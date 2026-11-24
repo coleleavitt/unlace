@@ -1,4 +1,4 @@
-//! (kuna `mzdgroup`) The data segment an MS-DOS program's startup code loads
+//! (unlace `mzdgroup`) The data segment an MS-DOS program's startup code loads
 //! into DS.
 //!
 //! DOS starts a program with DS holding its PSP. The startup code of a compiled

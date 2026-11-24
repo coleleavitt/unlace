@@ -1,4 +1,4 @@
-//! Tests moved out of `kuna_msvcstackguard` because they read higher-band modules. They live in the
+//! Tests moved out of `unlace_msvcstackguard` because they read higher-band modules. They live in the
 //! driver so the middle band can become its own crate (unlace-middle).
 
 #![allow(unused_imports, dead_code)]
@@ -91,7 +91,7 @@ fn build_fd_with_option(on: bool) -> Funcdata {
         .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
         .unwrap();
     let mut ctx = ArchContext::new(manage);
-    ctx.kuna_options
+    ctx.unlace_options
         .set(crate::msvcstackguard::StripMsvcStackGuard(on));
     let glb = Rc::new(ctx);
     let code = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

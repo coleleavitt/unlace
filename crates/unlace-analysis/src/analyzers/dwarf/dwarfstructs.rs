@@ -1,4 +1,4 @@
-//! (kuna `dwarfstructs`) DWARF aggregate LAYOUT import — `DW_AT_byte_size` plus
+//! (unlace `dwarfstructs`) DWARF aggregate LAYOUT import — `DW_AT_byte_size` plus
 //! the `DW_TAG_member` children of a `DW_TAG_structure_type` /
 //! `DW_TAG_union_type` / `DW_TAG_class_type`, installed on the interned type.
 //!
@@ -61,7 +61,7 @@
 //! under their **parent-qualified** name (`core::option::Option<usize>::Some`,
 //! reusing [`super::cppproto`]'s ancestry walk) and, if a name is STILL
 //! held by an aggregate of a different size, under a size-suffixed variant
-//! ([`resolve_name`]). A name held by a non-aggregate (kuna registers a core type
+//! ([`resolve_name`]). A name held by a non-aggregate (unlace registers a core type
 //! called `code`; zlib typedefs a struct to exactly that) is likewise stepped
 //! over rather than fought.
 //!
@@ -70,7 +70,7 @@
 //! members are walked, so the inner resolution finds it by name and the pointer
 //! is built against it; [`TypeWalk::begin_aggregate`] additionally refuses the
 //! re-entrant *population* so the recursion cannot restart. Documented LOSS: the
-//! `Rc<Datatype>` the inner pointer captured is the pre-completion shell (kuna's
+//! `Rc<Datatype>` the inner pointer captured is the pre-completion shell (unlace's
 //! interned types are immutable, so completing one mints a new `Rc` — the same
 //! model the wire `decode_composite` path lives with), so `n->next->val` chains
 //! one level less than `n->val`. The name still renders.
@@ -189,7 +189,7 @@ pub(super) fn intern_aggregate(
     Some(done.unwrap_or(shell))
 }
 
-/// `DW_AT_byte_size` as a kuna type size. `None` for a DIE with no width (a
+/// `DW_AT_byte_size` as a unlace type size. `None` for a DIE with no width (a
 /// forward declaration, or a producer that omitted it); a zero or absurd width is
 /// refused rather than installed.
 pub(super) fn aggregate_size(die: &DieSnap) -> Option<int4> {
@@ -302,7 +302,7 @@ pub(super) fn resolve_name(
     None
 }
 
-/// Walk the `DW_TAG_member` children into kuna fields and bitfields.
+/// Walk the `DW_TAG_member` children into unlace fields and bitfields.
 ///
 /// A member is SKIPPED (never fatal) when it has no name, no buildable type, a
 /// zero-width or `void` type, an unusable location or bit position, or is a
@@ -456,7 +456,7 @@ fn byte_exact_bitfield(
     (plain.get_size() == bytes).then_some((off, plain))
 }
 
-/// Fold the bitfields into kuna's container frame: each gets the SMALLEST byte
+/// Fold the bitfields into unlace's container frame: each gets the SMALLEST byte
 /// span that covers it, the span the compiler's own access and the printer's
 /// `.`-versus-`->` test (`checkBitFieldMember`) agree on, and its least
 /// significant bit within that span read in the target's byte order.

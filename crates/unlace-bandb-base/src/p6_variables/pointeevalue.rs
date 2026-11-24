@@ -7,10 +7,10 @@
 //!
 //! ```text
 //! int *q = p + k; gc = (char *)q; return q[1] + q[2];
-//! gc = &a0[a1]; return gc[2] + gc[1];            (kuna before)
+//! gc = &a0[a1]; return gc[2] + gc[1];            (unlace before)
 //! ```
 //!
-//! kuna never declares the global, so a reader who gives it its real type,
+//! unlace never declares the global, so a reader who gives it its real type,
 //! `char *`, reads two bytes and gets 0 where the binary returns 9.  The binary
 //! never reads `gc` here; it dereferences the register.  [`keeps_apart`] refuses
 //! that join in the two optional merges that make it, the `COPY`'s copy-shadow
@@ -181,7 +181,7 @@ fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighV
 /// ([`loads_stored_global`]) with a write between it and one of its readers
 /// ([`written_between`])?  Chapter 03 keeps such a load; joined with the
 /// global, or printed inline at its reader, it would read the global after a
-/// write that may change it, since kuna's SSA puts no `INDIRECT` on a global at
+/// write that may change it, since unlace's SSA puts no `INDIRECT` on a global at
 /// a `STORE` to show the Cover tests the conflict.
 pub fn load_crosses_write(data: &Funcdata, vn: VarnodeId) -> bool {
     let Some(v) = data.vbank().get(vn) else {
@@ -196,7 +196,7 @@ pub fn load_crosses_write(data: &Funcdata, vn: VarnodeId) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.pointeevalue_load_crosses_write = Some(load_crosses_write);
     hooks.pointeevalue_keeps_apart = Some(keeps_apart);
 }

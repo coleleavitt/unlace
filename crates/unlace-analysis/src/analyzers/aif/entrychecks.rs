@@ -31,7 +31,7 @@ pub(crate) fn run(
 ) -> CheckedAif {
     let mut straight_line = std::collections::BTreeSet::new();
     let poolslide = (arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Aifpoolslide>()
         .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
@@ -42,10 +42,10 @@ pub(crate) fn run(
             prior,
             translate,
             Rc::clone(&code_space),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
@@ -59,10 +59,10 @@ pub(crate) fn run(
             translate,
             Rc::clone(&code_space),
             listing.exec_ranges(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
@@ -72,7 +72,7 @@ pub(crate) fn run(
     };
     let mut pool_entries = Vec::new();
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Poolentry>()
         .0
     {

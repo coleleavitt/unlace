@@ -10,7 +10,7 @@ fn recovered_integer_call_arguments_match_complete_callee_contracts() {
         return;
     }
     let have_go = process::optional_output(Command::new("go").arg("version")).is_some();
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         ("pass_u8", "uint8", "uint8 value"),
@@ -37,7 +37,7 @@ fn recovered_integer_call_arguments_match_complete_callee_contracts() {
         .collect::<Vec<_>>()
         .join(",");
     let bodies = |language: &str| {
-        let mut command = Command::new(&kuna);
+        let mut command = Command::new(&unlace);
         command.args([
             "decompile-all",
             &common::fixture("call_argument_extensions_x86_64"),

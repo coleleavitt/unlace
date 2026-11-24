@@ -74,5 +74,5 @@ comparisons in `bejoin_cmp_arm32_be_O{0,2}.o`, the range checks in
 the unrecovered switch in `bejoin_jump_mips32_O2.o`, the reworked
 temporaries and products in `bejoin_hiop_*`), and the option's trade-off read
 both ways (`bejoin_tradeoff_ppc32_O2.o`, `bejoin_tradeoff_mips32_O0.o`); stages
-`kuna-bejoin{,-sparc,-sparc64,-mips,-avr}.xml`, `kuna-bejoin.xml` with an off
+`bejoin{,-sparc,-sparc64,-mips,-avr}.xml`, `bejoin.xml` with an off
 and an on pass.

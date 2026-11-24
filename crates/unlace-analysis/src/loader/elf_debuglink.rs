@@ -1,4 +1,4 @@
-//! (kuna `debuglink`) An ELF's separate debug information: the companion file
+//! (unlace `debuglink`) An ELF's separate debug information: the companion file
 //! its build-id or `.gnu_debuglink` names, and the MiniDebugInfo
 //! (`.gnu_debugdata`) a distribution embeds in a stripped image.
 //!

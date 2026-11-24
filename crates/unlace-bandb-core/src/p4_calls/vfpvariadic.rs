@@ -53,7 +53,7 @@ pub fn moves_return(pieces: &PrototypePieces) -> bool {
 /// once per default model.
 pub fn declarations(arch: &Architecture) -> Option<Rc<ProtoModel>> {
     let base = arch.default_fp()?;
-    let mut cache = arch.kuna_vfp_variadic.borrow_mut();
+    let mut cache = arch.unlace_vfp_variadic.borrow_mut();
     if let Some((key, derived)) = cache.as_ref() {
         if Rc::ptr_eq(key, base) {
             return derived.clone();
@@ -83,7 +83,7 @@ pub fn model(base: &Rc<ProtoModel>, manager: &AddrSpaceManager) -> Option<Rc<Pro
         })
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
-    result.output_mut().kuna_prepend_model_rules(rules);
+    result.output_mut().unlace_prepend_model_rules(rules);
     Some(Rc::new(result))
 }
 
@@ -121,6 +121,6 @@ pub fn parked_output(arch: &ArchContext, pieces: &PrototypePieces) -> Option<Par
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.vfpvariadic_applies = Some(applies);
 }

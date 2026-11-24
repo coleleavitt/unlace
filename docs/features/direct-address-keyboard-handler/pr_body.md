@@ -90,7 +90,7 @@ direct-address-keyboard-handler` reports `pass 1 / fail 0 / closed 1`.
 - `decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs` — 10 unit tests
   over hand-built IR (partial teardown, frameless leaf, `leave`, self-recursion,
   already-decoded target, indirect branch, address gap).
-- `decompiler/crates/kuna-console/tests/verify_tailcallframe.rs` — 3 tests on a real ELF.
+- `decompiler/crates/console/tests/verify_tailcallframe.rs` — 3 tests on a real ELF.
   Neither parity corpus can carry the *discovery* half: both are symbol-less bytechunks
   with no function map for `query_call` to miss.
 - `tests/cli/direct-address-keyboard-handler.json` + vendored fixture

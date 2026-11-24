@@ -1,4 +1,4 @@
-//! (kuna) `jumptablework`: a bound on the jump-table recovery one function's
+//! (unlace) `jumptablework`: a bound on the jump-table recovery one function's
 //! flow may do.
 //!
 //! Each indirect jump the flow meets is recovered by a partial decompile of
@@ -12,7 +12,7 @@
 //! remaining indirect jumps of the function are not recovered and print as
 //! computed calls, with one warning.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The default bound, in instructions summed over the recoveries.
 pub const DEFAULT_LIMIT: u64 = 250_000;
@@ -21,9 +21,9 @@ pub const DEFAULT_LIMIT: u64 = 250_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JumpTableWork(pub Option<u64>);
 
-impl crate::optionset::KunaOption for JumpTableWork {
+impl crate::optionset::UnlaceOption for JumpTableWork {
     const NAME: &'static str = "jumptablework";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         JumpTableWork(None)
@@ -33,7 +33,7 @@ impl crate::optionset::KunaOption for JumpTableWork {
         JumpTableWork(Some(DEFAULT_LIMIT))
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionJumpTableWork
             .apply(value)
             .map(|(v, msg)| (JumpTableWork(v), msg))
@@ -48,7 +48,7 @@ impl OptionJumpTableWork {
     pub const NAME: &'static str = "jumptablework";
 
     /// Resolve the bound (`None` for `off`) and its confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(Option<u64>, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(Option<u64>, String)> {
         let field = p1.trim();
         if field == "off" {
             return Ok((
@@ -60,7 +60,7 @@ impl OptionJumpTableWork {
             .parse::<u64>()
             .ok()
             .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
-            .ok_or_else(|| KunaError::parse("Must specify off or a decimal instruction count"))?;
+            .ok_or_else(|| UnlaceError::parse("Must specify off or a decimal instruction count"))?;
         Ok((
             Some(n),
             format!("Jump-table recovery stops after {n} instructions of work"),

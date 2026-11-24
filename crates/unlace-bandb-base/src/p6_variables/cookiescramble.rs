@@ -1,4 +1,4 @@
-//! (kuna) A stack-cookie scramble of the stack pointer is not a pointer
+//! (unlace) A stack-cookie scramble of the stack pointer is not a pointer
 //! escape.
 //!
 //! # The gap
@@ -60,7 +60,7 @@ use unlace_base::marshal::ElementId;
 
 use unlace_num::opcodes::OpCode;
 
-/// Marshaling element `<cookiescramble>` (kuna 4000+ range; 4148 = the previous
+/// Marshaling element `<cookiescramble>` (unlace 4000+ range; 4148 = the previous
 /// high-water mark).
 pub const ELEM_COOKIESCRAMBLE: ElementId = ElementId::new("cookiescramble", 4149);
 

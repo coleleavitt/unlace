@@ -113,7 +113,7 @@ impl Structs {
                 return Some(t);
             }
             Some(_) => return None,
-            None => types.kuna_declare_record(&shown, false).ok()?,
+            None => types.unlace_declare_record(&shown, false).ok()?,
         };
         // Interned before the fields so a self-referential ivar (`Node *next`) can
         // name it; a declared record's pointers read the completion afterwards.

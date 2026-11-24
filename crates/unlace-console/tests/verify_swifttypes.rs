@@ -111,11 +111,11 @@ fn load_fixture(fixture: &str, types_on: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("swiftmetadata", "on")
+        .set_unlace_option("swiftmetadata", "on")
         .expect("swiftmetadata flips on");
     if !types_on {
         prog.arch_mut()
-            .set_kuna_option("swifttypes", "off")
+            .set_unlace_option("swifttypes", "off")
             .expect("swifttypes flips off");
     }
     prog.commit_pending_analysis()

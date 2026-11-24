@@ -9,7 +9,7 @@ mod module_scope {
     pub(super) use crate::cover::Cover;
     pub(super) use crate::variable::{HighContext, HighIntersectTest};
     pub(super) use std::borrow::Cow;
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::types::{int4, uintm};
     pub(super) use unlace_num::opcodes::OpCode;
 }
@@ -302,7 +302,7 @@ impl MergeContext for Mock {
         high2: HighVariableId,
         isspeculative: bool,
         _cache: &mut HighIntersectTest,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.merged.push((high1, high2, isspeculative));
         // Move high2's instances into high1, union covers, drop high2.
         let h2 = self.highs.remove(&high2.0).expect("merge: missing high2");
@@ -319,7 +319,7 @@ impl MergeContext for Mock {
         _h2: HighVariableId,
         _off: int4,
         _h1: HighVariableId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         Ok(())
     }
     fn bank_set_mark(&mut self, h: HighVariableId) {
@@ -512,7 +512,7 @@ impl MergeContext for Mock {
     fn indirect_effect_op(&self, _indop: OpId) -> OpId {
         oid(0)
     }
-    fn op_set_input(&mut self, _op: OpId, _vn: VarnodeId, _slot: int4) -> KunaResult<()> {
+    fn op_set_input(&mut self, _op: OpId, _vn: VarnodeId, _slot: int4) -> UnlaceResult<()> {
         Ok(())
     }
     fn op_insert_before(&mut self, _op: OpId, _follow: OpId) {}
@@ -556,10 +556,10 @@ impl MergeContext for Mock {
         _in_vn: VarnodeId,
         _addr: Address,
         _trim_op: OpId,
-    ) -> KunaResult<OpId> {
+    ) -> UnlaceResult<OpId> {
         panic!("mock: copy_trim_op not under test")
     }
-    fn trim_op_output(&mut self, _op: OpId) -> KunaResult<()> {
+    fn trim_op_output(&mut self, _op: OpId) -> UnlaceResult<()> {
         panic!("mock: trim_op_output not under test")
     }
     fn trim_op_input_prep(&self, _op: OpId, _slot: int4) -> (VarnodeId, Address, bool) {
@@ -580,7 +580,7 @@ impl MergeContext for Mock {
         _copy: &[OpId],
         _pos: int4,
         _size: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         panic!("mock: build_dominant_copy not under test")
     }
     fn addr_tied_ranges(&self) -> Vec<AddrTiedRange> {

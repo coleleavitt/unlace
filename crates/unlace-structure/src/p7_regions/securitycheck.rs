@@ -1,4 +1,4 @@
-//! (kuna `securitycheck`) Strip rustc's bounds / slice / divide-by-zero panic
+//! (unlace `securitycheck`) Strip rustc's bounds / slice / divide-by-zero panic
 //! branches — the port of SEFCOM Oxidizer's `SecurityCheckRemover`
 //! (angr `angr/rust/optimization_passes/security_check_remover.py`, whose work
 //! lives in the `CFAMixin::match_call` / `CFGTransformationMixin::remove_block`
@@ -25,7 +25,7 @@
 //!
 //! ## Why the trigger is a name, and why that keeps it inert on C
 //!
-//! Unlike the sibling [`kuna_stackguard`](crate::stackguard) pass — whose
+//! Unlike the sibling [`unlace_stackguard`](crate::stackguard) pass — whose
 //! callee is an unnamed PLT stub, so the canary has to be pinned by its
 //! *compare* — every helper here is a **Rust-only symbol**.  Matching the callee
 //! name is therefore both the faithful port (angr matches the same seven paths)
@@ -44,7 +44,7 @@
 //! * the path with generic arguments still attached,
 //!   `core::slice::index::slice_start_index_len_fail<usize>` — so the match is
 //!   on the path PREFIX before the first `<`, never on string equality;
-//! * a name kuna installed under a shallower scope, down to the bare leaf
+//! * a name unlace installed under a shallower scope, down to the bare leaf
 //!   `panic_bounds_check`, which is what the x86-64 ELF path actually produces
 //!   today.
 //!
@@ -77,7 +77,7 @@
 //!
 //! ## The CFG surgery
 //!
-//! Identical to `kuna_stackguard`'s: `Funcdata::remove_branch` (CBRANCH →
+//! Identical to `unlace_stackguard`'s: `Funcdata::remove_branch` (CBRANCH →
 //! fall-through, MULTIEQUALs patched) followed by
 //! `Funcdata::remove_unreachable_blocks` to collect the orphaned panic block.
 //! The panic block's argument setup — the location `lea`, the index/len copies,
@@ -86,13 +86,13 @@
 //!
 //! ## Why P7 and this schedule slot
 //!
-//! The pass lives in `p7_regions/` next to `kuna_stackguard` because it is the
+//! The pass lives in `p7_regions/` next to `unlace_stackguard` because it is the
 //! same *kind* of operation on a different trigger: a pre-structuring removal of
 //! one CFG edge plus its orphaned diverging handler, expressed with the same two
 //! block-graph primitives, scheduled in the same `fullloop` tail so that
 //! `mainloop`'s dead-code and type passes re-run over the simplified graph and
 //! the structurer (P8) only ever sees the reduced CFG.  angr schedules its
-//! version at `BEFORE_VARIABLE_RECOVERY`; kuna cannot edit blocks that early
+//! version at `BEFORE_VARIABLE_RECOVERY`; unlace cannot edit blocks that early
 //! (call specs and the `bblocks` graph are what the edit needs), and the
 //! repeating `fullloop` gives the same effect — every later phase re-derives
 //! from the reduced graph.
@@ -193,7 +193,7 @@ fn block_is_security_check_handler(bb: BlockId, data: &Funcdata) -> bool {
     matched
 }
 
-/// (kuna) Strip rustc bounds/overflow panic branches
+/// (unlace) Strip rustc bounds/overflow panic branches
 /// (angr Oxidizer `SecurityCheckRemover`).
 ///
 /// When `option securitycheck on` (the default), finds a CBRANCH whose failure
@@ -242,7 +242,7 @@ impl Action for ActionRemoveSecurityCheck {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::securitycheck::StripSecurityCheck>()
                 .0
         {
@@ -298,7 +298,7 @@ impl Action for ActionRemoveSecurityCheck {
     }
 }
 
-/// (kuna) Toggle rustc security-check branch stripping.
+/// (unlace) Toggle rustc security-check branch stripping.
 ///
 /// `on` (default, DIV-82) removes the bounds/slice/divide-by-zero panic
 /// branches; `off` keeps them.  The resolved value is written into
@@ -329,8 +329,8 @@ impl SecurityCheckOption {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Strip rustc's bounds / slice / divide-by-zero panic branches --
+crate::unlace_flag!(
+    /// (unlace) Strip rustc's bounds / slice / divide-by-zero panic branches --
     /// the `core::panicking::*` / `core::slice::index::*` / `core::str::*`
     /// helper calls a Rust binary carries in front of every checked access
     /// (option `securitycheck`, DIV-82 default-on; SEFCOM Oxidizer's

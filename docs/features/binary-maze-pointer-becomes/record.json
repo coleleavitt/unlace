@@ -80,7 +80,7 @@
     "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
     "decompiler/crates/kuna-base/src/xml.rs",
-    "tests/stages/kuna-emptystrconst.xml",
+    "tests/stages/emptystrconst.xml",
     "tests/cli/binary-maze-pointer-becomes.json",
     "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/emptystrconst_x86_64.c",

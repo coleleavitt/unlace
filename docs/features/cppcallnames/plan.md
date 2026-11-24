@@ -7,10 +7,10 @@ plus the numbers behind it.
 
 | file | change |
 |---|---|
-| `decompiler/crates/kuna-console/src/engine.rs` | discovered-entry commit arm: the idempotence probe resolves **across scopes** (`find_function_across_scopes`) instead of global-only, so no generic placeholder is installed over a namespaced C++ funcsym; scope creation moves inside the branch |
-| `decompiler/crates/kuna-console/src/ifacedecomp.rs` | `IfcAddrrangeLoad`: with no explicit name token, prefer the qualified `function_display_name_across_scopes(offset)`; `name_function` stays the fallback for an unknown address |
-| `decompiler/crates/kuna-console/tests/verify_cppcallnames.rs` | **new** — 3 tests: the call-site render, the `load addr` header, and the control that discovery still names its genuinely-unknown finds `sub_<addr>` |
-| `decompiler/crates/kuna-console/tests/verify_multiformat_dwarf.rs` | baseline arm switched from "`load addr` with the pass on" to `option dwarf off` — the existing test was pinning the `--addr` bug (see Decision 5) |
+| `decompiler/crates/console/src/engine.rs` | discovered-entry commit arm: the idempotence probe resolves **across scopes** (`find_function_across_scopes`) instead of global-only, so no generic placeholder is installed over a namespaced C++ funcsym; scope creation moves inside the branch |
+| `decompiler/crates/console/src/ifacedecomp.rs` | `IfcAddrrangeLoad`: with no explicit name token, prefer the qualified `function_display_name_across_scopes(offset)`; `name_function` stays the fallback for an unknown address |
+| `decompiler/crates/console/tests/verify_cppcallnames.rs` | **new** — 3 tests: the call-site render, the `load addr` header, and the control that discovery still names its genuinely-unknown finds `sub_<addr>` |
+| `decompiler/crates/console/tests/verify_multiformat_dwarf.rs` | baseline arm switched from "`load addr` with the pass on" to `option dwarf off` — the existing test was pinning the `--addr` bug (see Decision 5) |
 | `docs/spec/00-overview.md` | 0.1 (the gated-commit idempotence contract is cross-scope) and 0.2 (`kuna decompile`'s two selection forms name identically) |
 | `docs/history.md` | DIV-59 row |
 | `docs/features/cppcallnames/` | this bundle |
@@ -24,7 +24,7 @@ No option, no `phases.toml` row, no catalog-count bump, no baseline re-pin.
 Three independent reasons, in order of weight:
 
 1. **There is no driver-tier option machinery to gate it with.** Every settable in
-   `phases.toml` carries an engine phase P1–P9; `kuna-console`/`kuna-cli` only ever
+   `phases.toml` carries an engine phase P1–P9; `console`/`kuna-cli` only ever
    *write* options. Gating this would mean inventing a new axis, not filling in a
    row. The precedent for driver policy deliberately kept out of the catalog is
    `--max-fn-seconds` ("Driver policy, not a stage-model settable", `docs/cli.md`);
@@ -61,7 +61,7 @@ Not a preference — a structural fact, verified before choosing. Every file in
 `tests/datatests/` and `tests/stages/` is an XML `<binaryimage>` document, and that
 bootstrap never produces an `AnalysisOutput`, so `commit_analysis_output` is a no-op
 there and the primary defect is **unreachable** from either corpus. The gate is
-`decompiler/crates/kuna-console/tests/verify_cppcallnames.rs`, which drives the real
+`decompiler/crates/console/tests/verify_cppcallnames.rs`, which drives the real
 engine over the already-vendored `cpp_noreturn_x86_64` with the discovery passes
 enabled in the live-CLI order (`option` before `read symbols`) — the exact
 configuration `--mode aggressive` produces.

@@ -69,7 +69,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -269,7 +269,7 @@ impl TypeOpInfo {
         &self,
         tlst: &dyn TypeFactory,
         out_size: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match self.opcode {
             // TypeOpPtradd::getOutputLocal / TypeOpPtrsub::getOutputLocal:
             // getBase(out_size, TYPE_INT) (typeop.cc:2240-2244, 2310-2314).
@@ -298,7 +298,7 @@ impl TypeOpInfo {
         tlst: &dyn TypeFactory,
         slot: int4,
         in_size: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match self.opcode {
             // TypeOpIntLeft/IntRight/IntSright::getInputLocal: slot 1 is the
             // shift amount -> getBaseNoChar(size, TYPE_INT); else fall to the

@@ -36,7 +36,7 @@ pub use substrate::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide_all(slots: &mut crate::passhooks::UnlaceHookSlots) {
     crate::segmentize::provide(slots);
     crate::avxintrin::provide(slots);
     crate::revisitrefine::provide(slots);

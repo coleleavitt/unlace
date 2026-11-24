@@ -1,4 +1,4 @@
-//! (kuna) `armlibcmain` — recover `main` from the **non-PIE** ARM crt1, where
+//! (unlace) `armlibcmain` — recover `main` from the **non-PIE** ARM crt1, where
 //! `_start` hands it to `__libc_start_main` through a PC-relative literal pool
 //! word rather than through a relocated GOT slot (P1 program prep).
 //!
@@ -72,7 +72,7 @@ const LIBC_START_MAIN: &[u8] = b"__libc_start_main";
 /// the scan away from whatever follows.
 const WINDOW: u64 = 0x80;
 
-/// (kuna) The non-PIE ARM `_start`→`main` pass (`armlibcmain`).
+/// (unlace) The non-PIE ARM `_start`→`main` pass (`armlibcmain`).
 pub struct ArmLibcMainPass;
 
 impl AnalysisPass for ArmLibcMainPass {
@@ -99,7 +99,7 @@ impl AnalysisPass for ArmLibcMainPass {
 /// the module header has been applied. `None` means this pass contributes
 /// nothing and the commit is byte-identical to before.
 ///
-/// Visible to the sibling [`super::kuna_elfmain`], which parks the
+/// Visible to the sibling [`super::unlace_elfmain`], which parks the
 /// `int main(int, char **, char **)` prototype on the name this pass installs.
 pub(super) fn main_vma(file: &object::File, bytes: &[u8]) -> Option<u64> {
     if file.architecture() != object::Architecture::Arm {

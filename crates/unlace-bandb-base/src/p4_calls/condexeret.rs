@@ -1,4 +1,4 @@
-//! (kuna) A return register that fails recovery only on paths
+//! (unlace) A return register that fails recovery only on paths
 //! `ActionConditionalExe` removes gets one more look after it.
 //!
 //! `ActionReturnRecovery` (coreaction.cc:1954) walks each output trial with

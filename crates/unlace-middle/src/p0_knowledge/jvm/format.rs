@@ -1,8 +1,8 @@
-//! (kuna `jvmmodel`) The Java class-file format (JVMS chapter 4): the constant pool,
+//! (unlace `jvmmodel`) The Java class-file format (JVMS chapter 4): the constant pool,
 //! the methods and their `Code` attributes. Ghidra's `ClassFileJava` reads the
 //! same; attributes other than `Code` are skipped.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The class-file magic.
 pub const MAGIC: u32 = 0xCAFE_BABE;
@@ -124,8 +124,8 @@ fn be32(bytes: &[u8], at: usize) -> Option<u32> {
         .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
 }
 
-fn bad(what: &str) -> KunaError {
-    KunaError::lowlevel(format!("malformed class file: {what}"))
+fn bad(what: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!("malformed class file: {what}"))
 }
 
 /// A reader over the file that fails, rather than panics, past its end.
@@ -135,25 +135,25 @@ struct Reader<'a> {
 }
 
 impl Reader<'_> {
-    fn u8(&mut self) -> KunaResult<u8> {
+    fn u8(&mut self) -> UnlaceResult<u8> {
         let b = *self.bytes.get(self.at).ok_or_else(|| bad("truncated"))?;
         self.at += 1;
         Ok(b)
     }
 
-    fn u16(&mut self) -> KunaResult<u16> {
+    fn u16(&mut self) -> UnlaceResult<u16> {
         let v = be16(self.bytes, self.at).ok_or_else(|| bad("truncated"))?;
         self.at += 2;
         Ok(v)
     }
 
-    fn u32(&mut self) -> KunaResult<u32> {
+    fn u32(&mut self) -> UnlaceResult<u32> {
         let v = be32(self.bytes, self.at).ok_or_else(|| bad("truncated"))?;
         self.at += 4;
         Ok(v)
     }
 
-    fn skip(&mut self, len: usize) -> KunaResult<()> {
+    fn skip(&mut self, len: usize) -> UnlaceResult<()> {
         let end = self.at.checked_add(len).filter(|&e| e <= self.bytes.len());
         self.at = end.ok_or_else(|| bad("truncated"))?;
         Ok(())
@@ -191,7 +191,7 @@ fn modified_utf8(raw: &[u8]) -> String {
 }
 
 impl ClassFile {
-    pub fn parse(bytes: Vec<u8>) -> KunaResult<ClassFile> {
+    pub fn parse(bytes: Vec<u8>) -> UnlaceResult<ClassFile> {
         let (major, pool, access, this_class, super_class, methods) = {
             let mut r = Reader {
                 bytes: &bytes,
@@ -386,7 +386,7 @@ impl ClassFile {
     }
 }
 
-fn skip_attributes(r: &mut Reader<'_>) -> KunaResult<()> {
+fn skip_attributes(r: &mut Reader<'_>) -> UnlaceResult<()> {
     let count = r.u16()?;
     for _ in 0..count {
         r.skip(2)?;

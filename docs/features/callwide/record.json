@@ -626,7 +626,7 @@
       },
       "foreign_paths_preserved": [
         "decompiler/crates/kuna-analysis/src/listing/x86listingswitch.rs",
-        "decompiler/crates/kuna-console/tests/verify_x86listingswitch.rs",
+        "decompiler/crates/console/tests/verify_x86listingswitch.rs",
         "docs/spec/01-program-prep.md"
       ],
       "all_66_feature_paths_byte_identical_to_fe29_before_evidence_updates": true,

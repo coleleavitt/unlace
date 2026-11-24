@@ -74,7 +74,7 @@ fn c_values_pointers_and_cpp_references_keep_their_existing_signatures() {
             );
             for &(function, signature) in functions {
                 let (body, err, status) =
-                    common::run_kuna(&["decompile", object.to_str().unwrap(), function]);
+                    common::run_unlace(&["decompile", object.to_str().unwrap(), function]);
                 assert_eq!(status, 0, "{err}");
                 assert!(body.starts_with(signature), "{compiler} {level}: {body}");
             }
@@ -106,7 +106,7 @@ fn pe_reference_arguments_keep_their_stack_slots() {
         String::from_utf8_lossy(&output.stderr)
     );
     let (body, err, status) =
-        common::run_kuna(&["decompile", binary.to_str().unwrap(), "many_refs"]);
+        common::run_unlace(&["decompile", binary.to_str().unwrap(), "many_refs"]);
     assert_eq!(status, 0, "{err}");
     let signature = body.lines().next().unwrap();
     assert_eq!(signature.matches("float *").count(), 12, "{body}");
@@ -140,7 +140,7 @@ fn large_reference_array_does_not_abort_parameter_allocation() {
         String::from_utf8_lossy(&output.stderr)
     );
     let (body, err, status) =
-        common::run_kuna(&["decompile", binary.to_str().unwrap(), "first_sample"]);
+        common::run_unlace(&["decompile", binary.to_str().unwrap(), "first_sample"]);
     assert_eq!(status, 0, "{err}");
     assert!(body.contains("(*a)"), "{body}");
     assert!(body.contains("*out = (*a)[0];"), "{body}");
@@ -178,7 +178,7 @@ fn reference_parameters_round_trip(optimizations: &[&str]) {
             "array_sample",
         ] {
             let (body, err, status) =
-                common::run_kuna(&["decompile", object.to_str().unwrap(), name]);
+                common::run_unlace(&["decompile", object.to_str().unwrap(), name]);
             assert_eq!(status, 0, "{err}");
             assert!(body.lines().next().unwrap().contains('*'), "{body}");
             code.push_str(&body);

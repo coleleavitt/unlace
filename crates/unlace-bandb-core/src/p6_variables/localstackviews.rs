@@ -62,7 +62,7 @@ fn invalidate(fd: &mut Funcdata) {
 
 fn enabled(fd: &Funcdata) -> bool {
     !fd.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
 }
@@ -949,14 +949,14 @@ pub fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.localstackviews_record_native = Some(record_native);
     hooks.localstackviews_preserves_range = Some(preserves_range);
 }
 
-crate::kuna_func_state!(crate::localstackviews::LocalStackViews, keep_across_clear: false);
+crate::unlace_func_state!(crate::localstackviews::LocalStackViews, keep_across_clear: false);
 
-/// The `kuna_localstackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_localstackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataLocalstackviewsExt {
     fn local_stack_views(&self) -> &crate::localstackviews::LocalStackViews;
@@ -965,10 +965,10 @@ pub trait FuncdataLocalstackviewsExt {
 
 impl FuncdataLocalstackviewsExt for crate::funcdata::Funcdata {
     fn local_stack_views(&self) -> &crate::localstackviews::LocalStackViews {
-        self.kuna_state::<crate::localstackviews::LocalStackViews>()
+        self.unlace_state::<crate::localstackviews::LocalStackViews>()
     }
     fn local_stack_views_mut(&mut self) -> &mut crate::localstackviews::LocalStackViews {
-        self.kuna_state_mut::<crate::localstackviews::LocalStackViews>()
+        self.unlace_state_mut::<crate::localstackviews::LocalStackViews>()
     }
 }
 

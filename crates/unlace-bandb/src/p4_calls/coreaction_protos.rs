@@ -202,11 +202,11 @@ impl Action for ActionPrototypeTypes {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         let evalfp = crate::callmechanisms::evaluation_model(data);
-        // (kuna `vectorabi`) A function with vector operations is evaluated
+        // (unlace `vectorabi`) A function with vector operations is evaluated
         // with the vector-widened default model.
         let evalfp = match (evalfp, data.get_arch().vector_fp.clone()) {
             (Some(e), Some(v))
-                if data.kuna_vector_code
+                if data.unlace_vector_code
                     && data
                         .get_arch()
                         .default_fp()
@@ -223,7 +223,7 @@ impl Action for ActionPrototypeTypes {
                 data.get_func_proto_mut().set_model(Some(evalfp));
             }
         }
-        // (kuna) Establish the local-variable discovery window from the (now-set)
+        // (unlace) Establish the local-variable discovery window from the (now-set)
         // proto model's stack ranges.  C++ runs `localmap->resetLocalWindow()` at
         // `Funcdata` construction (via `funcp.setScope`, funcdata.cc:70), where the
         // default proto model is already attached; the merged tree defers the model
@@ -536,7 +536,7 @@ impl Action for ActionDefaultParams {
         let default_fp = arch
             .vector_fp
             .clone()
-            .filter(|_| data.kuna_vector_code)
+            .filter(|_| data.unlace_vector_code)
             .or_else(|| arch.default_fp().cloned());
         let witness_tables = crate::valuewitness::tables(&arch);
         let mut ordered: Option<Vec<crate::context::OpId>> = None;
@@ -546,7 +546,7 @@ impl Action for ActionDefaultParams {
                 // C++ `coreaction.cc:2382-2390`.
                 // The callee's locked `FuncProto` is re-built here from the source-
                 // declared prototype pieces parked on its global FunctionSymbol by
-                // `Architecture::set_function_prototype_pieces` (the kuna stand-in for
+                // `Architecture::set_function_prototype_pieces` (the unlace stand-in for
                 // the C++ callee `Funcdata`'s lazily-built `FuncProto`).
                 let has_funcdata = data.get_call_specs(i).has_funcdata();
                 let indirect_slot = if has_funcdata {
@@ -569,7 +569,7 @@ impl Action for ActionDefaultParams {
                     }
                     _ => None,
                 };
-                // (kuna `valuewitness`) A call through a Swift value witness
+                // (unlace `valuewitness`) A call through a Swift value witness
                 // table slot takes the slot's prototype, locked, now rather than
                 // in type recovery. See `valuewitness::call_prototype`.
                 let witness_proto = match (&slot_proto, &witness_tables, has_funcdata) {
@@ -602,7 +602,7 @@ impl Action for ActionDefaultParams {
                     }
                 };
                 let (callee_pieces, callee_model, bound_model) = if let Some(entry) = pieces_entry {
-                    // (kuna, Phase 3) A host-declared prototype model rides the
+                    // (unlace, Phase 3) A host-declared prototype model rides the
                     // locked pieces (ghidra-mode `<prototype model=…>`); `None`
                     // on the standalone path, keeping the default-model seed.
                     let pieces = arch.callee_proto_pieces(&entry);
@@ -618,7 +618,7 @@ impl Action for ActionDefaultParams {
                 } else {
                     (None, None, None)
                 };
-                // (kuna) An *output-only* callee pieces (no declared inputs / void
+                // (unlace) An *output-only* callee pieces (no declared inputs / void
                 // outtype, but a custom locked output) is what the console
                 // `map return <addr>` parks: in C++ `map return` locks only the
                 // callee's output, leaving its inputs to be recovered by the model.
@@ -675,7 +675,7 @@ impl Action for ActionDefaultParams {
                                 types,
                                 arch.manage(),
                             ) {
-                                // (kuna) `calleeprotostack`: a locked parameter
+                                // (unlace) `calleeprotostack`: a locked parameter
                                 // list under a model that leaves its extrapop
                                 // unknown states how much the callee pops.  See
                                 // [`crate::calleeprotostack`].
@@ -714,7 +714,7 @@ impl Action for ActionDefaultParams {
                     None => {
                         // No source-declared callee prototype (a symbol with no
                         // Funcdata): set the default-model internal proto.  The
-                        // register-parameter datatests resolve here.  (kuna) A
+                        // register-parameter datatests resolve here.  (unlace) A
                         // throwing Swift call, or a callee the analysis tier
                         // bound to a model without a signature, has its
                         // arguments recovered under that model.
@@ -762,7 +762,7 @@ impl Action for ActionDefaultParams {
                         data.get_call_specs_mut(i)
                             .proto_mut()
                             .set_internal(model, void_ty.clone());
-                        // (kuna) A console `map return <addr>`-only callee: keep the
+                        // (unlace) A console `map return <addr>`-only callee: keep the
                         // model-driven input recovery just established, but lock the
                         // custom return storage on top (the C++ `map return` locks
                         // only the output).  This sets the typed output Varnode at
@@ -795,12 +795,12 @@ impl Action for ActionDefaultParams {
                 );
             }
             if let Err(error) = crate::callmechanisms::apply_return(data, i) {
-                data.kuna_state_mut::<crate::callmechanisms::State>()
+                data.unlace_state_mut::<crate::callmechanisms::State>()
                     .failure = Some(error.to_string());
                 return 0;
             }
         }
-        // (kuna) `msvcbyval`: size an MSVC `__cdecl` import's by-value class at
+        // (unlace) `msvcbyval`: size an MSVC `__cdecl` import's by-value class at
         // each call, now that every call's pop is known.  See
         // [`crate::msvcbyval`].
         crate::msvcbyval::size_slots(data);
@@ -891,7 +891,7 @@ impl Action for ActionExtraPopSetup {
         for i in 0..data.num_calls() {
             let mut extrapop = crate::calleeretpurge::effective_extra_pop(data, i);
             if extrapop == EXTRAPOP_UNKNOWN && exact {
-                // (kuna) A pop the callee's own returns prove; see
+                // (unlace) A pop the callee's own returns prove; see
                 // [`crate::calleepurge`].
                 if let Some(ep) = data.get_call_specs(i).callee_purge() {
                     data.get_call_specs_mut(i).proto_mut().set_extra_pop(ep);
@@ -1195,7 +1195,7 @@ impl ActionFuncLink {
             data.op_unset_output(callop);
         }
         if let Err(error) = crate::registerslots::apply_return(data, idx) {
-            data.kuna_state_mut::<crate::callmechanisms::State>()
+            data.unlace_state_mut::<crate::callmechanisms::State>()
                 .failure = Some(error.to_string());
             return;
         }
@@ -1436,7 +1436,7 @@ impl Action for ActionParamDouble {
 /// as parameters, then resolves the model and builds the input map.
 pub struct ActionActiveParam {
     base: ActionBase,
-    /// (kuna callee-contract) The direct callees this pass has already paused for,
+    /// (unlace callee-contract) The direct callees this pass has already paused for,
     /// so one call site does not request the same bootstrap twice.
     contract_requested: crate::fasthash::FxHashSet<(int4, uintb)>,
     ready_calls: Option<Vec<int4>>,
@@ -1536,7 +1536,7 @@ impl Action for ActionActiveParam {
         }))
     }
     /// C++ has no per-function state beyond the base; the callee-contract pause
-    /// bookkeeping is kuna's, and a fresh drive must not inherit it.
+    /// bookkeeping is unlace's, and a fresh drive must not inherit it.
     fn reset(&mut self, _data: &mut Funcdata) {
         self.base.reset_base();
         self.contract_requested.clear();
@@ -1551,23 +1551,23 @@ impl Action for ActionActiveParam {
         let mut aliascheck = data.build_alias_checker_deferred();
         let mut held = crate::calleestackargs::Contenders::default();
         let manager_rc = data.get_arch().manage.clone();
-        // (kuna) `calleearityfwd`: call sites that finalize with an empty argument
+        // (unlace) `calleearityfwd`: call sites that finalize with an empty argument
         // list, retried at the end of the pass against the siblings that finalize
         // after them.  See [`crate::calleearityfwd`].
         let mut pending_rescue = Vec::new();
-        // (kuna) `calleearitylive`: call sites that finalize with a SHORT argument
+        // (unlace) `calleearitylive`: call sites that finalize with a SHORT argument
         // list, retried the same way.  See
         // [`crate::calleearitylive`].
         let mut pending_extend = Vec::new();
-        // (kuna) `calleearitybody`: call sites that recovered nothing and have no
+        // (unlace) `calleearitybody`: call sites that recovered nothing and have no
         // sibling to compare against, answered from the callee's own body after
         // the sibling rules have had their turn.  See
         // [`crate::calleearitybody`].
         let mut pending_body = Vec::new();
-        // (kuna) `passthrough`: call sites that may still take a register the
+        // (unlace) `passthrough`: call sites that may still take a register the
         // function forwards untouched, extended after every other rule.
         let mut pending_pass = Vec::new();
-        // (kuna) `calleereadarg`: call sites whose callee reads a register the
+        // (unlace) `calleereadarg`: call sites whose callee reads a register the
         // caller's scoring refused.
         let mut pending_read = Vec::new();
 
@@ -1579,7 +1579,7 @@ impl Action for ActionActiveParam {
         // ops.  The take/restore is used ONLY for the finalize tail
         // (`final_input_check`/`build_input_from_trials`), which performs no
         // cross-call lookup and needs a single `&mut FuncCallSpecs`.
-        let bootstrap = data.kuna_callee_contract_armed();
+        let bootstrap = data.unlace_callee_contract_armed();
         let ready_calls = if bootstrap {
             if let Some(ready) = self.ready_calls.take() {
                 ready
@@ -1595,7 +1595,7 @@ impl Action for ActionActiveParam {
                         if let Some(entry) = crate::calleetrial::split_trial_callee(data, idx) {
                             if let Some(key) = crate::protoorder::stated_key(&entry) {
                                 if self.contract_requested.insert(key) {
-                                    data.kuna_queue_callee_split_call(entry);
+                                    data.unlace_queue_callee_split_call(entry);
                                     pause = true;
                                 }
                             }
@@ -1646,19 +1646,19 @@ impl Action for ActionActiveParam {
                 if fc.get_active_input().needs_final_check() {
                     final_input_check(&mut fc, data);
                 }
-                // (kuna) `varargstackargs`: tell `fillinMap` that this call's
+                // (unlace) `varargstackargs`: tell `fillinMap` that this call's
                 // variable arguments live on the stack, so the empty register
                 // slots before them are the ABI's doing and not evidence that
                 // the recovery has run past the argument list.
                 let vararg_split = fc.is_dotdotdot()
                     || crate::darwinvarargs::is_variadic_callee(data, fc.get_entry_address());
                 fc.get_active_input().set_vararg_stack_split(vararg_split);
-                // (kuna) `stackarggap`: tell `fillinMap` that an argument
+                // (unlace) `stackarggap`: tell `fillinMap` that an argument
                 // register this caller never wrote ends the argument list when
                 // the next slot is on the stack -- the ABI reaches the stack
                 // only past a full register file.
                 fc.get_active_input().set_stack_arg_gap(true);
-                // (kuna) `passthrough`: a register this caller hands on untouched
+                // (unlace) `passthrough`: a register this caller hands on untouched
                 // is not a run of empty slots in front of a later argument.
                 let forwarded_neutral =
                     crate::passthrough::neutral_scope(data, &fc, &mut first_calls);
@@ -1669,7 +1669,7 @@ impl Action for ActionActiveParam {
                     .is_some_and(|m| fc.proto().has_matching_model(m));
                 fc.get_active_input().set_callee_reads_registers(reads);
                 crate::armfloatargs::mark_single_floats(&mut fc, data);
-                // (kuna) `calleefilledarg`: an unfilled register the callee
+                // (unlace) `calleefilledarg`: an unfilled register the callee
                 // loads itself is no slot, and ends no argument list.
                 crate::calleefilledarg::mark(&mut fc, data);
                 let written = crate::armfloatargs::written_inputs(&fc, data);
@@ -1677,7 +1677,7 @@ impl Action for ActionActiveParam {
                 // the model and fill in the trial → parameter map.
                 let _ = fc.resolve_and_derive_input_map(&manager_rc);
                 crate::armfloatargs::cap_stated_inputs(&mut fc, data, &written);
-                // (kuna `formatstring`) A resolved format call's declared
+                // (unlace `formatstring`) A resolved format call's declared
                 // arguments are arguments whatever the positional rules made
                 // of the gap in front of them.
                 crate::formattail::keep_declared_trials(&mut fc);
@@ -1707,23 +1707,23 @@ impl Action for ActionActiveParam {
                 finalized = true;
             }
         }
-        // (kuna `formatstring`) Once no call has trials left, a resolved format
+        // (unlace `formatstring`) Once no call has trials left, a resolved format
         // call sheds the tail it was scored with.
         self.base.count += crate::formattail::shed_format_tails(data);
-        // (kuna) `calleearityfwd`: every spec in this pass is final now, so the
+        // (unlace) `calleearityfwd`: every spec in this pass is final now, so the
         // sites that recovered nothing get their one retry.
         crate::calleearityfwd::rescue_pending(data, &pending_rescue);
-        // (kuna) `calleearitylive`: and the sites that recovered too FEW get theirs.
+        // (unlace) `calleearitylive`: and the sites that recovered too FEW get theirs.
         crate::calleearitylive::extend_pending(data, &pending_extend);
-        // (kuna) `calleearitybody`: last, so a site a sibling could speak for is
+        // (unlace) `calleearitybody`: last, so a site a sibling could speak for is
         // already non-empty and is left alone.
         crate::calleearitybody::recover_pending(data, &pending_body);
-        // (kuna) `calleereadarg`: after every rule that settles a list from the
+        // (unlace) `calleereadarg`: after every rule that settles a list from the
         // trials, so it only ever adds the registers the callee reads.
         crate::calleereadarg::extend_pending(data, &pending_read);
-        // (kuna) `passthrough`: last of all, so it only ever adds to a final list.
+        // (unlace) `passthrough`: last of all, so it only ever adds to a final list.
         crate::passthrough::extend_pending(data, &pending_pass);
-        // (kuna) The MSVC frame cookie and the frame slots above it leave every
+        // (unlace) The MSVC frame cookie and the frame slots above it leave every
         // call once no call scores trials any more.
         if finalized {
             self.base.count += crate::stackcookie::shed_frame_cookies(data);
@@ -1864,7 +1864,7 @@ impl ActionReturnRecovery {
                 newparam.push(vn);
             }
         }
-        // (kuna) GH-6990: keep only the first return register (return_single).
+        // (unlace) GH-6990: keep only the first return register (return_single).
         if crate::returnpair::keep_single_return(return_single, newparam.len()) {
             newparam.truncate(2);
         }
@@ -1927,7 +1927,7 @@ impl ActionReturnRecovery {
             let _ = data.op_set_all_input(retop, &newparam);
             return;
         }
-        // (kuna) An aggregate returned one member per vector register (AAPCS64
+        // (unlace) An aggregate returned one member per vector register (AAPCS64
         // HFA in s0, s1, s2): join the members at a join address.  See
         // [`crate::hfareturn`].
         {
@@ -2031,7 +2031,7 @@ impl ActionReturnRecovery {
     }
 }
 
-/// (kuna) `KUNA_RETREC_TRACE`: print the expression tree under `vn`.
+/// (unlace) `UNLACE_RETREC_TRACE`: print the expression tree under `vn`.
 fn retrec_tree(data: &Funcdata, vn: crate::context::VarnodeId, depth: usize) {
     let Some(v) = data.vbank().get(vn) else {
         return;
@@ -2066,7 +2066,7 @@ fn retrec_tree(data: &Funcdata, vn: crate::context::VarnodeId, depth: usize) {
     }
 }
 
-/// (kuna) `KUNA_RETREC_TRACE`: print each output trial's state at `stage`.
+/// (unlace) `UNLACE_RETREC_TRACE`: print each output trial's state at `stage`.
 fn retrec_trace(stage: &str, data: &Funcdata, active: &crate::fspec::ParamActive) {
     if std::env::var_os("KUNA_RETREC_TRACE").is_none() {
         return;
@@ -2145,7 +2145,7 @@ impl Action for ActionReturnRecovery {
                         continue;
                     }
                 };
-                // (kuna) `passthrough`: the result of a tail call whose callee's
+                // (unlace) `passthrough`: the result of a tail call whose callee's
                 // recovered prototype returns a value in this storage.  Scored
                 // before the ancestor walk, whose INDIRECT-creation mark would
                 // keep the high register of a returned pair out of the output.
@@ -2255,10 +2255,10 @@ impl Action for ActionReturnRecovery {
             } else {
                 crate::bejoin::join_order(&active, data, &return_ops)
             };
-            data.kuna_set_pairs_first_low(crate::bejoin::joins_first_low(&active, order));
+            data.unlace_set_pairs_first_low(crate::bejoin::joins_first_low(&active, order));
             let return_single = data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::returnpair::ReturnSingle>()
                 .0;
             for &op in &return_ops {
@@ -2393,7 +2393,7 @@ impl Action for ActionInputPrototype {
             // the heritage collected).  `triallist[i]` is the i-th registered
             // trial's Varnode (1-based slot in ParamTrial).
             let mut active = crate::fspec::ParamActive::new(false);
-            // (kuna) These are the function's OWN input trials, where an ACTIVE
+            // (unlace) These are the function's OWN input trials, where an ACTIVE
             // trial means the body reads the register before it writes it.  Tell
             // `forceInactiveChain` that a run of unused argument registers is not
             // evidence against a later one.  See
@@ -2424,7 +2424,7 @@ impl Action for ActionInputPrototype {
                     }
                     triallist.push(vn);
                 } else if crate::armpairparam::joined_pair(data, &addr, size) {
-                    // (kuna `armpairparam`) One trial per register of the pair,
+                    // (unlace `armpairparam`) One trial per register of the pair,
                     // both mapped to the whole; `update_input_types` keeps the
                     // first used one.
                     let half = size / 2;
@@ -2532,7 +2532,7 @@ fn update_input_types(
                     crate::dtype::type_metatype::TYPE_UNKNOWN,
                 ))
             });
-        // (kuna `gonewtype`) A `go.typedesc *` parameter type is the interface
+        // (unlace `gonewtype`) A `go.typedesc *` parameter type is the interface
         // type word of an `any` argument mislabeled with the descriptor it points
         // at: a `&type:T` descriptor global flows into a runtime/stdlib
         // `any`-taking callee (`runtime.gopanic`, `fmt.(*pp).printArg`,
@@ -2553,8 +2553,8 @@ fn update_input_types(
             ty
         };
         let _ = is_persist;
-        // (kuna `elfmain`) A runtime argument of an executable's own `main` takes
-        // its runtime name. See `kuna_elfmaindecl`.
+        // (unlace `elfmain`) A runtime argument of an executable's own `main` takes
+        // its runtime name. See `unlace_elfmaindecl`.
         let name = crate::elfmaindecl::param_name(data, &addr, ty.get_size())
             .or_else(|| crate::inputhints::param_name(data, &addr, ty.get_size()))
             .unwrap_or_default();
@@ -2697,7 +2697,7 @@ impl Action for ActionOutputPrototype {
                 return 0;
             }
         }
-        // (kuna, ida) Repair a RETURN whose value is a bogus register PAIR before
+        // (unlace, ida) Repair a RETURN whose value is a bogus register PAIR before
         // the output storage and type are read off it. Return recovery registers
         // one trial per output register the model characterizes (x86-64 SysV: RAX
         // *and* RDX) and marks a trial active when its value survives ancestor
@@ -2739,7 +2739,7 @@ impl Action for ActionOutputPrototype {
                 crate::dtype::type_metatype::TYPE_UNKNOWN,
             ))
         });
-        // (kuna vectorabi) A vector result keeps its producer's vector type.
+        // (unlace vectorabi) A vector result keeps its producer's vector type.
         let out_type = if matches!(
             out_type.get_metatype(),
             crate::dtype::type_metatype::TYPE_UNKNOWN | crate::dtype::type_metatype::TYPE_ARRAY

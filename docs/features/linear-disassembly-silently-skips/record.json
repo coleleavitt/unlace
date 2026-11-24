@@ -36,7 +36,7 @@
     },
     {
       "what": "no option, no phases.toml row, no catalog counter, no stages XML",
-      "detail": "Driver tier: the change is entirely in kuna-cli's listing surface plus one derived bit on kuna-console's FixedRefs. A listing is a query -- nothing is committed into the engine and no emitted C can move, which `make test` 675/675 and `make test-stages` PARITY OK confirm. The stage/datatest corpora are XML <binaryimage> documents that never reach this surface. A DIV row IS required, because the always-on note is an intentional default-behaviour change."
+      "detail": "Driver tier: the change is entirely in kuna-cli's listing surface plus one derived bit on console's FixedRefs. A listing is a query -- nothing is committed into the engine and no emitted C can move, which `make test` 675/675 and `make test-stages` PARITY OK confirm. The stage/datatest corpora are XML <binaryimage> documents that never reach this surface. A DIV row IS required, because the always-on note is an intentional default-behaviour change."
     }
   ],
   "sweep": {
@@ -55,7 +55,7 @@
   "files": [
     "decompiler/crates/kuna-cli/src/disassemble.rs",
     "decompiler/crates/kuna-cli/tests/disassemble_cli.rs",
-    "decompiler/crates/kuna-console/src/engine.rs",
+    "decompiler/crates/console/src/engine.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/jumpoverdecoy_i386",
     "decompiler/crates/kuna-analysis/tests/fixtures/jumpoverdecoy_i386.py",
     "tests/cli/linear-disassembly-silently-skips.json",

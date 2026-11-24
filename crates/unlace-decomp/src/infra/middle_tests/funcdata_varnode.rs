@@ -18,8 +18,8 @@ use crate::varnode::VarnodeBank;
 use crate::varnode::varnode_flags;
 use std::rc::Rc;
 use unlace_base::address::Address;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::space::ConstantSpace;
@@ -131,7 +131,7 @@ fn rejected_delete_preserves_membership(has_definition: bool, shared: bool) {
         }
         peer
     });
-    fd.kuna_extend_storage_sources(
+    fd.unlace_extend_storage_sources(
         vn,
         [crate::varsources::StorageSource {
             address: Address::new(ram(&fd), 0x80),
@@ -139,7 +139,7 @@ fn rejected_delete_preserves_membership(has_definition: bool, shared: bool) {
             write_address: Some(pc.clone()),
         }],
     );
-    assert_eq!(fd.kuna_storage_sources(vn).len(), 1);
+    assert_eq!(fd.unlace_storage_sources(vn).len(), 1);
     let loc_order: Vec<_> = fd.vbank().iter_loc().collect();
     let def_order: Vec<_> = fd.vbank().iter_def().collect();
     let def = fd.vbank().get(vn).unwrap().get_def();
@@ -169,7 +169,7 @@ fn rejected_delete_preserves_membership(has_definition: bool, shared: bool) {
         for &member in &members {
             assert_eq!(fd.vbank().get(member).unwrap().get_high(), Some(high));
         }
-        let sources = fd.kuna_storage_sources(vn);
+        let sources = fd.unlace_storage_sources(vn);
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].address, Address::new(ram(&fd), 0x80));
         assert_eq!(sources[0].size, 4);
@@ -188,7 +188,7 @@ fn rejected_delete_preserves_membership(has_definition: bool, shared: bool) {
     }
     fd.delete_varnode(vn).unwrap();
     assert!(fd.vbank().get(vn).is_none());
-    assert!(fd.kuna_storage_sources(vn).is_empty());
+    assert!(fd.unlace_storage_sources(vn).is_empty());
     if let Some(peer) = peer {
         let h = fd.high_bank().get(high).unwrap();
         assert_eq!(h.num_instances(), 1);
@@ -231,8 +231,8 @@ fn large_storage_merge_preserves_order_and_distinct_write_sites() {
         size: 4,
         write_address: write.map(|pc| Address::new(Rc::clone(&ram), pc)),
     };
-    fd.kuna_extend_storage_sources(dst, (0..64).map(|offset| source(offset, None)));
-    fd.kuna_extend_storage_sources(
+    fd.unlace_extend_storage_sources(dst, (0..64).map(|offset| source(offset, None)));
+    fd.unlace_extend_storage_sources(
         dst,
         (40..64).map(|offset| source(offset, None)).chain([
             source(53, Some(0x100)),
@@ -245,7 +245,7 @@ fn large_storage_merge_preserves_order_and_distinct_write_sites() {
     let mut expected: Vec<_> = (0..64).map(|offset| (offset, None)).collect();
     expected.extend([(53, Some(0x100)), (4, Some(0x100)), (53, Some(0x101))]);
     let actual: Vec<_> = fd
-        .kuna_storage_sources(dst)
+        .unlace_storage_sources(dst)
         .iter()
         .map(|source| {
             (

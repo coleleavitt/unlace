@@ -1,4 +1,4 @@
-//! (kuna) Global blocks: a block literal the compiler laid out in `__const` —
+//! (unlace) Global blocks: a block literal the compiler laid out in `__const` —
 //! `isa = _NSConcreteGlobalBlock, flags, reserved, invoke, descriptor` — is
 //! named and typed as a `Block_layout`, and its invoke function is named and,
 //! when the descriptor carries a signature (`BLOCK_HAS_SIGNATURE`), typed from
@@ -38,7 +38,7 @@ fn block_layout(tctx: &TypeCtx) -> Option<Rc<Datatype>> {
         return (t.get_metatype() == type_metatype::TYPE_STRUCT).then_some(t);
     }
     let ps = tctx.ptr_size;
-    let shell = types.kuna_declare_record("Block_layout", false).ok()?;
+    let shell = types.unlace_declare_record("Block_layout", false).ok()?;
     let voidp = decode_ivar_type("^v", tctx)?;
     let int = decode_ivar_type("i", tctx)?;
     let fields = vec![
@@ -556,7 +556,7 @@ fn byref_layout(cell: Option<&ByrefCell>, tctx: &TypeCtx) -> Option<Rc<Datatype>
     if let Some(t) = types.find_by_name(&name).ok().flatten() {
         return (t.get_metatype() == type_metatype::TYPE_STRUCT).then_some(t);
     }
-    let shell = types.kuna_declare_record(&name, false).ok()?;
+    let shell = types.unlace_declare_record(&name, false).ok()?;
     let voidp = decode_ivar_type("^v", tctx)?;
     let int = decode_ivar_type("i", tctx)?;
     let me = types
@@ -651,7 +651,7 @@ fn captured_layout(
         end = off + store.width as i32;
     }
     types
-        .kuna_declare_record(&name, false)
+        .unlace_declare_record(&name, false)
         .ok()
         .and_then(|shell| {
             types

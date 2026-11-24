@@ -1,13 +1,13 @@
-//! Mach-O `__stubs` / indirect-symbol import-name resolution — the kuna analog
+//! Mach-O `__stubs` / indirect-symbol import-name resolution — the unlace analog
 //! of Ghidra's `MachoProgramBuilder.processIndirectSymbols` / `processStubs`
 //! (`Ghidra/Features/MachO/.../macho/MachoProgramBuilder.java`).
 //!
-//! ## Why this lives in kuna at all
+//! ## Why this lives in unlace at all
 //!
-//! kuna ports Ghidra's C++ *decompiler*; resolving a Mach-O call target
+//! unlace ports Ghidra's C++ *decompiler*; resolving a Mach-O call target
 //! (`0x1000005cc`) to its imported function name (`printf`) is done by Ghidra's
 //! Java *loader* layer, which the port never carried over. Without it a CALL
-//! that lands on a `__stubs` entry has no symbol, so `FlowInfo::queryCall` (kuna
+//! that lands on a `__stubs` entry has no symbol, so `FlowInfo::queryCall` (unlace
 //! `decompile_drive.rs::query_call`) finds nothing and the printer falls back to
 //! `sub_<addr>`. This module reconstructs the stub/slot → name mapping straight
 //! from the indirect-symbol table, so the loader can register the imports as
@@ -294,9 +294,9 @@ where
     finish_with_exports(neutral, bytes, out)
 }
 
-/// (kuna `kernelcache`) A kext cut out of a kernel collection carries each
+/// (unlace `kernelcache`) A kext cut out of a kernel collection carries each
 /// import the collection bound as an `N_ABS | N_EXT` symbol at the callee's
-/// address (see `kuna_kernelcache`), the target of the kext's direct calls.
+/// address (see `unlace_kernelcache`), the target of the kext's direct calls.
 /// Only a kext whose header says it lives in a collection (`MH_DYLIB_IN_CACHE`,
 /// which the kext headers of a kernel collection carry) is read this way; a
 /// standalone kext's absolute symbols stay what they are. Returns the name
@@ -333,7 +333,7 @@ fn push_kext_bound_imports<Mach: MachHeader<Endian = Endianness>>(
     bound
 }
 
-/// (kuna `kernelcache-boot`) The pointer slots of such a kext that hold a bound
+/// (unlace `kernelcache-boot`) The pointer slots of such a kext that hold a bound
 /// import's address. The collection's builder turned each bind of a
 /// symbol-pointer section (`__got`, `__auth_got`) or of `__auth_ptr` into a
 /// rebase, so once the peel has written the address, the slot's value is the
@@ -437,7 +437,7 @@ fn finish_with_exports(
     out
 }
 
-/// (kuna `exporttrie`) The `(address, name)` of every export the image's
+/// (unlace `exporttrie`) The `(address, name)` of every export the image's
 /// export trie places in the image: the names a stripped dylib still carries
 /// once its symbol table is gone. Re-exports and absolute exports name no
 /// address here.

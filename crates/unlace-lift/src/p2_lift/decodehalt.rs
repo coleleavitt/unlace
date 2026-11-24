@@ -1,4 +1,4 @@
-//! **decodehalt** — a flow terminator kuna planted because it could not decode
+//! **decodehalt** — a flow terminator unlace planted because it could not decode
 //! the bytes says so, instead of printing as an ordinary `return;`.
 //!
 //! `FlowInfo` ends a path it cannot follow by planting an *artificial halt*:
@@ -14,8 +14,8 @@
 //! Upstream's `PrintC::opReturn` (printc.cc:774) renders those three as the
 //! pseudo-calls `halt_baddata()` / `halt_unimplemented()` / `halt_missing()`,
 //! and `FlowInfo::processInstruction` buffers a warning at the truncation point
-//! plus a header warning on the function.  kuna ported the halt but neither the
-//! rendering nor the warnings, so a function that ran off into bytes kuna could
+//! plus a header warning on the function.  unlace ported the halt but neither the
+//! rendering nor the warnings, so a function that ran off into bytes unlace could
 //! not read ended with a bare `return;`, `error: null` in `--json`, and nothing
 //! anywhere saying the body is incomplete — the reading an RE agent is least
 //! able to recover from, because it is indistinguishable from a function that
@@ -23,19 +23,19 @@
 //!
 //! The self-decrypting stub is the shape that motivated this: a packer XORs its
 //! payload in place and jumps into it, so the bytes at the target are ciphertext
-//! at load time and no decoder can read them.  kuna resolved the jump, decoded
+//! at load time and no decoder can read them.  unlace resolved the jump, decoded
 //! ciphertext until it hit a byte that is not an instruction, and printed
 //! `case 0x40190e: return;`.
 //!
 //! `noreturn` — the fourth halt bit, planted after a call that does not come
-//! back — is deliberately NOT renamed.  It is not a decode failure, kuna already
+//! back — is deliberately NOT renamed.  It is not a decode failure, unlace already
 //! reports it (`// no-return` on the call), and its rendering is pinned by the
 //! whole-corpus measurements behind `noreturn_propagate` and friends.
 
 use unlace_base::marshal::ElementId;
 use unlace_base::types::uint4;
 
-/// Marshaling element `<decodehalt>` (kuna 4000+ range; 4159 = calleescratchbody).
+/// Marshaling element `<decodehalt>` (unlace 4000+ range; 4159 = calleescratchbody).
 pub const ELEM_DECODEHALT: ElementId = ElementId::new("decodehalt", 4160);
 
 /// C++ `FlowInfo::processInstruction`'s bad-data truncation warning

@@ -1,4 +1,4 @@
-//! (kuna `osclassinfo`) DriverKit class records.
+//! (unlace `osclassinfo`) DriverKit class records.
 //!
 //! A DriverKit extension lists every class it defines in `__osclassinfo`: an
 //! array of pointers to `OSClassLoadInformation` records (0xa0 bytes:

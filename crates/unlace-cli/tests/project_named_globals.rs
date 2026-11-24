@@ -69,7 +69,7 @@ fn named_global_objects_compile_and_match_the_original_shared_library() {
             "{}",
             String::from_utf8_lossy(&built.stderr)
         );
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile-project",
             binary.to_str().unwrap(),
             "--jobs",
@@ -94,7 +94,7 @@ fn named_global_objects_compile_and_match_the_original_shared_library() {
         let global = globals[0].strip_suffix(';').unwrap();
         assert!(global.contains(object), "{header}");
         let literal_project = source.with_extension("literal-project");
-        let (literal_out, literal_err, literal_status) = common::run_kuna(&[
+        let (literal_out, literal_err, literal_status) = common::run_unlace(&[
             "decompile-project",
             binary.to_str().unwrap(),
             "--functions",
@@ -116,7 +116,7 @@ fn named_global_objects_compile_and_match_the_original_shared_library() {
         }
         for selected in selections {
             let isolated = source.with_extension(format!("isolated-{selected}"));
-            let (isolated_out, isolated_err, isolated_status) = common::run_kuna(&[
+            let (isolated_out, isolated_err, isolated_status) = common::run_unlace(&[
                 "decompile-project",
                 binary.to_str().unwrap(),
                 "--functions",
@@ -271,7 +271,7 @@ int last(void) { return consume((int *)(bytes+60)); }
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let (_, error, status) = common::run_kuna(&[
+    let (_, error, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "--functions",
@@ -416,7 +416,7 @@ long load(long *p, long b) { loaded = *p; if (loaded < b) return loaded / 3; ret
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "--functions",

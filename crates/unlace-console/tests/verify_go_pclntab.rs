@@ -1,5 +1,5 @@
 //! End-to-end gate for Go `pclntab` function-name recovery (`pclntab`, the
-//! kuna analog of Ghidra's `GolangSymbolAnalyzer` name-recovery half).
+//! unlace analog of Ghidra's `GolangSymbolAnalyzer` name-recovery half).
 //!
 //! The proof: a Go binary's functions render NAMED (`main.main`, `main.compute`,
 //! `runtime.*`) instead of `sub_<addr>`, recovered from the embedded pclntab — and
@@ -284,7 +284,7 @@ fn stripped_go_macho_functions_recovered_from_pclntab() {
 /// The PE arm. A `go build` for Windows carries no Go-named section at all: the
 /// build-info blob heads `.data` and the pclntab rides inside `.rdata`, so the
 /// image is only recognized as Go, and its table only found, by reading
-/// content. Cross-built pure-Go for each Windows architecture kuna decodes; on
+/// content. Cross-built pure-Go for each Windows architecture unlace decodes; on
 /// each, the names must come back and `main.main` must decompile calling
 /// `main.compute` by name. On amd64 the Go-gated rules must act too: the
 /// stack-growth guard folds away (`gomorestack auto`, keyed on the detected
@@ -357,7 +357,7 @@ fn fast_inventory_walk_leaves_pclntab_functions_to_the_table() {
                 .expect("bootstrap fixture with built processor specs");
             for &(option, value) in [("fast_funcdisc", "on")].iter().chain(options) {
                 prog.arch_mut()
-                    .set_kuna_option(option, value)
+                    .set_unlace_option(option, value)
                     .expect("option applies");
             }
             prog.commit_pending_analysis()

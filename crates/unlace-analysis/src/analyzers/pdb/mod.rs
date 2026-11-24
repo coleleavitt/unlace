@@ -13,15 +13,15 @@
 //!   [`codeview::CodeViewInfo`] (`{guid|sig, age, path}`). A pure extractor: no
 //!   `pdb` crate.
 //! - [`locate`] — `.pdb` location: the ordered candidate list (an explicit
-//!   `kuna_pdb_path`, the CodeView record's own filename beside the image, then
+//!   `unlace_pdb_path`, the CodeView record's own filename beside the image, then
 //!   `<image stem>.pdb` beside the image) + the GUID/age **fingerprint gate**
 //!   (the FID full-hash-match discipline — never apply a wrong/stale PDB).
 //! - [`walk`] — **PR-P1**: the global symbol-stream walk (`S_PUB32`/`S_GPROC32`
 //!   → function name + VMA) through the `pdb` crate.
-//! - [`kuna_pdbtpi`] — the TPI type stream mapped onto kuna datatypes.
-//! - [`kuna_pdbtypes`] — (`pdbtypes`) typed prototypes, stack and register
+//! - [`unlace_pdbtpi`] — the TPI type stream mapped onto unlace datatypes.
+//! - [`unlace_pdbtypes`] — (`pdbtypes`) typed prototypes, stack and register
 //!   locals, typed globals and vftables from the module and global streams.
-//! - [`kuna_pdblines`] — (`pdblines`) `file:line` comments from the C13 line
+//! - [`unlace_pdblines`] — (`pdblines`) `file:line` comments from the C13 line
 //!   programs.
 //!
 //! ## The pass ([`PdbPass`], the headline)
@@ -40,8 +40,8 @@
 //!      exists for the rename to bind even when reached only through the metadata).
 //!
 //! This pass is the NAME level: stripped `FUN_*` → the real name. Types,
-//! prototypes, locals, globals and vftables are [`kuna_pdbtypes`] (`pdbtypes`),
-//! source lines [`kuna_pdblines`] (`pdblines`); both open the same
+//! prototypes, locals, globals and vftables are [`unlace_pdbtypes`] (`pdbtypes`),
+//! source lines [`unlace_pdblines`] (`pdblines`); both open the same
 //! fingerprint-matched `.pdb` through [`open_matched`].
 //!
 //! ## Gating + parity safety
@@ -72,7 +72,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase, Sy
 
 /// The PE PDB-consuming pass (gate id `pdb`, default-on, DIV-129).
 ///
-/// The kuna analog of Ghidra's `PdbUniversalAnalyzer` (the pure-Java PDB analyzer;
+/// The unlace analog of Ghidra's `PdbUniversalAnalyzer` (the pure-Java PDB analyzer;
 /// the MS-DIA `PdbAnalyzer` is Windows-native and out of scope). Pure over `ctx`
 /// (reads `ctx.bytes` for the CodeView record + image base and `ctx.image_path`
 /// for the sidecar directory, then the located `.pdb` off the filesystem),
@@ -109,7 +109,7 @@ fn names(ctx: &AnalysisCtx) -> AnalysisOutput {
     let Some(cv) = codeview::extract_codeview(ctx.bytes) else {
         return out;
     };
-    // 2. Locate: the ordered candidate list (explicit `kuna_pdb_path`, then the
+    // 2. Locate: the ordered candidate list (explicit `unlace_pdb_path`, then the
     //    record's own filename beside the image, then `<stem>.pdb`; the
     //    opt-in symbol store is tried after them).
     let candidates = locate::pdb_candidates(ctx.image_path, &cv);

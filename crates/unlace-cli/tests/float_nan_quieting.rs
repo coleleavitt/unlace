@@ -80,7 +80,7 @@ int main(void) {
  return 0;
 }
 "#).unwrap();
-    let (default, stderr, rc) = common::run_kuna(&[
+    let (default, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         native.to_str().unwrap(),
         "--functions",
@@ -92,7 +92,7 @@ int main(void) {
         "the default nanignore compare drops quieting\n{default}"
     );
     for policy in ["none"] {
-        let (printed, stderr, rc) = common::run_kuna(&[
+        let (printed, stderr, rc) = common::run_unlace(&[
             "decompile-all",
             native.to_str().unwrap(),
             "--functions",

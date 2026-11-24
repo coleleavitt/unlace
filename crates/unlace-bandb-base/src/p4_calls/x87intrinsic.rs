@@ -1,4 +1,4 @@
-//! (kuna) The prototype model of the MSVC x86-32 one-operand x87 math intrinsics.
+//! (unlace) The prototype model of the MSVC x86-32 one-operand x87 math intrinsics.
 //!
 //! MSVC compiles `sin(x)`, `cos(x)`, `sqrt(x)` and their siblings on x86-32 into
 //! `fld <x>; call __CIsin`: the operand arrives in the x87 stack top `ST0` and the
@@ -18,7 +18,7 @@
 //! slot, which a model cannot state; MSVC calls them with only their two
 //! operands on the x87 stack, so nothing the caller keeps there is displaced.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 pub use crate::specnames::X87_UNARY_MODEL as MODEL_NAME;
 
@@ -132,8 +132,8 @@ pub fn binary_prototype_xml() -> String {
 
 /// Parse both prototypes and hand each element to `decode`.
 pub fn decode_prototype(
-    decode: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-) -> KunaResult<()> {
+    decode: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> UnlaceResult<()>,
+) -> UnlaceResult<()> {
     use unlace_base::xml::DocumentStorage;
     for xml in [prototype_xml(), binary_prototype_xml()] {
         let mut store = DocumentStorage::new();
@@ -144,7 +144,7 @@ pub fn decode_prototype(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.x87intrinsic_decode_prototype = Some(decode_prototype);
 }
 

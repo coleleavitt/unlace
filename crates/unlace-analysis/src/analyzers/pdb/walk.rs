@@ -1,7 +1,7 @@
 //! Walk the global + module symbol streams of an opened `.pdb` and recover
 //! function names + addresses.
 //!
-//! The kuna analog of Ghidra's `PdbUniversalAnalyzer` symbol-application loop
+//! The unlace analog of Ghidra's `PdbUniversalAnalyzer` symbol-application loop
 //! (`ApplySymbols` over the `SymbolGroup`s). For the NAME-level MVP (PR-P1) we read
 //! the two function-bearing symbol kinds — `S_PUB32` (Public) and `S_GPROC32`
 //! (Procedure) — resolve each to a VMA, and return `(vma, name)` pairs the

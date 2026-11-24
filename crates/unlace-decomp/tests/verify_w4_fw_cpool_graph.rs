@@ -21,7 +21,7 @@ use unlace_base::space::{
 };
 use unlace_base::types::uintb;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_decomp::callgraph::{CallGraph, ELEM_CALLGRAPH, ELEM_NODE, NodeIndex};
 use unlace_decomp::cpool::{
@@ -42,7 +42,7 @@ fn void_type() -> Rc<Datatype> {
 }
 
 impl CPoolTypeRef for VoidAccess {
-    fn encode_ref(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode_ref(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&unlace_base::marshal::ELEM_VOID);
         encoder.close_element(&unlace_base::marshal::ELEM_VOID);
         Ok(())
@@ -53,12 +53,12 @@ impl CPoolTypeRefProvider for VoidAccess {
         &self,
         _record: &unlace_decomp::cpool::CPoolRecord,
         encoder: &mut dyn Encoder,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.encode_ref(encoder)
     }
 }
 impl CPoolTypeFactory for VoidAccess {
-    fn decode_type(&mut self, decoder: &mut dyn Decoder) -> KunaResult<Rc<Datatype>> {
+    fn decode_type(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<Datatype>> {
         let id = decoder.open_element()?;
         decoder.close_element(id)?;
         Ok(void_type())
@@ -68,7 +68,7 @@ impl CPoolTypeFactory for VoidAccess {
         decoder: &mut dyn Decoder,
         _c: bool,
         _d: bool,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let id = decoder.open_element()?;
         decoder.close_element(id)?;
         Ok(void_type())

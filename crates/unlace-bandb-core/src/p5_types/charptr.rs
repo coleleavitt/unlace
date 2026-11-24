@@ -1,4 +1,4 @@
-//! A pointer the program only ever uses on characters is a `char *` (kuna `charptr`, P5).
+//! A pointer the program only ever uses on characters is a `char *` (unlace `charptr`, P5).
 //!
 //! `ActionInferTypes` seeds every Varnode from local op semantics and then pushes
 //! the seeds along the def-use graph.  Both halves lose a string pointer the moment
@@ -442,7 +442,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId, offsetted: bool) -> Us
         // `p + k` with a literal k is still the same object, unless the literal is
         // itself the address of a mapped global object — then the constant is the
         // base and the walked value is an index into it.  The grading is
-        // `kuna_ptrfromuse`'s, and this rule reuses it.
+        // `unlace_ptrfromuse`'s, and this rule reuses it.
         OpCode::CPUI_INT_ADD => {
             let other = if slot == 0 { 1 } else { 0 };
             let Some(other_vn) = o.get_in(other) else {
@@ -622,7 +622,7 @@ fn defined_by_string_constant(data: &Funcdata, vn: VarnodeId) -> bool {
     })
 }
 
-/// Does the constant `cvn` resolve to a NUL-terminated character array kuna has
+/// Does the constant `cvn` resolve to a NUL-terminated character array unlace has
 /// already recovered at that address?  The resolution is
 /// `ActionConstantPtr::isPointer`'s (`coreaction.cc:1167`), and the answer is
 /// the covering global symbol's own data-type.
@@ -691,11 +691,11 @@ pub fn folds_over(cand: &Rc<Datatype>, cur: &Rc<Datatype>) -> bool {
     0 > cand.type_order(cur).unwrap_or(0)
 }
 
-crate::kuna_flag!(
-    /// (kuna `charptr`) Commit a pointer-width parameter or stack local the
+crate::unlace_flag!(
+    /// (unlace `charptr`) Commit a pointer-width parameter or stack local the
     /// program only ever uses on characters to `char *`; option
     /// `charptr on|off`.  The rule lives in
-    /// [`kuna_charptr`](crate::charptr).
+    /// [`unlace_charptr`](crate::charptr).
     CharPtr,
     "charptr",
     "character-pointer evidence",

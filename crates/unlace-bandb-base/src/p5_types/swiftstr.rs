@@ -1,4 +1,4 @@
-//! (kuna `swiftstr`) Swift string literals — the two constant words a
+//! (unlace `swiftstr`) Swift string literals — the two constant words a
 //! `Swift.String` is at `-O`.
 //!
 //! ```text
@@ -68,7 +68,7 @@ pub fn parse_mode(value: &str) -> Result<(FatStrMode, String), String> {
 
 /// Is the rewrite live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<SwiftStr>().0 {
+    match data.get_arch().unlace_options.get::<SwiftStr>().0 {
         FatStrMode::Off => false,
         FatStrMode::Auto => data.get_arch().source_lang.is_swift(),
         FatStrMode::Always => true,
@@ -785,7 +785,7 @@ fn literal_at(data: &Funcdata, op: OpId, index: int4) -> Option<Literal> {
     None
 }
 
-/// (kuna) `RuleSwiftString` — replace a Swift string literal's object word
+/// (unlace) `RuleSwiftString` — replace a Swift string literal's object word
 /// with the literal (option `fatstr`, default auto).
 pub struct RuleSwiftString {
     enabled: bool,
@@ -898,9 +898,9 @@ pub fn specs() -> Vec<RuleSpec> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SwiftStr(pub crate::fatstr::FatStrMode);
 
-impl crate::optionset::KunaOption for SwiftStr {
+impl crate::optionset::UnlaceOption for SwiftStr {
     const NAME: &'static str = "swiftstr";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SwiftStr(crate::fatstr::FatStrMode::Auto)
@@ -910,8 +910,8 @@ impl crate::optionset::KunaOption for SwiftStr {
         SwiftStr(crate::fatstr::FatStrMode::Auto)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (mode, msg) = parse_mode(value).map_err(unlace_base::error::KunaError::parse)?;
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        let (mode, msg) = parse_mode(value).map_err(unlace_base::error::UnlaceError::parse)?;
         Ok((SwiftStr(mode), msg))
     }
 }

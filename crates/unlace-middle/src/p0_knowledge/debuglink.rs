@@ -1,4 +1,4 @@
-//! (kuna) The `debuglink` option gate: name a stripped ELF's functions from its
+//! (unlace) The `debuglink` option gate: name a stripped ELF's functions from its
 //! separate debug file (build-id, `.gnu_debuglink`) or its MiniDebugInfo
 //! (`.gnu_debugdata`). A loader-tier option, bridged through an environment
 //! variable like `dynrelocs`, because the symbols are read inside `load file`.
@@ -18,8 +18,8 @@ pub fn set_debuglink_env(on: bool) {
     unsafe { std::env::set_var(DEBUGLINK_ENV, if on { "on" } else { "off" }) };
 }
 
-crate::kuna_flag!(
-    /// (kuna `debuglink`) The requested state of the separate debug file lookup.
+crate::unlace_flag!(
+    /// (unlace `debuglink`) The requested state of the separate debug file lookup.
     DebugLink,
     "debuglink",
     "separate debug file lookup",

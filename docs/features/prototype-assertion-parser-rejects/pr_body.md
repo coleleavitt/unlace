@@ -42,7 +42,7 @@ or the option catalog offers another way to state one.
 
 ## The tests
 
-Seven parser cases in `kuna-console` (both specifier positions, the callback
+Seven parser cases in `console` (both specifier positions, the callback
 shape, an unregistered convention still rejected, two conventions rejected, and
 the no-registry parse rejected exactly as before). Two promoted probes on the
 in-repo `fauxware` fixture: `prototype-assertion-parser-rejects.json` is the

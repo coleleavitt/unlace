@@ -19,7 +19,7 @@
 //! and inert when `LC_FUNCTION_STARTS` is present, so it is default-OFF.
 //!
 //! Only the function **starts** are read. The compact encodings (frame size,
-//! saved-register set, frameless stack size) are deliberately ignored: kuna's
+//! saved-register set, frameless stack size) are deliberately ignored: unlace's
 //! S5/S7 frame analysis recovers the stack frame from the code itself, so the
 //! encoding adds nothing at the decompiler tier — the same reason `eh_frame_full`
 //! inherits CFI rather than rebuilding it.
@@ -31,12 +31,12 @@ use object::{Architecture, Endianness, FileKind};
 use crate::loader::format::{FormatKind, detect};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-/// (kuna `unwindstarts`) Mach-O `__unwind_info` function-start discovery: read
+/// (unlace `unwindstarts`) Mach-O `__unwind_info` function-start discovery: read
 /// the second-level pages of `__TEXT,__unwind_info` and emit each function start
 /// as a discovered entry. Registered always (the facts are cheap to compute and
 /// are stashed at load), but the COMMIT is gated by `--option unwindstarts on`
 /// (default-OFF, output-changing) via `engine.rs::analysis_pass_enabled` →
-/// `arch.kuna_options.get::<unlace_decomp::analysisgates::Unwindstarts>().0`, so a default run is byte-identical to before.
+/// `arch.unlace_options.get::<unlace_decomp::analysisgates::Unwindstarts>().0`, so a default run is byte-identical to before.
 pub struct UnwindInfoStartsPass;
 
 impl AnalysisPass for UnwindInfoStartsPass {

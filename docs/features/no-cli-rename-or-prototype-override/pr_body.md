@@ -111,7 +111,7 @@ dataset).
 ## Every directive's test asserts the emitted C CHANGED
 
 Not that the command returned Ok — reviewing on the return value is how `override prototype`
-got shipped broken. `crates/kuna-console/tests/verify_assertplane.rs`, 11 tests, each a diff
+got shipped broken. `crates/console/tests/verify_assertplane.rs`, 11 tests, each a diff
 against the un-asserted baseline: prototype (signature + parameter names), param (locked
 input), return (locked output), name+type (`char v2 [8]` → `char credbuf [16]`), typedef+type
 (`creds v2;` / `v2.raw`), data (`sneaky` → `shadowpw` at the call), comment (`/* ... */` in

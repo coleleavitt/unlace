@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) An indirect call through a method slot of a Go itab
+//! (unlace `goitabcalls`) An indirect call through a method slot of a Go itab
 //! prints as `Interface.Method(receiver, ...)`.
 //!
 //! The callee of the CALLIND is a LOAD of one slot of an itab (`PTRSUB` or
@@ -39,7 +39,7 @@ const MAX_NESTING: u32 = 8;
 /// `Interface.Method` for a CALLIND through an itab method slot, under
 /// `option goitabcalls`.
 pub(crate) fn interface_method(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<String> {
-    if !arch.kuna_options.get::<GoItabCalls>().0 {
+    if !arch.unlace_options.get::<GoItabCalls>().0 {
         return None;
     }
     let op = fd.obank().get(id)?;
@@ -58,7 +58,7 @@ pub(crate) fn interface_method(fd: &Funcdata, arch: &Architecture, id: OpId) -> 
     let interface = table_interface(fd, arch, table, MAX_DEPTH)?;
     let types = arch.types();
     let name = itab_record_name(&interface);
-    if types.kuna_lang_facet(&name)
+    if types.unlace_lang_facet(&name)
         != Some(LangFacet::GoItab {
             interface: interface.clone(),
         })
@@ -201,7 +201,7 @@ fn typed_table(arch: &Architecture, ty: &Rc<Datatype>) -> Option<String> {
     {
         return None;
     }
-    match arch.types().kuna_lang_facet(record.get_name())? {
+    match arch.types().unlace_lang_facet(record.get_name())? {
         LangFacet::GoItab { interface } => Some(interface),
         _ => None,
     }
@@ -255,7 +255,7 @@ fn receiver_field_interface(
 /// The interface of the field at byte `offset` of named struct `record`, from
 /// its `GoInterfaceFields` facet.
 fn interface_field_at(arch: &Architecture, record: &str, offset: i64) -> Option<String> {
-    match arch.types().kuna_lang_facet(record)? {
+    match arch.types().unlace_lang_facet(record)? {
         LangFacet::GoInterfaceFields { fields } => fields
             .into_iter()
             .find(|(at, _)| i64::from(*at) == offset)
@@ -346,7 +346,7 @@ fn value_receiver_type(arch: &Architecture, name: &str) -> Option<String> {
         return None;
     }
     matches!(
-        arch.types().kuna_lang_facet(record)?,
+        arch.types().unlace_lang_facet(record)?,
         LangFacet::GoInterfaceFields { .. }
     )
     .then(|| record.to_string())
@@ -377,7 +377,7 @@ fn struct_field_interface(
         return None;
     }
     if let Some(LangFacet::GoInterfaceFields { fields }) =
-        arch.types().kuna_lang_facet(record.get_name())
+        arch.types().unlace_lang_facet(record.get_name())
     {
         if let Some((_, interface)) = fields.iter().find(|(at, _)| i64::from(*at) == offset) {
             return Some(interface.clone());

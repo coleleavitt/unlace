@@ -1,4 +1,4 @@
-//! (kuna `dynrelocs`) The dynamic relocations an image's `PT_DYNAMIC` names,
+//! (unlace `dynrelocs`) The dynamic relocations an image's `PT_DYNAMIC` names,
 //! read without section headers.
 //!
 //! The run-time loader never reads section headers: it finds its tables through

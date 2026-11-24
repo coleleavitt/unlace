@@ -27,7 +27,7 @@
 //! - `p9_emit/coreaction_casts.rs`    — cast insertion hooks (P9)
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{Wrap, int2, int4, uint4, uint8, uintm};
 
 use crate::block::{BasicData, BlockGraph, BlockKind, FlowBlock, block_flags};
@@ -123,7 +123,7 @@ impl LanedKey {
     }
 }
 
-/// (kuna `framelayout`) One recovered stack-frame slot: the name, data type and
+/// (unlace `framelayout`) One recovered stack-frame slot: the name, data type and
 /// byte size a `restructure_varnode` pass gave it.
 ///
 /// Recorded per pass into [`Funcdata::record_frame_slots`] so a slot that a later
@@ -140,7 +140,7 @@ pub struct FrameSlot {
     pub size: int4,
 }
 
-/// (kuna `--assert`) A `type` directive's retype of a whole printed variable to `ct`, keeping
+/// (unlace `--assert`) A `type` directive's retype of a whole printed variable to `ct`, keeping
 /// its width and kind (`stablenames::unit_retype`); `infer` when type inference has to read
 /// it (`stablenames::reaches_inference`); `from` the type the variable was printed with.
 #[derive(Clone, Debug)]
@@ -151,7 +151,7 @@ pub struct UnitRetype {
 }
 
 /// A machine home a Varnode's value was retained from when an equivalent value replaced it
-/// (`kuna_varsources`).
+/// (`unlace_varsources`).
 #[derive(Debug, Clone)]
 pub struct StorageSource {
     pub address: Address,
@@ -159,8 +159,8 @@ pub struct StorageSource {
     pub write_address: Option<Address>,
 }
 
-/// (kuna `--assert`) A local-scope Symbol a `name`/`type` directive touched on
-/// this pass: see [`Funcdata::kuna_directive_symbols`].
+/// (unlace `--assert`) A local-scope Symbol a `name`/`type` directive touched on
+/// this pass: see [`Funcdata::unlace_directive_symbols`].
 #[derive(Clone, Debug)]
 pub struct DirectiveSymbol {
     pub symbol: crate::database::SymbolId,
@@ -178,18 +178,18 @@ pub struct DirectiveSymbol {
 }
 
 pub struct Funcdata {
-    /// (kuna `switchextent`) The tables of the functions after this one, once
+    /// (unlace `switchextent`) The tables of the functions after this one, once
     /// a table that is the function's last asked for them.
-    pub kuna_later_tables: Option<std::rc::Rc<Vec<u64>>>,
-    /// (kuna `switchextent`) The table whose sanity check asked the flow for
-    /// [`Self::kuna_later_tables`], shared with the jump-table partial.
-    pub kuna_later_wanted: std::rc::Rc<std::cell::Cell<Option<u64>>>,
-    pub kuna_x87_empty_returns: Vec<Address>,
-    /// (kuna `x87depth`) Returns proven to leave one value on the x87 stack.
-    pub kuna_x87_float_returns: Vec<Address>,
-    /// (kuna `x87depth`) Calls proven to leave one value on the x87 stack.
-    pub kuna_x87_float_calls: Vec<Address>,
-    pub kuna_fpu_trunc_views: Vec<OpId>,
+    pub unlace_later_tables: Option<std::rc::Rc<Vec<u64>>>,
+    /// (unlace `switchextent`) The table whose sanity check asked the flow for
+    /// [`Self::unlace_later_tables`], shared with the jump-table partial.
+    pub unlace_later_wanted: std::rc::Rc<std::cell::Cell<Option<u64>>>,
+    pub unlace_x87_empty_returns: Vec<Address>,
+    /// (unlace `x87depth`) Returns proven to leave one value on the x87 stack.
+    pub unlace_x87_float_returns: Vec<Address>,
+    /// (unlace `x87depth`) Calls proven to leave one value on the x87 stack.
+    pub unlace_x87_float_calls: Vec<Address>,
+    pub unlace_fpu_trunc_views: Vec<OpId>,
     /// Boolean properties associated with \b this function (C++ `flags`)
     flags: uint4,
     /// Creation index of first Varnode created after start of cleanup
@@ -249,7 +249,7 @@ pub struct Funcdata {
     /// [`crate::varmap::ScopeLocal`].  The IR-mutating restructure/sync over the
     /// live varnode graph remains a documented seam (LOSS-109).
     localmap: Option<crate::varmap::ScopeLocal>,
-    /// (kuna `framelayout`) Every stack-frame slot any `restructure_varnode` pass
+    /// (unlace `framelayout`) Every stack-frame slot any `restructure_varnode` pass
     /// ever recovered, keyed by signed stack offset -> `(name, type, size)`.
     ///
     /// `restructure_varnode` re-derives the frame from the LIVE stack Varnodes on
@@ -262,7 +262,7 @@ pub struct Funcdata {
     /// Ninja's variable list do.  This side table accumulates the union so
     /// `extract_variables` can report it; it never feeds back into the IR.
     frame_slots: std::cell::RefCell<std::collections::BTreeMap<i64, FrameSlot>>,
-    /// (kuna `castobject`) Every stack object a `restructure_varnode` pass
+    /// (unlace `castobject`) Every stack object a `restructure_varnode` pass
     /// re-declared, as `(offset, size, type)`; read by
     /// [`crate::castobject::reconcile`] once the variables are merged.
     cast_objects: std::cell::RefCell<
@@ -272,39 +272,39 @@ pub struct Funcdata {
             std::rc::Rc<crate::dtype::Datatype>,
         )>,
     >,
-    /// (kuna `stackstoreguard`) Set once a `restructure_varnode` pass lays out a
+    /// (unlace `stackstoreguard`) Set once a `restructure_varnode` pass lays out a
     /// guarded store's reach; later passes keep doing so
     /// (`p6_variables/storereach.rs`).
     store_reach_committed: std::cell::Cell<bool>,
-    /// (kuna `stackstoreguard`) The STOREs of any width heritage guarded a
+    /// (unlace `stackstoreguard`) The STOREs of any width heritage guarded a
     /// written stack range against (`p3_dataflow/stackstoreguard.rs`).
     indexed_guard_stores: std::cell::RefCell<std::collections::BTreeSet<OpId>>,
-    /// (kuna `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
+    /// (unlace `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
     indexed_guard_indirects: std::cell::RefCell<std::collections::BTreeSet<OpId>>,
-    /// (kuna `stackstoreguard`) Every signed stack range a layout pass found
+    /// (unlace `stackstoreguard`) Every signed stack range a layout pass found
     /// only the guard keeps (`p6_variables/storereach.rs`).
     guard_only_seen: std::cell::RefCell<Vec<(unlace_base::types::intb, unlace_base::types::intb)>>,
-    /// (kuna `stackstoreguard`) Set when the guard is off for this function.
+    /// (unlace `stackstoreguard`) Set when the guard is off for this function.
     /// Survives `clear()`.
     stack_store_guard_withdrawn: std::cell::Cell<bool>,
-    /// (kuna `stackstoreguard`) Set when the final layout spoiled what the
+    /// (unlace `stackstoreguard`) Set when the final layout spoiled what the
     /// guard needs; the drive then analyzes the function again without it.
     stack_store_guard_spoiled: std::cell::Cell<bool>,
     stack_byte_copy_ops: std::collections::BTreeSet<OpId>,
-    /// (kuna `condstmts`) Block start addresses structured as complex from the
+    /// (unlace `condstmts`) Block start addresses structured as complex from the
     /// first structuring on; set by the drive and kept across `clear()`.
-    kuna_condstmts_seed: std::collections::BTreeSet<Address>,
-    /// (kuna `condstmts`) Block start addresses the final structure folded into a
+    unlace_condstmts_seed: std::collections::BTreeSet<Address>,
+    /// (unlace `condstmts`) Block start addresses the final structure folded into a
     /// condition operand over the cap.
-    kuna_condstmts_hits: std::collections::BTreeSet<Address>,
-    /// (kuna `earlyrestart`) Set when heritage bumped a space's dead-code delay
+    unlace_condstmts_hits: std::collections::BTreeSet<Address>,
+    /// (unlace `earlyrestart`) Set when heritage bumped a space's dead-code delay
     /// in this pass: the analysis is about to be thrown away and redone.
-    kuna_restart_now: bool,
-    /// (kuna `deadwaves`) While a rule pool's pass records it, every op
+    unlace_restart_now: bool,
+    /// (unlace `deadwaves`) While a rule pool's pass records it, every op
     /// dead-op removal took out and the Varnodes it read
     /// (`infra/action.rs (ActionPool::apply_wave)`).
     dead_wave_log: Option<(Vec<OpId>, Vec<VarnodeId>)>,
-    /// (kuna `deadcascade`) Does dead-op removal in the running pool pass take
+    /// (unlace `deadcascade`) Does dead-op removal in the running pool pass take
     /// the dead chain behind the removed op out with it?
     dead_cascade_now: bool,
     /// (unlace decompile-all watchdog) What was left of the per-function budget
@@ -323,11 +323,12 @@ pub struct Funcdata {
     /// Container of Varnode objects for \b this function (C++ `vbank`)
     vbank: VarnodeBank,
     /// Machine homes retained when equivalent values replace their Varnodes.
-    kuna_storage_sources: crate::fasthash::FxHashMap<VarnodeId, Vec<StorageSource>>,
-    kuna_call_transport: crate::fasthash::FxHashSet<VarnodeId>,
-    kuna_call_transport_projections: crate::fasthash::FxHashMap<VarnodeId, int4>,
-    kuna_denied_storage_writes: crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
-    kuna_meaningful_storage_writes: crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    unlace_storage_sources: crate::fasthash::FxHashMap<VarnodeId, Vec<StorageSource>>,
+    unlace_call_transport: crate::fasthash::FxHashSet<VarnodeId>,
+    unlace_call_transport_projections: crate::fasthash::FxHashMap<VarnodeId, int4>,
+    unlace_denied_storage_writes: crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    unlace_meaningful_storage_writes:
+        crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
     /// Container of PcodeOp objects for \b this function (C++ `obank`)
     obank: PcodeOpBank,
     /// Unstructured basic blocks (C++ `bblocks`)
@@ -372,7 +373,7 @@ pub struct Funcdata {
     /// [`Self::ensure_covermerge`].  `pub(crate)` so the `funcdata_merge` bridge
     /// module can take/replace it.
     pub covermerge: Option<crate::merge::Merge>,
-    /// (kuna perf) The block table every Cover walk shares while a merge pass
+    /// (unlace perf) The block table every Cover walk shares while a merge pass
     /// runs ([`Self::with_covermerge`]), which edits ops but never blocks.
     pub cover_blocks: Option<BlockTable>,
     /// Revision of the call/store set and its basic-block positions.
@@ -398,17 +399,17 @@ pub struct Funcdata {
     /// `(comment_type, placement_address, text)`; the function address is
     /// `baseaddr`.
     pending_comments: Vec<(unlace_base::types::uint4, Address, String)>,
-    /// (kuna `vectorabi`) Flow met a vector operation (a fused lane run or a
+    /// (unlace `vectorabi`) Flow met a vector operation (a fused lane run or a
     /// vector user-op), so the function's prototypes use the vector model.
-    pub kuna_vector_code: bool,
+    pub unlace_vector_code: bool,
     /// Names `ActionMapGlobals` gave to the uncovered parts of a global accessed
     /// wider than its Symbol (C++ `Funcdata::coverVarnodes`): `(address, size,
     /// name)`.
     global_covers: Vec<(Address, int4, String)>,
-    /// (kuna `mapglobalsyms`) The global storage `mapGlobals` found no Symbol
+    /// (unlace `mapglobalsyms`) The global storage `mapGlobals` found no Symbol
     /// for, with the type it would get one under.
     new_globals: Vec<(Address, Rc<crate::dtype::Datatype>)>,
-    /// (kuna `structsynth`) Did the last `ActionInferTypes` pass reach the
+    /// (unlace `structsynth`) Did the last `ActionInferTypes` pass reach the
     /// lattice fixpoint -- i.e. run a full propagation that changed nothing?
     ///
     /// `ActionInferTypes::apply` returns 0 unconditionally (a type change is
@@ -416,33 +417,33 @@ pub struct Funcdata {
     /// propagation to settle and an action placed after it fires on the FIRST of
     /// up to seven passes.  A pass that wants a decided pointer picture reads
     /// this instead.
-    kuna_infertypes_settled: bool,
+    unlace_infertypes_settled: bool,
     /// Scheduled constant-pointer pass count for the opt-in array-base guard.
-    pub kuna_global_array_anchor_passes: Option<u8>,
-    /// (kuna `regnarrow`) How many `fullloop` passes narrowed register-local webs.
-    pub kuna_regnarrow_runs: u8,
-    /// (kuna `regnarrow`) The narrow values those passes created.
-    pub kuna_regnarrow_values: std::collections::BTreeSet<VarnodeId>,
-    /// (kuna `regsigned`) The sign-extended narrow values those passes created.
-    pub kuna_regsigned_values: std::collections::BTreeSet<VarnodeId>,
-    /// (kuna `regnarrow`) Seeds whose web the flow could not rebuild.
-    pub kuna_regnarrow_failed: std::collections::BTreeSet<VarnodeId>,
-    /// (kuna `calltargettype`) The function-pointer type each indirect call
+    pub unlace_global_array_anchor_passes: Option<u8>,
+    /// (unlace `regnarrow`) How many `fullloop` passes narrowed register-local webs.
+    pub unlace_regnarrow_runs: u8,
+    /// (unlace `regnarrow`) The narrow values those passes created.
+    pub unlace_regnarrow_values: std::collections::BTreeSet<VarnodeId>,
+    /// (unlace `regsigned`) The sign-extended narrow values those passes created.
+    pub unlace_regsigned_values: std::collections::BTreeSet<VarnodeId>,
+    /// (unlace `regnarrow`) Seeds whose web the flow could not rebuild.
+    pub unlace_regnarrow_failed: std::collections::BTreeSet<VarnodeId>,
+    /// (unlace `calltargettype`) The function-pointer type each indirect call
     /// states, for a call whose target is cast at the call: the cast names it.
-    kuna_call_target_types: std::collections::HashMap<OpId, std::rc::Rc<crate::dtype::Datatype>>,
-    /// (kuna) Why the decompile pipeline aborted for this function, when it did.
+    unlace_call_target_types: std::collections::HashMap<OpId, std::rc::Rc<crate::dtype::Datatype>>,
+    /// (unlace) Why the decompile pipeline aborted for this function, when it did.
     ///
     /// A caught per-function abort (`LOSS-131`) unwinds and discards the
     /// half-built `Funcdata`, so the console keeps rendering the *previous*,
     /// un-decompiled one — which has no structured blocks.  The driver stamps
     /// the recoverable error text here
-    /// ([`Self::set_kuna_pipeline_failure`]) so the printer says the pipeline
+    /// ([`Self::set_unlace_pipeline_failure`]) so the printer says the pipeline
     /// failed, and why, instead of blaming structuring (`PrintC::emit_function_document`).
-    kuna_pipeline_failure: Option<String>,
+    unlace_pipeline_failure: Option<String>,
     /// The \e fspec handles this function's call-spec annotations registered
     /// in the fspec-space side table, released when the function is dropped.
-    pub kuna_fspec_handles: Vec<unlace_base::types::uintb>,
-    /// (kuna) The flow overrides `FlowInfo::process` asked for and
+    pub unlace_fspec_handles: Vec<unlace_base::types::uintb>,
+    /// (unlace) The flow overrides `FlowInfo::process` asked for and
     /// [`Self::override_flow`] refused, as `(instruction, flow type, reason)`.
     ///
     /// A refusal is a REJECTED caller assertion, not a reason to discard the
@@ -450,142 +451,142 @@ pub struct Funcdata {
     /// one this run would have produced without the directive.  Recording it here
     /// is what lets the front-ends report the rejection (`--assert` ledger, exit
     /// code) while still emitting the C.
-    kuna_rejected_flow: Vec<(Address, unlace_base::types::uint4, String)>,
-    /// (kuna `--assert callee`) The caller-stated indirect-call destinations
+    unlace_rejected_flow: Vec<(Address, unlace_base::types::uint4, String)>,
+    /// (unlace `--assert callee`) The caller-stated indirect-call destinations
     /// the followed flow did not apply, as `(call site, callee, reason)`.
-    kuna_rejected_callee: Vec<(Address, Address, String)>,
-    /// (kuna `--assert`) The local-scope Symbols the `name`/`type` directives
+    unlace_rejected_callee: Vec<(Address, Address, String)>,
+    /// (unlace `--assert`) The local-scope Symbols the `name`/`type` directives
     /// applied to THIS pass renamed, retyped or created, each keyed back to the
     /// identifier the pass printed for its variable.  A rebuilt `Funcdata` starts
     /// empty, so the entries are exactly one batch: the directives between two
     /// decompiles.
-    kuna_directive_symbols: Vec<DirectiveSymbol>,
+    unlace_directive_symbols: Vec<DirectiveSymbol>,
     /// One past the last default index the naming pass handed out.
-    kuna_default_name_end: int4,
-    /// Whether the naming pass records [`kuna_name_snapshot`](crate::stablenames::FuncdataStablenamesExt::kuna_name_snapshot).
-    kuna_record_names: bool,
+    unlace_default_name_end: int4,
+    /// Whether the naming pass records [`unlace_name_snapshot`](crate::stablenames::FuncdataStablenamesExt::unlace_name_snapshot).
+    unlace_record_names: bool,
     /// The local each replayed rename or retype reached, by the name the
     /// previous decompile printed it under; see
     /// `stablenames::directive_targets`.
-    kuna_directive_targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
-    /// (kuna, ghidra Phase 4) WIRE-ONLY symbols the encode-time link pass
+    unlace_directive_targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
+    /// (unlace, ghidra Phase 4) WIRE-ONLY symbols the encode-time link pass
     /// synthesized for named HighVariables the analysis deliberately left
     /// symbol-less — see [`crate::database::WireSymbol`].  They are encoded
     /// into `<localdb>` and referenced by `<high symref>` / `<vardecl symref>`
     /// but never enter the analysis scope, so the wire encode cannot perturb
     /// the emitted C.  Empty outside the ghidra-mode encode.
-    pub kuna_wire_symbols: Vec<crate::database::WireSymbol>,
-    pub kuna_wrapped_wire_storage: std::collections::BTreeMap<uint8, (Address, int4)>,
-    /// Index into [`Self::kuna_wire_symbols`] per HighVariable.
-    pub kuna_wire_symbol_for_high:
+    pub unlace_wire_symbols: Vec<crate::database::WireSymbol>,
+    pub unlace_wrapped_wire_storage: std::collections::BTreeMap<uint8, (Address, int4)>,
+    /// Index into [`Self::unlace_wire_symbols`] per HighVariable.
+    pub unlace_wire_symbol_for_high:
         std::collections::BTreeMap<crate::context::HighVariableId, usize>,
-    /// (kuna `calleeretpurge`) Per direct-call-target extrapop read off the
+    /// (unlace `calleeretpurge`) Per direct-call-target extrapop read off the
     /// callee's own `ret imm16`, keyed by `(space index, entry offset)`.
-    kuna_callee_purge: std::collections::HashMap<(int4, unlace_base::types::uintb), int4>,
-    /// (kuna `stackexitanchor`) `(call, value)`: the stack pointer after `call`
+    unlace_callee_purge: std::collections::HashMap<(int4, unlace_base::types::uintb), int4>,
+    /// (unlace `stackexitanchor`) `(call, value)`: the stack pointer after `call`
     /// equals the input one plus `value`, read off the raw epilogue.
-    kuna_stack_exit_anchors: Vec<(OpId, int4)>,
-    /// (kuna `varargstackargs`) The direct-call callees whose body runs Apple's
+    unlace_stack_exit_anchors: Vec<(OpId, int4)>,
+    /// (unlace `varargstackargs`) The direct-call callees whose body runs Apple's
     /// `va_start`, by `(space index, entry offset)`; `None` when the target does
     /// not pass variadic arguments the Apple way.
-    kuna_darwin_variadic: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
-    /// (kuna `swiftcall`) Direct callees whose bodies do not read `swiftself`
+    unlace_darwin_variadic: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
+    /// (unlace `swiftcall`) Direct callees whose bodies do not read `swiftself`
     /// before writing it, by `(space index, entry offset)`; seeded by
     /// [`crate::swiftcall::seed_self_readers`].
-    kuna_swift_self_unread: std::collections::HashSet<(int4, unlace_base::types::uintb)>,
-    /// (kuna `hiddenretarg`) The values a veto removed from a call's
+    unlace_swift_self_unread: std::collections::HashSet<(int4, unlace_base::types::uintb)>,
+    /// (unlace `hiddenretarg`) The values a veto removed from a call's
     /// hidden-return register, as the leaves
     /// [`crate::hiddenretarg::value_leaves`] finds. Cleared with the
     /// Varnodes on a restart.
-    kuna_hiddenret_vetoed: std::collections::HashSet<VarnodeId>,
-    /// (kuna callee-contract) May this drive bootstrap direct callees from the P4
+    unlace_hiddenret_vetoed: std::collections::HashSet<VarnodeId>,
+    /// (unlace callee-contract) May this drive bootstrap direct callees from the P4
     /// active-input trial storage?  Armed only by a single-function drive on a
     /// compiler spec that states `<prefersplit>`; every other surface keeps its
     /// own schedule.
-    kuna_callee_contract_armed: bool,
-    /// (kuna callee-contract) Direct callees whose P4 active-input trials sit in a
+    unlace_callee_contract_armed: bool,
+    /// (unlace callee-contract) Direct callees whose P4 active-input trials sit in a
     /// preferred-split register, queued by `ActionActiveParam` for the drive's
     /// bootstrap (its pause).
-    kuna_callee_split_calls: Vec<Address>,
-    /// (kuna `callrettype`) The loader's data ranges, for telling an address
+    unlace_callee_split_calls: Vec<Address>,
+    /// (unlace `callrettype`) The loader's data ranges, for telling an address
     /// from a number ([`crate::callrettype::contradicted`]).
-    kuna_callret_data: std::rc::Rc<Vec<(u64, u64)>>,
-    /// (kuna `voidret`) The return storage this function's callers read.
-    kuna_forced_return: Vec<(Address, int4)>,
-    /// (kuna `voidret`) The pieces of that storage whose RETURN read was planted.
-    kuna_forced_return_planted: Vec<(Address, int4)>,
-    /// (kuna `callresultuse`) The result register whose RETURN read was planted
+    unlace_callret_data: std::rc::Rc<Vec<(u64, u64)>>,
+    /// (unlace `voidret`) The return storage this function's callers read.
+    unlace_forced_return: Vec<(Address, int4)>,
+    /// (unlace `voidret`) The pieces of that storage whose RETURN read was planted.
+    unlace_forced_return_planted: Vec<(Address, int4)>,
+    /// (unlace `callresultuse`) The result register whose RETURN read was planted
     /// so a call-to-call hand-off is heritaged; its return trial is settled by
     /// `callresultuse::settle_planted`.
-    kuna_callresultuse_planted: Option<(Address, int4)>,
-    /// (kuna `voidret`) A reader keeps this function's float return as another
+    unlace_callresultuse_planted: Option<(Address, int4)>,
+    /// (unlace `voidret`) A reader keeps this function's float return as another
     /// type, so the float-register vote on the return is withdrawn.
-    kuna_float_return_withdrawn: bool,
-    /// (kuna `floatbits`) An inference pass typed this function's return a
+    unlace_float_return_withdrawn: bool,
+    /// (unlace `floatbits`) An inference pass typed this function's return a
     /// float because its float-register input reaches it only through bit ops.
-    kuna_float_bits_return: bool,
-    /// (kuna `voidret`) The `void` callees' results this function's return would be.
-    kuna_forced_claims: Vec<((int4, unlace_base::types::uintb), (Address, int4))>,
-    /// (kuna `voidret`) The storage this function's callers read of the word it
+    unlace_float_bits_return: bool,
+    /// (unlace `voidret`) The `void` callees' results this function's return would be.
+    unlace_forced_claims: Vec<((int4, unlace_base::types::uintb), (Address, int4))>,
+    /// (unlace `voidret`) The storage this function's callers read of the word it
     /// returns zero-extended, wider than the word.
-    kuna_wide_return: Option<(Address, int4)>,
-    /// (kuna `voidret`) The zero-extended word the RETURN pull trimmed the return
+    unlace_wide_return: Option<(Address, int4)>,
+    /// (unlace `voidret`) The zero-extended word the RETURN pull trimmed the return
     /// to, and whether its sign bit may be set.
-    kuna_zext_word: Option<(Address, int4, bool)>,
-    /// (kuna `floatbits`) The callees whose float return the bits of a
+    unlace_zext_word: Option<(Address, int4, bool)>,
+    /// (unlace `floatbits`) The callees whose float return the bits of a
     /// float-register input made one.
-    kuna_callee_float_bits: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
-    /// (kuna `voidret`) Per callee, whether each parameter its last decompile
+    unlace_callee_float_bits: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    /// (unlace `voidret`) Per callee, whether each parameter its last decompile
     /// recovered is a float (`Some(true)`), an integer or pointer (`Some(false)`).
-    kuna_callee_params:
+    unlace_callee_params:
         std::collections::BTreeMap<(int4, unlace_base::types::uintb), Vec<Option<bool>>>,
-    /// (kuna `voidret`) Per callee recovered returning a value, the storage its
+    /// (unlace `voidret`) Per callee recovered returning a value, the storage its
     /// last decompile returned it in.
-    kuna_callee_return_storage:
+    unlace_callee_return_storage:
         std::collections::BTreeMap<(int4, unlace_base::types::uintb), (Address, int4)>,
-    /// (kuna `floatreg`) The narrow float registers (ARM `s0`) whose other half
+    /// (unlace `floatreg`) The narrow float registers (ARM `s0`) whose other half
     /// of the pair the function's own code touches.
-    kuna_float_pair_halves: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
-    /// (kuna `voidret`) Whether `ancestor_op_use` is scoring that storage, where a
+    unlace_float_pair_halves: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    /// (unlace `voidret`) Whether `ancestor_op_use` is scoring that storage, where a
     /// call's result used only on the way to the RETURN counts as the return value.
-    kuna_forced_scoring: bool,
-    /// (kuna `varargsharedfloat`) The call whose other active argument slots a
+    unlace_forced_scoring: bool,
+    /// (unlace `varargsharedfloat`) The call whose other active argument slots a
     /// scored value may also reach.
-    kuna_shared_float_call: Option<OpId>,
-    /// (kuna `callrettype`) The extensions the return trimming narrowed the
+    unlace_shared_float_call: Option<OpId>,
+    /// (unlace `callrettype`) The extensions the return trimming narrowed the
     /// returned value back through ([`crate::callrettype::note_returned_extension`]).
-    kuna_callret_returned: Vec<(bool, int4)>,
-    /// (kuna `passthrough`) The CALL ops set up as variadic calls -- the caller
+    unlace_callret_returned: Vec<(bool, int4)>,
+    /// (unlace `passthrough`) The CALL ops set up as variadic calls -- the caller
     /// writes the return register, which carries no argument, just before them
     /// (`xor %eax,%eax` is SysV's vector-register count).
-    kuna_passthrough_vararg_calls: Vec<crate::context::OpId>,
-    /// (kuna `calleereadarg`) The CALL ops set up as variadic calls, recorded
+    unlace_passthrough_vararg_calls: Vec<crate::context::OpId>,
+    /// (unlace `calleereadarg`) The CALL ops set up as variadic calls, recorded
     /// before heritage whatever `passthrough` decides.
-    kuna_readarg_vararg_calls: Vec<crate::context::OpId>,
-    /// (kuna `passthrough`) Is this function itself variadic -- does its entry
+    unlace_readarg_vararg_calls: Vec<crate::context::OpId>,
+    /// (unlace `passthrough`) Is this function itself variadic -- does its entry
     /// block read the return register, which carries no argument, before it
     /// writes it (`test %al,%al` in a SysV register-save prologue)?
-    kuna_passthrough_variadic: bool,
-    /// (kuna `retinputhalf`) The return registers whose value the function moved
+    unlace_passthrough_variadic: bool,
+    /// (unlace `retinputhalf`) The return registers whose value the function moved
     /// out of its own register and back at some RETURN, noted while return
     /// recovery can still see the moves
     /// ([`crate::retinputhalf::note_moved_back_returns`]).
-    kuna_moved_back_returns: Vec<(Address, int4)>,
-    /// (kuna) Return recovery joined this function's two-register return value
+    unlace_moved_back_returns: Vec<(Address, int4)>,
+    /// (unlace) Return recovery joined this function's two-register return value
     /// first register low on an ABI that puts the high word first
     /// ([`crate::bejoin::join_order`]), so its calls' pairs are joined that
     /// way too.
-    kuna_pairs_first_low: bool,
-    pub kuna_go_receiver: Option<crate::gopointermethod::Receiver>,
+    unlace_pairs_first_low: bool,
+    pub unlace_go_receiver: Option<crate::gopointermethod::Receiver>,
     go_string_input: Option<Box<crate::gostringinput::GoStringInput>>,
-    /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
-    kuna_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
-    /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
-    kuna_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
-    /// (kuna `calleevote fields`) Every caller of this function is a known direct call.
-    kuna_calleevote_closed: bool,
-    /// The kuna passes' per-function state ([`crate::funcstate`]).
-    kuna_states: crate::funcstate::FuncStates,
+    /// (unlace `swiftcall`) The direct callees whose body reads `swiftself`.
+    unlace_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    /// (unlace `swiftcall`) The direct callees whose body reads `swiftasync`.
+    unlace_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
+    /// (unlace `calleevote fields`) Every caller of this function is a known direct call.
+    unlace_calleevote_closed: bool,
+    /// The unlace passes' per-function state ([`crate::funcstate`]).
+    unlace_states: crate::funcstate::FuncStates,
 }
 
 /// Opaque handle for a jump-table (C++ `JumpTable *` slot in `jumpvec`).
@@ -600,7 +601,7 @@ pub struct JumpTableId(pub u32);
 /// handles are process-unique, so nothing else names them once it is gone.
 impl Drop for Funcdata {
     fn drop(&mut self) {
-        for handle in self.kuna_fspec_handles.drain(..) {
+        for handle in self.unlace_fspec_handles.drain(..) {
             unlace_base::space::fspec_unregister(handle);
         }
     }
@@ -625,7 +626,7 @@ impl Funcdata {
         addr: Address,
         uniq_start: uintm,
         sz: int4,
-    ) -> KunaResult<Funcdata> {
+    ) -> UnlaceResult<Funcdata> {
         let vbank = VarnodeBank::new(glb.manage(), uniq_start)?;
         let min_laned_size = glb.get_minimum_laned_register_size();
         // bblocks / sblocks each get a root BlockGraph node (the C++ BlockGraph
@@ -672,22 +673,22 @@ impl Funcdata {
         };
 
         Ok(Funcdata {
-            kuna_fpu_trunc_views: Vec::new(),
-            kuna_later_tables: None,
-            kuna_later_wanted: std::rc::Rc::default(),
-            kuna_x87_empty_returns: Vec::new(),
-            kuna_x87_float_returns: Vec::new(),
-            kuna_x87_float_calls: Vec::new(),
+            unlace_fpu_trunc_views: Vec::new(),
+            unlace_later_tables: None,
+            unlace_later_wanted: std::rc::Rc::default(),
+            unlace_x87_empty_returns: Vec::new(),
+            unlace_x87_float_returns: Vec::new(),
+            unlace_x87_float_calls: Vec::new(),
             flags: 0,
             clean_up_index: 0,
             high_level_index: 0,
             cast_phase_index: 0,
             min_laned_size,
-            kuna_global_array_anchor_passes: None,
-            kuna_regnarrow_runs: 0,
-            kuna_regnarrow_values: std::collections::BTreeSet::new(),
-            kuna_regsigned_values: std::collections::BTreeSet::new(),
-            kuna_regnarrow_failed: std::collections::BTreeSet::new(),
+            unlace_global_array_anchor_passes: None,
+            unlace_regnarrow_runs: 0,
+            unlace_regnarrow_values: std::collections::BTreeSet::new(),
+            unlace_regsigned_values: std::collections::BTreeSet::new(),
+            unlace_regnarrow_failed: std::collections::BTreeSet::new(),
             laned_map: std::collections::BTreeMap::new(),
             size: sz,
             glb,
@@ -706,20 +707,20 @@ impl Funcdata {
             stack_store_guard_withdrawn: std::cell::Cell::new(false),
             stack_store_guard_spoiled: std::cell::Cell::new(false),
             stack_byte_copy_ops: Default::default(),
-            kuna_condstmts_seed: std::collections::BTreeSet::new(),
-            kuna_condstmts_hits: std::collections::BTreeSet::new(),
-            kuna_restart_now: false,
+            unlace_condstmts_seed: std::collections::BTreeSet::new(),
+            unlace_condstmts_hits: std::collections::BTreeSet::new(),
+            unlace_restart_now: false,
             dead_wave_log: None,
             dead_cascade_now: false,
             render_budget: None,
             flow_spent: std::time::Duration::ZERO,
             jumpvec: Vec::new(),
             vbank,
-            kuna_storage_sources: Default::default(),
-            kuna_call_transport: Default::default(),
-            kuna_call_transport_projections: Default::default(),
-            kuna_denied_storage_writes: Default::default(),
-            kuna_meaningful_storage_writes: Default::default(),
+            unlace_storage_sources: Default::default(),
+            unlace_call_transport: Default::default(),
+            unlace_call_transport_projections: Default::default(),
+            unlace_denied_storage_writes: Default::default(),
+            unlace_meaningful_storage_writes: Default::default(),
             obank: PcodeOpBank::new(),
             bblocks,
             sblocks,
@@ -733,56 +734,56 @@ impl Funcdata {
             stack_parameter_store_extents: std::collections::BTreeMap::new(),
             stack_alias_holds: None,
             pending_comments: Vec::new(),
-            kuna_vector_code: false,
+            unlace_vector_code: false,
             global_covers: Vec::new(),
             new_globals: Vec::new(),
-            kuna_infertypes_settled: false,
-            kuna_call_target_types: std::collections::HashMap::new(),
-            kuna_pipeline_failure: None,
-            kuna_fspec_handles: Vec::new(),
-            kuna_rejected_flow: Vec::new(),
-            kuna_rejected_callee: Vec::new(),
-            kuna_directive_symbols: Vec::new(),
-            kuna_default_name_end: 1,
-            kuna_record_names: false,
-            kuna_directive_targets: std::collections::BTreeMap::new(),
-            kuna_wire_symbols: Vec::new(),
-            kuna_wrapped_wire_storage: std::collections::BTreeMap::new(),
-            kuna_wire_symbol_for_high: std::collections::BTreeMap::new(),
-            kuna_callee_purge: std::collections::HashMap::new(),
-            kuna_stack_exit_anchors: Vec::new(),
-            kuna_darwin_variadic: None,
-            kuna_swift_self_unread: std::collections::HashSet::new(),
-            kuna_hiddenret_vetoed: std::collections::HashSet::new(),
-            kuna_callee_contract_armed: false,
-            kuna_callee_split_calls: Vec::new(),
-            kuna_callret_data: std::rc::Rc::new(Vec::new()),
-            kuna_forced_return: Vec::new(),
-            kuna_forced_return_planted: Vec::new(),
-            kuna_callresultuse_planted: None,
-            kuna_float_return_withdrawn: false,
-            kuna_float_bits_return: false,
-            kuna_callee_float_bits: std::collections::BTreeSet::new(),
-            kuna_callee_params: std::collections::BTreeMap::new(),
-            kuna_callee_return_storage: std::collections::BTreeMap::new(),
-            kuna_forced_claims: Vec::new(),
-            kuna_wide_return: None,
-            kuna_zext_word: None,
-            kuna_float_pair_halves: std::collections::BTreeSet::new(),
-            kuna_forced_scoring: false,
-            kuna_shared_float_call: None,
-            kuna_callret_returned: Vec::new(),
-            kuna_passthrough_vararg_calls: Vec::new(),
-            kuna_readarg_vararg_calls: Vec::new(),
-            kuna_passthrough_variadic: false,
-            kuna_moved_back_returns: Vec::new(),
-            kuna_pairs_first_low: false,
-            kuna_go_receiver: None,
+            unlace_infertypes_settled: false,
+            unlace_call_target_types: std::collections::HashMap::new(),
+            unlace_pipeline_failure: None,
+            unlace_fspec_handles: Vec::new(),
+            unlace_rejected_flow: Vec::new(),
+            unlace_rejected_callee: Vec::new(),
+            unlace_directive_symbols: Vec::new(),
+            unlace_default_name_end: 1,
+            unlace_record_names: false,
+            unlace_directive_targets: std::collections::BTreeMap::new(),
+            unlace_wire_symbols: Vec::new(),
+            unlace_wrapped_wire_storage: std::collections::BTreeMap::new(),
+            unlace_wire_symbol_for_high: std::collections::BTreeMap::new(),
+            unlace_callee_purge: std::collections::HashMap::new(),
+            unlace_stack_exit_anchors: Vec::new(),
+            unlace_darwin_variadic: None,
+            unlace_swift_self_unread: std::collections::HashSet::new(),
+            unlace_hiddenret_vetoed: std::collections::HashSet::new(),
+            unlace_callee_contract_armed: false,
+            unlace_callee_split_calls: Vec::new(),
+            unlace_callret_data: std::rc::Rc::new(Vec::new()),
+            unlace_forced_return: Vec::new(),
+            unlace_forced_return_planted: Vec::new(),
+            unlace_callresultuse_planted: None,
+            unlace_float_return_withdrawn: false,
+            unlace_float_bits_return: false,
+            unlace_callee_float_bits: std::collections::BTreeSet::new(),
+            unlace_callee_params: std::collections::BTreeMap::new(),
+            unlace_callee_return_storage: std::collections::BTreeMap::new(),
+            unlace_forced_claims: Vec::new(),
+            unlace_wide_return: None,
+            unlace_zext_word: None,
+            unlace_float_pair_halves: std::collections::BTreeSet::new(),
+            unlace_forced_scoring: false,
+            unlace_shared_float_call: None,
+            unlace_callret_returned: Vec::new(),
+            unlace_passthrough_vararg_calls: Vec::new(),
+            unlace_readarg_vararg_calls: Vec::new(),
+            unlace_passthrough_variadic: false,
+            unlace_moved_back_returns: Vec::new(),
+            unlace_pairs_first_low: false,
+            unlace_go_receiver: None,
             go_string_input: None,
-            kuna_swift_self_callees: std::collections::BTreeSet::new(),
-            kuna_swift_async_callees: std::collections::BTreeSet::new(),
-            kuna_calleevote_closed: false,
-            kuna_states: Default::default(),
+            unlace_swift_self_callees: std::collections::BTreeSet::new(),
+            unlace_swift_async_callees: std::collections::BTreeSet::new(),
+            unlace_calleevote_closed: false,
+            unlace_states: Default::default(),
         })
     }
 
@@ -800,7 +801,7 @@ impl Funcdata {
     pub fn get_display_name(&self) -> &str {
         &self.display_name
     }
-    /// (kuna, Phase 3) Override the display name (the C++ `displayName` set by
+    /// (unlace, Phase 3) Override the display name (the C++ `displayName` set by
     /// `Funcdata::decode` when the host sent a template-simplified label): the
     /// ghidra-mode decompileAt keeps the RAW `name` as the Java-side identity
     /// (the `HighFunction.decode` name echo) while the printed signature uses
@@ -904,7 +905,7 @@ impl Funcdata {
         self.global_covers = covers;
     }
 
-    /// (kuna `mapglobalsyms`) The unheld global storage `mapGlobals` recorded.
+    /// (unlace `mapglobalsyms`) The unheld global storage `mapGlobals` recorded.
     pub fn new_globals(&self) -> &[(Address, Rc<crate::dtype::Datatype>)] {
         &self.new_globals
     }
@@ -921,13 +922,13 @@ impl Funcdata {
         self.pending_comments.push((tp, ad, txt));
     }
 
-    /// (kuna) Record why the decompile pipeline aborted for this function.
+    /// (unlace) Record why the decompile pipeline aborted for this function.
     ///
     /// Called by a front-end that catches the drive's recoverable per-function
     /// error and keeps the previous `Funcdata` around to render (the console
     /// `decompile` command).  Newlines are folded and any comment terminator
     /// neutralized so the text is safe to plant in the emitted C.
-    pub fn set_kuna_pipeline_failure(&mut self, reason: &str) {
+    pub fn set_unlace_pipeline_failure(&mut self, reason: &str) {
         let flat: String = reason
             .chars()
             .map(|c| {
@@ -938,15 +939,15 @@ impl Funcdata {
                 }
             })
             .collect();
-        self.kuna_pipeline_failure = Some(flat.replace("*/", "* /").trim().to_string());
+        self.unlace_pipeline_failure = Some(flat.replace("*/", "* /").trim().to_string());
     }
 
-    /// (kuna) Why the decompile pipeline aborted for this function, if it did.
-    pub fn kuna_pipeline_failure(&self) -> Option<&str> {
-        self.kuna_pipeline_failure.as_deref()
+    /// (unlace) Why the decompile pipeline aborted for this function, if it did.
+    pub fn unlace_pipeline_failure(&self) -> Option<&str> {
+        self.unlace_pipeline_failure.as_deref()
     }
 
-    /// (kuna) Record a flow override [`Self::override_flow`] refused at `addr`.
+    /// (unlace) Record a flow override [`Self::override_flow`] refused at `addr`.
     /// Idempotent per `(addr, type_)`, so a restart re-flow that re-attempts the
     /// same override does not report it twice.
     pub fn note_rejected_flow_override(
@@ -956,64 +957,70 @@ impl Funcdata {
         reason: &str,
     ) {
         if self
-            .kuna_rejected_flow
+            .unlace_rejected_flow
             .iter()
             .any(|(a, t, _)| a == &addr && *t == type_)
         {
             return;
         }
-        self.kuna_rejected_flow
+        self.unlace_rejected_flow
             .push((addr, type_, reason.to_string()));
     }
 
-    /// (kuna) The flow overrides this function's flow follow refused.
-    pub fn kuna_rejected_flow_overrides(&self) -> &[(Address, unlace_base::types::uint4, String)] {
-        &self.kuna_rejected_flow
+    /// (unlace) The flow overrides this function's flow follow refused.
+    pub fn unlace_rejected_flow_overrides(
+        &self,
+    ) -> &[(Address, unlace_base::types::uint4, String)] {
+        &self.unlace_rejected_flow
     }
 
-    /// (kuna) Record a stated indirect-call destination the flow did not apply.
+    /// (unlace) Record a stated indirect-call destination the flow did not apply.
     /// Idempotent per call site.
     pub fn note_rejected_callee_override(&mut self, site: Address, callee: Address, reason: &str) {
-        if self.kuna_rejected_callee.iter().any(|(s, _, _)| s == &site) {
+        if self
+            .unlace_rejected_callee
+            .iter()
+            .any(|(s, _, _)| s == &site)
+        {
             return;
         }
-        self.kuna_rejected_callee
+        self.unlace_rejected_callee
             .push((site, callee, reason.to_string()));
     }
 
-    /// (kuna) The stated indirect-call destinations this function's flow did
+    /// (unlace) The stated indirect-call destinations this function's flow did
     /// not apply.
-    pub fn kuna_rejected_callee_overrides(&self) -> &[(Address, Address, String)] {
-        &self.kuna_rejected_callee
+    pub fn unlace_rejected_callee_overrides(&self) -> &[(Address, Address, String)] {
+        &self.unlace_rejected_callee
     }
 
-    /// (kuna `--assert`) The Symbols a `name`/`type` directive touched on this pass.
-    pub fn kuna_directive_symbols(&self) -> &[DirectiveSymbol] {
-        &self.kuna_directive_symbols
+    /// (unlace `--assert`) The Symbols a `name`/`type` directive touched on this pass.
+    pub fn unlace_directive_symbols(&self) -> &[DirectiveSymbol] {
+        &self.unlace_directive_symbols
     }
 
-    /// (kuna `--assert`) Record that a directive touched `entry.symbol`.  The
+    /// (unlace `--assert`) Record that a directive touched `entry.symbol`.  The
     /// first record wins, so the identifier kept is the one the pass printed.
-    pub fn kuna_record_directive_symbol(&mut self, entry: DirectiveSymbol) {
+    pub fn unlace_record_directive_symbol(&mut self, entry: DirectiveSymbol) {
         if self
-            .kuna_directive_symbols
+            .unlace_directive_symbols
             .iter()
             .any(|d| d.symbol == entry.symbol)
         {
             return;
         }
-        self.kuna_directive_symbols.push(entry);
+        self.unlace_directive_symbols.push(entry);
     }
 
-    /// (kuna `--assert`) Record that a `type` directive retyped `symbol`, and
+    /// (unlace `--assert`) Record that a `type` directive retyped `symbol`, and
     /// the unit type it gave the printed variable, if any.
-    pub fn kuna_set_directive_retype(
+    pub fn unlace_set_directive_retype(
         &mut self,
         symbol: crate::database::SymbolId,
         unit_type: Option<UnitRetype>,
     ) {
         if let Some(entry) = self
-            .kuna_directive_symbols
+            .unlace_directive_symbols
             .iter_mut()
             .find(|d| d.symbol == symbol)
         {
@@ -1023,335 +1030,335 @@ impl Funcdata {
     }
 
     /// One past the last default index the naming pass handed out.
-    pub fn kuna_default_name_end(&self) -> int4 {
-        self.kuna_default_name_end
+    pub fn unlace_default_name_end(&self) -> int4 {
+        self.unlace_default_name_end
     }
 
-    pub fn set_kuna_default_name_end(&mut self, end: int4) {
-        self.kuna_default_name_end = end;
+    pub fn set_unlace_default_name_end(&mut self, end: int4) {
+        self.unlace_default_name_end = end;
     }
 
-    /// (kuna `--assert`) Should the naming pass record its numbering?
-    pub fn kuna_record_names(&self) -> bool {
-        self.kuna_record_names
+    /// (unlace `--assert`) Should the naming pass record its numbering?
+    pub fn unlace_record_names(&self) -> bool {
+        self.unlace_record_names
     }
 
-    pub fn set_kuna_record_names(&mut self, on: bool) {
-        self.kuna_record_names = on;
+    pub fn set_unlace_record_names(&mut self, on: bool) {
+        self.unlace_record_names = on;
     }
 
-    /// (kuna `--assert`) The local each replayed rename or retype reached, by
+    /// (unlace `--assert`) The local each replayed rename or retype reached, by
     /// the name the previous decompile printed it under.
-    pub fn kuna_directive_targets(
+    pub fn unlace_directive_targets(
         &self,
     ) -> &std::collections::BTreeMap<String, crate::context::HighVariableId> {
-        &self.kuna_directive_targets
+        &self.unlace_directive_targets
     }
 
-    pub fn set_kuna_directive_targets(
+    pub fn set_unlace_directive_targets(
         &mut self,
         targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
     ) {
-        self.kuna_directive_targets = targets;
+        self.unlace_directive_targets = targets;
     }
 
-    /// (kuna `stackexitanchor`) Record the epilogue anchors.
-    pub fn kuna_set_stack_exit_anchors(&mut self, anchors: Vec<(OpId, int4)>) {
-        self.kuna_stack_exit_anchors = anchors;
+    /// (unlace `stackexitanchor`) Record the epilogue anchors.
+    pub fn unlace_set_stack_exit_anchors(&mut self, anchors: Vec<(OpId, int4)>) {
+        self.unlace_stack_exit_anchors = anchors;
     }
 
-    /// (kuna `stackexitanchor`) The epilogue anchors, `(call, value)`.
-    pub fn kuna_stack_exit_anchors(&self) -> &[(OpId, int4)] {
-        &self.kuna_stack_exit_anchors
+    /// (unlace `stackexitanchor`) The epilogue anchors, `(call, value)`.
+    pub fn unlace_stack_exit_anchors(&self) -> &[(OpId, int4)] {
+        &self.unlace_stack_exit_anchors
     }
 
-    /// (kuna `calleeretpurge`) Record the extrapop `entry`'s own returns take.
-    pub fn kuna_set_callee_purge(&mut self, entry: &Address, purge: int4) {
+    /// (unlace `calleeretpurge`) Record the extrapop `entry`'s own returns take.
+    pub fn unlace_set_callee_purge(&mut self, entry: &Address, purge: int4) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_callee_purge
+            self.unlace_callee_purge
                 .insert((sp.get_index(), entry.get_offset()), purge);
         }
     }
 
-    /// (kuna `calleeretpurge`) The recorded return purge of `entry`, if any.
-    pub fn kuna_callee_purge(&self, entry: &Address) -> Option<int4> {
+    /// (unlace `calleeretpurge`) The recorded return purge of `entry`, if any.
+    pub fn unlace_callee_purge(&self, entry: &Address) -> Option<int4> {
         let sp = entry.get_space()?;
-        self.kuna_callee_purge
+        self.unlace_callee_purge
             .get(&(sp.get_index(), entry.get_offset()))
             .copied()
     }
 
-    /// (kuna `varargstackargs`) Record the callees seen running Apple's `va_start`.
-    pub fn kuna_set_darwin_variadic(
+    /// (unlace `varargstackargs`) Record the callees seen running Apple's `va_start`.
+    pub fn unlace_set_darwin_variadic(
         &mut self,
         found: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
     ) {
-        self.kuna_darwin_variadic = found;
+        self.unlace_darwin_variadic = found;
     }
 
-    /// (kuna `varargstackargs`) The callees seen running Apple's `va_start`, or
+    /// (unlace `varargstackargs`) The callees seen running Apple's `va_start`, or
     /// `None` when the rule does not apply to this function's target.
-    pub fn kuna_darwin_variadic(
+    pub fn unlace_darwin_variadic(
         &self,
     ) -> Option<&std::collections::BTreeSet<(int4, unlace_base::types::uintb)>> {
-        self.kuna_darwin_variadic.as_ref()
+        self.unlace_darwin_variadic.as_ref()
     }
 
-    /// (kuna `swiftcall`) Record that `entry`'s body does not read `swiftself`
+    /// (unlace `swiftcall`) Record that `entry`'s body does not read `swiftself`
     /// before writing it.
-    pub fn kuna_set_swift_self_unread(&mut self, entry: &Address) {
+    pub fn unlace_set_swift_self_unread(&mut self, entry: &Address) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_swift_self_unread
+            self.unlace_swift_self_unread
                 .insert((sp.get_index(), entry.get_offset()));
         }
     }
 
-    /// (kuna `swiftcall`) Was `entry`'s body seen not to read `swiftself` first?
-    pub fn kuna_swift_self_unread(&self, entry: &Address) -> bool {
+    /// (unlace `swiftcall`) Was `entry`'s body seen not to read `swiftself` first?
+    pub fn unlace_swift_self_unread(&self, entry: &Address) -> bool {
         entry.get_space().is_some_and(|sp| {
-            self.kuna_swift_self_unread
+            self.unlace_swift_self_unread
                 .contains(&(sp.get_index(), entry.get_offset()))
         })
     }
 
-    /// (kuna `hiddenretarg`) Remember the leaves of a value vetoed from a call.
-    pub fn kuna_note_hiddenret_vetoed(&mut self, leaves: &[VarnodeId]) {
-        self.kuna_hiddenret_vetoed.extend(leaves.iter().copied());
+    /// (unlace `hiddenretarg`) Remember the leaves of a value vetoed from a call.
+    pub fn unlace_note_hiddenret_vetoed(&mut self, leaves: &[VarnodeId]) {
+        self.unlace_hiddenret_vetoed.extend(leaves.iter().copied());
     }
 
-    /// (kuna `hiddenretarg`) Was `vn` part of a value vetoed from a call?
-    pub fn kuna_hiddenret_vetoed(&self, vn: VarnodeId) -> bool {
-        self.kuna_hiddenret_vetoed.contains(&vn)
+    /// (unlace `hiddenretarg`) Was `vn` part of a value vetoed from a call?
+    pub fn unlace_hiddenret_vetoed(&self, vn: VarnodeId) -> bool {
+        self.unlace_hiddenret_vetoed.contains(&vn)
     }
 
-    /// (kuna callee-contract) Arm or disarm the P4 trial-storage bootstrap for
+    /// (unlace callee-contract) Arm or disarm the P4 trial-storage bootstrap for
     /// this drive.
-    pub fn kuna_set_callee_contract_armed(&mut self, armed: bool) {
-        self.kuna_callee_contract_armed = armed;
+    pub fn unlace_set_callee_contract_armed(&mut self, armed: bool) {
+        self.unlace_callee_contract_armed = armed;
     }
 
-    /// (kuna callee-contract) Is the P4 trial-storage bootstrap armed?
-    pub fn kuna_callee_contract_armed(&self) -> bool {
-        self.kuna_callee_contract_armed
+    /// (unlace callee-contract) Is the P4 trial-storage bootstrap armed?
+    pub fn unlace_callee_contract_armed(&self) -> bool {
+        self.unlace_callee_contract_armed
     }
 
-    /// (kuna callee-contract) Queue a direct callee whose active input trial sits
+    /// (unlace callee-contract) Queue a direct callee whose active input trial sits
     /// in a preferred-split register, and pause `ActionActiveParam` before it
     /// binds the argument list so the drive can state the callee's types.
-    pub fn kuna_queue_callee_split_call(&mut self, entry: Address) {
-        self.kuna_callee_split_calls.push(entry);
+    pub fn unlace_queue_callee_split_call(&mut self, entry: Address) {
+        self.unlace_callee_split_calls.push(entry);
     }
 
-    /// (kuna callee-contract) Take the queued direct callees (the drive's pause
+    /// (unlace callee-contract) Take the queued direct callees (the drive's pause
     /// request).
-    pub fn kuna_take_callee_split_calls(&mut self) -> Vec<Address> {
-        std::mem::take(&mut self.kuna_callee_split_calls)
+    pub fn unlace_take_callee_split_calls(&mut self) -> Vec<Address> {
+        std::mem::take(&mut self.unlace_callee_split_calls)
     }
 
-    /// (kuna `callrettype`) Record the loader's data ranges.
-    pub fn kuna_set_callret_data(&mut self, ranges: std::rc::Rc<Vec<(u64, u64)>>) {
-        self.kuna_callret_data = ranges;
+    /// (unlace `callrettype`) Record the loader's data ranges.
+    pub fn unlace_set_callret_data(&mut self, ranges: std::rc::Rc<Vec<(u64, u64)>>) {
+        self.unlace_callret_data = ranges;
     }
 
-    /// (kuna `voidret`) Record the return storage this function's callers read.
-    pub fn kuna_set_forced_return(&mut self, forced: Vec<(Address, int4)>) {
-        self.kuna_forced_return = forced;
+    /// (unlace `voidret`) Record the return storage this function's callers read.
+    pub fn unlace_set_forced_return(&mut self, forced: Vec<(Address, int4)>) {
+        self.unlace_forced_return = forced;
     }
 
-    /// (kuna `voidret`) The return storage this function's callers read, by register.
+    /// (unlace `voidret`) The return storage this function's callers read, by register.
     #[inline]
-    pub fn kuna_forced_return(&self) -> &[(Address, int4)] {
-        &self.kuna_forced_return
+    pub fn unlace_forced_return(&self) -> &[(Address, int4)] {
+        &self.unlace_forced_return
     }
 
-    /// (kuna `voidret`) Note a `void` callee's result this function's return would be.
-    pub fn kuna_note_forced_claim(
+    /// (unlace `voidret`) Note a `void` callee's result this function's return would be.
+    pub fn unlace_note_forced_claim(
         &mut self,
         claim: ((int4, unlace_base::types::uintb), (Address, int4)),
     ) {
-        if !self.kuna_forced_claims.contains(&claim) {
-            self.kuna_forced_claims.push(claim);
+        if !self.unlace_forced_claims.contains(&claim) {
+            self.unlace_forced_claims.push(claim);
         }
     }
 
-    /// (kuna `voidret`) The `void` callees' results this function's return would be.
-    pub fn kuna_forced_claims(&self) -> &[((int4, unlace_base::types::uintb), (Address, int4))] {
-        &self.kuna_forced_claims
+    /// (unlace `voidret`) The `void` callees' results this function's return would be.
+    pub fn unlace_forced_claims(&self) -> &[((int4, unlace_base::types::uintb), (Address, int4))] {
+        &self.unlace_forced_claims
     }
 
-    /// (kuna `voidret`) Record the storage this function's callers read of the
+    /// (unlace `voidret`) Record the storage this function's callers read of the
     /// word it returns zero-extended.
-    pub fn kuna_set_wide_return(&mut self, wide: Option<(Address, int4)>) {
-        self.kuna_wide_return = wide;
+    pub fn unlace_set_wide_return(&mut self, wide: Option<(Address, int4)>) {
+        self.unlace_wide_return = wide;
     }
 
-    /// (kuna `voidret`) The storage this function's callers read of the word it
+    /// (unlace `voidret`) The storage this function's callers read of the word it
     /// returns zero-extended, wider than the word.
-    pub fn kuna_wide_return(&self) -> Option<&(Address, int4)> {
-        self.kuna_wide_return.as_ref()
+    pub fn unlace_wide_return(&self) -> Option<&(Address, int4)> {
+        self.unlace_wide_return.as_ref()
     }
 
-    /// (kuna `voidret`) Note the zero-extended word the RETURN pull trims the
+    /// (unlace `voidret`) Note the zero-extended word the RETURN pull trims the
     /// return to, and whether its sign bit may be set at any RETURN.
-    pub fn kuna_note_zext_word(&mut self, addr: Address, size: int4, sign: bool) {
+    pub fn unlace_note_zext_word(&mut self, addr: Address, size: int4, sign: bool) {
         let before = self
-            .kuna_zext_word
+            .unlace_zext_word
             .as_ref()
             .is_some_and(|(a, s, b)| *a == addr && *s == size && *b);
-        self.kuna_zext_word = Some((addr, size, sign || before));
+        self.unlace_zext_word = Some((addr, size, sign || before));
     }
 
-    /// (kuna `voidret`) The zero-extended word the RETURN pull trimmed the return
+    /// (unlace `voidret`) The zero-extended word the RETURN pull trimmed the return
     /// to, and whether its sign bit may be set.
-    pub fn kuna_zext_word(&self) -> Option<&(Address, int4, bool)> {
-        self.kuna_zext_word.as_ref()
+    pub fn unlace_zext_word(&self) -> Option<&(Address, int4, bool)> {
+        self.unlace_zext_word.as_ref()
     }
 
-    /// (kuna `floatbits`) Seed the callees whose float return the bits of a
+    /// (unlace `floatbits`) Seed the callees whose float return the bits of a
     /// float-register input made one.
-    pub fn kuna_set_callee_float_bits(
+    pub fn unlace_set_callee_float_bits(
         &mut self,
         callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     ) {
-        self.kuna_callee_float_bits = callees;
+        self.unlace_callee_float_bits = callees;
     }
 
-    /// (kuna `floatbits`) Did the callee keyed `key` return a float for the
+    /// (unlace `floatbits`) Did the callee keyed `key` return a float for the
     /// bits of its float-register input?
-    pub fn kuna_callee_float_bits(&self, key: (int4, unlace_base::types::uintb)) -> bool {
-        self.kuna_callee_float_bits.contains(&key)
+    pub fn unlace_callee_float_bits(&self, key: (int4, unlace_base::types::uintb)) -> bool {
+        self.unlace_callee_float_bits.contains(&key)
     }
 
-    /// (kuna `voidret`) Record the storage each callee's last decompile returned a value in.
-    pub fn kuna_set_callee_return_storage(
+    /// (unlace `voidret`) Record the storage each callee's last decompile returned a value in.
+    pub fn unlace_set_callee_return_storage(
         &mut self,
         storage: std::collections::BTreeMap<(int4, unlace_base::types::uintb), (Address, int4)>,
     ) {
-        self.kuna_callee_return_storage = storage;
+        self.unlace_callee_return_storage = storage;
     }
 
-    /// (kuna `voidret`) The storage the callee at `key` last returned a value in.
+    /// (unlace `voidret`) The storage the callee at `key` last returned a value in.
     #[inline]
-    pub fn kuna_callee_return_storage(
+    pub fn unlace_callee_return_storage(
         &self,
         key: (int4, unlace_base::types::uintb),
     ) -> Option<&(Address, int4)> {
-        self.kuna_callee_return_storage.get(&key)
+        self.unlace_callee_return_storage.get(&key)
     }
 
-    /// (kuna `voidret`) Record the parameter classes each callee's last decompile recovered.
-    pub fn kuna_set_callee_params(
+    /// (unlace `voidret`) Record the parameter classes each callee's last decompile recovered.
+    pub fn unlace_set_callee_params(
         &mut self,
         params: std::collections::BTreeMap<(int4, unlace_base::types::uintb), Vec<Option<bool>>>,
     ) {
-        self.kuna_callee_params = params;
+        self.unlace_callee_params = params;
     }
 
-    /// (kuna `voidret`) Is the callee at `key`'s parameter `index`, as its last
+    /// (unlace `voidret`) Is the callee at `key`'s parameter `index`, as its last
     /// decompile recovered it, a float (`Some(true)`) or an integer or pointer?
-    pub fn kuna_callee_param_float(
+    pub fn unlace_callee_param_float(
         &self,
         key: (int4, unlace_base::types::uintb),
         index: usize,
     ) -> Option<bool> {
-        self.kuna_callee_params
+        self.unlace_callee_params
             .get(&key)
             .and_then(|p| p.get(index).copied().flatten())
     }
 
-    /// (kuna `floatreg`) Note a narrow float register whose pair the code touches.
-    pub fn kuna_note_float_pair_half(&mut self, key: (int4, unlace_base::types::uintb)) {
-        self.kuna_float_pair_halves.insert(key);
+    /// (unlace `floatreg`) Note a narrow float register whose pair the code touches.
+    pub fn unlace_note_float_pair_half(&mut self, key: (int4, unlace_base::types::uintb)) {
+        self.unlace_float_pair_halves.insert(key);
     }
 
-    /// (kuna `floatreg`) Does the code touch the other half of this register's pair?
-    pub fn kuna_float_pair_half(&self, key: (int4, unlace_base::types::uintb)) -> bool {
-        self.kuna_float_pair_halves.contains(&key)
+    /// (unlace `floatreg`) Does the code touch the other half of this register's pair?
+    pub fn unlace_float_pair_half(&self, key: (int4, unlace_base::types::uintb)) -> bool {
+        self.unlace_float_pair_halves.contains(&key)
     }
 
-    /// (kuna `voidret`) Withdraw, or restore, the float-register vote on the return.
-    pub fn kuna_set_float_return_withdrawn(&mut self, withdrawn: bool) {
-        self.kuna_float_return_withdrawn = withdrawn;
+    /// (unlace `voidret`) Withdraw, or restore, the float-register vote on the return.
+    pub fn unlace_set_float_return_withdrawn(&mut self, withdrawn: bool) {
+        self.unlace_float_return_withdrawn = withdrawn;
     }
 
-    /// (kuna `voidret`) Is the float-register vote on the return withdrawn?
-    pub fn kuna_float_return_withdrawn(&self) -> bool {
-        self.kuna_float_return_withdrawn
+    /// (unlace `voidret`) Is the float-register vote on the return withdrawn?
+    pub fn unlace_float_return_withdrawn(&self) -> bool {
+        self.unlace_float_return_withdrawn
     }
 
-    /// (kuna `floatbits`) Note that an inference pass typed the return a float
+    /// (unlace `floatbits`) Note that an inference pass typed the return a float
     /// for the bits of a float-register input.
-    pub fn kuna_note_float_bits_return(&mut self) {
-        self.kuna_float_bits_return = true;
+    pub fn unlace_note_float_bits_return(&mut self) {
+        self.unlace_float_bits_return = true;
     }
 
-    /// (kuna `floatbits`) Did an inference pass of this decompile type the
+    /// (unlace `floatbits`) Did an inference pass of this decompile type the
     /// return a float for the bits of a float-register input?
-    pub fn kuna_float_bits_return(&self) -> bool {
-        self.kuna_float_bits_return
+    pub fn unlace_float_bits_return(&self) -> bool {
+        self.unlace_float_bits_return
     }
 
-    /// (kuna `voidret`) Record that the RETURN read of one piece of that storage
+    /// (unlace `voidret`) Record that the RETURN read of one piece of that storage
     /// was planted.
-    pub fn kuna_note_forced_return_planted(&mut self, addr: Address, size: int4) {
-        self.kuna_forced_return_planted.push((addr, size));
+    pub fn unlace_note_forced_return_planted(&mut self, addr: Address, size: int4) {
+        self.unlace_forced_return_planted.push((addr, size));
     }
 
-    /// (kuna `voidret`) The pieces of that storage whose RETURN read was planted.
-    pub fn kuna_forced_return_planted(&self) -> &[(Address, int4)] {
-        &self.kuna_forced_return_planted
+    /// (unlace `voidret`) The pieces of that storage whose RETURN read was planted.
+    pub fn unlace_forced_return_planted(&self) -> &[(Address, int4)] {
+        &self.unlace_forced_return_planted
     }
 
-    /// (kuna `callresultuse`) Record the result register whose RETURN read was
+    /// (unlace `callresultuse`) Record the result register whose RETURN read was
     /// planted.
-    pub fn kuna_note_callresultuse_planted(&mut self, addr: Address, size: int4) {
-        self.kuna_callresultuse_planted = Some((addr, size));
+    pub fn unlace_note_callresultuse_planted(&mut self, addr: Address, size: int4) {
+        self.unlace_callresultuse_planted = Some((addr, size));
     }
 
-    /// (kuna `callresultuse`) The result register whose RETURN read was planted.
-    pub fn kuna_callresultuse_planted(&self) -> Option<&(Address, int4)> {
-        self.kuna_callresultuse_planted.as_ref()
+    /// (unlace `callresultuse`) The result register whose RETURN read was planted.
+    pub fn unlace_callresultuse_planted(&self) -> Option<&(Address, int4)> {
+        self.unlace_callresultuse_planted.as_ref()
     }
 
-    /// (kuna `voidret`) Score the forced return storage (see the field).
-    pub fn kuna_set_forced_scoring(&mut self, on: bool) {
-        self.kuna_forced_scoring = on;
+    /// (unlace `voidret`) Score the forced return storage (see the field).
+    pub fn unlace_set_forced_scoring(&mut self, on: bool) {
+        self.unlace_forced_scoring = on;
     }
 
-    /// (kuna `voidret`) Whether the forced return storage is being scored.
-    pub fn kuna_forced_scoring(&self) -> bool {
-        self.kuna_forced_scoring
+    /// (unlace `voidret`) Whether the forced return storage is being scored.
+    pub fn unlace_forced_scoring(&self) -> bool {
+        self.unlace_forced_scoring
     }
 
-    /// (kuna `varargsharedfloat`) Let the scored value reach `call`'s other
+    /// (unlace `varargsharedfloat`) Let the scored value reach `call`'s other
     /// active argument slots (see the field).
-    pub fn kuna_set_shared_float_call(&mut self, call: Option<OpId>) {
-        self.kuna_shared_float_call = call;
+    pub fn unlace_set_shared_float_call(&mut self, call: Option<OpId>) {
+        self.unlace_shared_float_call = call;
     }
 
-    /// (kuna `varargsharedfloat`) The call set by
-    /// [`Self::kuna_set_shared_float_call`].
-    pub fn kuna_shared_float_call(&self) -> Option<OpId> {
-        self.kuna_shared_float_call
+    /// (unlace `varargsharedfloat`) The call set by
+    /// [`Self::unlace_set_shared_float_call`].
+    pub fn unlace_shared_float_call(&self) -> Option<OpId> {
+        self.unlace_shared_float_call
     }
 
-    /// (kuna `callrettype`) The loader's data ranges recorded by the seed.
-    pub fn kuna_callret_data(&self) -> &[(u64, u64)] {
-        &self.kuna_callret_data
+    /// (unlace `callrettype`) The loader's data ranges recorded by the seed.
+    pub fn unlace_callret_data(&self) -> &[(u64, u64)] {
+        &self.unlace_callret_data
     }
 
-    /// (kuna `callrettype`) Record an extension the returned value was narrowed
+    /// (unlace `callrettype`) Record an extension the returned value was narrowed
     /// back through.
-    pub fn kuna_note_callret_returned(&mut self, ext: (bool, int4)) {
-        if !self.kuna_callret_returned.contains(&ext) {
-            self.kuna_callret_returned.push(ext);
+    pub fn unlace_note_callret_returned(&mut self, ext: (bool, int4)) {
+        if !self.unlace_callret_returned.contains(&ext) {
+            self.unlace_callret_returned.push(ext);
         }
     }
 
-    /// (kuna `callrettype`) The extensions the returned value was narrowed back
+    /// (unlace `callrettype`) The extensions the returned value was narrowed back
     /// through: whether each extends at the sign, and from what width.
-    pub fn kuna_callret_returned(&self) -> &[(bool, int4)] {
-        &self.kuna_callret_returned
+    pub fn unlace_callret_returned(&self) -> &[(bool, int4)] {
+        &self.unlace_callret_returned
     }
 
     #[doc(hidden)]
@@ -1364,97 +1371,97 @@ impl Funcdata {
         self.go_string_input.as_deref()
     }
 
-    /// (kuna `swiftcall`) Seed the direct callees whose body reads `swiftself`.
-    pub fn kuna_set_swift_self_callees(
+    /// (unlace `swiftcall`) Seed the direct callees whose body reads `swiftself`.
+    pub fn unlace_set_swift_self_callees(
         &mut self,
         s: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     ) {
-        self.kuna_swift_self_callees = s;
+        self.unlace_swift_self_callees = s;
     }
 
-    /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
-    pub fn kuna_swift_self_callees(
+    /// (unlace `swiftcall`) The direct callees whose body reads `swiftself`.
+    pub fn unlace_swift_self_callees(
         &self,
     ) -> &std::collections::BTreeSet<(int4, unlace_base::types::uintb)> {
-        &self.kuna_swift_self_callees
+        &self.unlace_swift_self_callees
     }
 
-    /// (kuna `swiftcall`) Seed the direct callees whose body reads `swiftasync`.
-    pub fn kuna_set_swift_async_callees(
+    /// (unlace `swiftcall`) Seed the direct callees whose body reads `swiftasync`.
+    pub fn unlace_set_swift_async_callees(
         &mut self,
         s: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     ) {
-        self.kuna_swift_async_callees = s;
+        self.unlace_swift_async_callees = s;
     }
 
-    /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
-    pub fn kuna_swift_async_callees(
+    /// (unlace `swiftcall`) The direct callees whose body reads `swiftasync`.
+    pub fn unlace_swift_async_callees(
         &self,
     ) -> &std::collections::BTreeSet<(int4, unlace_base::types::uintb)> {
-        &self.kuna_swift_async_callees
+        &self.unlace_swift_async_callees
     }
 
-    /// (kuna `calleevote fields`) Mark every caller of this function as known.
-    pub fn kuna_set_calleevote_closed(&mut self, closed: bool) {
-        self.kuna_calleevote_closed = closed;
+    /// (unlace `calleevote fields`) Mark every caller of this function as known.
+    pub fn unlace_set_calleevote_closed(&mut self, closed: bool) {
+        self.unlace_calleevote_closed = closed;
     }
 
-    /// (kuna `calleevote fields`) Are all of this function's callers known direct calls?
-    pub fn kuna_calleevote_closed(&self) -> bool {
-        self.kuna_calleevote_closed
+    /// (unlace `calleevote fields`) Are all of this function's callers known direct calls?
+    pub fn unlace_calleevote_closed(&self) -> bool {
+        self.unlace_calleevote_closed
     }
 
-    /// (kuna `passthrough`) Record the CALL ops set up as variadic calls.
-    pub fn kuna_set_passthrough_vararg_calls(&mut self, ops: Vec<crate::context::OpId>) {
-        self.kuna_passthrough_vararg_calls = ops;
+    /// (unlace `passthrough`) Record the CALL ops set up as variadic calls.
+    pub fn unlace_set_passthrough_vararg_calls(&mut self, ops: Vec<crate::context::OpId>) {
+        self.unlace_passthrough_vararg_calls = ops;
     }
 
-    /// (kuna `passthrough`) The CALL ops set up as variadic calls.
-    pub fn kuna_passthrough_vararg_calls(&self) -> &[crate::context::OpId] {
-        &self.kuna_passthrough_vararg_calls
+    /// (unlace `passthrough`) The CALL ops set up as variadic calls.
+    pub fn unlace_passthrough_vararg_calls(&self) -> &[crate::context::OpId] {
+        &self.unlace_passthrough_vararg_calls
     }
 
-    /// (kuna `calleereadarg`) Record the CALL ops set up as variadic calls.
-    pub fn kuna_set_readarg_vararg_calls(&mut self, ops: Vec<crate::context::OpId>) {
-        self.kuna_readarg_vararg_calls = ops;
+    /// (unlace `calleereadarg`) Record the CALL ops set up as variadic calls.
+    pub fn unlace_set_readarg_vararg_calls(&mut self, ops: Vec<crate::context::OpId>) {
+        self.unlace_readarg_vararg_calls = ops;
     }
 
-    /// (kuna `calleereadarg`) The CALL ops set up as variadic calls.
-    pub fn kuna_readarg_vararg_calls(&self) -> &[crate::context::OpId] {
-        &self.kuna_readarg_vararg_calls
+    /// (unlace `calleereadarg`) The CALL ops set up as variadic calls.
+    pub fn unlace_readarg_vararg_calls(&self) -> &[crate::context::OpId] {
+        &self.unlace_readarg_vararg_calls
     }
 
-    /// (kuna `passthrough`) Record whether this function is itself variadic.
-    pub fn kuna_set_passthrough_variadic(&mut self, v: bool) {
-        self.kuna_passthrough_variadic = v;
+    /// (unlace `passthrough`) Record whether this function is itself variadic.
+    pub fn unlace_set_passthrough_variadic(&mut self, v: bool) {
+        self.unlace_passthrough_variadic = v;
     }
 
-    /// (kuna `passthrough`) Is this function itself variadic?
-    pub fn kuna_passthrough_variadic(&self) -> bool {
-        self.kuna_passthrough_variadic
+    /// (unlace `passthrough`) Is this function itself variadic?
+    pub fn unlace_passthrough_variadic(&self) -> bool {
+        self.unlace_passthrough_variadic
     }
 
-    /// (kuna `retinputhalf`) Replace the record of return registers moved back
+    /// (unlace `retinputhalf`) Replace the record of return registers moved back
     /// into themselves.
-    pub fn kuna_set_moved_back_returns(&mut self, found: Vec<(Address, int4)>) {
-        self.kuna_moved_back_returns = found;
+    pub fn unlace_set_moved_back_returns(&mut self, found: Vec<(Address, int4)>) {
+        self.unlace_moved_back_returns = found;
     }
 
-    /// (kuna `retinputhalf`) The return registers moved back into themselves.
-    pub fn kuna_moved_back_returns(&self) -> &[(Address, int4)] {
-        &self.kuna_moved_back_returns
+    /// (unlace `retinputhalf`) The return registers moved back into themselves.
+    pub fn unlace_moved_back_returns(&self) -> &[(Address, int4)] {
+        &self.unlace_moved_back_returns
     }
 
-    /// (kuna) Record that this function's return pair was joined first
+    /// (unlace) Record that this function's return pair was joined first
     /// register low on an ABI that puts the high word first.
-    pub fn kuna_set_pairs_first_low(&mut self, v: bool) {
-        self.kuna_pairs_first_low = v;
+    pub fn unlace_set_pairs_first_low(&mut self, v: bool) {
+        self.unlace_pairs_first_low = v;
     }
 
-    /// (kuna) Was this function's return pair joined first register low on an
+    /// (unlace) Was this function's return pair joined first register low on an
     /// ABI that puts the high word first ([`crate::bejoin::join_order`])?
-    pub fn kuna_pairs_first_low(&self) -> bool {
-        self.kuna_pairs_first_low
+    pub fn unlace_pairs_first_low(&self) -> bool {
+        self.unlace_pairs_first_low
     }
 
     /// Get the entry point address (C++ `getAddress`).
@@ -1469,7 +1476,7 @@ impl Funcdata {
     /// Get the program/architecture owning \b this function (C++ `getArch`).
     /// The pass hooks of the function's architecture ([`crate::passhooks`]).
     #[inline]
-    pub fn hooks(&self) -> &'static crate::passhooks::KunaHooks {
+    pub fn hooks(&self) -> &'static crate::passhooks::UnlaceHooks {
         self.glb.pass_hooks
     }
 
@@ -1478,23 +1485,23 @@ impl Funcdata {
         &self.glb
     }
 
-    /// A kuna pass's per-function state, created with its default on first use
+    /// A unlace pass's per-function state, created with its default on first use
     /// ([`crate::funcstate`]).
     #[inline]
-    pub fn kuna_state<S: crate::funcstate::FuncState>(&self) -> &S {
-        self.kuna_states.get::<S>()
+    pub fn unlace_state<S: crate::funcstate::FuncState>(&self) -> &S {
+        self.unlace_states.get::<S>()
     }
 
-    /// A kuna pass's per-function state for writing ([`crate::funcstate`]).
+    /// A unlace pass's per-function state for writing ([`crate::funcstate`]).
     #[inline]
-    pub fn kuna_state_mut<S: crate::funcstate::FuncState>(&mut self) -> &mut S {
-        self.kuna_states.get_mut::<S>()
+    pub fn unlace_state_mut<S: crate::funcstate::FuncState>(&mut self) -> &mut S {
+        self.unlace_states.get_mut::<S>()
     }
 
     /// Build a fresh empty Funcdata sharing this function's arch / entry /
     /// unique-base (a placeholder for the move-out-build-blocks-move-in dance in
     /// `build_partial_blocks`).
-    pub fn new_placeholder_like(src: &Funcdata) -> KunaResult<Funcdata> {
+    pub fn new_placeholder_like(src: &Funcdata) -> UnlaceResult<Funcdata> {
         Funcdata::new(
             "@@placeholder",
             "@@placeholder",
@@ -1535,27 +1542,27 @@ impl Funcdata {
     /// not-yet-supported declaration degrades gracefully rather than aborting the
     /// whole decompile.
     ///
-    /// (kuna `cppsig`) A `pieces` with no `outtype` locks the INPUT half only —
+    /// (unlace `cppsig`) A `pieces` with no `outtype` locks the INPUT half only —
     /// see [`FuncProto::seed_locked_from_pieces`], which owns that contract so the
     /// caller-side rebuild honors it identically.
     pub fn apply_locked_prototype(
         &mut self,
         pieces: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.apply_locked_prototype_with_model(pieces, None)
     }
 
     /// [`Self::apply_locked_prototype`] with an explicit prototype MODEL (the
     /// ghidra-mode path: the host's `<prototype model=…>` names the convention
     /// its committed parameter storage was assigned under, so re-deriving
-    /// storage from kuna's default model would disagree with the database and
+    /// storage from unlace's default model would disagree with the database and
     /// force Java's `checkFullCommit` to rewrite the user's signature).
     /// `None` keeps the architecture default.
     pub fn apply_locked_prototype_with_model(
         &mut self,
         pieces: &crate::fspec::PrototypePieces,
         model: Option<Rc<crate::fspec::ProtoModel>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let defaultfp = match model.or_else(|| self.glb.default_fp().cloned()) {
             Some(m) => m,
             None => return Ok(()),
@@ -1569,7 +1576,7 @@ impl Funcdata {
         // borrows come from the clone, leaving `self.funcp` freely mutable.
         let glb = self.glb.clone();
         let types = glb.types().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel(
+            unlace_base::error::UnlaceError::lowlevel(
                 "apply_locked_prototype: no type factory on glb",
             )
         })?;
@@ -1591,7 +1598,7 @@ impl Funcdata {
     ///
     /// The C++ console (`IfcMapParam::execute`, ifacedecomp.cc:613) writes the
     /// locked input straight onto the queried Funcdata's live `FuncProto` via
-    /// `setParam` (`store->setInput`).  In kuna the `decompile` command rebuilds
+    /// `setParam` (`store->setInput`).  In unlace the `decompile` command rebuilds
     /// the Funcdata from scratch, discarding that console-set store, so the lock
     /// must be re-seeded here on the fresh prototype — the same re-seed model as
     /// [`Self::apply_locked_prototype`] / [`Self::seed_mapped_symbols`].  Each
@@ -1866,11 +1873,11 @@ impl Funcdata {
     /// move-back).  `build_info_list` is idempotent and ensures the per-space
     /// info list exists — the merged-tree substitute for the
     /// `startProcessing` → `heritage.buildInfoList()` call (a W4 seam there).
-    pub fn op_heritage(&mut self) -> KunaResult<()> {
+    pub fn op_heritage(&mut self) -> UnlaceResult<()> {
         self.op_heritage_with_deadline(None)
     }
 
-    /// [`op_heritage`](Self::op_heritage) with the (kuna) `decompile-all`
+    /// [`op_heritage`](Self::op_heritage) with the (unlace) `decompile-all`
     /// per-function watchdog deadline threaded through to
     /// [`Heritage::heritage`](crate::heritage::Heritage::heritage)'s
     /// per-address-space loop (`ActionHeritage` passes its
@@ -1879,7 +1886,7 @@ impl Funcdata {
     pub fn op_heritage_with_deadline(
         &mut self,
         deadline: Option<std::time::Instant>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut heritage = std::mem::take(&mut self.heritage);
         heritage.build_info_list(self);
         // C++ `Funcdata::startProcessing` runs `localoverride.applyDeadCodeDelay`
@@ -1907,7 +1914,7 @@ impl Funcdata {
         result
     }
 
-    /// (kuna `indexaliasguard global`) Is the global storage of `vn` covered by
+    /// (unlace `indexaliasguard global`) Is the global storage of `vn` covered by
     /// heritage's global STORE guard?  See
     /// [`Heritage::global_store_guarded`](crate::heritage::Heritage::global_store_guarded).
     pub fn global_store_guarded(&self, vn: &crate::varnode::Varnode) -> bool {
@@ -1935,7 +1942,7 @@ impl Funcdata {
     pub fn num_heritage_passes(
         &self,
         spc: &std::rc::Rc<unlace_base::space::AddrSpace>,
-    ) -> unlace_base::error::KunaResult<int4> {
+    ) -> unlace_base::error::UnlaceResult<int4> {
         self.heritage.num_heritage_passes(spc)
     }
 
@@ -1946,7 +1953,7 @@ impl Funcdata {
         self.heritage.get_pass()
     }
 
-    /// (kuna `calleeprotostack`) Whether heritage saw the stack base captured
+    /// (unlace `calleeprotostack`) Whether heritage saw the stack base captured
     /// a second time by the same register.
     #[doc(hidden)]
     pub fn rebound_frame_base_seen(&self) -> bool {
@@ -2044,7 +2051,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `framelayout`) Fold this pass's recovered stack-frame layout into the
+    /// (unlace `framelayout`) Fold this pass's recovered stack-frame layout into the
     /// running union.  Called at the tail of every `restructure_varnode`.
     ///
     /// A slot already recorded is kept: the FIRST pass to see it had the most
@@ -2056,7 +2063,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `framelayout`) The union of every stack-frame slot any pass recovered.
+    /// (unlace `framelayout`) The union of every stack-frame slot any pass recovered.
     pub fn frame_slots(&self) -> Vec<(i64, FrameSlot)> {
         self.frame_slots
             .borrow()
@@ -2065,7 +2072,7 @@ impl Funcdata {
             .collect()
     }
 
-    /// (kuna `castobject`) Remember the stack objects one pass re-declared.
+    /// (unlace `castobject`) Remember the stack objects one pass re-declared.
     pub fn record_cast_objects(
         &self,
         objects: Vec<(
@@ -2082,17 +2089,17 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `stackstoreguard`) Has a pass laid out a guarded store's reach?
+    /// (unlace `stackstoreguard`) Has a pass laid out a guarded store's reach?
     pub fn store_reach_committed(&self) -> bool {
         self.store_reach_committed.get()
     }
 
-    /// (kuna `stackstoreguard`) Record that this pass lays out a guarded store's reach.
+    /// (unlace `stackstoreguard`) Record that this pass lays out a guarded store's reach.
     pub fn commit_store_reach(&self) {
         self.store_reach_committed.set(true);
     }
 
-    /// (kuna `stackstoreguard`) Is the guard on for this function?
+    /// (unlace `stackstoreguard`) Is the guard on for this function?
     #[inline]
     pub fn stack_store_guard(&self) -> bool {
         !self.stack_store_guard_withdrawn.get()
@@ -2108,7 +2115,7 @@ impl Funcdata {
         self.stack_byte_copy_ops.contains(&op)
     }
 
-    /// (kuna `stackstoreguard`) Record a STORE heritage guarded a written
+    /// (unlace `stackstoreguard`) Record a STORE heritage guarded a written
     /// stack range against, and the INDIRECT it placed.
     #[doc(hidden)]
     pub fn note_indexed_guard_store(&self, store: OpId, indirect: OpId) {
@@ -2116,13 +2123,13 @@ impl Funcdata {
         self.indexed_guard_indirects.borrow_mut().insert(indirect);
     }
 
-    /// (kuna `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
+    /// (unlace `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
     #[doc(hidden)]
     pub fn indexed_guard_indirects(&self) -> std::collections::BTreeSet<OpId> {
         self.indexed_guard_indirects.borrow().clone()
     }
 
-    /// (kuna `stackstoreguard`) Add the stack ranges a layout pass found only
+    /// (unlace `stackstoreguard`) Add the stack ranges a layout pass found only
     /// the guard keeps, and return every one found since the analysis began.
     #[doc(hidden)]
     pub fn note_guard_only(
@@ -2136,7 +2143,7 @@ impl Funcdata {
         seen.clone()
     }
 
-    /// (kuna `stackstoreguard`) The STOREs heritage guarded written stack
+    /// (unlace `stackstoreguard`) The STOREs heritage guarded written stack
     /// ranges against.
     #[inline]
     #[doc(hidden)]
@@ -2144,58 +2151,58 @@ impl Funcdata {
         self.indexed_guard_stores.borrow().clone()
     }
 
-    /// (kuna `condstmts`) Block starts to structure as complex.
+    /// (unlace `condstmts`) Block starts to structure as complex.
     pub fn condstmts_seed(&self) -> &std::collections::BTreeSet<Address> {
-        &self.kuna_condstmts_seed
+        &self.unlace_condstmts_seed
     }
 
-    /// (kuna `condstmts`) Install the block starts to structure as complex.
+    /// (unlace `condstmts`) Install the block starts to structure as complex.
     pub fn set_condstmts_seed(&mut self, seed: std::collections::BTreeSet<Address>) {
-        self.kuna_condstmts_seed = seed;
+        self.unlace_condstmts_seed = seed;
     }
 
-    /// (kuna `condstmts`) Block starts the final structure folded over the cap.
+    /// (unlace `condstmts`) Block starts the final structure folded over the cap.
     pub fn condstmts_hits(&self) -> &std::collections::BTreeSet<Address> {
-        &self.kuna_condstmts_hits
+        &self.unlace_condstmts_hits
     }
 
-    /// (kuna `earlyrestart`) Did heritage bump a dead-code delay this pass?
-    pub fn kuna_restart_now(&self) -> bool {
-        self.kuna_restart_now
+    /// (unlace `earlyrestart`) Did heritage bump a dead-code delay this pass?
+    pub fn unlace_restart_now(&self) -> bool {
+        self.unlace_restart_now
     }
 
-    /// (kuna `earlyrestart`) Record that heritage bumped a dead-code delay.
-    pub fn kuna_set_restart_now(&mut self) {
-        self.kuna_restart_now = true;
+    /// (unlace `earlyrestart`) Record that heritage bumped a dead-code delay.
+    pub fn unlace_set_restart_now(&mut self) {
+        self.unlace_restart_now = true;
     }
 
-    /// (kuna `deadcascade`) Set whether dead-op removal in the running pool
+    /// (unlace `deadcascade`) Set whether dead-op removal in the running pool
     /// pass cascades.
     #[doc(hidden)]
     pub fn set_dead_cascade_now(&mut self, on: bool) {
         self.dead_cascade_now = on;
     }
 
-    /// (kuna `deadcascade`) Does dead-op removal in the running pool pass
+    /// (unlace `deadcascade`) Does dead-op removal in the running pool pass
     /// cascade?
     #[doc(hidden)]
     pub fn dead_cascade_now(&self) -> bool {
         self.dead_cascade_now
     }
 
-    /// (kuna `deadwaves`) Start recording dead-op removals for a pool pass.
+    /// (unlace `deadwaves`) Start recording dead-op removals for a pool pass.
     #[doc(hidden)]
     pub fn start_dead_wave_log(&mut self) {
         self.dead_wave_log = Some((Vec::new(), Vec::new()));
     }
 
-    /// (kuna `deadwaves`) Stop recording and hand back what was recorded.
+    /// (unlace `deadwaves`) Stop recording and hand back what was recorded.
     #[doc(hidden)]
     pub fn take_dead_wave_log(&mut self) -> (Vec<OpId>, Vec<VarnodeId>) {
         self.dead_wave_log.take().unwrap_or_default()
     }
 
-    /// (kuna `deadwaves`) Where the running log ends, for
+    /// (unlace `deadwaves`) Where the running log ends, for
     /// [`dead_wave_log_since`](Funcdata::dead_wave_log_since).
     #[doc(hidden)]
     pub fn dead_wave_log_mark(&self) -> (usize, usize) {
@@ -2204,7 +2211,7 @@ impl Funcdata {
             .map_or((0, 0), |log| (log.0.len(), log.1.len()))
     }
 
-    /// (kuna `deadwaves`) The removals logged after `mark`, and the Varnodes
+    /// (unlace `deadwaves`) The removals logged after `mark`, and the Varnodes
     /// they read.
     #[doc(hidden)]
     pub fn dead_wave_log_since(&self, mark: (usize, usize)) -> (&[OpId], &[VarnodeId]) {
@@ -2217,7 +2224,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `deadwaves`) Record that dead-op removal is taking out `op`, and
+    /// (unlace `deadwaves`) Record that dead-op removal is taking out `op`, and
     /// the Varnodes it reads, before it is destroyed.
     #[doc(hidden)]
     pub fn note_dead_removal(&mut self, op: OpId) {
@@ -2231,7 +2238,7 @@ impl Funcdata {
         log.1.extend((0..o.num_input()).filter_map(|k| o.get_in(k)));
     }
 
-    /// (kuna `copywaves`) Record that `op`'s input `old` is being replaced by
+    /// (unlace `copywaves`) Record that `op`'s input `old` is being replaced by
     /// `new`: the op and each Varnode it touches, its inputs, the one replaced,
     /// the one replacing it and its output.
     #[doc(hidden)]
@@ -2273,30 +2280,30 @@ impl Funcdata {
         self.render_budget = left;
     }
 
-    /// (kuna `condstmts`) Record a block start folded over the cap.
+    /// (unlace `condstmts`) Record a block start folded over the cap.
     pub fn add_condstmts_hit(&mut self, addr: Address) {
-        self.kuna_condstmts_hits.insert(addr);
+        self.unlace_condstmts_hits.insert(addr);
     }
 
-    /// (kuna `stackstoreguard`) Turn the guard off for the rest of this
+    /// (unlace `stackstoreguard`) Turn the guard off for the rest of this
     /// function's analysis.
     pub fn withdraw_stack_store_guard(&self) {
         self.stack_store_guard_withdrawn.set(true);
     }
 
-    /// (kuna `stackstoreguard`) Record that the final layout spoiled what the
+    /// (unlace `stackstoreguard`) Record that the final layout spoiled what the
     /// guard needs, so the function must be analyzed again without it.
     pub fn spoil_stack_store_guard(&self) {
         self.stack_store_guard_spoiled.set(true);
         self.stack_store_guard_withdrawn.set(true);
     }
 
-    /// (kuna `stackstoreguard`) Did the final layout spoil what the guard needs?
+    /// (unlace `stackstoreguard`) Did the final layout spoil what the guard needs?
     pub fn stack_store_guard_spoiled(&self) -> bool {
         self.stack_store_guard_spoiled.get()
     }
 
-    /// (kuna `castobject`) Every stack object any pass re-declared.
+    /// (unlace `castobject`) Every stack object any pass re-declared.
     pub fn cast_objects(
         &self,
     ) -> Vec<(
@@ -2316,7 +2323,7 @@ impl Funcdata {
     }
     /// The console-mapped Symbol specs in this function's local scope (the
     /// `map addr` symbols).  Empty when there is no local scope.  Used to carry
-    /// the symbols across the kuna console's IR rebuild on `decompile`.
+    /// the symbols across the unlace console's IR rebuild on `decompile`.
     pub fn mapped_symbol_specs(
         &self,
     ) -> Vec<(String, std::rc::Rc<crate::dtype::Datatype>, Address, uint4)> {
@@ -2329,7 +2336,7 @@ impl Funcdata {
     /// The usepoint-scoped console Symbol specs in this function's local scope (the
     /// register-storage `type varnode %REG(pc) <type> <name>` symbols), each paired
     /// with its use address.  Empty when there is no local scope.  Carried across
-    /// the kuna console's IR rebuild on `decompile` (the register `tmp` retstruct
+    /// the unlace console's IR rebuild on `decompile` (the register `tmp` retstruct
     /// return Symbol) — the usepoint-aware counterpart of
     /// [`mapped_symbol_specs`](Self::mapped_symbol_specs).
     #[allow(clippy::type_complexity)]
@@ -2376,7 +2383,7 @@ impl Funcdata {
                 // display format (`dispflags`) + value are preserved — otherwise
                 // ActionDynamicMapping's equate arm never fires and the constant
                 // renders in the default format instead of the forced one.  The
-                // C++ console never rebuilds the IR, so this re-seed is the kuna
+                // C++ console never rebuilds the IR, so this re-seed is the unlace
                 // stand-in for that persistence (the equate's type IS the
                 // `getBase(1,TYPE_UNKNOWN)` base1 the ctor uses).
                 if spec.category == symbol_category::EQUATE {
@@ -2439,7 +2446,7 @@ impl Funcdata {
 
     /// Re-create the given console-mapped Symbols in this function's local scope
     /// and re-apply the `namelock|typelock` attributes (`IfcMapaddress`'s fd-local
-    /// form).  The kuna console rebuilds the `Funcdata` on `decompile` (C++ reuses
+    /// form).  The unlace console rebuilds the `Funcdata` on `decompile` (C++ reuses
     /// the same `fd`), so the `map addr` symbols are carried across here.
     pub fn seed_mapped_symbols(
         &mut self,
@@ -2459,7 +2466,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna `dwarfscopes`) Map each DWARF register local `(name, type, storage,
+    /// (unlace `dwarfscopes`) Map each DWARF register local `(name, type, storage,
     /// start)` at the use point the value its register holds at `start` will
     /// have once heritage has run (`dwarfregbind::reaching_write`): the
     /// block's phi when `start` begins a basic block, else the last raw write
@@ -2469,7 +2476,7 @@ impl Funcdata {
     /// width with a same-signed integer type, name-locked only. A local whose
     /// write is not found, or whose name is already taken, is skipped. Returns
     /// the `(name, start)` of each local skipped for want of a write it can bind
-    /// at, so the caller can report it (kuna `honestgaps`).
+    /// at, so the caller can report it (unlace `honestgaps`).
     pub fn seed_dwarf_register_locals(
         &mut self,
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
@@ -2621,7 +2628,7 @@ impl Funcdata {
     /// `type varnode %REG(pc)` symbols) in this function's local scope, mapping each
     /// at its recorded **use address** so its `SymbolEntry::uselimit` is restored.
     /// The usepoint-aware counterpart of
-    /// [`seed_mapped_symbols`](Self::seed_mapped_symbols): the kuna console rebuilds
+    /// [`seed_mapped_symbols`](Self::seed_mapped_symbols): the unlace console rebuilds
     /// the `Funcdata` on `decompile` (C++ reuses the same `fd`), and unlike the
     /// addr-tied `map addr` symbols these would be lost unless re-mapped with their
     /// usepoint (an invalid usepoint would make `inUse` false at every read).
@@ -2642,7 +2649,7 @@ impl Funcdata {
                 if let Ok(sym) = lm.add_symbol(name, std::rc::Rc::clone(ct), addr, usepoint) {
                     let lock = flags & (varnode_flags::namelock | varnode_flags::typelock);
                     lm.set_attribute(sym, lock);
-                    // (kuna L4) Restore `Symbol::setIsolated(true)` for the
+                    // (unlace L4) Restore `Symbol::setIsolated(true)` for the
                     // `type varnode` register temp so `mergeAdjacent`'s isolated
                     // arm refuses to over-merge it into the param it shares storage
                     // with (Return Structure #1/#2/#4).
@@ -2672,7 +2679,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna, ghidra Phase 4) The local-scope Symbol **id** a HighVariable's
+    /// (unlace, ghidra Phase 4) The local-scope Symbol **id** a HighVariable's
     /// name resolves to — the naming pass's recorded bind, an analysis-time
     /// dynamic/equate symbol, or a symbol the encode-time link pass
     /// materialized.  `None` when the high is deliberately symbol-less.
@@ -2682,7 +2689,10 @@ impl Funcdata {
     /// `<localdb>` encodes.  (Before Phase 4 the markup wrote a varnode
     /// create index here — a placeholder that can never resolve, which left
     /// rename/retype dead on declaration-line tokens.)
-    pub fn kuna_high_symbol_wire_id(&self, high: crate::context::HighVariableId) -> Option<uint8> {
+    pub fn unlace_high_symbol_wire_id(
+        &self,
+        high: crate::context::HighVariableId,
+    ) -> Option<uint8> {
         // Every branch below returns only an id the `<localdb>` encode ACTUALLY
         // WRITES: `encode_scope`'s defensive per-symbol skips (and the wire
         // symbols' `is_encodable`) would otherwise leave the declaration
@@ -2694,25 +2704,25 @@ impl Funcdata {
         // A wire-only symbol first (the encode-time link pass synthesized it
         // for a high the analysis left symbol-less), then the real scope
         // symbol the naming pass / analysis bound.
-        if let Some(idx) = self.kuna_wire_symbol_for_high.get(&high) {
-            if let Some(w) = self.kuna_wire_symbols.get(*idx) {
+        if let Some(idx) = self.unlace_wire_symbol_for_high.get(&high) {
+            if let Some(w) = self.unlace_wire_symbols.get(*idx) {
                 if w.is_encodable() {
                     return Some(w.id);
                 }
             }
         }
         let h = self.high_bank.get(high)?;
-        // `kuna_ref_symbol` last of the recorded binds: it is the Symbol a
+        // `unlace_ref_symbol` last of the recorded binds: it is the Symbol a
         // `&symbol` REFERENCE high points at (C++ `setSymbolReference`), which a
         // high that also owns storage would already have answered above.  It is
         // the only bind a stack aggregate reached solely through `&sym` has —
         // its entire high is the constant PTRSUB operand, so the addr-tied
         // re-derivation below cannot see it.
         if let Some(sid) = h
-            .kuna_link_symbol()
-            .or_else(|| h.kuna_dynamic_symbol())
-            .or_else(|| h.kuna_equate_symbol())
-            .or_else(|| h.kuna_ref_symbol())
+            .unlace_link_symbol()
+            .or_else(|| h.unlace_dynamic_symbol())
+            .or_else(|| h.unlace_equate_symbol())
+            .or_else(|| h.unlace_ref_symbol())
         {
             let lm = self.localmap.as_ref()?;
             if lm.symbol_is_encodable(sid) {
@@ -2725,7 +2735,7 @@ impl Funcdata {
         // declaration) whose own symbol link lives on the sibling that carried
         // the name.  Resolve the covering local Symbol through the high's
         // addr-tied instances — the very query the declaration's name and type
-        // came from (`kuna_mapped_symbol_entry`).  A conflict-separated high
+        // came from (`unlace_mapped_symbol_entry`).  A conflict-separated high
         // never reaches here: the link pass already gave it a wire symbol of
         // its own, which the branch above returns.
         let lm = self.localmap.as_ref()?;
@@ -2769,7 +2779,7 @@ impl Funcdata {
     /// variable that `requiresDynamicStorage` (unique-space representatives,
     /// `splitOutMergeGroup` products), so this is the channel a rename of such
     /// a variable comes back through.  Applied by
-    /// [`Funcdata::kuna_apply_dynamic_recommendations`].
+    /// [`Funcdata::unlace_apply_dynamic_recommendations`].
     pub fn seed_dynamic_recommendations(&mut self, specs: &[(String, Address, u64)]) {
         if let Some(lm) = self.localmap.as_mut() {
             for (name, addr, hash) in specs {
@@ -2795,7 +2805,7 @@ impl Funcdata {
     /// runs this loop AFTER `linkSymbols`, so `vn->getHigh()->getSymbol()` is
     /// already populated and its guards — `sym == 0`, `sym->getScope() != this`,
     /// `!sym->isNameUndefined()` — are live, and it only ever RENAMES an
-    /// existing Symbol.  kuna's naming pass fuses linkSymbols with the `vN`
+    /// existing Symbol.  unlace's naming pass fuses linkSymbols with the `vN`
     /// default assignment into one location-ordered walk, so there is no point
     /// "after linking, before defaults" to run at; the loop therefore runs
     /// first and CREATES a dynamic Symbol.  The per-high guard below is then
@@ -2806,7 +2816,7 @@ impl Funcdata {
     /// `sym != 0 && !isNameUndefined` pair achieves.  Without it a stale or
     /// shape-shifted host hash could take a parameter's variable, and that
     /// high's `<high symref>` would stop pointing at the parameter.
-    pub fn kuna_apply_dynamic_recommendations(&mut self) {
+    pub fn unlace_apply_dynamic_recommendations(&mut self) {
         let recs: Vec<(String, Address, u64)> = match self.localmap.as_ref() {
             Some(lm) => lm
                 .dynamic_recommendations()
@@ -2842,10 +2852,10 @@ impl Funcdata {
                 .high_bank()
                 .get(high)
                 .map(|h| {
-                    h.kuna_name().is_some()
-                        || h.kuna_dynamic_symbol().is_some()
-                        || h.kuna_equate_symbol().is_some()
-                        || h.kuna_link_symbol().is_some()
+                    h.unlace_name().is_some()
+                        || h.unlace_dynamic_symbol().is_some()
+                        || h.unlace_equate_symbol().is_some()
+                        || h.unlace_link_symbol().is_some()
                 })
                 .unwrap_or(true);
             if already {
@@ -2888,9 +2898,9 @@ impl Funcdata {
                 .as_mut()
                 .and_then(|lm| lm.add_dynamic_symbol(&unique, dtype, &addr, hash).ok());
             if let Some(h) = self.high_bank_mut().get_mut(high) {
-                h.set_kuna_name(unique);
+                h.set_unlace_name(unique);
                 if let Some(sid) = sid {
-                    h.set_kuna_link_symbol(sid);
+                    h.set_unlace_link_symbol(sid);
                 }
             }
         }
@@ -3061,28 +3071,32 @@ impl Funcdata {
     pub fn set_type_recovery_exceeded(&mut self) {
         self.flags |= funcdata_flags::typerecovery_exceeded;
     }
-    /// (kuna `structsynth`) Record whether the propagation pass just run left the
+    /// (unlace `structsynth`) Record whether the propagation pass just run left the
     /// type lattice unchanged.
-    pub fn set_kuna_infertypes_settled(&mut self, val: bool) {
-        self.kuna_infertypes_settled = val;
+    pub fn set_unlace_infertypes_settled(&mut self, val: bool) {
+        self.unlace_infertypes_settled = val;
     }
-    /// (kuna `structsynth`) Has type propagation reached its fixpoint?
+    /// (unlace `structsynth`) Has type propagation reached its fixpoint?
     #[inline]
-    pub fn kuna_infertypes_settled(&self) -> bool {
-        self.kuna_infertypes_settled
+    pub fn unlace_infertypes_settled(&self) -> bool {
+        self.unlace_infertypes_settled
     }
-    /// (kuna `calltargettype`) Forget every recorded call target type, keeping the field calls.
+    /// (unlace `calltargettype`) Forget every recorded call target type, keeping the field calls.
     #[doc(hidden)]
-    pub fn kuna_clear_call_target_type_map(&mut self) {
-        self.kuna_call_target_types.clear();
+    pub fn unlace_clear_call_target_type_map(&mut self) {
+        self.unlace_call_target_types.clear();
     }
-    /// (kuna `calltargettype`) Record the type the indirect call `op` states.
-    pub fn kuna_set_call_target_type(&mut self, op: OpId, ty: std::rc::Rc<crate::dtype::Datatype>) {
-        self.kuna_call_target_types.insert(op, ty);
+    /// (unlace `calltargettype`) Record the type the indirect call `op` states.
+    pub fn unlace_set_call_target_type(
+        &mut self,
+        op: OpId,
+        ty: std::rc::Rc<crate::dtype::Datatype>,
+    ) {
+        self.unlace_call_target_types.insert(op, ty);
     }
-    /// (kuna `calltargettype`) The type the indirect call `op` states, if recorded.
-    pub fn kuna_call_target_type(&self, op: OpId) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
-        self.kuna_call_target_types.get(&op).cloned()
+    /// (unlace `calltargettype`) The type the indirect call `op` states, if recorded.
+    pub fn unlace_call_target_type(&self, op: OpId) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
+        self.unlace_call_target_types.get(&op).cloned()
     }
     /// Toggle whether normalization transforms will be performed
     /// (C++ `setNormalization`).
@@ -3157,15 +3171,15 @@ impl Funcdata {
     }
 
     #[inline]
-    pub fn kuna_storage_sources(&self, vn: VarnodeId) -> &[StorageSource] {
-        self.kuna_storage_sources
+    pub fn unlace_storage_sources(&self, vn: VarnodeId) -> &[StorageSource] {
+        self.unlace_storage_sources
             .get(&vn)
             .map(Vec::as_slice)
             .unwrap_or(&[])
     }
 
     /// Retain homes of an equivalent value without following computational inputs.
-    pub fn kuna_inherit_storage(&mut self, destination: VarnodeId, original: VarnodeId) {
+    pub fn unlace_inherit_storage(&mut self, destination: VarnodeId, original: VarnodeId) {
         let Some(size) = self.vbank.get(original).map(|v| v.get_size()) else {
             return;
         };
@@ -3174,12 +3188,12 @@ impl Funcdata {
             .get(destination)
             .is_some_and(|v| v.get_size() == size)
         {
-            self.kuna_inherit_storage_slice(destination, original, 0, size);
+            self.unlace_inherit_storage_slice(destination, original, 0, size);
         }
     }
 
     /// Retain a byte slice, with its offset measured from the least-significant end.
-    pub fn kuna_inherit_storage_slice(
+    pub fn unlace_inherit_storage_slice(
         &mut self,
         destination: VarnodeId,
         original: VarnodeId,
@@ -3214,9 +3228,9 @@ impl Funcdata {
             .get_def()
             .and_then(|id| self.obank.get(id))
             .map(|op| op.get_addr().clone());
-        let mut sources = self.kuna_storage_sources(original).to_vec();
+        let mut sources = self.unlace_storage_sources(original).to_vec();
         if (self.hooks().has_local_storage_use)(self, original) {
-            self.kuna_mark_meaningful_storage_write(original);
+            self.unlace_mark_meaningful_storage_write(original);
         }
         let transport = (self.hooks().is_call_transport)(self, original);
         if transport {
@@ -3225,7 +3239,7 @@ impl Funcdata {
         let projection =
             (self.hooks().is_call_transport_projection)(self, original, byte_offset, byte_size);
         if projection {
-            self.kuna_mark_call_transport_projection(original, byte_size);
+            self.unlace_mark_call_transport_projection(original, byte_size);
             if let Some(input) = self
                 .vbank
                 .get(original)
@@ -3271,11 +3285,11 @@ impl Funcdata {
                 write_address: source.write_address,
             });
         }
-        self.kuna_extend_storage_sources(destination, sliced);
+        self.unlace_extend_storage_sources(destination, sliced);
     }
 
     #[doc(hidden)]
-    pub fn kuna_extend_storage_sources(
+    pub fn unlace_extend_storage_sources(
         &mut self,
         destination: VarnodeId,
         sources: impl IntoIterator<Item = StorageSource>,
@@ -3290,7 +3304,7 @@ impl Funcdata {
         {
             return;
         }
-        let homes = self.kuna_storage_sources.entry(destination).or_default();
+        let homes = self.unlace_storage_sources.entry(destination).or_default();
         // Preserve first-seen order. Index only large merges so small vectors
         // and single-source updates do not allocate a temporary hash table.
         let address_key = |address: &Address| {
@@ -3316,8 +3330,11 @@ impl Funcdata {
             seen
         });
         for source in sources {
-            if Self::kuna_storage_write_matches(&self.kuna_denied_storage_writes, &source)
-                && !Self::kuna_storage_write_matches(&self.kuna_meaningful_storage_writes, &source)
+            if Self::unlace_storage_write_matches(&self.unlace_denied_storage_writes, &source)
+                && !Self::unlace_storage_write_matches(
+                    &self.unlace_meaningful_storage_writes,
+                    &source,
+                )
             {
                 continue;
             }
@@ -3337,49 +3354,49 @@ impl Funcdata {
     }
 
     #[doc(hidden)]
-    pub fn kuna_forget_storage_sources(&mut self, vn: VarnodeId) {
-        self.kuna_storage_sources.remove(&vn);
-        self.kuna_call_transport.remove(&vn);
-        self.kuna_call_transport_projections.remove(&vn);
+    pub fn unlace_forget_storage_sources(&mut self, vn: VarnodeId) {
+        self.unlace_storage_sources.remove(&vn);
+        self.unlace_call_transport.remove(&vn);
+        self.unlace_call_transport_projections.remove(&vn);
     }
 
     #[inline]
     #[doc(hidden)]
-    pub fn kuna_was_call_transport(&self, vn: VarnodeId) -> bool {
-        self.kuna_call_transport.contains(&vn)
+    pub fn unlace_was_call_transport(&self, vn: VarnodeId) -> bool {
+        self.unlace_call_transport.contains(&vn)
     }
 
     #[doc(hidden)]
-    pub fn kuna_mark_call_transport(&mut self, vn: VarnodeId) {
+    pub fn unlace_mark_call_transport(&mut self, vn: VarnodeId) {
         if self.glb.name_style_angr && self.vbank.get(vn).is_some() {
-            self.kuna_call_transport.insert(vn);
+            self.unlace_call_transport.insert(vn);
             if let Some(size) = self.vbank.get(vn).map(|v| v.get_size()) {
-                self.kuna_deny_storage_write(vn, size);
+                self.unlace_deny_storage_write(vn, size);
             }
         }
     }
 
     #[doc(hidden)]
-    pub fn kuna_forget_call_transport(&mut self, vn: VarnodeId) {
-        self.kuna_call_transport.remove(&vn);
-        self.kuna_call_transport_projections.remove(&vn);
+    pub fn unlace_forget_call_transport(&mut self, vn: VarnodeId) {
+        self.unlace_call_transport.remove(&vn);
+        self.unlace_call_transport_projections.remove(&vn);
     }
 
     #[doc(hidden)]
-    pub fn kuna_call_transport_projection_size(&self, vn: VarnodeId) -> Option<int4> {
-        self.kuna_call_transport_projections.get(&vn).copied()
+    pub fn unlace_call_transport_projection_size(&self, vn: VarnodeId) -> Option<int4> {
+        self.unlace_call_transport_projections.get(&vn).copied()
     }
 
     #[doc(hidden)]
-    pub fn kuna_mark_call_transport_projection(&mut self, vn: VarnodeId, size: int4) {
-        self.kuna_call_transport_projections
+    pub fn unlace_mark_call_transport_projection(&mut self, vn: VarnodeId, size: int4) {
+        self.unlace_call_transport_projections
             .entry(vn)
             .and_modify(|current| *current = (*current).max(size))
             .or_insert(size);
-        self.kuna_deny_storage_write(vn, size);
+        self.unlace_deny_storage_write(vn, size);
     }
 
-    fn kuna_deny_storage_write(&mut self, vn: VarnodeId, size: int4) {
+    fn unlace_deny_storage_write(&mut self, vn: VarnodeId, size: int4) {
         let Some(value) = self.vbank.get(vn) else {
             return;
         };
@@ -3400,16 +3417,16 @@ impl Funcdata {
             } else {
                 0
             };
-        let ranges = self.kuna_denied_storage_writes.entry(key).or_default();
+        let ranges = self.unlace_denied_storage_writes.entry(key).or_default();
         if ranges.iter().any(|range| *range == (offset, size)) {
             return;
         }
         ranges.push((offset, size));
-        for sources in self.kuna_storage_sources.values_mut() {
+        for sources in self.unlace_storage_sources.values_mut() {
             sources.retain(|source| {
-                !Self::kuna_storage_write_matches(&self.kuna_denied_storage_writes, source)
-                    || Self::kuna_storage_write_matches(
-                        &self.kuna_meaningful_storage_writes,
+                !Self::unlace_storage_write_matches(&self.unlace_denied_storage_writes, source)
+                    || Self::unlace_storage_write_matches(
+                        &self.unlace_meaningful_storage_writes,
                         source,
                     )
             });
@@ -3417,7 +3434,7 @@ impl Funcdata {
     }
 
     #[doc(hidden)]
-    pub fn kuna_mark_meaningful_storage_write(&mut self, vn: VarnodeId) {
+    pub fn unlace_mark_meaningful_storage_write(&mut self, vn: VarnodeId) {
         let Some(value) = self.vbank.get(vn) else {
             return;
         };
@@ -3439,14 +3456,17 @@ impl Funcdata {
             value.get_space().get_index(),
         );
         let range = (value.get_offset(), value.get_size());
-        let ranges = self.kuna_meaningful_storage_writes.entry(key).or_default();
+        let ranges = self
+            .unlace_meaningful_storage_writes
+            .entry(key)
+            .or_default();
         if !ranges.contains(&range) {
             ranges.push(range);
         }
     }
 
     #[doc(hidden)]
-    pub fn kuna_storage_write_has_local_use(&self, vn: VarnodeId, size: int4) -> bool {
+    pub fn unlace_storage_write_has_local_use(&self, vn: VarnodeId, size: int4) -> bool {
         let Some(value) = self.vbank.get(vn) else {
             return false;
         };
@@ -3463,10 +3483,10 @@ impl Funcdata {
             size,
             write_address: Some(operation.get_addr().clone()),
         };
-        Self::kuna_storage_write_matches(&self.kuna_meaningful_storage_writes, &source)
+        Self::unlace_storage_write_matches(&self.unlace_meaningful_storage_writes, &source)
     }
 
-    fn kuna_storage_write_matches(
+    fn unlace_storage_write_matches(
         denied: &crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
         source: &StorageSource,
     ) -> bool {
@@ -3494,12 +3514,12 @@ impl Funcdata {
     }
 
     #[doc(hidden)]
-    pub fn kuna_rekey_storage_sources(&mut self, original: VarnodeId, destination: VarnodeId) {
+    pub fn unlace_rekey_storage_sources(&mut self, original: VarnodeId, destination: VarnodeId) {
         if original != destination {
-            if let Some(size) = self.kuna_call_transport_projections.remove(&original) {
-                self.kuna_mark_call_transport_projection(destination, size);
+            if let Some(size) = self.unlace_call_transport_projections.remove(&original) {
+                self.unlace_mark_call_transport_projection(destination, size);
             }
-            if self.kuna_call_transport.remove(&original)
+            if self.unlace_call_transport.remove(&original)
                 && self
                     .vbank
                     .get(destination)
@@ -3507,10 +3527,10 @@ impl Funcdata {
                     .and_then(|op| self.obank.get(op))
                     .is_none_or(|op| op.code() == unlace_num::opcodes::OpCode::CPUI_COPY)
             {
-                self.kuna_mark_call_transport(destination);
+                self.unlace_mark_call_transport(destination);
             }
-            if let Some(sources) = self.kuna_storage_sources.remove(&original) {
-                self.kuna_extend_storage_sources(destination, sources);
+            if let Some(sources) = self.unlace_storage_sources.remove(&original) {
+                self.unlace_extend_storage_sources(destination, sources);
             }
         }
     }
@@ -3607,13 +3627,13 @@ impl Funcdata {
         self.sblocks.block(root).get_size()
     }
 
-    /// (kuna) Tally the `quality` goto-count structure-quality metric over the
-    /// structured tree (C++ `IfcKunaQuality`).  Pub wrapper over the private
+    /// (unlace) Tally the `quality` goto-count structure-quality metric over the
+    /// structured tree (C++ `IfcUnlaceQuality`).  Pub wrapper over the private
     /// `sblocks_root` so the console command can read the metric.
-    pub fn kuna_quality_counts(&self) -> crate::block::KunaQualityCounts {
-        let mut counts = crate::block::KunaQualityCounts::default();
+    pub fn unlace_quality_counts(&self) -> crate::block::UnlaceQualityCounts {
+        let mut counts = crate::block::UnlaceQualityCounts::default();
         let root = self.sblocks_root();
-        self.sblocks.kuna_count_quality(root, &mut counts);
+        self.sblocks.unlace_count_quality(root, &mut counts);
         counts
     }
 
@@ -3637,7 +3657,7 @@ impl Funcdata {
         }
     }
 
-    /// (kuna) Discard a partially-structured `sblocks` graph and rebuild a fresh
+    /// (unlace) Discard a partially-structured `sblocks` graph and rebuild a fresh
     /// `BlockCopy` mirror of `bblocks`.  Used only by the region-based structurer
     /// fallback (`option regionstructure`): when the region structurer cannot
     /// collapse the graph to a single root it leaves `sblocks` half-structured, so
@@ -3706,8 +3726,8 @@ impl Funcdata {
     /// surface they use, declared here so they need no seam edit.
     pub fn replace_reads_thunk(
         obank: &mut PcodeOpBank,
-    ) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> + '_ {
-        move |bank: &mut VarnodeBank, oldvn: VarnodeId, newvn: VarnodeId| -> KunaResult<()> {
+    ) -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> + '_ {
+        move |bank: &mut VarnodeBank, oldvn: VarnodeId, newvn: VarnodeId| -> UnlaceResult<()> {
             // C++ `VarnodeBank::replace` (varnode.cc:1351).
             // C++ walks oldvn's descend list (one entry per op-read of oldvn) and,
             // for each non-skipped entry, severs *that one* link, repoints the
@@ -3782,7 +3802,7 @@ impl Funcdata {
     }
 
     /// Identity of the smallest containing local SymbolEntry for a Varnode — the
-    /// kuna analog of C++ `Varnode::getSymbolEntry()` (the `mapentry` pointer).
+    /// unlace analog of C++ `Varnode::getSymbolEntry()` (the `mapentry` pointer).
     ///
     /// Re-derives the entry with the same containment query `linkSymbol` uses
     /// (`localmap->findContainer(addr, 1, vn->getUsePoint())`) and keys it by
@@ -3914,7 +3934,7 @@ impl Funcdata {
         // contributes an EMPTY cover to its HighVariable.  That fragments a
         // register's merged high (the loop-counter phi-temps lose their back-edge
         // span), letting an unrelated same-typed value speculatively merge into it
-        // — the gh1276 / gh9218 cover-fragmentation bug.  (kuna fix)
+        // — the gh1276 / gh9218 cover-fragmentation bug.  (unlace fix)
         let needs_calc = match self.vbank().get(vn) {
             Some(v) => v.cover().is_none(),
             None => return,
@@ -4300,16 +4320,16 @@ impl Funcdata {
     /// the flag/index reset are faithful. Buffered comments survive; the
     /// restart drive drops the warnings (`refollow_flow`).
     pub fn clear(&mut self) {
-        self.kuna_regnarrow_runs = 0;
-        self.kuna_regnarrow_values.clear();
-        self.kuna_regnarrow_failed.clear();
-        self.kuna_regsigned_values.clear();
+        self.unlace_regnarrow_runs = 0;
+        self.unlace_regnarrow_values.clear();
+        self.unlace_regnarrow_failed.clear();
+        self.unlace_regsigned_values.clear();
 
-        self.kuna_states.clear();
-        self.kuna_fpu_trunc_views.clear();
-        self.kuna_x87_empty_returns.clear();
-        self.kuna_x87_float_returns.clear();
-        self.kuna_x87_float_calls.clear();
+        self.unlace_states.clear();
+        self.unlace_fpu_trunc_views.clear();
+        self.unlace_x87_empty_returns.clear();
+        self.unlace_x87_float_returns.clear();
+        self.unlace_x87_float_calls.clear();
         // Clear the analysis-derived flags (the exact mask from funcdata.cc:88).
         self.flags &= !(funcdata_flags::highlevel_on
             | funcdata_flags::blocks_generated
@@ -4323,9 +4343,9 @@ impl Funcdata {
         self.high_level_index = 0;
         self.cast_phase_index = 0;
         self.min_laned_size = self.glb.get_minimum_laned_register_size();
-        self.kuna_hiddenret_vetoed.clear();
-        self.kuna_condstmts_hits.clear();
-        self.kuna_restart_now = false;
+        self.unlace_hiddenret_vetoed.clear();
+        self.unlace_condstmts_hits.clear();
+        self.unlace_restart_now = false;
 
         // localmap->clearUnlocked(); localmap->resetLocalWindow() (funcdata.cc:95):
         // a restart re-derives every symbol the analysis recovered, as a fresh
@@ -4351,12 +4371,12 @@ impl Funcdata {
         self.clear_blocks();
         self.obank.clear();
         self.vbank.clear();
-        self.kuna_storage_sources.clear();
-        self.kuna_call_transport.clear();
-        self.kuna_call_transport_projections.clear();
-        self.kuna_denied_storage_writes.clear();
-        self.kuna_meaningful_storage_writes.clear();
-        self.kuna_call_target_types.clear();
+        self.unlace_storage_sources.clear();
+        self.unlace_call_transport.clear();
+        self.unlace_call_transport_projections.clear();
+        self.unlace_denied_storage_writes.clear();
+        self.unlace_meaningful_storage_writes.clear();
+        self.unlace_call_target_types.clear();
         // clearCallSpecs() (funcdata.cc:104): drop the call-spec list so a restart
         // (which re-follows flow and rebuilds qlst) does not keep stale ops.
         self.clear_call_specs();
@@ -4370,30 +4390,30 @@ impl Funcdata {
         if let Some(merge) = self.covermerge.as_mut() {
             merge.clear();
         }
-        // (kuna, ghidra Phase 4) The wire symbols are keyed by HighVariableId,
+        // (unlace, ghidra Phase 4) The wire symbols are keyed by HighVariableId,
         // so they MUST die with the arena that issued those ids — a restart
         // would otherwise let a rebuilt high inherit another variable's symbol
         // id and hand the GUI the wrong rename target.
-        self.kuna_wire_symbols.clear();
-        self.kuna_wrapped_wire_storage.clear();
-        self.kuna_wire_symbol_for_high.clear();
-        self.kuna_directive_symbols.clear();
-        self.kuna_callee_split_calls.clear();
-        self.kuna_passthrough_vararg_calls.clear();
-        self.kuna_readarg_vararg_calls.clear();
-        self.kuna_passthrough_variadic = false;
-        self.kuna_moved_back_returns.clear();
+        self.unlace_wire_symbols.clear();
+        self.unlace_wrapped_wire_storage.clear();
+        self.unlace_wire_symbol_for_high.clear();
+        self.unlace_directive_symbols.clear();
+        self.unlace_callee_split_calls.clear();
+        self.unlace_passthrough_vararg_calls.clear();
+        self.unlace_readarg_vararg_calls.clear();
+        self.unlace_passthrough_variadic = false;
+        self.unlace_moved_back_returns.clear();
         self.store_reach_committed.set(false);
         self.indexed_guard_stores.borrow_mut().clear();
         self.stack_byte_copy_ops.clear();
         self.indexed_guard_indirects.borrow_mut().clear();
         self.guard_only_seen.borrow_mut().clear();
-        self.kuna_forced_return_planted.clear();
-        self.kuna_callresultuse_planted = None;
-        self.kuna_float_pair_halves.clear();
-        self.kuna_forced_claims.clear();
-        self.kuna_zext_word = None;
-        self.kuna_pairs_first_low = false;
+        self.unlace_forced_return_planted.clear();
+        self.unlace_callresultuse_planted = None;
+        self.unlace_float_pair_halves.clear();
+        self.unlace_forced_claims.clear();
+        self.unlace_zext_word = None;
+        self.unlace_pairs_first_low = false;
     }
 
     /// Set a delay/flag bit directly (test/seam helper; not a C++ method).
@@ -4463,7 +4483,7 @@ impl Funcdata {
         rampoint: &Address,
         origval: u64,
         origsize: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::dtype::TypeFactory;
         use crate::varnode::varnode_flags;
         use unlace_base::space::AddrSpace;
@@ -4476,14 +4496,14 @@ impl Funcdata {
         let wordsize = spaceid.get_word_size();
 
         let types = self.get_arch().types_rc().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("spacebaseConstant: no type factory")
+            unlace_base::error::UnlaceError::lowlevel("spacebaseConstant: no type factory")
         })?;
         let invalid = Address::new_invalid();
         let sb_spacebase = types.get_type_spacebase(Rc::clone(&spaceid), &invalid)?;
         let sb_type = types.get_type_pointer(sz, sb_spacebase, wordsize)?;
         // The covering Symbol's declared type.
         let entrytype = entry.symbol_type.clone().ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel("spacebaseConstant: entry has no type")
+            unlace_base::error::UnlaceError::lowlevel("spacebaseConstant: entry has no type")
         })?;
         let ptrentrytype =
             types.get_type_pointer_strip_array(sz, Rc::clone(&entrytype), wordsize)?;
@@ -5124,7 +5144,7 @@ impl Funcdata {
         in_vn: VarnodeId,
         addr: Address,
         _trim_op: OpId,
-    ) -> KunaResult<OpId> {
+    ) -> UnlaceResult<OpId> {
         let copy_op = self.new_op(1, addr);
         self.op_set_opcode(copy_op, crate::typeop::type_op_for(OpCode::CPUI_COPY));
         let (ct, size) = {
@@ -5137,11 +5157,11 @@ impl Funcdata {
         let out_vn = self.new_unique(size, Some(ct));
         self.op_set_output(copy_op, out_vn)?;
         self.op_set_input(copy_op, in_vn, 0)?;
-        // (kuna LOSS-229) Preserve the dynamic-symbol / `mapped` binding across a
+        // (unlace LOSS-229) Preserve the dynamic-symbol / `mapped` binding across a
         // cover-trim re-insertion.  In upstream the firstuse COPY that carries a
         // dynamic-hash symbol is never destroyed, so its `mapped` output survives to
         // `ActionMarkExplicit` (coreaction.cc:3148, isMapped arm) and is rendered as
-        // an explicit named local.  In the kuna pipeline `RulePropagateCopy` collapses
+        // an explicit named local.  In the unlace pipeline `RulePropagateCopy` collapses
         // that COPY during the fullloop and `Merge::mergeAddrTied` cover-separation
         // re-materialises it here; the fresh unique output must inherit the `mapped`
         // bit from the cover-forced input so the SAME markexplicit arm fires (the
@@ -5163,7 +5183,7 @@ impl Funcdata {
     /// C++ `Merge::trimOpOutput` (`merge.cc:656`): bump the op's output forward
     /// through a new COPY so its Cover shrinks to a single point.
     #[doc(hidden)]
-    pub fn do_trim_op_output(&mut self, op: OpId) -> KunaResult<()> {
+    pub fn do_trim_op_output(&mut self, op: OpId) -> UnlaceResult<()> {
         let code = self
             .obank
             .get(op)
@@ -5221,7 +5241,7 @@ impl Funcdata {
     /// `op->outputTypeLocal()` — the local-from-op output type (C++
     /// `TypeOp::getOutputLocal`, typeop.cc:262).
     ///
-    /// (kuna L3) Routes through the per-op-code [`crate::typeop::type_op_info`] dispatch on the
+    /// (unlace L3) Routes through the per-op-code [`crate::typeop::type_op_info`] dispatch on the
     /// shared (INTERNED) [`crate::dtype::TypeFactory`] (`glb->types`), so two ops whose local
     /// type is the same size+metatype return the SAME `Rc<Datatype>`.  This is
     /// load-bearing for `Merge::mergeAdjacent`'s pointer-identity same-type test
@@ -5329,7 +5349,7 @@ impl Funcdata {
         range
     }
 
-    /// (kuna) Does the `checkCopyPair` range of `dom_op` and `sub_op`
+    /// (unlace) Does the `checkCopyPair` range of `dom_op` and `sub_op`
     /// ([`Self::build_copy_pair_range`]) contain a point `writes` lists for its
     /// block?  The walk stops at the first one.
     #[doc(hidden)]
@@ -5395,7 +5415,7 @@ impl Funcdata {
         cache: &mut crate::variable::HighIntersectTest,
         set_high_log: &mut Vec<(VarnodeId, crate::context::HighVariableId, int2)>,
         mark_set: &std::cell::RefCell<std::collections::BTreeSet<crate::context::HighVariableId>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let Funcdata {
             high_bank,
             vbank,
@@ -5480,7 +5500,7 @@ impl Funcdata {
         copy: &[OpId],
         pos: int4,
         size: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut block_set: Vec<BlockId> = Vec::with_capacity(size as usize);
         for i in 0..size {
             let op = copy[(pos + i) as usize];
@@ -5669,7 +5689,7 @@ impl Funcdata {
         high1: crate::context::HighVariableId,
         high2: crate::context::HighVariableId,
         isspeculative: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let opset = crate::cover::PcodeOpSet::new(Box::new(Vec::new), Box::new(|_, _| false));
         let mut cache = crate::variable::HighIntersectTest::new(opset);
         let mut set_high_log: Vec<(VarnodeId, crate::context::HighVariableId, int2)> = Vec::new();
@@ -5950,19 +5970,19 @@ impl Funcdata {
         vn: VarnodeId,
         maxduplicates: uint4,
         base1_unknown: std::rc::Rc<crate::dtype::Datatype>,
-    ) -> KunaResult<()> {
-        use unlace_base::error::KunaError;
+    ) -> UnlaceResult<()> {
+        use unlace_base::error::UnlaceError;
         let v = self
             .vbank
             .get(vn)
-            .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: stale varnode"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("build_dynamic_symbol: stale varnode"))?;
         if v.is_type_lock() || v.is_name_lock() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Trying to build dynamic symbol on locked varnode",
             ));
         }
         if !self.is_high_on() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Cannot create dynamic symbols until decompile has completed",
             ));
         }
@@ -5972,18 +5992,18 @@ impl Funcdata {
             .vbank
             .get(vn)
             .and_then(|v| v.get_high())
-            .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: varnode has no high"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("build_dynamic_symbol: varnode has no high"))?;
         if self
             .high_bank
             .get(high)
-            .and_then(|h| h.kuna_equate_symbol().or(h.kuna_dynamic_symbol()))
+            .and_then(|h| h.unlace_equate_symbol().or(h.unlace_dynamic_symbol()))
             .is_some()
         {
             return Ok(());
         }
         let (hash, addr) = crate::dynamic::dynamic_unique_hash(vn, maxduplicates, self)?;
         if hash == 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Unable to find unique hash for varnode",
             ));
         }
@@ -5996,21 +6016,21 @@ impl Funcdata {
             let localmap = self
                 .localmap
                 .as_mut()
-                .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: no local scope"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("build_dynamic_symbol: no local scope"))?;
             let sym = localmap.add_dynamic_symbol("", dtype, &addr, hash)?;
             let entry = localmap
                 .database()
                 .dynamic_entries(localmap.scope_id())
                 .into_iter()
                 .find(|entry| entry.symbol == sym)
-                .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: missing entry"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("build_dynamic_symbol: missing entry"))?;
             (self.hooks().dynamiclocals_bind)(self, vn, &entry)?;
             return Ok(());
         }
         let localmap = self
             .localmap
             .as_mut()
-            .ok_or_else(|| KunaError::lowlevel("build_dynamic_symbol: no local scope"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("build_dynamic_symbol: no local scope"))?;
         let sym = localmap.add_equate_symbol(
             "",
             crate::database::symbol_dispflags::FORCE_HEX,
@@ -6020,7 +6040,7 @@ impl Funcdata {
             base1_unknown,
         )?;
         if let Some(h) = self.high_bank.get_mut(high) {
-            h.set_kuna_equate_symbol(sym);
+            h.set_unlace_equate_symbol(sym);
         }
         Ok(())
     }
@@ -6039,12 +6059,12 @@ impl Funcdata {
             if let Some(sym) = self
                 .high_bank
                 .get(high)
-                .and_then(|h| h.kuna_equate_symbol())
+                .and_then(|h| h.unlace_equate_symbol())
             {
                 return Some(sym);
             }
         }
-        let sym = self.vbank.get(vn)?.kuna_symbol_entry()?;
+        let sym = self.vbank.get(vn)?.unlace_symbol_entry()?;
         let localmap = self.localmap.as_ref()?;
         if localmap.database().symbol(sym).get_category()
             == crate::database::symbol_category::EQUATE
@@ -6059,8 +6079,8 @@ impl Funcdata {
     /// idempotency guard in `attemptDynamicMapping[Late]`
     /// (`funcdata_varnode.cc:1347,1378`): a dynamic SymbolEntry has already been
     /// bound to `vn` when its HighVariable carries either the attached name (the
-    /// non-equate arm's `set_kuna_name`) OR the attached equate Symbol (the
-    /// equate arm's `set_kuna_equate_symbol`).  Both arms set
+    /// non-equate arm's `set_unlace_name`) OR the attached equate Symbol (the
+    /// equate arm's `set_unlace_equate_symbol`).  Both arms set
     /// `vn->setSymbolEntry(entry)` in the C++, so a faithful stand-in must treat
     /// either binding as "already labeled" — otherwise a re-run of the (early)
     /// equate arm would re-bind an already-equated Varnode (the C++ returns
@@ -6071,7 +6091,7 @@ impl Funcdata {
         if self
             .vbank
             .get(vn)
-            .and_then(|v| v.kuna_symbol_entry())
+            .and_then(|v| v.unlace_symbol_entry())
             .is_some()
         {
             return true;
@@ -6083,7 +6103,7 @@ impl Funcdata {
             None => return false,
         };
         match self.high_bank.get(high) {
-            Some(h) => h.kuna_name().is_some() || h.kuna_equate_symbol().is_some(),
+            Some(h) => h.unlace_name().is_some() || h.unlace_equate_symbol().is_some(),
             None => false,
         }
     }
@@ -6092,7 +6112,7 @@ impl Funcdata {
     pub fn attempt_dynamic_mapping(
         &mut self,
         entry: &crate::database::SymbolEntry,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         use crate::database::symbol_category;
         let sym_id = entry.symbol;
         let category = {
@@ -6128,11 +6148,11 @@ impl Funcdata {
             // (symbol id) goes on the Varnode so this stays idempotent across passes;
             // the HighVariable mirror (read by the printer) is refreshed when present.
             if let Some(v) = self.vbank.get_mut(vn) {
-                v.set_kuna_symbol_entry(sym_id);
+                v.set_unlace_symbol_entry(sym_id);
             }
             if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
                 if let Some(h) = self.high_bank.get_mut(high) {
-                    h.set_kuna_equate_symbol(sym_id);
+                    h.set_unlace_equate_symbol(sym_id);
                 }
             }
             return Ok(true);
@@ -6144,7 +6164,7 @@ impl Funcdata {
     pub fn attempt_dynamic_mapping_late(
         &mut self,
         entry: &crate::database::SymbolEntry,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         use crate::database::symbol_category;
         // Read the symbol's identity, category, name (for the warning), and size up
         // front (snapshot so the `&mut self` DynamicHash search below does not alias
@@ -6180,11 +6200,11 @@ impl Funcdata {
             // and binds the entry; mirror both here as in the early arm
             // (`attempt_dynamic_mapping`) so the re-run stays idempotent.
             if let Some(v) = self.vbank.get_mut(vn) {
-                v.set_kuna_symbol_entry(sym_id);
+                v.set_unlace_symbol_entry(sym_id);
             }
             if let Some(high) = self.vbank.get(vn).and_then(|v| v.get_high()) {
                 if let Some(h) = self.high_bank.get_mut(high) {
-                    h.set_kuna_equate_symbol(sym_id);
+                    h.set_unlace_equate_symbol(sym_id);
                 }
             }
             return Ok(true);
@@ -6256,7 +6276,7 @@ impl Funcdata {
 /// [`HighContext`] borrowing only `vbank`/`obank`, so the sibling `high_bank`
 /// field stays mutably borrowable.
 impl Funcdata {
-    /// (kuna `sitetypelock`) Is the SSA value produced at `out` never joined
+    /// (unlace `sitetypelock`) Is the SSA value produced at `out` never joined
     /// with a value not derived from it? A per-site output lock is honest only
     /// then: if `out`'s value reaches a MULTIEQUAL alongside a foreign input (a
     /// parameter, global, different allocation, or LOAD), the forced type would
@@ -6325,7 +6345,7 @@ impl Funcdata {
     }
 }
 
-/// (kuna `sitetypelock`) Does the HighVariable with members `insts` hold a
+/// (unlace `sitetypelock`) Does the HighVariable with members `insts` hold a
 /// member foreign to the per-call-site lock on `lock_vn`? A member is foreign
 /// when it is wider than the lock, or does not reach `lock_vn` through only
 /// same-value edges ([`derives_from_banks`]). Shared by the two `HighContext`
@@ -7034,7 +7054,7 @@ mod tests {
         assert_ne!(hash, 0, "the fixture varnode must hash uniquely");
 
         fd.seed_dynamic_recommendations(&[("user_renamed".to_string(), hash_addr, hash)]);
-        fd.kuna_apply_dynamic_recommendations();
+        fd.unlace_apply_dynamic_recommendations();
 
         let high = fd
             .vbank()
@@ -7043,18 +7063,18 @@ mod tests {
             .expect("high");
         let h = fd.high_bank().get(high).expect("high present");
         assert_eq!(
-            h.kuna_name(),
+            h.unlace_name(),
             Some("user_renamed"),
             "the dynamic recommendation did not name the hashed variable"
         );
         assert!(
-            h.kuna_link_symbol().is_some(),
+            h.unlace_link_symbol().is_some(),
             "the recommendation must also bind a Symbol so the wire carries an id"
         );
         // A second apply is idempotent (the name is already resolved).
-        fd.kuna_apply_dynamic_recommendations();
+        fd.unlace_apply_dynamic_recommendations();
         assert_eq!(
-            fd.high_bank().get(high).unwrap().kuna_name(),
+            fd.high_bank().get(high).unwrap().unlace_name(),
             Some("user_renamed")
         );
     }
@@ -7077,13 +7097,13 @@ mod tests {
         assert!(!fd.vn_high_has_dynamic_binding(c));
         // Bind an arbitrary symbol id (slotmap default key stands in for any equate).
         let sym: SymbolId = Default::default();
-        fd.vbank.get_mut(c).unwrap().set_kuna_symbol_entry(sym);
+        fd.vbank.get_mut(c).unwrap().set_unlace_symbol_entry(sym);
         // setSymbolEntry marks `mapped` (the B2 copy-elim survival pin) ...
         assert!(fd.vbank.get(c).unwrap().is_mapped());
         // ... and is the idempotency key even with no HighVariable present.
         assert!(fd.vbank.get(c).unwrap().get_high().is_none());
         assert!(fd.vn_high_has_dynamic_binding(c));
-        assert_eq!(fd.vbank.get(c).unwrap().kuna_symbol_entry(), Some(sym));
+        assert_eq!(fd.vbank.get(c).unwrap().unlace_symbol_entry(), Some(sym));
     }
 
     #[test]
@@ -7179,7 +7199,7 @@ mod tests {
         assert_eq!(third, 0);
     }
 
-    /// Kuna #1674: a constant wider than 8 bytes holds zero above bit 63, so a
+    /// Unlace #1674: a constant wider than 8 bytes holds zero above bit 63, so a
     /// piece 8 or more bytes into it shadows only the constant 0.
     #[test]
     fn partial_copy_shadow_reads_zero_above_bit_63_of_a_wide_constant() {

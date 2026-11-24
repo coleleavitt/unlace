@@ -7,19 +7,19 @@
 //!
 //! After the structurer collapses the CFG into a structured AST, an edge that
 //! leaves a loop to the loop's *single successor* is the semantic `break;`.
-//! kuna's port of `ActionFinalStructure` ran `finalizePrinting` and
+//! unlace's port of `ActionFinalStructure` ran `finalizePrinting` and
 //! `markUnstructured` but left `scopeBreak` an explicit STUB stub
 //! (`p8_structure/blockaction.rs`, `docs/rust-port/losses.md`): every such
 //! loop-exit edge therefore rendered as a raw `goto <successor-label>;` plus a
 //! synthesized label on the successor.  angr recovers the structured `break;`.
 //!
 //! On `1after909::doit` the command-processing `while` loop has **nine**
-//! error/`quit` paths that exit to the shared cleanup block; kuna emitted nine
+//! error/`quit` paths that exit to the shared cleanup block; unlace emitted nine
 //! `goto label_239f;` + the label, where angr emits nine `break;`.
 //!
 //! # What this pass does
 //!
-//! [`kuna_scope_break`] is the faithful transcription of `BlockGraph::scopeBreak`
+//! [`unlace_scope_break`] is the faithful transcription of `BlockGraph::scopeBreak`
 //! and the overrides for every structured block type.  It is a single recursive
 //! walk of the already-collapsed structured tree, carrying:
 //!
@@ -37,7 +37,7 @@
 //! `f_break_goto` and `markUnstructured` (which runs *after* this pass) then skips
 //! marking the now-`break` target's label, so the synthesized label disappears.
 //!
-//! Block identity: the C++ compares `getIndex()` values; in the kuna arena each
+//! Block identity: the C++ compares `getIndex()` values; in the unlace arena each
 //! structured block has a unique [`BlockId`](crate::block) (1:1 with the C++
 //! `index`), so [`BlockId`] equality is the faithful, re-index-stable analog.
 //!
@@ -49,21 +49,21 @@
 //!
 //! The decision is a P0 assertion: `option loopbreak_recovery on|off`
 //! (the registered option `RecoverLoopBreak`).  `ActionFinalStructure` calls
-//! [`kuna_scope_break`] between `finalizePrinting` and `markUnstructured` only
-//! when the flag is set.  kuna ships it **DIV-7 default-on** (the ablation over
+//! [`unlace_scope_break`] between `finalizePrinting` and `markUnstructured` only
+//! when the flag is set.  unlace ships it **DIV-7 default-on** (the ablation over
 //! the 675-assertion datatest corpus plus the cargo golden suite is clean, and
-//! it converges kuna toward upstream Ghidra, which runs `scopeBreak`
+//! it converges unlace toward upstream Ghidra, which runs `scopeBreak`
 //! unconditionally); `option loopbreak_recovery off` restores the byte-identical
 //! raw-`goto` rendering.
 //!
 //! ## STUB(W9) — `ArchOption` wiring
 //!
-//! Upstream `scopeBreak` is not optional (it always runs).  kuna gates it behind
+//! Upstream `scopeBreak` is not optional (it always runs).  unlace gates it behind
 //! [`OptionLoopBreakRecovery`] so the rendering stays flippable per
 //! decompilation; the option parse is exposed here and the flag is threaded by
 //! the W9 option dispatch (`architecture.rs`).
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::uint4;
 
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
@@ -72,7 +72,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<loopbreakrecovery>` (kuna).  ElementIds live in the
+/// Marshaling element `<loopbreakrecovery>` (unlace).  ElementIds live in the
 /// 4000+ range.
 pub const ELEM_LOOPBREAK_RECOVERY: ElementId = ElementId::new("loopbreakrecovery", 4092);
 
@@ -80,13 +80,13 @@ pub const ELEM_LOOPBREAK_RECOVERY: ElementId = ElementId::new("loopbreakrecovery
 // scopeBreak: the structured-tree walk that lowers loop-exit gotos to breaks.
 //===========================================================================
 
-/// (kuna) Entry point: run `scopeBreak(-1,-1)` over the structured tree rooted
+/// (unlace) Entry point: run `scopeBreak(-1,-1)` over the structured tree rooted
 /// at `root` (C++ `BlockGraph::scopeBreak(-1,-1)` as called from
 /// `ActionFinalStructure`).
 ///
 /// `None` is the faithful analog of the C++ sentinel index `-1` ("no fixed
 /// exit").
-pub fn kuna_scope_break(bg: &mut BlockGraph, root: BlockId) {
+pub fn unlace_scope_break(bg: &mut BlockGraph, root: BlockId) {
     scope_break(bg, root, None, None);
 }
 
@@ -215,12 +215,12 @@ fn set_if_goto_type(bg: &mut BlockGraph, id: BlockId, ty: uint4) {
 // Option gate
 //===========================================================================
 
-/// (kuna) Toggle loop-exit `goto` -> `break;` recovery:
+/// (unlace) Toggle loop-exit `goto` -> `break;` recovery:
 /// `loopbreak_recovery on|off`.
 ///
-/// kuna ships this DIV-7 default-on (it recovers structured `break;` statements
+/// unlace ships this DIV-7 default-on (it recovers structured `break;` statements
 /// out of loops, matching angr and upstream Ghidra's unconditional `scopeBreak`);
-/// "off" restores the byte-identical raw-`goto` rendering of kuna's prior port.
+/// "off" restores the byte-identical raw-`goto` rendering of unlace's prior port.
 pub struct OptionLoopBreakRecovery;
 
 impl OptionLoopBreakRecovery {
@@ -229,22 +229,22 @@ impl OptionLoopBreakRecovery {
 
     /// Parse `on|off`; returns the resolved flag plus a confirmation message.
     /// The caller writes the flag into the registered option `RecoverLoopBreak`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Loop break/continue recovery turned {prop}")))
     }
 }
 
-/// (kuna) Lower loop-exit `goto <successor>` edges to structured `break;`
+/// (unlace) Lower loop-exit `goto <successor>` edges to structured `break;`
 /// (a port of Ghidra `BlockGraph::scopeBreak`; option `loopbreak_recovery`,
 /// DIV-10 default-on).
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecoverLoopBreak(pub bool);
 
-impl crate::optionset::KunaOption for RecoverLoopBreak {
+impl crate::optionset::UnlaceOption for RecoverLoopBreak {
     const NAME: &'static str = "loopbreak_recovery";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RecoverLoopBreak(false)
@@ -254,7 +254,7 @@ impl crate::optionset::KunaOption for RecoverLoopBreak {
         RecoverLoopBreak(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::loopbreak_recovery::OptionLoopBreakRecovery.apply(value)?;
         Ok((RecoverLoopBreak(v), msg))
     }

@@ -1,4 +1,4 @@
-//! (kuna) Keep a call argument the caller also tests when the callee's own body
+//! (unlace) Keep a call argument the caller also tests when the callee's own body
 //! reads it.
 //!
 //! # The symptom
@@ -13,7 +13,7 @@
 //!   call ext
 //! ```
 //!
-//! kuna printed `return ext() + 1;`. gcc's `int fwd(int *p) { int x = *p; if (x
+//! unlace printed `return ext() + 1;`. gcc's `int fwd(int *p) { int x = *p; if (x
 //! > 5) return x; return getk(x); }` loses `getk`'s argument the same way: the
 //! value it loads into `edi` is compared, returned on one path and tail-called
 //! on the other.
@@ -191,7 +191,7 @@ pub fn record_variadic_setups(data: &mut Funcdata) {
         .filter(|&i| variadic || crate::passthrough::set_up_as_variadic(data, i))
         .map(|i| data.get_call_specs(i).get_op())
         .collect();
-    data.kuna_set_readarg_vararg_calls(ops);
+    data.unlace_set_readarg_vararg_calls(ops);
 }
 
 /// Record the register trials of a call about to be finalized, when the callee
@@ -211,7 +211,7 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
     let o = data.obank().get(op)?;
     if o.is_dead()
         || o.code() != OpCode::CPUI_CALL
-        || data.kuna_readarg_vararg_calls().contains(&op)
+        || data.unlace_readarg_vararg_calls().contains(&op)
     {
         return None;
     }
@@ -220,7 +220,7 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         return None;
     }
     let live = data
-        .kuna_callee_entry_dead(entry)
+        .unlace_callee_entry_dead(entry)
         .filter(|f| f.is_complete());
     let seen = if live.is_none() {
         crate::entryreads::callee_reads(data, entry)
@@ -231,7 +231,7 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
     let stated = |a: &Address| {
         *entry == *data.get_address()
             || data
-                .kuna_protoorder_types(entry)
+                .unlace_protoorder_types(entry)
                 .is_some_and(|s| s.inputs.iter().any(|(x, _, _)| x == a))
     };
     if live.is_none() && seen.is_none() {
@@ -253,7 +253,7 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
             e.get_size(),
         )
     });
-    let own = data.kuna_callee_entry_dead(data.get_address());
+    let own = data.unlace_callee_entry_dead(data.get_address());
     if let (Some(own), Some((a, s))) = (own, last.as_ref()) {
         if own.proves_read(a, *s) {
             return None;

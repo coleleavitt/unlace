@@ -1,7 +1,7 @@
-//! (kuna `dexmodel`) The DEX `LoadImage`: each DEX file mapped whole, read-only.
+//! (unlace `dexmodel`) The DEX `LoadImage`: each DEX file mapped whole, read-only.
 //!
 //! Ghidra's `DexLoader` maps the file as one `.dex` block at offset 0 and
-//! copies each method's instructions to a second block; kuna decodes the
+//! copies each method's instructions to a second block; unlace decodes the
 //! instructions where they are, so the one mapping is the whole image. An APK is
 //! a zip of `classes.dex`, `classes2.dex`, ...: its DEX files are mapped one
 //! after another, each at a 64 KiB boundary. The method tables and constant
@@ -10,7 +10,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dex::DexModel;
 use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
@@ -23,7 +23,7 @@ pub use unlace_decomp::dex::format::is_dex;
 /// Alignment of each DEX file's mapping after the first.
 const DEX_ALIGN: u64 = 0x1_0000;
 
-/// Largest DEX file kuna inflates out of an APK.
+/// Largest DEX file unlace inflates out of an APK.
 const MAX_DEX_SIZE: usize = 1 << 30;
 
 /// The language an ODEX file decodes with: its instructions may be the
@@ -45,7 +45,7 @@ pub fn is_vdex(bytes: &[u8]) -> bool {
     bytes.len() >= 12 && bytes.starts_with(b"vdex027\0")
 }
 
-/// Is `bytes` any DEX input kuna loads: a DEX or compact DEX file, an ODEX,
+/// Is `bytes` any DEX input unlace loads: a DEX or compact DEX file, an ODEX,
 /// a VDEX, an OAT file that embeds its DEX files, or an APK?
 pub fn is_dex_image(bytes: &[u8]) -> bool {
     is_dex(bytes) || is_odex(bytes) || is_vdex(bytes) || is_oat(bytes) || is_apk(bytes)
@@ -114,7 +114,7 @@ pub fn dex_language(bytes: &[u8]) -> &'static str {
 }
 
 /// The DEX file an ODEX wraps (`DexOptHeader.dexOffset`, `dexLength`).
-fn odex_dex_file(bytes: &[u8]) -> KunaResult<Vec<u8>> {
+fn odex_dex_file(bytes: &[u8]) -> UnlaceResult<Vec<u8>> {
     let offset = le32(bytes, 8).ok_or_else(|| bad_odex("truncated header"))? as usize;
     let length = le32(bytes, 12).ok_or_else(|| bad_odex("truncated header"))? as usize;
     bytes
@@ -128,18 +128,18 @@ fn odex_dex_file(bytes: &[u8]) -> KunaResult<Vec<u8>> {
         .ok_or_else(|| bad_odex("DEX extent past the end of the file"))
 }
 
-fn bad_odex(what: &str) -> KunaError {
-    KunaError::lowlevel(format!("malformed ODEX: {what}"))
+fn bad_odex(what: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!("malformed ODEX: {what}"))
 }
 
 /// The DEX files of a VDEX's DEX section: one per checksum, each starting
 /// 4-byte aligned after the previous one's `file_size`. A compact DEX file's
 /// data may lie in a section shared after the last file, so each runs to the
 /// section's end.
-fn vdex_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
-    let bad = |what: &str| KunaError::lowlevel(format!("malformed VDEX: {what}"));
+fn vdex_dex_files(bytes: &[u8]) -> UnlaceResult<Vec<Vec<u8>>> {
+    let bad = |what: &str| UnlaceError::lowlevel(format!("malformed VDEX: {what}"));
     let sections = le32(bytes, 8).ok_or_else(|| bad("truncated header"))? as usize;
-    let section = |kind: u32| -> KunaResult<Option<(usize, usize)>> {
+    let section = |kind: u32| -> UnlaceResult<Option<(usize, usize)>> {
         for k in 0..sections.min(16) {
             let at = 12 + 12 * k;
             if le32(bytes, at).ok_or_else(|| bad("truncated section table"))? == kind {
@@ -180,7 +180,7 @@ pub fn is_apk(bytes: &[u8]) -> bool {
 
 /// Parse a DEX file, or every `classes*.dex` of an APK, mapping them in
 /// order from address 0.
-pub fn load_dex_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<DexModel>>> {
+pub fn load_dex_models(bytes: Vec<u8>) -> UnlaceResult<Vec<Rc<DexModel>>> {
     let files = if is_dex(&bytes) {
         vec![bytes]
     } else if is_odex(&bytes) {
@@ -199,7 +199,7 @@ pub fn load_dex_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<DexModel>>> {
         models.push(Rc::new(DexModel::parse(file, base)?));
         base = (base + len).div_ceil(DEX_ALIGN) * DEX_ALIGN;
         if base > u64::from(u32::MAX) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "DEX files do not fit in the 32-bit address space",
             ));
         }
@@ -227,8 +227,8 @@ fn le32(bytes: &[u8], at: usize) -> Option<u32> {
         .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
-fn bad_zip(what: &str) -> KunaError {
-    KunaError::lowlevel(format!("malformed APK: {what}"))
+fn bad_zip(what: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!("malformed APK: {what}"))
 }
 
 /// The `classes.dex`, `classes2.dex`, ... index from an entry name.
@@ -242,7 +242,7 @@ fn dex_number(name: &str) -> Option<u32> {
 }
 
 /// The zip central directory's `classes*.dex` entries, in load order.
-fn apk_dex_names(bytes: &[u8]) -> KunaResult<Vec<(u32, ZipEntry)>> {
+fn apk_dex_names(bytes: &[u8]) -> UnlaceResult<Vec<(u32, ZipEntry)>> {
     let floor = bytes.len().saturating_sub(22 + 0xffff);
     let eocd = (floor..=bytes.len().saturating_sub(22))
         .rev()
@@ -284,7 +284,7 @@ fn apk_dex_names(bytes: &[u8]) -> KunaResult<Vec<(u32, ZipEntry)>> {
 }
 
 /// Inflate an APK's `classes*.dex` files, in load order.
-pub fn apk_dex_files(bytes: &[u8]) -> KunaResult<Vec<Vec<u8>>> {
+pub fn apk_dex_files(bytes: &[u8]) -> UnlaceResult<Vec<Vec<u8>>> {
     let mut files = Vec::new();
     for (_, entry) in apk_dex_names(bytes)? {
         if entry.size > MAX_DEX_SIZE || entry.compressed == u32::MAX as usize {
@@ -373,7 +373,7 @@ impl LoadImage for DexLoadImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let start = addr.get_offset();
         let attached = match (addr.get_space(), self.space.as_ref()) {
             (Some(space), Some(own)) => Rc::ptr_eq(space, own),
@@ -385,7 +385,7 @@ impl LoadImage for DexLoadImage {
             .find(|m| m.contains(start))
             .filter(|_| attached);
         let Some(model) = model else {
-            return Err(KunaError::data_unavail(format!(
+            return Err(UnlaceError::data_unavail(format!(
                 "Unable to load {} bytes at {}:0x{start:x}",
                 ptr.len(),
                 addr.get_shortcut()

@@ -17,7 +17,7 @@
 //! [`read_all`](crate::protocol::read_all), a plain string stream
 //! (getRegisterName / getUserOpName / getCodeLabel), a bool stream
 //! (isNameUsed), or a byte stream (getBytes / getStringData).  A Java
-//! exception frame (burst 10) surfaces as [`KunaError::Java`] from any of
+//! exception frame (burst 10) surfaces as [`UnlaceError::Java`] from any of
 //! the response readers.
 //!
 //! Phase-1 scope: the framing and request encodings are complete and
@@ -38,7 +38,7 @@ use std::rc::Rc;
 
 use unlace_base::address::Address;
 use unlace_base::address::{ATTRIB_FIRST, ATTRIB_LAST};
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_SIZE, ATTRIB_TYPE, Decoder,
     ELEM_VALUE, Encoder, PackedEncode,
@@ -177,7 +177,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETREGISTERNAME);
             addr.encode_sized(&mut encoder, vndata.size as i32)
-                .map_err(WireError::Kuna)?;
+                .map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETREGISTERNAME);
         }
         self.send_query_document(&buf)?;
@@ -196,7 +196,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETTRACKEDREGISTERS);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETTRACKEDREGISTERS);
         }
         self.send_query_document(&buf)?;
@@ -227,7 +227,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETPCODE);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETPCODE);
         }
         self.send_query_document(&buf)?;
@@ -246,7 +246,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETMAPPEDSYMBOLS);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETMAPPEDSYMBOLS);
         }
         self.send_query_document(&buf)?;
@@ -265,7 +265,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETEXTERNALREF);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETEXTERNALREF);
         }
         self.send_query_document(&buf)?;
@@ -314,7 +314,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETCODELABEL);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETCODELABEL);
         }
         self.send_query_document(&buf)?;
@@ -358,7 +358,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(&ELEM_COMMAND_GETCOMMENTS);
             encoder.write_unsigned_integer(&ATTRIB_TYPE, flags as u64);
-            fad.encode(&mut encoder).map_err(WireError::Kuna)?;
+            fad.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETCOMMENTS);
         }
         self.send_query_document(&buf)?;
@@ -377,7 +377,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
             encoder.open_element(&ELEM_COMMAND_GETBYTES);
             inaddr
                 .encode_sized(&mut encoder, size as i32)
-                .map_err(WireError::Kuna)?;
+                .map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETBYTES);
         }
         self.send_query_document(&req)?;
@@ -397,7 +397,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
                 errmsg.push(spc.get_shortcut());
             }
             let _ = inaddr.print_raw(&mut errmsg);
-            return Err(WireError::Kuna(KunaError::data_unavail(errmsg)));
+            return Err(WireError::Unlace(UnlaceError::data_unavail(errmsg)));
         } else {
             return Err(java_alignment("Expecting bytes or end of query response"));
         }
@@ -429,7 +429,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
             encoder.write_signed_integer(&ATTRIB_MAXSIZE, max_bytes as i64);
             encoder.write_string(&ATTRIB_TYPE, type_name.as_bytes());
             encoder.write_unsigned_integer(&ATTRIB_ID, type_id);
-            addr.encode(&mut encoder).map_err(WireError::Kuna)?;
+            addr.encode(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(&ELEM_COMMAND_GETSTRINGDATA);
         }
         self.send_query_document(&req)?;
@@ -477,7 +477,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
         &mut self,
         name: &str,
         inject_type: InjectType,
-        encode_context: impl FnOnce(&mut dyn Encoder) -> Result<(), KunaError>,
+        encode_context: impl FnOnce(&mut dyn Encoder) -> Result<(), UnlaceError>,
         decoder: &mut dyn Decoder,
     ) -> WireResult<bool> {
         let elem = match inject_type {
@@ -491,7 +491,7 @@ impl<R: Read, W: Write> GhidraClient<R, W> {
             let mut encoder = PackedEncode::new(&mut buf);
             encoder.open_element(elem);
             encoder.write_string(&ATTRIB_NAME, name.as_bytes());
-            encode_context(&mut encoder).map_err(WireError::Kuna)?;
+            encode_context(&mut encoder).map_err(WireError::Unlace)?;
             encoder.close_element(elem);
         }
         self.send_query_document(&buf)?;

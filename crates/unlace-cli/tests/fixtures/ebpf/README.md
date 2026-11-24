@@ -1,6 +1,6 @@
 # eBPF fixtures
 
-Relocatable eBPF objects for `tests/stages/kuna-ebpf-elf-map-reloc.toml`,
+Relocatable eBPF objects for `tests/stages/ebpf-elf-map-reloc.toml`,
 built from the sources beside them; clang 21.1.8 reproduces every object
 byte-for-byte (the first three were first built with clang 22):
 

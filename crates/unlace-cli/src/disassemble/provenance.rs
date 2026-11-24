@@ -1,4 +1,4 @@
-//! (kuna) Where a byte view's bytes come from, and what the image lets a
+//! (unlace) Where a byte view's bytes come from, and what the image lets a
 //! running program do with them (GH #1401).
 //!
 //! The load image serves a segment over its whole memory size and zero-fills
@@ -42,7 +42,7 @@ const NOTE_RANGES: usize = 3;
 enum Source {
     /// The file's bytes, at the range's file offset.
     File,
-    /// Memory the segment declares and the file does not back: kuna reads zeroes.
+    /// Memory the segment declares and the file does not back: unlace reads zeroes.
     ZeroFill,
     /// File-backed, but a header repair rewrote these bytes; the file's own are
     /// at the range's file offset.

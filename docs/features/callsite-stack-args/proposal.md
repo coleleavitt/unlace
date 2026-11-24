@@ -165,7 +165,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
 3. **Register in** `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** — `src/p0_knowledge/phases/tests.rs`,
    `tests/catalog_bytecompat.rs` + its `tests/fixtures/phase_catalog.json` fixture, and the
-   `tests/stages/kuna-catalog.toml` count assertions (the `ghidra-upstream` /
+   `tests/stages/catalog.toml` count assertions (the `ghidra-upstream` /
    `correctness-fix` buckets).
 5. **Two-pass stage test** `tests/stages/ghdec-callsitestackargs.toml`: pass 1
    `option callsitestackargs off` asserts the bug (an 8-argument callee called with 6), pass 2

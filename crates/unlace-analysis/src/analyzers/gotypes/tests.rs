@@ -711,7 +711,7 @@ fn descriptor_globals_follow_type_edges_and_spell_import_paths() {
     );
 }
 
-// --- itab consumer (kuna_itabs) ---------------------------------------------
+// --- itab consumer (unlace_itabs) ---------------------------------------------
 
 /// Build a types blob with a named concrete struct (`main.Point` @ +0x60) and
 /// a two-method interface (`fmt.Stringer` @ +0x100), plus one itab record at
@@ -972,7 +972,7 @@ fn itab_record_names_each_method_slot() {
         type_metatype::TYPE_PTR
     );
     assert_eq!(
-        tf.kuna_lang_facet("go.itab.main.Shape"),
+        tf.unlace_lang_facet("go.itab.main.Shape"),
         Some(LangFacet::GoItab {
             interface: "main.Shape".to_string()
         })
@@ -1035,7 +1035,7 @@ fn interface_fields_name_their_interface() {
         1
     );
     assert_eq!(
-        tf.kuna_lang_facet("main.Holder"),
+        tf.unlace_lang_facet("main.Holder"),
         Some(LangFacet::GoInterfaceFields {
             fields: vec![(0, "main.Shape".to_string())]
         })

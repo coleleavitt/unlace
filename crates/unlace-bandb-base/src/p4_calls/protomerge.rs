@@ -1,4 +1,4 @@
-//! (kuna `protomerge`) Merge two declared prototypes of one function slot by
+//! (unlace `protomerge`) Merge two declared prototypes of one function slot by
 //! slot instead of letting the later source replace the earlier one wholesale.
 //!
 //! Several load-time sources park a prototype on the same function: the libc
@@ -85,7 +85,7 @@ pub fn merge(old: &PrototypePieces, new: PrototypePieces) -> PrototypePieces {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.protomerge_merge = Some(merge);
 }
 
@@ -106,7 +106,7 @@ mod tests {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         }
     }
 

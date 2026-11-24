@@ -1,4 +1,4 @@
-//! Logic-level tests for `kuna_trampoline_branch_target`, exercising the
+//! Logic-level tests for `unlace_trampoline_branch_target`, exercising the
 //! stack-pointer scan on hand-built raw p-code.
 
 use std::rc::Rc;
@@ -105,7 +105,7 @@ fn lea_form(s: &Spaces) -> Vec<RawOp> {
 fn lea_discard_then_jump_matches() {
     let m = build_manager();
     let s = spaces(&m);
-    let got = kuna_trampoline_branch_target(&lea_form(&s), &sp_storage(&s));
+    let got = unlace_trampoline_branch_target(&lea_form(&s), &sp_storage(&s));
     assert_eq!(got, Some(vn(&s.ram, 0x40d1b4, 1)));
 }
 
@@ -122,7 +122,7 @@ fn add_esp_4_then_jump_matches() {
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
     assert_eq!(
-        kuna_trampoline_branch_target(&ops, &sp_storage(&s)),
+        unlace_trampoline_branch_target(&ops, &sp_storage(&s)),
         Some(vn(&s.ram, 0x2000, 1))
     );
 }
@@ -143,7 +143,7 @@ fn allocation_after_the_discard_still_matches() {
             vec![esp(&s), vn(&s.cnst, 0xcfc, 4)],
         ),
     );
-    assert!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
+    assert!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
 }
 
 /// A `pop` reads the word before dropping it; the value read is not tracked, but
@@ -166,7 +166,7 @@ fn pop_then_jump_matches() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
-    assert!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
+    assert!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
 }
 
 #[test]
@@ -174,7 +174,7 @@ fn plain_jump_without_a_discard_declines() {
     let m = build_manager();
     let s = spaces(&m);
     let ops = vec![op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)])];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// `add esp,8` never equals one pointer word: two words consumed is not the
@@ -191,7 +191,7 @@ fn wrong_sized_discard_declines() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn a_return_declines() {
         ),
         op(OpCode::CPUI_RETURN, None, vec![vn(&s.cnst, 0, 4)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 #[test]
@@ -225,7 +225,7 @@ fn a_conditional_branch_declines() {
             vec![vn(&s.ram, 0x2000, 1), vn(&s.reg, 0x20, 1)],
         ),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 #[test]
@@ -240,7 +240,7 @@ fn an_indirect_branch_declines() {
         ),
         op(OpCode::CPUI_BRANCHIND, None, vec![vn(&s.reg, 0, 4)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// A relative branch inside one instruction's own p-code (a `constant`
@@ -257,7 +257,7 @@ fn a_relative_branch_declines() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.cnst, 2, 4)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// A `leave`-style `esp = ebp` restore leaves the stack pointer unaccountable.
@@ -275,7 +275,7 @@ fn an_opaque_stack_pointer_write_declines() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// A partial write to the low half of the stack pointer invalidates the tracked
@@ -297,7 +297,7 @@ fn a_partial_stack_pointer_write_declines() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// A `call` inside the fragment means the run is a function body, not a
@@ -314,7 +314,7 @@ fn an_inner_call_declines() {
         ),
         op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x3000, 1)]),
     ];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 /// A run that discards but never branches (the decode budget ran out) declines.
@@ -327,14 +327,14 @@ fn a_run_with_no_branch_declines() {
         Some(esp(&s)),
         vec![esp(&s), vn(&s.cnst, 4, 4)],
     )];
-    assert_eq!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)), None);
 }
 
 #[test]
 fn an_empty_run_declines() {
     let m = build_manager();
     let s = spaces(&m);
-    assert_eq!(kuna_trampoline_branch_target(&[], &sp_storage(&s)), None);
+    assert_eq!(unlace_trampoline_branch_target(&[], &sp_storage(&s)), None);
 }
 
 /// `sub esp,-4` is `add esp,4` written the other way; the literal is
@@ -351,5 +351,5 @@ fn a_negative_literal_is_sign_extended() {
         ),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x2000, 1)]),
     ];
-    assert!(kuna_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
+    assert!(unlace_trampoline_branch_target(&ops, &sp_storage(&s)).is_some());
 }

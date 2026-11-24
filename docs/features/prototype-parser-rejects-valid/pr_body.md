@@ -52,7 +52,7 @@ identically.
 
 ## The tests
 
-Six cases in `kuna-console/src/grammar/tests.rs` (both spellings, through
+Six cases in `console/src/grammar/tests.rs` (both spellings, through
 pointers/arrays/function pointers, a struct member, an enum constant, a scoped
 name) plus the pins that `code *p` is still a pointer to `code` and `int4 (code)`
 is still a function; one end-to-end case in `verify_assertplane.rs` asserting the

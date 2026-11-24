@@ -47,7 +47,7 @@ fn static_globals_take_their_dwarf_names() {
                     .arg(&binary),
             );
             let (body, err, status) =
-                common::run_kuna(&["decompile", binary.to_str().unwrap(), "bump"]);
+                common::run_unlace(&["decompile", binary.to_str().unwrap(), "bump"]);
             assert_eq!(status, 0, "{target} {version}: {err}");
             assert!(
                 body.contains("counter") && body.contains("table"),

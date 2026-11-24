@@ -122,7 +122,7 @@ ordinary assigned local (shadow `usermod` @0x6340: `a5 = *v13`), and on coreutil
 body ended `return v2._0_16_ << 0x40` — the locked prototype gives `return 0`.
 
 Both shapes are pinned by the in-repo fixture `elfmainextra_x86_64` @0x1026
-(`tests/stages/kuna-elfmain.toml` §§5-8, `tests/cli/elf-main-extra-register-args.json`),
+(`tests/stages/elfmain.toml` §§5-8, `tests/cli/elf-main-extra-register-args.json`),
 so whichever way call-site argument recovery removes the fabrication, the
 assertions move. Rows: `sweep-params/{summary.txt,population.txt,extra-parameter-uses.txt}`.
 

@@ -1,4 +1,4 @@
-//! S8 goto sinking and backward-goto loops (kuna `gotosink`).
+//! S8 goto sinking and backward-goto loops (unlace `gotosink`).
 //!
 //! Two print-tree rewrites of a structured list, run after every other
 //! structuring pass:
@@ -202,13 +202,13 @@ fn loop_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
         let graph = data.sblocks_mut();
         if conditional {
             let cond = graph.block(comps[j]).get_block(0);
-            graph.kuna_set_component(list, j, cond);
-            let body = graph.kuna_wrap_components(list, i, j, BlockKind::Ls);
-            let _ = graph.kuna_wrap_components(list, i, i, BlockKind::DoWhile);
+            graph.unlace_set_component(list, j, cond);
+            let body = graph.unlace_wrap_components(list, i, j, BlockKind::Ls);
+            let _ = graph.unlace_wrap_components(list, i, i, BlockKind::DoWhile);
             let _ = body;
         } else {
-            let body = graph.kuna_wrap_components(list, i, j, BlockKind::Ls);
-            let inf = graph.kuna_wrap_components(list, i, i, BlockKind::InfLoop);
+            let body = graph.unlace_wrap_components(list, i, j, BlockKind::Ls);
+            let inf = graph.unlace_wrap_components(list, i, i, BlockKind::InfLoop);
             let _ = body;
             continues_to(graph, inf, head);
         }
@@ -251,9 +251,9 @@ fn sink_once(data: &mut Funcdata, list: BlockId) -> Option<BlockId> {
         let clause = if j - i - 1 == 1 {
             comps[i + 1]
         } else {
-            graph.kuna_wrap_components(list, i + 1, j - 1, BlockKind::Ls)
+            graph.unlace_wrap_components(list, i + 1, j - 1, BlockKind::Ls)
         };
-        graph.kuna_move_component(list, i + 1, comps[i]);
+        graph.unlace_move_component(list, i + 1, comps[i]);
         if let BlockKind::If {
             gototarget,
             gototype,
@@ -290,7 +290,7 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
 pub fn gotosink_apply(data: &mut Funcdata) -> i32 {
     let root = data.sblocks_root();
     if !has_exceptional_if(data, root) {
-        data.sblocks_mut().kuna_flatten_lists(root);
+        data.sblocks_mut().unlace_flatten_lists(root);
     }
     let mut count = 0;
     let mut released = Vec::new();
@@ -381,7 +381,7 @@ impl Action for ActionGotoSink {
         unlace_middle::debug_assert_settled!(data, Casts);
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::gotosink::GotoSink>()
             .0
             || data.sblocks_get_size() == 0
@@ -393,8 +393,8 @@ impl Action for ActionGotoSink {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Sink `if (c) goto L` over the statements it skips and turn a backward goto into a loop. (option `gotosink`).
+crate::unlace_flag!(
+    /// (unlace) Sink `if (c) goto L` over the statements it skips and turn a backward goto into a loop. (option `gotosink`).
     GotoSink,
     "gotosink",
     "goto sinking and backward-goto loops",

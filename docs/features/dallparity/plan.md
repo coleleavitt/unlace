@@ -4,7 +4,7 @@ Driver/CLI-tier correctness fix. **No `--option`, no stage XML, no catalog
 counters** (nothing in the phase model changes, and `phases.toml` gains no row);
 it does need a **DIV row**, a **`docs/spec/` touch** and **Rust integration
 tests** -- the shape PR #262 (DIV-59) established for this tier. Classification
-was checked, not assumed: the change is entirely inside `kuna-console`'s driver
+was checked, not assumed: the change is entirely inside `console`'s driver
 seam, it adds no decision point, and it makes an existing option (`formatstring`)
 behave the same on both surfaces instead of introducing a new behaviour. There is
 therefore nothing to gate: a surface that ignores the option the caller set is a
@@ -26,7 +26,7 @@ bug, and the option itself is already the switch.
 
 Extract the format-string override / re-decompile loop and its scoped
 `readonlypropagate` flip out of `IfcDecompile` into a new
-`kuna-console/src/decompile_step.rs`, and route BOTH surfaces through it. Do not
+`console/src/decompile_step.rs`, and route BOTH surfaces through it. Do not
 copy the loop into `decompile_targets`: the divergence exists because there were
 two call sites, so the fix must leave one.
 
@@ -68,7 +68,7 @@ Design constraints:
 
 ## Step 4 -- tests
 
-`kuna-console/tests/verify_decompile_all_parity.rs`, over the four vendored
+`console/tests/verify_decompile_all_parity.rs`, over the four vendored
 `fmt_<arch>` fixtures (x86-64 / AArch64 / ARM / RISC-V, so the ARM literal-pool
 case is covered):
 

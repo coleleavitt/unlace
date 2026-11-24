@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna printed a cast on every constant address a pointer type reaches -- sub_e4ca((struct_2 *)0x2b080) where IDA prints sub_E4CA(qword_2B080) -- 1,118 casts on the 4,815 functions kuna and IDA both emit, up from 572 at the campaign baseline (protoorder stating recovered callee parameter types to callers is 44% of the growth).",
- "test_name": "tests/stages/kuna-globalref.xml (8 two-pass assertions) + kuna-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c (gcc+clang, both arms) + 7 kuna-decomp and 3 kuna-analysis unit tests",
+ "test_name": "tests/stages/globalref.xml (8 two-pass assertions) + kuna-cli decompile_all_cli a_constant_address_named_as_a_global_round_trips_through_the_printed_c (gcc+clang, both arms) + 7 kuna-decomp and 3 kuna-analysis unit tests",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/globalref_x86_64",
  "selector": "w_struct,w_scalar,w_range,w_buffer,w_compare,w_glyph,w_direct,w_numeric,w_width,w_count",
  "option": "globalref",
@@ -290,9 +290,9 @@
   "decompiler/crates/kuna-analysis/src/loader/globalref.rs",
   "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
   "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",
-  "decompiler/crates/kuna-console/src/project.rs",
+  "decompiler/crates/console/src/project.rs",
   "decompiler/crates/kuna-analysis/tests/fixtures/globalref_x86_64.c",
-  "tests/stages/kuna-globalref.xml"
+  "tests/stages/globalref.xml"
  ],
  "castbench_rebased": {
   "measured_on": "origin/main 22df4282c (#719), a fresh base arm built from it; the branch rebased onto it",

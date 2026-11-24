@@ -1,4 +1,4 @@
-//! (kuna `pltlocal`) A shared library's call through its own export's PLT stub
+//! (unlace `pltlocal`) A shared library's call through its own export's PLT stub
 //! is built at the definition the stub's relocation binds it to (GH-1342).
 
 use crate::common;
@@ -7,7 +7,7 @@ fn decompile_all(lib: &str, extra: &[&str]) -> String {
     let lib = common::fixture(lib);
     let mut args = vec!["decompile-all", lib.as_str()];
     args.extend_from_slice(extra);
-    let (out, err, code) = common::run_kuna(&args);
+    let (out, err, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{err}");
     out
 }

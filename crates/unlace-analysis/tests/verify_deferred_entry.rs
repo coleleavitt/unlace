@@ -1,4 +1,4 @@
-//! (kuna) The deferred entry-discovery contract, in its own test binary.
+//! (unlace) The deferred entry-discovery contract, in its own test binary.
 //!
 //! `funcstart_patterns` is not a load-time pass: its whole-image `<patternpairs>`
 //! sweep runs at the commit point, where the `--option funcstart_patterns on|off`
@@ -13,7 +13,7 @@
 //!   as 0x38/0x95, section-relative addresses the engine has no image for.
 //!
 //! Own binary because the second assertion reads the process-global
-//! `KUNA_RELOCREBASE` gate.
+//! `UNLACE_RELOCREBASE` gate.
 
 use unlace_analysis::loadimage_object::ObjectLoadImage;
 use unlace_analysis::passes::{passes_for, run_deferred_entry_passes};

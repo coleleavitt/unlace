@@ -1,4 +1,4 @@
-//! (kuna) The width and constants of a C `enum`, as C lays them out.
+//! (unlace) The width and constants of a C `enum`, as C lays them out.
 //!
 //! Upstream's `newEnum` interns every parsed enum at the factory's `enumsize`,
 //! which `setupSizes` fills with the default data space's address size: eight
@@ -17,7 +17,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uintb};
 use unlace_decomp::dtype::{Datatype, type_metatype};
 
@@ -26,7 +26,7 @@ use super::{CParse, Enumerator};
 impl CParse<'_> {
     /// The optional `: type` after an enum's tag (C23), which must name an
     /// integer type or `_Bool`.
-    pub(super) fn enum_underlying_type(&mut self) -> KunaResult<Option<Rc<Datatype>>> {
+    pub(super) fn enum_underlying_type(&mut self) -> UnlaceResult<Option<Rc<Datatype>>> {
         if !matches!(self.peek()?, super::PToken::Punct(b':')) {
             return Ok(None);
         }
@@ -42,7 +42,7 @@ impl CParse<'_> {
         );
         if tp.is_enum_type() || !integer {
             self.set_error("An enum's underlying type must be an integer type");
-            return Err(KunaError::parse(self.lasterror.clone()));
+            return Err(UnlaceError::parse(self.lasterror.clone()));
         }
         Ok(Some(tp))
     }

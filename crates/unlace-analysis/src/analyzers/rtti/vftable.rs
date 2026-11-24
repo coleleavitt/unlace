@@ -1,4 +1,4 @@
-//! The MSVC vftable walk — the kuna port of Ghidra's
+//! The MSVC vftable walk — the unlace port of Ghidra's
 //! `VfTableModel.getVfTableCount` (`Ghidra/Features/MicrosoftCodeAnalyzer/.../rtti/`).
 //!
 //! A validated [`CompleteObjectLocator`](super::models::CompleteObjectLocator) (COL)

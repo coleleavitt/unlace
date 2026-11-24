@@ -181,7 +181,7 @@ INDIRECT joined the two and declared a byte the callee sets to 200 a `bool`.
 `f1` is the same hole on a *parameter*: compiling the two emitted arms and
 running them side by side, the option-off arm prints `show=200` like the native
 binary and the option-on arm prints `show=1`. Both now refuse, and both are
-pinned in `tests/stages/kuna-boolbyte.toml` (`callfill`, `callslot`).
+pinned in `tests/stages/boolbyte.toml` (`callfill`, `callslot`).
 
 Removing the INDIRECT arms was not enough for the second defect the same
 premise produced. cronie `crond` -O2 `sub_7a20` reads the first byte of a
@@ -256,6 +256,6 @@ option changes anywhere in the sixteen-binary corpus, 7 → 0: the four that los
 one are `du` -O0 `sub_815c`, `find` -O0 `sub_347a5`, `libedit` -O2 `sub_25e80`
 and `tar` -O2 `sub_41370`.
 
-`tests/stages/kuna-boolbyte.toml` pins it with `truncjoin`, a stack byte one arm
+`tests/stages/boolbyte.toml` pins it with `truncjoin`, a stack byte one arm
 sets with `setg` and the other with a truncated `x >> 31`: pass 1 (off) asserts
 the `SUB41` the printer emits without the arm, pass 2 (on) asserts the cast.

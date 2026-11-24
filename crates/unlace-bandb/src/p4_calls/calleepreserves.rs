@@ -1,4 +1,4 @@
-//! (kuna) `calleepreserves` — a decoded helper's own body narrows the ABI's
+//! (unlace) `calleepreserves` — a decoded helper's own body narrows the ABI's
 //! killed-register set at the call.
 //!
 //! # The symptom
@@ -103,8 +103,8 @@ use unlace_base::types::int4;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleepreserves>` (kuna 4000+ range; 4146 = the previous
-/// kuna element).
+/// Marshaling element `<calleepreserves>` (unlace 4000+ range; 4146 = the previous
+/// unlace element).
 pub const ELEM_CALLEEPRESERVES: ElementId = ElementId::new("calleepreserves", 4147);
 
 /// Take the callee-body write probe for every direct call in `data`, so the
@@ -147,7 +147,7 @@ pub fn callee_preserves_range(
     if entry.is_invalid() || fc.plt_stub().is_some() {
         return false;
     }
-    let Some(w) = data.kuna_callee_ret_writes(entry) else {
+    let Some(w) = data.unlace_callee_ret_writes(entry) else {
         return false;
     };
     if !w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size) {
@@ -209,7 +209,7 @@ fn body_departs_from_convention(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleepreserves_callee_preserves_range = Some(callee_preserves_range);
 }
 

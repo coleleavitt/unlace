@@ -7,7 +7,7 @@ fn partial_unit_declarations_preserve_the_indirect_call_result() {
     for options in [&[][..], &["--option", "protoorder", "off"][..]] {
         let mut args = vec!["decompile", path.to_str().unwrap(), "mode"];
         args.extend_from_slice(options);
-        let (code, err, rc) = common::run_kuna(&args);
+        let (code, err, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{err}");
         assert!(
             code.lines().any(|line| line.contains("if (")

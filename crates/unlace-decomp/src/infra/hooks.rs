@@ -5,7 +5,7 @@
 //! and is read by [`universal_sched_hooked`](crate::universalaction::universal_sched_hooked)
 //! each time the universal tree is built.  An empty registry changes nothing:
 //! no rule row and no leaf action is added.  There is no option and no CLI
-//! surface; the registry is reachable only from code that links `kuna-decomp`.
+//! surface; the registry is reachable only from code that links `unlace-decomp`.
 //!
 //! A phase boundary is one fixed schedule point per phase:
 //!
@@ -28,13 +28,13 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::action::{
     Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, Rule, RuleState,
 };
 use crate::funcdata::Funcdata;
-use crate::phases::KunaPhase;
+use crate::phases::UnlacePhase;
 use crate::universalaction::{RuleRow, SchedNode, universal_sched};
 
 /// A callback run at a phase boundary.
@@ -52,7 +52,7 @@ struct HookRule {
 #[derive(Default)]
 pub struct HookRegistry {
     rules: Vec<HookRule>,
-    phases: BTreeMap<KunaPhase, PhaseCallbacks>,
+    phases: BTreeMap<UnlacePhase, PhaseCallbacks>,
 }
 
 impl HookRegistry {
@@ -72,15 +72,15 @@ impl HookRegistry {
         after_group: &str,
         state: RuleState,
         rule: Box<dyn Rule>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if !pool_owns_group(&universal_sched(None, None, Vec::new(), false), after_group) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "No rule pool holds the group: {after_group}"
             )));
         }
         let own = ActionGroupList::from_names([state.basegroup.as_str()]);
         if rule.clone_rule(&own).is_none() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Rule {} does not clone for its group {}",
                 state.name, state.basegroup
             )));
@@ -96,9 +96,9 @@ impl HookRegistry {
     /// Register `callback` at the boundary of `phase`; callbacks of one phase
     /// run in registration order.  Errors for a phase with no point inside
     /// the action tree.
-    pub fn on_phase(&mut self, phase: KunaPhase, callback: PhaseCallback) -> KunaResult<()> {
+    pub fn on_phase(&mut self, phase: UnlacePhase, callback: PhaseCallback) -> UnlaceResult<()> {
         if boundary_group(phase).is_none() {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Phase {} has no boundary inside the action tree",
                 phase.code()
             )));
@@ -137,7 +137,7 @@ impl HookRegistry {
     }
 
     /// The schedule node for the boundary of `phase`.
-    pub(crate) fn boundary(&self, phase: KunaPhase) -> SchedNode {
+    pub(crate) fn boundary(&self, phase: UnlacePhase) -> SchedNode {
         let (Some(group), Some(callbacks)) = (boundary_group(phase), self.phases.get(&phase))
         else {
             return SchedNode::Empty;
@@ -173,12 +173,12 @@ impl HookRule {
 }
 
 /// The group the boundary leaf of `phase` is scheduled under.
-fn boundary_group(phase: KunaPhase) -> Option<&'static str> {
+fn boundary_group(phase: UnlacePhase) -> Option<&'static str> {
     match phase {
-        KunaPhase::P2 | KunaPhase::P3 | KunaPhase::P4 | KunaPhase::P5 => Some("base"),
-        KunaPhase::P6 => Some("merge"),
-        KunaPhase::P7 | KunaPhase::P8 => Some("blockrecovery"),
-        KunaPhase::Infra | KunaPhase::P0 | KunaPhase::P1 | KunaPhase::P9 => None,
+        UnlacePhase::P2 | UnlacePhase::P3 | UnlacePhase::P4 | UnlacePhase::P5 => Some("base"),
+        UnlacePhase::P6 => Some("merge"),
+        UnlacePhase::P7 | UnlacePhase::P8 => Some("blockrecovery"),
+        UnlacePhase::Infra | UnlacePhase::P0 | UnlacePhase::P1 | UnlacePhase::P9 => None,
     }
 }
 
@@ -226,7 +226,7 @@ impl Action for ActionPhaseHook {
     }
 }
 
-crate::kuna_arch_table!(HookRegistry);
+crate::unlace_arch_table!(HookRegistry);
 
 /// Register `rule` on the architecture's registry ([`HookRegistry::add_rule`]).
 fn add_rule_to(
@@ -234,7 +234,7 @@ fn add_rule_to(
     after_group: &str,
     state: RuleState,
     rule: Box<dyn Rule>,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     tables
         .get_mut::<HookRegistry>()
         .add_rule(after_group, state, rule)
@@ -243,14 +243,14 @@ fn add_rule_to(
 /// Register `callback` on the architecture's registry ([`HookRegistry::on_phase`]).
 fn on_phase_of(
     tables: &mut crate::archstate::ArchTables,
-    phase: KunaPhase,
+    phase: UnlacePhase,
     callback: PhaseCallback,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     tables.get_mut::<HookRegistry>().on_phase(phase, callback)
 }
 
 /// Fill this module's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.hooks_add_rule = Some(add_rule_to);
     hooks.hooks_on_phase = Some(on_phase_of);
 }

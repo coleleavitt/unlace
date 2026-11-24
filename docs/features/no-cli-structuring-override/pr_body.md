@@ -20,12 +20,12 @@ binary an agent actually drives did not.
 A twelfth directive: **`flow [<func>::]<addr> branch|call|callreturn|return`**, at P2
 flow-classification. No engine change — `kuna-decomp` is untouched by this PR.
 
-* `kuna-console/src/assertions.rs` gains `Body::Flow`, **function-scoped**: a flow fact is
+* `console/src/assertions.rs` gains `Body::Flow`, **function-scoped**: a flow fact is
   consumed at flow time (the follower reads it while it is still deciding which bytes belong
   to the function), so it has to be a decompile *seed*, not a post-hoc edit. `seed_one`
   resolves the address in the default code space, maps the caller's word through
   `Override::string_to_type`, and parks the pair in `FunctionSeed::flow_overrides`.
-* `kuna-console/src/project.rs` appends that vector to the flow overrides the decompile loop
+* `console/src/project.rs` appends that vector to the flow overrides the decompile loop
   already carries — the analysis's `call error(nonzero,…)` no-return prunes. Appended
   **after** them on purpose: `insertFlowOverride` is a map store, so at an address both name
   the caller's fact wins. What was declared outranks what was inferred, the same rule the rest

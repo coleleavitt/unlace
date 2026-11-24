@@ -1,4 +1,4 @@
-//! (kuna) Keep a returned register half that carries a function **input
+//! (unlace) Keep a returned register half that carries a function **input
 //! parameter**, instead of discarding it as leftover.
 //!
 //! # The symptom
@@ -159,7 +159,7 @@ pub fn is_input_parameter(data: &Funcdata, vn: VarnodeId) -> bool {
         return false;
     }
     let (addr, size) = (v.get_addr().clone(), v.get_size());
-    if data.kuna_pushed_registers().is_push_only(&addr, size) {
+    if data.unlace_pushed_registers().is_push_only(&addr, size) {
         return false;
     }
     data.get_func_proto().possible_input_param(&addr, size)
@@ -402,13 +402,13 @@ pub fn note_moved_back_returns(
             found.push((t.get_address().clone(), t.get_size()));
         }
     }
-    data.kuna_set_moved_back_returns(found);
+    data.unlace_set_moved_back_returns(found);
 }
 
 /// Was the return register at `addr`/`size` recorded by
 /// [`note_moved_back_returns`]?
 pub fn is_moved_back(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_moved_back_returns()
+    data.unlace_moved_back_returns()
         .iter()
         .any(|(a, s)| a == addr && *s == size)
 }

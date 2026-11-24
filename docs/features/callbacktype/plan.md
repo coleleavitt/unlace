@@ -15,7 +15,7 @@
    `phases.toml` row, `p0_knowledge/options.rs`, `Architecture` field + dispatch,
    `docs/options.md`, the catalog counts.
 5. **Tests**: 13 unit tests on the table and the ledger; a negative-control stage test
-   (`tests/stages/kuna-callbacktype.toml`) for the one-function path; two `tests/cli` probes
+   (`tests/stages/callbacktype.toml`) for the one-function path; two `tests/cli` probes
    over a new fixture `callbacktype_x86_64` covering both halves and the escape control.
 6. **Spec**: a `callbacktype` section in `docs/spec/04-calls-and-prototypes.md`.
 7. **Measurement**: the 444-slice typesweep, a whole-corpus `decompile-all` hunk

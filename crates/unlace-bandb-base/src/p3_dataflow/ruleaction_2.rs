@@ -872,7 +872,7 @@ impl Rule for RuleDoubleShift {
         ]
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        // (kuna) C++ `new RuleDoubleShift("analysis")` — the rule's runtime group
+        // (unlace) C++ `new RuleDoubleShift("analysis")` — the rule's runtime group
         // is "analysis" (coreaction.cc:5807), so the live `universalAction` pool
         // clone must test "analysis"; checking only the per-op placeholder name
         // ("doubleshift") dropped this rule from every cloned pool, so `(x>>a)>>b`
@@ -1017,7 +1017,7 @@ impl Rule for RuleDoubleArithShift {
         vec![OpCode::CPUI_INT_SRIGHT]
     }
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        // (kuna) C++ `new RuleDoubleArithShift("analysis")` — the rule's runtime
+        // (unlace) C++ `new RuleDoubleArithShift("analysis")` — the rule's runtime
         // group is "analysis" (coreaction.cc:5808), so the live `universalAction`
         // pool clone must test "analysis"; checking only the per-op placeholder
         // name ("doublearithshift") dropped this rule from every cloned pool, so

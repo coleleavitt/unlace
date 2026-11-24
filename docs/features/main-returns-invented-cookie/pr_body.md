@@ -63,7 +63,7 @@ RE-need `main-returns-invented-cookie` (2 instances, major).
 
 ## The tests
 
-`tests/stages/kuna-calleeretpreserves.toml` is the two-pass case (off = the bug,
+`tests/stages/calleeretpreserves.toml` is the two-pass case (off = the bug,
 default = the fix) with an `endbr64; ret` negative control that must render
 identically in both passes; `tests/cli/main-returns-invented-cookie.json` runs the
 probe over the vendored `pe_cookiecheck_x86_64.exe`. Gates: `make test` PARITY OK

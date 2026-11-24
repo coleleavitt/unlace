@@ -1,4 +1,4 @@
-//! (kuna) Accept a lone call's callee-body argument run when the decode was CUT
+//! (unlace) Accept a lone call's callee-body argument run when the decode was CUT
 //! before it could prove a dead boundary register.
 //!
 //! # The gap
@@ -84,7 +84,7 @@ use unlace_base::types::int4;
 
 use crate::calleearitybody::{BodyTrial, is_register};
 
-/// Marshaling element `<calleearitycut>` (kuna 4000+ range; 4153 = calleeretpreserves).
+/// Marshaling element `<calleearitycut>` (unlace 4000+ range; 4153 = calleeretpreserves).
 pub const ELEM_CALLEEARITYCUT: ElementId = ElementId::new("calleearitycut", 4154);
 
 /// May a run the callee's body proves is an input stand as the whole argument

@@ -1,7 +1,7 @@
 //! Original encoding and executable p-code checks for Octeon integer extensions.
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use unlace_base::{address::Address, error::KunaResult, space::AddrSpace};
+use unlace_base::{address::Address, error::UnlaceResult, space::AddrSpace};
 use unlace_sleigh::{
     emulate::{BreakTableCallBack, Emulate, EmulatePcodeCache},
     globalcontext::ContextInternal,
@@ -20,7 +20,7 @@ impl LoadImage for Bytes {
         Vec::new()
     }
     fn adjust_vma(&mut self, _: i64) {}
-    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, out: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, byte) in out.iter_mut().enumerate() {
             *byte = addr
                 .get_offset()
@@ -111,11 +111,11 @@ impl unlace_sleigh::emulate::BreakCallBack for AtomicCapture {
         &mut self,
         emulator: &mut dyn unlace_sleigh::emulate::EmulateMemory,
         op: &unlace_num::pcoderaw::PcodeOpRaw,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let state = emulator.get_memory_state();
         let inputs = (1..op.num_input())
             .map(|i| state.borrow().get_value_data(op.get_input(i)))
-            .collect::<KunaResult<Vec<_>>>()?;
+            .collect::<UnlaceResult<Vec<_>>>()?;
         self.inputs.borrow_mut().push(inputs);
         if let Some(output) = op.get_output() {
             state.borrow_mut().set_value_data(output, self.old)?;

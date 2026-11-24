@@ -1,4 +1,4 @@
-//! (kuna `repstring`) An x86 `rep movs`, `rep stos` or `repz cmpsb` prints as
+//! (unlace `repstring`) An x86 `rep movs`, `rep stos` or `repz cmpsb` prints as
 //! a copy, fill or compare builtin.  Each image is printed with the option
 //! off and on; the x86-64 one is compiled under gcc and clang at -O0 and -O2
 //! beside a `main` that states what each function computes, so the printed
@@ -101,7 +101,7 @@ fn repeated_string_instructions_round_trip_through_the_printed_builtins() {
                 "repstring",
                 opt,
             ];
-            let (text, err, rc) = common::run_kuna(&args);
+            let (text, err, rc) = common::run_unlace(&args);
             assert_eq!(rc, 0, "{image} repstring {opt}: {err}");
             for name in FUNCS {
                 let body = function(&text, name);

@@ -18,7 +18,7 @@ fn decompile(extra: &[&str]) -> (String, String, i32) {
     let image = fixture("curlish.so");
     let mut args = vec!["decompile", image.as_str(), "fetch"];
     args.extend(extra);
-    common::run_kuna(&args)
+    common::run_unlace(&args)
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn an_assertion_outranks_the_header() {
 fn the_whole_binary_surface_takes_the_header() {
     let image = fixture("curlish.so");
     let header = fixture("curl.h");
-    let (c, stderr, code) = common::run_kuna(&["decompile-all", &image, "--types", &header]);
+    let (c, stderr, code) = common::run_unlace(&["decompile-all", &image, "--types", &header]);
     assert_eq!(code, 0, "{stderr}");
     assert!(c.contains("curl_easy_setopt(h,CURLOPT_URL,a0)"), "{c}");
     assert!(

@@ -1,4 +1,4 @@
-//! (kuna `reglocals`) The locals the C declares outside the stack frame, on the
+//! (unlace `reglocals`) The locals the C declares outside the stack frame, on the
 //! `decompile-all --json` `variables` surface (P6, JSON only).
 //!
 //! `extract_variables` reports the parameters and the stack frame.  A local the
@@ -44,7 +44,7 @@ fn frame_object(
             address.get_space().map(|s| s.get_index()) == Some(stack.get_index())
         })
     };
-    if let (Some(scope), Some(symbol)) = (fd.get_scope_local(), h.kuna_link_symbol()) {
+    if let (Some(scope), Some(symbol)) = (fd.get_scope_local(), h.unlace_link_symbol()) {
         if scope
             .symbol_storage(symbol)
             .iter()
@@ -116,7 +116,7 @@ pub fn declarations_of<'a>(print: &'a PrintC, fd: &Funcdata) -> &'a [DeclaredLoc
 /// Does `local` still name a high of `fd` the naming pass gave its base name?
 #[doc(hidden)]
 pub fn declares_high_of(fd: &Funcdata, local: &DeclaredLocal) -> bool {
-    fd.high_bank().get(local.high).and_then(|h| h.kuna_name()) == Some(local.base.as_str())
+    fd.high_bank().get(local.high).and_then(|h| h.unlace_name()) == Some(local.base.as_str())
 }
 
 /// The rows for the locals `arch`'s printer declared for `fd` that are neither

@@ -1,4 +1,4 @@
-//! (kuna) An M-profile ELF's Peripheral and System regions are Device memory:
+//! (unlace) An M-profile ELF's Peripheral and System regions are Device memory:
 //! a store to a peripheral register is kept, and a status register polled in a
 //! loop is read on every iteration.
 //!

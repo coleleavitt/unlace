@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_stackarggap` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_stackarggap` because they reach pass hooks a higher crate
 //! provides (unlace-bandb, the crate above). They live in that crate.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_stackarggap` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_stackarggap` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::fspec::ParamActive;
     pub(super) use unlace_base::space::spacetype;

@@ -7,7 +7,7 @@
 //!
 //! [`ImageBytes`] exposes mapped bytes for readers with independent windows.
 //! [`RawLoadImage`] reads files, reporting seek/read failures as
-//! `KunaError::Lowlevel` and unavailable image bytes as `KunaError::DataUnavail`.
+//! `UnlaceError::Lowlevel` and unavailable image bytes as `UnlaceError::DataUnavail`.
 
 use std::cell::Cell;
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 
@@ -55,11 +55,11 @@ pub struct LoadImageSection {
     pub flags: u32,
 }
 
-/// (kuna) The number of bytes a [`LoadImage`] read window stages at a time (the
+/// (unlace) The number of bytes a [`LoadImage`] read window stages at a time (the
 /// C++ `LoadImageBfd::BUFSIZE`).
 pub const IMAGE_WINDOW_BYTES: usize = 512;
 
-/// \brief (kuna) The mapped bytes of a load image, readable from any thread.
+/// \brief (unlace) The mapped bytes of a load image, readable from any thread.
 ///
 /// A [`LoadImage`] is a single-threaded object: it owns an `Rc<AddrSpace>` and a
 /// moving read window behind `RefCell`s. The *bytes* underneath it are neither,
@@ -132,21 +132,21 @@ pub trait LoadImage {
     /// caller must supply a pre-allocated array of bytes where the returned
     /// bytes should be stored.  If the requested address range does not
     /// exist in the image, or otherwise can't be retrieved, this method
-    /// returns `Err(KunaError::DataUnavail)` (C++ throws
+    /// returns `Err(UnlaceError::DataUnavail)` (C++ throws
     /// `DataUnavailError`).
     /// \param ptr points to where the resulting bytes will be stored (its
     ///        length is the C++ `size` parameter)
     /// \param addr is the starting address of the bytes to retrieve
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()>;
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()>;
 
-    /// (kuna) Where the staging window [`Self::load_fill`] reads through
+    /// (unlace) Where the staging window [`Self::load_fill`] reads through
     /// starts, `!0` when nothing is buffered; `None` for an image whose reads
     /// do not depend on the reads before them.
     fn read_window(&self) -> Option<u64> {
         None
     }
 
-    /// (kuna) Put the staging window back where [`Self::read_window`] found
+    /// (unlace) Put the staging window back where [`Self::read_window`] found
     /// it.  A read whose first byte is unmapped is answered only from inside
     /// the window, so a caller whose reads are speculative restores it to
     /// leave every later answer as it was.
@@ -211,7 +211,7 @@ pub trait LoadImage {
         false
     }
 
-    /// (kuna) Replace the mapped bytes at `addr` with `data` — the caller
+    /// (unlace) Replace the mapped bytes at `addr` with `data` — the caller
     /// states that the image content there is not what the file holds.
     ///
     /// The one fact a static loader cannot derive.  Code a stage-1 unpacker
@@ -222,14 +222,14 @@ pub trait LoadImage {
     /// statement about RAM, not about the file, so nothing is written to disk.
     ///
     /// A loader that cannot take one says so rather than accepting it silently.
-    fn kuna_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> KunaResult<()> {
+    fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
         let _ = (addr, data);
-        Err(KunaError::lowlevel(
+        Err(UnlaceError::lowlevel(
             "this load image does not support byte overlays",
         ))
     }
 
-    /// (kuna) The mapped **load segments** as `(vma, size, flags)`, `flags` per
+    /// (unlace) The mapped **load segments** as `(vma, size, flags)`, `flags` per
     /// [`section_flags`] — the coarser mapping unit underneath the section
     /// table.
     ///
@@ -243,7 +243,7 @@ pub trait LoadImage {
         Vec::new()
     }
 
-    /// (kuna) `(vma, size)` of each load segment the image declares
+    /// (unlace) `(vma, size)` of each load segment the image declares
     /// inaccessible -- a Mach-O segment with no initial protection, such as
     /// `__PAGEZERO`. The byte map still serves its RAM footprint as zero fill;
     /// this is for a reader asking whether the image holds bytes at an address.
@@ -252,18 +252,18 @@ pub trait LoadImage {
         Vec::new()
     }
 
-    /// (kuna `opaquepredicate globals`) The `[lo, hi)` ranges of the mapped
+    /// (unlace `opaquepredicate globals`) The `[lo, hi)` ranges of the mapped
     /// image that something other than the image's own code writes: a slot a
     /// load-time relocation or bind fills, a data object another module can
     /// reach by name.
     ///
     /// `None` -- the default -- means the image cannot say, and a reader must
     /// then treat every byte as written.
-    fn kuna_runtime_written(&self) -> Option<Vec<(u64, u64)>> {
+    fn unlace_runtime_written(&self) -> Option<Vec<(u64, u64)>> {
         None
     }
 
-    /// (kuna) A `Send + Sync` view of this image's mapped bytes, for a decoder
+    /// (unlace) A `Send + Sync` view of this image's mapped bytes, for a decoder
     /// running on another thread.
     ///
     /// `None` -- the default -- means the bytes cannot be shared, which is the
@@ -321,7 +321,7 @@ pub trait LoadImage {
     /// \param size is the number of bytes to read from the image
     /// \param addr is the address of the first byte being read
     /// \return the desired bytes
-    fn load(&mut self, size: i32, addr: &Address) -> KunaResult<Vec<u8>> {
+    fn load(&mut self, size: i32, addr: &Address) -> UnlaceResult<Vec<u8>> {
         // cast: int4 size as the C++ `new uint1[size]` extent; a negative
         // size is UB in C++ (and aborts allocation here)
         let mut buf = vec![0u8; size as usize];
@@ -345,7 +345,7 @@ pub struct RawLoadImage {
     vma: u64,
     /// Main file stream for image (C++ `ifstream *`, null until `open`)
     thefile: Option<File>,
-    /// (kuna) In-memory image bytes, read instead of `thefile` when present
+    /// (unlace) In-memory image bytes, read instead of `thefile` when present
     bytes: Option<Vec<u8>>,
     /// Total number of bytes in the loadimage/file
     filesize: u64,
@@ -354,15 +354,15 @@ pub struct RawLoadImage {
     spaceid: Option<Rc<AddrSpace>>,
     /// Cursor for the section records.
     cursection: Cell<usize>,
-    /// (kuna) The mapped runs of a segmented image, ascending and disjoint;
+    /// (unlace) The mapped runs of a segmented image, ascending and disjoint;
     /// empty when the whole file is one run.
     segments: Vec<RawSegment>,
-    /// (kuna) The ranges a container names over a one-run image, as
+    /// (unlace) The ranges a container names over a one-run image, as
     /// `(offset from the first byte, size, flags)`; empty for a headerless file.
     sections: Vec<(u64, u64, u32)>,
 }
 
-/// (kuna) One mapped run of a segmented [`RawLoadImage`]: `bytes` at `offset`
+/// (unlace) One mapped run of a segmented [`RawLoadImage`]: `bytes` at `offset`
 /// from the image's first byte, with [`section_flags`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawSegment {
@@ -387,13 +387,13 @@ impl RawLoadImage {
         }
     }
 
-    /// (kuna) Publish `sections`, `(offset from the first byte, size, flags)`,
+    /// (unlace) Publish `sections`, `(offset from the first byte, size, flags)`,
     /// in place of the one whole-file code section.
     pub fn set_sections(&mut self, sections: Vec<(u64, u64, u32)>) {
         self.sections = sections;
     }
 
-    /// (kuna) An already-open image over bytes built in memory, such as a DOS
+    /// (unlace) An already-open image over bytes built in memory, such as a DOS
     /// load module with its relocations applied.
     pub fn from_bytes(f: &str, bytes: Vec<u8>) -> RawLoadImage {
         let mut image = RawLoadImage::new(f);
@@ -402,7 +402,7 @@ impl RawLoadImage {
         image
     }
 
-    /// (kuna) An already-open image over separate runs of bytes, such as the
+    /// (unlace) An already-open image over separate runs of bytes, such as the
     /// segments of a firmware image, each `(address, bytes, flags)`. The image
     /// starts at the lowest address, which is returned for the caller to pass
     /// as the base; the space between two runs is not mapped. `None` when
@@ -453,7 +453,7 @@ impl RawLoadImage {
 
     /// [`LoadImage::load_fill`] over the segments: bytes no segment maps read
     /// as zero once the first byte is mapped.
-    fn load_fill_segments(&self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill_segments(&self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let mut offset = addr.get_offset().wsub(self.vma);
         let mut done = 0usize;
         while done < ptr.len() {
@@ -471,7 +471,7 @@ impl RawLoadImage {
                         addr.get_shortcut()
                     );
                     addr.print_raw(&mut errmsg)?;
-                    return Err(KunaError::data_unavail(errmsg));
+                    return Err(UnlaceError::data_unavail(errmsg));
                 }
                 Err(above) => {
                     let gap = above
@@ -504,17 +504,17 @@ impl RawLoadImage {
     /// Open the raw file for reading.
     ///
     /// The file is opened and its size immediately recovered.
-    pub fn open(&mut self) -> KunaResult<()> {
+    pub fn open(&mut self) -> UnlaceResult<()> {
         if self.thefile.is_some() || self.bytes.is_some() {
-            return Err(KunaError::lowlevel("loadimage is already open"));
+            return Err(UnlaceError::lowlevel("loadimage is already open"));
         }
         // C++ `new ifstream(filename.c_str())`: default (text) mode, which
-        // is identical to binary mode on the platforms kuna targets.
+        // is identical to binary mode on the platforms unlace targets.
         let mut file = match File::open(&self.filename) {
             Ok(f) => f,
             Err(_) => {
                 let errmsg = format!("Unable to open raw image file: {}", self.filename);
-                return Err(KunaError::lowlevel(errmsg));
+                return Err(UnlaceError::lowlevel(errmsg));
             }
         };
         // (C++ does not check the stream state; a seek failure here is an
@@ -524,7 +524,7 @@ impl RawLoadImage {
             Ok(sz) => self.filesize = sz,
             Err(_) => {
                 let errmsg = format!("Unable to open raw image file: {}", self.filename);
-                return Err(KunaError::lowlevel(errmsg));
+                return Err(UnlaceError::lowlevel(errmsg));
             }
         }
         self.thefile = Some(file);
@@ -537,7 +537,7 @@ impl LoadImage for RawLoadImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         if !self.segments.is_empty() {
             return self.load_fill_segments(ptr, addr);
         }
@@ -583,10 +583,10 @@ impl LoadImage for RawLoadImage {
                 // C++ ignores the stream state; an OS-level I/O failure (no
                 // oracle behavior) surfaces as a LowlevelError here.
                 file.seek(SeekFrom::Start(curaddr)).map_err(|e| {
-                    KunaError::lowlevel(format!("I/O error reading raw image file: {e}"))
+                    UnlaceError::lowlevel(format!("I/O error reading raw image file: {e}"))
                 })?;
                 file.read_exact(dest).map_err(|e| {
-                    KunaError::lowlevel(format!("I/O error reading raw image file: {e}"))
+                    UnlaceError::lowlevel(format!("I/O error reading raw image file: {e}"))
                 })?;
             } else if let Some(bytes) = &self.bytes {
                 // cast: curaddr + readsize <= filesize == bytes.len() here
@@ -599,7 +599,7 @@ impl LoadImage for RawLoadImage {
         if size > 0 {
             let mut errmsg = format!("Unable to load {} bytes at {}", size, addr.get_shortcut());
             addr.print_raw(&mut errmsg)?;
-            return Err(KunaError::data_unavail(errmsg));
+            return Err(UnlaceError::data_unavail(errmsg));
         }
         Ok(())
     }
@@ -838,7 +838,7 @@ mod tests {
             .load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x20))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert_eq!(explain, "Unable to load 4 bytes at r0x00000020");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
@@ -847,7 +847,7 @@ mod tests {
         // double open is a LowlevelError
         let err = img.open().unwrap_err();
         match &err {
-            KunaError::Lowlevel { explain } => assert_eq!(explain, "loadimage is already open"),
+            UnlaceError::Lowlevel { explain } => assert_eq!(explain, "loadimage is already open"),
             other => panic!("expected Lowlevel, got {other:?}"),
         }
 
@@ -861,7 +861,7 @@ mod tests {
         let mut img = RawLoadImage::new("/nonexistent/kuna_raw_image");
         let err = img.open().unwrap_err();
         match &err {
-            KunaError::Lowlevel { explain } => {
+            UnlaceError::Lowlevel { explain } => {
                 assert_eq!(
                     explain,
                     "Unable to open raw image file: /nonexistent/kuna_raw_image"
@@ -886,7 +886,7 @@ mod tests {
         let err = img
             .load_fill(&mut buf, &Address::new(Rc::clone(&ram), 0x80))
             .unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }));
+        assert!(matches!(err, UnlaceError::DataUnavail { .. }));
 
         std::fs::remove_file(&path).unwrap();
     }

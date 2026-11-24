@@ -1,4 +1,4 @@
-//! (kuna) Segmented addressing: the processor's `<segmentop>` applied to the
+//! (unlace) Segmented addressing: the processor's `<segmentop>` applied to the
 //! analysis, as upstream does.
 //!
 //! A segmented processor's SLEIGH spec computes every effective address through
@@ -34,7 +34,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::{int4, uintb};
 use unlace_num::opbehavior::OpBehavior;
@@ -80,8 +80,8 @@ impl LoadImage for NoImage {
     fn get_file_name(&self) -> &str {
         "snippet"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail(format!(
+    fn load_fill(&mut self, _ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail(format!(
             "Snippet emulation cannot read memory at {:#x}",
             addr.get_offset()
         )))
@@ -102,15 +102,15 @@ impl SegmentDef {
         arch: &dyn InjectArchitecture,
         manager: Rc<AddrSpaceManager>,
         behaviors: &[Option<Rc<dyn OpBehavior>>],
-    ) -> KunaResult<SegmentDef> {
+    ) -> UnlaceResult<SegmentDef> {
         let spc = seg
             .get_space()
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("<segmentop> expecting space attribute"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("<segmentop> expecting space attribute"))?;
         let const_space = manager
             .get_constant_space()
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("No constant space"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("No constant space"))?;
         let code_space = arch.get_default_code_space();
         let mut context = InjectContext::default();
         context.baseaddr = Some(Address::new(Rc::clone(&code_space), 0x1000));
@@ -124,7 +124,9 @@ impl SegmentDef {
             engine.emit_payload(payload, tpl, &mut context, &mut emitter)?;
         }
         if !emulator.check_for_legal_code() {
-            return Err(KunaError::lowlevel("Illegal p-code in executable snippet"));
+            return Err(UnlaceError::lowlevel(
+                "Illegal p-code in executable snippet",
+            ));
         }
         Ok(SegmentDef {
             useropindex,
@@ -154,17 +156,17 @@ impl SegmentDef {
 
     /// Compute the address for constant inputs (C++ `SegmentOp::execute` via
     /// `ExecutablePcode::evaluate`).
-    pub fn execute(&self, input: &[uintb]) -> KunaResult<uintb> {
+    pub fn execute(&self, input: &[uintb]) -> UnlaceResult<uintb> {
         let mut script = self.script.borrow_mut();
         let script = &mut *script;
         script.emulator.reset_memory();
         if input.len() != script.input_list.len() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Wrong number of input parameters to executable snippet",
             ));
         }
         let Some(&out) = script.output_list.first() else {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "No registered outputs to executable snippet",
             ));
         };
@@ -275,7 +277,7 @@ fn target_through_segment(fd: &crate::funcdata::Funcdata, indop: crate::context:
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.segmentize_table_leaves_image = Some(table_leaves_image);
     hooks.segmentize_build = Some(build_all);
 }
@@ -284,9 +286,9 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
 /// kept in the architecture's [`ArchStates`](crate::archstate::ArchStates) and shared with
 /// every per-function context.
 struct SegmentDefs(Vec<Option<Rc<SegmentDef>>>);
-crate::kuna_arch_state!(SegmentDefs);
+crate::unlace_arch_state!(SegmentDefs);
 
-/// Compile each registered `<segmentop>` into a [`SegmentDef`] (the kuna half of C++
+/// Compile each registered `<segmentop>` into a [`SegmentDef`] (the unlace half of C++
 /// `initializeSegments`). A segment op whose snippet has no local template (ghidra mode) is left
 /// out.
 fn build_all(
@@ -294,7 +296,7 @@ fn build_all(
     manager: Rc<AddrSpaceManager>,
     behaviors: &[Option<Rc<dyn OpBehavior>>],
     states: &mut crate::archstate::ArchStates,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let mut defs: Vec<Option<Rc<SegmentDef>>> = Vec::new();
     for i in 0..arch.userops.num_segment_ops() {
         let Some(op) = arch.userops.get_segment_op(i) else {
@@ -330,17 +332,17 @@ fn segment_at(defs: Option<&SegmentDefs>, i: int4) -> Option<&Rc<SegmentDef>> {
 }
 
 impl crate::architecture::Architecture {
-    /// (kuna `segmentize`) The live segment definition for the space with index
+    /// (unlace `segmentize`) The live segment definition for the space with index
     /// `i`, or `None` when the space has none.
     #[doc(hidden)]
     pub fn segment_def(&self, i: int4) -> Option<&Rc<SegmentDef>> {
-        segment_at(self.kuna_states.get::<SegmentDefs>(), i)
+        segment_at(self.unlace_states.get::<SegmentDefs>(), i)
     }
 
-    /// (kuna `segmentize`) Does any address space have a segment definition?
+    /// (unlace `segmentize`) Does any address space have a segment definition?
     #[doc(hidden)]
     pub fn has_segment_defs(&self) -> bool {
-        self.kuna_states
+        self.unlace_states
             .get::<SegmentDefs>()
             .is_some_and(|defs| defs.0.iter().any(Option::is_some))
     }
@@ -349,7 +351,7 @@ impl crate::architecture::Architecture {
 impl crate::context::ArchContext {
     /// Number of segment operations supported (C++ `userops.numSegmentOps`).
     pub fn num_segment_ops(&self) -> int4 {
-        self.kuna_states
+        self.unlace_states
             .get::<SegmentDefs>()
             .map_or(0, |defs| defs.0.len() as int4)
     }
@@ -357,6 +359,6 @@ impl crate::context::ArchContext {
     /// The segment operation for the space with index `i` (C++
     /// `userops.getSegmentOp`).
     pub fn get_segment_op(&self, i: int4) -> Option<&Rc<SegmentDef>> {
-        segment_at(self.kuna_states.get::<SegmentDefs>(), i)
+        segment_at(self.unlace_states.get::<SegmentDefs>(), i)
     }
 }

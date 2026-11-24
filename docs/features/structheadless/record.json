@@ -401,7 +401,7 @@
   "phases.toml": "parses with python3.14 tomllib",
   "make rust-test": "RUST_TEST_RC=0 via the lane script on 43e3957a3 (2026-09-25 03:49:21Z -> 04:16:49Z), 422 test-result blocks ok, none failed"
  },
- "counters": "settables 233 -> 234; tiers 75 core / 94 -> 95 transform / 64 analysis; kuna-catalog.xml #7 structure-recovery 32 -> 33; phases-tests catalog-json-records 232 -> 233; catalog_bytecompat fixture recaptured (234 options); tests/stages corpus 339 -> 340; docs/baseline-stages.json re-recorded on c960fb18d (1372 keys)",
+ "counters": "settables 233 -> 234; tiers 75 core / 94 -> 95 transform / 64 analysis; catalog.xml #7 structure-recovery 32 -> 33; phases-tests catalog-json-records 232 -> 233; catalog_bytecompat fixture recaptured (234 options); tests/stages corpus 339 -> 340; docs/baseline-stages.json re-recorded on c960fb18d (1372 keys)",
  "arity": {
   "instrument": ".scratch arity.py over the castbench arms (signature parameter count, callsite_metrics unassigned locals and the call arguments they reach)",
   "functions": 20230,

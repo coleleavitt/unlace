@@ -10,7 +10,7 @@ since.
 | criterion | result | passes |
 |---|---|---|
 | (a) `make test` | 675/675, PARITY OK; the datatests load no file, so structsynth never runs there | yes |
-| (b) `make test-stages` | 1532/1532, PARITY OK; only the 13 `kuna-fieldtype.xml` keys are this option's, no other key moved | yes |
+| (b) `make test-stages` | 1532/1532, PARITY OK; only the 13 `fieldtype.xml` keys are this option's, no other key moved | yes |
 | (c) `make test-cli` | 274/274; no probe pins a field this option re-types | yes |
 | (d) 444-slice typesweep | 1,674 -> 1,674 perfect, 0 improved, 0 worse, 0 moved on or off perfect; `decomp_vars` identical in all 10,748 functions. A disjoint 165-slice sweep (e2fsprogs, dash, kmod, zlib, shadow, dpkg): 458 -> 458, 0 improved, 0 worse | yes |
 | (e) speed, interleaved min-of-15 (fmt, ls, sort, bash -O2) | against origin/main 4f037dae4: default -0.15%, +0.05%, +0.37%, -0.10%; `on` +0.03%, +0.15%, +0.04%, -0.14% (speed.json); worst +0.37%. Before structsynth stopped keeping access values with the option off, two bash runs read default +4.42% / +5.02% and `on` +5.76% / +6.56% | yes |

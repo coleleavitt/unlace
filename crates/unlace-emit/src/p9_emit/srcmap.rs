@@ -1,4 +1,4 @@
-//! (kuna) The source map of a rendered function: every non-blank token of the
+//! (unlace) The source map of a rendered function: every non-blank token of the
 //! C text with its line, UTF-16 column, kind, colour and what it stands for
 //! (the instruction behind it, the callee a call names, the reported variable).
 //!

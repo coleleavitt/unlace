@@ -3,7 +3,7 @@
 //!
 //! `kassert` is a thin facade over the existing battle-tested stores (Override,
 //! Symbol-DB locks, FuncProto locks, the option database): it validates a
-//! `<stage> <substage>` pair against the stage registry ([`kuna_phases`]) and
+//! `<stage> <substage>` pair against the stage registry ([`unlace_phases`]) and
 //! dispatches to the store for that sub-stage. What it ADDS is the model —
 //! every applied assertion is recorded with its stage, sub-stage, strength, and
 //! the **computed minimal rewind scope** (`docs/history/stage-model.md` section 12), which
@@ -11,13 +11,13 @@
 //!
 //! ## What this module owns vs. STUB(W5)
 //!
-//! The C++ `IfcKunaAssert::execute` is a console command bound to
+//! The C++ `IfcUnlaceAssert::execute` is a console command bound to
 //! `IfaceDecompData` (the `dcp->conf`/`dcp->fd`, the `Override`/`FuncProto`/
 //! symbol-scope stores, and the option database). Those stores and the console
 //! `IfaceDecompCommand` machinery are a W5+ surface. This module ports the
 //! console-independent core that the command is built on:
 //!
-//!   - [`KunaAssertion`]: the recorded-assertion struct (the session log entry);
+//!   - [`UnlaceAssertion`]: the recorded-assertion struct (the session log entry);
 //!   - [`AssertLog`]: the session log (the C++ static `assertLog` vector) with
 //!     its `kassert list` rendering;
 //!   - [`validate_assertion`]: the stage/sub-stage validation + strength
@@ -31,30 +31,30 @@
 //! locks, `OptionDatabase::set`, symbol retype/rename) and the console parsing
 //! of `<args>` land with the console wave on top of [`Dispatch`].
 
-use crate::phases::{KunaPhase, KunaStrength, lookup_subphase};
-use unlace_base::error::{KunaError, KunaResult};
+use crate::phases::{UnlacePhase, UnlaceStrength, lookup_subphase};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
-/// (kuna) One recorded typed assertion (session log entry) — C++ `KunaAssertion`.
+/// (unlace) One recorded typed assertion (session log entry) — C++ `UnlaceAssertion`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct KunaAssertion {
+pub struct UnlaceAssertion {
     /// Function it applies to, or "(global)".
     pub func_name: String,
     /// Stage asserted.
-    pub phase: KunaPhase,
+    pub phase: UnlacePhase,
     /// Sub-stage name (validated against the catalog).
     pub subphase: String,
     /// The assertion arguments as given.
     pub args: String,
     /// Requested strength (hard/hint).
-    pub strength: KunaStrength,
+    pub strength: UnlaceStrength,
     /// Strength of the underlying mechanism actually used.
-    pub applied: KunaStrength,
+    pub applied: UnlaceStrength,
     /// Computed minimal rewind stage (REPORTED, not enacted).
-    pub rewind: KunaPhase,
+    pub rewind: UnlacePhase,
 }
 
 /// Which existing store a sub-stage's assertion routes to — the *decision*
-/// half of the C++ `IfcKunaAssert::execute` dispatch chain.
+/// half of the C++ `IfcUnlaceAssert::execute` dispatch chain.
 ///
 /// The C++ command performs the matching store mutation inline; the Rust port
 /// separates the routing decision (here, console-independent) from the store
@@ -91,7 +91,7 @@ pub enum Dispatch {
 
 impl Dispatch {
     /// Route a sub-stage name to its store — verbatim transcription of the C++
-    /// `IfcKunaAssert::execute` `if/else` dispatch chain (`kuna_assert.cc:99`),
+    /// `IfcUnlaceAssert::execute` `if/else` dispatch chain (`kuna_assert.cc:99`),
     /// in the same order. The trailing `else` distinguishes LATENT sub-stages
     /// (`sub->latent`) from merely-unroutable ones, exactly as the C++ does.
     pub fn for_substage(sname: &str, latent: bool) -> Dispatch {
@@ -125,33 +125,33 @@ impl Dispatch {
 
 /// The result of validating a `kassert <phase> <subphase> [hard|hint]` request,
 /// before any store mutation — the console-independent half of
-/// `IfcKunaAssert::execute`.
+/// `IfcUnlaceAssert::execute`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedAssertion {
     /// The validated stage.
-    pub phase: KunaPhase,
+    pub phase: UnlacePhase,
     /// The validated sub-stage name.
     pub subphase: String,
     /// The requested strength (the catalog default, or the trailing hard|hint
     /// override).
-    pub requested: KunaStrength,
+    pub requested: UnlaceStrength,
     /// The strength of the underlying mechanism actually used (the sub-stage's
     /// catalog strength — Ghidra stores are uniformly HARD mechanisms).
-    pub applied: KunaStrength,
+    pub applied: UnlaceStrength,
     /// The computed minimal rewind stage (REPORTED; section 12).
-    pub rewind: KunaPhase,
+    pub rewind: UnlacePhase,
     /// Which store the sub-stage routes to.
     pub dispatch: Dispatch,
 }
 
 /// Validate a `kassert` request and compute its strength + minimal rewind —
-/// the console-independent core of `IfcKunaAssert::execute`
+/// the console-independent core of `IfcUnlaceAssert::execute`
 /// (`kuna_assert.cc:51`), up to (but not including) the live store mutation.
 ///
 /// `stagecode` is the `<phase>` token ("P0".."P9", legacy "S1".."S9" accepted); `subname` is the
 /// `<substage>` token; `strength_override` is the optional trailing `hard|hint`
 /// (the C++ pops it off the token list). Errors mirror the C++ `IfaceParseError`
-/// throws (as [`KunaError::Parse`]), in the same precedence order:
+/// throws (as [`UnlaceError::Parse`]), in the same precedence order:
 ///
 ///   1. bad stage code,
 ///   2. missing sub-stage name,
@@ -164,21 +164,21 @@ pub struct ValidatedAssertion {
 pub fn validate_assertion(
     stagecode: &str,
     subname: &str,
-    strength_override: Option<KunaStrength>,
-) -> KunaResult<ValidatedAssertion> {
-    let phase = KunaPhase::from_code(stagecode).ok_or_else(|| KunaError::Parse {
+    strength_override: Option<UnlaceStrength>,
+) -> UnlaceResult<ValidatedAssertion> {
+    let phase = UnlacePhase::from_code(stagecode).ok_or_else(|| UnlaceError::Parse {
         explain: format!("Bad phase code (expecting P0..P9): {stagecode}"),
     })?;
     if subname.is_empty() {
-        return Err(KunaError::Parse {
+        return Err(UnlaceError::Parse {
             explain: "Missing sub-phase name (see `phase list`)".to_string(),
         });
     }
-    let sub = lookup_subphase(subname).ok_or_else(|| KunaError::Parse {
+    let sub = lookup_subphase(subname).ok_or_else(|| UnlaceError::Parse {
         explain: format!("Unknown sub-phase: {subname} (see `phase list`)"),
     })?;
     if sub.phase != phase {
-        return Err(KunaError::Parse {
+        return Err(UnlaceError::Parse {
             explain: format!(
                 "Sub-phase {subname} belongs to phase {}, not {stagecode}",
                 sub.phase.code()
@@ -203,7 +203,7 @@ pub fn validate_assertion(
 /// function clears like the Override store does).
 #[derive(Clone, Debug, Default)]
 pub struct AssertLog {
-    entries: Vec<KunaAssertion>,
+    entries: Vec<UnlaceAssertion>,
 }
 
 impl AssertLog {
@@ -213,12 +213,12 @@ impl AssertLog {
     }
 
     /// Record an applied assertion (C++ `assertLog.push_back(rec)`).
-    pub fn push(&mut self, rec: KunaAssertion) {
+    pub fn push(&mut self, rec: UnlaceAssertion) {
         self.entries.push(rec);
     }
 
     /// The recorded assertions, in insertion order.
-    pub fn entries(&self) -> &[KunaAssertion] {
+    pub fn entries(&self) -> &[UnlaceAssertion] {
         &self.entries
     }
 
@@ -228,7 +228,7 @@ impl AssertLog {
     }
 
     /// Render `kassert list` — byte-for-byte port of
-    /// `IfcKunaAssert::listAssertions` (`kuna_assert.cc:249`). Returns the exact
+    /// `IfcUnlaceAssert::listAssertions` (`kuna_assert.cc:249`). Returns the exact
     /// text the C++ writes to the bulk stream (one trailing newline per line).
     pub fn render_list(&self) -> String {
         let mut os = String::new();
@@ -255,11 +255,11 @@ impl AssertLog {
             }
             os.push_str("  strength=");
             os.push_str(match rec.strength {
-                KunaStrength::Hard => "HARD",
-                KunaStrength::Hint => "HINT",
-                KunaStrength::None => "-",
+                UnlaceStrength::Hard => "HARD",
+                UnlaceStrength::Hint => "HINT",
+                UnlaceStrength::None => "-",
             });
-            if rec.strength == KunaStrength::Hint && rec.applied == KunaStrength::Hard {
+            if rec.strength == UnlaceStrength::Hint && rec.applied == UnlaceStrength::Hard {
                 os.push_str(" (applied via HARD mechanism)");
             }
             os.push_str("  rewind->");

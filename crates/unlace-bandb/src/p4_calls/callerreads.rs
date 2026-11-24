@@ -1,16 +1,16 @@
-//! (kuna) A function decompiled alone returns what its callers
+//! (unlace) A function decompiled alone returns what its callers
 //! read after the call (P4).
 //!
 //! `int f(int a) { gi = a * 3; return gi; }` and `void f(int a) { gi = a * 3; }`
 //! both compile to `lea (%rdi,%rdi,2),%eax; mov %eax,gi(%rip); ret`. Upstream's
 //! `onlyOpUse` refuses a return value the function also stores, so the function
 //! alone reads as `void`. `decompile-all` settles it from the callers it
-//! decompiles (`kuna_voidret`); a single-function decompile had no caller, and
+//! decompiles (`unlace_voidret`); a single-function decompile had no caller, and
 //! `unlace decompile ./rv f` printed `void f(int a0)` while `unlace decompile ./rv
 //! main` printed `printf("%d\n",f(2))`.
 //!
 //! The Listing files where each direct call returns to
-//! (`Architecture::kuna_call_returns`). For a function recovered `void`, [`read`]
+//! (`Architecture::unlace_call_returns`). For a function recovered `void`, [`read`]
 //! decodes each of its callers from that address, the way `calleedeadarg`
 //! decodes a callee from its entry, and asks whether a path reads the low byte
 //! of one of the model's return registers before writing it. The ABI leaves that
@@ -34,7 +34,7 @@ pub const MAX_CALL_SITES: usize = 32;
 /// output: the widest read of the first model output register a caller reads,
 /// when every caller that reads one reads the same register.
 pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
-    if arch.kuna_call_returns.is_empty() {
+    if arch.unlace_call_returns.is_empty() {
         return None;
     }
     let entry = data.get_address();
@@ -82,12 +82,12 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
     }
     let off = entry.get_offset();
     let lo = arch
-        .kuna_call_returns
+        .unlace_call_returns
         .partition_point(|&(callee, _)| callee < off);
     let mut found: Option<(usize, int4)> = None;
     let x87 = crate::x87emptyreturn::storage(arch)
-        .filter(|_| arch.kuna_options.get::<crate::x87depth::X87Depth>().0);
-    let sites = arch.kuna_call_returns[lo..]
+        .filter(|_| arch.unlace_options.get::<crate::x87depth::X87Depth>().0);
+    let sites = arch.unlace_call_returns[lo..]
         .iter()
         .take_while(|&&(callee, _)| callee == off);
     for &(_, back) in sites.take(MAX_CALL_SITES) {
@@ -131,10 +131,10 @@ pub fn read(arch: &Architecture, data: &Funcdata) -> Option<(Address, int4)> {
 }
 
 /// Have the next decompile of the function at `entry` force its return to
-/// `storage`, as `kuna_voidret` does for a function whose callers read it.
+/// `storage`, as `unlace_voidret` does for a function whose callers read it.
 pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4)) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .forced
             .insert((space.get_index(), entry.get_offset()), storage);
@@ -144,7 +144,7 @@ pub fn force(arch: &mut Architecture, entry: &Address, storage: (Address, int4))
 /// Undo [`force`].
 pub fn release(arch: &mut Architecture, entry: &Address) {
     if let Some(space) = entry.get_space() {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .forced
             .remove(&(space.get_index(), entry.get_offset()));

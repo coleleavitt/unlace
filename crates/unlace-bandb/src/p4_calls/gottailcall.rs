@@ -1,4 +1,4 @@
-//! (kuna) `gottailcall` — a computed jump whose one destination is a function
+//! (unlace) `gottailcall` — a computed jump whose one destination is a function
 //! is a tail call when the call loses nothing the followed table would show.
 //!
 //! A position-independent tail call loads its target from a GOT slot and jumps
@@ -99,7 +99,7 @@ pub struct Ledger {
 /// return of the caller is a tail call: passthrough takes no tail call's
 /// result beside a return of the caller's own.
 pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
-    let ledger = arch.kuna_tables.get::<crate::gottailcall::Ledger>();
+    let ledger = arch.unlace_tables.get::<crate::gottailcall::Ledger>();
     if !ledger.recording {
         return false;
     }
@@ -111,7 +111,7 @@ pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
             !ledger.refused.contains(&(own, k))
                 && (!c.stated
                     || arch
-                        .kuna_tables
+                        .unlace_tables
                         .get::<crate::protoorder::CalleeTypes>()
                         .contains_key(&k))
                 && !(c.returns && returns_on_its_own(data))
@@ -127,7 +127,7 @@ pub fn callable(arch: &Architecture, data: &Funcdata, dest: &Address) -> bool {
 /// Note that the flow of `data` follows a one-destination table to `dest`
 /// instead of taking a tail call.
 pub fn followed(arch: &Architecture, data: &Funcdata, dest: &Address) {
-    let ledger = arch.kuna_tables.get::<crate::gottailcall::Ledger>();
+    let ledger = arch.unlace_tables.get::<crate::gottailcall::Ledger>();
     if !ledger.recording {
         return;
     }
@@ -160,7 +160,7 @@ fn returns_on_its_own(data: &Funcdata) -> bool {
 /// recovery states nothing a call could carry.
 pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     if !arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::gottailcall::Ledger>()
         .recording
     {
@@ -169,7 +169,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     let Some(own) = key(entry) else { return };
     let taken: Vec<Key> = {
         let mut t = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .taken
             .borrow_mut();
@@ -186,11 +186,11 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         .filter(|k| loses(arch, data, *k))
         .collect();
     for k in &lost {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::gottailcall::Ledger>()
             .refused
             .insert((own, *k));
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::gottailcall::Ledger>()
             .waiting
             .entry(*k)
@@ -199,19 +199,19 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     }
     match callable_by_recovery(arch, entry, data).filter(|_| lost.is_empty()) {
         Some(stated) => arch
-            .kuna_tables
+            .unlace_tables
             .get_mut::<crate::gottailcall::Ledger>()
             .callable
             .insert(own, stated),
         None => arch
-            .kuna_tables
+            .unlace_tables
             .get_mut::<crate::gottailcall::Ledger>()
             .callable
             .remove(&own),
     };
     let followed: Vec<Key> = {
         let mut f = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .followed
             .borrow_mut();
@@ -225,12 +225,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     };
     for k in followed {
         if !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .callable
             .contains_key(&k)
         {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::gottailcall::Ledger>()
                 .waiting
                 .entry(k)
@@ -245,7 +245,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 /// to it passes fewer arguments than its statement names?
 fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
     let Some(c) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::gottailcall::Ledger>()
         .callable
         .get(&callee)
@@ -260,7 +260,7 @@ fn loses(arch: &Architecture, data: &Funcdata, callee: Key) -> bool {
         return true;
     }
     let wanted = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::protoorder::CalleeTypes>()
         .get(&callee)
         .map_or(0, |s| s.inputs.len() as int4);
@@ -305,7 +305,7 @@ pub fn callable_by_recovery(
         });
     }
     let stated = Rc::clone(
-        arch.kuna_tables
+        arch.unlace_tables
             .get::<crate::protoorder::CalleeTypes>()
             .get(&key(entry)?)?,
     );
@@ -369,7 +369,7 @@ pub fn clear_stale_warnings(
     pending: &[(uint4, Address, String)],
 ) {
     if !arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::gottailcall::Ledger>()
         .recording
     {
@@ -391,7 +391,7 @@ pub fn clear_stale_warnings(
 /// callee that is now filed, once every callee it copied in has been
 /// decompiled, and each one refused a tail call at once.
 pub fn due(arch: &mut Architecture) -> BTreeSet<Key> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::gottailcall::Ledger>()
         .take_due()
 }
@@ -448,7 +448,7 @@ pub enum SingleStep {
 /// is already recording. Returns the ledger to put back with [`end_single`].
 pub fn begin_single(arch: &mut Architecture) -> Option<Ledger> {
     if arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::gottailcall::Ledger>()
         .recording
     {
@@ -459,14 +459,14 @@ pub fn begin_single(arch: &mut Architecture) -> Option<Ledger> {
         ..Ledger::default()
     };
     Some(std::mem::replace(
-        arch.kuna_tables.get_mut::<crate::gottailcall::Ledger>(),
+        arch.unlace_tables.get_mut::<crate::gottailcall::Ledger>(),
         own,
     ))
 }
 
 /// Put back the ledger [`begin_single`] replaced.
 pub fn end_single(arch: &mut Architecture, saved: Ledger) {
-    *arch.kuna_tables.get_mut::<crate::gottailcall::Ledger>() = saved;
+    *arch.unlace_tables.get_mut::<crate::gottailcall::Ledger>() = saved;
 }
 
 /// After one decompile of the function entered at `entry` under a
@@ -488,7 +488,7 @@ pub fn single_step(
     };
     let taken: Vec<Key> = {
         let mut t = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .taken
             .borrow_mut();
@@ -502,7 +502,7 @@ pub fn single_step(
     };
     let followed: BTreeSet<Key> = {
         let mut f = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .followed
             .borrow_mut();
@@ -513,7 +513,7 @@ pub fn single_step(
             .chain(
                 (0..data.num_jump_tables())
                     .filter_map(|i| {
-                        crate::tailcalljump::kuna_sole_table_destination(data.get_jump_table(i))
+                        crate::tailcalljump::unlace_sole_table_destination(data.get_jump_table(i))
                     })
                     .filter_map(|a| key(&a)),
             )
@@ -528,7 +528,7 @@ pub fn single_step(
         .collect();
     if !lost.is_empty() {
         for k in lost {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::gottailcall::Ledger>()
                 .refused
                 .insert((own, k));
@@ -541,12 +541,12 @@ pub fn single_step(
             continue;
         }
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::gottailcall::Ledger>()
             .callable
             .contains_key(&k)
             || arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::gottailcall::Ledger>()
                 .refused
                 .contains(&(own, k))
@@ -565,7 +565,7 @@ pub fn single_step(
             continue;
         }
         if let Some(callee) = recover(arch, &dest) {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::gottailcall::Ledger>()
                 .callable
                 .insert(k, callee);
@@ -579,7 +579,7 @@ pub fn single_step(
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);
 
 #[cfg(test)]
 #[path = "gottailcall/tests.rs"]

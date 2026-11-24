@@ -18,7 +18,7 @@ use object::pe::{
 };
 use object::{Architecture, SectionFlags, SectionKind};
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, LoadImageSection, section_flags};
@@ -77,7 +77,7 @@ fn machine_info(machine: u16) -> Option<MachineInfo> {
 /// The signature alone is two ASCII letters an unrelated file can open with;
 /// claiming the format on that misdiagnoses the input for every command that
 /// then rejects it. The machine word is deliberately not part of the claim: a
-/// TE for a machine kuna has no binding for is still a TE, and the loader's
+/// TE for a machine unlace has no binding for is still a TE, and the loader's
 /// own "unsupported machine" message is the answer it should get.
 pub fn is_te_image(prefix: &[u8]) -> bool {
     let Some(head) = prefix.get(..TE_PROBE_LEN) else {
@@ -151,11 +151,15 @@ pub struct TeLoadImage {
 }
 
 impl TeLoadImage {
-    pub fn from_bytes(filename: &str, bytes: &[u8]) -> KunaResult<Self> {
+    pub fn from_bytes(filename: &str, bytes: &[u8]) -> UnlaceResult<Self> {
         Self::from_bytes_with_target(filename, bytes, "")
     }
 
-    pub fn from_bytes_with_target(filename: &str, bytes: &[u8], target: &str) -> KunaResult<Self> {
+    pub fn from_bytes_with_target(
+        filename: &str,
+        bytes: &[u8],
+        target: &str,
+    ) -> UnlaceResult<Self> {
         let target = crate::loadimage_object::explicit_language_target(target).unwrap_or("");
         if bytes.len() < TE_HEADER_SIZE {
             return Err(Self::invalid(filename, "truncated 40-byte header"));
@@ -483,8 +487,8 @@ impl TeLoadImage {
         })
     }
 
-    fn invalid(filename: &str, detail: &str) -> KunaError {
-        KunaError::lowlevel(format!("File: {filename} : invalid TE image: {detail}"))
+    fn invalid(filename: &str, detail: &str) -> UnlaceError {
+        UnlaceError::lowlevel(format!("File: {filename} : invalid TE image: {detail}"))
     }
 
     pub fn attach_to_space(&mut self, space: Rc<AddrSpace>) {
@@ -581,7 +585,7 @@ impl LoadImage for TeLoadImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let space = addr
             .get_space()
             .expect("TeLoadImage::loadFill: address with null space");
@@ -590,7 +594,7 @@ impl LoadImage for TeLoadImage {
             .as_ref()
             .is_some_and(|attached| Rc::ptr_eq(attached, space))
         {
-            return Err(KunaError::data_unavail(format!(
+            return Err(UnlaceError::data_unavail(format!(
                 "Trying to get TE image bytes from space: {}",
                 space.get_name()
             )));
@@ -625,7 +629,7 @@ impl LoadImage for TeLoadImage {
                     addr.get_shortcut()
                 );
                 addr.print_raw(&mut message)?;
-                return Err(KunaError::data_unavail(message));
+                return Err(UnlaceError::data_unavail(message));
             }
             let gap = self
                 .sections
@@ -674,7 +678,7 @@ impl LoadImage for TeLoadImage {
             .collect()
     }
 
-    fn kuna_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> KunaResult<()> {
+    fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
         let space = addr
             .get_space()
             .expect("TeLoadImage::kuna_overlay_bytes: address with null space");
@@ -683,13 +687,13 @@ impl LoadImage for TeLoadImage {
             .as_ref()
             .is_some_and(|attached| Rc::ptr_eq(attached, space))
         {
-            return Err(KunaError::data_unavail(format!(
+            return Err(UnlaceError::data_unavail(format!(
                 "Trying to overlay TE image bytes in space: {}",
                 space.get_name()
             )));
         }
         self.overlay_span(addr.get_offset(), data)
-            .map_err(KunaError::data_unavail)
+            .map_err(UnlaceError::data_unavail)
     }
 
     fn get_readonly(&self, list: &mut RangeList) {
@@ -724,7 +728,7 @@ impl LoadImage for TeLoadImage {
     }
 }
 
-fn validate_target(filename: &str, target: &str, bits: u8) -> KunaResult<()> {
+fn validate_target(filename: &str, target: &str, bits: u8) -> UnlaceResult<()> {
     if target.is_empty() {
         return Ok(());
     }
@@ -749,7 +753,7 @@ fn validate_target(filename: &str, target: &str, bits: u8) -> KunaResult<()> {
 
 /// Synthetic TE images for regression tests, generated from source so no
 /// vendor binary is ever needed: one `.text` section at RVA
-/// [`synthetic::CODE_RVA`] under the fixed header layout every kuna TE test
+/// [`synthetic::CODE_RVA`] under the fixed header layout every unlace TE test
 /// shares. Tests that need a malformed header patch the returned bytes.
 #[doc(hidden)]
 pub mod synthetic {
@@ -1156,7 +1160,7 @@ mod tests {
         );
 
         assert!(!is_te_image(b"VZ this is prose, not a container"));
-        // A TE for a machine kuna has no binding for is still a TE: the probe
+        // A TE for a machine unlace has no binding for is still a TE: the probe
         // claims it so the loader's own message names the machine.
         let mut unsupported_machine = valid.clone();
         unsupported_machine[2..4].copy_from_slice(&0x0ebcu16.to_le_bytes());
@@ -1373,7 +1377,7 @@ mod tests {
         image.attach_to_space(Rc::clone(&ram));
 
         image
-            .kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401000), &[0x2a, 0x20])
+            .unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401000), &[0x2a, 0x20])
             .expect("the code section maps both bytes");
         let mut loaded = [0u8; 4];
         image
@@ -1382,7 +1386,7 @@ mod tests {
         assert_eq!(loaded, [0x2a, 0x20, 0x70, 0x47]);
 
         let error = image
-            .kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401002), &[0x90; 4])
+            .unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401002), &[0x90; 4])
             .unwrap_err();
         assert!(error.explain().contains("no loaded segment maps"));
         image
@@ -1397,7 +1401,7 @@ mod tests {
         let other = Rc::clone(manager.get_space_by_name("const").unwrap());
         assert!(
             image
-                .kuna_overlay_bytes(&Address::new(other, 0x401000), &[0x90])
+                .unlace_overlay_bytes(&Address::new(other, 0x401000), &[0x90])
                 .is_err()
         );
     }
@@ -1412,7 +1416,7 @@ mod tests {
         image.attach_to_space(Rc::clone(&ram));
 
         image
-            .kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401006), &[0xde, 0xad])
+            .unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401006), &[0xde, 0xad])
             .expect("the virtual tail is mapped memory");
         let mut loaded = [0xffu8; 4];
         image

@@ -14,7 +14,7 @@ use crate::common;
 /// `(kind, referencing function, referenced address)`.
 fn rows(binary: &str, direction: &str, target: &str) -> Vec<(String, String, u64)> {
     let path = common::fixture(binary);
-    let (stdout, stderr, rc) = common::run_kuna(&["xrefs", &path, direction, target, "--json"]);
+    let (stdout, stderr, rc) = common::run_unlace(&["xrefs", &path, direction, target, "--json"]);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     doc["xrefs"]

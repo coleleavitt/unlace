@@ -8,7 +8,7 @@ mod module_scope {
     pub(super) use crate::context::{OpId, VarnodeId};
     pub(super) use crate::funcdata::Funcdata;
     pub(super) use unlace_base::address::{Address, calc_mask};
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::spacetype;
     pub(super) use unlace_base::types::{Wrap, int4, uint4, uintb};
     pub(super) use unlace_num::opcodes::OpCode;

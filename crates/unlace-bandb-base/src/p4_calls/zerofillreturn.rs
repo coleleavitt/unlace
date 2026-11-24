@@ -1,4 +1,4 @@
-//! (kuna) The upper half of a vector register that a narrow write zero-fills is
+//! (unlace) The upper half of a vector register that a narrow write zero-fills is
 //! not part of the value a function returns.
 //!
 //! AAPCS64 returns a `double` in `d0`, the low doubleword of `q0`, and the
@@ -41,7 +41,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::{ParamActive, ParamEntry};
 use crate::funcdata::Funcdata;
-use crate::op::pcodeop_addlflags::kuna_zerofill;
+use crate::op::pcodeop_addlflags::unlace_zerofill;
 
 /// The low bytes a narrow write keeps; above them a lane is zero fill.
 const LOW_LANE: i32 = 8;
@@ -113,7 +113,7 @@ pub fn seed(fd: &mut Funcdata) {
     }
     for id in marks {
         if let Some(op) = fd.obank_mut().get_mut(id) {
-            op.set_additional_flag(kuna_zerofill);
+            op.set_additional_flag(unlace_zerofill);
         }
     }
 }
@@ -297,7 +297,7 @@ pub fn drop_zero_fill(data: &Funcdata, active: &mut ParamActive, returns: &[OpId
 /// glibc's `math_force_eval` keeps a `fmul d1,d0,d0` no op reads, on one path,
 /// beside a `fabs d1,d0` the next compare reads. Nor is what a call left there
 /// or the function's own incoming `d1` ([`produced_here`]): a forwarder of a
-/// complex result copies back the `d1` its callee returned, which kuna sees as
+/// complex result copies back the `d1` its callee returned, which unlace sees as
 /// the incoming one, and `CMPLX(a * 2, b)` cannot be told apart from it.
 fn returned_alone(data: &Funcdata, vn: VarnodeId, entry: &ParamEntry, steps: &mut usize) -> bool {
     if *steps == 0 {
@@ -488,7 +488,7 @@ fn zero_fill(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<OpId>, steps: &mut u
     };
     match op.code() {
         OpCode::CPUI_COPY => {
-            op.get_addlflags() & kuna_zerofill != 0
+            op.get_addlflags() & unlace_zerofill != 0
                 && op
                     .get_in(0)
                     .and_then(|c| data.vbank().get(c))

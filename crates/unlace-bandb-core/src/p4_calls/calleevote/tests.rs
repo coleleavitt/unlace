@@ -1,6 +1,6 @@
 //! Unit tests for the caller-to-callee decision. The end-to-end witness -- a
 //! callee decompiled again with the type its one caller passes -- is the
-//! two-pass stage test `tests/stages/kuna-calleevote.toml` and the CLI probe.
+//! two-pass stage test `tests/stages/unlace-calleevote.toml` and the CLI probe.
 
 use super::*;
 
@@ -445,7 +445,7 @@ fn a_frame_address_from_any_caller_marks_the_statement() {
     }
 }
 
-/// (kuna `structheadless`) `tail`'s `parse_obsolete_option` reads `argv[1]` and
+/// (unlace `structheadless`) `tail`'s `parse_obsolete_option` reads `argv[1]` and
 /// `argv[2]` only, and its first decompile under `closed` took them as a record
 /// read past its start. The `char **` its one caller passes replaces that record
 /// under the rule, and nowhere else; a record read at offset 0 stays the
@@ -477,7 +477,7 @@ fn a_callers_argument_vector_replaces_a_headless_record_only_under_the_rule() {
     assert!(decide_ledger_under(&l, 8, true, &all_calls(&l)).is_empty());
 }
 
-/// (kuna `structheadless`) A record another function synthesized is one more
+/// (unlace `structheadless`) A record another function synthesized is one more
 /// partial view: the callee's own headless record stands against it, while a
 /// `void *` parameter still takes it.
 #[test]

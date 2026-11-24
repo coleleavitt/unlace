@@ -104,13 +104,13 @@ pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i
     if entry.is_invalid() {
         return false;
     }
-    fd.kuna_callee_ret_writes(entry).is_some_and(|summary| {
+    fd.unlace_callee_ret_writes(entry).is_some_and(|summary| {
         register_only_body(summary, register.get_index(), (stack.offset, stack.size))
     })
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.leafmemory_preserves = Some(preserves);
 }
 

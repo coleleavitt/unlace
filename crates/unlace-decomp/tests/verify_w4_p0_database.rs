@@ -20,7 +20,7 @@ use unlace_base::types::int4;
 
 use unlace_base::types::{uint4, uintb};
 use unlace_decomp::database::{
-    Database, DatabaseArch, ScopeId, TranslateAccess, TypeFactoryAccess, kuna_global_data_name,
+    Database, DatabaseArch, ScopeId, TranslateAccess, TypeFactoryAccess, unlace_global_data_name,
 };
 use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::varnode::varnode_flags;
@@ -198,7 +198,7 @@ fn w4_p0_database_make_name_unique_xform_boundary() {
     };
 
     let addr = Address::new(Rc::clone(&ram), 0x4000);
-    let basebare = kuna_global_data_name(&addr); // dat_4000
+    let basebare = unlace_global_data_name(&addr); // dat_4000
 
     // Seed dat_4000 plus the full two-digit run dat_4000_00..dat_4000_99.
     db.add_symbol(g, &basebare, dt(4)).unwrap();
@@ -240,7 +240,7 @@ fn w4_p0_database_make_name_unique_ignores_wrong_digit_count() {
     };
 
     let addr = Address::new(Rc::clone(&ram), 0x5000);
-    let basebare = kuna_global_data_name(&addr); // dat_5000
+    let basebare = unlace_global_data_name(&addr); // dat_5000
     db.add_symbol(g, &basebare, dt(4)).unwrap();
     // dat_5000_123 has three digits: not the 2-digit form, not the x-form.
     db.add_symbol(g, &format!("{basebare}_123"), dt(4)).unwrap();
@@ -410,7 +410,7 @@ fn w4_p0_database_make_name_unique_continues_xform() {
     };
 
     let addr = Address::new(Rc::clone(&ram), 0x6000);
-    let basebare = kuna_global_data_name(&addr); // dat_6000
+    let basebare = unlace_global_data_name(&addr); // dat_6000
 
     // Seed the base name plus a single x-form entry at 100.
     db.add_symbol(g, &basebare, dt(4)).unwrap();

@@ -4,7 +4,7 @@
 //! FID re-identifies a function by fingerprinting its instruction stream with an
 //! operand-masked FNV-1a64 hash, then matching that fingerprint against a
 //! database of known-library hashes — the capability that renames a `FUN_<addr>`
-//! in a stripped binary back to (say) `kuna_crc32`. See `docs/history/fid-design.md` for
+//! in a stripped binary back to (say) `unlace_crc32`. See `docs/history/fid-design.md` for
 //! the full plan.
 //!
 //! # Module set
@@ -18,7 +18,7 @@
 //!   Listing.
 //! - [`skipper`] — the [`skipper::InstructionSkipper`] trait and
 //!   [`skipper::X86InstructionSkipper`] (the x86 NOP/alignment skipper).
-//! - [`db`] — the kuna-native `.fid` format ([`db::FidDb`] / [`db::FidRecord`]):
+//! - [`db`] — the unlace-native `.fid` format ([`db::FidDb`] / [`db::FidRecord`]):
 //!   a flat, full-hash-indexed, version-stamped file modeled field-for-field on
 //!   Ghidra's FID `FunctionsTable`+`StringsTable`, behind the [`db::FidDatabase`]
 //!   trait so a future `.fidbf` reader (deferred PR6) is a serialization swap.
@@ -40,13 +40,13 @@
 //! label gate). Default-OFF, real-ELF path only, inert without the Listing AND
 //! without a DB — so the parity oracles are structurally untouched.
 //!
-//! The database path is read from the `kuna_fid_db` environment variable; a real `--fidb
+//! The database path is read from the `unlace_fid_db` environment variable; a real `--fidb
 //! <path>` flag is a deferred follow-on (`docs/history/fid-design.md` §7.2). Absent / empty
 //! ⇒ the pass is a no-op. A configured database is matched only when it loads and its
-//! header language applies to the image ([`kuna_fidapply`]); either way the pass
+//! header language applies to the image ([`unlace_fidapply`]); either way the pass
 //! reports what became of it on [`AnalysisOutput::fid_databases`].
 //!
-//! A record may also carry the function's prototype ([`kuna_fidproto`]); a match
+//! A record may also carry the function's prototype ([`unlace_fidproto`]); a match
 //! emits it as a [`FidProtoFact`], which the commit applies to the function that
 //! took the record's name and that no other source declares.
 
@@ -75,7 +75,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, FidProtoF
 /// is inert (no DB to match against).
 pub const FID_DB_ENV: &str = unlace_decomp::loadoptions::FID_DB_ENV;
 
-/// The FID matching consumer pass — the kuna analog of Ghidra's FID identification
+/// The FID matching consumer pass — the unlace analog of Ghidra's FID identification
 /// analyzer (`FidServiceImpl` over the function-id query service), the third
 /// Listing/xref consumer.
 ///
@@ -117,7 +117,7 @@ impl AnalysisPass for FidPass {
 
         let chunks = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Funcchunks>()
             .0
             .then(|| crate::listing::funcchunks::ChunkModel::build(listing));
@@ -145,7 +145,7 @@ impl AnalysisPass for FidPass {
             };
             if ctx
                 .arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
                 && !fidstrict::supports_rename(records, &quad)
@@ -175,7 +175,7 @@ pub fn fingerprint_function(
     entry: u64,
 ) -> Result<FidHashQuad, &'static str> {
     let chunks = arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Funcchunks>()
         .0
         .then(|| crate::listing::funcchunks::ChunkModel::build(listing));

@@ -1,4 +1,4 @@
-//! PE CodeView debug-record extractor — the kuna port of Ghidra's
+//! PE CodeView debug-record extractor — the unlace port of Ghidra's
 //! `PdbInfoCodeView` (the NB10 record) and `PdbInfoDotNet` (the RSDS record),
 //! `Ghidra/Features/Base/.../format/pdb/PdbInfo{CodeView,DotNet}.java`.
 //!

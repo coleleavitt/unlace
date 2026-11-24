@@ -1,4 +1,4 @@
-//! (kuna `stubbinds`) Name a Mach-O stub after the import its pointer slot is
+//! (unlace `stubbinds`) Name a Mach-O stub after the import its pointer slot is
 //! bound to when the indirect-symbol table no longer says.
 //!
 //! A `__stubs` entry is named through `LC_DYSYMTAB`: its indirect-symbol entry

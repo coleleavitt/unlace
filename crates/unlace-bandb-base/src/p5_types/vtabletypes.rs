@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) Type each recovered C++ vtable, so a virtual call
+//! (unlace `vtabletypes`) Type each recovered C++ vtable, so a virtual call
 //! renders through a named slot of the receiver's class.
 //!
 //! An Itanium virtual call is two loads and an indirect call: the object's
@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::int4;
 
@@ -90,9 +90,9 @@ pub fn install(
     arch: &Architecture,
     space: &Rc<AddrSpace>,
     classes: &[VtableClass],
-) -> KunaResult<usize> {
+) -> UnlaceResult<usize> {
     let mut views: HashMap<&str, &KallocView> = HashMap::new();
-    let kalloc = crate::kalloctype::kalloc_types(&arch.kuna_states);
+    let kalloc = crate::kalloctype::kalloc_types(&arch.unlace_states);
     for v in kalloc.values().filter(|v| !v.pointers) {
         views.entry(v.name.as_str()).or_insert(v);
     }
@@ -134,7 +134,7 @@ fn install_class(
     space: &Rc<AddrSpace>,
     c: &VtableClass,
     views: &HashMap<&str, &KallocView>,
-) -> KunaResult<bool> {
+) -> UnlaceResult<bool> {
     let types = arch.types();
     let ptr = types.get_size_of_pointer();
     let ws = space.get_word_size();
@@ -150,9 +150,9 @@ fn install_class(
             class
         }
         Some(_) => return Ok(false),
-        None => types.kuna_declare_record(&c.class, false)?,
+        None => types.unlace_declare_record(&c.class, false)?,
     };
-    let vtbl = types.kuna_declare_record(&vtbl_name, false)?;
+    let vtbl = types.unlace_declare_record(&vtbl_name, false)?;
     let this = types.get_type_pointer(ptr, Rc::clone(&class), ws)?;
     let mut fields = Vec::with_capacity(c.slots.len());
     let mut used: std::collections::HashSet<String> =

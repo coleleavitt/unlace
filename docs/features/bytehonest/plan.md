@@ -57,7 +57,7 @@ regenerated.
 - `p6_variables/bytehonest/tests.rs` — the predicate: the byte, the wider
   unknowns, the array of unknown (including the 1-element array, whose *size* is
   1), the three committed one-byte types, and the spelling-independence case.
-- `kuna-console/tests/verify_bytehonest.rs` — two-pass end-to-end on the vendored
+- `console/tests/verify_bytehonest.rs` — two-pass end-to-end on the vendored
   `fauxware`: same functions, same variable count, same name/offset/size/arg
   index; the only admissible difference is `char` → `undefined1` at size 1, and
   the fixture must exercise it (non-vacuous).

@@ -5,7 +5,7 @@
 //! `__objc_const` `class_ro_t` → method/selector strings in `__TEXT`). Walking it
 //! means dereferencing a VMA into whichever section covers it, so this module
 //! builds a flat `[ (lo, hi, &bytes) ]` map of every *mapped* section and reads
-//! little/big-endian scalars + C strings off it (the kuna analog of Ghidra's
+//! little/big-endian scalars + C strings off it (the unlace analog of Ghidra's
 //! `Memory`/`MemBuffer` reads in `Objc2*`).
 //!
 //! It is the port of the section-locating half of Ghidra's `Objc2Constants` /

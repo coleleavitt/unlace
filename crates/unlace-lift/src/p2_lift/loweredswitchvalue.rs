@@ -1,4 +1,4 @@
-//! (kuna `loweredswitchvalue`) Prove that a re-rolled lowered switch dispatches
+//! (unlace `loweredswitchvalue`) Prove that a re-rolled lowered switch dispatches
 //! on the value its comparison cascade compared.
 //!
 //! [`crate::loweredswitch`] detects a cascade on the simplified SSA graph,
@@ -29,7 +29,7 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::p2_lift::loweredswitch::SharedLoweredSwitchStore;
 
-/// Marshaling element `<loweredswitchvalue>` (kuna 4000+ range).
+/// Marshaling element `<loweredswitchvalue>` (unlace 4000+ range).
 pub const ELEM_LOWEREDSWITCHVALUE: ElementId = ElementId::new("loweredswitchvalue", 4170);
 
 /// How a named value is defined.
@@ -630,7 +630,7 @@ pub fn verify_installed_switch_values(data: &mut Funcdata, store: &SharedLowered
     for (idx, branch_addr, name, size) in pending {
         let branchind = (0..data.num_jump_tables())
             .map(|i| data.get_jump_table(i))
-            .filter(|jt| jt.kuna_lowered_var().is_some() && *jt.get_op_address() == branch_addr)
+            .filter(|jt| jt.unlace_lowered_var().is_some() && *jt.get_op_address() == branch_addr)
             .filter_map(|jt| jt.get_indirect_op())
             .find(|&op| {
                 data.obank()
@@ -681,7 +681,7 @@ pub fn verify_installed_switch_values(data: &mut Funcdata, store: &SharedLowered
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.loweredswitchvalue_head_compare_operand = Some(head_compare_operand);
 }
 

@@ -1,7 +1,7 @@
-//! (kuna `ctree`) Printing the function body through its C syntax tree
+//! (unlace `ctree`) Printing the function body through its C syntax tree
 //! (`docs/architecture/ctree.md` §6), with `option ctree on`.
 //!
-//! `kuna_ctreebuild` builds the tree at `built`, one statement per structured block. The walk
+//! `unlace_ctreebuild` builds the tree at `built`, one statement per structured block. The walk
 //! here prints the kinds it models (the root's statements, a `BlockGraph`'s statements, a leaf)
 //! and the components the block printers take through `emit_part` (an `if`'s arms, a loop's
 //! body, a goto block's body) and hands every other statement to the block printer, whose children come
@@ -152,15 +152,15 @@ impl PrintC {
             return;
         };
         self.ctree_take_plans();
-        let bool_return = arch.kuna_options.get::<crate::ctree::Boolreturn>().0
+        let bool_return = arch.unlace_options.get::<crate::ctree::Boolreturn>().0
             && self.out_lang == crate::lang::OutLang::C;
-        let ret_ternary = arch.kuna_options.get::<crate::ctree::Retternary>().0
+        let ret_ternary = arch.unlace_options.get::<crate::ctree::Retternary>().0
             && self.out_lang == crate::lang::OutLang::C;
-        let noret_first = arch.kuna_options.get::<crate::ctree::Noretfirst>().0
+        let noret_first = arch.unlace_options.get::<crate::ctree::Noretfirst>().0
             && self.out_lang == crate::lang::OutLang::C;
-        let or_exit = arch.kuna_options.get::<crate::ctree::Orexit>().0
+        let or_exit = arch.unlace_options.get::<crate::ctree::Orexit>().0
             && self.out_lang == crate::lang::OutLang::C;
-        let nested_and = arch.kuna_options.get::<crate::ctree::Nestedand>().0
+        let nested_and = arch.unlace_options.get::<crate::ctree::Nestedand>().0
             && self.out_lang == crate::lang::OutLang::C;
         for id in ids {
             let Some(blk) = self.ctree.as_ref().and_then(|tree| {
@@ -412,7 +412,7 @@ impl PrintC {
         Some((ret, u64::try_from(vn.get_offset()).ok()?))
     }
 
-    /// (kuna `retternary`) An `if`/`else` (no goto) whose arms each print only a `return` of
+    /// (unlace `retternary`) An `if`/`else` (no goto) whose arms each print only a `return` of
     /// a constant or a named variable: the condition block, the body's `RETURN` and the
     /// returned value as a tree expression over the two `RETURN`s. A `1` or `0` arm against
     /// a `bool` variable `x` folds to `c || x`, `!c || x`, `c && x` or `!c && x`; any
@@ -479,7 +479,7 @@ impl PrintC {
         Some((cond_block, yes_op, value))
     }
 
-    /// (kuna `boolreturn`) In the sequence `id` (a `BlockList`), fold the trailing run of
+    /// (unlace `boolreturn`) In the sequence `id` (a `BlockList`), fold the trailing run of
     /// `if`s without else whose body only returns `0`, `1` or a comparison, ending in such a
     /// `return`, into one `return` of a short-circuit expression: `if (!a) return 0;
     /// return b < c;` becomes `return a && b < c;`. Folding right to left, `c ? 0 : T` is
@@ -578,7 +578,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `boolreturn`) Fold the `if`/`else` statement `id` (no goto, not a switch-merge
+    /// (unlace `boolreturn`) Fold the `if`/`else` statement `id` (no goto, not a switch-merge
     /// or exception `if`, its condition still its block's) whose two arms are each a value of
     /// a return run, a leaf `return_term` accepts or a statement an earlier fold made a
     /// `return` (`folded_return`), into one `return` the way `combine_return` joins a
@@ -894,7 +894,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when
+    /// (unlace `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when
     /// exactly one arm never falls through (its structured block has no out edge: it returns
     /// or calls a no-return function): that arm becomes the `if`'s only body and the other arm
     /// follows the `if` (`Seq[if, arm]`). When the arm that never falls through is the else,
@@ -999,7 +999,7 @@ impl PrintC {
             .unwrap_or_else(|| fd.sblocks_ref().block(blk).get_block(1))
     }
 
-    /// (kuna `nestedand`) Fold the `if` statement `id` with the `if` that is its whole body:
+    /// (unlace `nestedand`) Fold the `if` statement `id` with the `if` that is its whole body:
     /// `if (a) { if (b) { X } }` becomes `if (a && b) { X }`. Both have no else and no goto;
     /// the inner `if` is not rewritten, prints nothing before its test (no statement, no
     /// comment, no label), its condition is a single leaf, and neither prints as a switch or
@@ -1080,7 +1080,7 @@ impl PrintC {
         true
     }
 
-    /// (kuna `orexit`) In the sequence `id`, fold each run of adjacent `if`s without else that
+    /// (unlace `orexit`) In the sequence `id`, fold each run of adjacent `if`s without else that
     /// leave the same way (the same `goto`/`break`/`continue` target, or a `return` of the same
     /// constant or variable) into the first: `if (a) goto L; if (b) goto L;` becomes
     /// `if ((a) || (b)) goto L;`. A folded `if` stays in the tree as an empty sequence, which

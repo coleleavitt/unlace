@@ -31,8 +31,8 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let register = manager.get_space_by_name("register").unwrap().clone();
     let model = Rc::new(ProtoModel::new(&manager));
     let mut context = ArchContext::new(manager);
-    context.kuna_options.set(super::CallWide(true));
-    context.kuna_options.set(BeJoinMode::Evidence);
+    context.unlace_options.set(super::CallWide(true));
+    context.unlace_options.set(BeJoinMode::Evidence);
     let mut fd = Funcdata::new(
         "f",
         "f",
@@ -54,7 +54,7 @@ fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
         declarations: BTreeSet::from([0x2000]),
     });
     fd.get_func_proto_mut().set_model(Some(proof.model.clone()));
-    fd.kuna_set_callwide(Some(proof.clone()));
+    fd.unlace_set_callwide(Some(proof.clone()));
     (fd, proof)
 }
 
@@ -125,7 +125,7 @@ fn export_call_layout(layout: u8) -> (Funcdata, Rc<Ledger>, FuncCallSpecs) {
         entries: previous.entries.clone(),
         declarations: previous.declarations.clone(),
     });
-    fd.kuna_set_callwide(Some(proof.clone()));
+    fd.unlace_set_callwide(Some(proof.clone()));
     fd.get_func_proto_mut().set_model(Some(proof.model.clone()));
     let word = Rc::new(Datatype::new(4, type_metatype::TYPE_INT));
     let wide = Rc::new(Datatype::new(8, type_metatype::TYPE_UINT));
@@ -330,7 +330,7 @@ fn returned(fd: &mut Funcdata, low_size: int4) -> OpId {
 
 fn trials(fd: &Funcdata) -> ParamActive {
     let mut active = ParamActive::new(false);
-    let pair = &fd.kuna_callwide().unwrap().pair;
+    let pair = &fd.unlace_callwide().unwrap().pair;
     active.register_trial(&pair.hi.0, pair.hi.1);
     active.register_trial(&pair.lo.0, pair.lo.1);
     active

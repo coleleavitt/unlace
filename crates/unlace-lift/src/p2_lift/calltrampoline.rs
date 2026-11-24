@@ -1,7 +1,7 @@
-//! (kuna) `kuna_calltrampoline` — a `call` whose callee discards the pushed
+//! (unlace) `unlace_calltrampoline` — a `call` whose callee discards the pushed
 //! return address and jumps back into the instruction stream (S2 flow
-//! classification).  Sibling of [`kuna_tailcalljump`](crate::tailcalljump)
-//! and [`kuna_tailcallframe`](crate::tailcallframe), which decide the
+//! classification).  Sibling of [`unlace_tailcalljump`](crate::tailcalljump)
+//! and [`unlace_tailcallframe`](crate::tailcallframe), which decide the
 //! opposite question about a `jmp`.
 //!
 //! ## The structural gap
@@ -33,7 +33,7 @@
 //!
 //! ## The signal this module owns
 //!
-//! [`kuna_trampoline_branch_target`] scans the callee's raw p-code — decoded out
+//! [`unlace_trampoline_branch_target`] scans the callee's raw p-code — decoded out
 //! of band by the caller, before the flow follower commits to anything — and
 //! fires only when all of the following hold:
 //!
@@ -64,26 +64,26 @@
 //! target to be an address the symbol table does **not** know as a function
 //! entry.  A fragment that re-enters mid-instruction-stream satisfies that by
 //! construction; a thunk to a discovered callee does not, and stays a `CALL` for
-//! [`kuna_tailcalljump`](crate::tailcalljump) to claim at its `jmp`.
+//! [`unlace_tailcalljump`](crate::tailcalljump) to claim at its `jmp`.
 
 use unlace_base::marshal::ElementId;
 use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-/// Marshaling element `<calltrampoline>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<calltrampoline>` (unlace).  ElementIds live in the 4000+
 /// range; 4158 is the next free above `stackcommentbase`'s 4157.
 pub const ELEM_CALLTRAMPOLINE: ElementId = ElementId::new("calltrampoline", 4158);
 
 /// How many machine instructions of the callee the scan will decode before
 /// giving up.  A fragment of this family is three instructions; the slack is for
 /// a flag-setting `add` lowered across several p-code ops per instruction.
-pub const KUNA_TRAMPOLINE_MAX_INSTRS: usize = 6;
+pub const UNLACE_TRAMPOLINE_MAX_INSTRS: usize = 6;
 
 /// How many raw p-code ops the scan will read before giving up, whatever the
 /// instruction count says.  Bounds the cost of a probe at an address that
 /// happens to decode into something enormous.
-pub const KUNA_TRAMPOLINE_MAX_OPS: usize = 64;
+pub const UNLACE_TRAMPOLINE_MAX_OPS: usize = 64;
 
 /// One raw p-code op as the scan sees it — the [`PcodeEmit::dump`](
 /// unlace_sleigh::translate::PcodeEmit::dump) payload minus the instruction
@@ -184,7 +184,7 @@ impl SpTrack {
         if let Some(d) = delta {
             // Cap the map: a fragment this shape needs two or three entries, and
             // an unbounded one would let a long decode grow it without bound.
-            if self.known.len() < KUNA_TRAMPOLINE_MAX_OPS {
+            if self.known.len() < UNLACE_TRAMPOLINE_MAX_OPS {
                 self.known.push((k, d));
             }
         }
@@ -197,7 +197,7 @@ impl SpTrack {
     }
 }
 
-/// (kuna `calltrampoline`) Does this run of raw p-code discard the return
+/// (unlace `calltrampoline`) Does this run of raw p-code discard the return
 /// address its caller pushed and then branch directly somewhere else?
 ///
 /// `ops` are the callee's raw p-code ops in decode order, starting at its entry;
@@ -211,8 +211,8 @@ impl SpTrack {
 /// return address goes to a link register), the displacement never reaches one
 /// pointer word and the rule declines, which is the correct answer: there is no
 /// return address on the stack to discard.
-pub fn kuna_trampoline_branch_target(ops: &[RawOp], sp: &VarnodeStorage) -> Option<VarnodeData> {
-    if ops.is_empty() || ops.len() > KUNA_TRAMPOLINE_MAX_OPS {
+pub fn unlace_trampoline_branch_target(ops: &[RawOp], sp: &VarnodeStorage) -> Option<VarnodeData> {
+    if ops.is_empty() || ops.len() > UNLACE_TRAMPOLINE_MAX_OPS {
         return None;
     }
     let spkey = key_of_storage(sp)?;

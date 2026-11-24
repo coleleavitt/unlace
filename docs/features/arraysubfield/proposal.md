@@ -143,7 +143,7 @@ tractable part: the variable-merge (P6) and type-factory (P5) legs needed no cha
 
 ## Test
 
-`tests/stages/kuna-arraysubfield.toml`. Single image, four functions, gcc -O2 -no-pie:
+`tests/stages/arraysubfield.toml`. Single image, four functions, gcc -O2 -no-pie:
 `lo8`/`hi8` read 8 bytes at offsets 0 and 8 of a `char g[16]` global (the repair),
 `elem` reads one byte at offset 3 (the preservation), `shift64` is the reported
 reproducer. Assertion #7 pins `return v1 << 0x40;` — the part that is *not* fixed.
@@ -159,13 +159,13 @@ hi8      return g[8];               return g._8_8_;
 elem     return g[3];               return g[3];        (unchanged)
 ```
 
-Four existing stage assertions and two `kuna-console` integration-test pins moved — every one
+Four existing stage assertions and two `console` integration-test pins moved — every one
 of them a pin on the defective spelling: `ghdec-returncopysplit` #1/#5/#6,
-`kuna-retinputhalf` #2, `kuna-rustabi` #5, `verify_return_uncomputed`,
+`retinputhalf` #2, `rustabi` #5, `verify_return_uncomputed`,
 `verify_rustabi_pair`. `verify_return_uncomputed` also carries a `min=0` arm ("nothing should
 write the phantom high half", spelled `!code.contains("[8] =")`) which the repair would have
 made **vacuous** rather than failing; it was widened to reject both spellings.
-`kuna-rustabi` is the clearest witness of the discrimination, since one function contains
+`rustabi` is the clearest witness of the discrimination, since one function contains
 both kinds at once:
 
 ```c

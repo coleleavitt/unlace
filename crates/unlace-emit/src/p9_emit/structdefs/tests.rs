@@ -1,4 +1,4 @@
-//! (kuna `structdefs`) Unit tests for the preamble's type walk and per-type
+//! (unlace `structdefs`) Unit tests for the preamble's type walk and per-type
 //! definition text, over hand-built `Datatype`s (the same pattern the
 //! `doc_type_definitions` renderer tests use — no `Architecture` needed).
 

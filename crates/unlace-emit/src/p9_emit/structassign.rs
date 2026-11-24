@@ -1,6 +1,6 @@
-//! (kuna `structassign`) A `memcpy` of one whole struct prints as an assignment.
+//! (unlace `structassign`) A `memcpy` of one whole struct prints as an assignment.
 //!
-//! A compiler copies a struct with `memcpy` (or inlines the copy, which kuna's
+//! A compiler copies a struct with `memcpy` (or inlines the copy, which unlace's
 //! copy folds turn back into `memcpy`), so a by-value assignment `*d = *s;` or
 //! `v = *p;` prints as `memcpy(d,s,0x18);`. Hex-Rays turns such a copy back into
 //! a struct move when the copy size is the size of the struct type the
@@ -20,8 +20,8 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `structassign`) Print a `memcpy` of exactly one struct between two
+crate::unlace_flag!(
+    /// (unlace `structassign`) Print a `memcpy` of exactly one struct between two
     /// pointers to that struct type as `*d = *s`.  See [`crate::structassign`].
     StructAssign,
     "structassign",
@@ -57,7 +57,7 @@ pub fn recover(
     op: OpId,
     callee: &str,
 ) -> Option<(VarnodeId, VarnodeId)> {
-    if !arch.kuna_options.get::<StructAssign>().0 || !is_memcpy(callee) {
+    if !arch.unlace_options.get::<StructAssign>().0 || !is_memcpy(callee) {
         return None;
     }
     let o = fd.obank().get(op)?;

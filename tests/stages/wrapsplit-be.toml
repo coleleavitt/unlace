@@ -1,0 +1,66 @@
+# wrapsplit-be: a stack access across the top of a 32-bit big-endian
+# stack space.
+#
+# Issue #1034 (see wrapsplit.xml). Stage / sub-stage: P3 heritage, the
+# disjoint cover of a heritaged space (strict bug fix, no option).
+#
+# The bytes below, MIPS32 big-endian:
+#
+#     f:  sw  a0,-2(sp)       ; stack -2..+2, wraps
+#         lhu v0,0(sp)
+#         jr  ra
+#         nop
+#     g:  lw  v0,-2(sp)
+#         jr  ra
+#         nop
+#
+# #1 f: the halfword at sp is the low half of a0 (big-endian: bytes 0..1 of
+# the word stored at -2). It read an uninitialized stack+0: the store across
+# the top never reached it. Its SUBPIECE offset is reduced modulo the 32-bit
+# space; unreduced it is 0x100000000.
+# #2 g: the word at -2 is the halfword below the top over the halfword at 0.
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x400000', name = 'f' },
+    { space = 'ram', offset = '0x400020', name = 'g' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400000'
+readonly = true
+hex = 'afa4fffe97a2000003e0000800000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x400020'
+readonly = true
+hex = '8fa2fffe03e0000800000000'
+
+[script]
+commands = [
+    'lo fu f',
+    'decompile',
+    'print C',
+    'lo fu g',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'WRAPSPLIT-BE #1: a store across the top reaches the read at sp'
+count = 1
+regex = '^unsigned short f\(unsigned short a0\)$'
+
+[[match]]
+name = 'WRAPSPLIT-BE #2: f returns the low half of a0'
+count = 1
+regex = '^  return a0;$'
+
+[[match]]
+name = 'WRAPSPLIT-BE #3: the word at -2 is the halfword below the top over the halfword at 0'
+count = 1
+literal = 'return CONCAT22(v2,v1);'

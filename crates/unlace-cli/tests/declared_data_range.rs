@@ -61,7 +61,7 @@ fn check_table(assembly: &str) {
     );
     let project = root.join("project");
     let specs = common::repo_root().join("specs");
-    let (_, stderr, status) = common::run_kuna(&[
+    let (_, stderr, status) = common::run_unlace(&[
         "decompile-project",
         image.to_str().unwrap(),
         "--functions",

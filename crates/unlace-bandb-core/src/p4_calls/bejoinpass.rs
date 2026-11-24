@@ -1,4 +1,4 @@
-//! (kuna `bejoinpass`) A big-endian register pair that a call hands back and
+//! (unlace `bejoinpass`) A big-endian register pair that a call hands back and
 //! the function returns untouched is one value, joined in one order.
 //!
 //! `option bejoin` decides the order of a function's returned pair from that
@@ -47,7 +47,7 @@
 //! own verdicts.
 
 use crate::bejoin::FuncdataBejoinExt;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -72,9 +72,9 @@ pub enum BeJoinPassMode {
     High,
 }
 
-impl crate::optionset::KunaOption for BeJoinPassMode {
+impl crate::optionset::UnlaceOption for BeJoinPassMode {
     const NAME: &'static str = "bejoinpass";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         BeJoinPassMode::Off
@@ -84,7 +84,7 @@ impl crate::optionset::KunaOption for BeJoinPassMode {
         BeJoinPassMode::Whole
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         BeJoinPassMode::parse(value)
     }
 }
@@ -99,13 +99,13 @@ impl BeJoinPassMode {
     }
 
     /// Parse an `option bejoinpass` value.
-    pub fn parse(p1: &str) -> KunaResult<(BeJoinPassMode, String)> {
+    pub fn parse(p1: &str) -> UnlaceResult<(BeJoinPassMode, String)> {
         let mode = match p1 {
             "off" => BeJoinPassMode::Off,
             "whole" => BeJoinPassMode::Whole,
             "high" => BeJoinPassMode::High,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown bejoinpass value: {other} (expected off|whole|high)"
                 )));
             }
@@ -118,7 +118,7 @@ impl BeJoinPassMode {
 }
 
 fn mode(data: &Funcdata) -> BeJoinPassMode {
-    data.get_arch().kuna_options.get::<BeJoinPassMode>()
+    data.get_arch().unlace_options.get::<BeJoinPassMode>()
 }
 
 /// The model's pair, when it is two four-byte registers the ABI returns high
@@ -127,7 +127,7 @@ fn word_pair(data: &Funcdata) -> Option<crate::bejoin::WidePair> {
     if mode(data) == BeJoinPassMode::Off || !crate::bejoin::mode(data).proves() {
         return None;
     }
-    let pair = data.kuna_wide()?.pair.clone();
+    let pair = data.unlace_wide()?.pair.clone();
     (pair.hi.1 == 4 && pair.lo.1 == 4).then_some(pair)
 }
 

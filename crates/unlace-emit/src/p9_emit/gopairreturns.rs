@@ -21,7 +21,7 @@ pub fn fields(cx: &SpellCtx, ty: &Datatype) -> Option<[Rc<Datatype>; 2]> {
     }
     cx.go_pair_types
         .as_ref()?
-        .kuna_lang_facet(ty.get_name())?
+        .unlace_lang_facet(ty.get_name())?
         .go_pair_fields(ty)
 }
 
@@ -65,7 +65,7 @@ fn call_fields(cx: &SpellCtx, fd: &Funcdata, op: OpId) -> Option<[Rc<Datatype>; 
 #[doc(hidden)]
 pub fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<usize> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::analysisgates::Godwarfsig>()
         .0
     {
@@ -78,7 +78,7 @@ pub fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<u
     }
     let ty = proto.get_output_type()?;
     arch.types()
-        .kuna_lang_facet(ty.get_name())?
+        .unlace_lang_facet(ty.get_name())?
         .go_pair_fields(ty)?;
     if value.get_size() != 8
         || proto.get_model_name() != "abi-internal"

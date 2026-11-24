@@ -1,6 +1,6 @@
-//! (kuna) The java-language policy objects, after `printjava.cc`.
+//! (unlace) The java-language policy objects, after `printjava.cc`.
 //!
-//! Upstream `PrintJava` is `PrintC` with a handful of overrides; kuna's printer
+//! Upstream `PrintJava` is `PrintC` with a handful of overrides; unlace's printer
 //! is parameterized rather than subclassed, so the overrides become a profile,
 //! a type speller and a few `OutLang::Java` arms in `printc.rs`:
 //!

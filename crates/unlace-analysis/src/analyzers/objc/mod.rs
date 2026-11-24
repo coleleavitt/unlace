@@ -1,6 +1,6 @@
 //! S1 Mach-O Objective-C metadata recovery (`ObjcMetadataPass`).
 //!
-//! The kuna analog of Ghidra's `ObjcTypeMetadataAnalyzer` (the name-recovery
+//! The unlace analog of Ghidra's `ObjcTypeMetadataAnalyzer` (the name-recovery
 //! half): parse the `__objc_*` ObjC 2.0 metadata web entirely out of the loaded
 //! Mach-O image and recover **method names**, so a stripped IMP renders
 //! `-[Greeter greet:]` / `+[Greeter classMethod]` instead of `sub_<addr>`.
@@ -380,7 +380,7 @@ impl AnalysisPass for ObjcMetadataPass {
     }
 }
 
-/// (kuna `objcresolve`) The SDK classes a send of this image can reach: every
+/// (unlace `objcresolve`) The SDK classes a send of this image can reach: every
 /// class it imports (`_OBJC_CLASS_$_NSNumber`) or subclasses, with their
 /// superclasses. Their records are declared so a result typed by one of them,
 /// or by a class one of their methods returns, is that class's pointer.

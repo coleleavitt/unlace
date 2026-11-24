@@ -15,7 +15,7 @@ fn inventory(mode: &str, extra: &[&str]) -> Vec<(String, u64)> {
         specs.to_str().unwrap(),
     ];
     args.extend_from_slice(extra);
-    let (stdout, stderr, code) = common::run_kuna(&args);
+    let (stdout, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{stdout}\n{stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     doc["functions"]

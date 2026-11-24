@@ -11,7 +11,7 @@ use crate::funcdata::Funcdata;
 pub fn prepare(fd: &mut Funcdata, factory: &dyn TypeFactory) {
     let mut snapshots = Vec::new();
     for (_, high) in fd.high_bank().iter() {
-        if high.kuna_symbol_type().is_some() {
+        if high.unlace_symbol_type().is_some() {
             continue;
         }
         for index in 0..high.num_instances() {

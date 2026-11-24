@@ -1,8 +1,8 @@
-//! The ghidra-mode lazy symbol provider — kuna's port of `ScopeGhidra`
-//! (`decompiler/cpp/database_ghidra.{hh,cc}`) relocated to the seam the kuna
+//! The ghidra-mode lazy symbol provider — unlace's port of `ScopeGhidra`
+//! (`decompiler/cpp/database_ghidra.{hh,cc}`) relocated to the seam the unlace
 //! engine actually reads.
 //!
-//! Upstream `ScopeGhidra` overrides the `Scope` virtuals; kuna deliberately
+//! Upstream `ScopeGhidra` overrides the `Scope` virtuals; unlace deliberately
 //! collapsed that polymorphism (the `Scope`/`ScopeInternal` merge,
 //! `p0_knowledge/database.rs`), and the per-function pipeline reads program
 //! facts through two seams instead:
@@ -36,7 +36,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, Range, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_CONTENT, ATTRIB_ID, ATTRIB_INDEX, ATTRIB_MODEL, ATTRIB_NAME, ATTRIB_NAMELOCK,
     ATTRIB_READONLY, ATTRIB_SIZE, ATTRIB_TYPELOCK, ATTRIB_VAL, AttributeId, Decoder, ELEM_SYMBOL,
@@ -54,7 +54,7 @@ use crate::varnode::varnode_flags;
 
 // ---------------------------------------------------------------------------
 // The symbol-family marshaling ids (upstream numbers, database.cc:29-43,
-// fspec.cc, varmap.cc — wire-compat, NOT the kuna 4000+ range)
+// fspec.cc, varmap.cc — wire-compat, NOT the unlace 4000+ range)
 // ---------------------------------------------------------------------------
 
 /// Marshaling element \<equatesymbol> (C++ `ELEM_EQUATESYMBOL`, database.cc:31).
@@ -160,29 +160,30 @@ pub fn register_remote_provider_ids(reg: &mut IdRegistry) {
 /// caller-supplied decoder (matching the `GhidraClient` signatures).
 pub trait RemoteProviderFetch {
     /// getMappedSymbols(addr): `Ok(false)` = empty response (no answer at all).
-    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool>;
+    fn fetch_mapped_symbols(&self, addr: &Address, decoder: &mut dyn Decoder)
+    -> UnlaceResult<bool>;
     /// getNamespacePath(id): the `<parent>` document for a scope id.
-    fn fetch_namespace_path(&self, id: u64, decoder: &mut dyn Decoder) -> KunaResult<bool>;
+    fn fetch_namespace_path(&self, id: u64, decoder: &mut dyn Decoder) -> UnlaceResult<bool>;
     /// getExternalRef(addr): the resolved `<doc><mapsym>` for an external
     /// reference's POINTER address; `Ok(false)` = unresolvable.
-    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> KunaResult<bool>;
+    fn fetch_external_ref(&self, addr: &Address, decoder: &mut dyn Decoder) -> UnlaceResult<bool>;
     /// getTrackedRegisters(addr): the `<tracked_pointset>` for an address
     /// (always written by the host, possibly empty).
     fn fetch_tracked_registers(
         &self,
         addr: &Address,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool>;
+    ) -> UnlaceResult<bool>;
     /// getComments(addr, flags): the `<commentdb>` for a function.
     fn fetch_comments(
         &self,
         fad: &Address,
         flags: u32,
         decoder: &mut dyn Decoder,
-    ) -> KunaResult<bool>;
+    ) -> UnlaceResult<bool>;
     /// isNameUsed(name, start, stop): is `name` a symbol in the host namespace
     /// `start` or one of its parents below `stop` (0 = up to global)?
-    fn fetch_is_name_used(&self, _name: &str, _start: u64, _stop: u64) -> KunaResult<bool> {
+    fn fetch_is_name_used(&self, _name: &str, _start: u64, _stop: u64) -> UnlaceResult<bool> {
         Ok(false)
     }
 }
@@ -220,7 +221,7 @@ pub struct RemoteEntry {
     pub uselimit: RangeList,
 }
 
-/// A decoded `<mapsym>` symbol (the fields the kuna seams consume; everything
+/// A decoded `<mapsym>` symbol (the fields the unlace seams consume; everything
 /// else is skipped with `close_element_skipping` semantics).
 pub struct RemoteSymbolRecord {
     /// The `<doc>` wrapper's namespace/scope id (0 = global).
@@ -314,10 +315,10 @@ pub struct RemoteParam {
     /// The symbol's typelock bit.
     pub typelock: bool,
     /// The parameter's EXACT committed storage (the cat-0 mapsym's `<addr>`).
-    /// Java's `checkFullCommit` compares kuna's echoed storage against the
+    /// Java's `checkFullCommit` compares unlace's echoed storage against the
     /// database's; re-deriving it from a default model instead (the Phase-4
     /// behavior before this) makes every rename of a nonstandard-convention
-    /// function force-commit a kuna-rederived signature over the user's.
+    /// function force-commit a unlace-rederived signature over the user's.
     /// Invalid when the host sent a dynamic/hash entry.
     pub storage: Address,
     /// The host's AUTO hidden-return parameter, re-derived by the prototype model.
@@ -329,7 +330,7 @@ pub struct RemoteParam {
 /// e.g. by a prior GUI rename/retype through `HighFunctionDBUtil`).  The
 /// upstream native core decodes these straight into the function's `ScopeLocal`
 /// (`Funcdata::decode` → localmap restore), which is what makes a GUI rename
-/// SURVIVE the event-driven re-decompile; kuna seeds them through the same
+/// SURVIVE the event-driven re-decompile; unlace seeds them through the same
 /// per-function seeding path the console's `map addr`/`type varnode` symbols
 /// use ([`crate::funcdata::Funcdata::seed_mapped_symbols`] /
 /// [`crate::funcdata::Funcdata::seed_usepoint_symbols`]).
@@ -365,7 +366,7 @@ impl RemoteProto {
         self.voidlock || (!self.params.is_empty() && self.params_locked)
     }
 
-    /// Flatten to the [`PrototypePieces`] the kuna callee-prototype seams
+    /// Flatten to the [`PrototypePieces`] the unlace callee-prototype seams
     /// consume (`ActionDefaultParams` / `query_callee_proto`'s `TypeCode`).
     pub fn to_pieces(&self, name: &str) -> PrototypePieces {
         let mut pieces = PrototypePieces {
@@ -383,7 +384,7 @@ impl RemoteProto {
             },
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         if self.custom {
             pieces.output_storage =
@@ -432,7 +433,7 @@ impl RemoteProto {
 pub fn decode_mapped_answer(
     decoder: &mut dyn Decoder,
     types: &TypeFactoryImpl,
-) -> KunaResult<RemoteMapAnswer> {
+) -> UnlaceResult<RemoteMapAnswer> {
     if decoder.peek_element()? == ELEM_HOLE.get_id() {
         return decode_hole(decoder);
     }
@@ -448,7 +449,7 @@ pub fn decode_mapped_answer(
 /// Decode a `<hole>` (C++ `ScopeGhidra::decodeHole`, database_ghidra.cc:72-94):
 /// the covering range from `Range::decodeFromAttributes`, then a rewound scan
 /// for the readonly/volatile paint.
-fn decode_hole(decoder: &mut dyn Decoder) -> KunaResult<RemoteMapAnswer> {
+fn decode_hole(decoder: &mut dyn Decoder) -> UnlaceResult<RemoteMapAnswer> {
     let elem_id = decoder.open_element()?;
     let range = Range::decode_from_attributes(decoder)?;
     let mut flags: uint4 = 0;
@@ -475,7 +476,7 @@ pub fn decode_mapsym(
     decoder: &mut dyn Decoder,
     types: &TypeFactoryImpl,
     scope_id: u64,
-) -> KunaResult<RemoteSymbolRecord> {
+) -> UnlaceResult<RemoteSymbolRecord> {
     let elem_id = decoder.open_element_id(&ELEM_MAPSYM)?;
     let sub = decoder.peek_element()?;
     let mut rec = if sub == ELEM_SYMBOL.get_id() || sub == ELEM_FACETSYMBOL.get_id() {
@@ -488,7 +489,7 @@ pub fn decode_mapsym(
         rec
     } else if sub == ELEM_EQUATESYMBOL.get_id() {
         // <equatesymbol>: header + <value>; renders as a named constant.  The
-        // kuna equate surface is out of Phase-3 scope, so only the name/flags
+        // unlace equate surface is out of Phase-3 scope, so only the name/flags
         // survive (the mapping entry still marks the range answered).
         let sid = decoder.open_element()?;
         let rec = decode_symbol_header(decoder, scope_id)?;
@@ -562,7 +563,7 @@ pub fn decode_mapsym(
             extern_ref: None,
         }
     } else {
-        return Err(KunaError::lowlevel("Unknown symbol type"));
+        return Err(UnlaceError::lowlevel("Unknown symbol type"));
     };
     // The SymbolEntry list: <hash val=…>|<addr…> then a <rangelist> each
     // (SymbolEntry::decode, database.cc:206-221).
@@ -607,7 +608,7 @@ pub fn decode_mapsym(
 fn decode_symbol_header(
     decoder: &mut dyn Decoder,
     scope_id: u64,
-) -> KunaResult<RemoteSymbolRecord> {
+) -> UnlaceResult<RemoteSymbolRecord> {
     let mut rec = RemoteSymbolRecord {
         scope_id,
         symbol_id: 0,
@@ -676,7 +677,7 @@ fn decode_symbol_header(
 fn decode_wire_function(
     decoder: &mut dyn Decoder,
     types: &TypeFactoryImpl,
-) -> KunaResult<RemoteFunction> {
+) -> UnlaceResult<RemoteFunction> {
     let elem_id = decoder.open_element()?;
     let mut func = RemoteFunction {
         name: String::new(),
@@ -755,7 +756,7 @@ fn decode_localdb_params(
     params: &mut Vec<RemoteParam>,
     params_locked: &mut bool,
     locals: &mut Vec<RemoteLocalVar>,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let localdb_id = decoder.open_element_id(&ELEM_LOCALDB)?;
     // lock/main attributes: not consumed.
     while decoder.peek_element()? != 0 {
@@ -856,7 +857,10 @@ fn decode_localdb_params(
 
 /// Decode a `<prototype>` (C++ `FuncProto::decode`, fspec.cc:4675-4840,
 /// reduced to model/extrapop/flags + the `<returnsym>` type).
-fn decode_prototype(decoder: &mut dyn Decoder, types: &TypeFactoryImpl) -> KunaResult<RemoteProto> {
+fn decode_prototype(
+    decoder: &mut dyn Decoder,
+    types: &TypeFactoryImpl,
+) -> UnlaceResult<RemoteProto> {
     let elem_id = decoder.open_element_id(&ELEM_PROTOTYPE)?;
     let mut proto = RemoteProto {
         model: String::new(),
@@ -932,7 +936,7 @@ fn decode_prototype(decoder: &mut dyn Decoder, types: &TypeFactoryImpl) -> KunaR
 /// further `<val id=… [label=…]>name</val>` is one nesting level, outermost
 /// first.  Returns the display names, INNERMOST FIRST (the
 /// `GlobalEntry::scope_path` convention), global excluded.
-pub fn decode_namespace_path(decoder: &mut dyn Decoder) -> KunaResult<Vec<String>> {
+pub fn decode_namespace_path(decoder: &mut dyn Decoder) -> UnlaceResult<Vec<String>> {
     Ok(decode_namespace_levels(decoder)?
         .into_iter()
         .map(|(name, _)| name)
@@ -941,7 +945,7 @@ pub fn decode_namespace_path(decoder: &mut dyn Decoder) -> KunaResult<Vec<String
 
 /// [`decode_namespace_path`] keeping each level's host namespace id, the
 /// handle isNameUsed takes.
-pub fn decode_namespace_levels(decoder: &mut dyn Decoder) -> KunaResult<Vec<(String, u64)>> {
+pub fn decode_namespace_levels(decoder: &mut dyn Decoder) -> UnlaceResult<Vec<(String, u64)>> {
     let elem_id = decoder.open_element_id(&ELEM_PARENT)?;
     let mut levels: Vec<(String, u64)> = Vec::new();
     let mut first = true;
@@ -1050,7 +1054,7 @@ pub struct RemoteFunctionFacts {
     pub model: Option<String>,
     /// The host's EXACT committed parameter storage, slot-ordered:
     /// `(slot, name, pieces)` ready for `Funcdata::apply_mapped_params`.
-    /// Empty when the signature is unlocked (kuna then recovers parameters
+    /// Empty when the signature is unlocked (unlace then recovers parameters
     /// itself) or when the host sent no storage.
     pub param_storage: Vec<(int4, String, crate::fspec::ParameterPieces)>,
     /// The namespaces enclosing the function, innermost first, global
@@ -1096,7 +1100,7 @@ pub struct RemoteScope {
     /// context at an address.  Deliberately OUTSIDE the flush-cleared state:
     /// it is session-stable ENGINE truth, and it is what lets a later epoch's
     /// merge REVERT a value the host stopped reporting (upstream ContextGhidra
-    /// stores nothing and rebuilds from the wire per call; kuna's per-function
+    /// stores nothing and rebuilds from the wire per call; unlace's per-function
     /// trackbase snapshot needs the explicit pristine layer to merge over).
     pristine_tracked:
         RefCell<std::collections::BTreeMap<(int4, u64), unlace_sleigh::globalcontext::TrackedSet>>,
@@ -1318,7 +1322,7 @@ impl RemoteScope {
         let mut set = unlace_sleigh::globalcontext::TrackedSet::new();
         match self.fetch.fetch_tracked_registers(addr, &mut dec) {
             Ok(true) => {
-                let decoded = (|| -> KunaResult<()> {
+                let decoded = (|| -> UnlaceResult<()> {
                     let el = dec.open_element()?;
                     unlace_sleigh::globalcontext::decode_tracked(&mut dec, &mut set)?;
                     dec.close_element(el)?;
@@ -1422,7 +1426,7 @@ impl RemoteScope {
         }
     }
 
-    /// Materialize one decoded symbol into the cache (the kuna analog of C++
+    /// Materialize one decoded symbol into the cache (the unlace analog of C++
     /// `dump2Cache`'s post-processing, database_ghidra.cc:143-171).
     #[doc(hidden)]
     pub fn materialize(&self, rec: RemoteSymbolRecord) {
@@ -1496,7 +1500,7 @@ impl RemoteScope {
                     // carried verbatim so the echoed `<localdb>`/`<prototype>`
                     // match the database (Java's `checkFullCommit`).  Only
                     // meaningful for a locked signature — an unlocked one is
-                    // kuna's to recover.
+                    // unlace's to recover.
                     let mut param_storage: Vec<(int4, String, crate::fspec::ParameterPieces)> =
                         Vec::new();
                     let mut model_name: Option<String> = None;
@@ -1705,7 +1709,7 @@ impl RemoteScope {
         fad: &Address,
         filter: u32,
         sink: &mut crate::architecture::CommentDatabase,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if filter == 0 {
             return Ok(());
         }

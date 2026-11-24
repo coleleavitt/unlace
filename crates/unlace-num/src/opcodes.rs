@@ -9,7 +9,7 @@
 //! formats here, where `OpCode` is defined: XML stores names, while packed
 //! streams store positive signed integers.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     AttributeId, Decoder, Encoder, PackedDecode, PackedEncode, XmlDecode, XmlEncode,
 };
@@ -408,11 +408,11 @@ pub fn get_booleanflip(opc: OpCode, reorder: &mut bool) -> OpCode {
 pub trait OpcodeDecoder: Decoder {
     /// \brief Read the current attribute as a p-code OpCode
     /// (C++ `readOpcode(void)`).
-    fn read_opcode(&mut self) -> KunaResult<OpCode>;
+    fn read_opcode(&mut self) -> UnlaceResult<OpCode>;
 
     /// \brief Find the specific attribute in the current element and return
     /// it as an OpCode (C++ `readOpcode(AttributeId &)`).
-    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> KunaResult<OpCode>;
+    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<OpCode>;
 }
 
 /// The C++ `Encoder::writeOpcode` virtual, layered onto the concrete
@@ -425,24 +425,24 @@ pub trait OpcodeEncoder: Encoder {
 
 /// XML protocol: the opcode name string, resolved with `get_opcode`
 /// (marshal.cc `XmlDecode::readOpcode`).
-fn opcode_from_name_bytes(nm: &[u8]) -> KunaResult<OpCode> {
+fn opcode_from_name_bytes(nm: &[u8]) -> UnlaceResult<OpCode> {
     // The table names are pure ASCII, so a non-UTF-8 attribute value can
     // never match one; rejecting it takes the same "Bad encoded OpCode"
     // path the C++ byte comparison would end in.
     let opc = std::str::from_utf8(nm).ok().and_then(get_opcode);
     match opc {
         Some(opc) => Ok(opc),
-        None => Err(KunaError::decoder("Bad encoded OpCode")),
+        None => Err(UnlaceError::decoder("Bad encoded OpCode")),
     }
 }
 
 impl OpcodeDecoder for XmlDecode<'_> {
-    fn read_opcode(&mut self) -> KunaResult<OpCode> {
+    fn read_opcode(&mut self) -> UnlaceResult<OpCode> {
         let nm = self.read_string()?;
         opcode_from_name_bytes(&nm)
     }
 
-    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> KunaResult<OpCode> {
+    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<OpCode> {
         // C++ handles ATTRIB_CONTENT vs findMatchingAttribute exactly as
         // readString(AttributeId) does.
         let nm = self.read_string_id(attrib_id)?;
@@ -452,23 +452,23 @@ impl OpcodeDecoder for XmlDecode<'_> {
 
 /// Packed protocol: a positive signed integer holding the raw enum value
 /// (marshal.cc `PackedDecode::readOpcode`).
-fn opcode_from_packed_integer(raw: i64) -> KunaResult<OpCode> {
+fn opcode_from_packed_integer(raw: i64) -> UnlaceResult<OpCode> {
     let val = raw as i32; // cast: C++ `(int4)readSignedInteger()` truncation
     if val < 0 || val >= OpCode::CPUI_MAX as i32 {
-        return Err(KunaError::decoder("Bad encoded OpCode"));
+        return Err(UnlaceError::decoder("Bad encoded OpCode"));
     }
     // C++ returns the in-range but invalid enum values 0 and 45 unchecked;
     // Rust cannot represent them (see OpCode::from_i32) and rejects them
     // with the same error a genuinely out-of-range value gets.
-    OpCode::from_i32(val).ok_or_else(|| KunaError::decoder("Bad encoded OpCode"))
+    OpCode::from_i32(val).ok_or_else(|| UnlaceError::decoder("Bad encoded OpCode"))
 }
 
 impl OpcodeDecoder for PackedDecode<'_> {
-    fn read_opcode(&mut self) -> KunaResult<OpCode> {
+    fn read_opcode(&mut self) -> UnlaceResult<OpCode> {
         opcode_from_packed_integer(self.read_signed_integer()?)
     }
 
-    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> KunaResult<OpCode> {
+    fn read_opcode_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<OpCode> {
         // C++: findMatchingAttribute + readOpcode + curPos restore — the
         // same sequencing readSignedInteger(AttributeId) performs.
         opcode_from_packed_integer(self.read_signed_integer_id(attrib_id)?)

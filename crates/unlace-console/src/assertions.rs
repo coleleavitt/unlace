@@ -2,7 +2,7 @@
 //!
 //! # Why this exists
 //!
-//! Everything kuna knows about a program it *derived*. That is the right default
+//! Everything unlace knows about a program it *derived*. That is the right default
 //! and it is wrong exactly where reverse engineering is hard, and until this
 //! module the `unlace` binary had almost no lever to correct it: `rename`,
 //! `retype`, `map param`, `map return`, `map address`, `comment instruction` and
@@ -145,7 +145,7 @@ pub enum Body {
         text: String,
     },
     /// `flow [<func>::]<addr> branch|call|callreturn|return` — the flow out of
-    /// this instruction is not what kuna decided it was.
+    /// this instruction is not what unlace decided it was.
     Flow {
         func: Option<String>,
         addr: u64,
@@ -225,7 +225,7 @@ pub struct Outcome {
     pub detail: Option<String>,
     /// The pipeline ACCEPTED this directive, seeded it, and then refused it while
     /// applying it: a `flow` override the flow-follower could not apply
-    /// (`Funcdata::kuna_rejected_flow_overrides`), or a `name`/`type` whose local
+    /// (`Funcdata::unlace_rejected_flow_overrides`), or a `name`/`type` whose local
     /// the replayed C does not declare as asked ([`verify_printed`]).
     ///
     /// Such a rejection is fatal without `--assert-strict`, unlike one that never
@@ -477,7 +477,7 @@ fn overlay_bytes(prog: &mut ConsoleProgram, vma: u64, data: &[u8]) -> Result<(),
         .try_borrow_mut()
         .map_err(|_| "the load image is already borrowed".to_string())?;
     loader
-        .kuna_overlay_bytes(&addr, data)
+        .unlace_overlay_bytes(&addr, data)
         .map_err(|e| e.explain().to_string())?;
     drop(loader);
     prog.note_materialized_bytes(&addr, data.len());
@@ -1239,7 +1239,7 @@ pub fn record_rejected_flow_overrides(
     single: bool,
     fd: &Funcdata,
 ) {
-    let refused = fd.kuna_rejected_flow_overrides();
+    let refused = fd.unlace_rejected_flow_overrides();
     if refused.is_empty() {
         return;
     }
@@ -1285,7 +1285,7 @@ pub fn record_rejected_callee_overrides(
     let applied = |i: usize| outcomes.get(i).is_some_and(|o| o.status == "applied");
     let binds = |d: &Directive| binds_to(&d.body, name, single);
     let restated = restated_callees(&directives, applied, binds);
-    let refused = fd.kuna_rejected_callee_overrides();
+    let refused = fd.unlace_rejected_callee_overrides();
     for (i, directive) in directives.iter().enumerate() {
         let Body::Callee { addr, .. } = &directive.body else {
             continue;
@@ -1438,13 +1438,13 @@ fn seed_one(
             }
             let at = code_addr(prog, *addr)?;
             seed.flow_overrides.push((at.clone(), type_));
-            // (kuna) The same chain extension the `override flow` console
+            // (unlace) The same chain extension the `override flow` console
             // command performs, for the in-process drive (`decompile-all`,
             // `decompile-project`, the WASM front-end), which never runs it.
             if type_ == unlace_decomp::overrides::flow_type::CALL
                 || type_ == unlace_decomp::overrides::flow_type::CALL_RETURN
             {
-                for site in crate::retcallchain::kuna_chain_sites(
+                for site in crate::retcallchain::unlace_chain_sites(
                     prog.arch().translate(),
                     entry,
                     &at,
@@ -1608,7 +1608,7 @@ pub fn expected_locals(
     let mut out: Vec<(unlace_decomp::database::SymbolId, Expected)> = Vec::new();
     for (index, symbol, retype) in touched {
         let Some(directive) = fd
-            .kuna_directive_symbols()
+            .unlace_directive_symbols()
             .iter()
             .find(|d| d.symbol == *symbol)
         else {
@@ -1712,7 +1712,7 @@ pub fn verify_formats(prog: &mut ConsoleProgram, fd: &Funcdata, name: &str, sing
 /// the decompile `fd` printed as `code` does not show as expected. A local is
 /// found by the declaration the printer emitted for it
 /// (`PrintC::declared_locals`): the HighVariable the replay gave the directive
-/// to (`Funcdata::kuna_directive_targets`), else a declaration the naming pass
+/// to (`Funcdata::unlace_directive_targets`), else a declaration the naming pass
 /// gave the expected name; the printer may have suffixed that name where it
 /// collided with another identifier. A parameter is read from the signature.
 /// Only C is read; another output language reports nothing.
@@ -1735,7 +1735,7 @@ pub fn check_printed(
     let declares = |base: &str, name: &str| {
         base == name
             || fd
-                .kuna_library_aliases()
+                .unlace_library_aliases()
                 .iter()
                 .any(|a| a.shown && a.number == name && a.alias == base)
     };
@@ -1745,7 +1745,7 @@ pub fn check_printed(
         .filter(|(_, local)| !local.parameter)
     {
         let target = fd
-            .kuna_directive_targets()
+            .unlace_directive_targets()
             .get(&local.printed)
             .and_then(|&high| print.declared_local(high));
         if let Some(decl) =
@@ -1947,7 +1947,7 @@ fn name_only_renames(fd: &Funcdata) -> Vec<String> {
     let Some(lm) = fd.get_scope_local() else {
         return Vec::new();
     };
-    fd.kuna_directive_symbols()
+    fd.unlace_directive_symbols()
         .iter()
         .filter(|d| unlace_decomp::stablenames::is_carried_as_name(fd, d.symbol))
         .map(|d| lm.database().symbol(d.symbol).name.clone())

@@ -1,4 +1,4 @@
-//! (kuna `slotreport`) A frame slot a printed local lives in is reported at
+//! (unlace `slotreport`) A frame slot a printed local lives in is reported at
 //! that local's declared type on the `variables` rows (P6).
 //!
 //! `framelayout` reports the frame slots an earlier restructure pass recovered

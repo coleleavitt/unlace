@@ -1,4 +1,4 @@
-//! (kuna `fid`) The prototype of a `.fid` record, at build and at match.
+//! (unlace `fid`) The prototype of a `.fid` record, at build and at match.
 //!
 //! At build, [`describe`] gives each record the prototype the object's own
 //! committed analysis parked on its function (its DWARF signature), as the C

@@ -1,4 +1,4 @@
-//! (kuna `spsolve`) Solve an x86-32 function's stack-pointer deltas for the
+//! (unlace `spsolve`) Solve an x86-32 function's stack-pointer deltas for the
 //! calls that pop arguments or do not return.
 //!
 //! # The gap
@@ -113,7 +113,7 @@ pub use crate::calleefacts::CalleeReturns;
 /// `option spsolve` on its target: a loaded x86-32 ELF under a default model
 /// that states its extrapop.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.kuna_options.get::<crate::coreoptions::SpSolve>().0
+    arch.unlace_options.get::<crate::coreoptions::SpSolve>().0
         && arch.image_elf
         && arch.archid.starts_with("x86:LE:32:")
         && arch
@@ -1182,7 +1182,7 @@ fn spread(data: &Funcdata, verdicts: &mut [Verdict], pinned: &[bool]) {
 pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::SpSolve>()
         .0
         || data.is_jumptable_recovery_on()
@@ -1224,13 +1224,13 @@ pub fn settle(data: &mut Funcdata, sp: &Address, size: int4) -> bool {
     }
     if restart {
         data.set_restart_pending(true);
-        data.kuna_set_restart_now();
+        data.unlace_set_restart_now();
     }
     restart
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.spsolve_applies = Some(applies);
 }
 

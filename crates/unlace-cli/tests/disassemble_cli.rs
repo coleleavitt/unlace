@@ -4,7 +4,7 @@
 use serde_json::{Map, Value as Json};
 
 use crate::common;
-use common::{fixture, repo_root, run_kuna};
+use common::{fixture, repo_root, run_unlace};
 
 /// The vendored non-stripped x86-64 `fauxware`: named functions and a `.rodata`
 /// the `strings` pass names, so both the name path and the raw-address path have
@@ -29,7 +29,7 @@ fn listing(argv: &[&str]) -> String {
 }
 
 fn rendered(argv: &[&str]) -> (String, Vec<String>) {
-    let (stdout, stderr, code) = run_kuna(&[&["disassemble"][..], argv].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["disassemble"][..], argv].concat());
     assert_eq!(code, 0, "unlace disassemble {argv:?}: {stderr}");
     let notes = stderr
         .lines()
@@ -519,7 +519,7 @@ fn each_row_carries_its_own_bytes_contiguously() {
 
 /// Bytes the translator will not decode are listed in place as `.byte` rows
 /// rather than ending the listing or being silently skipped — the difference
-/// between "there is data here" and "kuna stopped".
+/// between "there is data here" and "unlace stopped".
 ///
 /// `fauxware`'s `.rodata` string at `0x400915` is named `s_400915` by the
 /// `strings` pass, so this also covers the string-to-its-bytes hop: the symbol
@@ -601,7 +601,7 @@ fn the_derived_cap_never_bounds_an_explicit_request() {
 // --- the byte view -----------------------------------------------------------
 
 /// The need this view closes: an agent inspecting the encoded globals at a data
-/// address got instructions back and left kuna for `xxd`
+/// address got instructions back and left unlace for `xxd`
 /// (`docs/re-needs/cli-mode-read-raw.md`). Now the span comes back as one
 /// contiguous hex string, per-row bytes, and an ASCII gutter — and `auto` picks
 /// it without being asked, because `.rodata` is not an instruction stream.
@@ -702,7 +702,7 @@ fn the_view_is_the_callers_to_override() {
     );
 }
 
-/// The human byte surface is `xxd -g1` with kuna's address column.
+/// The human byte surface is `xxd -g1` with unlace's address column.
 #[test]
 fn the_human_byte_surface_is_a_hexdump() {
     let text = listing(&[&fauxware(), "0x400915", "--addr", "--bytes", "16"]);
@@ -759,7 +759,7 @@ fn the_human_surface_is_a_header_plus_aligned_rows() {
 /// second-guess.
 #[test]
 fn an_unmapped_address_fails_with_a_reason() {
-    let (_, error, code) = run_kuna(&["disassemble", &fauxware(), "0xdeadbeef000", "--addr"]);
+    let (_, error, code) = run_unlace(&["disassemble", &fauxware(), "0xdeadbeef000", "--addr"]);
     assert_eq!(code, 1, "{error}");
     assert!(error.contains("no bytes mapped"), "{error}");
     assert!(error.contains("unlace unpack"), "{error}");
@@ -768,7 +768,7 @@ fn an_unmapped_address_fails_with_a_reason() {
 /// A name nothing carries is the same kind of failure, and points at `--addr`.
 #[test]
 fn an_unresolvable_name_fails_with_a_reason() {
-    let (_, error, code) = run_kuna(&["disassemble", &fauxware(), "no_such_symbol_here"]);
+    let (_, error, code) = run_unlace(&["disassemble", &fauxware(), "no_such_symbol_here"]);
     assert_eq!(code, 1, "{error}");
     assert!(error.contains("no symbol named"), "{error}");
     assert!(error.contains("--addr"), "{error}");
@@ -787,7 +787,7 @@ fn malformed_command_lines_are_usage_errors() {
         vec!["a.out", "main", "--bytes", "0"],
         vec!["a.out", "main", "--sideways"],
     ] {
-        let (_, error, code) = run_kuna(&[&["disassemble"][..], &argv].concat());
+        let (_, error, code) = run_unlace(&[&["disassemble"][..], &argv].concat());
         assert_eq!(code, 2, "{argv:?} should be a usage error: {error}");
     }
 }
@@ -795,7 +795,7 @@ fn malformed_command_lines_are_usage_errors() {
 /// An empty range is a question with no answer, not a zero-row listing.
 #[test]
 fn an_inverted_range_is_rejected() {
-    let (_, error, code) = run_kuna(&["disassemble", &fauxware(), "0x400680-0x400664"]);
+    let (_, error, code) = run_unlace(&["disassemble", &fauxware(), "0x400680-0x400664"]);
     assert_eq!(code, 1, "{error}");
     assert!(error.contains("empty range"), "{error}");
 }
@@ -806,7 +806,7 @@ fn an_inverted_range_is_rejected() {
 /// instructions on stdout.
 #[test]
 fn the_cli_exits_zero_and_prints_instructions() {
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &fauxware(), "main"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &fauxware(), "main"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("PUSH RBP"), "{stdout}");
     assert!(stdout.contains("CALL 0x400510"), "{stdout}");
@@ -817,7 +817,7 @@ fn the_cli_exits_zero_and_prints_instructions() {
 /// spelled `disassemble`. Through the binary, because the alias IS the dispatch.
 #[test]
 fn the_read_alias_prints_bytes_and_explains_nothing() {
-    let (stdout, stderr, code) = run_kuna(&["read", &fauxware(), "main", "--bytes", "4"]);
+    let (stdout, stderr, code) = run_unlace(&["read", &fauxware(), "main", "--bytes", "4"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("55 48 89 e5"), "{stdout}");
     assert!(
@@ -829,7 +829,7 @@ fn the_read_alias_prints_bytes_and_explains_nothing() {
 
     // ...and the caller can still ask for instructions through it.
     let (stdout, _, code) =
-        run_kuna(&["read", &fauxware(), "main", "--count", "1", "--as", "code"]);
+        run_unlace(&["read", &fauxware(), "main", "--count", "1", "--as", "code"]);
     assert_eq!(code, 0);
     assert!(
         stdout.contains("PUSH RBP"),
@@ -842,7 +842,7 @@ fn the_read_alias_prints_bytes_and_explains_nothing() {
 #[test]
 fn an_inferred_byte_view_explains_itself_on_stderr() {
     let (stdout, stderr, code) =
-        run_kuna(&["disassemble", &fauxware(), "0x400915-0x400925", "--json"]);
+        run_unlace(&["disassemble", &fauxware(), "0x400915-0x400925", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stderr.contains("non-executable data section"), "{stderr}");
     assert!(
@@ -864,7 +864,7 @@ fn the_cli_reports_usage_errors_as_exit_two() {
         vec!["disassemble", "/nonexistent", "main", "--count", "0"],
         vec!["disassemble", "/nonexistent", "main", "--sideways"],
     ] {
-        let (_, stderr, code) = run_kuna(&args);
+        let (_, stderr, code) = run_unlace(&args);
         assert_eq!(
             code, 2,
             "{args:?} should be a usage error, got {code}: {stderr}"
@@ -879,7 +879,7 @@ fn the_cli_reports_usage_errors_as_exit_two() {
 /// A binary that is not there is a load failure (exit 1), not a usage error.
 #[test]
 fn the_cli_reports_a_missing_binary_as_exit_one() {
-    let (_, stderr, code) = run_kuna(&["disassemble", "/nonexistent/binary", "main"]);
+    let (_, stderr, code) = run_unlace(&["disassemble", "/nonexistent/binary", "main"]);
     assert_eq!(code, 1, "{stderr}");
     // Assert what an agent needs -- the path that failed and why -- not the exact
     // wording. The message comes from the shared load path, so pinning its phrasing
@@ -1045,7 +1045,7 @@ fn a_listing_inside_mapped_memory_is_untouched_by_the_bound() {
 
 // --- decoy bytes and the branch targets a straight line walks over -----------
 
-/// (kuna, `linear-disassembly-silently-skips`) The straight line says so when it
+/// (unlace, `linear-disassembly-silently-skips`) The straight line says so when it
 /// decodes across an address the range's own branches name.
 ///
 /// `jumpoverdecoy_i386` is the round-12 witness's own 60 bytes rebased to
@@ -1179,7 +1179,7 @@ fn follow_covers_the_same_bytes_as_the_straight_line() {
 fn raw_pcode_exposes_instruction_ops_and_reports_limits() {
     let binary = fauxware();
     let (stdout, stderr, code) =
-        run_kuna(&["raw-pcode", &binary, "main", "--count", "1", "--json"]);
+        run_unlace(&["raw-pcode", &binary, "main", "--count", "1", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     let instructions = doc["instructions"].as_array().unwrap();
@@ -1216,7 +1216,7 @@ fn raw_pcode_exposes_instruction_ops_and_reports_limits() {
     assert_eq!(doc["kind"], "pcode");
     assert_eq!(doc["target"]["name"], "main");
     assert_eq!(doc["count"], 1);
-    let (text, stderr, code) = run_kuna(&["raw-pcode", &binary, "main", "--count", "1"]);
+    let (text, stderr, code) = run_unlace(&["raw-pcode", &binary, "main", "--count", "1"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         text.starts_with("# 1 instruction at main @ 0x40071d (0x40071d..0x40071e, 1 bytes)\n"),
@@ -1226,7 +1226,7 @@ fn raw_pcode_exposes_instruction_ops_and_reports_limits() {
     assert!(text.contains(ops[0]["opcode"].as_str().unwrap()));
     assert!(!text.contains("# truncated at"), "{text}");
     let next = format!("0x{:x}", doc["end"].as_u64().unwrap());
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, &next, "--bytes", "1"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, &next, "--bytes", "1"]);
     assert_eq!(code, 1);
     assert!(
         stderr.contains("error: instruction at 0x40071e crosses the requested or mapped boundary"),
@@ -1237,7 +1237,7 @@ fn raw_pcode_exposes_instruction_ops_and_reports_limits() {
         "{stdout}"
     );
     let (partial, stderr, code) =
-        run_kuna(&["raw-pcode", &binary, "main", "--bytes", "2", "--json"]);
+        run_unlace(&["raw-pcode", &binary, "main", "--bytes", "2", "--json"]);
     assert_eq!(code, 1, "{stderr}");
     let partial: Json = serde_json::from_str(&partial).unwrap();
     assert_eq!(partial["stop_reason"], "decode_error");
@@ -1254,7 +1254,7 @@ fn raw_pcode_rejects_unmapped_addresses_and_unsupported_walks() {
         vec!["raw-pcode", &binary, "0xffffffffffffffff"],
         vec!["raw-pcode", &binary, "main", "--as", "data"],
     ] {
-        let (_, stderr, code) = run_kuna(&args);
+        let (_, stderr, code) = run_unlace(&args);
         assert_ne!(code, 0);
         assert!(stderr.contains("error:"));
     }
@@ -1265,7 +1265,7 @@ fn raw_pcode_arm_interworking_selects_the_right_mode() {
     let binary = fixture("arm_interwork_le32");
     let raw = |target: &str| {
         let (stdout, stderr, code) =
-            run_kuna(&["raw-pcode", &binary, target, "--count", "1", "--json"]);
+            run_unlace(&["raw-pcode", &binary, target, "--count", "1", "--json"]);
         assert_eq!(code, 0, "{stderr}");
         serde_json::from_str::<Json>(&stdout).unwrap()
     };
@@ -1296,7 +1296,7 @@ fn raw_pcode_arm_interworking_selects_the_right_mode() {
 fn raw_pcode_mips_return_includes_delay_slot() {
     let binary = fixture("bejoin_order_mips32_O2");
     let (stdout, stderr, code) =
-        run_kuna(&["raw-pcode", &binary, "widen", "--count", "2", "--json"]);
+        run_unlace(&["raw-pcode", &binary, "widen", "--count", "2", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     let ret = &doc["instructions"][1];
@@ -1324,7 +1324,7 @@ fn raw_pcode_lifts_a_mips_unaligned_pair_as_the_decompiler_does() {
                 "--json",
             ];
             argv.extend_from_slice(extra);
-            let (stdout, stderr, code) = run_kuna(&argv);
+            let (stdout, stderr, code) = run_unlace(&argv);
             assert_eq!(code, 0, "{name}: {stderr}");
             instructions(&stdout)
                 .iter()
@@ -1382,7 +1382,7 @@ fn raw_flow_fixture_for(arch: object::Architecture, bytes: &[u8]) -> String {
 fn raw_pcode_follow_skips_inline_data_and_follows_both_paths() {
     // jmp +2; ud2 (unreachable); je +1; ret; ret
     let binary = raw_flow_fixture(&[0xeb, 0x02, 0x0f, 0x0b, 0x74, 0x01, 0xc3, 0xc3]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["complete"], true, "{doc}");
@@ -1398,7 +1398,7 @@ fn raw_pcode_follow_skips_inline_data_and_follows_both_paths() {
     let successors = conditional["successors"].as_array().unwrap();
     assert!(successors.iter().any(|edge| edge["target"] == start + 6));
     assert!(successors.iter().any(|edge| edge["target"] == start + 7));
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "raw-pcode",
         &binary,
         "probe",
@@ -1422,14 +1422,14 @@ fn raw_pcode_follow_skips_inline_data_and_follows_both_paths() {
 #[test]
 fn raw_pcode_truncated_means_the_derived_cap_as_in_disassemble() {
     let binary = raw_flow_fixture(&[0x90; 1100]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, "probe", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, "probe", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["count"], 1024);
     assert_eq!(doc["stop_reason"], "instruction_limit");
     assert_eq!(doc["truncated"], true);
     let (stdout, stderr, code) =
-        run_kuna(&["raw-pcode", &binary, "probe", "--count", "1024", "--json"]);
+        run_unlace(&["raw-pcode", &binary, "probe", "--count", "1024", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["stop_reason"], "instruction_limit");
@@ -1440,7 +1440,7 @@ fn raw_pcode_truncated_means_the_derived_cap_as_in_disassemble() {
 fn raw_pcode_follow_reports_each_undecodable_target_once() {
     // je, jne and jb all target the same truncated instruction at the window's end.
     let binary = raw_flow_fixture(&[0x74, 0x04, 0x75, 0x02, 0x72, 0x00, 0x0f]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
     assert_eq!(code, 1, "{stderr}");
     assert!(
         stderr.contains("error: 1 instruction(s) in the walk did not lift"),
@@ -1455,7 +1455,7 @@ fn raw_pcode_follow_reports_each_undecodable_target_once() {
 #[test]
 fn raw_pcode_follow_reports_unresolved_indirect_jump() {
     let binary = raw_flow_fixture(&[0xff, 0xe0]); // jmp rax
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["complete"], false);
@@ -1476,7 +1476,7 @@ fn raw_pcode_follow_preserves_arm_modes_and_mips_delay_slots() {
     ] {
         let binary = fixture(name);
         let (stdout, stderr, code) =
-            run_kuna(&["raw-pcode", &binary, target, "--follow", "--json"]);
+            run_unlace(&["raw-pcode", &binary, target, "--follow", "--json"]);
         assert_eq!(code, 0, "{stderr}");
         let doc: Json = serde_json::from_str(&stdout).unwrap();
         assert_eq!(doc["complete"], true, "{doc}");
@@ -1495,7 +1495,8 @@ fn raw_pcode_follow_preserves_arm_modes_and_mips_delay_slots() {
 #[test]
 fn raw_pcode_follow_preserves_out_of_range_edges_and_partial_errors() {
     let external = raw_flow_fixture(&[0xeb, 0x7f]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &external, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) =
+        run_unlace(&["raw-pcode", &external, "probe", "--follow", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["complete"], false);
@@ -1515,7 +1516,8 @@ fn raw_pcode_follow_preserves_out_of_range_edges_and_partial_errors() {
     );
 
     let boundary = raw_flow_fixture(&[0x90, 0x0f]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &boundary, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) =
+        run_unlace(&["raw-pcode", &boundary, "probe", "--follow", "--json"]);
     assert_eq!(code, 1, "{stderr} {stdout}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["complete"], false);
@@ -1533,7 +1535,7 @@ fn raw_pcode_follow_preserves_out_of_range_edges_and_partial_errors() {
 fn raw_pcode_thumb_interior_pointer_uses_thumb_without_changing_other_isas() {
     let binary = fixture("arm_interwork_le32");
     let read = |args: &[&str]| {
-        let (stdout, stderr, status) = run_kuna(args);
+        let (stdout, stderr, status) = run_unlace(args);
         assert_eq!(status, 0, "{stderr}\n{stdout}");
         serde_json::from_str::<Json>(&stdout).unwrap()
     };
@@ -1573,7 +1575,7 @@ fn raw_pcode_thumb_interior_pointer_uses_thumb_without_changing_other_isas() {
     assert_eq!(forced["instructions"], explicit["instructions"]);
     assert_eq!(forced["instructions"][0]["bytes"], "0040");
 
-    let (_, stderr, code) = run_kuna(&[
+    let (_, stderr, code) = run_unlace(&[
         "raw-pcode",
         &binary,
         "0x2000043",
@@ -1595,7 +1597,7 @@ fn raw_pcode_follow_falls_through_predicated_instructions() {
     // cmp edi,esi; cmovg eax,edi; ret -- CMOVG skips its own body with a CBRANCH
     // to the next address, which is no reason to stop the walk.
     let binary = raw_flow_fixture(&[0x39, 0xf7, 0x0f, 0x4f, 0xc7, 0xc3]);
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &binary, "probe", "--follow", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let doc: Json = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["kind"], "flow");
@@ -1623,7 +1625,7 @@ fn raw_pcode_follow_falls_through_predicated_instructions() {
             0x01, 0x00, 0x50, 0xe1, 0x01, 0x00, 0xa0, 0xd1, 0x1e, 0xff, 0x2f, 0xe1,
         ],
     );
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", &arm, "probe", "--follow"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", &arm, "probe", "--follow"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         stdout.starts_with("# 3 instructions reached from probe @ "),
@@ -1636,20 +1638,20 @@ fn raw_pcode_follow_falls_through_predicated_instructions() {
 
 #[test]
 fn raw_pcode_help_and_data_targets_say_what_they_are() {
-    let (stdout, stderr, code) = run_kuna(&["raw-pcode", "--help"]);
+    let (stdout, stderr, code) = run_unlace(&["raw-pcode", "--help"]);
     assert_eq!(code, 0);
     assert!(
         stdout.is_empty(),
         "help belongs on stderr like every other block: {stdout}"
     );
     assert!(stderr.starts_with("usage: unlace raw-pcode"), "{stderr}");
-    let (_, stderr, code) = run_kuna(&["raw-pcode"]);
+    let (_, stderr, code) = run_unlace(&["raw-pcode"]);
     assert_eq!(code, 2);
     assert!(
         stderr.contains("error: raw-pcode requires <binary>"),
         "{stderr}"
     );
-    let (_, stderr, _) = run_kuna(&[
+    let (_, stderr, _) = run_unlace(&[
         "raw-pcode",
         &fauxware(),
         "0x601040",

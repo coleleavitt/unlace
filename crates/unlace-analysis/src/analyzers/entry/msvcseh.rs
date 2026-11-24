@@ -1,4 +1,4 @@
-//! (kuna `msvceh`) MSVC structured exception handling scope tables, and x86 C++
+//! (unlace `msvceh`) MSVC structured exception handling scope tables, and x86 C++
 //! `FuncInfo`.
 //!
 //! A `__try` block's filter and handler are reached only by the exception
@@ -226,7 +226,7 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
     }
 }
 
-/// (kuna `msvceh`) Each x64 `__finally` funclet as a cleanup pad of its scope:
+/// (unlace `msvceh`) Each x64 `__finally` funclet as a cleanup pad of its scope:
 /// one cleanup record over the guarded range, entered with the parent's frame
 /// like a catch funclet, its `ret`s ending the path (the exception propagates).
 fn finally_pads(
@@ -287,7 +287,7 @@ pub fn constant_filter(c: i32) -> String {
     }
 }
 
-/// (kuna `msvceh`) The x86 C++ try regions of `func` as call-site records whose
+/// (unlace `msvceh`) The x86 C++ try regions of `func` as call-site records whose
 /// pads are its catch blocks. x86 keeps the EH state in `[ebp-4]`, so the regions
 /// come from the state stores between the function start and its first catch
 /// block (or 16 KiB), in layout order; a catch block is used when it ends in
@@ -372,7 +372,7 @@ fn x86_splice(
     }
 }
 
-/// (kuna `msvceh`) x86 SEH `__except` blocks as pads. The SEH3/SEH4 frame keeps
+/// (unlace `msvceh`) x86 SEH `__except` blocks as pads. The SEH3/SEH4 frame keeps
 /// the try level in `[ebp-4]` too, so the regions come from the same stores,
 /// between the function start (outside every level) and its first filter or
 /// handler block (at most 16 KiB). A region at level `n` gets one call-site

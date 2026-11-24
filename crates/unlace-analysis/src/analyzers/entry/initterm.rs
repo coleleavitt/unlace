@@ -1,4 +1,4 @@
-//! (kuna) The PE C runtime's initializer tables: the `INIT_ARRAY` of an MSVC
+//! (unlace) The PE C runtime's initializer tables: the `INIT_ARRAY` of an MSVC
 //! image.
 //!
 //! MSVC collects every C++ dynamic initializer (the constructor call for a

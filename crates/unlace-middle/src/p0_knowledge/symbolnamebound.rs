@@ -1,4 +1,4 @@
-//! (kuna) The symbol-name scope bound — put a ceiling on what one
+//! (unlace) The symbol-name scope bound — put a ceiling on what one
 //! attacker-controlled symbol name can spend of the process.
 //!
 //! ## The failure it removes
@@ -486,7 +486,7 @@ mod tests {
     }
 
     /// FNV-1a 64 against its published vectors -- the spelling of a folded name
-    /// is part of kuna's output contract, so the hash is pinned, not inherited.
+    /// is part of unlace's output contract, so the hash is pinned, not inherited.
     #[test]
     fn fnv1a64_matches_the_published_vectors() {
         assert_eq!(fnv1a64(b""), 0xcbf2_9ce4_8422_2325);

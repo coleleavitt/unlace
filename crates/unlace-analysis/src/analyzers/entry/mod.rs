@@ -1,4 +1,4 @@
-//! Function-entry / function-start discovery for stripped binaries — the kuna
+//! Function-entry / function-start discovery for stripped binaries — the unlace
 //! analog of Ghidra's entry-point + function-start analyzers, fused with the
 //! `.eh_frame` FDE oracle into ONE additive discovery pass.
 //!
@@ -78,7 +78,7 @@
 //!   Oracle 5 (prologue patterns) remains **x86-64-only** in v1 (the
 //!   patternconstraints.xml for ARM/AARCH64/MIPS/PPC are a follow-up).
 //!   Oracles 1–3 are arch-independent.
-//! - Static-image base-0 PIE assumption for array-pointer / absptr decode: kuna's
+//! - Static-image base-0 PIE assumption for array-pointer / absptr decode: unlace's
 //!   `ObjectLoadImage` loads at the file's native vmas and never rebases, so the
 //!   AbstractDwarfEHDecoder image-base adjustment is identically 0.
 
@@ -93,7 +93,7 @@ pub mod elfmain;
 pub mod entrymainproto;
 pub mod machomain;
 pub mod unwindinfo;
-// (kuna `machoehframe`) Mach-O `__eh_frame` FDE function starts.
+// (unlace `machoehframe`) Mach-O `__eh_frame` FDE function starts.
 pub mod armexidx;
 pub mod coldentry;
 pub mod cortexmvectors;
@@ -221,7 +221,7 @@ impl AnalysisPass for EntryDiscoveryPass {
     }
 }
 
-/// (kuna) `.eh_frame` LSDA landing-pad discovery — the GccExceptionAnalyzer full
+/// (unlace) `.eh_frame` LSDA landing-pad discovery — the GccExceptionAnalyzer full
 /// `.gcc_except_table` markup, factored out of the always-on entry-discovery pass
 /// as its OWN gated pass (id `eh_frame_full`, default-OFF). It emits each
 /// exception-handler landing pad (catch/cleanup block, reached only by the
@@ -230,12 +230,12 @@ impl AnalysisPass for EntryDiscoveryPass {
 ///
 /// Like every other analysis pass it RUNS at load (the facts are cheap to compute
 /// and are stashed per-pass); the **commit** is gated by `--option eh_frame_full
-/// on` (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::analysisgates::EhFrameFull>().0`). So a
+/// on` (`engine.rs::analysis_pass_enabled` → `arch.unlace_options.get::<unlace_decomp::analysisgates::EhFrameFull>().0`). So a
 /// default run computes but never COMMITS the landing pads, and the discovery set
 /// is byte-identical to the FDE-pcBegin-only behavior — every parity gate is
 /// structurally untouched. Output-changing (adds entries) ⇒ default-off.
 ///
-/// CFI (the `DW_CFA_*` call-frame instructions) is INHERITED, not rebuilt: kuna's
+/// CFI (the `DW_CFA_*` call-frame instructions) is INHERITED, not rebuilt: unlace's
 /// engine recovers the stack frame from the code (S5 type inference + S7 frame
 /// analysis), so the CFA/saved-register rules add nothing at the decompiler tier.
 pub struct EhFrameLsdaPass;
@@ -267,7 +267,7 @@ impl AnalysisPass for EhFrameLsdaPass {
     }
 }
 
-/// (kuna) The **full upstream byte-pattern function-start** pass — the faithful
+/// (unlace) The **full upstream byte-pattern function-start** pass — the faithful
 /// port of Ghidra's `FunctionStartAnalyzer` over the entire vendored pattern
 /// corpus (`entry/patterns/*.xml`, `<patternpairs>` pre/post + bare
 /// `<funcstart/>`), as a *separate*, default-**OFF** analysis pass.
@@ -574,12 +574,12 @@ fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool)
                     .into_iter()
                     .map(code_address),
             );
-            // (kuna) The header page is no section, so no section flag ever spoke
+            // (unlace) The header page is no section, so no section flag ever spoke
             // for the bytes in it: `AddressOfEntryPoint` is the image's only
             // statement about them, and a packer that lays its stub in the slack
             // after the section table makes that statement. An entry inside a
             // section the image flags non-executable is deliberately NOT exempt
-            // -- there the flag IS a statement, and kuna answers it by naming the
+            // -- there the flag IS a statement, and unlace answers it by naming the
             // cause and the `--define-function` that overrides it
             // (`docs/re-needs/batch-silently-omits-explicitly.md`).
             exempt = crate::loader::pe_headers::header_entry(file, bytes).map(code_address);
@@ -631,7 +631,7 @@ fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool)
 /// - each `DT_FINI_ARRAY` element `i` → `_FINI_<i>`
 ///
 /// (and `DT_PREINIT_ARRAY` element `i` → `_PREINIT_<i>` — the constant is wired
-/// for faithfulness, but kuna's discovery does not currently emit PREINIT_ARRAY
+/// for faithfulness, but unlace's discovery does not currently emit PREINIT_ARRAY
 /// entries, so none are produced here; adding PREINIT_ARRAY *discovery* is a
 /// separate follow-up that would change the discovery set).
 ///
@@ -675,7 +675,7 @@ pub(crate) fn executable_sections(file: &object::File) -> Vec<(u64, u64, Vec<u8>
         let data = sec.data().map(|d| d.to_vec()).unwrap_or_default();
         out.push((addr, addr.saturating_add(size), data));
     }
-    // (kuna) An image with NO section table at all presents no sections, so every
+    // (unlace) An image with NO section table at all presents no sections, so every
     // oracle below would reject its own entry point as "not plausible code" and
     // discovery would return nothing on a file the loader mapped perfectly well
     // (`sstrip`, and the corrupt-`e_shoff` case the loader now tolerates -- see
@@ -714,7 +714,7 @@ pub(crate) fn is_executable(sec: &object::Section) -> bool {
 ///
 /// A UPX image is section-less exactly like a stripped one, but its `PF_X`
 /// `PT_LOAD` is a decompressor wrapped around a compressed blob: discovering the
-/// stub's handful of routines would bury the far more actionable answer kuna
+/// stub's handful of routines would bury the far more actionable answer unlace
 /// already gives such an image -- "image appears UPX-packed; try `unlace unpack`",
 /// which a run that discovers nothing is what produces. So decline the fallback
 /// and leave that image exactly as it is today.
@@ -763,7 +763,7 @@ pub(crate) fn in_executable_section(execs: &[(u64, u64, Vec<u8>)], vma: u64) -> 
     execs.iter().any(|&(lo, hi, _)| vma >= lo && vma < hi)
 }
 
-/// (kuna) The *delta* between "the section header says executable" and "the loader
+/// (unlace) The *delta* between "the section header says executable" and "the loader
 /// maps it executable": `(address, address+size, data)` for every allocated ELF
 /// section that lies wholly inside a `PF_X` `PT_LOAD` segment yet does **not**
 /// carry `SHF_EXECINSTR` — the sections [`executable_sections`] misses.
@@ -824,7 +824,7 @@ pub(crate) fn phdr_executable_sections(file: &object::File) -> Vec<(u64, u64, Ve
     out
 }
 
-/// (kuna, issue #197) Fold the ARM/Thumb mode bit out of a **symbol** address.
+/// (unlace, issue #197) Fold the ARM/Thumb mode bit out of a **symbol** address.
 ///
 /// On 32-bit ARM a Thumb function's ELF symbol stores the mode bit in bit 0 of
 /// `st_value` (this repo's `arm_thumb_linked_le32` fixture records `compute` at
@@ -1091,7 +1091,7 @@ fn section_bytes_containing(file: &object::File, vma: u64) -> Option<(u64, Vec<u
 /// Recover `main` from the `_start`→`__libc_start_main(main, …)` idiom — the
 /// disassembly-free stand-in for the general call-target sweep (a pre-decompile
 /// Listing is unavailable at the analyzer tier — the same wall `noreturn.rs`
-/// documents): kuna recovers the *one* highest-value call target by byte-decoding
+/// documents): unlace recovers the *one* highest-value call target by byte-decoding
 /// the instructions that load `main` into the platform's first integer-arg
 /// register right before the `__libc_start_main` call.
 ///
@@ -1485,7 +1485,7 @@ const CORTEXM_MAX_VECTORS: usize = 1024;
 /// that a non-Cortex-M ARM object (or any non-firmware image) does not match, so
 /// every downstream use is a strict no-op there.
 ///
-/// (kuna) The candidate set is every section the *loader* maps as executable, not
+/// (unlace) The candidate set is every section the *loader* maps as executable, not
 /// just the `SHF_EXECINSTR` ones: the table is DATA that the CPU reads, so
 /// demanding an executable section header of the table itself was a category
 /// error — what must be executable is what its handler entries POINT AT, which
@@ -1498,8 +1498,8 @@ const CORTEXM_MAX_VECTORS: usize = 1024;
 /// ARM-gated (32-bit ARM ELF only); returns `None` on any other arch/format or
 /// when no candidate section presents the signature.
 ///
-/// (kuna) This is the *shipped* signature. [`cortexm_vector_table`] wraps it with
-/// the `cortexmvectors` widening (see [`kuna_cortexmvectors`]), which keeps this
+/// (unlace) This is the *shipped* signature. [`cortexm_vector_table`] wraps it with
+/// the `cortexmvectors` widening (see [`unlace_cortexmvectors`]), which keeps this
 /// answer whenever it exists.
 fn cortexm_vector_table_shipped(file: &object::File) -> Option<(u64, u64, Vec<u8>)> {
     if file.architecture() != object::Architecture::Arm {
@@ -1534,7 +1534,7 @@ fn cortexm_vector_table_shipped(file: &object::File) -> Option<(u64, u64, Vec<u8
 /// (`widen`). With `widen` clear this is exactly
 /// [`cortexm_vector_table_shipped`]; with it set the shipped answer still wins
 /// and the widened scan only runs when the shipped signature found nothing —
-/// see [`kuna_cortexmvectors`].
+/// see [`unlace_cortexmvectors`].
 fn cortexm_vector_table(file: &object::File, widen: bool) -> Option<(u64, u64, Vec<u8>)> {
     cortexmvectors::vector_table(file, widen)
 }
@@ -1577,7 +1577,7 @@ fn cortexm_vector_entries(file: &object::File, widen: bool) -> Vec<u64> {
 /// or once the scan reaches the lowest handler address (start of code). `in_exec`
 /// answers "is this masked VMA in an executable section?". Sorted/deduped.
 ///
-/// (kuna) `relocated` is the `cortexmvectors` relaxation of the start-of-code
+/// (unlace) `relocated` is the `cortexmvectors` relaxation of the start-of-code
 /// stop: see [`harvest_vector_slots`].
 fn harvest_vector_words(
     sec_addr: u64,
@@ -1592,7 +1592,7 @@ fn harvest_vector_words(
     out
 }
 
-/// (kuna) The harvest loop's raw result: one entry per accepted table SLOT, in
+/// (unlace) The harvest loop's raw result: one entry per accepted table SLOT, in
 /// table order, neither sorted nor deduped. [`harvest_vector_words`] is this,
 /// sorted and deduped; the `cortexmvectors` signature counts these slots (a
 /// bare-metal table aims most of its vectors at one shared handler, so distinct
@@ -1991,7 +1991,7 @@ fn scan_eh_frame_starts_sized(file: &object::File, ptr_size: usize) -> Vec<u64> 
 //     disassembles each non-zero landing pad (marks it code) — our entry fact.
 //
 // CFI (the `DW_CFA_*` call-frame instructions giving CFA/register-save rules) is
-// deliberately NOT recovered here: kuna's own engine recovers the stack frame from
+// deliberately NOT recovered here: unlace's own engine recovers the stack frame from
 // the code (S5 type inference + S7 frame analysis), so the CFA/saved-register
 // rules add nothing at the decompiler tier — CFI is INHERITED, not rebuilt. See
 // `docs/history/analysis-port-log.md`.
@@ -2102,7 +2102,7 @@ pub enum Personality {
     /// `__gxx_personality_sj0` and friends: setjmp/longjmp unwinding, whose
     /// call-site table holds indices, not code ranges.
     SjLj,
-    /// No personality, or one with no name kuna can read.
+    /// No personality, or one with no name unlace can read.
     Unknown,
 }
 
@@ -2691,7 +2691,7 @@ fn encoded_size(enc: u8, ptr_size: usize, rest: &[u8]) -> usize {
 /// field lives at `field_vma`. Faithful to `DwarfDecoderFactory` +
 /// `AbstractDwarfEHDecoder.resolveRelativeOffset`: read the raw value by `format`,
 /// then apply `appl` (pcrel = field_vma + raw; datarel = section_vma + raw;
-/// absptr = raw as-is — kuna loads at the file vmas so the image-base adjustment
+/// absptr = raw as-is — unlace loads at the file vmas so the image-base adjustment
 /// is 0). `indirect` (enc & 0x80) is unresolvable without a runtime relocation —
 /// skipped as a documented LOSS (never in the fixtures).
 fn decode_eh_pointer_ordered(

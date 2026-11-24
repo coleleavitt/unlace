@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -27,7 +27,7 @@ impl LoadImage for MemImg {
     fn get_file_name(&self) -> &str {
         "arc"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let start = addr.get_offset();
         for (i, b) in ptr.iter_mut().enumerate() {
             *b = start

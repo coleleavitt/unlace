@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) Which interface each interface-typed field of a named
+//! (unlace `goitabcalls`) Which interface each interface-typed field of a named
 //! Go struct holds.
 //!
 //! A struct field of interface type is two words, the itab pointer then the
@@ -95,7 +95,7 @@ pub(super) fn register(
     }
     let mut registered = 0;
     for (name, mut lists) in by_name {
-        if lists.len() != 1 || tf.kuna_is_ambiguous_go_type(&name) {
+        if lists.len() != 1 || tf.unlace_is_ambiguous_go_type(&name) {
             continue;
         }
         let Some(fields) = lists.pop_first() else {
@@ -104,11 +104,11 @@ pub(super) fn register(
         if fields.is_empty() || fields.iter().any(|(offset, _)| *offset < 0) {
             continue;
         }
-        if tf.kuna_lang_facet(&name).is_some() {
+        if tf.unlace_lang_facet(&name).is_some() {
             continue;
         }
         if tf
-            .kuna_register_lang_facet(&name, LangFacet::GoInterfaceFields { fields })
+            .unlace_register_lang_facet(&name, LangFacet::GoInterfaceFields { fields })
             .is_ok()
         {
             registered += 1;

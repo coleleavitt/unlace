@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, byte_swap, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::Wrap;
 use unlace_num::pcoderaw::VarnodeData;
@@ -156,15 +156,15 @@ impl MemoryBankCore {
 /// (C++ `insert`/`find`/`getPage`/`setPage` are protected; Rust traits have
 /// no protected methods, so they are public here.)
 pub trait MemoryBank {
-    /// Access the concrete C++ base-class members (kuna boundary; see
+    /// Access the concrete C++ base-class members (unlace boundary; see
     /// [`MemoryBankCore`]).
     fn bank_core(&self) -> &MemoryBankCore;
 
     /// Insert a word in memory bank at an aligned location
-    fn insert(&mut self, addr: u64, val: u64) -> KunaResult<()>;
+    fn insert(&mut self, addr: u64, val: u64) -> UnlaceResult<()>;
 
     /// Retrieve a word from memory bank at an aligned location
-    fn find(&self, addr: u64) -> KunaResult<u64>;
+    fn find(&self, addr: u64) -> UnlaceResult<u64>;
 
     /// Retrieve data from a memory \e page
     ///
@@ -179,7 +179,7 @@ pub trait MemoryBank {
     /// \param res is where fetched data is written (its length is the C++
     ///        `size` parameter)
     /// \param skip is the offset \e into \e the \e page to get the bytes from
-    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> KunaResult<()> {
+    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> UnlaceResult<()> {
         // Default implementation just iterates using find
         // but could be optimized
         let wordsize = self.bank_core().wordsize;
@@ -239,7 +239,7 @@ pub trait MemoryBank {
     ///        the C++ `size` parameter)
     /// \param skip is the offset \e into \e the \e page where bytes will be
     ///        written
-    fn set_page(&mut self, addr: u64, val: &[u8], skip: i32) -> KunaResult<()> {
+    fn set_page(&mut self, addr: u64, val: &[u8], skip: i32) -> UnlaceResult<()> {
         // Default implementation just iterates using insert
         // but could be optimized
         let wordsize = self.bank_core().wordsize;
@@ -338,7 +338,7 @@ pub trait MemoryBank {
     /// \param offset is the start of the byte range to write
     /// \param size is the number of bytes in the range to write
     /// \param val is the value to be written
-    fn set_value(&mut self, offset: u64, size: i32, val: u64) -> KunaResult<()> {
+    fn set_value(&mut self, offset: u64, size: i32, val: u64) -> UnlaceResult<()> {
         let wordsize = self.bank_core().wordsize;
         let alignmask = (wordsize - 1) as i64 as u64; // cast: (uintb)(wordsize-1)
         let ind = offset & !alignmask;
@@ -409,7 +409,7 @@ pub trait MemoryBank {
     /// \param offset is the start of the byte range encoding the value
     /// \param size is the number of bytes in the range
     /// \return the decoded value
-    fn get_value(&self, offset: u64, size: i32) -> KunaResult<u64> {
+    fn get_value(&self, offset: u64, size: i32) -> UnlaceResult<u64> {
         let res: u64;
 
         let wordsize = self.bank_core().wordsize;
@@ -463,7 +463,7 @@ pub trait MemoryBank {
     /// \param offset is the start of the byte range to be written
     /// \param val is the sequence of bytes to be written into the bank (its
     ///        length is the C++ `size` parameter)
-    fn set_chunk(&mut self, offset: u64, val: &[u8]) -> KunaResult<()> {
+    fn set_chunk(&mut self, offset: u64, val: &[u8]) -> UnlaceResult<()> {
         let size = val.len() as i32; // C++ int4 size parameter
         let pagesize = self.bank_core().pagesize;
         let mut cursize: i32;
@@ -502,7 +502,7 @@ pub trait MemoryBank {
     /// \param offset is the start of the byte range to read
     /// \param res is where the retrieved bytes are stored (its length is the
     ///        C++ `size` parameter)
-    fn get_chunk(&self, offset: u64, res: &mut [u8]) -> KunaResult<()> {
+    fn get_chunk(&self, offset: u64, res: &mut [u8]) -> UnlaceResult<()> {
         let size = res.len() as i32; // C++ int4 size parameter
         let pagesize = self.bank_core().pagesize;
         let mut cursize: i32;
@@ -573,8 +573,8 @@ impl MemoryBank for MemoryImage {
     }
 
     /// Exception is thrown for write attempts
-    fn insert(&mut self, _addr: u64, _val: u64) -> KunaResult<()> {
-        Err(KunaError::lowlevel("Writing to read-only MemoryBank"))
+    fn insert(&mut self, _addr: u64, _val: u64) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel("Writing to read-only MemoryBank"))
     }
 
     /// Overridden find method.
@@ -584,7 +584,7 @@ impl MemoryBank for MemoryImage {
     /// returned as 0.
     /// \param addr is the address of the word to fetch
     /// \return the fetched value
-    fn find(&self, addr: u64) -> KunaResult<u64> {
+    fn find(&self, addr: u64) -> UnlaceResult<u64> {
         // Assume that -addr- is word aligned
         // Make sure all bytes start as 0, as load may not fill all bytes
         let wordsize = self.core.wordsize;
@@ -597,7 +597,7 @@ impl MemoryBank for MemoryImage {
             &Address::new(Rc::clone(spc), addr),
         ) {
             Ok(()) => {}
-            Err(KunaError::DataUnavail { .. }) => {
+            Err(UnlaceError::DataUnavail { .. }) => {
                 // Pages not mapped in the load image, are assumed to be zero
                 buf = [0u8; 8];
             }
@@ -617,7 +617,7 @@ impl MemoryBank for MemoryImage {
     /// retrieve the page from the LoadImage, which may do its own zero
     /// filling.  If the attempt fails, the page is entirely filled in with
     /// zeros.
-    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> KunaResult<()> {
+    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> UnlaceResult<()> {
         // Assume that -addr- is page aligned
         let spc = &self.core.space;
         match self.loader.borrow_mut().load_fill(
@@ -625,7 +625,7 @@ impl MemoryBank for MemoryImage {
             &Address::new(Rc::clone(spc), addr.wadd(skip as i64 as u64)), // cast: int4 -> uintb
         ) {
             Ok(()) => Ok(()),
-            Err(KunaError::DataUnavail { .. }) => {
+            Err(UnlaceError::DataUnavail { .. }) => {
                 // Pages not mapped in the load image, are assumed to be zero
                 res.fill(0);
                 Ok(())
@@ -695,7 +695,7 @@ impl MemoryBank for MemoryPageOverlay {
     /// page.
     /// \param addr is the aligned address of the word to be written
     /// \param val is the value to be written at that word
-    fn insert(&mut self, addr: u64, val: u64) -> KunaResult<()> {
+    fn insert(&mut self, addr: u64, val: u64) -> UnlaceResult<()> {
         let pagesize = self.core.pagesize;
         let pageaddr = addr & !((pagesize - 1) as i64 as u64); // cast: (uintb)(getPageSize()-1)
 
@@ -733,7 +733,7 @@ impl MemoryBank for MemoryPageOverlay {
     /// returned.
     /// \param addr is the aligned offset of the word
     /// \return the retrieved value
-    fn find(&self, addr: u64) -> KunaResult<u64> {
+    fn find(&self, addr: u64) -> UnlaceResult<u64> {
         let pagesize = self.core.pagesize;
         let pageaddr = addr & !((pagesize - 1) as i64 as u64); // cast: (uintb)(getPageSize()-1)
 
@@ -763,7 +763,7 @@ impl MemoryBank for MemoryPageOverlay {
     /// \param res is where retrieved bytes are stored
     /// \param skip is the offset \e into \e the \e page from where bytes
     ///        should be retrieved
-    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> KunaResult<()> {
+    fn get_page(&self, addr: u64, res: &mut [u8], skip: i32) -> UnlaceResult<()> {
         match self.page.get(&addr) {
             None => match &self.underlie {
                 None => {
@@ -790,7 +790,7 @@ impl MemoryBank for MemoryPageOverlay {
     /// \param val are the bytes to be written into the page
     /// \param skip is the offset \e into \e the \e page where bytes should
     ///        be written
-    fn set_page(&mut self, addr: u64, val: &[u8], skip: i32) -> KunaResult<()> {
+    fn set_page(&mut self, addr: u64, val: &[u8], skip: i32) -> UnlaceResult<()> {
         let pagesize = self.core.pagesize;
         let size = val.len() as i32; // C++ int4 size parameter
 
@@ -890,7 +890,7 @@ impl MemoryBank for MemoryHashOverlay {
     /// of 1023, and the `0xBADBEEF` empty-slot marker).
     /// \param addr is the aligned address of the word being written
     /// \param val is the value of the word to write
-    fn insert(&mut self, addr: u64, val: u64) -> KunaResult<()> {
+    fn insert(&mut self, addr: u64, val: u64) -> UnlaceResult<()> {
         let size = self.address.len() as i32; // C++ int4 size = address.size()
         // C++ `(addr>>alignshift) % size`: the int4 size converts to uintb
         let mut offset = (addr >> self.alignshift) % (size as i64 as u64); // cast: int4 -> uintb
@@ -909,7 +909,7 @@ impl MemoryBank for MemoryHashOverlay {
             offset = offset.wadd(self.collideskip) % (size as i64 as u64); // cast: int4 -> uintb
             i += 1;
         }
-        Err(KunaError::lowlevel("Memory state hash_table is full"))
+        Err(UnlaceError::lowlevel("Memory state hash_table is full"))
     }
 
     /// Overridden aligned word find.
@@ -919,7 +919,7 @@ impl MemoryBank for MemoryHashOverlay {
     /// bank, or return 0 if there is no underlying bank
     /// \param addr is the aligned address of the word to retrieve
     /// \return the retrieved value
-    fn find(&self, addr: u64) -> KunaResult<u64> {
+    fn find(&self, addr: u64) -> UnlaceResult<u64> {
         // Find address in hash-table, or return find from underlying memory
         let size = self.address.len() as i32; // C++ int4 size = address.size()
         let mut offset = (addr >> self.alignshift) % (size as i64 as u64); // cast: int4 -> uintb
@@ -1028,9 +1028,9 @@ impl MemoryState {
         off: u64,
         size: i32,
         cval: u64,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match self.get_memory_bank(spc) {
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Setting value for unmapped memory space: {}",
                 spc.get_name()
             ))),
@@ -1047,12 +1047,12 @@ impl MemoryState {
     /// \param off is the offset of the value being queried
     /// \param size is the number of bytes to query
     /// \return the queried value
-    pub fn get_value(&self, spc: &Rc<AddrSpace>, off: u64, size: i32) -> KunaResult<u64> {
+    pub fn get_value(&self, spc: &Rc<AddrSpace>, off: u64, size: i32) -> UnlaceResult<u64> {
         if spc.get_type() == spacetype::IPTR_CONSTANT {
             return Ok(off);
         }
         match self.get_memory_bank(spc) {
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Getting value from unmapped memory space: {}",
                 spc.get_name()
             ))),
@@ -1069,7 +1069,7 @@ impl MemoryState {
     /// up and automatically passed to the main set_value routine.
     /// \param nm is the name of the register
     /// \param cval is the value to write to the register
-    pub fn set_value_by_name(&mut self, nm: &str, cval: u64) -> KunaResult<()> {
+    pub fn set_value_by_name(&mut self, nm: &str, cval: u64) -> UnlaceResult<()> {
         // Set a "register" value
         let vdata = self.trans.get_register_data(nm)?;
         let spc = vdata
@@ -1088,7 +1088,7 @@ impl MemoryState {
     /// up and automatically passed to the main get_value routine.
     /// \param nm is the name of the register
     /// \return the value associated with that register
-    pub fn get_value_by_name(&self, nm: &str) -> KunaResult<u64> {
+    pub fn get_value_by_name(&self, nm: &str) -> UnlaceResult<u64> {
         // Get a "register" value
         let vdata = self.trans.get_register_data(nm)?;
         let spc = vdata
@@ -1105,7 +1105,7 @@ impl MemoryState {
     /// than breaking out the components
     /// \param vn is the varnode to be written
     /// \param cval is the value to write into the varnode
-    pub fn set_value_data(&mut self, vn: &VarnodeData, cval: u64) -> KunaResult<()> {
+    pub fn set_value_data(&mut self, vn: &VarnodeData, cval: u64) -> UnlaceResult<()> {
         let spc = vn
             .space
             .as_ref()
@@ -1119,7 +1119,7 @@ impl MemoryState {
     /// rather than querying for the offset and space
     /// \param vn is the varnode to be read
     /// \return the value read from the varnode
-    pub fn get_value_data(&self, vn: &VarnodeData) -> KunaResult<u64> {
+    pub fn get_value_data(&self, vn: &VarnodeData) -> UnlaceResult<u64> {
         let spc = vn
             .space
             .as_ref()
@@ -1138,9 +1138,9 @@ impl MemoryState {
     ///        length is the C++ `size` parameter)
     /// \param spc is the desired address space
     /// \param off is the starting offset of the byte range being queried
-    pub fn get_chunk(&self, res: &mut [u8], spc: &Rc<AddrSpace>, off: u64) -> KunaResult<()> {
+    pub fn get_chunk(&self, res: &mut [u8], spc: &Rc<AddrSpace>, off: u64) -> UnlaceResult<()> {
         match self.get_memory_bank(spc) {
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Getting chunk from unmapped memory space: {}",
                 spc.get_name()
             ))),
@@ -1159,9 +1159,9 @@ impl MemoryState {
     ///        (its length is the C++ `size` parameter)
     /// \param spc is the address space being written
     /// \param off is the starting offset of the range being written
-    pub fn set_chunk(&mut self, val: &[u8], spc: &Rc<AddrSpace>, off: u64) -> KunaResult<()> {
+    pub fn set_chunk(&mut self, val: &[u8], spc: &Rc<AddrSpace>, off: u64) -> UnlaceResult<()> {
         match self.get_memory_bank(spc) {
-            None => Err(KunaError::lowlevel(format!(
+            None => Err(UnlaceError::lowlevel(format!(
                 "Setting chunk of unmapped memory space: {}",
                 spc.get_name()
             ))),

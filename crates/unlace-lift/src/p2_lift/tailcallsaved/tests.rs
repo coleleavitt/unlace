@@ -163,8 +163,8 @@ fn a_push_saves_its_width() {
     let mut fd = build_fd();
     emit_push(&mut fd, 0x1000);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_saved_bytes(&fd, &a, &sp, -8), 8);
-    assert_eq!(kuna_stack_restored_bytes(&fd, &a, &sp, -8), 0);
+    assert_eq!(unlace_stack_saved_bytes(&fd, &a, &sp, -8), 8);
+    assert_eq!(unlace_stack_restored_bytes(&fd, &a, &sp, -8), 0);
 }
 
 #[test]
@@ -172,8 +172,8 @@ fn a_pop_restores_its_width() {
     let mut fd = build_fd();
     emit_pop(&mut fd, 0x1000);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_restored_bytes(&fd, &a, &sp, 8), 8);
-    assert_eq!(kuna_stack_saved_bytes(&fd, &a, &sp, 8), 0);
+    assert_eq!(unlace_stack_restored_bytes(&fd, &a, &sp, 8), 8);
+    assert_eq!(unlace_stack_saved_bytes(&fd, &a, &sp, 8), 0);
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn argument_cleanup_restores_nothing() {
     let mut fd = build_fd();
     emit_sp_arith(&mut fd, 0x1000, OpCode::CPUI_INT_ADD, 8);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_restored_bytes(&fd, &a, &sp, 8), 0);
+    assert_eq!(unlace_stack_restored_bytes(&fd, &a, &sp, 8), 0);
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn frame_allocation_saves_nothing() {
     let mut fd = build_fd();
     emit_sp_arith(&mut fd, 0x1000, OpCode::CPUI_INT_SUB, 0x10);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_saved_bytes(&fd, &a, &sp, -0x10), 0);
+    assert_eq!(unlace_stack_saved_bytes(&fd, &a, &sp, -0x10), 0);
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn a_store_that_does_not_move_the_stack_pointer_saves_nothing() {
     let ptr = sp_vn(&mut fd);
     emit_store(&mut fd, 0x1000, ptr, 8);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_saved_bytes(&fd, &a, &sp, 0), 0);
+    assert_eq!(unlace_stack_saved_bytes(&fd, &a, &sp, 0), 0);
 }
 
 #[test]
@@ -212,7 +212,7 @@ fn a_load_off_the_stack_pointer_restores_nothing() {
     emit_load(&mut fd, 0x1000, ptr, 8);
     emit_sp_arith(&mut fd, 0x1000, OpCode::CPUI_INT_ADD, 8);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_restored_bytes(&fd, &a, &sp, 8), 0);
+    assert_eq!(unlace_stack_restored_bytes(&fd, &a, &sp, 8), 0);
 }
 
 #[test]
@@ -224,17 +224,17 @@ fn the_transfer_cannot_exceed_the_stack_pointer_motion() {
     let ptr = sp_vn(&mut fd);
     emit_store(&mut fd, 0x1000, ptr, 8);
     let (sp, a) = (sp_loc(&fd), at(&fd, 0x1000));
-    assert_eq!(kuna_stack_saved_bytes(&fd, &a, &sp, -4), 4);
+    assert_eq!(unlace_stack_saved_bytes(&fd, &a, &sp, -4), 4);
 }
 
 #[test]
 fn a_frame_that_saved_nothing_demands_nothing() {
-    assert!(kuna_teardown_restores_saves(0, 0));
+    assert!(unlace_teardown_restores_saves(0, 0));
 }
 
 #[test]
 fn restoring_everything_saved_is_a_teardown() {
-    assert!(kuna_teardown_restores_saves(8, 8));
-    assert!(kuna_teardown_restores_saves(8, 16));
-    assert!(!kuna_teardown_restores_saves(16, 8));
+    assert!(unlace_teardown_restores_saves(8, 8));
+    assert!(unlace_teardown_restores_saves(8, 16));
+    assert!(!unlace_teardown_restores_saves(16, 8));
 }

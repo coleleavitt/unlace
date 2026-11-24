@@ -259,7 +259,7 @@ fn unrelated_models_keep_exact_signature() {
     for (stem, sig) in [
         ("boolless", "uint1 boolless(void)"),
         ("nan", "void nanops(float8 a0,float8 a1)"),
-        // (kuna DIV-6 realtypes) the un-inferred 4-byte return relabels to
+        // (unlace DIV-6 realtypes) the un-inferred 4-byte return relabels to
         // `unsigned int` (was `xunknown4`); the `char *` parameter is unchanged.
         ("promotecompare", "unsigned int promote_compare(char *"),
     ] {

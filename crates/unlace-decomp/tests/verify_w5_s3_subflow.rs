@@ -21,7 +21,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
     spacetype,
@@ -77,8 +77,8 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut unlace_decomp::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-    |_: &mut unlace_decomp::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> {
+-> impl FnMut(&mut unlace_decomp::varnode::VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+    |_: &mut unlace_decomp::varnode::VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> {
         Ok(())
     }
 }

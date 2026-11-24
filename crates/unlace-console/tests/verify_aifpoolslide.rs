@@ -35,7 +35,7 @@ fn bootstrap(slide: bool) -> unlace_console::engine::ConsoleProgram {
         ("aifdataveto", false),
     ] {
         prog.arch_mut()
-            .set_kuna_option(name, if on { "on" } else { "off" })
+            .set_unlace_option(name, if on { "on" } else { "off" })
             .unwrap();
     }
     prog.commit_pending_analysis()

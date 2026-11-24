@@ -14,7 +14,7 @@
 //!     endianness (the Round-1 F1 `retstruct` regression is gone).
 //!
 //! Every expectation is derived from the C++ oracle B5 (`decomp_test_dbg
-//! datatests`, the same XML the kuna baseline pins), NOT from the Rust output.
+//! datatests`, the same XML the unlace baseline pins), NOT from the Rust output.
 //! Committed with the verdict regardless of outcome (verification.md §"Adversarial
 //! pass").  All four pass on the branch; each FAILED on the relevant prior state
 //! (R1 regression / unpieced seam) so none is vacuous.

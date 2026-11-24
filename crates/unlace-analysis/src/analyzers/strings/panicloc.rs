@@ -1,4 +1,4 @@
-//! (kuna `panicloc`) Rust panic `Location` records, typed and named.
+//! (unlace `panicloc`) Rust panic `Location` records, typed and named.
 //!
 //! Every panic site passes `&'static core::panic::Location { file: &str, line:
 //! u32, col: u32 }`. rustc emits one per site in read-only data, so a call reads
@@ -156,7 +156,7 @@ fn location_type(tf: &dyn TypeFactory, width: i32) -> Option<Rc<Datatype>> {
         .ok()
 }
 
-/// (kuna `panicloc`) Registered for rustc-detected images; committed under
+/// (unlace `panicloc`) Registered for rustc-detected images; committed under
 /// `--option panicloc`.
 pub struct PanicLocationPass;
 

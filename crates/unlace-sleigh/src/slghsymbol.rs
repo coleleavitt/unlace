@@ -23,7 +23,7 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
@@ -65,17 +65,17 @@ pub struct ConstructorRef {
 /// Runtime parser walkers implement this extension of [`PatternExpressionContext`].
 pub trait SymbolWalker: PatternExpressionContext {
     /// C++ `ParserWalker::pushOperand(int4 i)`.
-    fn push_operand(&mut self, i: i32) -> KunaResult<()>;
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()>;
     /// C++ `ParserWalker::popOperand()`.
-    fn pop_operand(&mut self) -> KunaResult<()>;
+    fn pop_operand(&mut self) -> UnlaceResult<()>;
     /// C++ `ParserWalker::getConstructor()`: the constructor resolved at the
     /// current point, identified by (table id, constructor id).
-    fn get_constructor(&self) -> KunaResult<ConstructorRef>;
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef>;
     /// C++ `ParserWalker::getFixedHandle(int4 i)` (the resolved handle of
     /// child operand `i`; returned by value instead of const reference).
-    fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle>;
+    fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle>;
     /// Borrow a resolved handle when its storage belongs to the walker.
-    fn borrow_fixed_handle(&self, i: i32) -> KunaResult<Cow<'_, FixedHandle>> {
+    fn borrow_fixed_handle(&self, i: i32) -> UnlaceResult<Cow<'_, FixedHandle>> {
         self.get_fixed_handle(i).map(Cow::Owned)
     }
     /// C++ `ParserWalker::getConstSpace()`.
@@ -83,13 +83,13 @@ pub trait SymbolWalker: PatternExpressionContext {
     /// C++ `ParserWalker::getCurSpace()`.
     fn get_cur_space(&self) -> Rc<AddrSpace>;
     /// C++ `ParserWalker::getDestAddr()` (`ParserContext` may throw).
-    fn get_dest_addr(&self) -> KunaResult<Address>;
+    fn get_dest_addr(&self) -> UnlaceResult<Address>;
     /// C++ `ParserWalker::getRefAddr()` (`ParserContext` may throw).
-    fn get_ref_addr(&self) -> KunaResult<Address>;
+    fn get_ref_addr(&self) -> UnlaceResult<Address>;
     /// C++ `ParserWalker::getInstructionBits(int4 startbit,int4 size)`.
-    fn get_instruction_bits(&self, startbit: i32, size: i32) -> KunaResult<u32>;
+    fn get_instruction_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32>;
     /// C++ `ParserWalker::getContextBits(int4 startbit,int4 size)`.
-    fn get_context_bits(&self, startbit: i32, size: i32) -> KunaResult<u32>;
+    fn get_context_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32>;
 }
 
 /// Mirror of C++ `ParserWalkerChange` for the context-command apply path
@@ -120,7 +120,7 @@ pub trait SleighBaseTrans {
     fn decode_construct_tpl(
         &mut self,
         decoder: &mut dyn OpcodeDecoder,
-    ) -> KunaResult<(i32, ConstructTplHandle)>;
+    ) -> UnlaceResult<(i32, ConstructTplHandle)>;
 }
 
 // ---------------------------------------------------------------------------
@@ -225,10 +225,10 @@ fn push_hex_operand(s: &mut String, val: i64, code_address: bool) {
 fn decode_pattern_value(
     decoder: &mut dyn Decoder,
     trans: &dyn OperandValueResolver,
-) -> KunaResult<PatternValue> {
+) -> UnlaceResult<PatternValue> {
     match PatternExpression::decode_expression(decoder, trans)? {
         PatternExpression::Value(v) => Ok(v),
-        _ => Err(KunaError::decoder(
+        _ => Err(UnlaceError::decoder(
             "Expecting pattern value (C++ casts unchecked)",
         )),
     }
@@ -237,10 +237,10 @@ fn decode_pattern_value(
 /// C++ static `calc_maskword(int4 sbit,int4 ebit,int4 &num,int4 &shift,
 /// uintm &mask)` (slghsymbol.cc): locate a context bit-field within one
 /// machine int.  Returns `(num, shift, mask)`.
-fn calc_maskword(mut sbit: i32, mut ebit: i32) -> KunaResult<(i32, i32, u32)> {
+fn calc_maskword(mut sbit: i32, mut ebit: i32) -> UnlaceResult<(i32, i32, u32)> {
     let num = sbit / 32; // 8*sizeof(uintm)
     if num != ebit / 32 {
-        return Err(KunaError::sleigh(
+        return Err(UnlaceError::sleigh(
             "Context field not contained within one machine int",
         ));
     }
@@ -329,10 +329,10 @@ impl ValueSymbol {
     }
 
     /// The C++ null-`patval` dereference sites (getValue paths) as an error.
-    fn patval(&self) -> KunaResult<&PatternValue> {
+    fn patval(&self) -> UnlaceResult<&PatternValue> {
         self.patval
             .as_ref()
-            .ok_or_else(|| KunaError::sleigh("value symbol has no pattern value (not decoded)"))
+            .ok_or_else(|| UnlaceError::sleigh("value symbol has no pattern value (not decoded)"))
     }
 }
 
@@ -351,7 +351,7 @@ impl ValueMapSymbol {
     }
 
     /// C++ `ValueMapSymbol::checkTableFill`.
-    fn check_table_fill(&mut self) -> KunaResult<()> {
+    fn check_table_fill(&mut self) -> UnlaceResult<()> {
         let min = self.value.patval()?.min_value()?;
         let max = self.value.patval()?.max_value()?;
         // C++ `max < valuetable.size()`: intb vs size_t comparison — max
@@ -366,7 +366,7 @@ impl ValueMapSymbol {
     }
 
     /// C++ `ValueMapSymbol::resolve` (always returns null Constructor).
-    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<()> {
+    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<()> {
         if !self.tableisfilled {
             let ind = self.value.patval()?.get_value(walker)?;
             // C++ `(ind >= valuetable.size())||(ind<0)||...`: the first is
@@ -379,7 +379,7 @@ impl ValueMapSymbol {
                 s.push(walker.get_addr().get_shortcut());
                 walker.get_addr().print_raw(&mut s)?;
                 s.push_str(": No corresponding entry in valuetable");
-                return Err(KunaError::bad_data(s));
+                return Err(UnlaceError::bad_data(s));
             }
         }
         Ok(())
@@ -401,7 +401,7 @@ impl NameSymbol {
     }
 
     /// C++ `NameSymbol::checkTableFill`.
-    fn check_table_fill(&mut self) -> KunaResult<()> {
+    fn check_table_fill(&mut self) -> UnlaceResult<()> {
         let min = self.value.patval()?.min_value()?;
         let max = self.value.patval()?.max_value()?;
         // intb vs size_t mixed comparison as in ValueMapSymbol.
@@ -416,7 +416,7 @@ impl NameSymbol {
     }
 
     /// C++ `NameSymbol::resolve` (always returns null Constructor).
-    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<()> {
+    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<()> {
         if !self.tableisfilled {
             let ind = self.value.patval()?.get_value(walker)?;
             // C++ `(ind >= nametable.size())||(ind<0)||...`: intb vs size_t
@@ -430,7 +430,7 @@ impl NameSymbol {
                 s.push(walker.get_addr().get_shortcut());
                 walker.get_addr().print_raw(&mut s)?;
                 s.push_str(": No corresponding entry in nametable");
-                return Err(KunaError::bad_data(s));
+                return Err(UnlaceError::bad_data(s));
             }
         }
         Ok(())
@@ -514,7 +514,7 @@ impl VarnodeListSymbol {
     }
 
     /// C++ `VarnodeListSymbol::checkTableFill`.
-    fn check_table_fill(&mut self) -> KunaResult<()> {
+    fn check_table_fill(&mut self) -> UnlaceResult<()> {
         let min = self.value.patval()?.min_value()?;
         let max = self.value.patval()?.max_value()?;
         // intb vs size_t mixed comparison as in ValueMapSymbol.
@@ -528,7 +528,7 @@ impl VarnodeListSymbol {
     }
 
     /// C++ `VarnodeListSymbol::resolve` (always returns null Constructor).
-    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<()> {
+    fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<()> {
         if !self.tableisfilled {
             let ind = self.value.patval()?.get_value(walker)?;
             // C++ `(ind<0)||(ind>=varnode_table.size())||(null entry)`: the
@@ -542,7 +542,7 @@ impl VarnodeListSymbol {
                 s.push(walker.get_addr().get_shortcut());
                 walker.get_addr().print_raw(&mut s)?;
                 s.push_str(": No corresponding entry in varnode list");
-                return Err(KunaError::bad_data(s));
+                return Err(UnlaceError::bad_data(s));
             }
         }
         Ok(())
@@ -550,13 +550,13 @@ impl VarnodeListSymbol {
 
     /// C++ `VarnodeListSymbol::getSize` (`name` is the symbol name for the
     /// error message; the table resolves the varnode entries).
-    fn get_size(&self, name: &[u8], table: &SymbolTable) -> KunaResult<i32> {
+    fn get_size(&self, name: &[u8], table: &SymbolTable) -> UnlaceResult<i32> {
         // C++ loop returns at the first non-null entry (assume all are
         // same size)
         if let Some(id) = self.varnode_table.iter().flatten().next() {
             return Ok(table.varnode_symbol(*id)?.get_size());
         }
-        Err(KunaError::sleigh(format!(
+        Err(UnlaceError::sleigh(format!(
             "No register attached to: {}",
             name_text(name)
         )))
@@ -649,9 +649,9 @@ impl OperandSymbol {
     }
 
     /// C++ `OperandSymbol::defineOperand(PatternExpression *pe)`.
-    pub fn define_operand_expression(&mut self, pe: PatternExpression) -> KunaResult<()> {
+    pub fn define_operand_expression(&mut self, pe: PatternExpression) -> UnlaceResult<()> {
         if self.defexp.is_some() || self.triple.is_some() {
-            return Err(KunaError::sleigh("Redefining operand"));
+            return Err(UnlaceError::sleigh("Redefining operand"));
         }
         self.defexp = Some(pe);
         Ok(())
@@ -659,9 +659,9 @@ impl OperandSymbol {
 
     /// C++ `OperandSymbol::defineOperand(TripleSymbol *tri)` (the defining
     /// symbol passed as its id).
-    pub fn define_operand_symbol(&mut self, tri: u32) -> KunaResult<()> {
+    pub fn define_operand_symbol(&mut self, tri: u32) -> UnlaceResult<()> {
         if self.defexp.is_some() || self.triple.is_some() {
-            return Err(KunaError::sleigh("Redefining operand"));
+            return Err(UnlaceError::sleigh("Redefining operand"));
         }
         self.triple = Some(tri);
         Ok(())
@@ -737,7 +737,7 @@ impl OperandSymbol {
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
         code_address: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let code_address =
             code_address || (self.is_code_address() && walker.get_cur_space().get_addr_size() == 8);
         walker.push_operand(self.get_index())?;
@@ -756,7 +756,7 @@ impl OperandSymbol {
             let defexp = self
                 .defexp
                 .as_ref()
-                .ok_or_else(|| KunaError::sleigh("operand has no defining expression"))?;
+                .ok_or_else(|| UnlaceError::sleigh("operand has no defining expression"))?;
             let val = defexp.get_value(walker)?;
             push_hex_operand(s, val, code_address);
         }
@@ -806,11 +806,11 @@ pub struct FlowRefSymbol {
 pub struct SubtableSymbol {
     construct: Vec<Constructor>,
     decisiontree: Option<DecisionNode>,
-    /// (kuna build side) C++ `TokenPattern *pattern`.
+    /// (unlace build side) C++ `TokenPattern *pattern`.
     pattern: Option<TokenPattern>,
-    /// (kuna build side) C++ `bool beingbuilt` (recursion guard).
+    /// (unlace build side) C++ `bool beingbuilt` (recursion guard).
     beingbuilt: bool,
-    /// (kuna build side) C++ `bool errors`.
+    /// (unlace build side) C++ `bool errors`.
     errors: bool,
 }
 
@@ -852,17 +852,17 @@ impl SubtableSymbol {
     /// C++ `SubtableSymbol::getConstructor(uintm id)` — unchecked vector
     /// indexing in C++ (UB out of range); an error here.
     #[inline]
-    pub fn get_constructor(&self, id: u32) -> KunaResult<&Constructor> {
-        self.construct
-            .get(id as usize)
-            .ok_or_else(|| KunaError::sleigh("constructor id out of range (C++ indexes unchecked)"))
+    pub fn get_constructor(&self, id: u32) -> UnlaceResult<&Constructor> {
+        self.construct.get(id as usize).ok_or_else(|| {
+            UnlaceError::sleigh("constructor id out of range (C++ indexes unchecked)")
+        })
     }
 
     /// Mutable `getConstructor` (build side).
-    fn construct_mut(&mut self, id: u32) -> KunaResult<&mut Constructor> {
-        self.construct
-            .get_mut(id as usize)
-            .ok_or_else(|| KunaError::sleigh("constructor id out of range (C++ indexes unchecked)"))
+    fn construct_mut(&mut self, id: u32) -> UnlaceResult<&mut Constructor> {
+        self.construct.get_mut(id as usize).ok_or_else(|| {
+            UnlaceError::sleigh("constructor id out of range (C++ indexes unchecked)")
+        })
     }
 
     /// Mutable access to a constructor by its index in this subtable.
@@ -877,7 +877,7 @@ impl SubtableSymbol {
 
     /// C++ `SubtableSymbol::resolve`: `decisiontree->resolve(walker)`
     /// (a null tree dereference is UB in C++; an error here).
-    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<u32> {
+    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<u32> {
         self.resolve_matched(walker).map(|(_, id)| *id)
     }
 
@@ -888,11 +888,11 @@ impl SubtableSymbol {
     pub fn resolve_matched(
         &self,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<&(DisjointPattern, u32)> {
+    ) -> UnlaceResult<&(DisjointPattern, u32)> {
         let tree = self
             .decisiontree
             .as_ref()
-            .ok_or_else(|| KunaError::sleigh("subtable has no decision tree (not decoded)"))?;
+            .ok_or_else(|| UnlaceError::sleigh("subtable has no decision tree (not decoded)"))?;
         tree.resolve_matched(walker)
     }
 }
@@ -917,7 +917,7 @@ pub struct ContextOp {
 
 impl ContextOp {
     /// C++ `ContextOp(int4 startbit,int4 endbit,PatternExpression *pe)`.
-    pub fn new(startbit: i32, endbit: i32, pe: PatternExpression) -> KunaResult<ContextOp> {
+    pub fn new(startbit: i32, endbit: i32, pe: PatternExpression) -> UnlaceResult<ContextOp> {
         let (num, shift, mask) = calc_maskword(startbit, endbit)?;
         Ok(ContextOp {
             patexp: Some(pe),
@@ -944,11 +944,11 @@ impl ContextOp {
     /// C++ `ContextOp::validate`: error if the expression uses an operand
     /// that is not constructor-relative (such operands are evaluated BEFORE
     /// their offset is recovered).
-    pub fn validate(&self, table: &SymbolTable) -> KunaResult<()> {
+    pub fn validate(&self, table: &SymbolTable) -> UnlaceResult<()> {
         let patexp = self
             .patexp
             .as_ref()
-            .ok_or_else(|| KunaError::sleigh("context op has no expression (not decoded)"))?;
+            .ok_or_else(|| UnlaceError::sleigh("context op has no expression (not decoded)"))?;
         let mut values: Vec<&PatternValue> = Vec::new();
         patexp.list_values(&mut values); // Get all the expression tokens
         for value in values {
@@ -960,7 +960,7 @@ impl ContextOp {
             // has been recovered. If the offset is not relative to
             // the base constructor, then we throw an error
             if !table.operand_value_is_constructor_relative(val)? {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "{}: cannot be used in context expression",
                     name_text(table.operand_value_name(val)?)
                 )));
@@ -970,11 +970,11 @@ impl ContextOp {
     }
 
     /// C++ `ContextOp::apply`.
-    pub fn apply(&self, walker: &mut (impl SymbolWalkerChange + ?Sized)) -> KunaResult<()> {
+    pub fn apply(&self, walker: &mut (impl SymbolWalkerChange + ?Sized)) -> UnlaceResult<()> {
         let patexp = self
             .patexp
             .as_ref()
-            .ok_or_else(|| KunaError::sleigh("context op has no expression (not decoded)"))?;
+            .ok_or_else(|| UnlaceError::sleigh("context op has no expression (not decoded)"))?;
         // C++ `uintm val = patexp->getValue(walker)`: intb -> uintm
         // truncation
         let mut val = patexp.get_value(walker)? as u32;
@@ -986,14 +986,14 @@ impl ContextOp {
     }
 
     /// C++ `ContextOp::encode`.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&sla::ELEM_CONTEXT_OP);
         encoder.write_signed_integer(&sla::ATTRIB_I, i64::from(self.num));
         encoder.write_signed_integer(&sla::ATTRIB_SHIFT, i64::from(self.shift));
         encoder.write_unsigned_integer(&sla::ATTRIB_MASK, u64::from(self.mask));
         self.patexp
             .as_ref()
-            .ok_or_else(|| KunaError::sleigh("context op has no expression (not decoded)"))?
+            .ok_or_else(|| UnlaceError::sleigh("context op has no expression (not decoded)"))?
             .encode(encoder);
         encoder.close_element(&sla::ELEM_CONTEXT_OP);
         Ok(())
@@ -1003,7 +1003,7 @@ impl ContextOp {
     pub fn decode(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<ContextOp> {
+    ) -> UnlaceResult<ContextOp> {
         let el = decoder.open_element_id(&sla::ELEM_CONTEXT_OP)?;
         let num = decoder.read_signed_integer_id(&sla::ATTRIB_I)? as i32; // C++ implicit intb -> int4
         let shift = decoder.read_signed_integer_id(&sla::ATTRIB_SHIFT)? as i32; // C++ implicit intb -> int4
@@ -1035,7 +1035,7 @@ pub struct ContextCommit {
 impl ContextCommit {
     /// C++ `ContextCommit(TripleSymbol *s,int4 sbit,int4 ebit,bool fl)`,
     /// with the symbol passed as its id.
-    pub fn new(sym: u32, sbit: i32, ebit: i32, fl: bool) -> KunaResult<ContextCommit> {
+    pub fn new(sym: u32, sbit: i32, ebit: i32, fl: bool) -> UnlaceResult<ContextCommit> {
         let (num, _shift, mask) = calc_maskword(sbit, ebit)?;
         Ok(ContextCommit {
             sym,
@@ -1070,7 +1070,7 @@ impl ContextCommit {
     }
 
     /// C++ `ContextCommit::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<ContextCommit> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<ContextCommit> {
         let el = decoder.open_element_id(&sla::ELEM_COMMIT)?;
         let sym = decoder.read_unsigned_integer_id(&sla::ATTRIB_ID)? as u32; // C++ implicit uintb -> uintm
         let num = decoder.read_signed_integer_id(&sla::ATTRIB_NUMBER)? as i32; // C++ implicit intb -> int4
@@ -1098,7 +1098,7 @@ pub enum ContextChange {
 
 impl ContextChange {
     /// C++ virtual `validate` (`ContextCommit::validate` is a no-op).
-    pub fn validate(&self, table: &SymbolTable) -> KunaResult<()> {
+    pub fn validate(&self, table: &SymbolTable) -> UnlaceResult<()> {
         match self {
             ContextChange::Op(op) => op.validate(table),
             ContextChange::Commit(_) => Ok(()),
@@ -1106,7 +1106,7 @@ impl ContextChange {
     }
 
     /// C++ virtual `apply`.
-    pub fn apply(&self, walker: &mut (impl SymbolWalkerChange + ?Sized)) -> KunaResult<()> {
+    pub fn apply(&self, walker: &mut (impl SymbolWalkerChange + ?Sized)) -> UnlaceResult<()> {
         match self {
             ContextChange::Op(op) => op.apply(walker),
             ContextChange::Commit(c) => {
@@ -1117,7 +1117,7 @@ impl ContextChange {
     }
 
     /// C++ virtual `encode`.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         match self {
             ContextChange::Op(op) => op.encode(encoder),
             ContextChange::Commit(c) => {
@@ -1331,11 +1331,10 @@ impl Constructor {
     /// C++ `Constructor::getOperand(int4 i)` — the operand's symbol id
     /// (unchecked vector indexing in C++; an error here).
     #[inline]
-    pub fn get_operand(&self, i: i32) -> KunaResult<u32> {
-        self.operands
-            .get(i as usize)
-            .copied()
-            .ok_or_else(|| KunaError::sleigh("operand index out of range (C++ indexes unchecked)"))
+    pub fn get_operand(&self, i: i32) -> UnlaceResult<u32> {
+        self.operands.get(i as usize).copied().ok_or_else(|| {
+            UnlaceError::sleigh("operand index out of range (C++ indexes unchecked)")
+        })
     }
 
     /// C++ `Constructor::getTempl`.
@@ -1407,7 +1406,7 @@ impl Constructor {
         s: &mut String,
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.print_with_address(s, walker, table, false)
     }
 
@@ -1417,7 +1416,7 @@ impl Constructor {
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
         code_address: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for piece in &self.printpiece {
             self.print_piece(s, walker, table, piece, code_address)?;
         }
@@ -1432,7 +1431,7 @@ impl Constructor {
         table: &SymbolTable,
         piece: &[u8],
         code_address: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if piece.first() == Some(&b'\n') {
             let index = i32::from(piece[1]) - i32::from(b'A');
             let opid = self.get_operand(index)?;
@@ -1451,7 +1450,7 @@ impl Constructor {
         s: &mut String,
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.flowthruindex != -1 && self.flowthru_subtable(table)?.is_some() {
             walker.push_operand(self.flowthruindex)?;
             let ctref = walker.get_constructor()?;
@@ -1479,7 +1478,7 @@ impl Constructor {
         s: &mut String,
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.flowthruindex != -1 && self.flowthru_subtable(table)?.is_some() {
             walker.push_operand(self.flowthruindex)?;
             let ctref = walker.get_constructor()?;
@@ -1505,7 +1504,7 @@ impl Constructor {
     /// getDefiningSymbol())` test shared by printMnemonic/printBody:
     /// `Some(subtable symbol id)` when the flow-through operand is defined
     /// by a subtable.
-    fn flowthru_subtable(&self, table: &SymbolTable) -> KunaResult<Option<u32>> {
+    fn flowthru_subtable(&self, table: &SymbolTable) -> UnlaceResult<Option<u32>> {
         let opid = self.get_operand(self.flowthruindex)?;
         let opsym = table.operand_symbol(opid)?;
         match opsym.get_defining_symbol() {
@@ -1515,7 +1514,10 @@ impl Constructor {
     }
 
     /// C++ `Constructor::applyContext`.
-    pub fn apply_context(&self, walker: &mut (impl SymbolWalkerChange + ?Sized)) -> KunaResult<()> {
+    pub fn apply_context(
+        &self,
+        walker: &mut (impl SymbolWalkerChange + ?Sized),
+    ) -> UnlaceResult<()> {
         for change in &self.context {
             change.apply(walker)?;
         }
@@ -1524,11 +1526,11 @@ impl Constructor {
 
     /// C++ `Constructor::printInfo`: identifying information for error
     /// messages.
-    pub fn print_info(&self, s: &mut String, table: &SymbolTable) -> KunaResult<()> {
+    pub fn print_info(&self, s: &mut String, table: &SymbolTable) -> UnlaceResult<()> {
         // C++ dereferences parent unconditionally
         let parent = self
             .parent
-            .ok_or_else(|| KunaError::sleigh("constructor has no parent table"))?;
+            .ok_or_else(|| UnlaceError::sleigh("constructor has no parent table"))?;
         s.push_str(&format!(
             "table \"{}\" constructor starting at line {}",
             name_text(table.symbol(parent)?.get_name()),
@@ -1542,12 +1544,12 @@ impl Constructor {
         &self,
         encoder: &mut dyn OpcodeEncoder,
         templates: &[ConstructTpl],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         encoder.open_element(&sla::ELEM_CONSTRUCTOR);
         // C++ dereferences parent unconditionally
         let parent = self
             .parent
-            .ok_or_else(|| KunaError::sleigh("constructor has no parent table"))?;
+            .ok_or_else(|| UnlaceError::sleigh("constructor has no parent table"))?;
         encoder.write_unsigned_integer(&sla::ATTRIB_PARENT, u64::from(parent));
         encoder.write_signed_integer(&sla::ATTRIB_FIRST, i64::from(self.firstwhitespace));
         encoder.write_signed_integer(&sla::ATTRIB_LENGTH, i64::from(self.minimumlength));
@@ -1583,7 +1585,7 @@ impl Constructor {
             if let Some(handle) = handle {
                 templates
                     .get(handle)
-                    .ok_or_else(|| KunaError::sleigh("bad ConstructTpl handle"))?
+                    .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle"))?
                     .encode(encoder, section_id);
             }
         }
@@ -1599,7 +1601,7 @@ impl Constructor {
         decoder: &mut dyn OpcodeDecoder,
         resolver: &dyn OperandValueResolver,
         trans: &mut dyn SleighBaseTrans,
-    ) -> KunaResult<Constructor> {
+    ) -> UnlaceResult<Constructor> {
         let el = decoder.open_element_id(&sla::ELEM_CONSTRUCTOR)?;
         let mut ct = Constructor::new();
         let parent = decoder.read_unsigned_integer_id(&sla::ATTRIB_PARENT)? as u32; // C++ implicit uintb -> uintm
@@ -1639,7 +1641,7 @@ impl Constructor {
                 let (sectionid, handle) = trans.decode_construct_tpl(decoder)?;
                 if sectionid < 0 {
                     if ct.templ.is_some() {
-                        return Err(KunaError::lowlevel("Duplicate main section"));
+                        return Err(UnlaceError::lowlevel("Duplicate main section"));
                     }
                     ct.templ = Some(handle);
                 } else {
@@ -1649,7 +1651,7 @@ impl Constructor {
                         ct.namedtempl.push(None);
                     }
                     if ct.namedtempl[sectionid as usize].is_some() {
-                        return Err(KunaError::lowlevel("Duplicate named section"));
+                        return Err(UnlaceError::lowlevel("Duplicate named section"));
                     }
                     ct.namedtempl[sectionid as usize] = Some(handle);
                 }
@@ -1713,7 +1715,7 @@ pub struct DecisionNode {
 impl DecisionNode {
     /// C++ `DecisionNode::resolve`: dispatch to a constructor id, or the
     /// C++ `BadDataError` when no terminal pattern matches.
-    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<u32> {
+    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<u32> {
         self.resolve_matched(walker).map(|(_, id)| *id)
     }
 
@@ -1723,7 +1725,7 @@ impl DecisionNode {
     pub fn resolve_matched(
         &self,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<&(DisjointPattern, u32)> {
+    ) -> UnlaceResult<&(DisjointPattern, u32)> {
         if self.bitsize == 0 {
             for pair in &self.list {
                 if pair.0.is_match(walker)? {
@@ -1734,7 +1736,7 @@ impl DecisionNode {
             s.push(walker.get_addr().get_shortcut());
             walker.get_addr().print_raw(&mut s)?;
             s.push_str(": Unable to resolve constructor");
-            return Err(KunaError::bad_data(s));
+            return Err(UnlaceError::bad_data(s));
         }
         let val = if self.contextdecision {
             walker.get_context_bits(self.startbit, self.bitsize)?
@@ -2020,7 +2022,7 @@ impl DecisionNode {
     /// C++ `DecisionNode::decode(decoder, parent, sub)`: `parent` is
     /// dropped (see struct docs) and `sub` reduces to the owning subtable's
     /// live constructor count, used to validate pair ids.
-    pub fn decode(decoder: &mut dyn Decoder, numct: i32) -> KunaResult<DecisionNode> {
+    pub fn decode(decoder: &mut dyn Decoder, numct: i32) -> UnlaceResult<DecisionNode> {
         let el = decoder.open_element_id(&sla::ELEM_DECISION)?;
         let mut node = DecisionNode {
             num: decoder.read_signed_integer_id(&sla::ATTRIB_NUMBER)? as i32, // C++ implicit intb -> int4
@@ -2039,7 +2041,7 @@ impl DecisionNode {
                 // C++ `id >= sub->getNumConstructors()`: uintm vs int4 —
                 // the int4 converts to uintm (usual arithmetic conversions)
                 if id >= numct as u32 {
-                    return Err(KunaError::decoder("Invalid constructor id"));
+                    return Err(UnlaceError::decoder("Invalid constructor id"));
                 }
                 let pat = DisjointPattern::decode_disjoint(decoder)?;
                 node.list.push((pat, id));
@@ -2096,10 +2098,10 @@ impl DecisionProperties {
 }
 
 /// Borrow a disjoint pattern, rejecting an invalid C++ downcast.
-fn expect_disjoint(p: &Pattern) -> KunaResult<&DisjointPattern> {
+fn expect_disjoint(p: &Pattern) -> UnlaceResult<&DisjointPattern> {
     match p {
         Pattern::Disjoint(d) => Ok(d),
-        Pattern::Or(_) => Err(KunaError::sleigh(
+        Pattern::Or(_) => Err(UnlaceError::sleigh(
             "decision tree: expected a DisjointPattern (C++ UB cast)",
         )),
     }
@@ -2423,7 +2425,7 @@ impl SleighSymbol {
 
     /// C++ `ValueMapSymbol(const string &nm,PatternValue *pv,const
     /// vector<intb> &vt)`.
-    pub fn new_valuemap(nm: &[u8], pv: PatternValue, vt: Vec<i64>) -> KunaResult<SleighSymbol> {
+    pub fn new_valuemap(nm: &[u8], pv: PatternValue, vt: Vec<i64>) -> UnlaceResult<SleighSymbol> {
         let mut vm = ValueMapSymbol {
             value: ValueSymbol { patval: Some(pv) },
             valuetable: vt,
@@ -2439,7 +2441,7 @@ impl SleighSymbol {
         nm: &[u8],
         pv: PatternValue,
         nt: Vec<Vec<u8>>,
-    ) -> KunaResult<SleighSymbol> {
+    ) -> UnlaceResult<SleighSymbol> {
         let mut ns = NameSymbol {
             value: ValueSymbol { patval: Some(pv) },
             nametable: nt,
@@ -2496,7 +2498,7 @@ impl SleighSymbol {
         nm: &[u8],
         pv: PatternValue,
         vt: Vec<Option<u32>>,
-    ) -> KunaResult<SleighSymbol> {
+    ) -> UnlaceResult<SleighSymbol> {
         let mut vl = VarnodeListSymbol {
             value: ValueSymbol { patval: Some(pv) },
             varnode_table: vt,
@@ -2659,7 +2661,7 @@ impl SleighSymbol {
                     }
                     // The constructor references its operands by symbol id; C++
                     // keeps `OperandSymbol *` pointers (immune to renumber), so
-                    // the kuna port must remap each id here.
+                    // the unlace port must remap each id here.
                     for opid in ct.operands.iter_mut() {
                         *opid = map(*opid);
                     }
@@ -2780,7 +2782,7 @@ impl SleighSymbol {
     /// `operand_value` boundary docs in [`crate::slghpatexpress`]); FlowDest/
     /// FlowRef/Subtable throw exactly the C++ `SleighError`s.  Returns an
     /// owned expression (C++ shares an interior pointer).
-    pub fn get_pattern_expression(&self) -> KunaResult<Option<PatternExpression>> {
+    pub fn get_pattern_expression(&self) -> UnlaceResult<Option<PatternExpression>> {
         match &self.kind {
             // PatternlessSymbol: the constant-0 expression
             SymbolKind::Epsilon(_) | SymbolKind::Varnode(_) => Ok(Some(PatternExpression::Value(
@@ -2805,9 +2807,11 @@ impl SleighSymbol {
                 PatternValue::Next2InstructionValue(Next2InstructionValue),
             ))),
             SymbolKind::FlowDest(_) | SymbolKind::FlowRef(_) => {
-                Err(KunaError::sleigh("Cannot use symbol in pattern"))
+                Err(UnlaceError::sleigh("Cannot use symbol in pattern"))
             }
-            SymbolKind::Subtable(_) => Err(KunaError::sleigh("Cannot use subtable in expression")),
+            SymbolKind::Subtable(_) => {
+                Err(UnlaceError::sleigh("Cannot use subtable in expression"))
+            }
             // Not a TripleSymbol in C++ (unreachable through ported paths)
             SymbolKind::Space(_)
             | SymbolKind::Token(_)
@@ -2815,7 +2819,7 @@ impl SleighSymbol {
             | SymbolKind::Macro(_)
             | SymbolKind::Section(_)
             | SymbolKind::Bitrange(_)
-            | SymbolKind::Label(_) => Err(KunaError::sleigh(
+            | SymbolKind::Label(_) => Err(UnlaceError::sleigh(
                 "symbol has no pattern expression (not a TripleSymbol in C++)",
             )),
         }
@@ -2825,7 +2829,7 @@ impl SleighSymbol {
     /// only for a subtable; the table-driven family symbols validate their
     /// index and return `None` (C++ null), everything else is the base
     /// no-op.
-    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> KunaResult<Option<u32>> {
+    pub fn resolve(&self, walker: &(impl SymbolWalker + ?Sized)) -> UnlaceResult<Option<u32>> {
         match &self.kind {
             SymbolKind::ValueMap(v) => {
                 v.resolve(walker)?;
@@ -2850,7 +2854,7 @@ impl SleighSymbol {
     pub fn resolve_matched(
         &self,
         walker: &(impl SymbolWalker + ?Sized),
-    ) -> KunaResult<(Option<u32>, Option<DisjointPattern>)> {
+    ) -> UnlaceResult<(Option<u32>, Option<DisjointPattern>)> {
         match &self.kind {
             SymbolKind::Subtable(v) => {
                 let (pat, ct) = v.resolve_matched(walker)?;
@@ -2861,7 +2865,7 @@ impl SleighSymbol {
     }
 
     /// C++ virtual `TripleSymbol::getSize` (size out of context).
-    pub fn get_size(&self, table: &SymbolTable) -> KunaResult<i32> {
+    pub fn get_size(&self, table: &SymbolTable) -> UnlaceResult<i32> {
         match &self.kind {
             SymbolKind::Varnode(v) => Ok(v.get_size()),
             SymbolKind::VarnodeList(v) => v.get_size(&self.name, table),
@@ -2882,12 +2886,12 @@ impl SleighSymbol {
         hand: &mut FixedHandle,
         walker: &(impl SymbolWalker + ?Sized),
         table: &SymbolTable,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match &self.kind {
             SymbolKind::Epsilon(e) => {
                 // C++ reads the (decode-initialized) const_space field
                 hand.space = Some(e.const_space.clone().ok_or_else(|| {
-                    KunaError::sleigh("epsilon symbol has no constant space (not decoded)")
+                    UnlaceError::sleigh("epsilon symbol has no constant space (not decoded)")
                 })?);
                 hand.offset_space = None; // Not a dynamic value
                 hand.offset_offset = 0;
@@ -2933,7 +2937,7 @@ impl SleighSymbol {
                 // The resolve routine has checked that -ind- must be a
                 // valid index; C++ dereferences the table entry unchecked
                 let vnid = v.varnode_table[ind as usize].ok_or_else(|| {
-                    KunaError::sleigh("null varnode list entry (C++ dereferences unchecked)")
+                    UnlaceError::sleigh("null varnode list entry (C++ dereferences unchecked)")
                 })?;
                 let fix = table.varnode_symbol(vnid)?.get_fixed_varnode();
                 hand.space = fix.space.clone();
@@ -2970,7 +2974,7 @@ impl SleighSymbol {
                 let ref_addr = walker.get_dest_addr()?;
                 hand.space =
                     Some(f.const_space.clone().ok_or_else(|| {
-                        KunaError::sleigh("flowdest symbol has no constant space")
+                        UnlaceError::sleigh("flowdest symbol has no constant space")
                     })?);
                 hand.offset_space = None;
                 hand.offset_offset = ref_addr.get_offset();
@@ -2980,14 +2984,14 @@ impl SleighSymbol {
                 let ref_addr = walker.get_ref_addr()?;
                 hand.space =
                     Some(f.const_space.clone().ok_or_else(|| {
-                        KunaError::sleigh("flowref symbol has no constant space")
+                        UnlaceError::sleigh("flowref symbol has no constant space")
                     })?);
                 hand.offset_space = None;
                 hand.offset_offset = ref_addr.get_offset();
                 hand.size = ref_addr.get_addr_size() as u32; // C++ implicit int4 -> uint4
             }
             SymbolKind::Subtable(_) => {
-                return Err(KunaError::sleigh("Cannot use subtable in expression"));
+                return Err(UnlaceError::sleigh("Cannot use subtable in expression"));
             }
             // Not a TripleSymbol in C++ (unreachable through ported paths)
             SymbolKind::Space(_)
@@ -2997,7 +3001,7 @@ impl SleighSymbol {
             | SymbolKind::Section(_)
             | SymbolKind::Bitrange(_)
             | SymbolKind::Label(_) => {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "symbol has no fixed handle (not a TripleSymbol in C++)",
                 ));
             }
@@ -3011,7 +3015,7 @@ impl SleighSymbol {
         s: &mut String,
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.print_with_address(s, walker, table, false)
     }
 
@@ -3021,7 +3025,7 @@ impl SleighSymbol {
         walker: &mut (impl SymbolWalker + ?Sized),
         table: &SymbolTable,
         code_address: bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match &self.kind {
             SymbolKind::Epsilon(_) => {
                 s.push('0');
@@ -3065,11 +3069,11 @@ impl SleighSymbol {
                 // C++ `if (ind >= varnode_table.size())`: uint4 vs size_t
                 // (ind zero-extends)
                 if u64::from(ind) >= v.varnode_table.len() as u64 {
-                    return Err(KunaError::sleigh("Value out of range for varnode table"));
+                    return Err(UnlaceError::sleigh("Value out of range for varnode table"));
                 }
                 // C++ dereferences the entry unchecked (null would be UB)
                 let vnid = v.varnode_table[ind as usize].ok_or_else(|| {
-                    KunaError::sleigh("null varnode list entry (C++ dereferences unchecked)")
+                    UnlaceError::sleigh("null varnode list entry (C++ dereferences unchecked)")
                 })?;
                 s.push_str(name_text(table.symbol(vnid)?.get_name()).as_ref());
                 Ok(())
@@ -3096,7 +3100,9 @@ impl SleighSymbol {
                 push_hex_offset(s, walker.get_ref_addr()?.get_offset());
                 Ok(())
             }
-            SymbolKind::Subtable(_) => Err(KunaError::sleigh("Cannot use subtable in expression")),
+            SymbolKind::Subtable(_) => {
+                Err(UnlaceError::sleigh("Cannot use subtable in expression"))
+            }
             // Not a TripleSymbol in C++ (unreachable through ported paths)
             SymbolKind::Space(_)
             | SymbolKind::Token(_)
@@ -3104,7 +3110,7 @@ impl SleighSymbol {
             | SymbolKind::Macro(_)
             | SymbolKind::Section(_)
             | SymbolKind::Bitrange(_)
-            | SymbolKind::Label(_) => Err(KunaError::sleigh(
+            | SymbolKind::Label(_) => Err(UnlaceError::sleigh(
                 "symbol is not printable (not a TripleSymbol in C++)",
             )),
         }
@@ -3144,7 +3150,7 @@ impl SleighSymbol {
     }
 
     /// C++ `SleighSymbol::decodeHeader`.
-    pub fn decode_header(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_header(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.open_element()?;
         self.name = decoder.read_string_id(&sla::ATTRIB_NAME)?;
         self.id = decoder.read_unsigned_integer_id(&sla::ATTRIB_ID)? as u32; // C++ implicit uintb -> uintm
@@ -3160,7 +3166,7 @@ impl SleighSymbol {
         &self,
         encoder: &mut dyn OpcodeEncoder,
         templates: &[ConstructTpl],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         match &self.kind {
             SymbolKind::UserOp(v) => {
                 encoder.open_element(&sla::ELEM_USEROP);
@@ -3210,7 +3216,7 @@ impl SleighSymbol {
                 encoder.open_element(&sla::ELEM_VARNODE_SYM);
                 encoder.write_unsigned_integer(&sla::ATTRIB_ID, u64::from(self.id));
                 let spc = v.fix.space.as_ref().ok_or_else(|| {
-                    KunaError::sleigh("varnode symbol has no space (C++ dereferences unchecked)")
+                    UnlaceError::sleigh("varnode symbol has no space (C++ dereferences unchecked)")
                 })?;
                 encoder.write_space(&sla::ATTRIB_SPACE, spc);
                 encoder.write_unsigned_integer(&sla::ATTRIB_OFF, v.fix.offset);
@@ -3222,7 +3228,7 @@ impl SleighSymbol {
                 encoder.write_unsigned_integer(&sla::ATTRIB_ID, u64::from(self.id));
                 // C++ writes vn->getId() (deref unchecked)
                 let vn = v.vn.ok_or_else(|| {
-                    KunaError::sleigh("context symbol has no varnode (C++ dereferences unchecked)")
+                    UnlaceError::sleigh("context symbol has no varnode (C++ dereferences unchecked)")
                 })?;
                 encoder.write_unsigned_integer(&sla::ATTRIB_VARNODE, u64::from(vn));
                 encoder.write_signed_integer(&sla::ATTRIB_LOW, i64::from(v.low));
@@ -3268,7 +3274,7 @@ impl SleighSymbol {
                 op.localexp
                     .as_ref()
                     .ok_or_else(|| {
-                        KunaError::sleigh("operand has no local expression (not decoded)")
+                        UnlaceError::sleigh("operand has no local expression (not decoded)")
                     })?
                     .encode(encoder);
                 if let Some(defexp) = &op.defexp {
@@ -3319,7 +3325,7 @@ impl SleighSymbol {
             | SymbolKind::Section(_)
             | SymbolKind::Bitrange(_)
             | SymbolKind::Label(_) => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Symbol {} cannot be encoded to stream directly",
                     name_text(&self.name)
                 )));
@@ -3481,7 +3487,7 @@ impl SymbolTable {
     }
 
     /// C++ `SymbolTable::addGlobalSymbol`.  Returns the assigned symbol id.
-    pub fn add_global_symbol(&mut self, mut sym: SleighSymbol) -> KunaResult<u32> {
+    pub fn add_global_symbol(&mut self, mut sym: SleighSymbol) -> UnlaceResult<u32> {
         // size_t -> uintm symbol id as in C++ `a->id = symbollist.size()`
         let id = self.symbollist.len() as u32;
         sym.id = id;
@@ -3489,14 +3495,14 @@ impl SymbolTable {
             .table
             .first_mut()
             .and_then(|s| s.as_mut())
-            .ok_or_else(|| KunaError::sleigh("symbol table has no global scope"))?;
+            .ok_or_else(|| UnlaceError::sleigh("symbol table has no global scope"))?;
         sym.scopeid = scope.get_id();
         let name = sym.name.clone();
         // C++ pushes onto symbollist before the duplicate check throws
         self.symbollist.push(Some(sym));
         let res = scope.add_symbol(name, id);
         if res != id {
-            return Err(KunaError::sleigh(format!(
+            return Err(UnlaceError::sleigh(format!(
                 "Duplicate symbol name '{}'",
                 name_text(self.symbol(id)?.get_name())
             )));
@@ -3506,13 +3512,13 @@ impl SymbolTable {
 
     /// C++ `SymbolTable::addSymbol` (into the current scope).  Returns the
     /// assigned symbol id.
-    pub fn add_symbol(&mut self, mut sym: SleighSymbol) -> KunaResult<u32> {
+    pub fn add_symbol(&mut self, mut sym: SleighSymbol) -> UnlaceResult<u32> {
         // size_t -> uintm symbol id as in C++
         let id = self.symbollist.len() as u32;
         sym.id = id;
         let curid = self
             .curscope
-            .ok_or_else(|| KunaError::sleigh("symbol table has no current scope"))?;
+            .ok_or_else(|| UnlaceError::sleigh("symbol table has no current scope"))?;
         sym.scopeid = curid;
         let name = sym.name.clone();
         // C++ pushes onto symbollist before the duplicate check throws
@@ -3521,10 +3527,10 @@ impl SymbolTable {
             .table
             .get_mut(curid as usize)
             .and_then(|s| s.as_mut())
-            .ok_or_else(|| KunaError::sleigh("current scope is undefined"))?;
+            .ok_or_else(|| UnlaceError::sleigh("current scope is undefined"))?;
         let res = scope.add_symbol(name, id);
         if res != id {
-            return Err(KunaError::sleigh(format!(
+            return Err(UnlaceError::sleigh(format!(
                 "Duplicate symbol name: {}",
                 name_text(self.symbol(id)?.get_name())
             )));
@@ -3578,29 +3584,29 @@ impl SymbolTable {
     /// `findSymbol(id)` at sites where C++ dereferences the result
     /// immediately (an error instead of UB).
     #[inline]
-    fn symbol(&self, id: u32) -> KunaResult<&SleighSymbol> {
+    fn symbol(&self, id: u32) -> UnlaceResult<&SleighSymbol> {
         self.find_symbol_by_id(id).ok_or_else(|| {
-            KunaError::sleigh(format!(
+            UnlaceError::sleigh(format!(
                 "symbol id {id} is undefined (C++ dereferences unchecked)"
             ))
         })
     }
 
     /// Resolve a symbol id that C++ blind-casts to `VarnodeSymbol*`.
-    fn varnode_symbol(&self, id: u32) -> KunaResult<&VarnodeSymbol> {
+    fn varnode_symbol(&self, id: u32) -> UnlaceResult<&VarnodeSymbol> {
         match &self.symbol(id)?.kind {
             SymbolKind::Varnode(v) => Ok(v),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a varnode symbol (C++ casts unchecked)"
             ))),
         }
     }
 
     /// Resolve a symbol id that C++ blind-casts to `OperandSymbol*`.
-    fn operand_symbol(&self, id: u32) -> KunaResult<&OperandSymbol> {
+    fn operand_symbol(&self, id: u32) -> UnlaceResult<&OperandSymbol> {
         match &self.symbol(id)?.kind {
             SymbolKind::Operand(v) => Ok(v),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not an operand symbol (C++ casts unchecked)"
             ))),
         }
@@ -3608,10 +3614,10 @@ impl SymbolTable {
 
     /// Resolve a symbol id that C++ blind-casts to `SubtableSymbol*`.
     #[inline]
-    fn subtable_symbol(&self, id: u32) -> KunaResult<&SubtableSymbol> {
+    fn subtable_symbol(&self, id: u32) -> UnlaceResult<&SubtableSymbol> {
         match &self.symbol(id)?.kind {
             SymbolKind::Subtable(v) => Ok(v),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a subtable symbol (C++ casts unchecked)"
             ))),
         }
@@ -3620,7 +3626,7 @@ impl SymbolTable {
     /// Look up a [`Constructor`] by reference (C++ navigates
     /// `SubtableSymbol*`/`Constructor*` pointers).
     #[inline]
-    pub fn get_constructor(&self, ctref: ConstructorRef) -> KunaResult<&Constructor> {
+    pub fn get_constructor(&self, ctref: ConstructorRef) -> UnlaceResult<&Constructor> {
         self.subtable_symbol(ctref.table_id)?
             .get_constructor(ctref.ct_id)
     }
@@ -3628,7 +3634,7 @@ impl SymbolTable {
     /// C++ `OperandValue::isConstructorRelative` (slghpatexpress.cc:800):
     /// `ct->getOperand(index)->getOffsetBase() == -1`, resolved through
     /// this table (see the module docs of [`crate::slghpatexpress`]).
-    pub fn operand_value_is_constructor_relative(&self, ov: &OperandValue) -> KunaResult<bool> {
+    pub fn operand_value_is_constructor_relative(&self, ov: &OperandValue) -> UnlaceResult<bool> {
         let ct = self.get_constructor(ConstructorRef {
             table_id: ov.table_id(),
             ct_id: ov.ct_id(),
@@ -3639,7 +3645,7 @@ impl SymbolTable {
 
     /// C++ `OperandValue::getName` (slghpatexpress.cc:807):
     /// `ct->getOperand(index)->getName()`, resolved through this table.
-    pub fn operand_value_name(&self, ov: &OperandValue) -> KunaResult<&[u8]> {
+    pub fn operand_value_name(&self, ov: &OperandValue) -> UnlaceResult<&[u8]> {
         let ct = self.get_constructor(ConstructorRef {
             table_id: ov.table_id(),
             ct_id: ov.ct_id(),
@@ -3652,14 +3658,14 @@ impl SymbolTable {
     /// `VarnodeTpl` for a symbol used directly in a p-code expression.  Driven
     /// through the symbol table because `OperandSymbol::getVarnode` recurses
     /// into its defining triple symbol.
-    pub fn get_varnode(&self, id: u32) -> KunaResult<VarnodeTpl> {
+    pub fn get_varnode(&self, id: u32) -> UnlaceResult<VarnodeTpl> {
         let sym = self.symbol(id)?;
         match &sym.kind {
             SymbolKind::Epsilon(e) => {
                 let cs = e
                     .const_space
                     .clone()
-                    .ok_or_else(|| KunaError::sleigh("epsilon symbol has no constant space"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("epsilon symbol has no constant space"))?;
                 Ok(VarnodeTpl::new(
                     ConstTpl::new_space(cs),
                     ConstTpl::new_real(ConstType::Real, 0),
@@ -3671,7 +3677,7 @@ impl SymbolTable {
                     .fix
                     .space
                     .clone()
-                    .ok_or_else(|| KunaError::sleigh("varnode symbol has no space"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("varnode symbol has no space"))?;
                 Ok(VarnodeTpl::new(
                     ConstTpl::new_space(spc),
                     ConstTpl::new_real(ConstType::Real, v.fix.offset),
@@ -3707,7 +3713,7 @@ impl SymbolTable {
                     None => Ok(VarnodeTpl::new_from_handle(op.hand, false)),
                 }
             }
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} has no varnode (not a SpecificSymbol in C++)"
             ))),
         }
@@ -3718,10 +3724,10 @@ impl SymbolTable {
         &self,
         const_space: Option<&Rc<AddrSpace>>,
         jtype: ConstType,
-    ) -> KunaResult<VarnodeTpl> {
+    ) -> UnlaceResult<VarnodeTpl> {
         let cs = const_space
             .cloned()
-            .ok_or_else(|| KunaError::sleigh("jump symbol has no constant space"))?;
+            .ok_or_else(|| UnlaceError::sleigh("jump symbol has no constant space"))?;
         Ok(VarnodeTpl::new(
             ConstTpl::new_space(cs),
             ConstTpl::new_type(jtype),
@@ -3788,30 +3794,30 @@ impl SymbolTable {
     // -----------------------------------------------------------------
 
     /// Mutable `SubtableSymbol` by id (build side; C++ casts unchecked).
-    fn subtable_symbol_mut(&mut self, id: u32) -> KunaResult<&mut SubtableSymbol> {
+    fn subtable_symbol_mut(&mut self, id: u32) -> UnlaceResult<&mut SubtableSymbol> {
         let sym = self
             .symbollist
             .get_mut(id as usize)
             .and_then(|s| s.as_mut())
-            .ok_or_else(|| KunaError::sleigh(format!("symbol id {id} is undefined")))?;
+            .ok_or_else(|| UnlaceError::sleigh(format!("symbol id {id} is undefined")))?;
         match &mut sym.kind {
             SymbolKind::Subtable(v) => Ok(v),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not a subtable symbol (C++ casts unchecked)"
             ))),
         }
     }
 
     /// Mutable `OperandSymbol` by id (build side; C++ casts unchecked).
-    fn operand_symbol_mut(&mut self, id: u32) -> KunaResult<&mut OperandSymbol> {
+    fn operand_symbol_mut(&mut self, id: u32) -> UnlaceResult<&mut OperandSymbol> {
         let sym = self
             .symbollist
             .get_mut(id as usize)
             .and_then(|s| s.as_mut())
-            .ok_or_else(|| KunaError::sleigh(format!("symbol id {id} is undefined")))?;
+            .ok_or_else(|| UnlaceError::sleigh(format!("symbol id {id} is undefined")))?;
         match &mut sym.kind {
             SymbolKind::Operand(v) => Ok(v),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "symbol id {id} is not an operand symbol (C++ casts unchecked)"
             ))),
         }
@@ -3827,7 +3833,7 @@ impl SymbolTable {
         table_id: u32,
         arena: &EquationArena,
         errs: &mut Vec<String>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Already built?
         if self.subtable_symbol(table_id)?.pattern.is_some() {
             return Ok(());
@@ -3884,7 +3890,7 @@ impl SymbolTable {
 
     /// C++ `Constructor::printInfo` text without the double-borrow (reads
     /// the parent name + lineno).
-    fn constructor_info(&self, table_id: u32, ct_id: u32) -> KunaResult<String> {
+    fn constructor_info(&self, table_id: u32, ct_id: u32) -> UnlaceResult<String> {
         let ct = self.subtable_symbol(table_id)?.get_constructor(ct_id)?;
         let lineno = ct.get_lineno();
         Ok(format!(
@@ -3897,12 +3903,12 @@ impl SymbolTable {
     /// Java `Constructor.buildPattern` "operand ... has an issue": an operand
     /// defined as itself or as a bare operand whose pattern is generated after
     /// its own.
-    fn operand_before_definition(&self, opid: u32) -> KunaError {
+    fn operand_before_definition(&self, opid: u32) -> UnlaceError {
         let nm = self
             .symbol(opid)
             .map(|s| name_text(s.get_name()).to_string())
             .unwrap_or_default();
-        KunaError::sleigh(format!(
+        UnlaceError::sleigh(format!(
             "{nm}: operand is defined as itself or an operand that follows it"
         ))
     }
@@ -3917,7 +3923,7 @@ impl SymbolTable {
         ct_id: u32,
         arena: &EquationArena,
         errs: &mut Vec<String>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Already built?
         if self
             .subtable_symbol(table_id)?
@@ -3943,7 +3949,7 @@ impl SymbolTable {
                     if self.subtable_symbol(tripid)?.is_being_built() {
                         // Detected recursion
                         if recursion {
-                            return Err(KunaError::sleigh("Illegal recursion"));
+                            return Err(UnlaceError::sleigh("Illegal recursion"));
                         }
                         recursion = true;
                         TokenPattern::new_true()
@@ -3967,7 +3973,7 @@ impl SymbolTable {
                     .ok_or_else(|| self.operand_before_definition(opid))?
             } else {
                 let nm = name_text(self.symbol(opid)?.get_name()).to_string();
-                return Err(KunaError::sleigh(format!("{nm}: operand is undefined")));
+                return Err(UnlaceError::sleigh(format!("{nm}: operand is undefined")));
             };
 
             let min_len = sympat.get_minimum_length();
@@ -3986,12 +3992,12 @@ impl SymbolTable {
             .subtable_symbol(table_id)?
             .get_constructor(ct_id)?
             .get_pattern_equation()
-            .ok_or_else(|| KunaError::sleigh("Missing equation"))?;
+            .ok_or_else(|| UnlaceError::sleigh("Missing equation"))?;
 
         // Build the entire pattern
         let mut pattern = arena.gen_pattern(pateq, &oppattern)?;
         if pattern.always_false() {
-            return Err(KunaError::sleigh("Impossible pattern"));
+            return Err(UnlaceError::sleigh("Impossible pattern"));
         }
         if recursion {
             pattern.set_right_ellipsis(true);
@@ -4011,7 +4017,7 @@ impl SymbolTable {
                 operand_ids: &operand_ids,
             };
             if !arena.resolve_operand_left(pateq, &mut resolve, &oppattern, &mut sink)? {
-                return Err(KunaError::sleigh("Unable to resolve operand offsets"));
+                return Err(UnlaceError::sleigh("Unable to resolve operand offsets"));
             }
         }
 
@@ -4066,7 +4072,7 @@ impl SymbolTable {
         table_id: u32,
         ct_id: u32,
         arena: &EquationArena,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let operand_ids: Vec<u32> = self
             .subtable_symbol(table_id)?
             .get_constructor(ct_id)?
@@ -4077,7 +4083,7 @@ impl SymbolTable {
             .subtable_symbol(table_id)?
             .get_constructor(ct_id)?
             .get_pattern_equation()
-            .ok_or_else(|| KunaError::sleigh("Missing equation"))?;
+            .ok_or_else(|| UnlaceError::sleigh("Missing equation"))?;
 
         // operandOrder fills patternorder with the operand indices
         let mut patternorder: Vec<i32> = Vec::new();
@@ -4137,7 +4143,7 @@ impl SymbolTable {
         }
 
         if neworder.len() != n {
-            return Err(KunaError::sleigh(
+            return Err(UnlaceError::sleigh(
                 "Circular offset dependency between operands",
             ));
         }
@@ -4171,7 +4177,7 @@ impl SymbolTable {
             .collect();
         // Remap operand-value indices embedded in each operand's defining
         // expression (`op << 8 | op` etc.) through the handmap (C++ shares the
-        // operand `localexp` pointers; the kuna port clones them).  Done before
+        // operand `localexp` pointers; the unlace port clones them).  Done before
         // re-borrowing the constructor below.
         for &opid in &operand_ids {
             self.operand_symbol_mut(opid)?
@@ -4189,7 +4195,7 @@ impl SymbolTable {
         ct.operands = new_operand_ids;
         // Remap operand-value indices embedded in the constructor's ContextOps
         // through the handmap (C++ shares the operand's localexp pointer; the
-        // kuna port clones it into the ContextOp, so it must be remapped here).
+        // unlace port clones it into the ContextOp, so it must be remapped here).
         for cc in ct.context.iter_mut() {
             if let ContextChange::Op(op) = cc {
                 op.remap_operand_index(&handmap);
@@ -4205,7 +4211,7 @@ impl SymbolTable {
         &mut self,
         table_id: u32,
         props: &mut DecisionProperties,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let table = self.subtable_symbol(table_id)?;
         if table.pattern.is_none() {
             return Ok(());
@@ -4223,7 +4229,7 @@ impl SymbolTable {
             } else {
                 for j in 0..ndisjoint {
                     let dp = pat.get_disjoint(j).ok_or_else(|| {
-                        KunaError::sleigh("decision tree: missing disjoint pattern")
+                        UnlaceError::sleigh("decision tree: missing disjoint pattern")
                     })?;
                     tree.add_constructor_pair(dp, i as u32);
                 }
@@ -4239,7 +4245,7 @@ impl SymbolTable {
     /// to the existing symbol `a`'s name) in place, preserving `a`'s id and
     /// scopeid.  Used by the `attach*` directives to swap a `ValueSymbol` for
     /// a `ValueMapSymbol`/`NameSymbol`/`VarnodeListSymbol`.
-    pub fn replace_symbol(&mut self, a_id: u32, mut b: SleighSymbol) -> KunaResult<()> {
+    pub fn replace_symbol(&mut self, a_id: u32, mut b: SleighSymbol) -> UnlaceResult<()> {
         let (name, scopeid) = {
             let a = self.symbol(a_id)?;
             (a.name.clone(), a.scopeid)
@@ -4404,7 +4410,7 @@ impl SymbolTable {
         &self,
         encoder: &mut dyn OpcodeEncoder,
         templates: &[ConstructTpl],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         encoder.open_element(&sla::ELEM_SYMBOL_TABLE);
         // size_t -> intb counts as in C++ writeSignedInteger(..., size())
         encoder.write_signed_integer(&sla::ATTRIB_SCOPESIZE, self.table.len() as i64);
@@ -4412,9 +4418,9 @@ impl SymbolTable {
         for scope in &self.table {
             // C++ dereferences table[i] unconditionally (null after a
             // purge would be UB)
-            let scope = scope
-                .as_ref()
-                .ok_or_else(|| KunaError::sleigh("undefined scope (C++ dereferences unchecked)"))?;
+            let scope = scope.as_ref().ok_or_else(|| {
+                UnlaceError::sleigh("undefined scope (C++ dereferences unchecked)")
+            })?;
             encoder.open_element(&sla::ELEM_SCOPE);
             encoder.write_unsigned_integer(&sla::ATTRIB_ID, u64::from(scope.get_id()));
             let parent = match scope.get_parent() {
@@ -4427,7 +4433,7 @@ impl SymbolTable {
         // First save the headers
         for sym in &self.symbollist {
             let sym = sym.as_ref().ok_or_else(|| {
-                KunaError::sleigh("undefined symbol (C++ dereferences unchecked)")
+                UnlaceError::sleigh("undefined symbol (C++ dereferences unchecked)")
             })?;
             sym.encode_header(encoder);
         }
@@ -4446,18 +4452,18 @@ impl SymbolTable {
         &mut self,
         decoder: &mut dyn OpcodeDecoder,
         trans: &mut dyn SleighBaseTrans,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let el = decoder.open_element_id(&sla::ELEM_SYMBOL_TABLE)?;
         let table_size = decoder.read_signed_integer_id(&sla::ATTRIB_SCOPESIZE)?;
         let symbol_size = decoder.read_signed_integer_id(&sla::ATTRIB_SYMBOLSIZE)?;
         if table_size < 0 || symbol_size < 0 {
-            return Err(KunaError::sleigh("Bad symbol table size"));
+            return Err(UnlaceError::sleigh("Bad symbol table size"));
         }
         if table_size > MAX_TABLES {
-            return Err(KunaError::sleigh("Maximum scopes exceeded"));
+            return Err(UnlaceError::sleigh("Maximum scopes exceeded"));
         }
         if symbol_size > MAX_SYMBOLS {
-            return Err(KunaError::sleigh("Maximum symbols exceeded"));
+            return Err(UnlaceError::sleigh("Maximum symbols exceeded"));
         }
         self.table.resize_with(table_size as usize, || None); // bounded by MAX_TABLES
         self.symbollist.resize_with(symbol_size as usize, || None); // bounded by MAX_SYMBOLS
@@ -4467,13 +4473,13 @@ impl SymbolTable {
             let id = decoder.read_unsigned_integer_id(&sla::ATTRIB_ID)? as u32; // C++ implicit uintb -> uintm
             // C++ `id >= table.size()`: uintm vs size_t (id zero-extends)
             if u64::from(id) >= self.table.len() as u64 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Bad symbol scope id: exceeds symbol scope table size",
                 ));
             }
             let parent = decoder.read_unsigned_integer_id(&sla::ATTRIB_PARENT)? as u32; // C++ implicit uintb -> uintm
             if u64::from(parent) >= self.table.len() as u64 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Bad symbol scope parent id: exceeds symbol scope table size",
                 ));
             }
@@ -4489,7 +4495,9 @@ impl SymbolTable {
             };
             if self.table[id as usize].is_some() {
                 // (C++ message quirk: complains about the parent id)
-                return Err(KunaError::sleigh("Bad symbol scope parent id: not unique"));
+                return Err(UnlaceError::sleigh(
+                    "Bad symbol scope parent id: not unique",
+                ));
             }
             self.table[id as usize] = Some(SymbolScope::new(parscope, id));
             decoder.close_element(subel)?;
@@ -4518,7 +4526,7 @@ impl SymbolTable {
 
     /// C++ `SymbolTable::decodeSymbolHeader`: put the shell of a symbol in
     /// the symbol table in order to allow recursion.
-    pub fn decode_symbol_header(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_symbol_header(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.peek_element()?;
         let kind = if el == sla::ELEM_USEROP_HEAD {
             SymbolKind::UserOp(UserOpSymbol::default())
@@ -4547,23 +4555,25 @@ impl SymbolTable {
         } else if el == sla::ELEM_SUBTABLE_SYM_HEAD {
             SymbolKind::Subtable(SubtableSymbol::default())
         } else {
-            return Err(KunaError::sleigh("Bad symbol xml"));
+            return Err(UnlaceError::sleigh("Bad symbol xml"));
         };
         let mut sym = SleighSymbol::new(b"", kind);
         sym.decode_header(decoder)?; // Restore basic elements of symbol
         // C++ `sym->id >= symbollist.size()`: uintm vs size_t (zero-extends)
         if u64::from(sym.id) >= self.symbollist.len() as u64 {
-            return Err(KunaError::sleigh("Bad symbol id: exceeds symbollist size"));
+            return Err(UnlaceError::sleigh(
+                "Bad symbol id: exceeds symbollist size",
+            ));
         }
         if self.symbollist[sym.id as usize].is_some() {
-            return Err(KunaError::sleigh("Bad symbol id: not unique"));
+            return Err(UnlaceError::sleigh("Bad symbol id: not unique"));
         }
         // C++ `sym->scopeid >= table.size()`: uintm vs size_t
         if u64::from(sym.scopeid) >= self.table.len() as u64 {
-            return Err(KunaError::sleigh("Bad symbol scope id: too large"));
+            return Err(UnlaceError::sleigh("Bad symbol scope id: too large"));
         }
         if self.table[sym.scopeid as usize].is_none() {
-            return Err(KunaError::sleigh("Bad symbol scope id: undefined"));
+            return Err(UnlaceError::sleigh("Bad symbol scope id: undefined"));
         }
         let id = sym.id;
         let scopeid = sym.scopeid;
@@ -4584,11 +4594,11 @@ impl SymbolTable {
         decoder: &mut dyn OpcodeDecoder,
         trans: &mut dyn SleighBaseTrans,
         id: u32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let sym_type = self
             .find_symbol_by_id(id)
             .ok_or_else(|| {
-                KunaError::decoder(format!(
+                UnlaceError::decoder(format!(
                     "symbol content references undefined id {id} (C++ dereferences unchecked)"
                 ))
             })?
@@ -4614,7 +4624,7 @@ impl SymbolTable {
                 // C++ ValueSymbol::decode
                 if let SymbolKind::Value(v) = self.kind_of(id) {
                     if v.patval.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let patval = {
@@ -4633,7 +4643,7 @@ impl SymbolTable {
                 // C++ ValueMapSymbol::decode
                 if let SymbolKind::ValueMap(v) = self.kind_of(id) {
                     if v.value.patval.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let (patval, valuetable) = {
@@ -4662,7 +4672,7 @@ impl SymbolTable {
                 // C++ NameSymbol::decode
                 if let SymbolKind::Name(v) = self.kind_of(id) {
                     if v.value.patval.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let (patval, nametable) = {
@@ -4731,11 +4741,11 @@ impl SymbolTable {
                     attrib = decoder.get_next_attribute_id()?;
                 }
                 if low_missing || high_missing {
-                    return Err(KunaError::decoder("Missing high/low attributes"));
+                    return Err(UnlaceError::decoder("Missing high/low attributes"));
                 }
                 if let SymbolKind::Context(v) = self.kind_of(id) {
                     if v.value.patval.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let patval = {
@@ -4758,7 +4768,7 @@ impl SymbolTable {
                 // C++ VarnodeListSymbol::decode
                 if let SymbolKind::VarnodeList(v) = self.kind_of(id) {
                     if v.value.patval.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let (patval, varnode_table) = {
@@ -4793,7 +4803,7 @@ impl SymbolTable {
                 // C++ OperandSymbol::decode
                 if let SymbolKind::Operand(v) = self.kind_of(id) {
                     if v.defexp.is_some() || v.localexp.is_some() {
-                        return Err(KunaError::decoder("Already decoded symbol"));
+                        return Err(UnlaceError::decoder("Already decoded symbol"));
                     }
                 }
                 let mut reloffset: u32 = 0;
@@ -4834,7 +4844,7 @@ impl SymbolTable {
                     let localexp = match PatternExpression::decode_expression(decoder, &resolver)? {
                         PatternExpression::Value(PatternValue::OperandValue(ov)) => ov,
                         _ => {
-                            return Err(KunaError::decoder(
+                            return Err(UnlaceError::decoder(
                                 "Expecting operand expression (C++ casts unchecked)",
                             ));
                         }
@@ -4892,7 +4902,7 @@ impl SymbolTable {
             }
             // C++ SleighSymbol::decode base: no content decode for this kind
             _ => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Symbol {} cannot be decoded from stream directly",
                     name_text(self.symbol(id)?.get_name())
                 )));
@@ -4924,7 +4934,7 @@ impl OperandValueResolver for SymbolTable {
     /// `dynamic_cast<SubtableSymbol*>(trans->findSymbol(tabid))
     /// ->getNumConstructors()` — a failed lookup/downcast is UB in C++ and
     /// an error here (per the boundary contract).
-    fn num_constructors(&self, table_id: u32) -> KunaResult<i32> {
+    fn num_constructors(&self, table_id: u32) -> UnlaceResult<i32> {
         Ok(self.subtable_symbol(table_id)?.get_num_constructors())
     }
 }
@@ -4941,7 +4951,7 @@ struct TableResolver<'a> {
 }
 
 impl OperandValueResolver for TableResolver<'_> {
-    fn num_constructors(&self, table_id: u32) -> KunaResult<i32> {
+    fn num_constructors(&self, table_id: u32) -> UnlaceResult<i32> {
         if let Some((cur_id, cur_num)) = self.current {
             if cur_id == table_id {
                 return Ok(cur_num);
@@ -4960,7 +4970,7 @@ fn decode_subtable_content(
     table: &SymbolTable,
     trans: &mut dyn SleighBaseTrans,
     self_id: u32,
-) -> KunaResult<(Vec<Constructor>, Option<DecisionNode>)> {
+) -> UnlaceResult<(Vec<Constructor>, Option<DecisionNode>)> {
     // C++ reads ATTRIB_NUMCT only to reserve()
     let _numct = decoder.read_signed_integer_id(&sla::ATTRIB_NUMCT)? as i32; // C++ implicit intb -> int4
     let mut construct: Vec<Constructor> = Vec::new();
@@ -5053,8 +5063,8 @@ mod tests {
         fn decode_construct_tpl(
             &mut self,
             _decoder: &mut dyn OpcodeDecoder,
-        ) -> KunaResult<(i32, ConstructTplHandle)> {
-            Err(KunaError::sleigh("no ConstructTpl in symbol tests"))
+        ) -> UnlaceResult<(i32, ConstructTplHandle)> {
+            Err(UnlaceError::sleigh("no ConstructTpl in symbol tests"))
         }
     }
 
@@ -5100,9 +5110,9 @@ mod tests {
     }
 
     impl PatternExpressionContext for TestWalker {
-        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
             if byteoff < 0 || (byteoff + numbytes) as usize > self.instr.len() {
-                return Err(KunaError::bad_data(
+                return Err(UnlaceError::bad_data(
                     "Instruction is using more than 16 bytes",
                 ));
             }
@@ -5114,7 +5124,7 @@ mod tests {
             Ok(res)
         }
 
-        fn get_context_bytes(&self, bytestart: i32, size: i32) -> KunaResult<u32> {
+        fn get_context_bytes(&self, bytestart: i32, size: i32) -> UnlaceResult<u32> {
             let intstart = (bytestart / 4) as usize;
             let mut res: u32 = *self.ctx.get(intstart).unwrap_or(&0);
             let byte_offset = bytestart % 4;
@@ -5132,45 +5142,47 @@ mod tests {
             self.naddr.clone().expect("test walker naddr unset")
         }
 
-        fn get_n2addr(&self) -> KunaResult<Address> {
-            Err(KunaError::lowlevel(
+        fn get_n2addr(&self) -> UnlaceResult<Address> {
+            Err(UnlaceError::lowlevel(
                 "inst_next2 not available in this context",
             ))
         }
 
-        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
-            Err(KunaError::sleigh("no operand values in symbol tests"))
+        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
+            Err(UnlaceError::sleigh("no operand values in symbol tests"))
         }
     }
 
     impl SymbolWalker for TestWalker {
-        fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+        fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
             self.path.borrow_mut().push(i);
             Ok(())
         }
 
-        fn pop_operand(&mut self) -> KunaResult<()> {
+        fn pop_operand(&mut self) -> UnlaceResult<()> {
             self.path.borrow_mut().pop();
             Ok(())
         }
 
-        fn get_constructor(&self) -> KunaResult<ConstructorRef> {
+        fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
             let path = self.path.borrow();
             for (p, ctref) in &self.ctmap {
                 if *p == *path {
                     return Ok(*ctref);
                 }
             }
-            Err(KunaError::sleigh("no constructor mapped for operand path"))
+            Err(UnlaceError::sleigh(
+                "no constructor mapped for operand path",
+            ))
         }
 
-        fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle> {
+        fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle> {
             for (ind, hand) in &self.handles {
                 if *ind == i {
                     return Ok(hand.clone());
                 }
             }
-            Err(KunaError::sleigh("no fixed handle for operand"))
+            Err(UnlaceError::sleigh("no fixed handle for operand"))
         }
 
         fn get_const_space(&self) -> Rc<AddrSpace> {
@@ -5181,22 +5193,22 @@ mod tests {
             Rc::clone(self.cur_space.as_ref().expect("cur space unset"))
         }
 
-        fn get_dest_addr(&self) -> KunaResult<Address> {
-            Err(KunaError::lowlevel("no flowdest in symbol tests"))
+        fn get_dest_addr(&self) -> UnlaceResult<Address> {
+            Err(UnlaceError::lowlevel("no flowdest in symbol tests"))
         }
 
-        fn get_ref_addr(&self) -> KunaResult<Address> {
-            Err(KunaError::lowlevel("no flowref in symbol tests"))
+        fn get_ref_addr(&self) -> UnlaceResult<Address> {
+            Err(UnlaceError::lowlevel("no flowref in symbol tests"))
         }
 
-        fn get_instruction_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+        fn get_instruction_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
             // bit 0 is the MSB of instruction byte 0
             let mut res: u32 = 0;
             for i in 0..size {
                 let bit = startbit + i;
                 let byte = (bit / 8) as usize;
                 if byte >= self.instr.len() {
-                    return Err(KunaError::bad_data("instruction bits past buffer"));
+                    return Err(UnlaceError::bad_data("instruction bits past buffer"));
                 }
                 let b = (self.instr[byte] >> (7 - (bit % 8))) & 1;
                 res = (res << 1) | u32::from(b);
@@ -5204,14 +5216,14 @@ mod tests {
             Ok(res)
         }
 
-        fn get_context_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+        fn get_context_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
             // bit 0 is the MSB of context word 0
             let mut res: u32 = 0;
             for i in 0..size {
                 let bit = startbit + i;
                 let word = (bit / 32) as usize;
                 if word >= self.ctx.len() {
-                    return Err(KunaError::bad_data("context bits past buffer"));
+                    return Err(UnlaceError::bad_data("context bits past buffer"));
                 }
                 let b = (self.ctx[word] >> (31 - (bit % 32))) & 1;
                 res = (res << 1) | (b & 1);
@@ -5297,7 +5309,7 @@ mod tests {
             .expect_err("duplicate must fail");
         assert_eq!(
             format!("{err}"),
-            format!("{}", KunaError::sleigh("Duplicate symbol name 'dup'"))
+            format!("{}", UnlaceError::sleigh("Duplicate symbol name 'dup'"))
         );
         let err2 = table
             .add_symbol(SleighSymbol::new_userop(b"dup"))
@@ -6001,7 +6013,7 @@ mod tests {
         nsyms: i64,
         heads: impl FnOnce(&mut PackedEncode),
         contents: impl FnOnce(&mut PackedEncode),
-    ) -> KunaResult<SymbolTable> {
+    ) -> UnlaceResult<SymbolTable> {
         let mut buf = Vec::new();
         {
             let mut enc = PackedEncode::new(&mut buf);

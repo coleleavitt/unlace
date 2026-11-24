@@ -43,5 +43,5 @@
       "gt": 600
     }
   },
-  "notes": "In-repo twin of dataset acceptance a-9667a93853f5 (crackme0x04 sub_100003790); promote refuses it, CI has no dataset. gcc -O3 -mssse3 vectorises the range loops and broadcasts the base byte with pxor+pshufb, so all 32 lanes read back as opaque SUB161 temporaries. tests/stages/kuna-simdlane.toml pins the stage seam."
+  "notes": "In-repo twin of dataset acceptance a-9667a93853f5 (crackme0x04 sub_100003790); promote refuses it, CI has no dataset. gcc -O3 -mssse3 vectorises the range loops and broadcasts the base byte with pxor+pshufb, so all 32 lanes read back as opaque SUB161 temporaries. tests/stages/simdlane.toml pins the stage seam."
 }

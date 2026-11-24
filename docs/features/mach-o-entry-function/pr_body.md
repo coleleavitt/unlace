@@ -108,7 +108,7 @@ That is the standing behaviour the PE pass above already documents and measures 
 30 firing images; the answer is prototype coverage at the callee, not withholding the entry
 declaration. It is recorded in `not_closed`.
 
-**Tests.** `decompiler/crates/kuna-console/tests/verify_machomain.rs` — the two-pass gate
+**Tests.** `decompiler/crates/console/tests/verify_machomain.rs` — the two-pass gate
 (off: `sub_1000005b0(...)` with no argument named; default: `main` with `argc`/`argv`) plus
 the guard that the un-stripped twin keeps its own `_main` in **both** arms and gains no
 function. Four unit tests over the pure seams (`entry_main_vma`, `macho_main_entry_vma`):

@@ -1,4 +1,4 @@
-//! (kuna) The `delphiabi` option gate: read a 32-bit Delphi PE under the
+//! (unlace) The `delphiabi` option gate: read a 32-bit Delphi PE under the
 //! vendored Delphi compiler spec (`x86delphi.cspec`, compiler id
 //! `borlanddelphi`), whose default model is Delphi's `register` convention:
 //! the first three arguments in EAX, EDX and ECX, the rest on the stack, the
@@ -24,15 +24,15 @@ pub fn delphiabi_enabled() -> bool {
     }
 }
 
-/// Bridge a `set_kuna_option("delphiabi", val)` toggle to [`DELPHIABI_ENV`]
+/// Bridge a `set_unlace_option("delphiabi", val)` toggle to [`DELPHIABI_ENV`]
 /// so a later `load file` in the same process sees the choice.
 pub fn set_delphiabi_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(DELPHIABI_ENV, if on { "on" } else { "off" }) };
 }
 
-crate::kuna_flag!(
-    /// (kuna `delphiabi`) The requested state of the load-time Delphi
+crate::unlace_flag!(
+    /// (unlace `delphiabi`) The requested state of the load-time Delphi
     /// compiler-spec selection; the catalog's live `current` field reads it.
     DelphiAbi,
     "delphiabi",

@@ -110,7 +110,7 @@ asked about; they carry `__int128` or a two-word struct, and counting them would
 mark every 64-bit output narrowed. On a 32-bit target the result is that only
 declared callees fold under this option: over the three ARM binaries in the
 sweep, 53 functions go back to the `off` text (52 in `cf2.elf`, 1 in
-`RTOSDemo.out`). `tests/stages/kuna-foldcallretphi-join.toml` is the i386 case:
+`RTOSDemo.out`). `tests/stages/foldcallretphi-join.toml` is the i386 case:
 undeclared `big` keeps its spill by default, and declared `int4 big(int4)` folds.
 
 ## The short-circuit guard
@@ -155,7 +155,7 @@ today's default output, so it is GH-684 and not part of this change.
 | gate | result |
 |---|---|
 | `make test` | 675/675, PARITY OK — 0 assertions move |
-| `make test-stages` | 1181/1181 on `d96e3408`, 1160/1160 on `6e4f6fa5` with both new guards (1156 before them, 1141 on `e1139df9`), PARITY OK. The option's stage test now runs its default passes first with no option command, so the corpus pins the shipped default: the undeclared-`helper` pass (spill kept), the declared one (folded), `target2` (global write blocks), and `target3`, gcc -O2's setcc/and shape for `(r == 0) && (a > 5)` (spill kept); then `option foldcallretphi off`. `kuna-foldcallretphi-join.xml` is new: i386 `edx:eax`, spill kept for undeclared `big`, fold once it is declared `int4`. Its five old assertion names are re-recorded and four new rows added in `docs/baseline-stages.json`; no other row moves. The four new assertions fail on the build before the guards |
+| `make test-stages` | 1181/1181 on `d96e3408`, 1160/1160 on `6e4f6fa5` with both new guards (1156 before them, 1141 on `e1139df9`), PARITY OK. The option's stage test now runs its default passes first with no option command, so the corpus pins the shipped default: the undeclared-`helper` pass (spill kept), the declared one (folded), `target2` (global write blocks), and `target3`, gcc -O2's setcc/and shape for `(r == 0) && (a > 5)` (spill kept); then `option foldcallretphi off`. `foldcallretphi-join.xml` is new: i386 `edx:eax`, spill kept for undeclared `big`, fold once it is declared `int4`. Its five old assertion names are re-recorded and four new rows added in `docs/baseline-stages.json`; no other row moves. The four new assertions fail on the build before the guards |
 | `make test-cli` | 189/189 on `6e4f6fa5` with both new guards (185 on `e1139df9`); one probe re-pointed, see below |
 
 `tests/cli/no-cli-rename-or-prototype-override` runs
@@ -181,13 +181,13 @@ pass 49 / regressed 1 (`typed-mach-o-tail`), the same as `main`.
 `make rust-test` has three more fences on default output, and each moves
 because a spill is gone:
 
-* `kuna-console/tests/verify_assertplane.rs` (6 cases). The file's register-local
+* `console/tests/verify_assertplane.rs` (6 cases). The file's register-local
   cases target `int v1; // eax` in `fauxware` `authenticate`, which is the
   `strcmp(a1,sneaky)` spill; folded, `authenticate` has no register local left
   and its buffer is `v1`. The fixture now loads with `foldcallretphi off`, so
   every directive names what it named before; the plane is under test there,
   not the fold.
-* `kuna-console/tests/verify_libcsigs.rs` `callee_return_type_reaches_the_local_that_holds_it`
+* `console/tests/verify_libcsigs.rs` `callee_return_type_reaches_the_local_that_holds_it`
   asserted `unsigned int v4;` / `int4 v4;` for `open`'s fd, which is `v3` once
   the spill above it goes. It now finds the local assigned `open(...)` and
   checks that declaration's type, so it no longer depends on a number.
@@ -405,12 +405,12 @@ value and every global afterwards:
 | F `pr` O2-noinline `main` | the default keeps `v4 = sub_60c0(stdin), v4 == -1` | 4 |
 | B' / F' the pre-guard fold `sub_c5b0(stdin) == -1` / `sub_60c0(stdin) == -1`, callee returning 0 | agree | 3 + 3 |
 | control B' / F': the same, callee returning `0xffffffff` as the binary and kuna's own callee text do | must differ | 1 + 1 |
-| control K: `stages/kuna-foldcallretphi.xml` `target2` folded past `k = 42` | must differ | 1 |
+| control K: `stages/foldcallretphi.xml` `target2` folded past `k = 42` | must differ | 1 |
 | G `cx7` z1 -O2 | `(ferror(stdin) \|\| 5 < a0)`, the call folded into the left operand | 8 |
 | G `cx7` z3 -O2 | the default keeps `v1 = fflush(stdout); (5 < a0 && !v1)` | 8 |
 | G' the pre-guard fold `(5 < a0 && !fflush(stdout))`, `a0 > 5` | agree | 4 |
 | control G': the same, `a0 <= 5` | must differ (no `fflush` in the trace) | 4 |
-| H i386 `kuna-foldcallretphi-join` | the default keeps `v1 = big(dat_1050); if (v1 != -1)` | 2 |
+| H i386 `foldcallretphi-join` | the default keeps `v1 = big(dat_1050); if (v1 != -1)` | 2 |
 | H' the pre-guard fold `big(dat_1050) != -1`, callee returning 1 | agree | 1 |
 | control H': the same, callee returning `0xffffffff` in an `unsigned long long` | must differ | 1 |
 

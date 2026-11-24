@@ -103,7 +103,7 @@ fn resolver_transfers_are_bounded_and_explicit_flow_takes_precedence() {
             )
             .unwrap();
             prog.arch_mut()
-                .set_kuna_option("voidtailreturn", "off")
+                .set_unlace_option("voidtailreturn", "off")
                 .unwrap();
             let sites: Vec<_> = prog.arch().loader_transfer_sites.iter().cloned().collect();
             assert!(sites.len() >= 4, "{image}");

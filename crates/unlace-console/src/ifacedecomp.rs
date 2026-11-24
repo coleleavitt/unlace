@@ -16,7 +16,7 @@
 //! In C++ each `Ifc*` command is a subclass of `IfaceDecompCommand`, holds a
 //! back-pointer to the owning `IfaceStatus` (`status`) and to the shared
 //! per-module data (`dcp`, an [`IfaceDecompData`]), set by `setData`, and
-//! mutates them from a `void execute(istream&)`.  The kuna framework passes
+//! mutates them from a `void execute(istream&)`.  The unlace framework passes
 //! `&mut IfaceStatus` to [`IfaceCommandAction::execute`] directly (no stored
 //! back-pointer — see `interface.rs`), and the shared [`IfaceDecompData`] lives
 //! in the [`IfaceStatus::get_data_mut`] datamap under the module name
@@ -38,7 +38,7 @@
 //! (`"No function selected"`, `"Decompiling <name>"`, `"Successfully ..."`,
 //! ...), and the [`execute`] exception→prefix grammar (`"Command parsing error:
 //! "`, `"Execution error: "`, ...) are byte-faithful to C++: they are what the
-//! Python harness (`kuna/run_tests.py`) and the datatest `<stringmatch>`
+//! Python harness (`unlace/run_tests.py`) and the datatest `<stringmatch>`
 //! assertions parse.
 //!
 //! # Documented losses (engine integration not yet exposed by W1–W8)
@@ -130,7 +130,7 @@ pub struct IfaceDecompData {
     /// branch) keyed by function name.
     ///
     /// C++ `Architecture::setPrototype` finds the existing function symbol and
-    /// locks the prototype onto its `Funcdata` immediately.  In the kuna console
+    /// locks the prototype onto its `Funcdata` immediately.  In the unlace console
     /// boundary the `Funcdata` (`dcp.fd`) is built later by `load function`/`load addr`
     /// (`build_and_follow_flow` makes a fresh one), so the pieces are stashed here
     /// when the named function symbol exists and applied at load time.
@@ -144,7 +144,7 @@ pub struct IfaceDecompData {
     >,
     /// Flow overrides installed by `override flow <addr> <type>`, keyed by
     /// function name.  C++ keeps these on `dcp->fd->getOverride()` (the Funcdata
-    /// is reused); the kuna console rebuilds the IR on `load`/`decompile`, so the
+    /// is reused); the unlace console rebuilds the IR on `load`/`decompile`, so the
     /// `(address, flow_type)` facts are stashed here and re-seeded onto the fresh
     /// Funcdata's `localoverride` at flow time (the `pending_prototypes`
     /// precedent).
@@ -160,7 +160,7 @@ pub struct IfaceDecompData {
         std::collections::BTreeMap<String, Vec<(unlace_base::address::Address, String)>>,
     /// Prototype overrides installed by `override prototype <addr> <decl>`, keyed
     /// by function name.  C++ keeps these on `dcp->fd->getOverride()` (the Funcdata
-    /// is reused); the kuna console rebuilds the IR on `decompile`, so the
+    /// is reused); the unlace console rebuilds the IR on `decompile`, so the
     /// `(callpoint, pieces)` facts are stashed here and re-seeded onto the fresh
     /// Funcdata's `localoverride` at flow time (the `pending_flow_overrides`
     /// precedent) — `FlowInfo::build_call_specs` consumes them as
@@ -174,7 +174,7 @@ pub struct IfaceDecompData {
     >,
     /// Parameter storage locks installed by `map param <i> <addr> <typedecl>`
     /// (`IfcMapParam`), keyed by function name.  C++ writes these straight onto
-    /// the queried Funcdata's live `FuncProto` via `setParam`; the kuna console
+    /// the queried Funcdata's live `FuncProto` via `setParam`; the unlace console
     /// rebuilds the IR on `decompile`, so the `(index, name, pieces)` facts are
     /// stashed here and re-seeded onto the fresh Funcdata's prototype at decompile
     /// time (the `pending_prototypes` precedent).  The pieces already carry the
@@ -192,7 +192,7 @@ pub struct IfaceDecompData {
         unlace_base::address::Address,
         unlace_decomp::stablenames::PriorNames,
     >,
-    /// (kuna) What the last `load function` / `load addr` followed, so the very
+    /// (unlace) What the last `load function` / `load addr` followed, so the very
     /// next `decompile` can adopt that IR instead of following the same flow a
     /// second time.  See [`PristineFlow`].
     pub pristine_flow: Option<PristineFlow>,
@@ -200,31 +200,31 @@ pub struct IfaceDecompData {
     /// budget or memory limit left out of the shell in `fd`, which
     /// [`Self::follow_stopped_flow`] follows for a command that reads the IR.
     pub stopped_flow: Option<PristineFlow>,
-    /// (kuna) How many times a `decompile` adopted the loaded IR instead of
+    /// (unlace) How many times a `decompile` adopted the loaded IR instead of
     /// re-following the flow.  Observability only -- nothing reads it to make a
     /// decision; it is what lets a test assert the fast path was actually taken
     /// rather than only that the output did not change.
     pub adopted_flows: u64,
-    /// (kuna) The `rename`/`retype` lines applied since the last `decompile`,
+    /// (unlace) The `rename`/`retype` lines applied since the last `decompile`,
     /// with the Symbol each touched and the type a `retype` gave.
     pub pending_local_checks: Vec<(
         String,
         unlace_decomp::database::SymbolId,
         Option<std::rc::Rc<unlace_decomp::dtype::Datatype>>,
     )>,
-    /// (kuna) What the last `decompile` must print for those lines, which the
+    /// (unlace) What the last `decompile` must print for those lines, which the
     /// next `print C` checks (`assertions::check_printed`).
     pub printed_checks: Option<(Vec<String>, Vec<crate::assertions::Expected>)>,
-    /// (kuna) The `force constant` requests applied since the last
+    /// (unlace) The `force constant` requests applied since the last
     /// `decompile` (address, format, value), which that `decompile` checks.
     pub pending_format_checks: Vec<(unlace_base::address::Address, String, Option<u64>)>,
 }
 
-/// (kuna) The provenance stamp of the `Funcdata` currently in `dcp.fd`, recorded
+/// (unlace) The provenance stamp of the `Funcdata` currently in `dcp.fd`, recorded
 /// by `load function` / `load addr` right after their flow follow.
 ///
 /// C++ `IfcDecompile` re-runs the actions on the `Funcdata` `IfcFuncload` built
-/// (`clearAnalysis` + `perform`), so upstream follows the flow ONCE.  The kuna
+/// (`clearAnalysis` + `perform`), so upstream follows the flow ONCE.  The unlace
 /// console rebuilds the IR instead, because the seeds a decompile is given --
 /// `map addr` symbols and DWARF locals, `type varnode` usepoint symbols, `map
 /// hash` dynamic symbols, a `parse line` prototype, `map param` storage locks,
@@ -404,7 +404,7 @@ impl IfaceDecompData {
         if shell.get_address() != &recipe.entry || !shell.obank().empty() {
             return;
         }
-        let reason = shell.kuna_pipeline_failure().map(str::to_string);
+        let reason = shell.unlace_pipeline_failure().map(str::to_string);
         let followed = build_and_follow_flow_with_override(
             prog.arch_mut(),
             &recipe.name,
@@ -414,7 +414,7 @@ impl IfaceDecompData {
         );
         if let Ok(mut fd) = followed {
             if let Some(reason) = reason {
-                fd.set_kuna_pipeline_failure(&reason);
+                fd.set_unlace_pipeline_failure(&reason);
             }
             self.fd = Some(fd);
         }
@@ -749,7 +749,7 @@ fn mark_property_range(
     let prog = dcp.conf.as_mut().expect("conf checked non-None above");
     // C++ Address addr = parse_machaddr(s,size,*dcp->conf->types).
     let (addr, mut size) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
-    // (kuna) An explicit size may follow the address.  The C++ takes the size
+    // (unlace) An explicit size may follow the address.  The C++ takes the size
     // only from the bracketed `[space,offset,size]` form, which forces a caller
     // that wants a sized range to also name the address space; `--assert
     // 'readonly 0x404028+8'` lowers to the default-code-space form and states
@@ -805,7 +805,7 @@ fn run_parse_c(status: &mut IfaceStatus, content: &str) -> IfaceResult<()> {
         let res = crate::grammar::parse_c(content, arch.types(), org, &models, |pieces, model| {
             // C++ Architecture::setPrototype resolves the function via queryFunction
             // (which lazily builds the Funcdata from the function symbol) and locks
-            // the prototype.  In the kuna console boundary the named function may live
+            // the prototype.  In the unlace console boundary the named function may live
             // only in the binaryimage's symbol records (the readLoaderSymbols →
             // Scope::addFunction markup is a W4 stub, so it is not yet in the
             // symboltab), and `dcp.fd` is built later by `load function`.  So the
@@ -989,7 +989,7 @@ fn parse_storage_and_type(
     ))
 }
 
-/// (kuna) Bind a parsed C prototype to `func`, whatever name the declaration
+/// (unlace) Bind a parsed C prototype to `func`, whatever name the declaration
 /// carries — the console spelling of `--assert 'prototype <func> <decl>'`
 /// (`map prototype`, registered in [`crate::console`]).
 ///
@@ -1166,16 +1166,16 @@ decomp_command!(
                 }
             }
         }
-        // kuna stage-model options (`KUNA_OPTION_NAMES`) are not in the upstream
+        // unlace stage-model options (`UNLACE_OPTION_NAMES`) are not in the upstream
         // `OptionDatabase` / `ElementId` registry; route them to
-        // `Architecture::set_kuna_option`, which validates the value and writes
+        // `Architecture::set_unlace_option`, which validates the value and writes
         // the live flag the consuming action/printer reads.  Upstream options
         // fall through to the byte-identical `OptionDatabase` path below.
-        if unlace_decomp::option_dispatch::KUNA_OPTION_NAMES.contains(&optname.as_str()) {
+        if unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES.contains(&optname.as_str()) {
             let prog = dcp.conf.as_mut().expect("conf checked non-None above");
             let res = prog
                 .arch_mut()
-                .set_kuna_option(&optname, &p1)
+                .set_unlace_option(&optname, &p1)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
             prog.callwide_changed();
             status.out(&format!("{res}\n"));
@@ -1271,7 +1271,7 @@ decomp_command!(
     /// C++ `IfcLoadFile` (`consolemain.cc:46`): load an image file (`load file
     /// [<target>] <filename>`).
     ///
-    /// The C++ console drives a real binary through BFD; the kuna Rust engine's
+    /// The C++ console drives a real binary through BFD; the unlace Rust engine's
     /// only load-image backend is the XML `<binaryimage>` format (the BFD backend
     /// is a later port item).  So `load file <path>` accepts the corpus
     /// `<binaryimage>`/`<decompilertest>` XML the Python tools and datatests feed.
@@ -1416,7 +1416,7 @@ decomp_command!(
     /// <name>`), following its flow if it has code.
     IfcFuncload,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
-        // (kuna `symbolnamebound`) Canonicalize what the user typed to the
+        // (unlace `symbolnamebound`) Canonicalize what the user typed to the
         // spelling the symbol table and the listing use, so a name the binary
         // spells past the scope bound both RESOLVES and renders as one name.
         // Idempotent, and a no-op for every real name.
@@ -1427,7 +1427,7 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No image loaded"));
         }
-        // The kuna path resolves the entry from the binaryimage's own symbol
+        // The unlace path resolves the entry from the binaryimage's own symbol
         // records (the readLoaderSymbols hook), where C++ uses
         // resolveScopeFromSymbolName + queryFunction + followFlow.
         let mut flow_overrides = dcp
@@ -1436,7 +1436,7 @@ decomp_command!(
             .cloned()
             .unwrap_or_default();
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
-        // (kuna) Safety commit: if a session loads a function without an explicit
+        // (unlace) Safety commit: if a session loads a function without an explicit
         // `read symbols`, commit the stashed analysis facts now (default gates;
         // no-op once committed). The CLI always emits `read symbols` first, where
         // the per-pass `--option` gates apply; this only covers a hand session.
@@ -1462,7 +1462,7 @@ decomp_command!(
         } else {
             selected.name
         };
-        // (kuna, Ghidra-gap) Apply the analysis's `call error(nonzero,…)` no-return facts
+        // (unlace, Ghidra-gap) Apply the analysis's `call error(nonzero,…)` no-return facts
         // as CALL_RETURN flow overrides — the SAME prune `decompile-all` does — so the
         // single-function console decompile does NOT overrun past a no-returning
         // `call error` into the following function. `error_noreturn_callsites` is empty
@@ -1491,7 +1491,7 @@ decomp_command!(
             &flow_overrides,
         )
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        // (kuna) Stamp the follow so an immediately-following `decompile` can adopt
+        // (unlace) Stamp the follow so an immediately-following `decompile` can adopt
         // this IR rather than following the same flow again (see `PristineFlow`).
         dcp.stopped_flow = None;
         dcp.pristine_flow = Some(PristineFlow {
@@ -1520,7 +1520,7 @@ decomp_command!(
             return Err(IfaceError::execution("No binary loaded"));
         }
         let prog = dcp.conf.as_mut().expect("conf checked non-None above");
-        // (kuna) Safety commit (see IfcFuncload): commit stashed analysis facts if
+        // (unlace) Safety commit (see IfcFuncload): commit stashed analysis facts if
         // a session reaches `load addr` without an explicit `read symbols`.
         prog.commit_pending_analysis()
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -1565,7 +1565,7 @@ decomp_command!(
                 .function_display_name_across_scopes(&offset)
                 .unwrap_or_else(|| prog.arch().name_function(&offset))
         };
-        // (kuna, Ghidra-gap) error(nonzero) no-return prune, mirroring decompile-all and
+        // (unlace, Ghidra-gap) error(nonzero) no-return prune, mirroring decompile-all and
         // IfcFuncload: apply the analysis's `call error(nonzero,…)` facts as CALL_RETURN
         // flow overrides so `load addr` does NOT overrun past a no-returning `call error`
         // into the next function. Empty unless the Listing + noreturn_error are on.
@@ -1612,7 +1612,7 @@ decomp_command!(
             &flow_overrides,
         )
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        // (kuna) Same follow stamp as `load function` (see `PristineFlow`).
+        // (unlace) Same follow stamp as `load function` (see `PristineFlow`).
         dcp.stopped_flow = None;
         dcp.pristine_flow = Some(PristineFlow {
             command_seq,
@@ -1632,7 +1632,7 @@ decomp_command!(
 // --- read symbols / clear architecture (ifacedecomp.cc:529, 518) -----------
 
 decomp_command!(
-    /// C++ `IfcReadSymbols`: read symbols from the load image. (kuna) Prints a
+    /// C++ `IfcReadSymbols`: read symbols from the load image. (unlace) Prints a
     /// `warning:` line for each configured `.fid` database the commit did not
     /// match against.
     IfcReadSymbols,
@@ -1641,12 +1641,12 @@ decomp_command!(
         if dcp.conf.is_none() {
             return Err(IfaceError::execution("No load image present"));
         }
-        // C++ `dcp->conf->readLoaderSymbols("::")`.  The kuna XML engine reads the
+        // C++ `dcp->conf->readLoaderSymbols("::")`.  The unlace XML engine reads the
         // binaryimage's `<symbol>` records into the program's name→address table
         // at `load file` (the readLoaderSymbols hook runs eagerly there), so the
         // symbols are already available.
         //
-        // (kuna) This is also the gated-commit point for the unlace_analysis passes:
+        // (unlace) This is also the gated-commit point for the unlace_analysis passes:
         // `bootstrap_from_object` STASHES the per-pass facts at load (no longer
         // commits them eagerly) so they can be committed here, AFTER the per-pass
         // `--option <id> on|off` flags have been applied — the CLI `build_script`
@@ -1830,7 +1830,7 @@ decomp_command!(
     IfcMapParam,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
-        // (kuna) `map param <func>::<i> <storage> <decl>` declares a slot of the
+        // (unlace) `map param <func>::<i> <storage> <decl>` declares a slot of the
         // prototype of the function it NAMES, which need not be the one under
         // decompile.  Without it a caller has no way to say what a CALLEE takes,
         // and the qualifier the `--assert` grammar documents was dropped on the
@@ -1889,7 +1889,7 @@ decomp_command!(
         fd.get_func_proto_mut().set_param(i, &name, &piece);
         // Stash the lock keyed by function name so the `decompile` IR rebuild can
         // re-seed it on the fresh prototype (C++ keeps it on the reused Funcdata;
-        // the kuna console discards `dcp.fd` on `decompile`).  Precedent:
+        // the unlace console discards `dcp.fd` on `decompile`).  Precedent:
         // `pending_prototypes` / `pending_flow_overrides`.
         let fname = fd.get_name().to_string();
         dcp.pending_param_maps
@@ -1910,7 +1910,7 @@ decomp_command!(
     IfcMapReturn,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         use unlace_decomp::fspec::{ParameterPieces, parameter_pieces_flags};
-        // (kuna) `map return <func>::<storage> <decl>` — the cross-function arm,
+        // (unlace) `map return <func>::<storage> <decl>` — the cross-function arm,
         // as for `map param` above.  The storage grammar has no `::` of its own,
         // so the qualifier is unambiguous.
         if let Some(func) = peek_qualifier(s) {
@@ -1965,7 +1965,7 @@ decomp_command!(
         let function_entry = fd.get_address().clone();
         fd.get_func_proto_mut().attach_internal_store(void_type);
         fd.get_func_proto_mut().set_output(&piece);
-        // (kuna) C++ keeps this locked output live on the callee `Funcdata`, so a
+        // (unlace) C++ keeps this locked output live on the callee `Funcdata`, so a
         // caller's `ActionDefaultParams` (`fc->copy(otherfunc->getFuncProto())`)
         // picks up the custom (possibly stack-relative) return storage.  The
         // merged tree rebuilds callee prototypes from `PrototypePieces`, so park an
@@ -2028,7 +2028,7 @@ decomp_command!(
         // newly-mapped function the current function so the override commands
         // (`override flow|prototype`, which require `dcp->fd != 0`) can attach to
         // it.  The C++ `getFunction()` lazily builds the Funcdata WITHOUT following
-        // flow; the kuna boundary builds the same un-followed Funcdata (the real flow
+        // flow; the unlace boundary builds the same un-followed Funcdata (the real flow
         // follow runs at `load function`/`decompile`).
         let fd = prog
             .arch()
@@ -2215,7 +2215,7 @@ decomp_command!(
 /// The mnemonic is left-justified to a fixed field width (C++ `mnemonicpad=10`)
 /// before the operand body.  The one deliberate deviation from the verbatim C++
 /// (which pads unconditionally) is that the pad is suppressed for an empty body:
-/// the kuna `<stringmatch>` matcher uses the `regex` crate whose `$` rejects a
+/// the unlace `<stringmatch>` matcher uses the `regex` crate whose `$` rejects a
 /// line with trailing whitespace, so an operand-less instruction (e.g. `ARHL`)
 /// must render with no trailing spaces.
 struct IfaceAssemblyEmit<'a> {
@@ -2434,7 +2434,7 @@ decomp_command!(
                 ),
             }
         };
-        // (kuna DWARF subtask 3) Append the DWARF stack LOCALS parked on this
+        // (unlace DWARF subtask 3) Append the DWARF stack LOCALS parked on this
         // function (by entry VMA) to the `mapped_symbols` re-seeded into the rebuilt
         // `Funcdata`'s `ScopeLocal` — each as a `typelock|namelock` stack symbol via
         // the same `seed_mapped_symbols` path a hand-typed `map addr` uses. So a
@@ -2489,7 +2489,7 @@ decomp_command!(
             .get(&name)
             .cloned()
             .unwrap_or_default();
-        // (kuna, Ghidra-gap) Apply the analysis's `call error(nonzero,…)` no-return facts
+        // (unlace, Ghidra-gap) Apply the analysis's `call error(nonzero,…)` no-return facts
         // as CALL_RETURN flow overrides on the rebuilt IR — the SAME prune `decompile-all`
         // does — so the single-function console decompile does NOT overrun a no-returning
         // `call error` into the following function. `error_noreturn_callsites` is empty
@@ -2580,10 +2580,10 @@ decomp_command!(
         // drive (decompile_drive::decompile_func) installs the `decompile` root,
         // resets it, and runs the 252-pass perform loop to completion.
         //
-        // (kuna) Adopt the IR `load function` / `load addr` already followed, when
+        // (unlace) Adopt the IR `load function` / `load addr` already followed, when
         // this `decompile` is provably the same flow follow repeated.  Upstream
         // never repeats it (`IfcDecompile` re-runs the actions on `IfcFuncload`'s
-        // Funcdata); kuna rebuilds because the seeds below are consumed at flow
+        // Funcdata); unlace rebuilds because the seeds below are consumed at flow
         // time and the load applies none of them — so the rebuild is required
         // exactly when some seed is non-empty, and pure waste when none is.  Every
         // seed the drive would apply before/at flow time is checked, plus the
@@ -2619,19 +2619,19 @@ decomp_command!(
             //    `printf((char *)(dat_52c + 0x51c), ...)` -- the format string never
             //    resolves and the varargs never get typed.
             //  * the watchdog arms its per-function deadline inside the drive
-            //    (`kuna_fn_budget` is `None` on every console path).
+            //    (`unlace_fn_budget` is `None` on every console path).
             //  * ghidra mode stages name/dynamic/prototype-model recommendations that
             //    the drive takes; a follow that ran while they were still parked is
             //    not the same follow.
             let same_config = !prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::formatstring::FormatStringMode>()
                 .loop_pass()
-                && prog.arch().kuna_fn_budget.is_none()
-                && prog.arch().kuna_pending_name_recs.is_empty()
-                && prog.arch().kuna_pending_dyn_recs.is_empty()
-                && prog.arch().kuna_pending_proto_model.is_none();
+                && prog.arch().unlace_fn_budget.is_none()
+                && prog.arch().unlace_pending_name_recs.is_empty()
+                && prog.arch().unlace_pending_dyn_recs.is_empty()
+                && prog.arch().unlace_pending_proto_model.is_none();
             if seeds_empty && stamp_matches && same_config {
                 dcp.adopted_flows += 1;
                 dcp.fd.take()
@@ -2658,9 +2658,9 @@ decomp_command!(
         // re-decompile loop, which used to live only here.
         *prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::stablenames::PriorNames>() = prior_names;
-        prog.arch_mut().kuna_record_names = true;
+        prog.arch_mut().unlace_record_names = true;
         let step = crate::decompile_step::decompile_one_prefollowed(
             prog.arch_mut(),
             &name,
@@ -2681,9 +2681,9 @@ decomp_command!(
         );
         *prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::stablenames::PriorNames>() = Default::default();
-        prog.arch_mut().kuna_record_names = false;
+        prog.arch_mut().unlace_record_names = false;
         let result = step.result;
         if !step.discovered.is_empty() {
             status.out("Re-decompiling with format-string varargs typing\n");
@@ -2735,13 +2735,13 @@ decomp_command!(
         dcp.conf = Some(prog);
         match result {
             Ok(fd) => {
-                // (kuna `--assert`) Every flow override the follower REFUSED, named
+                // (unlace `--assert`) Every flow override the follower REFUSED, named
                 // in the console's own command spelling so a front-end driving
                 // `decomp_dbg` can pair each line with the `override flow` it sent.
                 // The refusal is reported here and not at `override flow` time
                 // because nothing can be applied until flow has followed.
                 let refusals: Vec<String> = fd
-                    .kuna_rejected_flow_overrides()
+                    .unlace_rejected_flow_overrides()
                     .iter()
                     .map(|(addr, type_, reason)| {
                         format!(
@@ -2750,7 +2750,7 @@ decomp_command!(
                             unlace_decomp::overrides::Override::type_to_string(*type_)
                         )
                     })
-                    .chain(fd.kuna_rejected_callee_overrides().iter().flat_map(
+                    .chain(fd.unlace_rejected_callee_overrides().iter().flat_map(
                         |(site, _, reason)| {
                             dcp.pending_callee_overrides
                                 .get(&name)
@@ -2796,7 +2796,7 @@ decomp_command!(
             }
             Err(e) => {
                 let msg = e.explain().to_string();
-                // (kuna GH-6904) A *recoverable* per-function abort — the pipeline
+                // (unlace GH-6904) A *recoverable* per-function abort — the pipeline
                 // hit a documented un-ported stub (LOSS-131) and unwound, discarding
                 // this function's half-built IR — degrades gracefully instead of
                 // poisoning the whole console session.  This mirrors the C++
@@ -2815,12 +2815,12 @@ decomp_command!(
                 // the abort.  Guarded on the address so a stale, unrelated function
                 // is never mislabeled.  Stamped for EVERY per-function abort, not
                 // only the swallowed one: a `decompile` that raised leaves the same
-                // shell behind, and a front-end that reads only the C (`kuna
+                // shell behind, and a front-end that reads only the C (`unlace
                 // decompile`'s text surface) cannot otherwise tell it from a
                 // genuinely empty function.
                 if let Some(fd) = dcp.fd.as_mut() {
                     if fd.get_address() == &stamp_addr {
-                        fd.set_kuna_pipeline_failure(&msg);
+                        fd.set_unlace_pipeline_failure(&msg);
                     }
                 }
                 if msg.contains("LOSS-131") {
@@ -2905,7 +2905,7 @@ decomp_command!(
     /// (231 `<com>print C</com>` uses).
     IfcPrintCStruct,
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
-        // The kuna print drive (decompile_drive::print_c) renders the function
+        // The unlace print drive (decompile_drive::print_c) renders the function
         // through the owned PrintC.  Output goes to the bulk stream (fileoptr),
         // which the Python tools capture via `openfile write`.  Render the C with
         // `dcp` borrowed, then drop the borrow before writing to the status.
@@ -3296,7 +3296,7 @@ decomp_command!(
 decomp_command!(
     /// C++ `IfcRename`: `rename <oldname> <newname>` (ifacedecomp.cc:1332).
     ///
-    /// (kuna) Resolved by `crate::hightarget::apply_local`, which also
+    /// (unlace) Resolved by `crate::hightarget::apply_local`, which also
     /// reaches a register-resident local (a HighVariable the printer named, with
     /// no Symbol behind it) and reads `oldname` against the output the renames
     /// since the last `decompile` started from.
@@ -3640,7 +3640,7 @@ decomp_command!(
 );
 
 decomp_command!(
-    /// (kuna) `force constant <addr> <format> [<value>]`: `force varnode` for
+    /// (unlace) `force constant <addr> <format> [<value>]`: `force varnode` for
     /// the constant the instruction at `addr` reads, named without a p-code
     /// sequence number (`crate::constformat`).
     IfcForceConstant,
@@ -3753,10 +3753,10 @@ impl unlace_decomp::overrides::FuncProtoOverride for PiecesProtoOverride {
     fn encode(
         &self,
         _encoder: &mut dyn unlace_base::marshal::Encoder,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         // STUB(W4): FuncProto::encode of an override is a debug/save surface absent
         // from the datatest corpus.
-        Err(unlace_base::error::KunaError::lowlevel(
+        Err(unlace_base::error::UnlaceError::lowlevel(
             "kuna rust port: prototype-override encode needs the W4 FuncProto::encode",
         ))
     }
@@ -3799,7 +3799,7 @@ decomp_command!(
         // (FlowInfo::queryCall) is still stubbed (LOSS-031 neighborhood), so the
         // override is stored but not yet applied at flow time; the command succeeds
         // (the script proceeds) exactly as C++.
-        // The kuna console rebuilds the IR on `decompile`, dropping this fd's
+        // The unlace console rebuilds the IR on `decompile`, dropping this fd's
         // Override; stash the (callpoint, pieces) by function name so the next
         // `decompile` re-seeds it onto the fresh Funcdata (the `flow`/`proto`
         // override precedent).
@@ -3867,19 +3867,19 @@ decomp_command!(
         if type_ == unlace_decomp::overrides::flow_type::NONE {
             return Err(IfaceError::parse("Bad override type"));
         }
-        // (kuna) A `call` override on a `push <cont>; push <target>; ret` link
+        // (unlace) A `call` override on a `push <cont>; push <target>; ret` link
         // recovers ONE call of a chain built entirely out of them; the follower
         // then resumes at the continuation and meets the next link's `ret`,
         // which is still a return, so the rest of the body decompiles away.
         // Plant the same override on the links this one leads to
-        // (`kuna_retcallchain`), which is what the caller asked for and the only
+        // (`unlace_retcallchain`), which is what the caller asked for and the only
         // way it can even see they exist.
         let entry = dcp.fd.as_ref().expect("fd present").get_address().clone();
         let prog = dcp.conf.as_ref().expect("conf present when fd present");
         let chained = if type_ == unlace_decomp::overrides::flow_type::CALL
             || type_ == unlace_decomp::overrides::flow_type::CALL_RETURN
         {
-            crate::retcallchain::kuna_chain_sites(
+            crate::retcallchain::unlace_chain_sites(
                 prog.arch().translate(),
                 &entry,
                 &addr,
@@ -3898,7 +3898,7 @@ decomp_command!(
                 .get_override_mut()
                 .insert_flow_override(site.clone(), type_);
             // Stash by function name so the override survives the IR rebuild on
-            // `load function`/`decompile` (the kuna console rebuilds the Funcdata).
+            // `load function`/`decompile` (the unlace console rebuilds the Funcdata).
             dcp.pending_flow_overrides
                 .entry(fname.clone())
                 .or_default()
@@ -3912,7 +3912,7 @@ decomp_command!(
         if !chained.is_empty() {
             status.out(&format!(
                 "Extended it along the ret-call chain to {}\n",
-                crate::retcallchain::kuna_render_sites(&chained)
+                crate::retcallchain::unlace_render_sites(&chained)
             ));
         }
         Ok(())
@@ -3920,9 +3920,9 @@ decomp_command!(
 );
 
 decomp_command!(
-    /// (kuna) `override indirect <callsite> <name|address>`: the indirect call
+    /// (unlace) `override indirect <callsite> <name|address>`: the indirect call
     /// at `<callsite>` goes to that function ([`crate::calleeoverride`]).
-    /// Not a C++ command, so [`crate::console::register_kuna_commands`]
+    /// Not a C++ command, so [`crate::console::register_unlace_commands`]
     /// registers it.
     IfcOverrideIndirect,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
@@ -4286,7 +4286,7 @@ decomp_command!(
 
 decomp_command!(
     /// C++ `IfcCountPcode`: `count pcode`, the selected function's live ops.
-    /// (kuna) A second line counts every op the function created since its IR
+    /// (unlace) A second line counts every op the function created since its IR
     /// was last cleared, dead ones included: the size of its op arena. Both go
     /// to the bulk stream, as the print commands do, so a datatest sees them.
     IfcCountPcode,
@@ -4485,17 +4485,17 @@ decomp_command!(
     }
 );
 
-// --- byte overlay (kuna) ---------------------------------------------------
+// --- byte overlay (unlace) ---------------------------------------------------
 
 decomp_command!(
-    /// (kuna) `override bytes <addr> <hex>`: the bytes mapped at `<addr>` are
+    /// (unlace) `override bytes <addr> <hex>`: the bytes mapped at `<addr>` are
     /// `<hex>`, whatever the image file holds there.  Not a C++ command, so it is
-    /// registered by [`crate::console::register_kuna_commands`] rather than
+    /// registered by [`crate::console::register_unlace_commands`] rather than
     /// here — `CPP_REGISTER_ORDER` is a transcription of upstream's own list.
     ///
     /// The statement a static loader cannot derive.  A stage-1 unpacker's output
     /// exists only once that stage has run, so an agent that has recovered the
-    /// plaintext otherwise has to patch a copy of the executable outside kuna and
+    /// plaintext otherwise has to patch a copy of the executable outside unlace and
     /// re-load it (`docs/re-needs/byte-overlay-assertion-recovered.md`).  The
     /// overlay lives in the load image, so nothing is written to disk, and it
     /// must be stated before `read symbols` — every later read of those addresses
@@ -4523,7 +4523,7 @@ decomp_command!(
                 .try_borrow_mut()
                 .map_err(|_| IfaceError::execution("The load image is already borrowed"))?;
             loader
-                .kuna_overlay_bytes(&addr, &data)
+                .unlace_overlay_bytes(&addr, &data)
                 .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         }
         prog.note_materialized_bytes(&addr, data.len());
@@ -4788,7 +4788,7 @@ decomp_command!(
 /// "base" module commands the console shares.
 ///
 /// `OPACTION_DEBUG`/`CPUI_RULECOMPILE`/`TYPEPROP_DEBUG`-gated commands are
-/// compiled out of the kuna build (those macros are never defined here), exactly
+/// compiled out of the unlace build (those macros are never defined here), exactly
 /// as in C++, so they are not registered.
 pub fn register_decomp_commands(status: &mut IfaceStatus) {
     use crate::interface::{
@@ -4810,7 +4810,7 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
     status.register_com(Box::new(IfcEcho), &["echo"]);
 
     // The decompiler module commands (ifacedecomp.cc:47-142).  `source` is a
-    // console-only command (consolemain.cc) registered there in C++; the kuna
+    // console-only command (consolemain.cc) registered there in C++; the unlace
     // console binary registers it where it owns the source-script reader.
     status.register_com(Box::new(IfcOption), &["option"]);
     status.register_com(Box::new(IfcParseFile), &["parse", "file"]);
@@ -4928,7 +4928,7 @@ pub fn register_decomp_commands(status: &mut IfaceStatus) {
 /// [`register_decomp_commands`] (the extra `main()` registrations:
 /// `load file`/`addpath`/`save`/`restore`).
 ///
-/// Only `load file` is wired in the kuna port (the engine-backed image load);
+/// Only `load file` is wired in the unlace port (the engine-backed image load);
 /// `addpath`/`save`/`restore` reach the spec-path globals / `Architecture::encode`
 /// / `restoreXml` marshaling, which are later port items, so they are not
 /// registered here (an unregistered token surfaces "ERROR: Invalid command",
@@ -4956,12 +4956,12 @@ pub fn register_console_commands(status: &mut IfaceStatus) {
 ///   - `LowlevelError`       → `"Low-level ERROR: "` (+ `abortFunction`)
 ///   - `DecoderError`        → `"Decoding ERROR: "`  (+ `abortFunction`)
 ///
-/// In the kuna port a command's `execute` returns an [`IfaceError`] (the
-/// interface hierarchy); engine errors (`KunaError`/`LowlevelError` family) are
+/// In the unlace port a command's `execute` returns an [`IfaceError`] (the
+/// interface hierarchy); engine errors (`UnlaceError`/`LowlevelError` family) are
 /// converted to an [`IfaceError`] at the (unported) engine call boundary, so the
 /// three [`IfaceError`] kinds are the arms reachable today.  The remaining arms
 /// are transcribed in [`render_engine_error`] for when the engine integration
-/// lands and real `KunaError`s flow out of the command bodies; the catch
+/// lands and real `UnlaceError`s flow out of the command bodies; the catch
 /// placement (which frame catches which) is preserved (ADR 0004).
 ///
 /// The command runs under the loaded program's load-time options.
@@ -4989,40 +4989,40 @@ pub fn execute(status: &mut IfaceStatus) {
     status.evaluate_error();
 }
 
-/// Render an engine-layer error (`KunaError`, the `LowlevelError` hierarchy)
+/// Render an engine-layer error (`UnlaceError`, the `LowlevelError` hierarchy)
 /// under the exact console prefix C++ `execute` assigns its class, and run the
 /// `abortFunction` side effect for the two arms that have it.
 ///
-/// Not yet reachable from [`execute`] (no command body lets a `KunaError`
+/// Not yet reachable from [`execute`] (no command body lets a `UnlaceError`
 /// escape, because the engine calls are routed through `engine_unavailable` as
 /// an `IfaceExecutionError`); transcribed now so the catch grammar is complete
 /// and ready to wire when the engine integration lands.  Mirrors the
 /// `ParseError`/`RecovError`/`LowlevelError`/`DecoderError` catch arms of C++
 /// `execute`.
 pub fn render_engine_error(
-    err: &unlace_base::error::KunaError,
+    err: &unlace_base::error::UnlaceError,
     dcp: &mut IfaceDecompData,
     out: &mut String,
 ) {
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     match err {
-        KunaError::Parse { explain } => {
+        UnlaceError::Parse { explain } => {
             out.push_str("Parse ERROR: ");
             out.push_str(explain);
             out.push('\n');
         }
-        KunaError::Recov { explain } => {
+        UnlaceError::Recov { explain } => {
             out.push_str("Function ERROR: ");
             out.push_str(explain);
             out.push('\n');
         }
-        KunaError::Decoder { explain } => {
+        UnlaceError::Decoder { explain } => {
             out.push_str("Decoding ERROR: ");
             out.push_str(explain);
             out.push('\n');
             dcp.abort_function(out);
         }
-        // The remaining KunaError variants are all part of the C++
+        // The remaining UnlaceError variants are all part of the C++
         // `LowlevelError` hierarchy (RecovError aside, handled above), which the
         // `catch(LowlevelError &)` frame catches.
         other => {

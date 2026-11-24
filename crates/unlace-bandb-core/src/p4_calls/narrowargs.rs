@@ -1,4 +1,4 @@
-//! (kuna `narrowargs`) A register parameter whose body reads only its low bytes
+//! (unlace `narrowargs`) A register parameter whose body reads only its low bytes
 //! is declared that narrow.
 //!
 //! An ARM AAPCS or x86-64 caller hands a `uint8_t` or an `int` over in a whole
@@ -173,7 +173,7 @@ fn shifts_by(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
 pub fn narrow_inputs(data: &mut Funcdata) -> int4 {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowargs::NarrowArgs>()
         .body
         || data.get_func_proto().is_input_locked()
@@ -269,9 +269,9 @@ fn replace(
     part: &Address,
     w: int4,
     ext: OpCode,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     if overlaps_another_input(data, vn, addr, size) {
-        return Err(unlace_base::error::KunaError::lowlevel(
+        return Err(unlace_base::error::UnlaceError::lowlevel(
             "narrowargs: overlapping input varnodes".to_string(),
         ));
     }
@@ -307,13 +307,13 @@ fn replace(
 pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -> int4 {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::narrowargs::NarrowArgs>()
         .body
     {
         return 0;
     }
-    let Some(stated) = data.kuna_protoorder_types(fc.get_entry_address()) else {
+    let Some(stated) = data.unlace_protoorder_types(fc.get_entry_address()) else {
         return 0;
     };
     let inputs = data.obank().get(fc.get_op()).map(|o| o.num_input());
@@ -351,18 +351,18 @@ fn trace() -> bool {
     unlace_base::env::var("UNLACE_NARROWARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
-/// (kuna `narrowargs`) Declare a register parameter at the width its uses read
+/// (unlace `narrowargs`) Declare a register parameter at the width its uses read
 /// (`body`), and a 32-bit ARM parameter every caller passes narrow (`callers`,
-/// [`crate::kuna_callerargs`]).
+/// [`crate::unlace_callerargs`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NarrowArgs {
     pub body: bool,
     pub callers: bool,
 }
 
-impl crate::optionset::KunaOption for NarrowArgs {
+impl crate::optionset::UnlaceOption for NarrowArgs {
     const NAME: &'static str = "narrowargs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NarrowArgs {
@@ -378,7 +378,7 @@ impl crate::optionset::KunaOption for NarrowArgs {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (body, callers) = match value {
             "callers" => (true, true),
             _ => (crate::options::on_or_off(value)?, false),

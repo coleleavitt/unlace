@@ -1,4 +1,4 @@
-//! (kuna `switchmerge`) Print-time plan for the arms of a C `switch`.
+//! (unlace `switchmerge`) Print-time plan for the arms of a C `switch`.
 //!
 //! A compiler lowers one sparse source `switch` into a search tree of jump
 //! tables: each table's range guard sends the values it does not cover on to
@@ -174,7 +174,7 @@ fn runs_past_end(fd: &Funcdata, blk: BlockId) -> bool {
 /// The selector varnode the switch header prints: in0 of its BRANCHIND.
 fn selector(fd: &Funcdata, sw: BlockId) -> Option<VarnodeId> {
     let jt = fd.get_jump_table(fd.sblocks_ref().block(sw).switch_jt_index()? as int4);
-    if jt.kuna_lowered_var().is_some() {
+    if jt.unlace_lowered_var().is_some() {
         return None;
     }
     fd.obank().get(jt.get_indirect_op()?)?.get_in(0)
@@ -428,7 +428,7 @@ fn default_reaches(
                 };
                 let Some(x) = op
                     .get_in(0)
-                    .filter(|_| jt.kuna_lowered_var().is_none())
+                    .filter(|_| jt.unlace_lowered_var().is_none())
                     .and_then(|i| eval_with(fd, i, &is_selector, value, 8))
                 else {
                     return false;
@@ -438,7 +438,7 @@ fn default_reaches(
                         .get(op.get_in(0).unwrap())
                         .map_or(0, |v| v.get_size()),
                 );
-                match jt.kuna_out_for_label(x, mask) {
+                match jt.unlace_out_for_label(x, mask) {
                     Some(o) => o,
                     None => return false,
                 }
@@ -858,8 +858,8 @@ pub fn switch_plans(fd: &Funcdata, root: BlockId, facts: &PrintFacts<'_>) -> Swi
     out
 }
 
-crate::kuna_flag!(
-    /// (kuna `switchmerge`) Print a C `switch` whose `default:` arm is only
+crate::unlace_flag!(
+    /// (unlace `switchmerge`) Print a C `switch` whose `default:` arm is only
     /// another switch on the same selector as one `switch`, and leave out the
     /// labels of arms that jump to the code `default:` runs.
     Switchmerge,

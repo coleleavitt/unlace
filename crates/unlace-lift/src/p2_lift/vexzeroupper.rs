@@ -1,4 +1,4 @@
-//! (kuna `vexzeroupper`) The VEX/EVEX zero-upper write, split at its width.
+//! (unlace `vexzeroupper`) The VEX/EVEX zero-upper write, split at its width.
 //!
 //! A VEX- or EVEX-encoded instruction that writes an XMM or YMM register clears
 //! the rest of the ZMM register. The x86 SLEIGH spec states that as one write of
@@ -17,7 +17,7 @@
 //! at its real width.
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -28,7 +28,7 @@ use crate::funcdata::Funcdata;
 /// 32- or 64-byte register from a 4-, 8-, 16- or 32-byte value (a scalar
 /// `vmulsd`/`vaddss` result, or an XMM or YMM one). Returns the zero-fill op
 /// inserted after it.
-pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> KunaResult<Option<OpId>> {
+pub fn split(data: &mut Funcdata, op: OpId, insn: &[OpId]) -> UnlaceResult<Option<OpId>> {
     let Some(o) = data.obank().get(op) else {
         return Ok(None);
     };
@@ -112,7 +112,7 @@ fn zero_fill(
     reg: &Address,
     from: int4,
     to: int4,
-) -> KunaResult<OpId> {
+) -> UnlaceResult<OpId> {
     let space = reg.get_space().expect("register space").clone();
     let pc = data
         .obank()

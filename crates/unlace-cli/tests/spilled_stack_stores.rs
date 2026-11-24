@@ -64,7 +64,7 @@ fn spilled_stack_pointer_writes_round_trip_with_alias_and_escape_controls() {
                 args.extend(["--assert".into(), format!("prototype {name} {prototype}")]);
             }
             let (printed, stderr, code) =
-                common::run_kuna(&args.iter().map(String::as_str).collect::<Vec<_>>());
+                common::run_unlace(&args.iter().map(String::as_str).collect::<Vec<_>>());
             assert_eq!(code, 0, "{fixture}: {stderr}");
             let mut reference = source.clone();
             for name in FUNCTIONS {

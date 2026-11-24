@@ -1,4 +1,4 @@
-//! Independent adversarial verification tests for `w7-harness-kunaregion`
+//! Independent adversarial verification tests for `w7-harness-unlaceregion`
 //! (port of `decompiler/unittests/testkunaregion.cc`, the 3 angr
 //! RegionIdentifier S7 unit tests).
 //!
@@ -24,7 +24,7 @@
 //! a head that is NOT the lowest input address).
 
 use unlace_decomp::context::BlockId;
-use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
+use unlace_decomp::regionid::{UnlaceGraphRegion, UnlaceRegionIdentifier, UnlaceRegionVisitor};
 
 /// Re-implementation of the harness collector, kept byte-for-byte equivalent so
 /// the tests exercise the SAME reconstruction logic under review.
@@ -40,8 +40,8 @@ struct Collector {
     max_depth: usize,
 }
 
-impl KunaRegionVisitor for Collector {
-    fn enter_region(&mut self, region: &KunaGraphRegion) {
+impl UnlaceRegionVisitor for Collector {
+    fn enter_region(&mut self, region: &UnlaceGraphRegion) {
         if self.stack.len() == 1 {
             self.direct_subregions += 1;
         }
@@ -50,7 +50,7 @@ impl KunaRegionVisitor for Collector {
             self.max_depth = self.stack.len();
         }
     }
-    fn exit_region(&mut self, _region: &KunaGraphRegion) {
+    fn exit_region(&mut self, _region: &UnlaceGraphRegion) {
         if let Some((cyclic, head, mut body)) = self.stack.pop() {
             if cyclic {
                 body.sort_unstable();
@@ -72,7 +72,7 @@ impl KunaRegionVisitor for Collector {
 }
 
 /// Public-API head-address reconstruction, identical to the harness `head_addr`.
-fn head_addr(region: &KunaGraphRegion) -> u64 {
+fn head_addr(region: &UnlaceGraphRegion) -> u64 {
     let head = region.get_head().expect("region has a head");
     region
         .get_graph()
@@ -91,11 +91,11 @@ fn sorted(input: &[u64]) -> Vec<u64> {
 /// ADVERSARIAL 1 — `head_addr` must return the region's ENTRY, not merely the
 /// minimum-address member of the graph.  The 3 ported tests all have the entry
 /// at the lowest address (1 or 2), so a buggy `head_addr` that returned
-/// `node_keys().next()` (the KunaNodeOrder minimum) would still pass them.
+/// `node_keys().next()` (the UnlaceNodeOrder minimum) would still pass them.
 ///
 /// Here the input entry is forced (`set_entry_addr(50)`) to a node whose address
 /// is GREATER than other members of the top region's graph, so "first key in
-/// KunaNodeOrder" != "the head".  The C++ `top->getHead()->getAddr()` returns
+/// UnlaceNodeOrder" != "the head".  The C++ `top->getHead()->getAddr()` returns
 /// the entry (50); a min-key shortcut would return something smaller.  The
 /// reconstruction must agree with the entry.
 #[test]
@@ -104,7 +104,7 @@ fn head_addr_is_entry_not_min_key() {
     // addresses so the entry is NOT the global minimum among ALL inputs, and add
     // a second, non-entry component with a smaller address so the min-key
     // shortcut would be tempted toward 10).
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     let a = ri.add_synthetic_block(50);
     let b = ri.add_synthetic_block(60);
     let c = ri.add_synthetic_block(70);
@@ -166,8 +166,8 @@ fn direct_subregions_matches_top_region_node_count() {
     //      5   6        (diamond B)
     //       \ /
     //        7
-    let mut ri = KunaRegionIdentifier::new();
-    let n = |ri: &mut KunaRegionIdentifier, a: u64| ri.add_synthetic_block(a);
+    let mut ri = UnlaceRegionIdentifier::new();
+    let n = |ri: &mut UnlaceRegionIdentifier, a: u64| ri.add_synthetic_block(a);
     let n1 = n(&mut ri, 1);
     let n2 = n(&mut ri, 2);
     let n3 = n(&mut ri, 3);
@@ -196,14 +196,14 @@ fn direct_subregions_matches_top_region_node_count() {
         direct_subregions: i32,
         all_addrs: Vec<u64>,
     }
-    impl KunaRegionVisitor for TopMembers {
-        fn enter_region(&mut self, _r: &KunaGraphRegion) {
+    impl UnlaceRegionVisitor for TopMembers {
+        fn enter_region(&mut self, _r: &UnlaceGraphRegion) {
             if self.depth == 1 {
                 self.direct_subregions += 1;
             }
             self.depth += 1;
         }
-        fn exit_region(&mut self, _r: &KunaGraphRegion) {
+        fn exit_region(&mut self, _r: &UnlaceGraphRegion) {
             self.depth -= 1;
         }
         fn visit_block(&mut self, _b: Option<BlockId>, addr: u64) {
@@ -255,7 +255,7 @@ fn cyclic_body_includes_nested_region_blocks() {
     // 1 -> 2 -> [ diamond 3/4/5 -> 6 ] -> 2  (back edge), and 6 -> 7 exits.
     //   loop body = {2,3,4,5,6}; the diamond 3/4/5 may collapse into a nested
     //   sub-region inside the loop region.
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     let n1 = ri.add_synthetic_block(1);
     let n2 = ri.add_synthetic_block(2);
     let n3 = ri.add_synthetic_block(3);

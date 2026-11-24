@@ -13,7 +13,7 @@ use std::rc::Rc;
 use unlace_base::address::{
     calc_mask, count_leading_zeros, popcount, sign_extend, sign_extend_sized, signbit_negative,
 };
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{Wrap, int4, int8, uint4, uintb};
 use unlace_num::multiprecision::{
     add128, leftshift128, set_u128, subtract128, udiv128, uless128, ulessequal128,
@@ -90,7 +90,7 @@ fn new_extended_constant(
     s: int4,
     val: &[u64; 2],
     op: OpId,
-) -> KunaResult<VarnodeId> {
+) -> UnlaceResult<VarnodeId> {
     if s <= 8 {
         return Ok(data.new_constant(s, val[0]));
     }
@@ -119,8 +119,8 @@ fn new_extended_constant(
 /// `Varnode::getTypeReadFacing(op)` — the read-facing data-type resolution
 /// (union/flow aware) is W6.  // STUB(W6)
 #[inline]
-fn type_read_facing_stub(_data: &Funcdata, _vn: VarnodeId, _op: OpId) -> KunaResult<()> {
-    Err(KunaError::lowlevel(
+fn type_read_facing_stub(_data: &Funcdata, _vn: VarnodeId, _op: OpId) -> UnlaceResult<()> {
+    Err(UnlaceError::lowlevel(
         "ruleaction_6: Varnode::getTypeReadFacing is a W6 type-facing surface",
     ))
 }
@@ -567,11 +567,11 @@ impl RulePtrsubUndo {
         extra
     }
 
-    /// (kuna) GH-8471 guard: should `RulePtrsubUndo` preserve this PTRSUB as a
+    /// (unlace) GH-8471 guard: should `RulePtrsubUndo` preserve this PTRSUB as a
     /// mode-bit-encoded (Thumb) function pointer rather than collapse it to raw
     /// hex?  Resolves the W6 [`ThumbPtrTypeFacts`] from the read-facing pointer
     /// type and the (global-scope) `TypeSpacebase::getSubType` walk, then defers
-    /// to [`kuna_preserve_thumb_funcptr`].
+    /// to [`unlace_preserve_thumb_funcptr`].
     ///
     /// `read_facing` is `basevn->getTypeReadFacing(op)`; `val`/`extra`/`multiplier`
     /// are the PTRSUB constant decomposition exactly as `applyOp` computes them.
@@ -584,7 +584,7 @@ impl RulePtrsubUndo {
     ) -> bool {
         use crate::dtype::type_metatype;
         use crate::thumbfuncptr::{
-            ThumbPtrTypeFacts, ThumbSubTypeFact, kuna_preserve_thumb_funcptr,
+            ThumbPtrTypeFacts, ThumbSubTypeFact, unlace_preserve_thumb_funcptr,
         };
         let funcptr_align = data.get_arch().funcptr_align;
         if funcptr_align == 0 {
@@ -622,7 +622,7 @@ impl RulePtrsubUndo {
             word_size,
             sub,
         };
-        kuna_preserve_thumb_funcptr(funcptr_align, val, extra, multiplier, &facts)
+        unlace_preserve_thumb_funcptr(funcptr_align, val, extra, multiplier, &facts)
     }
 }
 
@@ -647,18 +647,18 @@ impl Rule for RulePtrsubUndo {
         let mut val: int8 = offset(data, cvn) as int8;
         let (extra0, multiplier) = Self::get_extra_offset(data, op);
         // `getTypeReadFacing(op)->isPtrsubMatching` dispatches through
-        // TypeSpacebase, which the kuna `is_ptrsub_matching_scope` resolves via the
+        // TypeSpacebase, which the unlace `is_ptrsub_matching_scope` resolves via the
         // local-variable Scope (the same call ActionSetCasts::castFixupPtrsub uses).
         let read_facing = data.vn_type_read_facing(basevn, op);
         if data.is_ptrsub_matching_scope(&read_facing, val, extra0, multiplier) {
             return 0;
         }
-        //   return 0;  -- (kuna) GH-8471
+        //   return 0;  -- (unlace) GH-8471
         // A pointer to a Thumb function carries the mode bit in its LSB
         // (`value = fn|1`).  When the architecture has aligned function
         // pointers (`funcptr_align != 0`), keep the `PTRSUB(fn) + 1` symbolic
         // rather than collapsing it back to raw hex.
-        // The predicate (`kuna_preserve_thumb_funcptr`) needs the resolved
+        // The predicate (`unlace_preserve_thumb_funcptr`) needs the resolved
         // TypeSpacebase::getSubType walk, which `is_ptrsub_matching_scope` already
         // routes through the function's scope; the global-symbol arm of
         // `spacebase_get_sub_type` resolves the constant `fn` to its TYPE_CODE
@@ -784,7 +784,7 @@ impl Rule for RuleAddUnsigned {
         if let Some(sym) = data
             .vbank()
             .get(constvn)
-            .and_then(|v| v.kuna_symbol_entry())
+            .and_then(|v| v.unlace_symbol_entry())
         {
             if let Some(local) = data.get_scope_local() {
                 let s = local.database().symbol(sym);
@@ -929,7 +929,7 @@ impl Rule for RuleSubRight {
             // so don't convert it.
             return 0;
         }
-        // (kuna) The C++ reads `glb->types` only after it has already rewired the
+        // (unlace) The C++ reads `glb->types` only after it has already rewired the
         // graph; a hand-built Funcdata with no type factory would leave a
         // half-applied transform behind, so the availability check is hoisted here.
         if data.get_arch().types().is_none() {
@@ -1176,7 +1176,7 @@ impl RulePieceStructure {
         ct: &std::rc::Rc<crate::dtype::Datatype>,
         offset: int4,
         size: int4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if offset + size > ct.get_size() {
             return Ok(false);
         }
@@ -1218,10 +1218,10 @@ impl RulePieceStructure {
     fn determine_datatype(
         data: &Funcdata,
         vn: VarnodeId,
-    ) -> KunaResult<(Option<std::rc::Rc<crate::dtype::Datatype>>, int4)> {
+    ) -> UnlaceResult<(Option<std::rc::Rc<crate::dtype::Datatype>>, int4)> {
         let vnsize = size(data, vn);
         // C++ getStructuredType(): mapentry ? symbol->getType() : vn->getType(); piece-structured else null.
-        // Resolve the containing local SymbolEntry (the kuna `mapentry`).
+        // Resolve the containing local SymbolEntry (the unlace `mapentry`).
         let usepoint = data.vn_use_point(vn);
         let addr = vn_addr(data, vn);
         let container = data
@@ -1279,7 +1279,7 @@ impl RulePieceStructure {
         zext: OpId,
         ct: Option<std::rc::Rc<crate::dtype::Datatype>>,
         mut offset: int4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let outvn = out_vn(data, zext);
         let invn = in_vn(data, zext, 0);
         if is_const(data, invn) {
@@ -1328,7 +1328,7 @@ impl RulePieceStructure {
         data: &mut Funcdata,
         stack: &[crate::op::PieceNode],
         structured_type: &std::rc::Rc<crate::dtype::Datatype>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mut change = false;
         for node in stack {
             if !node.is_leaf() {
@@ -1342,7 +1342,7 @@ impl RulePieceStructure {
             if code(data, op) != OpCode::CPUI_INT_ZEXT {
                 continue;
             }
-            // (kuna `mulblob`) a multiply operand leaf stays an extension.
+            // (unlace `mulblob`) a multiply operand leaf stays an extension.
             if crate::mulblob::declines_zext(data, op) {
                 continue;
             }
@@ -1429,7 +1429,7 @@ impl Rule for RulePieceStructure {
         };
 
         if code(data, op) == OpCode::CPUI_INT_ZEXT {
-            // (kuna `mulblob`) A widened multiply operand is a value, not an
+            // (unlace `mulblob`) A widened multiply operand is a value, not an
             // aggregate: leave the extension alone so it prints as ZEXT816(x).
             if crate::mulblob::declines_zext(data, op) {
                 return 0;
@@ -1449,7 +1449,7 @@ impl Rule for RulePieceStructure {
             }
             if zc == OpCode::CPUI_INT_ZEXT {
                 // Extension of a structured data-type; convert extension to PIECE first
-                // (kuna `mulblob`) unless the extension is a multiply operand.
+                // (unlace `mulblob`) unless the extension is a multiply operand.
                 if crate::mulblob::declines_zext(data, zext) {
                     return 0;
                 }

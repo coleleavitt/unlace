@@ -708,9 +708,12 @@ fn walk(
 }
 
 pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
-    if !arch.kuna_options.get::<crate::coreoptions::StackViews>().0
+    if !arch
+        .unlace_options
+        .get::<crate::coreoptions::StackViews>()
+        .0
         && !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::heritage::StackAliasDeadstore>()
             .0
         && !super::globalcallranges::should_seed(fd)
@@ -759,7 +762,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
         };
         let key = (space.get_index(), entry.get_offset());
         if !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::calleememory::CalleeMemoryCache>()
             .contains_key(&key)
         {
@@ -777,12 +780,12 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
                 link,
             )
             .unwrap_or_default();
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::calleememory::CalleeMemoryCache>()
                 .insert(key, Rc::new(summary));
         }
         if let Some(summary) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::calleememory::CalleeMemoryCache>()
             .get(&key)
         {
@@ -880,12 +883,12 @@ fn for_call<'a>(
 ) -> Option<&'a CalleeMemory> {
     if (!fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         && !fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::heritage::StackAliasDeadstore>()
             .0)
         || fd.obank().get(call.get_op())?.code() != OpCode::CPUI_CALL
@@ -975,7 +978,7 @@ fn for_call<'a>(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleememory_preserves = Some(preserves);
 }
 
@@ -998,7 +1001,7 @@ pub fn test_call_summary_is_usable(
 pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i32) -> bool {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         || !(1..=16).contains(&size)
@@ -1212,7 +1215,7 @@ fn unobserved_inner(
     Some(wanted)
 }
 
-/// (kuna `calleememory`) The memory summary of each direct callee, by `(space index, entry offset)`; reset by `Funcdata::clear`.
+/// (unlace `calleememory`) The memory summary of each direct callee, by `(space index, entry offset)`; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct SummariesSlot(
     std::collections::HashMap<
@@ -1220,9 +1223,9 @@ struct SummariesSlot(
         std::rc::Rc<crate::calleememory::CalleeMemory>,
     >,
 );
-crate::kuna_func_state!(SummariesSlot, keep_across_clear: false);
+crate::unlace_func_state!(SummariesSlot, keep_across_clear: false);
 
-/// The `kuna_calleememory` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_calleememory` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCalleememoryExt {
     fn callee_memory(
@@ -1246,7 +1249,7 @@ impl FuncdataCalleememoryExt for crate::funcdata::Funcdata {
         (unlace_base::types::int4, unlace_base::types::uintb),
         std::rc::Rc<crate::calleememory::CalleeMemory>,
     > {
-        &self.kuna_state::<SummariesSlot>().0
+        &self.unlace_state::<SummariesSlot>().0
     }
     fn callee_memory_mut(
         &mut self,
@@ -1254,17 +1257,17 @@ impl FuncdataCalleememoryExt for crate::funcdata::Funcdata {
         (unlace_base::types::int4, unlace_base::types::uintb),
         std::rc::Rc<crate::calleememory::CalleeMemory>,
     > {
-        &mut self.kuna_state_mut::<SummariesSlot>().0
+        &mut self.unlace_state_mut::<SummariesSlot>().0
     }
 }
 
-/// (kuna `calleememory`) The run-wide cache of callee memory summaries, by callee
+/// (unlace `calleememory`) The run-wide cache of callee memory summaries, by callee
 /// `(space index, entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeMemoryCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
     std::rc::Rc<crate::calleememory::CalleeMemory>,
 >;
-crate::kuna_arch_table!(CalleeMemoryCache);
+crate::unlace_arch_table!(CalleeMemoryCache);
 
 #[cfg(test)]
 mod tests {

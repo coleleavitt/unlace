@@ -1,4 +1,4 @@
-//! (kuna) A register the function sets for a system register is not the high
+//! (unlace) A register the function sets for a system register is not the high
 //! word of its return.
 //!
 //! `int f(void) { int r = g(); __asm volatile("vmsr fpscr, %0" :: "r"(K));
@@ -22,7 +22,7 @@
 //! it takes an address, and a returned word can be one. The first register
 //! then stands alone. When it was refused too, as a call's untouched result
 //! is, the function returns nothing, as `bl g; pop {r11,pc}` does until a
-//! caller reads the result (`kuna_voidret`).
+//! caller reads the result (`unlace_voidret`).
 //!
 //! The pair stays where the second register may still be the high word of a
 //! 64-bit value. A 64-bit system register takes both words in one write (x86's

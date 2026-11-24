@@ -1,4 +1,4 @@
-//! (kuna `elfmain`) The C runtime's declaration for an executable's own `main`,
+//! (unlace `elfmain`) The C runtime's declaration for an executable's own `main`,
 //! applied as far as `main`'s own analysis recovers its parameters.
 //!
 //! An executable that keeps its symbol table names `main` itself, but the
@@ -125,7 +125,7 @@ fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
 /// (an unread slot before a read one, a read of a wider or narrower register
 /// than the slot, a read past the third).
 pub fn read_slots(data: &Funcdata) -> Option<usize> {
-    let rt = data.kuna_elfmain()?;
+    let rt = data.unlace_elfmain()?;
     let mut read: Vec<(Address, int4)> = Vec::new();
     for id in data
         .vbank()
@@ -154,7 +154,7 @@ pub fn read_slots(data: &Funcdata) -> Option<usize> {
 }
 
 fn slot_of<'a>(data: &'a Funcdata, addr: &Address, size: int4) -> Option<&'a Slot> {
-    let rt = data.kuna_elfmain()?;
+    let rt = data.unlace_elfmain()?;
     let k = read_slots(data)?;
     rt.slots[..k]
         .iter()
@@ -169,7 +169,7 @@ pub fn input_type(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
         return None;
     }
     let slot = slot_of(data, v.get_addr(), v.get_size())?;
-    data.kuna_elfmain()?.typed.set(true);
+    data.unlace_elfmain()?.typed.set(true);
     Some(Rc::clone(&slot.ct))
 }
 
@@ -197,7 +197,7 @@ pub fn param_name(data: &Funcdata, addr: &Address, size: int4) -> Option<String>
 /// the drive decompiles it again without the seed, so it prints exactly what it
 /// prints with the option off.
 pub fn settled(fd: &Funcdata) -> bool {
-    let Some(rt) = fd.kuna_elfmain() else {
+    let Some(rt) = fd.unlace_elfmain() else {
         return true;
     };
     let proto = fd.get_func_proto();
@@ -221,30 +221,30 @@ pub fn settled(fd: &Funcdata) -> bool {
     }
 }
 
-/// (kuna `elfmain`) The C runtime's `main` declaration this function's inputs take, when it is
+/// (unlace `elfmain`) The C runtime's `main` declaration this function's inputs take, when it is
 /// an executable's own `main`; kept across `Funcdata::clear`.
 #[derive(Default)]
 struct RuntimeSlot(Option<std::rc::Rc<crate::elfmaindecl::Runtime>>);
-crate::kuna_func_state!(RuntimeSlot, keep_across_clear: true);
+crate::unlace_func_state!(RuntimeSlot, keep_across_clear: true);
 
-/// The `kuna_elfmaindecl` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_elfmaindecl` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataElfmaindeclExt {
-    /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
+    /// (unlace `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>);
-    /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    fn kuna_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime>;
+    fn unlace_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>);
+    /// (unlace `elfmain`) The C runtime's `main` declaration for this function.
+    fn unlace_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime>;
 }
 
 impl FuncdataElfmaindeclExt for crate::funcdata::Funcdata {
-    /// (kuna `elfmain`) Give this function's inputs the C runtime's `main`
+    /// (unlace `elfmain`) Give this function's inputs the C runtime's `main`
     /// declaration, as far as its own analysis recovers them.
-    fn kuna_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>) {
-        self.kuna_state_mut::<RuntimeSlot>().0 = runtime;
+    fn unlace_set_elfmain(&mut self, runtime: Option<std::rc::Rc<crate::elfmaindecl::Runtime>>) {
+        self.unlace_state_mut::<RuntimeSlot>().0 = runtime;
     }
-    /// (kuna `elfmain`) The C runtime's `main` declaration for this function.
-    fn kuna_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime> {
-        self.kuna_state::<RuntimeSlot>().0.as_deref()
+    /// (unlace `elfmain`) The C runtime's `main` declaration for this function.
+    fn unlace_elfmain(&self) -> Option<&crate::elfmaindecl::Runtime> {
+        self.unlace_state::<RuntimeSlot>().0.as_deref()
     }
 }

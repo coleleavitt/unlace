@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) The typed-vftable facts of an MSVC C++ image, for the
+//! (unlace `vtabletypes`) The typed-vftable facts of an MSVC C++ image, for the
 //! commit that installs them ([`unlace_decomp::vtabletypes`]).
 //!
 //! Built on the MSVC RTTI recovery of [`super::RttiPass`], which this pass runs

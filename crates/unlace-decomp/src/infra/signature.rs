@@ -51,7 +51,7 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use unlace_base::crc32::crc_update;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_INDEX, ATTRIB_VAL, AttributeId, ElementId, Encoder};
 use unlace_num::opcodes::OpCode;
 
@@ -286,7 +286,7 @@ impl Signature {
     /// The bare `<gensig>` / `<copysig>` forms port; the `<varsig>` / `<blocksig>`
     /// forms need `Varnode::encode` / `PcodeOp::encode` / `Address::encode` of the
     /// block start — the W8 marshal/print surface — and STUB out.
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         match self.kind {
             SignatureKind::Generic => {
                 // Signature::encode (signature.cc:609-615)
@@ -303,11 +303,11 @@ impl Signature {
                 encoder.close_element(&ELEM_COPYSIG);
                 Ok(())
             }
-            SignatureKind::Varnode(_) => Err(KunaError::lowlevel(
+            SignatureKind::Varnode(_) => Err(UnlaceError::lowlevel(
                 "kuna rust port: VarnodeSignature::encode needs Varnode::encode + \
                  PcodeOp::encode (W8 marshal surface)",
             )),
-            SignatureKind::Block { .. } => Err(KunaError::lowlevel(
+            SignatureKind::Block { .. } => Err(UnlaceError::lowlevel(
                 "kuna rust port: BlockSignature::encode needs FlowBlock::getStart \
                  + Address::encode of block start + PcodeOp::encode (W8)",
             )),
@@ -669,10 +669,10 @@ impl GraphSigManager {
     ///
     /// Returns an error when the settings are invalid (the C++
     /// `throw LowlevelError("Bad signature settings")`).
-    pub fn new() -> KunaResult<GraphSigManager> {
+    pub fn new() -> UnlaceResult<GraphSigManager> {
         let setting = get_settings();
         if !Self::test_settings(setting) {
-            return Err(KunaError::lowlevel("Bad signature settings"));
+            return Err(UnlaceError::lowlevel("Bad signature settings"));
         }
         Ok(GraphSigManager {
             sigs: Vec::new(),
@@ -762,10 +762,10 @@ impl GraphSigManager {
     ///
     /// Returns an error when the function exceeds the size threshold (the C++
     /// `throw LowlevelError(... " exceeds size threshold ...")`).
-    pub fn set_current_function(&mut self, fd: &Funcdata) -> KunaResult<()> {
+    pub fn set_current_function(&mut self, fd: &Funcdata) -> UnlaceResult<()> {
         let size = fd.num_varnodes();
         if self.maxvarnode != 0 && size > self.maxvarnode {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "{} exceeds size threshold for generating signatures",
                 fd.get_name()
             )));
@@ -1671,7 +1671,7 @@ impl GraphSigManager {
 
     /// Encode all current features (C++ `SigManager::encode`,
     /// signature.cc:729-737).
-    pub fn encode(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_SIGNATUREDESC);
         for s in &self.sigs {
             s.encode(encoder)?;
@@ -1690,7 +1690,7 @@ impl GraphSigManager {
 ///
 /// Emits `<signatures>` with `unimpl`/`baddata` flags, one `<sig val=..>` per
 /// feature (sorted), then a `<call>` per non-invalid call entry address.
-pub fn simple_signature(fd: &Funcdata, encoder: &mut dyn Encoder) -> KunaResult<()> {
+pub fn simple_signature(fd: &Funcdata, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
     let mut sigmanager = GraphSigManager::new()?;
     sigmanager.set_current_function(fd)?;
     sigmanager.generate(fd);
@@ -1720,7 +1720,7 @@ pub fn simple_signature(fd: &Funcdata, encoder: &mut dyn Encoder) -> KunaResult<
 ///
 /// Defers on the `<varsig>`/`<blocksig>` encode (the W8 marshal surface); the
 /// `<gensig>`/`<copysig>` features encode fully.
-pub fn debug_signature(fd: &Funcdata, encoder: &mut dyn Encoder) -> KunaResult<()> {
+pub fn debug_signature(fd: &Funcdata, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
     let mut sigmanager = GraphSigManager::new()?;
     sigmanager.set_current_function(fd)?;
     sigmanager.generate(fd);

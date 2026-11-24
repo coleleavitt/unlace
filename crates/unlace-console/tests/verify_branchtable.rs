@@ -309,7 +309,7 @@ fn an_unreadable_a32_table_states_no_count() {
 #[test]
 fn armframes_off_reads_no_a32_table() {
     let idx = build(|arch| {
-        arch.set_kuna_option("armframes", "off")
+        arch.set_unlace_option("armframes", "off")
             .expect("armframes flips off");
     });
     for sw in [&ADD, &LDR] {

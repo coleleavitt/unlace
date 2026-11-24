@@ -1,7 +1,7 @@
 //! ELF instruction-set and compiler-model declarations beyond the container's
 //! address size. Explicit language targets bypass this selection.
 use object::{Architecture, Object, elf::*};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 const MIPS_32BITMODE: u32 = 0x100;
 const MIPS_FP64: u32 = 0x200;
@@ -14,7 +14,7 @@ struct MipsFloat {
     abi: Option<u32>,
 }
 
-fn agree(a: Option<u32>, b: Option<u32>) -> KunaResult<Option<u32>> {
+fn agree(a: Option<u32>, b: Option<u32>) -> UnlaceResult<Option<u32>> {
     if a.zip(b).is_some_and(|(a, b)| a != b) {
         return Err(unsupported("conflicting MIPS floating-point declarations"));
     }
@@ -24,7 +24,7 @@ fn agree(a: Option<u32>, b: Option<u32>) -> KunaResult<Option<u32>> {
 fn mips_float(
     file: &object::File<'_>,
     record: Option<super::mipsabi::AbiFlags>,
-) -> KunaResult<MipsFloat> {
+) -> UnlaceResult<MipsFloat> {
     let registers = match record.map(|r| r.0[5]).unwrap_or(0) {
         0 => None,
         1 => Some(4),
@@ -42,8 +42,8 @@ fn flags(file: &object::File<'_>) -> Option<u32> {
     }
 }
 
-fn unsupported(message: &str) -> KunaError {
-    KunaError::lowlevel(format!("{message}; pass an explicit --target language id"))
+fn unsupported(message: &str) -> UnlaceError {
+    UnlaceError::lowlevel(format!("{message}; pass an explicit --target language id"))
 }
 
 struct Selection {
@@ -52,11 +52,11 @@ struct Selection {
     fp64_on_mips32: bool,
 }
 
-fn mips_id(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> KunaResult<String> {
+fn mips_id(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> UnlaceResult<String> {
     select(flags, elf64, endian, fp).map(|selection| selection.id)
 }
 
-fn select(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> KunaResult<Selection> {
+fn select(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> UnlaceResult<Selection> {
     let isa = flags & EF_MIPS_ARCH;
     let isa64 = match isa {
         EF_MIPS_ARCH_3 | EF_MIPS_ARCH_4 | EF_MIPS_ARCH_5 | EF_MIPS_ARCH_64 | EF_MIPS_ARCH_64R2
@@ -144,7 +144,7 @@ fn select(flags: u32, elf64: bool, endian: &str, fp: MipsFloat) -> KunaResult<Se
     })
 }
 
-fn mips_selection(file: &object::File<'_>, flags: u32) -> KunaResult<Option<Selection>> {
+fn mips_selection(file: &object::File<'_>, flags: u32) -> UnlaceResult<Option<Selection>> {
     if flags & 0x00ff_0000 != 0 {
         return Ok(None);
     }
@@ -156,7 +156,7 @@ fn mips_selection(file: &object::File<'_>, flags: u32) -> KunaResult<Option<Sele
     select(flags, file.is_64(), endian, mips_float(file, record)?).map(Some)
 }
 
-pub(crate) fn language_id(file: &object::File<'_>) -> KunaResult<Option<String>> {
+pub(crate) fn language_id(file: &object::File<'_>) -> UnlaceResult<Option<String>> {
     let Some(flags) = flags(file) else {
         return Ok(None);
     };

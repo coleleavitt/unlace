@@ -1,11 +1,11 @@
-// Tests for `kuna_fatstr` (included into `mod tests` in fatstr.rs).
+// Tests for `unlace_fatstr` (included into `mod tests` in fatstr.rs).
 //
 // Covered:
 //   - `FatStrMode`: parse vocabulary, u8 round-trip, default.
 //   - `bytes_are_text`: text, UTF-8, control-byte and no-alnum refusals.
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - the W3 facet table: register + lookup through the `TypeFactory` trait
-//     (the end-to-end rewrite is pinned by `tests/stages/kuna-fatstr.toml`).
+//     (the end-to-end rewrite is pinned by `tests/stages/unlace-fatstr.toml`).
 
 use super::*;
 
@@ -39,7 +39,7 @@ fn build_fd(mode: FatStrMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -108,19 +108,19 @@ fn specs_register_the_analysis_clone() {
 fn facet_table_registers_and_looks_up() {
     use crate::dtype::TypeFactory;
     let tf = TypeFactoryImpl::default();
-    assert!(tf.kuna_lang_facet("alloc::string::String").is_none());
-    tf.kuna_register_lang_facet("&str", LangFacet::RustStr)
+    assert!(tf.unlace_lang_facet("alloc::string::String").is_none());
+    tf.unlace_register_lang_facet("&str", LangFacet::RustStr)
         .expect("registers");
-    tf.kuna_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u8".into() })
+    tf.unlace_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u8".into() })
         .expect("registers");
-    assert_eq!(tf.kuna_lang_facet("&str"), Some(LangFacet::RustStr));
-    assert!(tf.kuna_lang_facet("&str").unwrap().is_text());
-    assert!(!tf.kuna_lang_facet("&[u8]").unwrap().is_text());
+    assert_eq!(tf.unlace_lang_facet("&str"), Some(LangFacet::RustStr));
+    assert!(tf.unlace_lang_facet("&str").unwrap().is_text());
+    assert!(!tf.unlace_lang_facet("&[u8]").unwrap().is_text());
     // Re-registration replaces (a provider refining its record).
-    tf.kuna_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u16".into() })
+    tf.unlace_register_lang_facet("&[u8]", LangFacet::RustSlice { elem: "u16".into() })
         .expect("re-registers");
     assert_eq!(
-        tf.kuna_lang_facet("&[u8]"),
+        tf.unlace_lang_facet("&[u8]"),
         Some(LangFacet::RustSlice { elem: "u16".into() })
     );
 }

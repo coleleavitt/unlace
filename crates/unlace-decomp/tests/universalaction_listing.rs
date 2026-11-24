@@ -1,5 +1,5 @@
-//! Byte-for-byte regression check of kuna's decompile action-tree listing.
-//! The fixture includes kuna-specific passes; it is not a raw C++ oracle.
+//! Byte-for-byte regression check of unlace's decompile action-tree listing.
+//! The fixture includes unlace-specific passes; it is not a raw C++ oracle.
 //! See `fixtures/README.md` for its provenance and update policy.
 
 use unlace_decomp::universalaction::{ActionListFilter, UNPORTED_ALLOWLIST, universal_sched};

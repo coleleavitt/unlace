@@ -1,4 +1,4 @@
-//! (kuna `utf8strings`) The multi-byte reading of the 1-byte width, for the
+//! (unlace `utf8strings`) The multi-byte reading of the 1-byte width, for the
 //! [`inventory`](super::stringinv::inventory) query.
 //!
 //! # The gap

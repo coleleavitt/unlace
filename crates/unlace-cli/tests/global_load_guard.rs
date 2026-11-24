@@ -46,7 +46,7 @@ fn a_store_before_a_pointer_load_is_kept_when_the_global_is_stored_again() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for (fixture, funcs) in BUILDS {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",

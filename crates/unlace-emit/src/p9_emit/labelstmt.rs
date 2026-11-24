@@ -1,4 +1,4 @@
-//! (kuna) Every label in the printed C labels a statement.
+//! (unlace) Every label in the printed C labels a statement.
 //!
 //! In C99/C11/C17 a label is part of a labeled statement, so a label directly
 //! before a closing brace (`case 2: }`, `default: }`, `label_1234: }`) is a

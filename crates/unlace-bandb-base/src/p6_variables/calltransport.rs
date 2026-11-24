@@ -13,34 +13,34 @@ use crate::funcdata::Funcdata;
 
 /// [`Funcdata`] methods for outgoing-argument transport detection.
 pub trait FuncdataCallTransportExt {
-    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool;
+    fn unlace_is_call_transport(&self, vn: VarnodeId) -> bool;
 }
 
 /// [`Funcdata`] methods for outgoing-argument transport detection used elsewhere in the crate.
 #[doc(hidden)]
 pub trait FuncdataCallTransportCrateExt {
-    fn kuna_record_call_transport(&mut self, first: VarnodeId);
-    fn kuna_is_call_transport_projection(
+    fn unlace_record_call_transport(&mut self, first: VarnodeId);
+    fn unlace_is_call_transport_projection(
         &self,
         vn: VarnodeId,
         byte_offset: int4,
         byte_size: int4,
     ) -> bool;
-    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool;
+    fn unlace_has_local_storage_use(&self, first: VarnodeId) -> bool;
 }
 
 /// [`Funcdata`] methods for outgoing-argument transport detection private to this module.
 trait FuncdataCallTransportLocalExt {
-    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool;
-    fn kuna_has_prior_storage(
+    fn unlace_is_register_storage(&self, address: &Address, size: int4) -> bool;
+    fn unlace_has_prior_storage(
         &self,
         first: VarnodeId,
         carrier: &Address,
         instruction: &Address,
     ) -> bool;
-    fn kuna_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool;
-    fn kuna_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool;
-    fn kuna_argument_storage_matches(
+    fn unlace_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool;
+    fn unlace_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool;
+    fn unlace_argument_storage_matches(
         &self,
         op: OpId,
         slot: int4,
@@ -52,21 +52,21 @@ trait FuncdataCallTransportLocalExt {
 impl FuncdataCallTransportExt for Funcdata {
     /// A register copy is transport only when an earlier home exists and all
     /// remaining uses forward it through that register to ordinary call arguments.
-    fn kuna_is_call_transport(&self, vn: VarnodeId) -> bool {
+    fn unlace_is_call_transport(&self, vn: VarnodeId) -> bool {
         if !self.get_arch().name_style_angr {
             return false;
         }
         let Some(value) = self.vbank().get(vn) else {
             return false;
         };
-        if value.is_persist() || self.kuna_storage_write_has_local_use(vn, value.get_size()) {
+        if value.is_persist() || self.unlace_storage_write_has_local_use(vn, value.get_size()) {
             return false;
         }
-        if self.kuna_was_call_transport(vn) {
+        if self.unlace_was_call_transport(vn) {
             return value.has_no_descend()
-                || self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size());
+                || self.unlace_only_argument_uses(vn, value.get_addr(), value.get_size());
         }
-        if !self.kuna_is_register_storage(value.get_addr(), value.get_size()) {
+        if !self.unlace_is_register_storage(value.get_addr(), value.get_size()) {
             return false;
         }
         let Some(definition) = value.get_def().and_then(|id| self.obank().get(id)) else {
@@ -82,17 +82,17 @@ impl FuncdataCallTransportExt for Funcdata {
             .vbank()
             .get(input)
             .is_none_or(|v| v.get_size() != value.get_size())
-            || !self.kuna_has_prior_storage(input, value.get_addr(), definition.get_addr())
+            || !self.unlace_has_prior_storage(input, value.get_addr(), definition.get_addr())
         {
             return false;
         }
-        self.kuna_only_argument_uses(vn, value.get_addr(), value.get_size())
+        self.unlace_only_argument_uses(vn, value.get_addr(), value.get_size())
     }
 }
 
 impl FuncdataCallTransportCrateExt for Funcdata {
-    fn kuna_record_call_transport(&mut self, first: VarnodeId) {
-        self.kuna_mark_call_transport(first);
+    fn unlace_record_call_transport(&mut self, first: VarnodeId) {
+        self.unlace_mark_call_transport(first);
         let Some(value) = self.vbank().get(first) else {
             return;
         };
@@ -142,14 +142,14 @@ impl FuncdataCallTransportCrateExt for Funcdata {
                     continue;
                 }
                 if node.get_addr() == &carrier && node.get_size() > size {
-                    self.kuna_mark_call_transport_projection(output, size);
+                    self.unlace_mark_call_transport_projection(output, size);
                 }
                 pending.push(output);
             }
         }
     }
 
-    fn kuna_is_call_transport_projection(
+    fn unlace_is_call_transport_projection(
         &self,
         vn: VarnodeId,
         byte_offset: int4,
@@ -161,16 +161,16 @@ impl FuncdataCallTransportCrateExt for Funcdata {
         let Some(value) = self.vbank().get(vn) else {
             return false;
         };
-        if value.is_persist() || self.kuna_storage_write_has_local_use(vn, byte_size) {
+        if value.is_persist() || self.unlace_storage_write_has_local_use(vn, byte_size) {
             return false;
         }
         if !value.is_persist()
             && self
-                .kuna_call_transport_projection_size(vn)
+                .unlace_call_transport_projection_size(vn)
                 .is_some_and(|size| byte_size <= size && byte_size < value.get_size())
         {
             return value.has_no_descend()
-                || self.kuna_only_argument_uses(vn, value.get_addr(), byte_size);
+                || self.unlace_only_argument_uses(vn, value.get_addr(), byte_size);
         }
         let Some(definition) = value.get_def().and_then(|id| self.obank().get(id)) else {
             return false;
@@ -188,21 +188,21 @@ impl FuncdataCallTransportCrateExt for Funcdata {
             (v.get_size() == byte_size
                 && value.get_size() > byte_size
                 && v.get_addr() == value.get_addr()
-                && self.kuna_is_call_transport(input))
+                && self.unlace_is_call_transport(input))
                 || (v.get_size() >= byte_size
                     && value.get_size() > v.get_size()
                     && v.get_space().get_type() == spacetype::IPTR_SPACEBASE
                     && v.get_def().is_some()
-                    && self.kuna_is_register_storage(value.get_addr(), value.get_size())
-                    && self.kuna_only_argument_uses(vn, value.get_addr(), byte_size))
+                    && self.unlace_is_register_storage(value.get_addr(), value.get_size())
+                    && self.unlace_only_argument_uses(vn, value.get_addr(), byte_size))
         })
     }
 
-    fn kuna_has_local_storage_use(&self, first: VarnodeId) -> bool {
+    fn unlace_has_local_storage_use(&self, first: VarnodeId) -> bool {
         let Some(value) = self.vbank().get(first) else {
             return false;
         };
-        if !self.kuna_is_register_storage(value.get_addr(), value.get_size()) {
+        if !self.unlace_is_register_storage(value.get_addr(), value.get_size()) {
             return false;
         }
         let carrier = value.get_addr();
@@ -279,7 +279,7 @@ impl FuncdataCallTransportCrateExt for Funcdata {
 }
 
 impl FuncdataCallTransportLocalExt for Funcdata {
-    fn kuna_is_register_storage(&self, address: &Address, size: int4) -> bool {
+    fn unlace_is_register_storage(&self, address: &Address, size: int4) -> bool {
         let Some(space) = address.get_space() else {
             return false;
         };
@@ -293,13 +293,13 @@ impl FuncdataCallTransportLocalExt for Funcdata {
             })
     }
 
-    fn kuna_has_prior_storage(
+    fn unlace_has_prior_storage(
         &self,
         first: VarnodeId,
         carrier: &Address,
         instruction: &Address,
     ) -> bool {
-        if self.kuna_materializes_computation(first, instruction) {
+        if self.unlace_materializes_computation(first, instruction) {
             return false;
         }
         let mut pending = vec![first];
@@ -329,13 +329,13 @@ impl FuncdataCallTransportLocalExt for Funcdata {
             }
             let address = value.get_addr();
             if address != carrier
-                && !self.kuna_was_call_transport(id)
-                && (self.kuna_is_register_storage(address, value.get_size())
+                && !self.unlace_was_call_transport(id)
+                && (self.unlace_is_register_storage(address, value.get_size())
                     || value.get_space().get_type() == spacetype::IPTR_SPACEBASE)
             {
                 return true;
             }
-            if self.kuna_storage_sources(id).iter().any(|source| {
+            if self.unlace_storage_sources(id).iter().any(|source| {
                 source.address != *carrier
                     && source.size == value.get_size()
                     && source.write_address.as_ref() != Some(instruction)
@@ -360,7 +360,7 @@ impl FuncdataCallTransportLocalExt for Funcdata {
         false
     }
 
-    fn kuna_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool {
+    fn unlace_materializes_computation(&self, first: VarnodeId, instruction: &Address) -> bool {
         let mut current = first;
         let mut visited = FxHashSet::default();
         while visited.insert(current) && visited.len() <= 64 {
@@ -400,7 +400,7 @@ impl FuncdataCallTransportLocalExt for Funcdata {
         true
     }
 
-    fn kuna_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool {
+    fn unlace_only_argument_uses(&self, first: VarnodeId, carrier: &Address, size: int4) -> bool {
         let mut pending = vec![first];
         let mut visited = FxHashSet::default();
         let mut saw_argument = false;
@@ -427,7 +427,7 @@ impl FuncdataCallTransportLocalExt for Funcdata {
                     }
                     if matches!(operation.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
                         if slot == 0
-                            || !self.kuna_argument_storage_matches(use_id, slot, carrier, size)
+                            || !self.unlace_argument_storage_matches(use_id, slot, carrier, size)
                         {
                             return false;
                         }
@@ -474,7 +474,7 @@ impl FuncdataCallTransportLocalExt for Funcdata {
         saw_argument
     }
 
-    fn kuna_argument_storage_matches(
+    fn unlace_argument_storage_matches(
         &self,
         op: OpId,
         slot: int4,
@@ -520,9 +520,9 @@ impl FuncdataCallTransportLocalExt for Funcdata {
 }
 
 /// Fill the call-transport hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
-    hooks.is_call_transport = Some(Funcdata::kuna_is_call_transport);
-    hooks.record_call_transport = Some(Funcdata::kuna_record_call_transport);
-    hooks.is_call_transport_projection = Some(Funcdata::kuna_is_call_transport_projection);
-    hooks.has_local_storage_use = Some(Funcdata::kuna_has_local_storage_use);
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
+    hooks.is_call_transport = Some(Funcdata::unlace_is_call_transport);
+    hooks.record_call_transport = Some(Funcdata::unlace_record_call_transport);
+    hooks.is_call_transport_projection = Some(Funcdata::unlace_is_call_transport_projection);
+    hooks.has_local_storage_use = Some(Funcdata::unlace_has_local_storage_use);
 }

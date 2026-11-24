@@ -1,4 +1,4 @@
-//! (kuna) A narrow LOAD keeps its own width unless a declared record, reached
+//! (unlace) A narrow LOAD keeps its own width unless a declared record, reached
 //! through a pointer whose type is locked, attests the whole field it would be
 //! widened to.
 //!

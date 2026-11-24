@@ -405,9 +405,9 @@ fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
 
 #[test]
 fn region_identification_stops_at_the_budget_and_names_itself() {
-    use crate::regionid::KunaRegionIdentifier;
+    use crate::regionid::UnlaceRegionIdentifier;
     let build = || {
-        let mut ri = KunaRegionIdentifier::new();
+        let mut ri = UnlaceRegionIdentifier::new();
         let n: Vec<_> = (1..=4).map(|a| ri.add_synthetic_block(a)).collect();
         ri.add_synthetic_edge(n[0], n[1]);
         ri.add_synthetic_edge(n[1], n[2]);
@@ -424,7 +424,7 @@ fn region_identification_stops_at_the_budget_and_names_itself() {
     assert_eq!(budget_site().as_deref(), Some("region identification"));
 }
 
-/// (kuna `iokitclasses on`) Candidates that all override one method collapse to
+/// (unlace `iokitclasses on`) Candidates that all override one method collapse to
 /// its name; unnamed ones do not count, and two names or a non-member do
 /// not collapse.
 #[test]

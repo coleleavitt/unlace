@@ -1,5 +1,5 @@
-//! (kuna) Relocatable-object (`.o` / `.obj`) load-layout + relocation engine —
-//! the loader-tier capability angr's CLE `ELF` backend has and kuna lacked.
+//! (unlace) Relocatable-object (`.o` / `.obj`) load-layout + relocation engine —
+//! the loader-tier capability angr's CLE `ELF` backend has and unlace lacked.
 //!
 //! ## Why this exists
 //!
@@ -72,7 +72,7 @@ use super::mipsreloc;
 use super::reloc_apply::{self, RelocationFailure};
 
 /// Synthetic load base for the first `SHF_ALLOC` section (angr's CLE default for
-/// a relocatable object, so a `.o` lifted by kuna and by angr share addresses).
+/// a relocatable object, so a `.o` lifted by unlace and by angr share addresses).
 pub const RELOC_BASE: u64 = 0x40_0000;
 
 /// The load base on a machine whose address space is 16 bits wide (AVR,
@@ -371,7 +371,7 @@ struct ResolvedRelocationTarget {
 
 /// Lay a relocatable object (an ELF `ET_REL` or a COFF `.obj`) out into a
 /// loadable image: synthesize the section layout, apply the relocations, and
-/// rebase / extern-bind the symbols.  The kuna analog of angr CLE's `ELF`
+/// rebase / extern-bind the symbols.  The unlace analog of angr CLE's `ELF`
 /// relocatable backend.
 ///
 /// `fmt` supplies the two per-format questions — which sections are memory-

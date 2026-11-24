@@ -50,7 +50,7 @@ and loses to anything more specific.
 
 **Verification.**
 
-1. `tests/stages/kuna-boolbyte.toml` — two passes over one bytechunk: the witness
+1. `tests/stages/boolbyte.toml` — two passes over one bytechunk: the witness
    (`flagparam`, `char a0` -> `bool a0`) and three refusals (a byte also widened
    and added, a byte tested for its low bit, a byte stored through a pointer),
    each identical in both passes.

@@ -1,4 +1,4 @@
-//! (kuna `delphi`) Borland/Delphi RTTI: the class VMTs, class and method
+//! (unlace `delphi`) Borland/Delphi RTTI: the class VMTs, class and method
 //! names, type-info records and interface tables of a Delphi PE.
 //!
 //! Every Delphi class has a VMT in the image. The VMT pointer an object holds

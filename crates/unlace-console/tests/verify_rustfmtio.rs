@@ -34,9 +34,9 @@ fn decompile(
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
     program
         .arch_mut()
-        .kuna_options
+        .unlace_options
         .set(unlace_decomp::analysisgates::Listing(true));
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::All
     } else {
         RustFmtMode::On
@@ -141,17 +141,17 @@ fn producer_language_and_current_image_evidence_are_required() {
                     0 => arch.rustc_stable_version = None,
                     1 => arch.rustc_stable_version = Some((1, 93, 0)),
                     2 => arch
-                        .kuna_options
+                        .unlace_options
                         .set(unlace_decomp::sourcelang::SourceLangForced(Some(
                             unlace_decomp::sourcelang::SourceLang::C,
                         ))),
                     3 => arch
-                        .kuna_tables
+                        .unlace_tables
                         .get_mut::<unlace_decomp::rustfmtio::WriterProfiles>()
                         .clear(),
                     4 => {
                         for profile in arch
-                            .kuna_tables
+                            .unlace_tables
                             .get_mut::<unlace_decomp::rustfmtio::WriterProfiles>()
                             .values_mut()
                         {
@@ -160,7 +160,7 @@ fn producer_language_and_current_image_evidence_are_required() {
                     }
                     5 => {
                         for profile in arch
-                            .kuna_tables
+                            .unlace_tables
                             .get_mut::<unlace_decomp::rustfmtio::WriterProfiles>()
                             .values_mut()
                         {
@@ -169,7 +169,7 @@ fn producer_language_and_current_image_evidence_are_required() {
                     }
                     _ => {
                         let spans: Vec<_> = arch
-                            .kuna_tables
+                            .unlace_tables
                             .get::<unlace_decomp::rustfmtio::WriterProfiles>()
                             .values()
                             .flat_map(|profile| profile.protected.iter())

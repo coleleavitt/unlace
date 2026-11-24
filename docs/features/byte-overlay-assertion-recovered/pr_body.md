@@ -50,7 +50,7 @@ void sub_43d0c6(void)
 
 ## The tests
 
-`kuna-console/tests/verify_byteoverlay.rs` (4) is the end-to-end bar: overlaying
+`console/tests/verify_byteoverlay.rs` (4) is the end-to-end bar: overlaying
 `b8 2a 00 00 00 c3` on `assertranges_x86_64`'s `sample` must turn
 `return scale * a0 + bias + …` into `return 0x2a`, an unmapped address must be
 rejected naming the span, and the console command must say what it did. Plus two

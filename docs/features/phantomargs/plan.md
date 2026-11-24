@@ -64,7 +64,7 @@ stage files); `docs/baseline-stages.json` re-recorded (1021 keys), not hand-merg
 
 ## 4. Test
 
-`tests/stages/kuna-argclobber.toml`, two passes over one hand-assembled x86-64
+`tests/stages/argclobber.toml`, two passes over one hand-assembled x86-64
 bytechunk (`caller` / `clobber` / `target` / `helper`), cut to the fmt witness's
 real shape: one path calls `clobber` (whose own first act is a call, so
 `calleepreserves` cannot narrow the killed set), the other runs `idivl` and leaves
@@ -80,14 +80,14 @@ cannot prove `rdx` dead there.
 Three negative cases, one per guard clause, each asserting the SAME call in both
 passes:
 
-* `tests/stages/kuna-argclobber-guards.toml` (x86-64) — the same caller shape, but
+* `tests/stages/argclobber-guards.toml` (x86-64) — the same caller shape, but
   the callee is `reader: mov %rdx,%rax; ret`, so the callee clause keeps the
   argument.
-* `tests/stages/kuna-argclobber-armreturn.toml` (ARM) — u-boot `sub_60827fa4`
+* `tests/stages/argclobber-armreturn.toml` (ARM) — u-boot `sub_60827fa4`
   reduced: `bl producer; cmp r0,#4; movne r3,r0; moveq r3,r0; bl target2`, so the
   creation feeding `r3` is a creation of `r0` and the same-register clause keeps
   the argument.
-* `tests/stages/kuna-argclobber-forward.toml` (x86-64) — the caller forwards its
+* `tests/stages/argclobber-forward.toml` (x86-64) — the caller forwards its
   own second parameter into `rdx` (`mov %r12,%rdx`) on the non-clobber path, so
   the join clause keeps both the argument and the parameter.
 

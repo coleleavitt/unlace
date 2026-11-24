@@ -64,7 +64,7 @@ fn decompile_main(mode: ListingMode) -> String {
         .expect("analysis commit succeeds");
     if let ListingMode::OnAfterBootstrap = mode {
         prog.arch_mut()
-            .set_kuna_option("listing", "on")
+            .set_unlace_option("listing", "on")
             .expect("listing option flips on");
     }
 

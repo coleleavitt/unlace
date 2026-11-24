@@ -1,4 +1,4 @@
-//! (kuna) `entryretdispatch` — marshal identity for entry-point RET-dispatch
+//! (unlace) `entryretdispatch` — marshal identity for entry-point RET-dispatch
 //! recovery (P2 flow classification).
 //!
 //! Some packers replace a direct call chain with repeated
@@ -11,7 +11,7 @@
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<entryretdispatch>` (kuna). ElementIds live in the
+/// Marshaling element `<entryretdispatch>` (unlace). ElementIds live in the
 /// 4000+ range; 4164 was the next free id when this module was added.
 pub const ELEM_ENTRYRETDISPATCH: ElementId = ElementId::new("entryretdispatch", 4164);
 

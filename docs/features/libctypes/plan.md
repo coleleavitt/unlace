@@ -53,7 +53,7 @@ scores (`kuna decompile-all --json`'s `variables[]`), where every such slot is
    agrees with what the pass parks on an imported `fopen`.
 6. Env bridge wired through the console `option` arm, `kuna decompile`'s
    subprocess env and `decompile-all`'s `is_loadtime_gate` / `apply_loadtime_env`.
-7. Stage test `tests/stages/kuna-libctypes.toml`, three `load file` passes over
+7. Stage test `tests/stages/libctypes.toml`, three `load file` passes over
    two real ELFs. Passes 1/2 use `libctypes_stat_x86_64`, written so the two
    halves are separable: it never names `FILE`, so the table must MINT one
    (off = `fclose(void *)` / `void * fopen(...)`, on = `fclose(FILE *)` /

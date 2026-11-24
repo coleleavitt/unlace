@@ -108,9 +108,9 @@ fn decompile(bytes: &[u8]) -> String {
     let specs = std::env::var_os("SLEIGHHOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| common::repo_root().join("specs"));
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let output = Command::new(kuna)
+    let output = Command::new(unlace)
         .arg("decompile-all")
         .arg(&path)
         .args(["--assert-strict", "--sleighpath"])

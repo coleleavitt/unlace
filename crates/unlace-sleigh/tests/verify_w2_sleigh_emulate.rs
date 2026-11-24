@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace, RegisterLookup, UniqueSpace,
     VarnodeStorage, addrspace_flags, spacetype,
@@ -90,8 +90,8 @@ impl LoadImage for EmptyLoader {
     fn get_file_name(&self) -> &str {
         "empty"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("EmptyLoader"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("EmptyLoader"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         b"test:LE:64:default".to_vec()
@@ -125,7 +125,7 @@ impl CannedTranslator {
 }
 
 impl RegisterLookup for CannedTranslator {
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
         if let Some(num) = nm.strip_prefix('r') {
             if let Ok(index) = num.parse::<u64>() {
                 if index < 8 {
@@ -137,7 +137,7 @@ impl RegisterLookup for CannedTranslator {
                 }
             }
         }
-        Err(KunaError::sleigh(format!("Unknown register name: {nm}")))
+        Err(UnlaceError::sleigh(format!("Unknown register name: {nm}")))
     }
     fn get_register_name(&self, _base: &Rc<AddrSpace>, _off: u64, _size: i32) -> String {
         String::new()
@@ -154,22 +154,22 @@ impl Translate for CannedTranslator {
     fn translate_base_mut(&mut self) -> &mut TranslateBase {
         &mut self.base
     }
-    fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+    fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
         Ok(())
     }
     // mutable_key_type: see the trait declaration (translate.rs)
     #[allow(clippy::mutable_key_type)]
     fn get_all_registers(&self, _reglist: &mut BTreeMap<VarnodeData, String>) {}
     fn get_user_op_names(&self, _res: &mut Vec<String>) {}
-    fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32> {
+    fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32> {
         match self.program.get(&baseaddr.get_offset()) {
-            None => Err(KunaError::bad_data("no instruction")),
+            None => Err(UnlaceError::bad_data("no instruction")),
             Some((len, _)) => Ok(*len),
         }
     }
-    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> UnlaceResult<i32> {
         match self.program.get(&baseaddr.get_offset()) {
-            None => Err(KunaError::bad_data("no instruction")),
+            None => Err(UnlaceError::bad_data("no instruction")),
             Some((len, ops)) => {
                 for op in ops {
                     emit.dump(baseaddr, op.opc, op.out.as_ref(), &op.ins);
@@ -178,8 +178,12 @@ impl Translate for CannedTranslator {
             }
         }
     }
-    fn print_assembly(&self, _emit: &mut dyn AssemblyEmit, _baseaddr: &Address) -> KunaResult<i32> {
-        Err(KunaError::lowlevel("no assembly"))
+    fn print_assembly(
+        &self,
+        _emit: &mut dyn AssemblyEmit,
+        _baseaddr: &Address,
+    ) -> UnlaceResult<i32> {
+        Err(UnlaceError::lowlevel("no assembly"))
     }
 }
 

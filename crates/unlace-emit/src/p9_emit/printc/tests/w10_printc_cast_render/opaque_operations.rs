@@ -31,7 +31,7 @@ fn render(
         fd.high_bank_mut()
             .get_mut(high)
             .unwrap()
-            .set_kuna_name(name);
+            .set_unlace_name(name);
     }
     let mut printer = PrintC::new();
     printer.set_name(lang);
@@ -121,7 +121,7 @@ fn unicode_operations_keep_distinct_bindings_and_all_four_operands() {
 fn acle_intrinsics_keep_precedence_for_a_resolved_userop() {
     let mut arch = bare_arch();
     arch.archid = "AARCH64:LE:64:v8A:default".into();
-    arch.kuna_options.set(crate::memtag::AcleIntrinsics(true));
+    arch.unlace_options.set(crate::memtag::AcleIntrinsics(true));
     arch.userops
         .register_op(UserPcodeOp::new_unspecialized(b"WaitForInterrupt", 0))
         .unwrap();
@@ -132,7 +132,8 @@ fn acle_intrinsics_keep_precedence_for_a_resolved_userop() {
         render(&arch, "rust", 1 << 32, &[]),
         "__kuna_userop_100000000()"
     );
-    arch.kuna_options.set(crate::memtag::AcleIntrinsics(false));
+    arch.unlace_options
+        .set(crate::memtag::AcleIntrinsics(false));
     for lang in ["c", "go", "rust"] {
         assert_eq!(render(&arch, lang, 0, &[]), "WaitForInterrupt()");
     }

@@ -54,7 +54,7 @@ pub fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
     let address = byte_address(fd, pointer, size);
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         && address.is_none()

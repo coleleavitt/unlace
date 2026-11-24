@@ -1,4 +1,4 @@
-//! (kuna `callerptr`) A parameter every caller passes a pointer is a pointer.
+//! (unlace `callerptr`) A parameter every caller passes a pointer is a pointer.
 //!
 //! `calleevote` states a callee parameter's type only where every direct call
 //! passes the same committed pointer: a record with a layout, a `char *`, a
@@ -41,9 +41,9 @@ const HOP_CAP: usize = 10;
 /// The target's `void *`, or `None` when nothing is decided: the option or
 /// `calleevote` is off.
 pub fn void_pointer(arch: &Architecture) -> Option<Rc<Datatype>> {
-    if !arch.kuna_options.get::<crate::callerptr::CallerPtr>().0
+    if !arch.unlace_options.get::<crate::callerptr::CallerPtr>().0
         || !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::calleevote::CalleeVoteMode>()
             .is_on()
     {
@@ -346,7 +346,7 @@ fn dereferenced(data: &Funcdata, family: &[VarnodeId]) -> bool {
 }
 
 /// Is `v` a string literal: a constant, or the engine's `PTRSUB` off the
-/// constant zero, that resolves to a character array kuna recovered
+/// constant zero, that resolves to a character array unlace recovered
 /// (`charptr::constant_is_string`)? Any other constant is a number as
 /// often as an address -- `0x2000` is a buffer size and the address of
 /// `.init` -- so it proves nothing.
@@ -377,7 +377,7 @@ fn addresses_a_string(data: &Funcdata, v: VarnodeId) -> bool {
 
 /// Did the function's callers state a pointer for its input in this storage?
 fn stated_pointer(data: &Funcdata, addr: &Address, size: i32) -> bool {
-    data.kuna_calleevote_inputs()
+    data.unlace_calleevote_inputs()
         .and_then(|s| s.at(addr, size))
         .is_some_and(|t| t.ct.get_metatype() == type_metatype::TYPE_PTR)
 }
@@ -424,8 +424,8 @@ fn declared_pointer_argument(data: &Funcdata, r: OpId, v: VarnodeId) -> bool {
         })
 }
 
-crate::kuna_flag!(
-    /// (kuna `callerptr`) Does a pointer-width integer parameter every caller
+crate::unlace_flag!(
+    /// (unlace `callerptr`) Does a pointer-width integer parameter every caller
     /// passes some pointer or a null take a pointer?
     CallerPtr,
     "callerptr",

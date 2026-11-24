@@ -1,4 +1,4 @@
-//! (kuna) PE data-directory tolerance: clamp a `NumberOfRvaAndSizes` that cannot
+//! (unlace) PE data-directory tolerance: clamp a `NumberOfRvaAndSizes` that cannot
 //! fit its own optional header, because the directories that are physically
 //! present still describe the image.
 //!
@@ -9,7 +9,7 @@
 //! fits)` directories and ignoring the field's excess. `object` does not — it
 //! slices exactly `NumberOfRvaAndSizes` entries out of the optional header inside
 //! `ImageNtHeaders::parse`, so one oversized `u32` rejects the whole file with
-//! "Invalid PE number of RVA and sizes" and every kuna surface (`functions`,
+//! "Invalid PE number of RVA and sizes" and every unlace surface (`functions`,
 //! `decompile-all`, `strings`, `disassemble`) exits 1 before a single byte of
 //! code is mapped. Packers write that field over deliberately: an Invius-packed
 //! image carried 1531532893 in a 224-byte optional header holding the 16 real

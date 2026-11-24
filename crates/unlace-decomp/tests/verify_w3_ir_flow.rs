@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
@@ -75,7 +75,7 @@ fn typeop_for(opc: OpCode) -> TypeOp {
 }
 
 /// A minimal [`FlowEnvironment`] for the pure-IR strand: resolves op-codes via
-/// [`typeop_for`] and reports no overrides / no injected user-ops / no kuna
+/// [`typeop_for`] and reports no overrides / no injected user-ops / no unlace
 /// anchors.  It needs no `Translate` (the pure-IR tests never call
 /// `process_instruction`), so the translator accessor panics if ever reached.
 struct TableEnv;
@@ -609,8 +609,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -787,7 +787,7 @@ fn assert_lift_reaches_emitter_stub(fixture_file: &str) {
                 "successful process_instruction must record the visited instruction"
             );
         }
-        Err(KunaError::Lowlevel { explain, .. }) => {
+        Err(UnlaceError::Lowlevel { explain, .. }) => {
             // The precise W3-funcdata emitter stub (newVarnodeOut / newCodeRef),
             // proving the lift was driven and reached exactly the documented
             // boundary.

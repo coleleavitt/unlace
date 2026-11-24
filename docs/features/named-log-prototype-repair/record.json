@@ -38,7 +38,7 @@
     "negative_control": "The same promoted probe fails its stdout_matches clause against an unpatched build from the same pre-fix lineage, which emits the old under-parameterized call."
   },
   "tests": {
-    "focused": "cargo test -p kuna-console --test verify_assertplane -- --nocapture: 29 passed",
+    "focused": "cargo test -p console --test verify_assertplane -- --nocapture: 29 passed",
     "promoted": "scripts.repipe.clitests --name named-log-prototype-repair --json: 1/1 passed",
     "workspace": "cargo test --workspace --no-fail-fast on the immediately prior 7c890180 main: exit 0; all workspace and doc-test targets passed, with only their declared ignored tests. After the final 7b9948f rebase (#577 streamed project export), the touched code paths were audited as disjoint and the focused suite, release build, promoted probe, dataset acceptance, both spec modes, catalog, counters, and mergecheck were rerun and passed.",
     "cli_sweep": "The debug-binary sweep passed 131/134 probes. The new probe passed. Two unrelated wall-time budgets were expectedly unsuitable for a debug binary; one unrelated 60-second probe timed out under concurrent load.",
@@ -48,8 +48,8 @@
     "mergecheck": "scripts.repipe.mergecheck against origin/main: ok=true, rejects=0; only pre-existing DIV-76/DIV-77 duplicate warnings"
   },
   "files": [
-    "decompiler/crates/kuna-console/src/assertions.rs",
-    "decompiler/crates/kuna-console/tests/verify_assertplane.rs",
+    "decompiler/crates/console/src/assertions.rs",
+    "decompiler/crates/console/tests/verify_assertplane.rs",
     "tests/cli/named-log-prototype-repair.json",
     "docs/spec/00-overview.md",
     "docs/features/named-log-prototype-repair/record.json",

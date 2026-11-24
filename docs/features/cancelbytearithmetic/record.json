@@ -47,11 +47,11 @@
     "generator": "decompiler/crates/kuna-analysis/tests/fixtures/pe_subcommuteshift_x86_64.py",
     "sha256": "a39bf9ded430fe75b3a84edebf55dec3ac299bc4428b838a041112a1f8c550fb",
     "size": 10240,
-    "source_bytes": "tests/stages/kuna-subcommuteshift.xml exact 9024-byte bytechunk"
+    "source_bytes": "tests/stages/subcommuteshift.xml exact 9024-byte bytechunk"
   },
   "tests": {
     "unit": "ruleaction_4::tests::cancelbytearithmetic_*: shifts 1-7 and operand permutations; option-off; exact coefficient/source/offset/width; precision and every sole-consumer guard; CALL/LOAD/constant-mask preservation; legacy ZEXT/PIECE; unsigned DIV/REM; fixed point",
-    "stage": "tests/stages/kuna-subcommuteshift.xml (four exact two-pass assertions over the complete function)",
+    "stage": "tests/stages/subcommuteshift.xml (four exact two-pass assertions over the complete function)",
     "promoted_cli": "tests/cli/cancelling-byte-arithmetic-splits.json",
     "option_off_cli": "tests/cli/cancelling-byte-arithmetic-splits-option-off.json",
     "catalog": "catalog_bytecompat and options_md_fresh"

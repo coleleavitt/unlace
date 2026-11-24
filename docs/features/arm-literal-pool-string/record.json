@@ -26,7 +26,7 @@
     "decompiler/crates/kuna-analysis/tests/fixtures/poolref_arm_le32",
     "decompiler/crates/kuna-analysis/tests/fixtures/poolref_arm_le32.py",
     "decompiler/crates/kuna-cli/src/strings.rs",
-    "decompiler/crates/kuna-console/tests/verify_poolref.rs",
+    "decompiler/crates/console/tests/verify_poolref.rs",
     "tests/cli/arm-literal-pool-string.json",
     "docs/cli.md",
     "docs/spec/01-program-prep.md"

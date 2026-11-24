@@ -552,7 +552,7 @@ converges.
 There is no `tests/cli` probe for the stream-vs-eager difference. That schema
 runs one command and matches its stdout, and this claim compares the files of two
 exports. The property the prune depends on is pinned instead: a unit test in
-`kuna-console/src/project.rs` builds a header from records whose `code` is
+`console/src/project.rs` builds a header from records whose `code` is
 `None`, which is what the streaming writer leaves behind, and checks that the
 definition named by their prototype survives.
 

@@ -17,7 +17,7 @@ fn query(command: &str, args: &[&str]) -> Value {
     let image = common::fixture("immutable_got_calls_x86_64");
     let mut argv = vec![command, &image];
     argv.extend(args);
-    let (stdout, stderr, status) = common::run_kuna(&argv);
+    let (stdout, stderr, status) = common::run_unlace(&argv);
     assert_eq!(status, 0, "{stderr}\n{stdout}");
     serde_json::from_str(&stdout).unwrap()
 }

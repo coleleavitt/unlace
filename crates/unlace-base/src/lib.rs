@@ -1,4 +1,4 @@
-//! unlace-base: foundation layer of the kuna Rust port.
+//! unlace-base: foundation layer of the unlace Rust port.
 //!
 //! Ports the dependency-free bottom of the C++ tree (`decompiler/cpp/`):
 //!

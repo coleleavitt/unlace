@@ -7,8 +7,8 @@
   "round": 9,
   "summary": "A struct/union/enum tag stops being usable the moment it is declared: interning it makes the lexer return it as a type name, and the tag position of struct_or_union_specifier only read the identifier terminal. CParse::tag_identifier accepts either.",
   "files": [
-    "decompiler/crates/kuna-console/src/grammar.rs",
-    "decompiler/crates/kuna-console/src/grammar/tests.rs",
+    "decompiler/crates/console/src/grammar.rs",
+    "decompiler/crates/console/src/grammar/tests.rs",
     "tests/cli/prototype-parser-rejects-previously.json",
     "docs/spec/00-overview.md",
     "docs/cli.md"
@@ -36,7 +36,7 @@
   "gates": {
     "make test": "PARITY OK, 675/675 assertions",
     "make test-stages": "PARITY OK, 687/687 assertions",
-    "make rust-test": "green with `env -u KUNA_DECOMP_TEST`. The launcher-exported KUNA_DECOMP_TEST points the C++-oracle block at kuna's own decomp_test_dbg, so verify_w10_proto_unlock:202 fails asking the 'oracle' for `xunknown4 promote_compare(char *` when kuna prints `unsigned int` in every build. kuna-decomp does not depend on kuna-console, so this change cannot reach it; the target is green with the variable unset.",
+    "make rust-test": "green with `env -u KUNA_DECOMP_TEST`. The launcher-exported KUNA_DECOMP_TEST points the C++-oracle block at kuna's own decomp_test_dbg, so verify_w10_proto_unlock:202 fails asking the 'oracle' for `xunknown4 promote_compare(char *` when kuna prints `unsigned int` in every build. kuna-decomp does not depend on console, so this change cannot reach it; the target is green with the variable unset.",
     "make check-spec": "OK (lenient mode)",
     "make test-cli": "81/81 passed, including the promoted probe",
     "kuna catalog --check": "catalog OK (no option added)"

@@ -64,7 +64,7 @@ per-test opt-out was needed.
 
 1250/1250, PARITY OK, after the edits below. The 13 assertions the flip moves,
 each read in both arms. None is a stage test of `ptrfromuse`
-(`kuna-ptrfromuse.xml` already names every value in every pass); each pins a
+(`ptrfromuse.xml` already names every value in every pass); each pins a
 parameter spelling incidental to its own subject, and each follows the new
 spelling:
 

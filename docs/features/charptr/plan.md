@@ -39,7 +39,7 @@ left is "none of the above".
 
 ## Verification
 
-- `tests/stages/kuna-charptr.toml`, three passes (`off` = the bug, `libc` = the
+- `tests/stages/charptr.toml`, three passes (`off` = the bug, `libc` = the
   call-site half, `uses` = both) with three controls that must not move.
 - Unit tests on the option surface and the two fold properties.
 - 444-slice typesweep, both directions, `improved` and `worse` per project.

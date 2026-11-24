@@ -28,11 +28,11 @@ use std::path::PathBuf;
 use unlace_analysis::listing::xrefs::{self, XrefIndex, XrefKind};
 use unlace_console::engine::bootstrap_from_object;
 
-/// `"kuna picpool prompt"` — reached only by an adjacent `ldr`/`add pc` pair.
+/// `"unlace picpool prompt"` — reached only by an adjacent `ldr`/`add pc` pair.
 const PROMPT: u64 = 0x300;
-/// `"kuna picpool second"` — reached only by a pair the scheduler separated.
+/// `"unlace picpool second"` — reached only by a pair the scheduler separated.
 const SECOND: u64 = 0x320;
-/// `"kuna picpool number"` — reached only by arithmetic with no PC in it.
+/// `"unlace picpool number"` — reached only by arithmetic with no PC in it.
 const NUMBER: u64 = 0x340;
 
 /// The `add r0,pc,r0` that completes `PROMPT`, and the function it lies in.

@@ -1,4 +1,4 @@
-//! (kuna) `kuna_tailcalljump` — `-O2` tail-jump recognition (S2 flow
+//! (unlace) `unlace_tailcalljump` — `-O2` tail-jump recognition (S2 flow
 //! classification).  Inspired by angr's tail-call handling
 //! (`test_decompiling_tee_O2_tail_jumps`, `setlocale_null_androidfix`).
 //!
@@ -8,7 +8,7 @@
 //! direct **tail jump** — `jmp X` instead of `call X; ret`.  When `X` is an
 //! external symbol the jump targets the PLT thunk (`jmp setlocale@plt`).
 //!
-//! kuna's flow follower ([`FlowInfo::xref_control_flow`](crate::flow)) runs with
+//! unlace's flow follower ([`FlowInfo::xref_control_flow`](crate::flow)) runs with
 //! `baddr=0, eaddr=~0` (the whole address space is in-bounds), so a direct
 //! `CPUI_BRANCH` to the thunk is treated as ordinary *intraprocedural* flow: it
 //! `new_address()`-follows the jump INTO the PLT thunk.  The thunk's body is an
@@ -17,19 +17,19 @@
 //! plus a `"Treating indirect jump as call"` warning.  The thunk gets *inlined*
 //! instead of the `jmp` being recognized as a tail call.
 //!
-//! angr instead renders `return setlocale(v1, NULL)`.  kuna already resolves a
+//! angr instead renders `return setlocale(v1, NULL)`.  unlace already resolves a
 //! normal `call setlocale@plt` to `setlocale(...)` (via
 //! `FlowEnvironment::query_call` over the PLT-thunk address); the tail-jump path
 //! simply never consults it.
 //!
 //! ## What this module owns
 //!
-//! [`kuna_is_tail_call_branch`] is the *decision* only: is `op` a direct
+//! [`unlace_is_tail_call_branch`] is the *decision* only: is `op` a direct
 //! `CPUI_BRANCH`, or a bounded `CPUI_CBRANCH`, to another known function?  The rewrite
 //! (`BRANCH` → `CPUI_CALL` + an artificial `RETURN`) is driven by `flow.rs` at the
 //! `CPUI_BRANCH` arm of `xref_control_flow`, mirroring the in-file
 //! `truncate_indirect_jump` / `setup_callind_specs` rewrite + halt-insert idiom.
-//! This is the same hook class as [`kuna_v850indbranch`](crate::v850indbranch)
+//! This is the same hook class as [`unlace_v850indbranch`](crate::v850indbranch)
 //! (a `FlowEnvironment` predicate consulted inside `xref_control_flow`, gated by an
 //! Architecture bool flag).
 //!
@@ -53,8 +53,8 @@
 //! through a register (`ldr r1,[pc]; bx r1`, `ldr pc,[pc,#-4]`).  Jump-table
 //! recovery reads the read-only literal and yields a one-entry table.  When that
 //! sole destination is another known function's entry, the jump is the same tail
-//! call a direct `jmp` to it would be: [`kuna_sole_table_destination`] names the
-//! destination and [`kuna_is_tail_call_table`] decides for the `CPUI_BRANCHIND`
+//! call a direct `jmp` to it would be: [`unlace_sole_table_destination`] names the
+//! destination and [`unlace_is_tail_call_table`] decides for the `CPUI_BRANCHIND`
 //! under `tailcalljump on`.  The tail call is taken where following the table
 //! can only reach a `halt_missing()` (the destination is outside a declared
 //! extent), or where it loses nothing the copied-in body states: the callee's
@@ -69,15 +69,15 @@ use crate::fspec::{FuncProto, PrototypePieces};
 use crate::funcdata::Funcdata;
 use crate::jumptable::JumpTable;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 use unlace_num::opcodes::OpCode;
 
-/// Marshaling element `<tailcalljump>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<tailcalljump>` (unlace).  ElementIds live in the 4000+
 /// range (next free above `gotoreduce`'s 4100 in the 40xx block: 4101).
 pub const ELEM_TAILCALLJUMP: ElementId = ElementId::new("tailcalljump", 4101);
 
-/// (kuna) Toggle `-O2` tail-jump recognition: `tailcalljump on|off`.
+/// (unlace) Toggle `-O2` tail-jump recognition: `tailcalljump on|off`.
 ///
 /// STUB(W4): the flag is carried as a plain `bool` whose [`Default`] mirrors the
 /// *shipped* default (`option tailcalljump off`, i.e. \b false — kept opt-in
@@ -102,7 +102,7 @@ impl Default for TailCallJumpOption {
 }
 
 impl TailCallJumpOption {
-    /// (kuna) Set the gate.
+    /// (unlace) Set the gate.
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {
@@ -139,7 +139,7 @@ impl TailCallJumpOption {
 /// `dest_is_known_function` / `dest_is_self` are the already-resolved
 /// symbol-table queries (the v850 register-name STUB convention; `decompile_drive`
 /// wires the real `query_call` / `fd.getAddress()` calls).  // STUB(W4)
-pub fn kuna_is_tail_call_branch(
+pub fn unlace_is_tail_call_branch(
     data: &Funcdata,
     op: OpId,
     gate: bool,
@@ -173,7 +173,7 @@ pub fn conditional_tail_branches(
     data: &mut Funcdata,
     branch: OpId,
     dest: &Address,
-) -> KunaResult<(OpId, OpId, OpId)> {
+) -> UnlaceResult<(OpId, OpId, OpId)> {
     let site = data
         .obank()
         .get(branch)
@@ -210,17 +210,17 @@ pub fn conditional_tail_branches(
     Ok((skip, taken, call))
 }
 
-/// (kuna) The one address every entry of a recovered, non-override jump table
+/// (unlace) The one address every entry of a recovered, non-override jump table
 /// names, or `None` when the table is empty, an override, or has two targets.
-pub fn kuna_sole_table_destination(jt: &JumpTable) -> Option<Address> {
-    kuna_sole_destination(
+pub fn unlace_sole_table_destination(jt: &JumpTable) -> Option<Address> {
+    unlace_sole_destination(
         jt.is_override(),
         (0..jt.num_entries()).map(|i| jt.get_address_by_index(i)),
     )
 }
 
-/// (kuna) [`kuna_sole_table_destination`] over the table's `targets`.
-pub fn kuna_sole_destination(
+/// (unlace) [`unlace_sole_table_destination`] over the table's `targets`.
+pub fn unlace_sole_destination(
     is_override: bool,
     targets: impl IntoIterator<Item = Address>,
 ) -> Option<Address> {
@@ -232,10 +232,10 @@ pub fn kuna_sole_destination(
     targets.all(|t| t == dest).then_some(dest)
 }
 
-/// (kuna) Parse `option tailcalljump on|direct|off` into the
+/// (unlace) Parse `option tailcalljump on|direct|off` into the
 /// `(tail_call_jumps, tail_call_tables)` gates: `on` recovers direct jumps and
 /// one-destination computed jumps, `direct` only direct jumps.
-pub fn tail_call_mode(p1: &str) -> KunaResult<(bool, bool, &'static str)> {
+pub fn tail_call_mode(p1: &str) -> UnlaceResult<(bool, bool, &'static str)> {
     match p1 {
         "" | "on" => Ok((true, true, "Tail-call jump recovery turned on")),
         "direct" => Ok((
@@ -244,17 +244,17 @@ pub fn tail_call_mode(p1: &str) -> KunaResult<(bool, bool, &'static str)> {
             "Tail-call jump recovery limited to direct jumps",
         )),
         "off" => Ok((false, false, "Tail-call jump recovery turned off")),
-        other => Err(KunaError::parse(format!(
+        other => Err(UnlaceError::parse(format!(
             "Unknown tailcalljump value: {other} (expected on|direct|off)"
         ))),
     }
 }
 
-/// (kuna) Is the computed jump `op`, whose recovered jump table has the single
+/// (unlace) Is the computed jump `op`, whose recovered jump table has the single
 /// destination `dest`, a tail call?  The gate is on, `dest` is another known
 /// function's entry, and either `dest` lies outside the function's declared
 /// extent or `call_states_the_body` holds (see [`tail_call_states_the_body`]).
-pub fn kuna_is_tail_call_table(
+pub fn unlace_is_tail_call_table(
     data: &Funcdata,
     op: OpId,
     gate: bool,
@@ -272,7 +272,7 @@ pub fn kuna_is_tail_call_table(
         && (dest_outside_extent || call_states_the_body())
 }
 
-/// (kuna) What a callee's stated prototype fixes about a call to it: the
+/// (unlace) What a callee's stated prototype fixes about a call to it: the
 /// call's arguments, and whether the callee returns nothing.  A prototype that
 /// states no return type (a `cppsig` signature: the mangling encodes none)
 /// leaves the return to recovery, so it does not say the callee returns nothing.
@@ -281,7 +281,7 @@ pub struct StatedCallee {
     pub returns_nothing: bool,
 }
 
-/// (kuna) The prototype pieces parked on a callee (declared, DWARF, a library
+/// (unlace) The prototype pieces parked on a callee (declared, DWARF, a library
 /// signature, a demangled C++ name), as a call to it gets them from
 /// `ActionDefaultParams`.  A `map return` park states only the output and
 /// leaves the inputs to recovery, so it states no call.  Only a stated `void`
@@ -298,7 +298,7 @@ pub fn stated_by_pieces(pieces: Option<&PrototypePieces>) -> Option<StatedCallee
     Some(StatedCallee { returns_nothing })
 }
 
-/// (kuna) The code prototype on a callee's symbol, which flow copies into the
+/// (unlace) The code prototype on a callee's symbol, which flow copies into the
 /// call spec, when it locks the inputs.  Only a locked `void` output says the
 /// callee returns nothing.
 pub fn stated_by_proto(proto: Option<&FuncProto>) -> Option<StatedCallee> {
@@ -309,14 +309,14 @@ pub fn stated_by_proto(proto: Option<&FuncProto>) -> Option<StatedCallee> {
     Some(StatedCallee { returns_nothing })
 }
 
-/// (kuna) Do the pieces parked on a function lock its output when its own
+/// (unlace) Do the pieces parked on a function lock its output when its own
 /// decompile applies them?  Pieces with neither a return type nor return
 /// storage (a `cppsig` signature) leave the output to recovery.
 pub fn output_stated_by_pieces(pieces: Option<&PrototypePieces>) -> bool {
     pieces.is_some_and(|p| p.outtype.is_some() || p.output_storage.is_some())
 }
 
-/// (kuna) Does a tail call to `callee` state everything the callee's body,
+/// (unlace) Does a tail call to `callee` state everything the callee's body,
 /// copied in, would?  Its prototype fixes the call's arguments, and its return
 /// value reaches the caller's: it is stated to return nothing, or the caller's
 /// own output is stated.  A caller whose output is left to recovery never takes
@@ -325,7 +325,7 @@ pub fn tail_call_states_the_body(callee: Option<StatedCallee>, own_output_stated
     callee.is_some_and(|c| c.returns_nothing || own_output_stated)
 }
 
-/// (kuna `tailcalljump`) The two gates the option sets: recover direct jumps
+/// (unlace `tailcalljump`) The two gates the option sets: recover direct jumps
 /// to another function's entry (`jumps`), and one-destination computed jumps
 /// too (`tables`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -334,9 +334,9 @@ pub struct TailCallJump {
     pub tables: bool,
 }
 
-impl crate::optionset::KunaOption for TailCallJump {
+impl crate::optionset::UnlaceOption for TailCallJump {
     const NAME: &'static str = "tailcalljump";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         TailCallJump {
@@ -352,7 +352,7 @@ impl crate::optionset::KunaOption for TailCallJump {
         }
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         let (jumps, tables, msg) = tail_call_mode(value)?;
         Ok((TailCallJump { jumps, tables }, msg.to_string()))
     }

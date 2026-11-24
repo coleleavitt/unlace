@@ -148,7 +148,7 @@ fn entries_render_as_library_lines() {
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(
         &lines[..3],
-        &["kuna-typelib 1", "target elf x86_64", "source til test"]
+        &["typelib 1", "target elf x86_64", "source til test"]
     );
     for want in [
         "S pt * 16 8",

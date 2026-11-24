@@ -10,7 +10,7 @@ use crate::funcdata::Funcdata;
 pub fn needs_cast(fd: &Funcdata, base: VarnodeId, pointer: &Rc<Datatype>) -> bool {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
         || !fd.get_func_proto().has_store()

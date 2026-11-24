@@ -1,4 +1,4 @@
-//! (kuna `loweredswitchheads`) Look for a lowered-switch cascade behind every head
+//! (unlace `loweredswitchheads`) Look for a lowered-switch cascade behind every head
 //! on the switch variable, not only the first.
 //!
 //! [`crate::loweredswitch`] picks the most-compared variable and recovers a
@@ -24,10 +24,10 @@ use unlace_base::marshal::ElementId;
 
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
-use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitch::UnlaceLoweredSwitchRecord;
 use crate::p2_lift::loweredswitchexact::{block_at_start, removed_blocks};
 
-/// Marshaling element `<loweredswitchheads>` (kuna 4000+ range).
+/// Marshaling element `<loweredswitchheads>` (unlace 4000+ range).
 pub const ELEM_LOWEREDSWITCHHEADS: ElementId = ElementId::new("loweredswitchheads", 4172);
 
 /// The cascade heads to try, in block order: every compare on the switch
@@ -48,7 +48,7 @@ pub fn cascade_heads(spine: &BTreeSet<BlockId>, is_child: &BTreeSet<BlockId>) ->
 pub fn case_body_entered_elsewhere(
     data: &Funcdata,
     head: BlockId,
-    rec: &KunaLoweredSwitchRecord,
+    rec: &UnlaceLoweredSwitchRecord,
 ) -> bool {
     let mut targets: Vec<BlockId> = Vec::new();
     let mut bodies: BTreeSet<BlockId> = BTreeSet::new();

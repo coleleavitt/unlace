@@ -1,4 +1,4 @@
-//! (kuna) The widened `<data_organization>` decode: every scalar width a
+//! (unlace) The widened `<data_organization>` decode: every scalar width a
 //! per-architecture C spelling needs is read off the compiler spec.
 //!
 //! `Architecture::decode_data_organization` used to match only

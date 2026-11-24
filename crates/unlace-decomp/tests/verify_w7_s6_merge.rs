@@ -279,7 +279,7 @@ impl MergeContext for Mock {
         high2: HighVariableId,
         isspeculative: bool,
         _cache: &mut HighIntersectTest,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         self.merged.push((high1, high2, isspeculative));
         let h2 = self.highs.remove(&high2.0).expect("merge: missing high2");
         let h1 = self.hs_mut(high1);
@@ -462,7 +462,7 @@ impl MergeContext for Mock {
     }
 
     unused_mut! {
-        bank_group_with(HighVariableId, int4, HighVariableId) -> unlace_base::error::KunaResult<()>;
+        bank_group_with(HighVariableId, int4, HighVariableId) -> unlace_base::error::UnlaceResult<()>;
         bank_set_unmerged(HighVariableId) -> ();
         bank_set_copy_in1(HighVariableId) -> ();
         bank_set_copy_in2(HighVariableId) -> ();
@@ -471,13 +471,13 @@ impl MergeContext for Mock {
         vn_set_cover_dirty(VarnodeId) -> ();
         vn_clear_implied_set_explicit(VarnodeId) -> ();
         vn_clear_proto_partial(VarnodeId) -> ();
-        op_set_input(OpId, VarnodeId, int4) -> unlace_base::error::KunaResult<()>;
+        op_set_input(OpId, VarnodeId, int4) -> unlace_base::error::UnlaceResult<()>;
         op_insert_before(OpId, OpId) -> ();
         op_insert_after(OpId, OpId) -> ();
         op_insert_begin(OpId, BlockId) -> ();
         op_insert_end_pred(OpId, OpId, int4) -> ();
         op_mark_non_printing(OpId) -> ();
-        trim_op_output(OpId) -> unlace_base::error::KunaResult<()>;
+        trim_op_output(OpId) -> unlace_base::error::UnlaceResult<()>;
         indirect_inherit_union(VarnodeId, OpId, OpId) -> ();
         symbol_set_merge_problems(u64) -> ();
         symbol_merge_warning(u64, int4, int4, int4) -> ();
@@ -487,7 +487,7 @@ impl MergeContext for Mock {
         _in_vn: VarnodeId,
         _addr: Address,
         _trim_op: OpId,
-    ) -> unlace_base::error::KunaResult<OpId> {
+    ) -> unlace_base::error::UnlaceResult<OpId> {
         unimplemented!("copy_trim_op not under test")
     }
     fn snip_reads_insert_point(
@@ -503,7 +503,7 @@ impl MergeContext for Mock {
         _copy: &[OpId],
         _pos: int4,
         _size: int4,
-    ) -> unlace_base::error::KunaResult<()> {
+    ) -> unlace_base::error::UnlaceResult<()> {
         unimplemented!("build_dominant_copy not under test")
     }
 }
@@ -871,7 +871,7 @@ fn w7_s6_merge_intersection_cache_reused_when_clean() {
 }
 
 // ============================================================================
-// (kuna) option `typemerge`: `off` joins nothing by type, `storage` only
+// (unlace) option `typemerge`: `off` joins nothing by type, `storage` only
 // same-typed highs that share a storage location.
 // ============================================================================
 

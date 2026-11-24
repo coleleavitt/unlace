@@ -1,14 +1,14 @@
-//! ELF PLT/GOT import-name resolution — the kuna analog of Ghidra's Java
+//! ELF PLT/GOT import-name resolution — the unlace analog of Ghidra's Java
 //! `ElfDefaultGotPltMarkup` + `ElfProgramBuilder::createExternalFunctionLinkage`
 //! (`Ghidra/Features/Base/.../elf/ElfDefaultGotPltMarkup.java`,
 //! `.../opinion/ElfProgramBuilder.java`).
 //!
-//! ## Why this lives in kuna at all
+//! ## Why this lives in unlace at all
 //!
-//! kuna ports Ghidra's C++ *decompiler*; the resolution of a PLT stub
+//! unlace ports Ghidra's C++ *decompiler*; the resolution of a PLT stub
 //! (`0x400510`) to its imported library name (`puts`) is done by Ghidra's Java
 //! *loader/analyzer* layer, which the port never carried over.  Without it a CALL
-//! to a PLT stub has no symbol, so `FlowInfo::queryCall` (kuna
+//! to a PLT stub has no symbol, so `FlowInfo::queryCall` (unlace
 //! `decompile_drive.rs::query_call`) finds nothing and the printer falls back to
 //! `sub_<addr>`.  This module reconstructs the stub→name mapping straight from the
 //! ELF, so the loader can register the imports as ordinary `FunctionSymbol`s in
@@ -190,7 +190,7 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
     }
 
     let got_to_name = build_got_name_map(file);
-    // (kuna ifuncfpret) A statically-linked binary can have NO symbol-named PLT
+    // (unlace ifuncfpret) A statically-linked binary can have NO symbol-named PLT
     // imports yet still carry IFUNC (IRELATIVE) `.plt.sec` stubs to name, so the
     // early-out must also account for the ifunc pass below.
     let ifunc_enabled = unlace_decomp::ifuncfpret::ifuncfpret_enabled();
@@ -223,7 +223,7 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
     }
     plt_secs.sort_by_key(|&(_, _, prio)| prio);
 
-    // (kuna) i386-PIE PLT stubs are GOT-relative (`jmp *disp(%ebx)`, `FF A3
+    // (unlace) i386-PIE PLT stubs are GOT-relative (`jmp *disp(%ebx)`, `FF A3
     // <disp32>`), so decoding them needs the GOT base that `%ebx` holds at the
     // call site.  Derive it once (angr `test_decompiling_nl_i386_pie`) and thread
     // it to `decode_i386`; `None` off-i386 or when no GOT anchor exists (non-PIC
@@ -247,7 +247,7 @@ fn resolve_from_sections(file: &object::File, named_got: &mut HashSet<u64>) -> V
         );
     }
 
-    // (kuna ifuncfpret) Name the x86-64 `.plt.sec`/`.iplt` IFUNC (IRELATIVE) stubs
+    // (unlace ifuncfpret) Name the x86-64 `.plt.sec`/`.iplt` IFUNC (IRELATIVE) stubs
     // the symbol-keyed pass above leaves undiscovered, so a tail `jmp` to one is
     // recovered as a tail call (`tailcalljump`) rather than flowing into the stub
     // body and dropping the callee's return type.  Gated by `option ifuncfpret`.
@@ -891,7 +891,7 @@ fn decode_riscv(
 /// avoids relying on a `.TOC.` symbol being present.  If there is no `.got`
 /// section the binary has no TOC-relative imports and we resolve nothing.
 ///
-/// PPC32 uses the separate relocation-validated `kuna_ppc32_imports` resolver.
+/// PPC32 uses the separate relocation-validated `unlace_ppc32_imports` resolver.
 fn decode_ppc_text(
     file: &object::File,
     arch: Architecture,
@@ -1038,7 +1038,7 @@ fn decode_sparc(
 // MIPS (.MIPS.stubs / GOT layout)
 // ---------------------------------------------------------------------------
 
-/// Resolve MIPS import names from the dynamic-symbol GOT layout — the kuna analog
+/// Resolve MIPS import names from the dynamic-symbol GOT layout — the unlace analog
 /// of Ghidra's `MIPS_ElfExtension.fixupGot` + `processMipsStubsSection`
 /// (`Ghidra/Processors/MIPS/.../elf/extend/MIPS_ElfExtension.java`).
 ///
@@ -1067,7 +1067,7 @@ fn decode_sparc(
 /// initialized to the address of that import's lazy-binding stub in `.MIPS.stubs`
 /// (and that same stub address is the symbol's `st_value`).  At a MIPS call site
 /// the compiler emits `lw $t9, off($gp); jalr $t9` — an indirect call through the
-/// GOT slot.  With kuna's `$gp` recovery (Increment 17) the engine constant-folds
+/// GOT slot.  With unlace's `$gp` recovery (Increment 17) the engine constant-folds
 /// the GOT load to that slot's contents (the stub address), so naming the **stub
 /// address** as a `FunctionSymbol` makes the call render `puts(...)` instead of
 /// `sub_<addr>` — exactly mirroring `createExternalFunctionLinkage(symName,

@@ -1,4 +1,4 @@
-//! (kuna `swiftruntime`) The Swift runtime's entry points, with the
+//! (unlace `swiftruntime`) The Swift runtime's entry points, with the
 //! signatures the runtime's public headers give them
 //! (`swift/Runtime/HeapObject.h`, `Metadata.h`, `Casting.h`,
 //! `Exclusivity.h`, `Concurrency.h`, and the compiler's own list of them,
@@ -903,7 +903,7 @@ pub fn prototypes(tf: &dyn TypeFactory, ptr_size: i32) -> Vec<PrototypePieces> {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         });
     }
     out
@@ -980,7 +980,7 @@ pub fn custom_rr_prototypes(arch: &Architecture, ptr_size: i32) -> Vec<Prototype
                 first_var_arg_slot: -1,
                 output_storage: if retains { storage("x0") } else { None },
                 input_storage: vec![(0, input.clone())],
-                kuna_library_names: None,
+                unlace_library_names: None,
             });
         }
     }
@@ -1035,7 +1035,7 @@ pub fn concurrency(
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         };
         match context_slot {
             Some(context_slot) => context.push(ContextProto {

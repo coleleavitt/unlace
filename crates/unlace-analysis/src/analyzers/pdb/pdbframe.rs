@@ -1,4 +1,4 @@
-//! (kuna `pdbtypes`) Where an x64 function's frame register points, from its
+//! (unlace `pdbtypes`) Where an x64 function's frame register points, from its
 //! unwind data.
 //!
 //! A CodeView record that places a local relative to `RBP` (or `R13`) says
@@ -30,7 +30,7 @@ const CV_REGISTER: [u16; 16] = [
 
 const UNW_FLAG_CHAININFO: u8 = 0x4;
 
-/// Each x64 function's frame register, as `(CodeView register, kuna stack
+/// Each x64 function's frame register, as `(CodeView register, unlace stack
 /// offset of its value in the body)`, keyed by the function's entry VMA. Empty on
 /// anything but a PE32+ AMD64 image.
 pub(crate) fn x64_frame_registers(bytes: &[u8]) -> BTreeMap<u64, (u16, i64)> {
@@ -69,7 +69,7 @@ pub(crate) fn x64_frame_registers(bytes: &[u8]) -> BTreeMap<u64, (u16, i64)> {
     out
 }
 
-/// The frame register an `UNWIND_INFO` establishes and where it points in kuna
+/// The frame register an `UNWIND_INFO` establishes and where it points in unlace
 /// stack coordinates (0 is the return-address slot), or `None`.
 pub(crate) fn frame_register(info: &[u8]) -> Option<(u16, i64)> {
     let header = *info.first()?;

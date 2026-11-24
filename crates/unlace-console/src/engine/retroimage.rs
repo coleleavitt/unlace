@@ -1,4 +1,4 @@
-//! (kuna `retroimage`) Bootstrap of a PS-X EXE, N64 ROM, a.out, Amiga hunk,
+//! (unlace `retroimage`) Bootstrap of a PS-X EXE, N64 ROM, a.out, Amiga hunk,
 //! PEF or NE executable, or an OMF object or library: the container supplies the language, base, entry,
 //! sections and names a headerless image takes from the command line, and the
 //! program is then built and discovered exactly as a raw image is.
@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use unlace_analysis::loader::retroimage::{self, RETRO_PROBE_LEN, RetroImage};
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_sleigh::loadimage::section_flags;
 
 use super::{
@@ -51,7 +51,7 @@ pub(crate) fn bootstrap_retro_bytes(
     target: &str,
     languages: &(impl Languages + ?Sized),
     isa: Option<ArmIsa>,
-) -> KunaResult<ConsoleProgram> {
+) -> UnlaceResult<ConsoleProgram> {
     let image = retroimage::parse(path, bytes)?;
     for note in &image.notes {
         unlace_base::notes::say_once(path, &format!("[kuna {}] {path}: {note}", image.format));

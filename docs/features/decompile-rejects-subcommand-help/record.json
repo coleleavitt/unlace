@@ -33,7 +33,7 @@
     }
   ],
   "inertness": {
-    "method": "the only source files changed are decompiler/crates/kuna-cli/src/{decompile.rs,main.rs,specs.rs}; each adds one match arm plus a `usage()` that only runs on that arm, and specs.rs's guard sits ahead of the slacomp spawn. No kuna-decomp, kuna-analysis or kuna-console source is touched.",
+    "method": "the only source files changed are decompiler/crates/kuna-cli/src/{decompile.rs,main.rs,specs.rs}; each adds one match arm plus a `usage()` that only runs on that arm, and specs.rs's guard sits ahead of the slacomp spawn. No kuna-decomp, kuna-analysis or console source is touched.",
     "note": "make test 675/675 PARITY OK and make test-stages 635/635 PARITY OK confirm it"
   },
   "sweep": {

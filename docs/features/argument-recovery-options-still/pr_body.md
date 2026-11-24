@@ -54,7 +54,7 @@ rendering is wrong output, not a shorter call.
 
 ## The tests
 
-`tests/stages/kuna-calleearitylive.toml` — two callee/caller pairs that differ only
+`tests/stages/calleearitylive.toml` — two callee/caller pairs that differ only
 in the callee: one is extended, the other is declined because the callee also reads
 `r8d`. Both are short with the option off. Plus `tests/cli/argument-recovery-options-still.json`
 and five unit tests on the two decisions this module owns.

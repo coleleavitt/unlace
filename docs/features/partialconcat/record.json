@@ -1,6 +1,6 @@
 {
   "opportunity": "pwncollege-module5::port-conversion",
-  "test_name": "kuna-partialconcat",
+  "test_name": "partialconcat",
   "binary": "docs/features/partialconcat/witness.xml",
   "selector": "swap_port",
   "func_addr": "0x401487",

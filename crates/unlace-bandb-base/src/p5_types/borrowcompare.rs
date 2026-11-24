@@ -1,4 +1,4 @@
-//! (kuna) Fold a branchless two-word compare back into one double-precision
+//! (unlace) Fold a branchless two-word compare back into one double-precision
 //! compare (P5).
 //!
 //! On a 32-bit target a 64-bit `a < b` is a subtract-with-borrow chain: the low
@@ -657,7 +657,7 @@ fn eq_pair(data: &Funcdata, or: OpId, xlo: VarnodeId, xhi: VarnodeId) -> Option<
     None
 }
 
-/// (kuna) Fold the branchless two-word equality `(xlo ^ ylo) | (xhi ^ yhi)`
+/// (unlace) Fold the branchless two-word equality `(xlo ^ ylo) | (xhi ^ yhi)`
 /// compared with 0 into one `==` or `!=` of the two wholes, tried from the
 /// INT_XOR or INT_OR that reads a piece of the split value `i` (called from
 /// `apply_rule_in` alongside upstream's `Equal2Form`, which only knows the
@@ -737,7 +737,7 @@ pub fn apply_equal_rule(
     false
 }
 
-/// (kuna) Join two adjacent unlocked input words into one double-precision
+/// (unlace) Join two adjacent unlocked input words into one double-precision
 /// input when the low word's borrow or carry is consumed together with the high
 /// word (option `pairparam`).
 ///
@@ -1035,7 +1035,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::borrowcompare::PairParams>()
             .0
             || data.get_func_proto().is_input_locked()
@@ -1137,8 +1137,8 @@ impl crate::action::Rule for RuleDoubleInputPair {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Join two adjacent input words that a chain of branching compares
+crate::unlace_flag!(
+    /// (unlace) Join two adjacent input words that a chain of branching compares
     /// links (option `pairbranch`); see `branch_input_pair`.
     PairBranch,
     "pairbranch",
@@ -1148,10 +1148,10 @@ crate::kuna_flag!(
 );
 
 fn pair_branch(data: &Funcdata) -> bool {
-    data.get_arch().kuna_options.get::<PairBranch>().0
+    data.get_arch().unlace_options.get::<PairBranch>().0
 }
 
-/// (kuna) The branch trigger of [`RuleDoubleInputPair`] (option
+/// (unlace) The branch trigger of [`RuleDoubleInputPair`] (option
 /// `pairbranch`): join an input word compared by `op` with the word above it
 /// when a branch next to the one `op` decides compares that word with the
 /// matching word of the other operand.
@@ -1377,15 +1377,15 @@ fn hi_compare(
     }
 }
 
-/// (kuna) Join two adjacent input words a borrow or carry chain links into
+/// (unlace) Join two adjacent input words a borrow or carry chain links into
 /// one double-precision input (option `pairparam`).  See
 /// [`crate::borrowcompare::RuleDoubleInputPair`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairParams(pub bool);
 
-impl crate::optionset::KunaOption for PairParams {
+impl crate::optionset::UnlaceOption for PairParams {
     const NAME: &'static str = "pairparam";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PairParams(true)
@@ -1395,7 +1395,7 @@ impl crate::optionset::KunaOption for PairParams {
         PairParams(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::options::on_or_off(value)
             .map(|v| (v, format!("Double-precision input pairing turned {value}")))?;
         Ok((PairParams(v), msg))

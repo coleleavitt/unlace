@@ -1,4 +1,4 @@
-//! (kuna `fid`) The prototype a `.fid` record carries for the function it names.
+//! (unlace `fid`) The prototype a `.fid` record carries for the function it names.
 //!
 //! A `.fid` database built from an object that describes its functions keeps
 //! each one's prototype as C text beside the name, with the type declarations
@@ -241,8 +241,8 @@ pub fn withdraw(arch: &mut Architecture, addr: &Address) {
     );
 }
 
-crate::kuna_flag!(
-    /// (kuna) Apply libc prototype / no-return to functions a FID or FLIRT rename names (`fidproto`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Apply libc prototype / no-return to functions a FID or FLIRT rename names (`fidproto`). Default on.
     Fidproto,
     "fidproto",
     "Prototype and no-return for FID/FLIRT renames",

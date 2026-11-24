@@ -75,9 +75,9 @@ pub enum GoMorestackMode {
     Always,
 }
 
-impl crate::optionset::KunaOption for GoMorestackMode {
+impl crate::optionset::UnlaceOption for GoMorestackMode {
     const NAME: &'static str = "gomorestack";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GoMorestackMode::Auto
@@ -87,8 +87,8 @@ impl crate::optionset::KunaOption for GoMorestackMode {
         GoMorestackMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_gomorestack_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_gomorestack_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 
@@ -136,14 +136,14 @@ pub fn is_morestack_name(name: &str) -> bool {
 
 /// Is the fold live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<GoMorestackMode>() {
+    match data.get_arch().unlace_options.get::<GoMorestackMode>() {
         GoMorestackMode::Off => false,
         GoMorestackMode::Auto => data.get_arch().source_lang.is_go(),
         GoMorestackMode::Always => true,
     }
 }
 
-/// (kuna) `ActionGoMorestack` — fold the Go stack-growth entry guard
+/// (unlace) `ActionGoMorestack` — fold the Go stack-growth entry guard
 /// (option `gomorestack`, default auto).
 pub struct ActionGoMorestack {
     base: ActionBase,

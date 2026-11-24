@@ -1,4 +1,4 @@
-//! (kuna) A direct access at a known stack offset aliases only the bytes it
+//! (unlace) A direct access at a known stack offset aliases only the bytes it
 //! touches.
 //!
 //! `checkInputTrialUse` drops a stack trial when the frame's alias boundary

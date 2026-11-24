@@ -20,9 +20,9 @@
   "changed": [
     "decompiler/crates/kuna-sleigh/src/loadimage.rs",
     "decompiler/crates/kuna-analysis/src/loadimage_object.rs",
-    "decompiler/crates/kuna-console/src/funcextent.rs",
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_sectionlessextent.rs",
+    "decompiler/crates/console/src/funcextent.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_sectionlessextent.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/noshdr_x86_64.py",
     "tests/cli/zero-function-sizes-make.json",
@@ -43,9 +43,9 @@
     "delta": "0.0% -- the fallback adds one loader borrow and a 3-element vector per inventory build"
   },
   "tests": {
-    "kuna-console/src/funcextent.rs": "4 unit tests on spans(): sections win when present, the executable-segment fallback and its segment-end clip, a CODE-less section table still falls back, and neither source leaves the extent unrecovered",
+    "console/src/funcextent.rs": "4 unit tests on spans(): sections win when present, the executable-segment fallback and its segment-end clip, a CODE-less section table still falls back, and neither source leaves the extent unrecovered",
     "kuna-analysis/src/loadimage_object.rs": "2 unit tests on get_segments(): permission-to-flag translation and ascending order on the sectionless fixture, and a sectioned image reporting both views",
-    "kuna-console/tests/verify_sectionlessextent.rs": "4 e2e tests on noshdr_x86_64 -- the premise (no sections, one executable segment of three), both clip arms (16 and 6, where the unpatched tree reports 0 and 0), the --addr path plus data/unmapped addresses keeping no extent, and fauxware's section-table clip unchanged at 195",
+    "console/tests/verify_sectionlessextent.rs": "4 e2e tests on noshdr_x86_64 -- the premise (no sections, one executable segment of three), both clip arms (16 and 6, where the unpatched tree reports 0 and 0), the --addr path plus data/unmapped addresses keeping no extent, and fauxware's section-table clip unchanged at 195",
     "tests/cli": "zero-function-sizes-make.json, 45/45"
   },
   "gates": {

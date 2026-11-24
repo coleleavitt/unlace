@@ -802,11 +802,11 @@ impl Rule for RuleIndirectCollapse {
         let out = op_out(data, op).expect("RuleIndirectCollapse: op out");
         let in0 = op_in(data, op, 0).expect("RuleIndirectCollapse: op in0");
         if data.obank().get(op).is_some_and(|o| {
-            o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0
+            o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_persist_stale != 0
         }) {
             crate::persistcalls::restart_full(data);
         } else if data.obank().get(op).is_some_and(|o| {
-            o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_guard != 0
+            o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_persist_guard != 0
         }) {
             let (addr, size) = {
                 let v = data
@@ -819,7 +819,7 @@ impl Rule for RuleIndirectCollapse {
                 crate::persistcalls::restart_full(data);
             }
         }
-        if crate::heritage::kuna_jt_trace() {
+        if crate::heritage::unlace_jt_trace() {
             let v = data.vbank().get(out);
             eprintln!(
                 "jt-trace indirect-collapse jt={} at={:?} space={:?} off={:?} size={:?} nolocalalias={:?} indop_dead={}",
@@ -2033,7 +2033,7 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
     let mut marked_input = data
         .vbank()
         .get(in0)
-        .and_then(|v| v.kuna_symbol_entry())
+        .and_then(|v| v.unlace_symbol_entry())
         .is_some();
     if (eval_type & pcodeop_flags::unary) != 0 {
         match behave.evaluate_unary(out_size, in0_size, in0_off) {
@@ -2046,7 +2046,7 @@ fn dc_collapse(op: OpId, data: &Funcdata) -> Option<(u64, bool)> {
         if data
             .vbank()
             .get(in1)
-            .and_then(|v| v.kuna_symbol_entry())
+            .and_then(|v| v.unlace_symbol_entry())
             .is_some()
         {
             marked_input = true;
@@ -2087,7 +2087,7 @@ fn collapse_constant_symbol(op: OpId, new_const: VarnodeId, data: &mut Funcdata)
     };
     let has_sym = |v: Option<VarnodeId>| -> bool {
         v.and_then(|x| data.vbank().get(x))
-            .and_then(|x| x.kuna_symbol_entry())
+            .and_then(|x| x.unlace_symbol_entry())
             .is_some()
     };
     let copy_vn: Option<VarnodeId> = match code {
@@ -2241,7 +2241,7 @@ impl Rule for RulePropagateCopy {
             let operation = data.obank().get(op).expect("RulePropagateCopy: stale op");
             (
                 operation.is_return_copy(),
-                operation.get_addlflags() & crate::op::pcodeop_addlflags::kuna_stack_read != 0,
+                operation.get_addlflags() & crate::op::pcodeop_addlflags::unlace_stack_read != 0,
             )
         };
         if machine_read {
@@ -2281,7 +2281,7 @@ impl Rule for RulePropagateCopy {
             if crate::stablenames::is_retyped_definition(data, vn) {
                 continue;
             }
-            // (kuna) a store of a value used as an address into a global keeps
+            // (unlace) a store of a value used as an address into a global keeps
             // its COPY; see [`crate::pointeestorekeep`].
             if crate::pointeestorekeep::declines(data, op, vn, invn) {
                 continue;
@@ -2296,7 +2296,7 @@ impl Rule for RulePropagateCopy {
             if crate::globalorderkeep::declines(data, op, vn, invn) {
                 continue;
             }
-            // (kuna) a store of a sign-sensitively read value into a global
+            // (unlace) a store of a sign-sensitively read value into a global
             // keeps its COPY; see [`crate::globalstorekeep`].
             if crate::globalstorekeep::declines(data, op, vn, invn) {
                 continue;
@@ -2368,7 +2368,7 @@ impl Rule for RulePropagateCopy {
                         continue; // We must not allow merging of different addrtieds
                     }
                 }
-                // (kuna) The address-tied store brake widens the addrforce refusal
+                // (unlace) The address-tied store brake widens the addrforce refusal
                 // just above: decline when this marker is the LAST reader of an
                 // address-tied COPY output, which would otherwise strand the frame
                 // store for dead-code elimination.  See
@@ -2376,7 +2376,7 @@ impl Rule for RulePropagateCopy {
                 if crate::tiedstorekeep::declines(data, op, vn, invn) {
                     continue;
                 }
-                // (kuna) The loop-counter store brake refuses the same
+                // (unlace) The loop-counter store brake refuses the same
                 // propagation for a self-updating address-tied phi, which is how
                 // a frame-slot loop counter's write-back is deleted.  See
                 // [`crate::loopcounterstore`].
@@ -2406,7 +2406,7 @@ impl Rule for RulePropagateCopy {
                 }
             }
             crate::stackreadscope::record_propagated_read(data, copyop, invn);
-            data.kuna_inherit_storage(invn, vn);
+            data.unlace_inherit_storage(invn, vn);
             data.note_wave_input_change(op, vn, invn);
             data.op_set_input(op, invn, i)
                 .expect("RulePropagateCopy: opSetInput"); // propagate just a single copy
@@ -2884,7 +2884,7 @@ pub fn specs() -> Vec<RuleSpec> {
 mod tests {
     use super::*;
     use std::rc::Rc;
-    use unlace_base::error::KunaResult;
+    use unlace_base::error::UnlaceResult;
 
     /// Regression: the opcode seam must cover the equality comparisons (a
     /// `markLabelBumpUp`-hoisted loop-head `==`/`!=` guard re-set its opcode
@@ -3007,7 +3007,7 @@ mod tests {
         let mut no_replace = |_: &mut crate::varnode::VarnodeBank,
                               _: VarnodeId,
                               _: VarnodeId|
-         -> KunaResult<()> { Ok(()) };
+         -> UnlaceResult<()> { Ok(()) };
         fd.vbank_mut().set_input(vn, &mut no_replace).unwrap()
     }
 
@@ -3758,11 +3758,11 @@ mod tests {
             assert_eq!(RulePropagateCopy.apply_op(consumer, &mut fd), 1);
             assert_eq!(op_in(&fd, consumer, 0), Some(loaded));
         }
-        let sources = fd.kuna_storage_sources(loaded);
+        let sources = fd.unlace_storage_sources(loaded);
         assert_eq!(sources.len(), 2);
         assert_eq!(sources[0].address.get_offset(), 0x80);
         assert_eq!(sources[1].address.get_offset(), 0x84);
-        assert!(fd.kuna_storage_sources(pointer).is_empty());
+        assert!(fd.unlace_storage_sources(pointer).is_empty());
     }
 
     #[test]
@@ -3777,9 +3777,9 @@ mod tests {
         wire(&mut fd, op, addout, 0); // written by INT_ADD, not COPY
         wire(&mut fd, op, c, 1); // not written
         assert_eq!(RulePropagateCopy.apply_op(op, &mut fd), 0);
-        assert!(fd.kuna_storage_sources(addout).is_empty());
-        assert!(fd.kuna_storage_sources(a).is_empty());
-        assert!(fd.kuna_storage_sources(b).is_empty());
+        assert!(fd.unlace_storage_sources(addout).is_empty());
+        assert!(fd.unlace_storage_sources(a).is_empty());
+        assert!(fd.unlace_storage_sources(b).is_empty());
     }
 
     #[test]
@@ -3831,7 +3831,7 @@ mod tests {
         ] {
             let manage = build_manager();
             let mut glb = ArchContext::new(manage);
-            glb.kuna_options
+            glb.unlace_options
                 .set(crate::indexaliasguard::IndexAliasGuard(level));
             let glb = Rc::new(glb);
             let memory = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
@@ -4266,7 +4266,7 @@ mod tests {
         fd.vbank_mut()
             .get_mut(src8)
             .unwrap()
-            .set_kuna_symbol_entry(sym);
+            .set_unlace_symbol_entry(sym);
         assert_eq!(
             fd.vn_high_display_format(src8),
             symbol_dispflags::FORCE_CHAR
@@ -4290,7 +4290,7 @@ mod tests {
             fd.vbank()
                 .get(folded)
                 .unwrap()
-                .kuna_symbol_entry()
+                .unlace_symbol_entry()
                 .is_some()
         );
         assert_eq!(
@@ -4308,7 +4308,7 @@ mod tests {
             fd.vbank()
                 .get(folded_low)
                 .unwrap()
-                .kuna_symbol_entry()
+                .unlace_symbol_entry()
                 .is_none(),
             "low-byte SUBPIECE truncation must not carry the equate"
         );
@@ -4326,7 +4326,7 @@ mod tests {
         fd.vbank_mut()
             .get_mut(src4)
             .unwrap()
-            .set_kuna_symbol_entry(sym);
+            .set_unlace_symbol_entry(sym);
 
         // INT_ADD(src4, 0): the marked input is slot 0 (collapseConstantSymbol's
         // INT_ADD arm, op.cc:551).  Same-size, value-identical fold (isValueClose
@@ -4341,7 +4341,7 @@ mod tests {
             fd.vbank()
                 .get(folded)
                 .unwrap()
-                .kuna_symbol_entry()
+                .unlace_symbol_entry()
                 .is_some()
         );
         // Format faithfully follows the Symbol (hex here, not char) — no
@@ -4366,12 +4366,12 @@ mod tests {
         fd.vbank_mut()
             .get_mut(src)
             .unwrap()
-            .set_kuna_symbol_entry(sym);
+            .set_unlace_symbol_entry(sym);
         // -0x61 in size-4 (two's complement) — close to the equate by negation.
         let neg = fd.new_constant(4, 0x61u64.wrapping_neg() & 0xffff_ffff);
         fd.copy_symbol_if_valid(neg, src);
         assert!(
-            fd.vbank().get(neg).unwrap().kuna_symbol_entry().is_some(),
+            fd.vbank().get(neg).unwrap().unlace_symbol_entry().is_some(),
             "isValueClose(negation) must re-bind"
         );
 
@@ -4380,7 +4380,7 @@ mod tests {
         let far = fd.new_constant(4, 0x12345);
         fd.copy_symbol_if_valid(far, src);
         assert!(
-            fd.vbank().get(far).unwrap().kuna_symbol_entry().is_none(),
+            fd.vbank().get(far).unwrap().unlace_symbol_entry().is_none(),
             "a distant constant must NOT inherit the equate"
         );
     }

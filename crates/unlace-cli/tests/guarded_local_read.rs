@@ -31,7 +31,7 @@ fn check_guarded_stack_read(target: &str, code: &str, qualifier: &str, preloaded
     let specs = common::repo_root().join("specs");
     let acquire_proto = format!("prototype acquire short acquire({qualifier}int *)");
     let mutate_proto = format!("prototype mutate void mutate({qualifier}int *)");
-    let (decompiled, stderr, status) = common::run_kuna(&[
+    let (decompiled, stderr, status) = common::run_unlace(&[
         "decompile",
         image.to_str().unwrap(),
         "0x1000",

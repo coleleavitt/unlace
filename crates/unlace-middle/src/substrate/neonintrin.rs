@@ -1,8 +1,8 @@
-//! (kuna `neonintrin`) ACLE NEON intrinsic names and vector types for AArch64.
+//! (unlace `neonintrin`) ACLE NEON intrinsic names and vector types for AArch64.
 //!
 //! The AArch64 SLEIGH spec lifts Advanced SIMD in two ways. Lane-wise arithmetic
 //! (`add v0.4s, v1.4s, v2.4s`) is one p-code op per lane on slices of the
-//! registers, which `kuna_lanefuse` re-fuses into one built-in named here
+//! registers, which `unlace_lanefuse` re-fuses into one built-in named here
 //! (`vaddq_s32`). Everything else is a `NEON_<mnemonic>` user op whose last
 //! input is the element size in bytes (`NEON_smax(a, b, 4:1)`), plus
 //! `a64_TBL`. This maps both to the `<arm_neon.h>` intrinsic a programmer
@@ -45,7 +45,7 @@ impl Elem {
 }
 
 /// A vector-kind code for `vector_userops`: `0x80 | elem << 4 | log2(lane bytes)`.
-/// Codes below `0x80` are the Intel kinds of `kuna_avxintrin`.
+/// Codes below `0x80` are the Intel kinds of `unlace_avxintrin`.
 pub fn kind_code(elem: Elem, lane: u32) -> u8 {
     let e = match elem {
         Elem::S => 0,
@@ -398,7 +398,7 @@ pub fn userop_name(
     ))
 }
 
-/// (kuna `neonintrin`) Print AArch64 Advanced SIMD as ACLE NEON intrinsics on the
+/// (unlace `neonintrin`) Print AArch64 Advanced SIMD as ACLE NEON intrinsics on the
 /// ACLE vector types (`on`), and also re-fuse lane-wise arithmetic and scalar
 /// duplicates into one intrinsic (`all`). A function's context holds it resolved
 /// against the image (AArch64 only).
@@ -408,9 +408,9 @@ pub struct NeonIntrin {
     pub fuse: bool,
 }
 
-impl crate::optionset::KunaOption for NeonIntrin {
+impl crate::optionset::UnlaceOption for NeonIntrin {
     const NAME: &'static str = "neonintrin";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NeonIntrin {
@@ -426,7 +426,7 @@ impl crate::optionset::KunaOption for NeonIntrin {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, fuse) = match value.trim().to_ascii_lowercase().as_str() {
             "all" => (true, true),
             _ => (crate::options::on_or_off(value)?, false),

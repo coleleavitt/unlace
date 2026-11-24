@@ -22,7 +22,7 @@
 //!    `bank_symbol`/`multi_entry_symbols`/`symbol_*` return the un-recovered
 //!    default (no symbol, no multi-entry groups), so `mergeMultiEntry` is a true
 //!    no-op and merged locals are named directly on the HighVariable
-//!    (`kuna_naming`), not via a `Symbol` in the local scope.
+//!    (`unlace_naming`), not via a `Symbol` in the local scope.
 //!  * `addr_tied_ranges` (`Funcdata::overlapLoc`) and the union-resolution arms of
 //!    the trim COPYs are the conservative default (no addr-tied overlap groups, no
 //!    `needsResolution` types in the merged tree) — exact on boolless.
@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::block::{DOMINATES_SHORT_WALK, DominatesMemo};
@@ -55,7 +55,7 @@ use crate::variable::{
 use unlace_base::space::spacetype;
 use unlace_base::types::{int2, int4, uint4, uintm};
 
-/// (kuna LOSS-229) Disjoint id-spaces for `MergeContext::bank_symbol`.  A local
+/// (unlace LOSS-229) Disjoint id-spaces for `MergeContext::bank_symbol`.  A local
 /// (dynamic/equate) Symbol is a slotmap ffi key; a global mapped Symbol is keyed
 /// off its storage address.  We clear the top bit on the local id and set it on
 /// the global id so the two id-spaces never collide in the `mergeTestRequired`
@@ -170,9 +170,9 @@ pub trait FuncdataMergeExt {
 /// [`Funcdata`] methods for the cover/merge state of high variables private to this module.
 trait FuncdataMergeLocalExt {
     fn make_covermerge() -> crate::merge::Merge;
-    fn kuna_mapped_symbol_entry(&self, high: HighVariableId) -> Option<(Address, int4)>;
-    fn kuna_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64>;
-    fn kuna_mapped_symbol_offset(&self, high: HighVariableId) -> Option<int4>;
+    fn unlace_mapped_symbol_entry(&self, high: HighVariableId) -> Option<(Address, int4)>;
+    fn unlace_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64>;
+    fn unlace_mapped_symbol_offset(&self, high: HighVariableId) -> Option<int4>;
     fn refresh_high_cover(&mut self, high: HighVariableId);
 }
 
@@ -235,13 +235,13 @@ impl FuncdataMergeLocalExt for Funcdata {
         crate::merge::Merge::new(cache)
     }
 
-    /// (kuna LOSS-229) Model `HighVariable::getSymbol()` (variable.cc:418-432) for a
+    /// (unlace LOSS-229) Model `HighVariable::getSymbol()` (variable.cc:418-432) for a
     /// `map addr`-mapped access, returning the covering Symbol's storage address and
     /// in-symbol byte offset `(entry_addr, sym_off)`, or `None`.
     ///
     /// C++ `updateSymbol()` scans the high's member Varnodes for one carrying a
     /// `SymbolEntry`; for a `map addr` symbol (global *or* a stack-mapped local) that
-    /// entry is the Symbol's.  The merged kuna tree does not paint mapped SymbolEntries
+    /// entry is the Symbol's.  The merged unlace tree does not paint mapped SymbolEntries
     /// onto varnodes before the merge group (`ActionMapGlobals` runs after it,
     /// coreaction.cc:6025; the local sync only updates flags), so we resolve the
     /// covering Symbol directly from the scope snapshot — the same
@@ -254,15 +254,15 @@ impl FuncdataMergeLocalExt for Funcdata {
     /// stack member is never global), the frozen global scope second.  Returns
     /// `(entry_addr, sym_off)` for the first member that maps, location-ordered (the
     /// C++ `updateSymbol` first-hit; members of one high share the same Symbol).
-    fn kuna_mapped_symbol_entry(&self, high: HighVariableId) -> Option<(Address, int4)> {
+    fn unlace_mapped_symbol_entry(&self, high: HighVariableId) -> Option<(Address, int4)> {
         let h = self.high_bank().get(high)?;
-        // (kuna perf) The scan below only ever accepts an address-tied member,
+        // (unlace perf) The scan below only ever accepts an address-tied member,
         // and a high's cached flag word is the OR of its members', so a clean
         // `addrtied == false` settles it without walking them.  `mergeTestRequired`
         // — this is its inner loop — reads `high_is_addr_tied` on both highs before
         // it gets here, so the flags are clean by construction; a dirty word just
         // falls through to the scan.
-        if h.kuna_addr_tied_if_clean() == Some(false) {
+        if h.unlace_addr_tied_if_clean() == Some(false) {
             return None;
         }
         let invalid = Address::new_invalid();
@@ -315,11 +315,11 @@ impl FuncdataMergeLocalExt for Funcdata {
         None
     }
 
-    /// (kuna LOSS-229) The `map addr` Symbol id for the `bank_symbol` guard, keyed off
+    /// (unlace LOSS-229) The `map addr` Symbol id for the `bank_symbol` guard, keyed off
     /// the covering entry's storage address (a `map addr` Symbol has one storage),
     /// tagged into the mapped id-space so it never collides with a local slotmap key.
-    fn kuna_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64> {
-        let (entry_addr, _off) = self.kuna_mapped_symbol_entry(high)?;
+    fn unlace_mapped_symbol_id(&self, high: HighVariableId) -> Option<u64> {
+        let (entry_addr, _off) = self.unlace_mapped_symbol_entry(high)?;
         let off = entry_addr.get_offset();
         let space = entry_addr
             .get_space()
@@ -332,12 +332,13 @@ impl FuncdataMergeLocalExt for Funcdata {
         Some(SYM_ID_GLOBAL_TAG | (((space << 48) ^ off) & SYM_ID_LOCAL_MASK))
     }
 
-    /// (kuna LOSS-229) The in-symbol byte offset for a `map addr` access (C++
+    /// (unlace LOSS-229) The in-symbol byte offset for a `map addr` access (C++
     /// `HighVariable::setSymbol`'s `symboloffset`, variable.cc:269: `(addr -
     /// entry_addr) + entry_offset`), used by the `mergeTestRequired` "different parts
     /// of same symbol" arm.
-    fn kuna_mapped_symbol_offset(&self, high: HighVariableId) -> Option<int4> {
-        self.kuna_mapped_symbol_entry(high).map(|(_addr, off)| off)
+    fn unlace_mapped_symbol_offset(&self, high: HighVariableId) -> Option<int4> {
+        self.unlace_mapped_symbol_entry(high)
+            .map(|(_addr, off)| off)
     }
 
     /// Refresh the (member-varnode) covers a HighVariable's cover read depends
@@ -391,19 +392,19 @@ fn copy_pair_writes(
 }
 
 impl MergeContext for Funcdata {
-    fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
+    fn pass_hooks(&self) -> &'static crate::passhooks::UnlaceHooks {
         self.hooks()
     }
 
     fn fpu_trunc_views_enabled(&self) -> bool {
-        !self.kuna_fpu_trunc_views.is_empty()
+        !self.unlace_fpu_trunc_views.is_empty()
     }
     fn fpu_trunc_view_highs(&self, a: HighVariableId, b: HighVariableId) -> bool {
-        self.kuna_fpu_trunc_views.iter().any(|id| {
+        self.unlace_fpu_trunc_views.iter().any(|id| {
             let Some(op) = self.obank().get(*id) else {
                 return false;
             };
-            if op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy == 0 {
+            if op.get_addlflags() & crate::op::pcodeop_addlflags::unlace_fpu_view_copy == 0 {
                 return false;
             }
             let out = op
@@ -418,9 +419,9 @@ impl MergeContext for Funcdata {
         })
     }
     fn fpu_trunc_root_high(&self, high: HighVariableId) -> bool {
-        self.kuna_fpu_trunc_views.iter().any(|id| {
+        self.unlace_fpu_trunc_views.iter().any(|id| {
             self.obank().get(*id).is_some_and(|op| {
-                op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy != 0
+                op.get_addlflags() & crate::op::pcodeop_addlflags::unlace_fpu_view_copy != 0
                     && op
                         .get_in(0)
                         .and_then(|vn| self.vbank().get(vn))
@@ -431,7 +432,7 @@ impl MergeContext for Funcdata {
     }
     fn op_is_fpu_trunc_view(&self, op: OpId) -> bool {
         self.obank().get(op).is_some_and(|op| {
-            op.get_addlflags() & crate::op::pcodeop_addlflags::kuna_fpu_view_copy != 0
+            op.get_addlflags() & crate::op::pcodeop_addlflags::unlace_fpu_view_copy != 0
         })
     }
     // --- HighVariable flag/type reads -------------------------------------
@@ -608,7 +609,7 @@ impl MergeContext for Funcdata {
         high2: HighVariableId,
         isspeculative: bool,
         cache: &mut HighIntersectTest,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Drive the bank-level merge across the field-split.  The bank's `merge`
         // reads the moved members'
         // `merge_group`/loc through the read view and reports each `vn->setHigh`
@@ -648,7 +649,7 @@ impl MergeContext for Funcdata {
         high2: HighVariableId,
         off: int4,
         high1: HighVariableId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if (self.hooks().stackparamviews_separates_parameter)(self, high1, high2) {
             return Ok(());
         }
@@ -704,19 +705,22 @@ impl MergeContext for Funcdata {
 
     // --- Symbol reads on a HighVariable (W4 surface; un-recovered default) ---
     fn bank_symbol(&self, high: HighVariableId) -> Option<u64> {
-        // (kuna LOSS-229) Expose the Symbol id bound to this high so
+        // (unlace LOSS-229) Expose the Symbol id bound to this high so
         // `Merge::mergeTestRequired` (merge.cc:157-164) keeps a dynamic temp distinct
         // from the storage it copies.  Equate symbols count too (same C++ guard).
         use slotmap::Key;
         let h = self.high_bank().get(high)?;
-        if let Some(s) = h.kuna_dynamic_symbol().or_else(|| h.kuna_equate_symbol()) {
+        if let Some(s) = h
+            .unlace_dynamic_symbol()
+            .or_else(|| h.unlace_equate_symbol())
+        {
             // Tag with the top bit cleared so a slotmap ffi key never collides with a
             // mapped-Symbol id (which is keyed off the entry storage address + tag bit).
             return Some(s.data().as_ffi() & SYM_ID_LOCAL_MASK);
         }
         // C++ `HighVariable::getSymbol()` also resolves a `map addr` access to its
         // Symbol (the member Varnode carries the SymbolEntry, variable.cc:418-432).
-        // The merged kuna tree does not paint mapped SymbolEntries onto varnodes before
+        // The merged unlace tree does not paint mapped SymbolEntries onto varnodes before
         // the merge group (ActionMapGlobals runs after, coreaction.cc:6025), so resolve
         // the covering Symbol directly from the scope snapshot (the local stack scope,
         // then the frozen global scope) — the same covering-entry lookup `linkSymbol`
@@ -742,7 +746,7 @@ impl MergeContext for Funcdata {
                 }
             }
         }
-        self.kuna_mapped_symbol_id(high)
+        self.unlace_mapped_symbol_id(high)
     }
     fn bank_symbol_offset(&self, high: HighVariableId) -> int4 {
         let h = match self.high_bank().get(high) {
@@ -751,14 +755,14 @@ impl MergeContext for Funcdata {
         };
         // A dynamic/equate symbol parks its in-symbol offset on the high; a `map addr`
         // access reads the covering entry's `(addr - entry_addr) + entry_off`.
-        if h.kuna_dynamic_symbol().is_some() || h.kuna_equate_symbol().is_some() {
+        if h.unlace_dynamic_symbol().is_some() || h.unlace_equate_symbol().is_some() {
             return h.get_symbol_offset();
         }
-        self.kuna_mapped_symbol_offset(high)
+        self.unlace_mapped_symbol_offset(high)
             .unwrap_or_else(|| h.get_symbol_offset())
     }
     fn bank_symbol_isolated(&self, high: HighVariableId) -> bool {
-        // (kuna L2) C++ `Merge::mergeTestAdjacent` (merge.cc:196-205) bails out
+        // (unlace L2) C++ `Merge::mergeTestAdjacent` (merge.cc:196-205) bails out
         // when `high->getSymbol()` is a non-null isolated Symbol.  Resolve the
         // SAME Symbol `bank_symbol` resolves, then read its
         // `Symbol::isIsolated()` (database.hh:241).  A dynamic-hash / equate
@@ -772,7 +776,10 @@ impl MergeContext for Funcdata {
         // Dynamic / equate Symbol bound on the high (the `type varnode tmp`
         // isolated return temp, or an equate): read its isolated flag from the
         // local scope's symbol table.
-        if let Some(sym) = h.kuna_dynamic_symbol().or_else(|| h.kuna_equate_symbol()) {
+        if let Some(sym) = h
+            .unlace_dynamic_symbol()
+            .or_else(|| h.unlace_equate_symbol())
+        {
             if let Some(lm) = self.get_scope_local() {
                 return lm.symbol_isolated(sym);
             }
@@ -783,7 +790,7 @@ impl MergeContext for Funcdata {
         // carries the `isolate`-able Symbol; a frozen global entry is never
         // isolated in the merged-tree snapshots.
         //
-        // (kuna L4) Unlike `bank_symbol`'s addr-tied member scan, a `type varnode
+        // (unlace L4) Unlike `bank_symbol`'s addr-tied member scan, a `type varnode
         // %REG(pc)` isolated Symbol is REGISTER storage (not addr-tied) and is
         // usepoint-SCOPED: `find_container` only matches it when the query
         // usepoint falls in the entry's `uselimit`.  Iterate ALL members (not
@@ -792,7 +799,7 @@ impl MergeContext for Funcdata {
         // getSymbol`'s first-hit member scan against a properly painted
         // SymbolEntry.
         //
-        // (kuna perf) The scan is `merge_test_adjacent`'s inner loop and is
+        // (unlace perf) The scan is `merge_test_adjacent`'s inner loop and is
         // quadratic in a big function: it runs once per candidate pair and
         // walks every member of both highs, so on a 43 KB function it issued
         // 26 M containment queries.  A scope that has never had a Symbol
@@ -1129,7 +1136,7 @@ impl MergeContext for Funcdata {
     }
 
     // --- Op mutation ------------------------------------------------------
-    fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> KunaResult<()> {
+    fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> UnlaceResult<()> {
         Funcdata::op_set_input(self, op, vn, slot)
     }
     fn op_insert_before(&mut self, op: OpId, follow: OpId) {
@@ -1179,10 +1186,10 @@ impl MergeContext for Funcdata {
         self.obank().iter_alive().collect()
     }
 
-    fn kuna_same_prior_variable(&self, a: HighVariableId, b: HighVariableId) -> Option<bool> {
+    fn unlace_same_prior_variable(&self, a: HighVariableId, b: HighVariableId) -> Option<bool> {
         (self.hooks().stablenames_same_variable)(self, a, b)
     }
-    fn kuna_prior_variable_groups(&self, highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
+    fn unlace_prior_variable_groups(&self, highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
         (self.hooks().stablenames_variable_groups)(self, highs)
     }
     fn vn_loads_across_write(&self, vn: VarnodeId) -> bool {
@@ -1215,7 +1222,7 @@ impl MergeContext for Funcdata {
     fn copy_pair_range(&self, dom_op: OpId, sub_op: OpId) -> Cover {
         self.build_copy_pair_range(dom_op, sub_op)
     }
-    /// (kuna) `checkCopyPair` over the pairs of one group, with the long
+    /// (unlace) `checkCopyPair` over the pairs of one group, with the long
     /// dominator walks of each dominating COPY, the block table and the high's
     /// writes shared across the pairs, and each range walked only until it meets a
     /// write ([`Funcdata::copy_pair_crossed`]).  Nothing these read changes
@@ -1256,10 +1263,15 @@ impl MergeContext for Funcdata {
     }
 
     // --- IR-surgery hooks -------------------------------------------------
-    fn copy_trim_op(&mut self, in_vn: VarnodeId, addr: Address, trim_op: OpId) -> KunaResult<OpId> {
+    fn copy_trim_op(
+        &mut self,
+        in_vn: VarnodeId,
+        addr: Address,
+        trim_op: OpId,
+    ) -> UnlaceResult<OpId> {
         self.build_copy_trim_op(in_vn, addr, trim_op)
     }
-    fn trim_op_output(&mut self, op: OpId) -> KunaResult<()> {
+    fn trim_op_output(&mut self, op: OpId) -> UnlaceResult<()> {
         self.do_trim_op_output(op)
     }
     fn trim_op_input_prep(&self, op: OpId, slot: int4) -> (VarnodeId, Address, bool) {
@@ -1295,7 +1307,7 @@ impl MergeContext for Funcdata {
     fn persist_trim(&mut self, op: OpId) {
         if self.obank().get(op).is_some_and(|o| {
             o.code() == OpCode::CPUI_INDIRECT
-                && o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_persist_stale != 0
+                && o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_persist_stale != 0
         }) {
             (self.hooks().persistcalls_restart_full)(self);
         }
@@ -1322,7 +1334,7 @@ impl MergeContext for Funcdata {
         copy: &[OpId],
         pos: int4,
         size: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ `Merge::buildDominantCopy` body (findCommonBlock / totalReplace /
         // opDestroy / high->merge surgery).  Lives on `Funcdata` since the whole
         // body is live-graph IR mutation + cover math off the varnode/op/block

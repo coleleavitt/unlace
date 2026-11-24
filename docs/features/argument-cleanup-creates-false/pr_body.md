@@ -67,7 +67,7 @@ output.
 
 ## The tests
 
-`tests/stages/kuna-tailcallsaved.toml` runs the shape twice (option off = the
+`tests/stages/tailcallsaved.toml` runs the shape twice (option off = the
 false call and the truncation, default = the whole function).
 `tests/cli/argument-cleanup-creates-false.json` pins it end to end against a new
 in-repo fixture. 10 unit cases for the accounting, 3 more on the predicate

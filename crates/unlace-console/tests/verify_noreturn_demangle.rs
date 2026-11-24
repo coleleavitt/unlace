@@ -1,4 +1,4 @@
-//! End-to-end gate for the no-return × demangle cross-pass seam (the kuna analog
+//! End-to-end gate for the no-return × demangle cross-pass seam (the unlace analog
 //! of Ghidra's `NoReturnFunctionAnalyzer` interacting with `GnuDemanglerAnalyzer`).
 //!
 //! The seam: the no-return pass (`loader/noreturn.rs`) matches on the **raw**

@@ -1,4 +1,4 @@
-//! (kuna) `arrayextent` -- an indexed stack array covers the slots its index
+//! (unlace) `arrayextent` -- an indexed stack array covers the slots its index
 //! reaches past the four elements upstream assumes.
 //!
 //! `MapState::gatherOpen` gives the open range at an indexed stack base room
@@ -30,7 +30,7 @@ pub use crate::varmap::Extended;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, sign_extend};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
@@ -55,9 +55,9 @@ const MAX_FOLLOW: int4 = 256;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArrayExtent(pub int4);
 
-impl crate::optionset::KunaOption for ArrayExtent {
+impl crate::optionset::UnlaceOption for ArrayExtent {
     const NAME: &'static str = "arrayextent";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArrayExtent(0)
@@ -67,7 +67,7 @@ impl crate::optionset::KunaOption for ArrayExtent {
         ArrayExtent(LEVEL_ON)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionArrayExtent
             .apply(value)
             .map(|(v, msg)| (ArrayExtent(v), msg))
@@ -83,7 +83,7 @@ impl OptionArrayExtent {
 
     /// Parse the level and its confirmation message; the caller writes it into
     /// the registered option `ArrayExtent`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         match p1 {
             "off" => Ok((
                 LEVEL_OFF,
@@ -97,7 +97,7 @@ impl OptionArrayExtent {
                 LEVEL_ON,
                 "Indexed stack array extent turned on, bound plus write-only slots".to_string(),
             )),
-            _ => Err(KunaError::parse("Must specify one of off, bound, on")),
+            _ => Err(UnlaceError::parse("Must specify one of off, bound, on")),
         }
     }
 }
@@ -516,7 +516,7 @@ fn observed(fd: &Funcdata, space: &Rc<AddrSpace>, start: intb, slot: intb, elem:
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.arrayextent_settle = Some(settle);
 }
 

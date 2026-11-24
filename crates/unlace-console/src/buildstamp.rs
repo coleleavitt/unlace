@@ -98,7 +98,7 @@ pub fn mismatch_warning(
     theirs: &str,
     pinned_by: Option<&str>,
 ) -> String {
-    let kuna = std::env::current_exe()
+    let unlace = std::env::current_exe()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|_| "unlace".to_string());
     let width = child_name.len().max("unlace".len()) + 1;
@@ -107,7 +107,7 @@ pub fn mismatch_warning(
         .unwrap_or_default();
     format!(
         "warning: {child_name} is a different build from this unlace\n\
-         \x20 {:<width$} {} {kuna}\n\
+         \x20 {:<width$} {} {unlace}\n\
          \x20 {:<width$} {theirs} {}{pinned}\n",
         "unlace:",
         identity(kind),

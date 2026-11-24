@@ -46,7 +46,7 @@ The witness now reads `char v4; // al`, `v4 = sub_44ac7a();`, `v4 += '$'`.
 
 ## The tests
 
-`tests/stages/kuna-codescalar.toml` is the two-pass case (assertion #1 asserts
+`tests/stages/codescalar.toml` is the two-pass case (assertion #1 asserts
 the bug with the option off; #3/#4 the fix with it on) over a witness and a
 direct-call control that must stay byte-identical in both passes.
 `tests/cli/decompiler-emits-void-scalar.json` is the CLI probe over the vendored

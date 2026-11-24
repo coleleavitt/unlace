@@ -3,7 +3,7 @@
 //! the vector spec was the 0.9 draft with every instruction unimplemented (and
 //! draft-only names such as vlxei, vpopc.m and vamo*).
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -28,7 +28,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile(elf: &str, function: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&["decompile", elf, function]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", elf, function]);
     assert_eq!(code, 0, "{function}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{function}:\n{stdout}");
@@ -41,7 +41,7 @@ fn every_vector_encoding_decodes_as_llvm_names_it() {
     let expected = std::fs::read_to_string(fixture("probe64.txt")).unwrap();
     let expected: Vec<&str> = expected.lines().collect();
     let elf = fixture("vector64.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe"]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     assert!(listing.len() >= expected.len(), "{} rows", listing.len());

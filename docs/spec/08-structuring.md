@@ -531,7 +531,7 @@ the re-analysed functions. At `2`, eight functions change and gotos rise by
 four, but the affected functions are large enough that the second analysis
 costs +8% (grep) and +26% (libselinux) of whole-binary time. `off` makes
 `record_hits`, the seed and the budget clamp inert, so the output is
-byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.toml`.
+byte-identical to the uncapped form. Witness: `tests/stages/condstmts.toml`.
 
 **Goto selection (the pathological case).** When the cascade stalls with more
 than one component live, `blockaction.rs (CollapseStructure::select_goto)`
@@ -1697,7 +1697,7 @@ cannot tell the two apart. Over a decbench sample (12 projects, 126 slices,
 decoders, whose source is the one-block `if` the option prints. Because the
 O2 aggregate rises, the option ships off and is a member of the `aggressive`
 preset, which `--mode auto` selects under 500 KiB.
-`tests/stages/kuna-rettriangle.toml` decompiles gcc -O0 functions with the
+`tests/stages/rettriangle.toml` decompiles gcc -O0 functions with the
 default and with the option on, and
 `unlace-cli/tests/rettriangle_round_trip.rs` compiles the printed C of gcc
 -O0/-O2 and clang -O0 builds beside the source and checks each function
@@ -1868,7 +1868,7 @@ decompiled C plus the disassembly, chose a region, and applied the option — ou
 **0 of 15**, on cases selected so that a DWARF-confirmed inlined callee spanning at
 least two whole basic blocks existed in every one. Two of those failures were the
 pass emitting wrong C (both fixed, and pinned by
-`tests/stages/kuna-outline-proto.toml`); the rest were correct declines against two
+`tests/stages/outline-proto.toml`); the rest were correct declines against two
 classes v1 cannot take at all:
 
 * **Multi-exit inlines.** The compiler routinely fuses a callee's return-value

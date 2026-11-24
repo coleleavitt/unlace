@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_nulterminator` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_nulterminator` because they reach pass hooks a higher crate
 //! provides (unlace-bandb, the crate above). They live in that crate.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_nulterminator` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_nulterminator` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::dtype::type_metatype;
     pub(super) use crate::options::on_or_off;
@@ -19,7 +19,7 @@ use unlace_base::address::RangeList;
 use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 use unlace_base::types::{int4, intb, uintb};
 
-// Unit tests for (kuna) `nulterminator`.
+// Unit tests for (unlace) `nulterminator`.
 
 use std::rc::Rc;
 

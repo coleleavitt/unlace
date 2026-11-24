@@ -572,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn kuna_looking_aliases_for_external_packages_stay_external() {
+    fn unlace_looking_aliases_for_external_packages_stay_external() {
         let root = workspace("external_alias");
         fs::write(
             root.join("crates/unlace-console/Cargo.toml"),

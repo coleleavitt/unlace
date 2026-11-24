@@ -85,7 +85,7 @@ void *sum_pointer(double a,double b) {
     if nocasts {
         args.extend(["--option", "nocastprinting", "on"]);
     }
-    let (_, error, status) = common::run_kuna(&args);
+    let (_, error, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{error}");
     let generated = project.join("sample.so.c");
     let driver = root.join("driver.c");

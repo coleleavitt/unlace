@@ -412,7 +412,7 @@ impl FuncdataSpacebaseExt for Funcdata {
     ///    Varnode that is `isUnaffected`, every `CPUI_COPY` descendant whose output
     ///    lands in this scope's stack space (`isUnaffectedStorage`) is the slot the
     ///    saved value is stashed in — unmap it so it is not promoted to a spurious
-    ///    `undefined8 v//rsp` local.  (kuna) Skipped when the register overlaps a
+    ///    `undefined8 v//rsp` local.  (unlace) Skipped when the register overlaps a
     ///    declared parameter of this function (directly or as a join piece): that
     ///    copy is a parameter spill whose slot may escape or be reused.
     ///
@@ -442,7 +442,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             let call_op = self.get_call_specs(i).get_op();
             let mut marks: Vec<(Rc<unlace_base::space::AddrSpace>, uintb, int4)> = Vec::new();
             for j in 0..numparam {
-                // (kuna) `msvcbyval`: a by-value slot a constructor builds is an
+                // (unlace) `msvcbyval`: a by-value slot a constructor builds is an
                 // object as well as an argument.
                 if crate::msvcbyval::keeps_slot_mapped(self, call_op, j) {
                     continue;
@@ -563,7 +563,7 @@ impl FuncdataSpacebaseExt for Funcdata {
                     None => continue,
                 };
                 if o.code() != OpCode::CPUI_COPY
-                    || o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_rustprobe_spill != 0
+                    || o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_rustprobe_spill != 0
                 {
                     continue;
                 }
@@ -623,10 +623,10 @@ impl FuncdataSpacebaseExt for Funcdata {
             let _ = lm.clear_unlocked_category_negative();
         }
 
-        // (kuna) C++ maps the locked/recovered parameters into the local scope at
+        // (unlace) C++ maps the locked/recovered parameters into the local scope at
         // prototype-attach time (`ProtoStoreSymbol::setInput`, fspec.cc:3174), so
         // they are present in the scope's EntryMap during EVERY restructure/sync
-        // pass.  The kuna `ProtoStoreInternal` keeps parameters off the scope, and
+        // pass.  The unlace `ProtoStoreInternal` keeps parameters off the scope, and
         // `link_proto_params` was only run at the final naming pass — so the
         // restructure/sync passes saw NO param entry and `syncVarnodesWithSymbols`
         // took the no-symbol `mapped|addrtied` fallback (keeping `addrforce` on a
@@ -691,7 +691,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             None => Default::default(),
         };
 
-        // (kuna) `endptrbound`: a stack pointer walk's `[start, end)` is one buffer.
+        // (unlace) `endptrbound`: a stack pointer walk's `[start, end)` is one buffer.
         let endptr_walks = crate::endptrbound::gather_walks(self, &space);
         if let (false, Some(t)) = (endptr_walks.is_empty(), self.get_arch().types_rc()) {
             crate::endptrbound::coalesce_hints(&mut state, &endptr_walks, &space, t.as_ref());
@@ -699,7 +699,7 @@ impl FuncdataSpacebaseExt for Funcdata {
 
         if self
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::castobject::CastObject>()
             .0
         {
@@ -753,7 +753,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             self.annotate_raw_stack_ptr(&space);
         }
 
-        // (kuna framelayout) Fold this pass's layout into the running union, so a
+        // (unlace framelayout) Fold this pass's layout into the running union, so a
         // slot a later pass's dataflow folds away is still reportable on the
         // `decompile-all --json` `variables` surface.  Union only -- nothing here
         // feeds back into the IR or the emitted C; `extract_variables` is the
@@ -987,7 +987,7 @@ impl FuncdataSpacebaseExt for Funcdata {
             // Whether the resolved SymbolEntry is a join-piece sub-entry (precislo/
             // precishi extra-flags, NOT `mapped`) — the extra maps `Scope::addMap`
             // registers per piece of a join-address Symbol (database.cc:1161-1180).
-            // The kuna addrtied pre-tie must NOT fire for such a partial piece: the
+            // The unlace addrtied pre-tie must NOT fire for such a partial piece: the
             // covered Varnode is a SUBPIECE-extracted field of the join symbol, and
             // C++'s heritage pre-tie only ties whole-symbol storage (the `mapped`
             // entry), never these piece sub-entries.  Without this gate the field
@@ -1040,7 +1040,7 @@ impl FuncdataSpacebaseExt for Funcdata {
                     } else {
                         0
                     };
-                    if crate::heritage::kuna_jt_trace() {
+                    if crate::heritage::unlace_jt_trace() {
                         eprintln!(
                             "jt-trace sync unmapped off={:#x} size={} unaliased={}",
                             ex_addr.get_offset(),
@@ -1063,7 +1063,7 @@ impl FuncdataSpacebaseExt for Funcdata {
 }
 
 impl FuncdataSpacebaseLocalExt for Funcdata {
-    /// (kuna `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
+    /// (unlace `framelayout`) Snapshot the NO_CATEGORY stack Symbols this pass
     /// recovered into the `Funcdata`'s frame-slot union.
     fn record_frame_layout_pass(&self, space: &Rc<unlace_base::space::AddrSpace>) {
         let Some(sl) = self.get_scope_local() else {
@@ -1195,7 +1195,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
                     if is_const
                         && self
                             .get_arch()
-                            .kuna_options
+                            .unlace_options
                             .get::<crate::nulterminator::NulTerminator>()
                             .0
                     {
@@ -1360,7 +1360,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
     ) -> Vec<super::arrayextent::OpenBase> {
         let extent = self
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::arrayextent::ArrayExtent>()
             .0;
         let mut unbounded = Vec::new();
@@ -1460,7 +1460,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
     /// `varmap.cc:1003`).  `opc` is the expected op-code (CPUI_LOAD or
     /// CPUI_STORE); the guard is ignored if its op died or its range was never
     /// refined (`step == 0`).  Returns the open hint's base when the guard has a
-    /// step but no locked range (kuna `arrayextent`).
+    /// step but no locked range (unlace `arrayextent`).
     fn add_guard(
         &self,
         state: &mut crate::varmap::MapState,
@@ -1564,7 +1564,7 @@ impl FuncdataSpacebaseLocalExt for Funcdata {
         ct: Option<&Rc<crate::dtype::Datatype>>,
         entry_is_join_piece: bool,
     ) -> bool {
-        // (kuna pre-tie) The merged tree has no pass that pre-ties stack storage:
+        // (unlace pre-tie) The merged tree has no pass that pre-ties stack storage:
         // the C++ ties address-tied stack storage earlier, via the heritage /
         // storage-class bookkeeping and the `setSymbolEntry` attach (only the
         // return register is pre-tied here, by `mark_output_storage_addr_tied`).
@@ -1658,7 +1658,7 @@ fn addr_eq(a: &Address, b: &Address) -> bool {
 /// The stack parameter range `restructure_varnode` clears out of the local
 /// analysis range (C++ `proto.getParamRange()`).
 ///
-/// (kuna) A `storage="hiddenret"` entry only holds a parameter when this
+/// (unlace) A `storage="hiddenret"` entry only holds a parameter when this
 /// function takes a hidden return pointer. Otherwise its storage is ordinary
 /// local frame memory: SPARC V9's 64-bit models place the entry at stack
 /// `0x7ef`, inside every function's own frame, and clearing it there dropped
@@ -1739,7 +1739,7 @@ fn proto_boundaries(proto: &crate::fspec::FuncProto) -> Option<crate::varmap::Pr
 #[doc(hidden)]
 pub struct FuncdataAliasAccess<'a> {
     fd: &'a Funcdata,
-    /// (kuna) Exempt an `INT_XOR` of the stack pointer from the escape-site
+    /// (unlace) Exempt an `INT_XOR` of the stack pointer from the escape-site
     /// scan.  Set only for the call-site input-trial checker; the local-layout
     /// gather (`gather_open`) always answers upstream.
     exempt_scramble: bool,
@@ -1891,7 +1891,7 @@ impl FuncdataAliasExt for Funcdata {
                         }
                     }
                     _ => {
-                        // (kuna) A stack-pointer scramble against a live value
+                        // (unlace) A stack-pointer scramble against a live value
                         // (MSVC's `/GS` cookie) is not an address, so it does
                         // not open an escape site for the call-site checker.
                         nonadduse |= crate::cookiescramble::is_escape_site(exempt_scramble, code)
@@ -1900,7 +1900,7 @@ impl FuncdataAliasExt for Funcdata {
                     }
                 }
             }
-            if crate::heritage::kuna_jt_trace() {
+            if crate::heritage::unlace_jt_trace() {
                 let v = self.vbank().get(vn);
                 eprintln!(
                     "jt-trace alias walk jt={} vn={:?} def={:?} at={:?} nonadduse={} uses={:?}",
@@ -2060,7 +2060,7 @@ fn stack_slot_aliased(
 }
 
 /// Fill the spacebase and stack-alias hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.find_spacebase_input = Some(Funcdata::find_spacebase_input);
     hooks.build_alias_checker_deferred = Some(Funcdata::build_alias_checker_deferred);
     hooks.stack_slot_aliased = Some(stack_slot_aliased);

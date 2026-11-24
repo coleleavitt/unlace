@@ -1,4 +1,4 @@
-//! (kuna) The rust-language policy objects: the profile and capability record
+//! (unlace) The rust-language policy objects: the profile and capability record
 //! for Rust output.
 //!
 //! The type speller lives next door in [`crate::rusttypes`]; this file owns
@@ -7,7 +7,7 @@
 //!
 //! # The capabilities that matter, and why they are capabilities
 //!
-//! Three of kuna's rendering defaults are **on** and produce text that is not
+//! Three of unlace's rendering defaults are **on** and produce text that is not
 //! Rust: `truthycond` (DIV-37) renders `x != 0` as `x`, which is not a condition
 //! in a language without implicit bool conversion; `braceelide` (DIV-38) drops
 //! the braces from a single-statement body, which Rust requires; and
@@ -16,7 +16,7 @@
 //! Rust a single correct choice.
 //!
 //! `switch_captures_break: false` is the load-bearing one. A C `switch` captures
-//! a bare `break`, so `kuna_scope_break` (`p8_structure/loopbreak_recovery.rs`,
+//! a bare `break`, so `unlace_scope_break` (`p8_structure/loopbreak_recovery.rs`,
 //! DIV-10, default-on) legitimately retags a goto that targets the switch exit as
 //! `f_break_goto`. A Rust `match` does **not** capture `break`: the same flag,
 //! rendered naively inside a `match` arm inside a loop, breaks the *loop*. The
@@ -24,7 +24,7 @@
 //!
 //! # Token precedences, and the one that is a correctness bug
 //!
-//! Most of the ~46 operator tokens are the right token in every language kuna
+//! Most of the ~46 operator tokens are the right token in every language unlace
 //! targets, so `rust_map_token` remaps only the eleven that are not. Two of
 //! those are spelling (`~` becomes `!`, `&x` becomes `&mut x`); the rest are
 //! **rank**, and rank is where a wrong table is dangerous rather than ugly.
@@ -38,7 +38,7 @@
 //! Rust also puts every comparison at one non-associative level where C ranks
 //! the relational operators above equality. Flattening them is what makes
 //! `(a < b) != 0` parenthesise instead of emitting the chained comparison
-//! `a < b != 0`, which does not parse. Because those become kuna-owned statics,
+//! `a < b != 0`, which does not parse. Because those become unlace-owned statics,
 //! they carry their own `negate` links (`OpToken::negate`, the C++ field the port
 //! left unset because a Rust static cannot reference itself — it can reference
 //! its sibling), so `!(a < b)` still folds to `a >= b`.
@@ -440,8 +440,8 @@ impl PrintC {
             let default_name;
             let mut name = param.get_name();
             if name.is_empty() {
-                default_name = crate::database::kuna_materialized_param_name(
-                    arch.kuna_options
+                default_name = crate::database::unlace_materialized_param_name(
+                    arch.unlace_options
                         .get::<crate::coreoptions::NameStyleAngr>()
                         .0,
                     i,
@@ -617,7 +617,7 @@ pub const UNSTRUCTURED_GOTO_NOTE: &str = "kuna: unstructured goto to ";
 /// The unescaped `"` is what makes matching this over rendered text sound. A
 /// decompiled program that embedded this very sentence in a string constant is
 /// printed as a Rust string literal, and the printer escapes an interior quote
-/// (`panic!(\"kuna: ...`), so program data cannot produce a match.
+/// (`panic!(\"unlace: ...`), so program data cannot produce a match.
 pub const UNSTRUCTURED_GOTO_MARKER: &str = "panic!(\"kuna: unstructured goto to ";
 
 /// How many unrepresentable gotos a rendered function body contains.
@@ -635,7 +635,7 @@ impl PrintC {
     /// The structurer manufactures `goto`s as its escape hatch, and Rust has no
     /// form for one that is neither a `break` nor a `continue`. Rather than emit
     /// a `goto` into a document called Rust -- which is what the reference
-    /// implementation does -- kuna emits a comment naming the construct plus a
+    /// implementation does -- unlace emits a comment naming the construct plus a
     /// **diverging** `panic!`.
     ///
     /// Diverging because `!` coerces to any type, so a jump in expression or
@@ -665,7 +665,7 @@ impl PrintC {
     /// `while cond { ... }`, and `loop { ...; if cond { break; } ... }` for the
     /// overflow form.
     ///
-    /// The overflow shape is not a Rust-specific invention: kuna already renders
+    /// The overflow shape is not a Rust-specific invention: unlace already renders
     /// a loop whose head is too complex to sit inside `while (...)` as
     /// `while( true ) { cond-body; if (cond) break; body }` (`f_whiledo_overflow`,
     /// set at fold time by the structurer). That IS the Rust shape -- only
@@ -728,7 +728,7 @@ impl PrintC {
                 &MarkupRef::none(),
             );
             self.emit.spaces(1, 0);
-            // (kuna outlang) C renders a condition that carries statements as a
+            // (unlace outlang) C renders a condition that carries statements as a
             // comma expression -- `while (v = f(), v != 0)`. Rust has no comma
             // operator, but its block expression is exactly the same thing with
             // braces: `while { v = f(); v != 0 } { ... }`. The two emissions of

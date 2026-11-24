@@ -1,8 +1,8 @@
-//! (kuna `castnarrow`) A narrowing C's own assignment, argument or return
+//! (unlace `castnarrow`) A narrowing C's own assignment, argument or return
 //! conversion performs keeps no cast.
 //!
 //! `castimplied` leaves out a widening that flows into a destination declared
-//! with exactly its type, and keeps every truncation and sign change.  So kuna
+//! with exactly its type, and keeps every truncation and sign change.  So unlace
 //! prints `v4 = (unsigned int)a0;` into an `unsigned int v4` from a `long a0`,
 //! `return (int)x;` from a function declared `int`, and `toupper((int)a0)`.
 //! C performs that very conversion itself in the places it converts a value to
@@ -211,8 +211,8 @@ fn c_integer(t: &Datatype) -> bool {
             && matches!(t.get_size(), 1 | 2 | 4 | 8))
 }
 
-crate::kuna_flag!(
-    /// (kuna `castnarrow`) Leave out an integer truncation or sign change that
+crate::unlace_flag!(
+    /// (unlace `castnarrow`) Leave out an integer truncation or sign change that
     /// flows whole into an assignment, a store, a trusted argument or a `return`
     /// whose type is spelled exactly as the cast's: C's own conversion there is
     /// that very conversion.  See [`crate::castnarrow`].

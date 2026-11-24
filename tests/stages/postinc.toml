@@ -1,0 +1,93 @@
+# postinc: a pointer step after the statement that dereferences the
+# pointer prints as a post-increment (option postinc).
+#
+# Source (gcc -O1, x86-64):
+#   int sumb(const unsigned char *p, int n) {
+#     int s = 0;
+#     while (n) { n = n - 1; s += *p; p++; }
+#     return s;
+#   }
+#   int sumi(const int *p, const int *e) {
+#     int s = 0;
+#     while (p != e) s += *p++;
+#     return s;
+#   }
+# fill is authored: mov [rdi],dl; add rdi,1; cmp rdi,rsi; jne; ret.
+#
+# Stage: P9, ActionPostIncrement: the step p = p + 1 reads the same value
+# only the LOAD of one byte before it reads, p points to one-byte elements,
+# and the statement with the LOAD is printed right before the step, so the
+# step prints nothing and the LOAD prints *p++. fill is the STORE form. In
+# sumi the compiler steps the pointer before the LOAD and the loop compares
+# the stepped copy, so nothing folds.
+#
+# Pass 1 (default) prints v2 += (uint4)*a0++; and *a0++ = a2; pass 2
+# (postinc off) the access and the step.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'sumb' },
+    { space = 'ram', offset = '0x401050', name = 'sumi' },
+    { space = 'ram', offset = '0x402000', name = 'fill' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = 'f30f1efa85f6742789f0488d0c07b800000000669066662e0f1f8400000000000fb61701d04883c7014839cf75f2c389f0c3f30f1efab8000000000f1f4400000fb614068814074883c00184d275f1c3f30f1efa4839f77414b80000000066904883c7040347fc4839fe75f4c3b800000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+readonly = true
+hex = '88174883c7014839f775f5c3'
+
+[script]
+commands = [
+    # looprotate would print sumi as a for loop, whose stepped copy this test reads
+    'option looprotate off',
+    'lo fu sumb',
+    'decompile',
+    'print C',
+    'lo fu fill',
+    'decompile',
+    'print C',
+    'lo fu sumi',
+    'decompile',
+    'print C',
+    'option postinc off',
+    'lo fu sumb',
+    'decompile',
+    'print C',
+    'lo fu fill',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-POSTINC #1: the step folds into the load (default)'
+count = 1
+regex = '^      v2 \+= \(uint4\)\*a0\+\+;$'
+
+[[match]]
+name = 'KUNA-POSTINC #2: the step folds into the store (default)'
+count = 1
+regex = '^    \*a0\+\+ = a2;$'
+
+[[match]]
+name = 'KUNA-POSTINC #3: a step through a copy the loop compares is left'
+count = 1
+regex = '^      a0 = v2;$'
+
+[[match]]
+name = 'KUNA-POSTINC #4: postinc off keeps each step as its own statement'
+count = 2
+literal = 'a0 = &a0[1];'
+
+[[match]]
+name = 'KUNA-POSTINC #5: postinc off prints no post-increment'
+count = 2
+literal = '++'

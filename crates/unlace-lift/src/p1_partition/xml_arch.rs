@@ -29,7 +29,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ElementId, IdRegistry};
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::Element;
@@ -51,7 +51,7 @@ pub const ELEM_XML_SAVEFILE: ElementId = ElementId::new("xml_savefile", 236);
 /// \brief Extension for building an XML format capable Architecture (C++ `class
 /// XmlArchitectureCapability : public ArchitectureCapability`, `xml_arch.hh:29`).
 ///
-/// In C++ a single static singleton registers itself; per the kuna no-static
+/// In C++ a single static singleton registers itself; per the unlace no-static
 /// convention the bootstrap constructs and `register`s this with the
 /// [`CapabilityRegistry`](crate::capability::CapabilityRegistry).
 #[derive(Debug, Clone, Default)]
@@ -194,11 +194,11 @@ impl XmlArchitecture {
     /// `getTag("binaryimage")` lookup performs.  Errors if the element is not a
     /// `<binaryimage>` (C++ `throw LowlevelError("Could not find binaryimage
     /// tag")`).
-    pub fn build_loader(&mut self, binaryimage: Rc<Element>) -> KunaResult<()> {
+    pub fn build_loader(&mut self, binaryimage: Rc<Element>) -> UnlaceResult<()> {
         // The document open/extract is the caller's (it owns the store); the
         // resolved <binaryimage> element is passed in.
         if binaryimage.get_name() != "binaryimage" {
-            return Err(KunaError::lowlevel("Could not find binaryimage tag"));
+            return Err(UnlaceError::lowlevel("Could not find binaryimage tag"));
         }
         let filename = self.sleigh.get_filename().to_string();
         self.loader = Some(LoadImageXml::new(&filename, binaryimage)?);
@@ -219,9 +219,9 @@ impl XmlArchitecture {
         &mut self,
         manager: &AddrSpaceManager,
         registry: &IdRegistry,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let loader = self.loader.as_mut().ok_or_else(|| {
-            KunaError::lowlevel("XmlArchitecture::postSpecFile: loader not built")
+            UnlaceError::lowlevel("XmlArchitecture::postSpecFile: loader not built")
         })?;
         loader.open(manager, registry)?;
         if self.adjustvma != 0 {
@@ -251,7 +251,7 @@ impl XmlArchitecture {
         target: &str,
         adjustvma_str: &str,
         children: &[Rc<Element>],
-    ) -> KunaResult<XmlRestore> {
+    ) -> UnlaceResult<XmlRestore> {
         self.sleigh.restore_xml_header(name, target);
         self.adjustvma = parse_auto_base(adjustvma_str);
 

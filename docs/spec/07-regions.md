@@ -599,13 +599,13 @@ in most such frames, and deleting it removes the local-alias escape site that
 bottom of the frame, so dead stores the aliasing had been keeping alive are
 collected too. That is the same defect the `cookiescramble` alias exemption
 addresses on the same instruction, from the other side; the two compose.
-`tests/stages/kuna-msvcstackguard.toml` pins both directions, with the callee
+`tests/stages/msvcstackguard.toml` pins both directions, with the callee
 deliberately unnamed so the shape-only claim is what is tested.
-`tests/stages/kuna-msvcstackguard-return.toml` pins the restart handoff with a
+`tests/stages/msvcstackguard-return.toml` pins the restart handoff with a
 two-arm shared epilogue; its checker
 failure tail enters a helper with an ordinary returning call before fast-fail,
 so generic callee-body inference is deliberately unavailable.
-`tests/stages/kuna-declaring-double-score-return.toml` pins the non-destructive
+`tests/stages/declaring-double-score-return.toml` pins the non-destructive
 locked-void handoff, including a loop-carried cookie, a double XMM0 return, an
 exact-cookie callee that writes XMM0 before an unresolved nested call, and a
 16-byte XMM0 overlap whose low ABI-output lane survives while its upper scratch
@@ -642,7 +642,7 @@ guard edge goes the unreachable sweep removes the arm, its join inputs with
 it — each surviving phi collapses to the hot-path value. One guard edge is
 cut per apply, so a shared arm converges one guard at a time and every cut
 re-validates the shape against the edited graph. The witness is
-`tests/stages/kuna-gowbphi.toml` (a double-guarded shared arm whose buffer
+`tests/stages/gowbphi.toml` (a double-guarded shared arm whose buffer
 stores read the call result), and the unlace-console `verify_go_writebarrier`
 family carries the store-preservation oracle over real Go builds.
 
@@ -658,7 +658,7 @@ the recursive region-order visit of every leaf block. Each invocation builds a
 (`console.rs (build_region_identifier)`), so the dumps can never disagree
 with the current CFG, and writes to the bulk-output stream — assertable from
 datatests and capturable via `openfile write`. The dump grammar is a stable
-contract, pinned by `tests/stages/kuna-regions.toml`: 2-space indent per
+contract, pinned by `tests/stages/regions.toml`: 2-space indent per
 nesting level; `region head=0x<hex> nodes=<N>[ cyclic]` per region; `block
 0x<hex>` per leaf (a merged `Multi` chain prints one `block` line per member);
 one bracketed `[0x<hex>, ...]` line per flat region; `walk 0x<hex>` per

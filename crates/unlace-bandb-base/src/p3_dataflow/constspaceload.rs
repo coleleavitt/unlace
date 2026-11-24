@@ -1,4 +1,4 @@
-//! (kuna) `constspaceload` — resolve a SLEIGH dynamic constant-space export to
+//! (unlace) `constspaceload` — resolve a SLEIGH dynamic constant-space export to
 //! the value it exports instead of leaving it as a pointer-shaped LOAD.
 //!
 //! # The symptom
@@ -11,7 +11,7 @@
 //! 4f4:  vst1.64  {d16-d17}, [r1]!
 //! ```
 //!
-//! and kuna renders the zeroing as three reads through a null pointer:
+//! and unlace renders the zeroing as three reads through a null pointer:
 //!
 //! ```c
 //! v2 = *(unsigned int *)(0 + 4);
@@ -89,7 +89,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// Marshalling element id (kuna 4000+ range).
+/// Marshalling element id (unlace 4000+ range).
 pub const ELEM_CONSTSPACELOAD: ElementId = ElementId::new("constspaceload", 4162);
 
 /// Rewrite `LOAD(const, p)` to the value of `p` (see the module docs).

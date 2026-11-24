@@ -1,4 +1,4 @@
-//! (kuna, issue #667) The ambiguity report has to offer a selector that works
+//! (unlace, issue #667) The ambiguity report has to offer a selector that works
 //! on the image in hand: a linked image has no section-qualified coordinates,
 //! so only the address separates two same-named entries.
 

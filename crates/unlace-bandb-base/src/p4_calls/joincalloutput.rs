@@ -26,6 +26,6 @@ pub fn needs_reflow(data: &Funcdata, call: &FuncCallSpecs, proto: &FuncProto) ->
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.joincalloutput_needs_reflow = Some(needs_reflow);
 }

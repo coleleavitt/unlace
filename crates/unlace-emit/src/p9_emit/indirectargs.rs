@@ -81,7 +81,7 @@ pub fn mutable_inputs(data: &Funcdata) -> Vec<MutableInput> {
             .find_input(param.get_size(), &param.get_address())
             .and_then(|vn| data.vbank().get(vn)?.get_high());
         let symbol = high
-            .and_then(|high| data.high_bank().get(high)?.kuna_link_symbol())
+            .and_then(|high| data.high_bank().get(high)?.unlace_link_symbol())
             .or_else(|| {
                 let scope = data.get_scope_local()?;
                 scope
@@ -103,7 +103,7 @@ pub fn mutable_inputs(data: &Funcdata) -> Vec<MutableInput> {
         }
         if let Some(symbol) = symbol {
             highs.extend(data.high_bank().iter().filter_map(|(id, variable)| {
-                (Some(id) != high && variable.kuna_link_symbol() == Some(symbol)).then_some(id)
+                (Some(id) != high && variable.unlace_link_symbol() == Some(symbol)).then_some(id)
             }));
         }
         let mutable = highs.len() > 1

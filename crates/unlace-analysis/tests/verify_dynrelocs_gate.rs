@@ -1,4 +1,4 @@
-//! (kuna `dynrelocs`) The dynamic-relocation application, in its own test binary,
+//! (unlace `dynrelocs`) The dynamic-relocation application, in its own test binary,
 //! driven against real fixtures rather than synthetic images.
 
 use unlace_analysis::loader::dynrelocs::resolve;

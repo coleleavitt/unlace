@@ -146,5 +146,5 @@ _none recorded_
   binary into the repo first"*, writing nothing. The builder had already swept all 132 in-repo
   fixture binaries under both arms for a substitute witness and found none — the shape needs an
   AArch64/ARM callee plus a producer with a recovered return, and this box has no AArch64 linker.
-  The permanent CI pin is therefore `tests/stages/kuna-calleedeadarg.toml`, which shipped inside #402
+  The permanent CI pin is therefore `tests/stages/calleedeadarg.toml`, which shipped inside #402
   and is green in `make test-stages` at 613/613. `make test-cli` stays at 27/27 by design.

@@ -10,7 +10,7 @@
 //! backed by a `JumpTable` (an S2 artifact recovered from a lifted indirect
 //! jump).  When the compiler lowered the switch to comparisons there is no
 //! `BRANCHIND`, so Ghidra (like stock angr) renders a deep if/else chain.  The
-//! kuna pass detects the comparison cascade and MANUFACTURES the S2 artifact (a
+//! unlace pass detects the comparison cascade and MANUFACTURES the S2 artifact (a
 //! `BRANCHIND` + a hand-built, pre-labelled `JumpTable`) so the existing
 //! structurer + printer emit a `switch` — a stage-model feedback edge
 //! (`docs/divergences.md`).
@@ -24,10 +24,10 @@
 //!     addresses only — no `Varnode`/`Block` handles), and requests a restart.
 //!   - `ActionLowerSwitchInstall` runs EARLY on the restart, BEFORE
 //!     `ActionHeritage`, when blocks exist but SSA does not.  It performs the CFG
-//!     surgery (`Funcdata::kunaInstallLoweredSwitch`) so the following
+//!     surgery (`Funcdata::unlaceInstallLoweredSwitch`) so the following
 //!     `ActionHeritage` rebuilds phi from scratch over the corrected CFG.
 //!
-//! The decision is a P0 assertion: `option loweredswitch on|off`.  The kuna Rust
+//! The decision is a P0 assertion: `option loweredswitch on|off`.  The unlace Rust
 //! port ships this **default-on** (`architecture.rs:418` sets
 //! `recover_lowered_switch = true`; the angr-port DIV default), so the Detect
 //! Action's [`enabled`](ActionLowerSwitchDetect) gate carries `true` in the
@@ -37,16 +37,16 @@
 //!
 //! Ported faithfully (self-contained, read-only over the merged tree):
 //!
-//! * [`ELEM_LOWEREDSWITCH`] — the marshaling element id (kuna 4000+ range).
-//! * [`KunaLoweredSwitchRecord`] / [`KunaLsKey`] / [`key_for_func`] — the
+//! * [`ELEM_LOWEREDSWITCH`] — the marshaling element id (unlace 4000+ range).
+//! * [`UnlaceLoweredSwitchRecord`] / [`UnlaceLsKey`] / [`key_for_func`] — the
 //!   side-table record and function-identity key (the C++ `loweredStore`
-//!   key/value shapes; identical to `kuna_restartlog`'s `KunaFuncKey`).
-//! * [`KunaLoweredSwitchStore`] — the sticky side table.  C++ holds a
+//!   key/value shapes; identical to `unlace_restartlog`'s `UnlaceFuncKey`).
+//! * [`UnlaceLoweredSwitchStore`] — the sticky side table.  C++ holds a
 //!   file-static `std::map`; the Rust port models it as an owned struct (the
 //!   same convention as the `RestartLog` port) carried inside the Detect Action,
 //!   whose lifetime (per `ActionDatabase`) matches the file-static's
-//!   survives-`clear()` semantics.  [`KunaLoweredSwitchStore::has_record`] is
-//!   `kunaLoweredSwitchHasRecord`.
+//!   survives-`clear()` semantics.  [`UnlaceLoweredSwitchStore::has_record`] is
+//!   `unlaceLoweredSwitchHasRecord`.
 //! * The detection: [`canon_switch_var`], [`is_pure_compare_block`],
 //!   [`analyze_cmp`] ([`CmpNode`]), [`target_start`], [`recover_cascade`],
 //!   [`advance_past_guards`], and [`ActionLowerSwitchDetect::apply`] — the
@@ -55,7 +55,7 @@
 //!   (`OptionLowerSwitch::apply`).
 //!
 //! ## The install half (`ActionLowerSwitchInstall` +
-//! `Funcdata::kuna_install_lowered_switch`)
+//! `Funcdata::unlace_install_lowered_switch`)
 //!
 //! The CFG surgery that turns a recorded cascade into a real `BRANCHIND` +
 //! `JumpTable` runs on the restart pass, pre-SSA, over the now-ported surfaces:
@@ -69,7 +69,7 @@
 //!     linked to the synthesized BRANCHIND.
 //!   * [`Funcdata::remove_unreachable_blocks`](crate::funcdata::Funcdata::remove_unreachable_blocks)
 //!     — sweeps the orphaned comparison-cascade spine.
-//!   * [`JumpTable::kuna_set_trivial_model`](crate::jumptable::JumpTable::kuna_set_trivial_model)
+//!   * [`JumpTable::unlace_set_trivial_model`](crate::jumptable::JumpTable::unlace_set_trivial_model)
 //!     — attaches a [`JumpModelTrivial`](crate::jumptable::JumpModelTrivial) so the
 //!     model-bearing queries behave as for a recovered switch.
 //!
@@ -91,7 +91,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -108,7 +108,7 @@ use crate::p2_lift::loweredswitchvalue::{ValueCheck, verify_installed_switch_val
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<loweredswitch>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<loweredswitch>` (unlace).  ElementIds live in the 4000+
 /// range (C++ `ELEM_LOWEREDSWITCH = ElementId("loweredswitch",4019)`).
 pub const ELEM_LOWEREDSWITCH: ElementId = ElementId::new("loweredswitch", 4019);
 
@@ -116,9 +116,9 @@ pub const ELEM_LOWEREDSWITCH: ElementId = ElementId::new("loweredswitch", 4019);
 // Side table: the recovered lowered-switch hint, keyed by function identity.
 //===========================================================================
 
-/// One recovered lowered switch within a function (C++ `KunaLoweredSwitchRecord`).
+/// One recovered lowered switch within a function (C++ `UnlaceLoweredSwitchRecord`).
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct KunaLoweredSwitchRecord {
+pub struct UnlaceLoweredSwitchRecord {
     /// Op address of the cascade head (hosts the synthetic `BRANCHIND`).
     pub branch_addr: Address,
     /// Switch variable storage (a fallback locator for V).
@@ -133,13 +133,13 @@ pub struct KunaLoweredSwitchRecord {
     pub default_target: Address,
     /// Case-label interpretation proved by the cascade's range comparisons.
     pub signed_labels: bool,
-    /// (kuna `loweredswitchvalue`) The compared value and whether the installed
+    /// (unlace `loweredswitchvalue`) The compared value and whether the installed
     /// switch has been shown to read it.
     pub value: ValueCheck,
 }
 
 /// Side-table key: identifies a function without holding clearable handles
-/// (C++ `KunaLSKey`; identical shape to `kuna_restartlog`'s `KunaFuncKey`).
+/// (C++ `UnlaceLSKey`; identical shape to `unlace_restartlog`'s `UnlaceFuncKey`).
 ///
 /// The C++ stores the raw `Architecture *` (`glb`) in the key; here the function
 /// is identified by its entry address (space index + offset) which is stable
@@ -147,7 +147,7 @@ pub struct KunaLoweredSwitchRecord {
 /// entry address alone is the live discriminator (the C++ `glb` field guards
 /// against cross-program collisions, irrelevant within one run).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KunaLsKey {
+pub struct UnlaceLsKey {
     /// Entry address space index, or -1 if the entry has no space
     /// (C++ `(entry.getSpace() != 0) ? ->getIndex() : -1`).
     pub space_index: int4,
@@ -156,13 +156,13 @@ pub struct KunaLsKey {
 }
 
 /// The side-table key for `fd` — C++ `keyForFunc` (`kuna_loweredswitch.cc:73`).
-pub fn key_for_func(fd: &Funcdata) -> KunaLsKey {
+pub fn key_for_func(fd: &Funcdata) -> UnlaceLsKey {
     let entry = fd.get_address();
     let space_index = match entry.get_space() {
         Some(s) => s.get_index(),
         None => -1,
     };
-    KunaLsKey {
+    UnlaceLsKey {
         space_index,
         offset: entry.get_offset(),
     }
@@ -176,18 +176,18 @@ pub fn key_for_func(fd: &Funcdata) -> KunaLsKey {
 /// that function re-applies it pre-SSA without another restart — exactly like a
 /// manual jump-table override.
 #[derive(Clone, Debug, Default)]
-pub struct KunaLoweredSwitchStore {
-    table: BTreeMap<KunaLsKey, Vec<KunaLoweredSwitchRecord>>,
+pub struct UnlaceLoweredSwitchStore {
+    table: BTreeMap<UnlaceLsKey, Vec<UnlaceLoweredSwitchRecord>>,
 }
 
-impl KunaLoweredSwitchStore {
+impl UnlaceLoweredSwitchStore {
     /// A new, empty store.
-    pub fn new() -> KunaLoweredSwitchStore {
-        KunaLoweredSwitchStore::default()
+    pub fn new() -> UnlaceLoweredSwitchStore {
+        UnlaceLoweredSwitchStore::default()
     }
 
-    /// (kuna) Has a lowered-switch record already been stored for `fd`?
-    /// (C++ `kunaLoweredSwitchHasRecord`).  True on the post-restart pass (the
+    /// (unlace) Has a lowered-switch record already been stored for `fd`?
+    /// (C++ `unlaceLoweredSwitchHasRecord`).  True on the post-restart pass (the
     /// detection self-gate / install trigger).
     pub fn has_record(&self, fd: &Funcdata) -> bool {
         match self.table.get(&key_for_func(fd)) {
@@ -197,7 +197,7 @@ impl KunaLoweredSwitchStore {
     }
 
     /// The recorded cascades for `fd` (empty if none) — used by the install half.
-    pub fn records(&self, fd: &Funcdata) -> &[KunaLoweredSwitchRecord] {
+    pub fn records(&self, fd: &Funcdata) -> &[UnlaceLoweredSwitchRecord] {
         match self.table.get(&key_for_func(fd)) {
             Some(v) => v.as_slice(),
             None => &[],
@@ -206,7 +206,7 @@ impl KunaLoweredSwitchStore {
 
     /// Append a recovered record for `fd` — C++
     /// `loweredStore[keyForFunc(data)].push_back(rec)`.
-    pub fn push(&mut self, fd: &Funcdata, rec: KunaLoweredSwitchRecord) {
+    pub fn push(&mut self, fd: &Funcdata, rec: UnlaceLoweredSwitchRecord) {
         self.table.entry(key_for_func(fd)).or_default().push(rec);
     }
 
@@ -215,7 +215,7 @@ impl KunaLoweredSwitchStore {
         &mut self,
         fd: &Funcdata,
         idx: usize,
-    ) -> Option<&mut KunaLoweredSwitchRecord> {
+    ) -> Option<&mut UnlaceLoweredSwitchRecord> {
         self.table
             .get_mut(&key_for_func(fd))
             .and_then(|v| v.get_mut(idx))
@@ -232,11 +232,11 @@ impl KunaLoweredSwitchStore {
 /// the Detect half records on pass 1 is visible to the Install half on the
 /// restart pass.  Cloning the handle (including through `clone_filtered`) shares
 /// the same inner store, matching the file-static's single-instance semantics.
-pub type SharedLoweredSwitchStore = Rc<RefCell<KunaLoweredSwitchStore>>;
+pub type SharedLoweredSwitchStore = Rc<RefCell<UnlaceLoweredSwitchStore>>;
 
 /// Construct a fresh, empty shared lowered-switch store.
 pub fn new_shared_store() -> SharedLoweredSwitchStore {
-    Rc::new(RefCell::new(KunaLoweredSwitchStore::new()))
+    Rc::new(RefCell::new(UnlaceLoweredSwitchStore::new()))
 }
 
 //===========================================================================
@@ -703,7 +703,7 @@ fn target_start(data: &Funcdata, bl: BlockId) -> Address {
 }
 
 /// Count the INDEPENDENT default sinks among a set of default candidates
-/// (kuna adaptation of angr's single-shared-default guard for the pre-merge,
+/// (unlace adaptation of angr's single-shared-default guard for the pre-merge,
 /// variable-fragmented cascade — see the call site in [`recover_cascade`]).
 ///
 /// A candidate is "absorbed" if a forward CFG walk from it reaches ANOTHER
@@ -773,7 +773,7 @@ fn recover_cascade(
     startbb: BlockId,
     cmpmap: &BTreeMap<BlockId, CmpNode>,
     swvar: VarnodeId,
-) -> Option<KunaLoweredSwitchRecord> {
+) -> Option<UnlaceLoweredSwitchRecord> {
     // DFS over cascade nodes reading swvar; collect cases + default votes.
     let mut cases: BTreeMap<uintb, Address> = BTreeMap::new();
     let mut default_votes: BTreeMap<Address, int4> = BTreeMap::new();
@@ -897,7 +897,7 @@ fn recover_cascade(
             // Classify each terminal (non-cascade) edge by the interval bound.
             // angr, at `:573-577`/`:585-589`, appends the single-value edge to
             // `cases` and only routes the rest into `default_case_candidates`.
-            // kuna does the SAME split, but does NOT synthesize the single-value
+            // unlace does the SAME split, but does NOT synthesize the single-value
             // edge as a new case label: the point here is to keep it OUT of the
             // default set so the convergence guard below counts only true default
             // sinks.  Synthesizing it as a case would change the recovered
@@ -921,7 +921,7 @@ fn recover_cascade(
     let (floor, cap) = if saw_range
         && data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loweredswitch::LoweredSwitchMode>()
             .tree()
     {
@@ -947,7 +947,7 @@ fn recover_cascade(
     // first different-variable node, `:487-491`), so the many CFG edges that fall
     // through to the default collapse to a single `default_case_candidates` entry.
     //
-    // kuna groups the cascade by switch VARIABLE (`canonSwitchVar`), so when GCC
+    // unlace groups the cascade by switch VARIABLE (`canonSwitchVar`), so when GCC
     // re-derives the dispatch value the single default REGION appears as several
     // unmerged blocks — the secondary dispatch head plus the trampolines that jump
     // into it.  Counting distinct addresses would therefore wrongly decline a
@@ -988,7 +988,7 @@ fn recover_cascade(
     } else {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loweredswitch::LoweredSwitchMode>()
             .linear()
         {
@@ -1036,7 +1036,7 @@ fn recover_cascade(
     }
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::loweredswitch::SwitchSelectorGuard>()
         .0
         && !selector_defined_in_function(data, swvar)
@@ -1069,7 +1069,7 @@ fn recover_cascade(
         }
     };
 
-    Some(KunaLoweredSwitchRecord {
+    Some(UnlaceLoweredSwitchRecord {
         branch_addr,
         var_addr,
         var_size,
@@ -1081,7 +1081,7 @@ fn recover_cascade(
     })
 }
 
-/// (kuna `switchselector`) Is the switch value computed inside this function?
+/// (unlace `switchselector`) Is the switch value computed inside this function?
 ///
 /// The re-roll replaces the compiler's comparison cascade with a `switch` over
 /// the recorded storage. When the selector is a parameter — a register argument,
@@ -1144,7 +1144,7 @@ fn advance_past_guards(
     head
 }
 
-/// (kuna) Detect a compiler-lowered comparison cascade and request a restart
+/// (unlace) Detect a compiler-lowered comparison cascade and request a restart
 /// (C++ `ActionLowerSwitchDetect`).
 ///
 /// Runs after `ActionSwitchNorm` on the simplified CFG.  On finding a cascade it
@@ -1158,7 +1158,7 @@ pub struct ActionLowerSwitchDetect {
     /// Resolved `glb->recover_lowered_switch` gate (STUB(W4); the ArchContext
     /// `Architecture` skeleton on `Funcdata` does not carry the flag yet, so it
     /// is resolved at construction by the W9 assembler — the
-    /// `kuna_compareform`/`kuna_arraystride` convention).
+    /// `unlace_compareform`/`unlace_arraystride` convention).
     enabled: bool,
     /// The sticky side table (C++ file-static `loweredStore`), shared with the
     /// Install half.  Cloning the Action (via `clone_filtered`) shares the same
@@ -1206,7 +1206,7 @@ impl ActionLowerSwitchDetect {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::loweredswitch::LoweredSwitchMode>()
                 .enabled()
         {
@@ -1274,11 +1274,11 @@ impl ActionLowerSwitchDetect {
         self.detect_bits(data)
     }
 
-    /// (kuna `loweredswitchbits`) Record a switch lowered to bit tests.
+    /// (unlace `loweredswitchbits`) Record a switch lowered to bit tests.
     fn detect_bits(&mut self, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loweredswitchbits::LoweredSwitchBits>()
             .0
         {
@@ -1390,13 +1390,13 @@ impl Action for ActionLowerSwitchDetect {
 // Install (CFG surgery) on the restart pass, pre-SSA
 //===========================================================================
 
-/// (kuna) Install the recorded lowered switch as a `BRANCHIND` + `JumpTable`
+/// (unlace) Install the recorded lowered switch as a `BRANCHIND` + `JumpTable`
 /// (C++ `ActionLowerSwitchInstall`).
 ///
 /// Runs before `ActionHeritage` on the restart pass (pre-SSA, no `MULTIEQUAL`s
 /// yet, so the edge surgery needs no phi patching).  Reads the side table; for
 /// each recorded record that is not yet installed, it calls
-/// `Funcdata::kunaInstallLoweredSwitch` to manufacture the S2 artifact (replace
+/// `Funcdata::unlaceInstallLoweredSwitch` to manufacture the S2 artifact (replace
 /// the cascade head's `CBRANCH` with a `BRANCHIND(V)`, rewire its out-edges to
 /// the case targets + default, and build a fully-labelled `JumpTable`).  A
 /// non-zero return makes the mainloop re-iterate so `ActionHeritage` rebuilds
@@ -1404,7 +1404,7 @@ impl Action for ActionLowerSwitchDetect {
 ///
 /// ## The install surgery (ported)
 ///
-/// The body's central call, [`Funcdata::kuna_install_lowered_switch`], performs
+/// The body's central call, [`Funcdata::unlace_install_lowered_switch`], performs
 /// the CFG surgery over the now-ported surfaces:
 ///
 ///   * [`Funcdata::get_heritage_pass`] — the install gate
@@ -1412,7 +1412,7 @@ impl Action for ActionLowerSwitchDetect {
 ///     re-clears heritage, so the first mainloop iteration runs at pass 0).
 ///   * the live `jumpvec` registry — the constructed [`JumpTable`] is pushed as a
 ///     real entry, linked to the synthesized BRANCHIND.
-///   * [`JumpTable::kuna_set_trivial_model`] — attaches a
+///   * [`JumpTable::unlace_set_trivial_model`] — attaches a
 ///     [`JumpModelTrivial`](crate::jumptable::JumpModelTrivial) so the
 ///     model-bearing queries behave as for a recovered switch.
 ///   * [`Funcdata::remove_unreachable_blocks`] — sweeps the orphaned
@@ -1480,7 +1480,7 @@ impl ActionLowerSwitchInstall {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::loweredswitch::LoweredSwitchMode>()
                 .enabled()
         {
@@ -1500,10 +1500,10 @@ impl ActionLowerSwitchInstall {
             return 0;
         }
 
-        // for each recorded record: jt = data.kunaInstallLoweredSwitch(...).  A
+        // for each recorded record: jt = data.unlaceInstallLoweredSwitch(...).  A
         // non-null table means the surgery committed; count it so the mainloop
         // re-iterates and ActionHeritage rebuilds SSA over the corrected CFG.
-        let recs: Vec<KunaLoweredSwitchRecord> = store.records(data).to_vec();
+        let recs: Vec<UnlaceLoweredSwitchRecord> = store.records(data).to_vec();
         drop(store);
         let mut changed = 0;
         for (i, r) in recs.iter().enumerate() {
@@ -1524,7 +1524,7 @@ impl ActionLowerSwitchInstall {
                 // read, so an unnamed switch reads the home storage.
                 rec.value.reads_home()
             };
-            match data.kuna_install_lowered_switch(
+            match data.unlace_install_lowered_switch(
                 &r.branch_addr,
                 &r.var_addr,
                 r.var_size,
@@ -1590,7 +1590,7 @@ impl Action for ActionLowerSwitchInstall {
 // Option gate
 //===========================================================================
 
-/// (kuna) Toggle lowered comparison-cascade -> switch recovery:
+/// (unlace) Toggle lowered comparison-cascade -> switch recovery:
 /// What `loweredswitch` re-rolls: nothing, the binary-search cascades of 3 to
 /// 16 cases, and optionally linear equality chains and wider compare trees.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1616,7 +1616,7 @@ impl LoweredSwitchMode {
 
 /// `loweredswitch on|off|linear|tree|all` (C++ `OptionLowerSwitch`).
 ///
-/// The kuna Rust port ships default-on (the angr-port DIV;
+/// The unlace Rust port ships default-on (the angr-port DIV;
 /// `architecture.rs:418`).  "off" makes the Detect/Install Actions inert.
 pub struct OptionLowerSwitch;
 
@@ -1627,7 +1627,7 @@ impl OptionLowerSwitch {
     /// C++ `OptionLowerSwitch::apply`, extended with the `linear`, `tree` and
     /// `all` values.  Returns the resolved mode plus the confirmation message;
     /// the caller writes the mode into the `Architecture`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(LoweredSwitchMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(LoweredSwitchMode, String)> {
         let widened =
             |what: &str| format!("Lowered comparison-cascade switch recovery turned on, {what}");
         Ok(match p1.trim() {
@@ -1660,7 +1660,7 @@ impl OptionLowerSwitch {
 }
 
 // ---------------------------------------------------------------------------
-// Local read accessors (the `kuna_compareform` / `kuna_arraystride` idiom).
+// Local read accessors (the `unlace_compareform` / `unlace_arraystride` idiom).
 // ---------------------------------------------------------------------------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
@@ -1736,8 +1736,8 @@ fn block_is_switch_out(data: &Funcdata, bl: BlockId) -> bool {
     data.bblocks_ref().block(bl).is_switch_out()
 }
 
-crate::kuna_flag!(
-    /// (kuna `switchselector`) Refuse to install a recovered lowered-switch
+crate::unlace_flag!(
+    /// (unlace `switchselector`) Refuse to install a recovered lowered-switch
     /// cascade whose synthesized BRANCHIND cannot be given the switch value as
     /// its selector, so the compiler's `if`/`else if` chain over the real
     /// variable survives instead of a `switch` over something else
@@ -1750,9 +1750,9 @@ crate::kuna_flag!(
     shipped: false
 );
 
-impl crate::optionset::KunaOption for LoweredSwitchMode {
+impl crate::optionset::UnlaceOption for LoweredSwitchMode {
     const NAME: &'static str = "loweredswitch";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         LoweredSwitchMode::Off
@@ -1762,7 +1762,7 @@ impl crate::optionset::KunaOption for LoweredSwitchMode {
         LoweredSwitchMode::On
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionLowerSwitch.apply(value)
     }
 }

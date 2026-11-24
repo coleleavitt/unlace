@@ -1,4 +1,4 @@
-//! (kuna) The printer an `Architecture` owns, as the core sees it.
+//! (unlace) The printer an `Architecture` owns, as the core sees it.
 //!
 //! `Architecture` holds its output-language printer as a [`PrintHandle`]: the core reads the
 //! output language and the printer's name, resets its context and forwards the print options
@@ -7,7 +7,7 @@
 //! `printc::ArchPrintExt`). A fresh printer comes from the `printer_new` and `printer_default`
 //! pass hooks.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 
 /// The printer operations the core drives.
@@ -29,15 +29,15 @@ pub trait PrintHandle: std::any::Any {
     fn set_convention_printing(&mut self, val: bool);
     fn set_no_cast_printing(&mut self, val: bool);
     fn set_hide_implied_exts(&mut self, val: bool);
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()>;
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()>;
     fn set_indent_increment(&mut self, val: int4);
-    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()>;
+    fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()>;
     fn set_comment_style(&mut self, style: &str);
     fn header_comment_flags(&self) -> uint4;
     fn set_header_comment_flags(&mut self, flags: uint4);
     fn instruction_comment_flags(&self) -> uint4;
     fn set_instruction_comment_flags(&mut self, flags: uint4);
-    fn set_integer_format(&mut self, fmt: &str) -> KunaResult<()>;
+    fn set_integer_format(&mut self, fmt: &str) -> UnlaceResult<()>;
     fn set_namespace_strategy(&mut self, strategy: crate::options::NamespaceStrategy);
     fn set_brace_format(
         &mut self,

@@ -1,5 +1,5 @@
-//! (kuna `msvcstackguard`) Strip the MSVC `/GS` frame-cookie boilerplate — the
-//! sibling of [`kuna_stackguard`](crate::stackguard) for the Windows shape.
+//! (unlace `msvcstackguard`) Strip the MSVC `/GS` frame-cookie boilerplate — the
+//! sibling of [`unlace_stackguard`](crate::stackguard) for the Windows shape.
 //!
 //! # Why the glibc matcher cannot see this
 //!
@@ -489,7 +489,7 @@ fn mark_kept_checkers(data: &mut Funcdata, calls: &[(OpId, Vec<OpId>)]) {
     }
 }
 
-/// (kuna) Strip the MSVC `/GS` frame-cookie check and its entry-side init
+/// (unlace) Strip the MSVC `/GS` frame-cookie check and its entry-side init
 /// (option `msvcstackguard`, default off).
 pub struct ActionStripMsvcStackGuard {
     base: ActionBase,
@@ -529,7 +529,7 @@ impl Action for ActionStripMsvcStackGuard {
         let strip = self.enabled
             || data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::msvcstackguard::StripMsvcStackGuard>()
                 .0;
         if data.num_calls() == 0 {
@@ -589,8 +589,8 @@ impl Action for ActionStripMsvcStackGuard {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Strip the MSVC `/GS` frame-cookie boilerplate -- the entry-side
+crate::unlace_flag!(
+    /// (unlace) Strip the MSVC `/GS` frame-cookie boilerplate -- the entry-side
     /// `cookie ^ SP` scramble and the epilogue `__security_check_cookie((cookie
     /// ^ SP) ^ SP)` call (option `msvcstackguard`, default-off).  The sibling of
     /// `strip_stack_guard` for the Windows shape, which has no CBRANCH to match.

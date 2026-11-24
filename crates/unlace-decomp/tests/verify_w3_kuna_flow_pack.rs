@@ -1,7 +1,7 @@
-//! Verifier adversarial tests for item `w3-kuna-flow-pack`.
+//! Verifier adversarial tests for item `w3-unlace-flow-pack`.
 //!
 //! Independent re-derivation tests targeting the hunt-list spots flagged as
-//! most fragile for the five S2/S5 kuna flow hooks:
+//! most fragile for the five S2/S5 unlace flow hooks:
 //!   - SPARC struct-ret trap: the `(uint4)idvn->getOffset()` *width truncation*
 //!     of the user-op id, and the positional backward dead-list walk through
 //!     *multiple* CALLOTHERs (iteration order / first-match semantics), plus the
@@ -26,9 +26,9 @@ use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::op::pcodeop_flags;
 
-use unlace_decomp::inferfuncentry::kuna_is_function_entry;
-use unlace_decomp::sparcstructret::kuna_sparc_struct_ret_trap_producer;
-use unlace_decomp::v850indbranch::kuna_is_v850_indirect_jmp;
+use unlace_decomp::inferfuncentry::unlace_is_function_entry;
+use unlace_decomp::sparcstructret::unlace_sparc_struct_ret_trap_producer;
+use unlace_decomp::v850indbranch::unlace_is_v850_indirect_jmp;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
@@ -121,7 +121,7 @@ fn flowpack_sparc_userop_id_truncates_high_bits_and_matches() {
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
     // (uint4)0x1_0000_0007 == 7 -> resolver(7) == IllegalInstructionTrap.
     assert!(
-        kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some(),
+        unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some(),
         "low-32-bits-7 user-op id must truncate to 7 and match the trap"
     );
 }
@@ -135,7 +135,7 @@ fn flowpack_sparc_userop_id_high_bits_only_does_not_alias_into_trap() {
     let callother = make_op(&mut fd, OpCode::CPUI_CALLOTHER, 0x1000, 1, true);
     set_const_input(&mut fd, callother, 0, 0x1_0000_0000u64);
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
-    assert!(!kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
+    assert!(!unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ fn flowpack_sparc_walk_passes_nontrap_callother_to_reach_trap() {
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
     // Walk: BRANCHIND -> other(id9, no match, keep going) -> trap(id7, match).
     assert!(
-        kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some(),
+        unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some(),
         "the walk must pass a non-matching CALLOTHER and still reach the trap"
     );
 }
@@ -172,7 +172,7 @@ fn flowpack_sparc_nearest_trap_matches_before_instruction_start() {
     let near_trap = make_op(&mut fd, OpCode::CPUI_CALLOTHER, 0x1000, 1, false);
     set_const_input(&mut fd, near_trap, 0, 7);
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
-    assert!(kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
+    assert!(unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ fn flowpack_sparc_lone_branchind_at_deadlist_head_no_panic_false() {
     // A single BRANCHIND, instruction-start, dead-list head, no CALLOTHER.
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, true);
     set_const_input(&mut fd, branchind, 0, 0x40);
-    assert!(!kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
+    assert!(!unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn flowpack_sparc_walk_to_deadlist_head_non_start_terminates() {
     set_const_input(&mut fd, first, 0, 1);
     let branchind = make_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x1000, 1, false);
     set_const_input(&mut fd, branchind, 0, 1);
-    assert!(!kuna_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
+    assert!(!unlace_sparc_struct_ret_trap_producer(&fd, branchind, true, resolver).is_some());
 }
 
 // ---------------------------------------------------------------------------
@@ -225,12 +225,12 @@ fn flowpack_v850_only_exact_pc_spellings_excluded() {
     fd.obank_mut().get_mut(op).unwrap().set_input(Some(vn), 0);
 
     // "PC" and "pc" excluded ...
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("PC")));
-    assert!(!kuna_is_v850_indirect_jmp(&fd, op, true, Some("pc")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("PC")));
+    assert!(!unlace_is_v850_indirect_jmp(&fd, op, true, Some("pc")));
     // ... but "Pc" / "pC" / a normal reg are NOT excluded (exact-string match).
-    assert!(kuna_is_v850_indirect_jmp(&fd, op, true, Some("Pc")));
-    assert!(kuna_is_v850_indirect_jmp(&fd, op, true, Some("pC")));
-    assert!(kuna_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
+    assert!(unlace_is_v850_indirect_jmp(&fd, op, true, Some("Pc")));
+    assert!(unlace_is_v850_indirect_jmp(&fd, op, true, Some("pC")));
+    assert!(unlace_is_v850_indirect_jmp(&fd, op, true, Some("r10")));
 }
 
 // ---------------------------------------------------------------------------
@@ -274,11 +274,11 @@ fn flowpack_inferfuncentry_cross_space_same_offset_not_equal() {
     let rampoint = Address::new(Rc::clone(&ram), 0x10_0000);
     let entry_other_space = Address::new(Rc::clone(&rom), 0x10_0000); // same offset, other space
     // Different space -> Address::eq false -> no inference.
-    assert!(!kuna_is_function_entry(
+    assert!(!unlace_is_function_entry(
         Some(&rampoint),
         Some(&entry_other_space)
     ));
     // Same space, same offset -> inference fires.
     let entry_same = Address::new(Rc::clone(&ram), 0x10_0000);
-    assert!(kuna_is_function_entry(Some(&rampoint), Some(&entry_same)));
+    assert!(unlace_is_function_entry(Some(&rampoint), Some(&entry_same)));
 }

@@ -1,9 +1,9 @@
-//! (kuna) A run of unused argument registers must not veto a LATER register
+//! (unlace) A run of unused argument registers must not veto a LATER register
 //! the function's own body reads before it writes.
 //!
 //! # The symptom
 //!
-//! A Wayland `wl_keyboard_listener` key handler, decompiled by kuna, reads two
+//! A Wayland `wl_keyboard_listener` key handler, decompiled by unlace, reads two
 //! values it never defines:
 //!
 //! ```text
@@ -24,7 +24,7 @@
 //! callback's ABI signature
 //! `key(void *data, struct wl_keyboard *, uint32_t serial, uint32_t time,
 //! uint32_t key, uint32_t state)` — `r8d` is `key`, `r9d` is `state`. An agent
-//! reading kuna's output cannot tell that, and the C does not recompile.
+//! reading unlace's output cannot tell that, and the C does not recompile.
 //!
 //! # Why the incoming registers are dropped
 //!
@@ -127,7 +127,7 @@ use unlace_base::marshal::ElementId;
 
 use crate::fspec::{ParamActive, ParamEntry, ParamTrial};
 
-/// Marshaling element `<inputparamgap>` (kuna 4000+ range; 4140 was the previous
+/// Marshaling element `<inputparamgap>` (unlace 4000+ range; 4140 was the previous
 /// high-water mark).
 pub const ELEM_INPUTPARAMGAP: ElementId = ElementId::new("inputparamgap", 4141);
 
@@ -154,7 +154,7 @@ pub fn trial_is_protected(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.inputparamgap_trial_is_protected = Some(trial_is_protected);
 }
 

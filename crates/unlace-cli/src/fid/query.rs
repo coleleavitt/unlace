@@ -1,4 +1,4 @@
-//! Read-only candidate lookup against a user-supplied kuna FID database.
+//! Read-only candidate lookup against a user-supplied unlace FID database.
 use object::Object;
 use serde_json::json;
 use unlace_analysis::fid::db::{FidDatabase, FidDb};

@@ -1,4 +1,4 @@
-//! (kuna) The `sourcelang` option: the source-language image fact and its
+//! (unlace) The `sourcelang` option: the source-language image fact and its
 //! per-run override.
 //!
 //! ## The fact
@@ -107,7 +107,7 @@ pub fn forced_from_env() -> Option<SourceLang> {
     crate::loadoptions::env::sourcelang()
 }
 
-/// Export a `set_kuna_option("sourcelang", val)` choice to [`SOURCELANG_ENV`]
+/// Export a `set_unlace_option("sourcelang", val)` choice to [`SOURCELANG_ENV`]
 /// so a later `load file` in the same process sees it (`auto` clears it).
 pub fn set_sourcelang_env(forced: Option<SourceLang>) {
     match forced {
@@ -130,13 +130,13 @@ pub fn parse_option_value(value: &str) -> Result<Option<SourceLang>, String> {
     })
 }
 
-/// (kuna `sourcelang`) The language a run forces; `None` follows detection (`auto`).
+/// (unlace `sourcelang`) The language a run forces; `None` follows detection (`auto`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SourceLangForced(pub Option<SourceLang>);
 
-impl crate::optionset::KunaOption for SourceLangForced {
+impl crate::optionset::UnlaceOption for SourceLangForced {
     const NAME: &'static str = "sourcelang";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SourceLangForced(None)
@@ -146,8 +146,8 @@ impl crate::optionset::KunaOption for SourceLangForced {
         SourceLangForced(None)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let forced = parse_option_value(value).map_err(unlace_base::error::KunaError::parse)?;
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        let forced = parse_option_value(value).map_err(unlace_base::error::UnlaceError::parse)?;
         let msg = match forced {
             Some(lang) => format!("Source language forced to {}", lang.as_str()),
             None => "Source language follows detection (auto)".to_string(),

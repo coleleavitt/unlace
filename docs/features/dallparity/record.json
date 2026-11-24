@@ -10,8 +10,8 @@
  "flag": null,
  "element_id": null,
  "change_kind": "correctness-fix (surface parity) + mode-preset change (`formatstring` leaves AGGRESSIVE_OVERRIDES on the speed gate)",
- "tier": "driver (kuna-console)",
- "module": "decompiler/crates/kuna-console/src/decompile_step.rs (new), decompiler/crates/kuna-console/src/ifacedecomp.rs (IfcDecompile), decompiler/crates/kuna-console/src/project.rs (decompile_targets), decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs (AGGRESSIVE_OVERRIDES / EXCLUDED_ON_PURPOSE)",
+ "tier": "driver (console)",
+ "module": "decompiler/crates/console/src/decompile_step.rs (new), decompiler/crates/console/src/ifacedecomp.rs (IfcDecompile), decompiler/crates/console/src/project.rs (decompile_targets), decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs (AGGRESSIVE_OVERRIDES / EXCLUDED_ON_PURPOSE)",
  "phase": "driver seam (P0 knowledge / per-function policy)",
  "spec_chapter": "docs/spec/00-overview.md (+ docs/spec/01-program-prep.md 1.4)",
  "div": "DIV-66",
@@ -110,11 +110,11 @@
  },
  "baseline_repin": false,
  "stage_test": null,
- "stage_test_note": "structurally impossible: every tests/datatests and tests/stages file is an XML <binaryimage> whose bootstrap never produces an AnalysisOutput, so an analysis-tier option (formatstring) cannot be reached from there at all. Gated instead by kuna-console/tests/verify_decompile_all_parity.rs.",
+ "stage_test_note": "structurally impossible: every tests/datatests and tests/stages file is an XML <binaryimage> whose bootstrap never produces an AnalysisOutput, so an analysis-tier option (formatstring) cannot be reached from there at all. Gated instead by console/tests/verify_decompile_all_parity.rs.",
  "tests_added": [
-  "kuna-console/tests/verify_decompile_all_parity.rs::whole_binary_leaves_varargs_untyped_with_formatstring_off",
-  "kuna-console/tests/verify_decompile_all_parity.rs::whole_binary_types_varargs_with_formatstring_on",
-  "kuna-console/tests/verify_decompile_all_parity.rs::whole_binary_matches_console_in_both_option_states"
+  "console/tests/verify_decompile_all_parity.rs::whole_binary_leaves_varargs_untyped_with_formatstring_off",
+  "console/tests/verify_decompile_all_parity.rs::whole_binary_types_varargs_with_formatstring_on",
+  "console/tests/verify_decompile_all_parity.rs::whole_binary_matches_console_in_both_option_states"
  ],
  "sweep": {
   "surface": "kuna decompile-all --json --no-vars, `--option formatstring off` (= the pre-fix behaviour) vs the shipped default, both from this build",

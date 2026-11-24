@@ -1,4 +1,4 @@
-//! (kuna `condcallpush`) A call instruction's own return-address push is not a statement when
+//! (unlace `condcallpush`) A call instruction's own return-address push is not a statement when
 //! `BlockBasic::isComplex` sizes a condition block.
 //!
 //! On x86 a `CALL` instruction lifts to a stack-pointer adjust, a `STORE` of the return address
@@ -16,8 +16,8 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `condcallpush`) Skip a call's own return-address `STORE` when
+crate::unlace_flag!(
+    /// (unlace `condcallpush`) Skip a call's own return-address `STORE` when
     /// `BlockBasic::isComplex` counts a block whose branch tests the call's result.
     CondCallPush,
     "condcallpush",

@@ -1,4 +1,4 @@
-// Tests for `kuna_msvcstackguard` (included into `mod tests` in
+// Tests for `unlace_msvcstackguard` (included into `mod tests` in
 // msvcstackguard.rs).
 //
 // Covered:
@@ -90,7 +90,7 @@ fn build_fd_with_option(on: bool) -> Funcdata {
         .add_spacebase_pointer(&stackspc, &sp_data, SP_SIZE, true)
         .unwrap();
     let mut ctx = ArchContext::new(manage);
-    ctx.kuna_options
+    ctx.unlace_options
         .set(crate::msvcstackguard::StripMsvcStackGuard(on));
     let glb = Rc::new(ctx);
     let code = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

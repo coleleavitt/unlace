@@ -19,12 +19,12 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
     }
     let full = fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::heritage::StackAliasDeadstore>()
         .0
         || fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::StackViews>()
             .0;
     if !full
@@ -58,12 +58,12 @@ pub fn holds_store(fd: &Funcdata, id: VarnodeId) -> bool {
 pub fn prepare(fd: &mut Funcdata) -> i32 {
     let full = fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::heritage::StackAliasDeadstore>()
         .0
         || fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::StackViews>()
             .0;
     if !full
@@ -267,7 +267,7 @@ fn unobserved_bytes(
     Some(wanted)
 }
 
-/// (kuna GH-8500) Toggle preservation of a store-through-a-stack-pointer-alias
+/// (unlace GH-8500) Toggle preservation of a store-through-a-stack-pointer-alias
 /// across the deadcode race (C++ `OptionStackAlias`).
 ///
 /// Off by default because the conservative policy retains dead frame writes.
@@ -287,7 +287,7 @@ impl Default for StackAliasOption {
 }
 
 impl StackAliasOption {
-    /// (kuna) Set the gate (C++ `OptionStackAlias::apply`).
+    /// (unlace) Set the gate (C++ `OptionStackAlias::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {

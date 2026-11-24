@@ -24,7 +24,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 
 use unlace_decomp::architecture::Architecture;
@@ -40,8 +40,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -97,7 +97,7 @@ fn name_function_oracle(addr_size: u32, wordsize: u32, offset: u64) -> String {
 
 fn name_via_port(space: Rc<AddrSpace>, offset: u64) -> String {
     let mut arch = Architecture::new("t", bare_sleigh());
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::NameStyleAngr(false));
     arch.name_function(&Address::new(space, offset))
 }

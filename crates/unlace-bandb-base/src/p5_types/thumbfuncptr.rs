@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_thumbfuncptr.{cc,hh}` — Thumb function-pointer
-//! preservation (kuna GH-8471, S5 const-pointer).
+//! preservation (unlace GH-8471, S5 const-pointer).
 //!
 //! A pointer to a Thumb function carries the mode bit in its LSB
 //! (`value = fn|1`).  `ActionConstantPtr` recovers `PTRSUB(fn) + 1`, but
@@ -11,8 +11,8 @@
 //!
 //! ## What this module ports
 //!
-//! [`kuna_preserve_thumb_funcptr`] is a faithful free-function transcription of
-//! the C++ `kunaPreserveThumbFuncPtr(Varnode*, PcodeOp*, int8 val, int8 extra,
+//! [`unlace_preserve_thumb_funcptr`] is a faithful free-function transcription of
+//! the C++ `unlacePreserveThumbFuncPtr(Varnode*, PcodeOp*, int8 val, int8 extra,
 //! int8 multiplier, Architecture*)` predicate.  The `RulePtrsubUndo` integration
 //! (preserving the PTRSUB when this returns `true`) is W5 (`ruleaction`); this
 //! module owns only the *decision*.
@@ -33,7 +33,7 @@ use unlace_base::types::int8;
 use crate::dtype::type_metatype;
 
 /// Resolved W6 type-system facts about `basevn->getTypeReadFacing(op)` for
-/// [`kuna_preserve_thumb_funcptr`].
+/// [`unlace_preserve_thumb_funcptr`].
 ///
 /// STUB(W6): the C++ predicate reaches the `Datatype`/`TypePointer` subsystem
 /// (`type.{hh,cc}`).  The W3 `Datatype` skeleton has no `TypePointer`,
@@ -70,15 +70,15 @@ pub struct ThumbSubTypeFact {
     pub residual_offset: int8,
 }
 
-/// (kuna) Should `RulePtrsubUndo` preserve this PTRSUB as a mode-bit-encoded
-/// function pointer? (C++ `kunaPreserveThumbFuncPtr`, GH-8471).
+/// (unlace) Should `RulePtrsubUndo` preserve this PTRSUB as a mode-bit-encoded
+/// function pointer? (C++ `unlacePreserveThumbFuncPtr`, GH-8471).
 ///
 /// C++ `kuna_thumbfuncptr.cc:12-36`.
 ///
 /// `funcptr_align` is `glb->funcptr_align`.  `facts` carries the resolved W6 type-system queries (see [`ThumbPtrTypeFacts`]).
 /// `val`, `extra`, `multiplier` are the PTRSUB constant decomposition exactly
 /// as the C++ takes them.
-pub fn kuna_preserve_thumb_funcptr(
+pub fn unlace_preserve_thumb_funcptr(
     funcptr_align: i32,
     val: int8,
     extra: int8,

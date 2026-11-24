@@ -33,7 +33,7 @@ probe's own `__stubs` entry) is left alone. See `docs/spec/02-lift-and-flow.md`,
 
 ## Evidence
 
-`tests/stages/kuna-chkstkdarwin.toml` over `chkstkdarwin_macho_arm64` has 8
+`tests/stages/chkstkdarwin.toml` over `chkstkdarwin_macho_arm64` has 8
 assertions. Main does not know the option, so the test errors there; with the
 option line removed main passes 1 of 8 (the `__stubs` entry check). The branch
 passes 8 of 8. The datatest corpus is unchanged (675/675).

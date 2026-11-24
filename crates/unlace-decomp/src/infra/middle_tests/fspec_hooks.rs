@@ -10,9 +10,9 @@ mod module_scope {
         Datatype, TypeFactory, metatype2typeclass, type_class, type_metatype,
     };
     pub(super) use crate::funcdata::Funcdata;
-    pub(super) use crate::restartlog::{KunaRestartReason, RestartLog};
+    pub(super) use crate::restartlog::{RestartLog, UnlaceRestartReason};
     pub(super) use unlace_base::address::{Address, RangeList};
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::{
         AddrSpace, AddrSpaceManager, JoinRecord, VarnodeStorage, spacetype,
     };
@@ -28,7 +28,7 @@ use crate::restartlog::RestartLog;
 use crate::varnode::DefOpInfo;
 use module_scope::*;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -218,28 +218,28 @@ impl TypeFactory for PanicTypeFactory {
     fn get_size_of_alt_pointer(&self) -> int4 {
         unreached!()
     }
-    fn get_alignment(&self, _size: u32) -> KunaResult<int4> {
+    fn get_alignment(&self, _size: u32) -> UnlaceResult<int4> {
         unreached!()
     }
-    fn get_primitive_align_size(&self, _size: u32) -> KunaResult<int4> {
+    fn get_primitive_align_size(&self, _size: u32) -> UnlaceResult<int4> {
         unreached!()
     }
-    fn get_type_void(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_void(&self) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base_no_char(&self, _s: int4, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base_no_char(&self, _s: int4, _m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base(&self, _s: int4, _m: type_metatype) -> KunaResult<Rc<Datatype>> {
+    fn get_base(&self, _s: int4, _m: type_metatype) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_base_named(&self, _s: int4, _m: type_metatype, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_base_named(&self, _s: int4, _m: type_metatype, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_char(&self, _s: int4) -> KunaResult<Rc<Datatype>> {
+    fn get_type_char(&self, _s: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_code(&self) -> KunaResult<Rc<Datatype>> {
+    fn get_type_code(&self) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_strip_array(
@@ -247,10 +247,15 @@ impl TypeFactory for PanicTypeFactory {
         _s: int4,
         _pt: Rc<Datatype>,
         _ws: u32,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_pointer(&self, _s: int4, _pt: Rc<Datatype>, _ws: u32) -> KunaResult<Rc<Datatype>> {
+    fn get_type_pointer(
+        &self,
+        _s: int4,
+        _pt: Rc<Datatype>,
+        _ws: u32,
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_named(
@@ -259,10 +264,10 @@ impl TypeFactory for PanicTypeFactory {
         _pt: Rc<Datatype>,
         _ws: u32,
         _n: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn resize_pointer(&self, _ptr: Rc<Datatype>, _new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_pointer(&self, _ptr: Rc<Datatype>, _new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_rel(
@@ -270,7 +275,7 @@ impl TypeFactory for PanicTypeFactory {
         _parent_ptr: Rc<Datatype>,
         _ptr_to: Rc<Datatype>,
         _off: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_rel_full(
@@ -281,7 +286,7 @@ impl TypeFactory for PanicTypeFactory {
         _ws: int4,
         _off: int4,
         _nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_pointer_with_space(
@@ -289,13 +294,13 @@ impl TypeFactory for PanicTypeFactory {
         _ptr_to: Rc<Datatype>,
         _spc: Rc<AddrSpace>,
         _nm: &str,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_array(&self, _as_: int4, _ao: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn get_type_array(&self, _as_: int4, _ao: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_struct(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_struct(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_struct(
@@ -303,10 +308,10 @@ impl TypeFactory for PanicTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_union(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_union(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_union(
@@ -314,7 +319,7 @@ impl TypeFactory for PanicTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_type_partial_enum(
@@ -322,16 +327,20 @@ impl TypeFactory for PanicTypeFactory {
         _contain: Rc<Datatype>,
         _off: int4,
         _sz: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_enum(&self, _n: &str) -> KunaResult<Rc<Datatype>> {
+    fn get_type_enum(&self, _n: &str) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn get_type_spacebase(&self, _id: Rc<AddrSpace>, _addr: &Address) -> KunaResult<Rc<Datatype>> {
+    fn get_type_spacebase(
+        &self,
+        _id: Rc<AddrSpace>,
+        _addr: &Address,
+    ) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
-    fn resize_integer(&self, _ct: Rc<Datatype>, _new_size: int4) -> KunaResult<Rc<Datatype>> {
+    fn resize_integer(&self, _ct: Rc<Datatype>, _new_size: int4) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
     fn get_exact_piece(
@@ -339,13 +348,13 @@ impl TypeFactory for PanicTypeFactory {
         _ct: Rc<Datatype>,
         _offset: int4,
         _size: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         unreached!()
     }
-    fn find_by_name(&self, _n: &str) -> KunaResult<Option<Rc<Datatype>>> {
+    fn find_by_name(&self, _n: &str) -> UnlaceResult<Option<Rc<Datatype>>> {
         unreached!()
     }
-    fn concretize(&self, _ct: Rc<Datatype>) -> KunaResult<Rc<Datatype>> {
+    fn concretize(&self, _ct: Rc<Datatype>) -> UnlaceResult<Rc<Datatype>> {
         unreached!()
     }
 }
@@ -514,7 +523,7 @@ fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: in
         let mut noop = |_b: &mut crate::varnode::VarnodeBank,
                         _o: VarnodeId,
                         _n: VarnodeId|
-         -> KunaResult<()> { panic!("collision") };
+         -> UnlaceResult<()> { panic!("collision") };
         fd.vbank_mut()
             .create_def(
                 size,
@@ -743,7 +752,7 @@ fn assign_map_standard_input_walk() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -775,7 +784,7 @@ fn assign_map_standard_out_hidden_return_emits_indirect_output_plus_pointer_para
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -850,7 +859,7 @@ fn proto_model_assign_parameter_storage_orders_output_first() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model
@@ -1069,7 +1078,7 @@ fn modelrule_gotostack_routes_oversized_float_to_aligned_stack_footprint() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -1104,7 +1113,7 @@ fn modelrule_precedes_metatype_fallback() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -1148,7 +1157,7 @@ fn no_modelrule_falls_through_to_metatype_fallback() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -1231,7 +1240,7 @@ fn w10_float_typeclass_failing_rule_does_not_short_circuit_chain() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();
@@ -1270,7 +1279,7 @@ fn w10_float_typeclass_pointermax_rule_appends_after_existing_rules() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let mut res: Vec<ParameterPieces> = Vec::new();
     model.assign_map(&proto, &tf, &mut res, &mgr).unwrap();

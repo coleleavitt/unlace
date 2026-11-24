@@ -1,4 +1,4 @@
-//! (kuna) The type-spelling seam: how a recovered [`Datatype`] is *named* in the
+//! (unlace) The type-spelling seam: how a recovered [`Datatype`] is *named* in the
 //! output language.
 //!
 //! # Recovery is language-independent; only spelling is not
@@ -39,25 +39,25 @@ use crate::dtype::Datatype;
 use crate::lang::OutLang;
 
 /// The per-document type-rendering context (C++ has no analogue: the `realtypes`
-/// and `ctypes` gates are kuna divergences).
+/// and `ctypes` gates are unlace divergences).
 ///
 #[derive(Clone)]
 pub struct SpellCtx {
     /// The output language, which selects the [`TypeSpeller`].
     pub lang: OutLang,
-    /// (kuna `realtypes`) Relabel residual `TYPE_UNKNOWN` bases as real types.
+    /// (unlace `realtypes`) Relabel residual `TYPE_UNKNOWN` bases as real types.
     pub enabled: bool,
     /// The data-model fact that `long` is 8 bytes, so an 8-byte unknown reads
     /// `unsigned long` on LP64 and `unsigned long long` on LLP64.
     pub long_is_8: bool,
-    /// (kuna `ctypes`) Spell the NAMED core types (`int4`/`uint1`/`float8`/`code`)
+    /// (unlace `ctypes`) Spell the NAMED core types (`int4`/`uint1`/`float8`/`code`)
     /// as the target's own type names too, not just the residual unknowns.
     pub ctypes: bool,
-    /// (kuna `ctypes`) The target's declared C scalar widths, which is what makes
+    /// (unlace `ctypes`) The target's declared C scalar widths, which is what makes
     /// the spelling per-architecture rather than a guess.
     pub model: crate::ctypes::CDataModel,
     pub c_type_definition: bool,
-    /// (kuna `cppshortnames`) Print standard C++ type names short.
+    /// (unlace `cppshortnames`) Print standard C++ type names short.
     pub cpp_short_names: bool,
     pub go_package: Option<Rc<str>>,
     pub go_pair_types: Option<Rc<crate::dtype::TypeFactoryImpl>>,

@@ -1,4 +1,4 @@
-//! (kuna) The libgcc soft-float and machine-mode integer routines, typed by
+//! (unlace) The libgcc soft-float and machine-mode integer routines, typed by
 //! their machine modes, on every target but 32-bit ARM.
 //!
 //! A soft-float or 32-bit target calls libgcc for what it has no instruction
@@ -14,7 +14,7 @@
 //! typed `float`, a declaration would be laid out under the default model's
 //! floating-point registers (`$f12` on MIPS, `fa0` on RISC-V `ilp32d`), which
 //! a soft-float caller never sets. A comparison returns libgcc's `CMPtype`,
-//! the word. 32-bit ARM types the same routines through `kuna_aeabisigs`'s
+//! the word. 32-bit ARM types the same routines through `unlace_aeabisigs`'s
 //! RTABI names and folds them under `aeabifloat`.
 //!
 //! A routine with an eight-byte value is seeded only where the default model
@@ -23,7 +23,7 @@
 //! spec passes a `long long` on the stack and returns it through a hidden
 //! pointer, which no caller sets up. One with an eight-byte RESULT is also
 //! seeded by this pass only on a little-endian target; on a big-endian one
-//! `kuna_libgcc`'s pass seeds it, under `libgccsigs`, since a locked
+//! `unlace_libgcc`'s pass seeds it, under `libgccsigs`, since a locked
 //! eight-byte result on a big-endian register pair still costs a caller that
 //! returns arithmetic on it a word.
 
@@ -633,7 +633,7 @@ impl AnalysisPass for SoftFpSigsPass {
 
 /// The routines with an eight-byte result on a big-endian target other than
 /// 32-bit ARM whose default model fits them ([`wide_values_fit`]); seeded by
-/// `kuna_libgcc`'s pass, whose commit `libgccsigs` gates.
+/// `unlace_libgcc`'s pass, whose commit `libgccsigs` gates.
 pub(super) fn seed_big_endian_wide(ctx: &AnalysisCtx, out: &mut AnalysisOutput) {
     if ctx.file.architecture() == Architecture::Arm || ctx.file.is_little_endian() {
         return;

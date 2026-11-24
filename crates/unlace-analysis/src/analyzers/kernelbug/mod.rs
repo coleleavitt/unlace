@@ -1,4 +1,4 @@
-//! (kuna `kernelbug`) Read a Linux kernel image's `__bug_table`: one
+//! (unlace `kernelbug`) Read a Linux kernel image's `__bug_table`: one
 //! [`KernelBugSite`] per `struct bug_entry`, so the flow renders each `WARN`/`BUG`
 //! trap as the statement it is (`unlace_decomp::kernelbug`). Inert on every
 //! image without that section.
@@ -31,7 +31,7 @@
 //!   is an executable section are the `bug_addr` fields; their spacing is the
 //!   entry size, and the other relocations inside one entry are its pointer
 //!   fields. The analyzer tier sees the module in the loaded image's address
-//!   space (`kuna_relocrebase`), so the field values read back already applied.
+//!   space (`unlace_relocrebase`), so the field values read back already applied.
 //! * **A linked image (`vmlinux`)** is probed even when it keeps its
 //!   relocations (an x86-64 `vmlinux` links with `--emit-relocs`, whose offsets
 //!   are addresses, not section offsets). Each candidate entry

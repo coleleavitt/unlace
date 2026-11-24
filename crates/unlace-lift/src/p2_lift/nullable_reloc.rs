@@ -55,7 +55,7 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
             {
                 continue;
             }
-            let record = relocations(&data.get_arch().kuna_states)
+            let record = relocations(&data.get_arch().unlace_states)
                 .get(&vn.get_offset())
                 .and_then(|records| {
                     records.iter().find(|r| {
@@ -93,7 +93,7 @@ pub fn materialize(data: &mut Funcdata, address: &Address, step: i32, ops: &[OpI
         }
     }
     let end = address.get_offset().saturating_add(step as u64);
-    let records: Vec<_> = relocations(&data.get_arch().kuna_states)
+    let records: Vec<_> = relocations(&data.get_arch().unlace_states)
         .range(address.get_offset()..end)
         .flat_map(|(_, refs)| refs.iter().cloned())
         .collect();
@@ -349,7 +349,7 @@ fn emit(
 /// The image's nullable relocations, by field address; an
 /// [`ArchState`](crate::archstate::ArchState) shared with every function's context.
 pub type Relocations = std::collections::BTreeMap<u64, Vec<NullableRelocation>>;
-crate::kuna_arch_state!(Relocations);
+crate::unlace_arch_state!(Relocations);
 
 /// The image's nullable relocations; empty before the loader commits them.
 pub fn relocations(states: &crate::archstate::ArchStates) -> std::rc::Rc<Relocations> {

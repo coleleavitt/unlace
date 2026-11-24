@@ -32,7 +32,7 @@ use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 
 /// `"Password: "` — formed by the function that runs the base idiom itself.
 const PROMPT: u64 = 0x804a000;
-/// `"kuna picbase fixture"` — formed by a function that only inherits the base.
+/// `"unlace picbase fixture"` — formed by a function that only inherits the base.
 const BANNER: u64 = 0x804a00b;
 /// `"picbase must not claim this"` — formed off a register holding 0x11111111.
 const SECRET: u64 = 0x804a020;

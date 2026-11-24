@@ -1,9 +1,9 @@
-//! (kuna `libctypes`) The stdio stream slots — `stdin`, `stdout`, `stderr` — as
+//! (unlace `libctypes`) The stdio stream slots — `stdin`, `stdout`, `stderr` — as
 //! typed `FILE *` data symbols.
 //!
 //! The rest of this table types a stream where a CALL says what it is. That
 //! leaves the streams themselves untyped storage: the dynamic linker's `stdout`
-//! is a `FILE *` in every image that imports it, and kuna learned that only
+//! is a `FILE *` in every image that imports it, and unlace learned that only
 //! where the same function also called something like `__overflow(FILE *, int)`.
 //! A function that merely hands `stdout` to one of the image's own helpers
 //! learned nothing, and the two renderings of the same global disagreed inside
@@ -45,7 +45,7 @@
 //! declined outright, and so is a `COPY` slot whose declared size is not the
 //! image's pointer width.
 //!
-//! `stdout_ptr` is kuna's own coinage, so it gets the same treatment one step
+//! `stdout_ptr` is unlace's own coinage, so it gets the same treatment one step
 //! further out: the `GLOB_DAT` arm declines when either symbol table already
 //! spells the name it would mint. An image with its own `stdout_ptr` global
 //! would otherwise print two different addresses as one identifier. `.symtab`
@@ -74,7 +74,7 @@ use crate::pass::TypedDataFact;
 /// The three stream names, in `.dynsym` spelling.
 pub(super) const STREAM_NAMES: [&str; 3] = ["stdin", "stdout", "stderr"];
 
-/// The `COPY` / `GLOB_DAT` `r_type` pair for `machine`, or `None` where kuna does
+/// The `COPY` / `GLOB_DAT` `r_type` pair for `machine`, or `None` where unlace does
 /// not know this architecture's dynamic relocation numbering. The same four
 /// architectures [`crate::loader::dynrelocs`] handles.
 fn copy_globdat(arch: object::Architecture) -> Option<(u32, u32)> {

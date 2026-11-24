@@ -1,4 +1,4 @@
-//! (kuna) The `rule_block_if_no_exit` decision surface: the shared per-block
+//! (unlace) The `rule_block_if_no_exit` decision surface: the shared per-block
 //! facts the rule's arm tie-break and the deferred scan need, plus the
 //! `UNLACE_RS_DEBUG` decision trace that measures them.
 //!
@@ -24,11 +24,11 @@ pub struct ExitLeafFacts {
     pub halt: BTreeMap<BlockId, uint4>,
     /// Start address offset of each block, for the trace only.
     pub addr: BTreeMap<BlockId, u64>,
-    /// (kuna `javatry`) The basic blocks a `java_try` dispatch enters.
+    /// (unlace `javatry`) The basic blocks a `java_try` dispatch enters.
     pub java_handlers: std::collections::BTreeSet<BlockId>,
-    /// (kuna `javatry`) The basic blocks that end in a dispatch.
+    /// (unlace `javatry`) The basic blocks that end in a dispatch.
     pub java_dispatch: std::collections::BTreeSet<BlockId>,
-    /// (kuna `noretfirst`) The blocks whose no-return halt follows a call: the
+    /// (unlace `noretfirst`) The blocks whose no-return halt follows a call: the
     /// call sits in the block itself, or the halt has a block of its own and
     /// every predecessor ends in a call.  A halt planted where a branch's
     /// fall-through reached the next function (`funcboundflow`) is not here.
@@ -98,7 +98,7 @@ impl OptionGuardArm {
     pub const NAME: &'static str = "guardarm";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, String)> {
         let val = crate::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -117,7 +117,7 @@ impl OptionLoopCondHoist {
     pub const NAME: &'static str = "loopcondhoist";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, String)> {
         let val = crate::options::on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("If-no-exit loop-head deferral turned {prop}")))
@@ -133,16 +133,16 @@ pub fn next_apply_index() -> u32 {
     N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// (kuna) Source-layout tie-break for `CollapseStructure::ruleBlockIfNoExit`'s
+/// (unlace) Source-layout tie-break for `CollapseStructure::ruleBlockIfNoExit`'s
 /// clause arm (option `guardarm`, default-off opt-in).  Only fires when BOTH
 /// arms are eligible clauses; the earlier-addressed arm becomes the `if`
 /// clause instead of out-index 0.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GuardArm(pub bool);
 
-impl crate::optionset::KunaOption for GuardArm {
+impl crate::optionset::UnlaceOption for GuardArm {
     const NAME: &'static str = "guardarm";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GuardArm(false)
@@ -152,22 +152,22 @@ impl crate::optionset::KunaOption for GuardArm {
         GuardArm(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::ifnoexit::OptionGuardArm.apply(value)?;
         Ok((GuardArm(v), msg))
     }
 }
 
-/// (kuna) Defer a live loop head in `CollapseStructure`'s deferred
+/// (unlace) Defer a live loop head in `CollapseStructure`'s deferred
 /// `ruleBlockIfNoExit` scan while a non-head candidate remains (option
 /// `loopcondhoist`, default-off opt-in), so `ruleBlockWhileDo` keeps the
 /// loop's head test instead of emitting `while(true) { if (!C) ...; }`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoopCondHoist(pub bool);
 
-impl crate::optionset::KunaOption for LoopCondHoist {
+impl crate::optionset::UnlaceOption for LoopCondHoist {
     const NAME: &'static str = "loopcondhoist";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         LoopCondHoist(false)
@@ -177,7 +177,7 @@ impl crate::optionset::KunaOption for LoopCondHoist {
         LoopCondHoist(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::ifnoexit::OptionLoopCondHoist.apply(value)?;
         Ok((LoopCondHoist(v), msg))
     }

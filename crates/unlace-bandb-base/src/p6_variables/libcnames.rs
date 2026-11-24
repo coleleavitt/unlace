@@ -1,4 +1,4 @@
-//! (kuna `libcnames`) Name locals from the library calls they meet.
+//! (unlace `libcnames`) Name locals from the library calls they meet.
 //!
 //! A prototype the analysis parks from a built-in library table carries the
 //! library's own names for its parameters and, where the result has a
@@ -189,7 +189,7 @@ pub fn local_of(fd: &mut Funcdata, vn: VarnodeId) -> Option<HighVariableId> {
     }
     let high = v.get_high()?;
     let h = fd.high_bank().get(high)?;
-    if h.kuna_global() || h.kuna_name().is_some() || h.get_num_merge_classes() > 1 {
+    if h.unlace_global() || h.unlace_name().is_some() || h.get_num_merge_classes() > 1 {
         return None;
     }
     let rep = fd.high_name_representative(high)?;
@@ -329,7 +329,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     let mut found: BTreeMap<Target, (HighVariableId, bool, Vec<Evidence>)> = BTreeMap::new();
     let shown = fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::libcnames::LibcNames>()
         .0;
     let mut note = |target: Target, high: HighVariableId, scalar: bool, e: Evidence| {
@@ -400,7 +400,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     let mut context: BTreeMap<HighVariableId, Vec<Evidence>> = BTreeMap::new();
     if fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::contextnames::ContextNames>()
         .0
     {
@@ -408,7 +408,7 @@ fn evidence(fd: &mut Funcdata) -> BTreeMap<Target, (HighVariableId, bool, Vec<Ev
     }
     if fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::flownames::FlowNames>()
         .0
     {
@@ -534,14 +534,14 @@ pub struct LibraryAlias {
 /// (a naming record is being taken or replayed).
 pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
     let arch = fd.get_arch();
-    if !arch.kuna_options.get::<crate::libcnames::LibcNames>().0
+    if !arch.unlace_options.get::<crate::libcnames::LibcNames>().0
         && !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::contextnames::ContextNames>()
             .0
-        && !arch.kuna_options.get::<crate::flownames::FlowNames>().0
-        && !fd.kuna_record_names()
-        && fd.kuna_prior_names().is_empty()
+        && !arch.unlace_options.get::<crate::flownames::FlowNames>().0
+        && !fd.unlace_record_names()
+        && fd.unlace_prior_names().is_empty()
     {
         return Vec::new();
     }
@@ -577,12 +577,12 @@ pub fn candidates(fd: &mut Funcdata) -> Vec<Candidate> {
 /// rename took or vacated, or another local printed, goes to no one else.
 pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
     let angr = fd.get_arch().name_style_angr;
-    let prior = fd.kuna_prior_names().clone();
+    let prior = fd.unlace_prior_names().clone();
     let replay = !prior.is_empty();
     let mut taken: BTreeSet<String> = fd
         .high_bank()
         .iter()
-        .filter_map(|(_, h)| h.kuna_name().map(str::to_string))
+        .filter_map(|(_, h)| h.unlace_name().map(str::to_string))
         .collect();
     for i in 0..fd.num_calls() {
         taken.insert(fd.get_call_specs(i).get_name().to_string());
@@ -607,7 +607,7 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
             Target::Local(high) => fd
                 .high_bank()
                 .get(high)
-                .and_then(|h| h.kuna_name())
+                .and_then(|h| h.unlace_name())
                 .map(str::to_string),
             Target::Object(sym) => fd
                 .get_scope_local()
@@ -654,15 +654,15 @@ pub fn apply(fd: &mut Funcdata, candidates: &[Candidate]) {
             let alias = fd
                 .high_bank()
                 .get(high)
-                .and_then(|h| h.kuna_name())
+                .and_then(|h| h.unlace_name())
                 .and_then(|n| rename.get(n))
                 .cloned();
             if let (Some(alias), Some(h)) = (alias, fd.high_bank_mut().get_mut(high)) {
-                h.set_kuna_name(alias);
+                h.set_unlace_name(alias);
             }
         }
     }
-    fd.set_kuna_library_aliases(out);
+    fd.set_unlace_library_aliases(out);
 }
 
 /// Did a directive or the binary choose `name`, though it is shaped like a
@@ -683,7 +683,7 @@ fn chosen(fd: &Funcdata, prior: &crate::stablenames::PriorNames, name: &str) -> 
 /// not the output shows the library name. `None` when no library name is
 /// `name`.
 pub fn number_for(fd: &Funcdata, name: &str) -> Option<String> {
-    fd.kuna_library_aliases()
+    fd.unlace_library_aliases()
         .iter()
         .find(|a| a.alias == name)
         .map(|a| a.number.clone())
@@ -692,14 +692,14 @@ pub fn number_for(fd: &Funcdata, name: &str) -> Option<String> {
 /// The number a local printed under its library name answers to; `None` for
 /// every other local.
 pub fn shown_number(fd: &Funcdata, high: HighVariableId) -> Option<&str> {
-    fd.kuna_library_aliases()
+    fd.unlace_library_aliases()
         .iter()
         .find(|a| a.high == high && a.shown)
         .map(|a| a.number.as_str())
 }
 
-crate::kuna_flag!(
-    /// (kuna `libcnames`) Name locals from the library calls they meet.
+crate::unlace_flag!(
+    /// (unlace `libcnames`) Name locals from the library calls they meet.
     /// See [`crate::libcnames`].
     LibcNames,
     "libcnames",
@@ -708,27 +708,27 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna `libcnames`) The library names the naming pass gave numbered locals, kept across
+/// (unlace `libcnames`) The library names the naming pass gave numbered locals, kept across
 /// `Funcdata::clear`.
 #[derive(Default)]
 struct AliasSlot(Vec<crate::libcnames::LibraryAlias>);
-crate::kuna_func_state!(AliasSlot, keep_across_clear: true);
+crate::unlace_func_state!(AliasSlot, keep_across_clear: true);
 
-/// The `kuna_libcnames` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_libcnames` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataLibcnamesExt {
-    /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    fn kuna_library_aliases(&self) -> &[crate::libcnames::LibraryAlias];
-    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>);
+    /// (unlace `libcnames`) The library names the naming pass gave numbered locals.
+    fn unlace_library_aliases(&self) -> &[crate::libcnames::LibraryAlias];
+    fn set_unlace_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>);
 }
 
 impl FuncdataLibcnamesExt for crate::funcdata::Funcdata {
-    /// (kuna `libcnames`) The library names the naming pass gave numbered locals.
-    fn kuna_library_aliases(&self) -> &[crate::libcnames::LibraryAlias] {
-        &self.kuna_state::<AliasSlot>().0
+    /// (unlace `libcnames`) The library names the naming pass gave numbered locals.
+    fn unlace_library_aliases(&self) -> &[crate::libcnames::LibraryAlias] {
+        &self.unlace_state::<AliasSlot>().0
     }
-    fn set_kuna_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>) {
-        self.kuna_state_mut::<AliasSlot>().0 = aliases;
+    fn set_unlace_library_aliases(&mut self, aliases: Vec<crate::libcnames::LibraryAlias>) {
+        self.unlace_state_mut::<AliasSlot>().0 = aliases;
     }
 }
 

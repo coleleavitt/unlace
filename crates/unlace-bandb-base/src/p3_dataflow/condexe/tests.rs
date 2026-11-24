@@ -108,7 +108,7 @@ fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
         |_b: &mut crate::varnode::VarnodeBank,
          _o: VarnodeId,
          _n: VarnodeId|
-         -> unlace_base::error::KunaResult<()> { panic!("mk_input: collision") };
+         -> unlace_base::error::UnlaceResult<()> { panic!("mk_input: collision") };
     fd.vbank_mut().set_input(vn, &mut noop_thunk).unwrap()
 }
 
@@ -131,7 +131,7 @@ fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
             |_b: &mut crate::varnode::VarnodeBank,
              _o: VarnodeId,
              _n: VarnodeId|
-             -> unlace_base::error::KunaResult<()> { panic!("mk_out: collision") };
+             -> unlace_base::error::UnlaceResult<()> { panic!("mk_out: collision") };
         fd.vbank_mut()
             .create_def(size, Address::new(ram, off), dt(size), def, &mut noop_thunk)
             .unwrap()

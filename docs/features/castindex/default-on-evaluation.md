@@ -6,7 +6,7 @@ Both arms of one build (`--option castindex off` against the default), base orig
 | criterion | result |
 |---|---|
 | (a) `make test` with the new default | 675/675, PARITY OK; 0 datatest assertions moved |
-| (b) `make test-stages` | PARITY OK, 1377/1377; 0 existing assertions moved (1370 before this test); `kuna-castindex.xml` adds 7, its pass 1 says `option castindex off` |
+| (b) `make test-stages` | PARITY OK, 1377/1377; 0 existing assertions moved (1370 before this test); `castindex.xml` adds 7, its pass 1 says `option castindex off` |
 | (c) `make test-cli` | 237/237; no probe moved |
 | (d) 444-slice typesweep | 1,615 -> 1,615 perfect, aggregate 3,973.97 -> 3,973.97, 0 improved, 0 worse, 0 moved on or off; `variables[]` byte-identical for all 10,748 functions, so arity and phantom counts cannot move |
 | (e) speed, interleaved min-of-15 | fmt O2 +0.09%, ls O2 -0.26%, sort O2 -1.66%, bash O2 +0.07% (min, on vs off); worst +0.09%, budget +5% |

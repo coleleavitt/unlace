@@ -59,7 +59,7 @@
   "speed_delta_pct": -0.84,
   "speed_note": "Indistinguishable from noise. The single-function timeit on the witness itself reports +38.9%, which is not the predicate's cost: with the option ON the function is no longer truncated at a false tail call, so the ON arm decompiles the whole classifier and the OFF arm decompiles about half of it.",
   "tests": [
-    "tests/stages/kuna-tailcallsaved.xml (two-pass: option off = the bug, default = the fix)",
+    "tests/stages/tailcallsaved.xml (two-pass: option off = the bug, default = the fix)",
     "tests/cli/argument-cleanup-creates-false.json (promoted acceptance, in-repo fixture tailcallsaved_i386)",
     "decompiler/crates/kuna-decomp/src/p2_lift/tailcallsaved/tests.rs (10 cases)",
     "decompiler/crates/kuna-decomp/src/p2_lift/tailcallframe/tests.rs (+3 cases)"

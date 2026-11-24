@@ -13,7 +13,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
 1. **Recording** (`record`). While the driver's `Ledger::recording` is set, each
    successful decompile files the function's own recovered parameters and, per
    direct CALL, the callee entry, the call address and each argument's
-   `(storage, HighVariable type)`. Hooked in `kuna-console` `decompile_pulled`
+   `(storage, HighVariable type)`. Hooked in `console` `decompile_pulled`
    next to `protoorder`'s park.
 2. **Knowing every caller** (`CallGraph::direct_call_sites`,
    `open_function_entries`, `kuna-cli` `decompile_all.rs`). Direct calls and
@@ -67,9 +67,9 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
   also called directly, keeps `void *`); and
   `calleevote-reads-a-table-in-code-at-address-zero.json` over
   `calleevote_zero_x86_64` (a const ops table in a `.text` loaded at 0).
-* Stage: `tests/stages/kuna-calleevote.toml`, the negative control (one function
+* Stage: `tests/stages/calleevote.toml`, the negative control (one function
   from bytes, no caller set: both passes print the raw offset), following
-  `kuna-argclobber.xml`'s precedent for a whole-binary option.
+  `argclobber.xml`'s precedent for a whole-binary option.
 
 ## 4. Default
 

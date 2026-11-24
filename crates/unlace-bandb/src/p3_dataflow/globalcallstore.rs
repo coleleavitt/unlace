@@ -2,7 +2,7 @@
 //! Later reload folding or load splitting must not
 //! move the assignment or interleave a snapshot's reads with writes to
 //! overlapping memory. The kept COPY prints its LOAD inline unless
-//! `kuna_loadorder` keeps the load ahead of a store to a global it may read,
+//! `unlace_loadorder` keeps the load ahead of a store to a global it may read,
 //! which it does only at `option indexaliasguard global`; at any other level
 //! the refusal stays off so the load cannot print after such a store.
 
@@ -44,7 +44,7 @@ pub fn declines(data: &Funcdata, op: OpId, global: VarnodeId, source: VarnodeId)
 #[doc(hidden)]
 pub fn load_order_enabled(data: &Funcdata) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         == LEVEL_GLOBAL

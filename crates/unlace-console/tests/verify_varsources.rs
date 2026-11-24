@@ -10,7 +10,7 @@ use unlace_console::ifaceterm::ConsoleCommands;
 
 fn bootstrap() -> ConsoleProgram {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let fixture = stage_xml("kuna-varsources");
+    let fixture = stage_xml("varsources");
     let specs = root.join("specs");
     bootstrap_from_file(
         fixture.to_str().unwrap(),
@@ -30,7 +30,7 @@ fn decompile(name: &str, setup: &[&str]) -> String {
     let count = commands.len();
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     let data = status.get_data_mut(DECOMPILE_MODULE).unwrap();
     data.as_any_mut()
         .downcast_mut::<IfaceDecompData>()

@@ -11,7 +11,7 @@ fn pointer_byte_arithmetic_survives_go_checkptr_at_both_native_widths() {
     {
         return;
     }
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for (arch, flag, goarch, size) in [("x86_64", "-m64", "amd64", 8), ("i386", "-m32", "386", 4)] {
         let fixture = common::scratch_file("go_pointer_arithmetic", "elf");
@@ -27,7 +27,7 @@ fn pointer_byte_arithmetic_survives_go_checkptr_at_both_native_widths() {
                 .arg("-o")
                 .arg(&fixture),
         );
-        let mut command = Command::new(&kuna);
+        let mut command = Command::new(&unlace);
         command.args(["decompile-all"]).arg(&fixture).args([
             "--language",
             "go",

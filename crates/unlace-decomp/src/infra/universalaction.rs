@@ -1,5 +1,5 @@
 //! Declarative pass schedule, based on `decompiler/cpp/coreaction.cc`
-//! `ActionDatabase::universalAction` and extended with kuna-specific passes.
+//! `ActionDatabase::universalAction` and extended with unlace-specific passes.
 //!
 //! [`SchedNode`] records registration order, groups and flags; materialization
 //! creates the engine's actions and rule pools. Each root (`decompile`,
@@ -8,7 +8,7 @@
 //! obtain those from their constructors.
 //!
 //! Listings retain the upstream `list action` format. The regression fixture
-//! pins kuna's current tree, not an unchanged upstream schedule. Tests also
+//! pins unlace's current tree, not an unchanged upstream schedule. Tests also
 //! require [`UNPORTED_ALLOWLIST`] to remain empty.
 
 use std::borrow::Cow;
@@ -24,8 +24,8 @@ use crate::action::{
 };
 use crate::hooks::HookRegistry;
 use crate::maturity::Maturity;
-use crate::passhooks::{KunaHookSlots, KunaHooks};
-use crate::phases::KunaPhase;
+use crate::passhooks::{UnlaceHookSlots, UnlaceHooks};
+use crate::phases::UnlacePhase;
 
 /// Metadata for an omitted upstream pass, retained for API compatibility.
 #[derive(Debug, Clone, Copy)]
@@ -45,8 +45,8 @@ pub const UNPORTED_ALLOWLIST: &[UnportedEntry] = &[];
 /// The pass hooks of the default pipeline: each crate's `provide_all`, which calls the
 /// `provide` of every pass module in it that fills slots (rustc `DEFAULT_QUERY_PROVIDERS`). Built on first use; a slot no module
 /// fills stops the run there, naming the hook.
-pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
-    let mut slots = KunaHookSlots::default();
+pub static PASS_HOOKS: LazyLock<UnlaceHooks> = LazyLock::new(|| {
+    let mut slots = UnlaceHookSlots::default();
     unlace_middle::provide_all(&mut slots);
     unlace_lift::provide_all(&mut slots);
     unlace_structure::provide_all(&mut slots);
@@ -64,7 +64,7 @@ pub static PASS_HOOKS: LazyLock<KunaHooks> = LazyLock::new(|| {
 /// The IR's handle on [`PASS_HOOKS`] ([`crate::passhooks::default_pass_hooks`]): defined
 /// here so the driver supplies the table at link time.
 #[unsafe(no_mangle)]
-pub fn __unlace_default_pass_hooks() -> &'static KunaHooks {
+pub fn __unlace_default_pass_hooks() -> &'static UnlaceHooks {
     &PASS_HOOKS
 }
 
@@ -81,7 +81,7 @@ fn universal_action(arch: &crate::architecture::Architecture) -> Box<dyn Action>
         stackspace_index,
         Vec::new(),
         truncated,
-        arch.kuna_tables.get::<crate::hooks::HookRegistry>(),
+        arch.unlace_tables.get::<crate::hooks::HookRegistry>(),
     )
 }
 
@@ -137,7 +137,7 @@ pub enum SchedNode {
     /// A schedule point that holds nothing: a phase boundary no callback is
     /// registered for.  It adds no action and no listing line.
     Empty,
-    /// (kuna maturity) A node whose completion settles a maturity level
+    /// (unlace maturity) A node whose completion settles a maturity level
     /// (`docs/spec/00-overview.md` §0.10): materialized, filtered and listed as
     /// the node itself, with [`ActionBase::settles`](crate::action::ActionBase) set.
     Settles(Maturity, Box<SchedNode>),
@@ -332,7 +332,7 @@ impl ActionListFilter {
 /// Returns `num+1`.
 ///
 /// Zero-padding matches the original C++ console capture's sticky
-/// `setfill('0')` and is retained in the kuna listing snapshot.
+/// `setfill('0')` and is retained in the unlace listing snapshot.
 fn print_action_line(
     out: &mut String,
     num: int4,
@@ -393,7 +393,7 @@ fn print_rule_line(
     out.push_str(name);
 }
 
-/// (kuna maturity) Mark `node` as settling `level` when it completes.
+/// (unlace maturity) Mark `node` as settling `level` when it completes.
 fn settles(level: Maturity, node: SchedNode) -> SchedNode {
     SchedNode::Settles(level, Box::new(node))
 }
@@ -422,7 +422,7 @@ const ONCE: u32 = ruleflags::rule_onceperfunc;
 // The universal schedule (based on coreaction.cc:5734-6031)
 // =============================================================================
 
-/// Build the universal [`SchedNode`] tree, including kuna-specific passes.
+/// Build the universal [`SchedNode`] tree, including unlace-specific passes.
 ///
 /// `stackspace` / `stackspace_index` correspond to the C++
 /// `conf->getStackSpace()` (the same `AddrSpace`, passed both as the `Rc`
@@ -1229,7 +1229,7 @@ pub fn universal_sched_hooked(
             "typerecovery",
             crate::ruleaction_5::RulePtrArith::new("typerecovery")
         ),
-        // (kuna/upstream) RuleIndirectConcat("analysis") is commented out upstream.
+        // (unlace/upstream) RuleIndirectConcat("analysis") is commented out upstream.
         rrow!(
             "loadvarnode",
             "stackvars",
@@ -1240,7 +1240,7 @@ pub fn universal_sched_hooked(
             "stackvars",
             crate::ruleaction_4::RuleStoreVarnode
         ),
-        // (kuna) callpush: after storevarnode, so a push in a tracked frame is
+        // (unlace) callpush: after storevarnode, so a push in a tracked frame is
         // that rule's stack COPY first.
         rrow!(
             "callpush",
@@ -1368,7 +1368,7 @@ pub fn universal_sched_hooked(
 
     hooks.insert_rules(&mut [&mut oppool1_rules, &mut oppool2_rules, &mut cleanup_rules]);
 
-    // (kuna) One shared lowered-switch hint store (the C++ file-static
+    // (unlace) One shared lowered-switch hint store (the C++ file-static
     // `loweredStore`): the Detect half (fullloop) writes it, the Install half
     // (mainloop) reads it on the restart.  Cloned into both action closures so
     // they reference the same inner table.
@@ -1404,7 +1404,7 @@ pub fn universal_sched_hooked(
         children: vec![
             act!(ActionUnreachable::boxed("base")),
             act!(crate::stackbytecopy::ActionStackByteCopy::boxed()),
-            // (kuna) cleanupcode (option `cleanupcode`, default-ON, DIV-81): delete
+            // (unlace) cleanupcode (option `cleanupcode`, default-ON, DIV-81): delete
             // the Rust drop/deallocate call sites (SEFCOM Oxidizer's
             // CleanupCodeRemover, whose STAGE is BEFORE_VARIABLE_RECOVERY).  Runs at
             // the very top of mainloop, self-gated on `get_heritage_pass() == 0`:
@@ -1423,11 +1423,11 @@ pub fn universal_sched_hooked(
             )),
             act!(crate::ptrauthtrap::ActionPtrAuthTrap::boxed("deadcode")),
             act!(crate::chkstkdarwin::ActionChkstkDarwin::boxed("deadcode")),
-            // (kuna) llscfold (option `llscfold`, default-OFF): an AArch64
+            // (unlace) llscfold (option `llscfold`, default-OFF): an AArch64
             // load/store-exclusive retry loop becomes the atomic builtin of its
             // successful iteration. Pre-SSA, so heritage guards memory across it.
             act!(crate::atomics::ActionLlscLoop::boxed("deadcode")),
-            // (kuna) outline (option `outline`, default-OFF - destructive, and inert
+            // (unlace) outline (option `outline`, default-OFF - destructive, and inert
             // with no region supplied).  Excise a SUPPLIED single-entry region and
             // emit a call to a synthesized pseudofunction in its place.
             //
@@ -1436,15 +1436,15 @@ pub fn universal_sched_hooked(
             // `get_heritage_pass() == 0`), and the
             // varnodeprops -> lowerswitchinstall -> heritage run below is a ported
             // C++ adjacency (coreaction.cc:5751-5756) pinned by
-            // verify_w8x_allowlist.rs.  A kuna-only pass does not get to split it.
+            // verify_w8x_allowlist.rs.  A unlace-only pass does not get to split it.
             act!(crate::outline::ActionOutline::boxed("blockrecovery")),
-            // (kuna) armhoist (option `armhoist`, default-OFF): move the ops both
+            // (unlace) armhoist (option `armhoist`, default-OFF): move the ops both
             // arms of a branch share at their head or tail out of the arms, so
             // structuring sees one copy. Pre-SSA like outline (self-gated on the
             // Ssa fact) and before varnodeprops, outside its pinned adjacency.
             act!(crate::armhoist::ActionArmHoist::boxed("blockrecovery")),
             act!(ActionVarnodeProps::boxed("base")),
-            // (kuna) Install a previously-detected lowered switch BEFORE heritage
+            // (unlace) Install a previously-detected lowered switch BEFORE heritage
             // (coreaction.cc:5755).  `enabled` resolves the C++
             // `glb->recover_lowered_switch` gate (default-on, DIV-3); the gate does
             // not affect the dump.
@@ -1469,7 +1469,7 @@ pub fn universal_sched_hooked(
             act!(ActionDynamicMapping::boxed("dynamic")),
             act!(ActionSpacebase::boxed("base")),
             act!(ActionNonzeroMask::boxed("analysis")),
-            // (kuna) sitetypelock: pin client-asserted per-call-site output
+            // (unlace) sitetypelock: pin client-asserted per-call-site output
             // types onto the call output Varnodes before the first
             // `buildLocaltypes`, so the lattice seeds from them and neither
             // propagation nor structsynth can replace them.
@@ -1480,7 +1480,7 @@ pub fn universal_sched_hooked(
             act!(crate::indexrescale::ActionIndexRescale::boxed(
                 "typerecovery"
             )),
-            // (kuna) structsynth: once propagation has settled, complete a
+            // (unlace) structsynth: once propagation has settled, complete a
             // `struct_N` over a pointer parameter dereferenced at two or more
             // constant offsets and type-lock the parameter to it.  It sits here
             // so the pointer-arithmetic pools below (`oppool1`'s ptr*undo,
@@ -1505,7 +1505,7 @@ pub fn universal_sched_hooked(
             act!(Box::new(crate::condexe::ActionConditionalExe::new(
                 "conditionalexe"
             ))),
-            // (kuna) option `phithread` (default off): thread a join that branches
+            // (unlace) option `phithread` (default off): thread a join that branches
             // on a merged constant, splitting the arms that feed it.
             act!(crate::phithread::ActionPhiThread::boxed("conditionalexe")),
             act!(ActionConditionalConst::boxed("analysis")),
@@ -1543,7 +1543,7 @@ pub fn universal_sched_hooked(
             ))),
             act!(crate::vastart::ActionVaStart::boxed("returnsplit")),
             act!(crate::vaarg::ActionVaArg::boxed("returnsplit")),
-            // (kuna) msvcstackguard (option `msvcstackguard`, default-OFF): the
+            // (unlace) msvcstackguard (option `msvcstackguard`, default-OFF): the
             // Windows sibling of ActionStripStackGuard.  MSVC `/GS` puts the
             // compare inside `__security_check_cookie`, so the guarded function
             // holds no CBRANCH for the glibc matcher to find -- the trigger is the
@@ -1555,7 +1555,7 @@ pub fn universal_sched_hooked(
             act!(Box::new(
                 crate::msvcstackguard::ActionStripMsvcStackGuard::new(false, "returnsplit")
             )),
-            // (kuna) SEFCOM Oxidizer `SecurityCheckRemover` (option `securitycheck`,
+            // (unlace) SEFCOM Oxidizer `SecurityCheckRemover` (option `securitycheck`,
             // DIV-82 default-ON): sever the CBRANCH edge to a diverging block whose
             // only call is one of rustc's seven bounds/slice/divide-by-zero panic
             // helpers, and collect the orphan.  Sits next to ActionStripStackGuard
@@ -1566,7 +1566,7 @@ pub fn universal_sched_hooked(
             act!(Box::new(
                 crate::securitycheck::ActionRemoveSecurityCheck::new(false, "returnsplit")
             )),
-            // (kuna) the post-SSA Go write-barrier arm fold (option
+            // (unlace) the post-SSA Go write-barrier arm fold (option
             // `gowritebarrier`, same judgment as the pre-SSA one-hop fold in
             // mainloop): shared arms and arms whose call result feeds the join
             // phis are only provably bookkeeping once SSA is mature, so this
@@ -1576,7 +1576,7 @@ pub fn universal_sched_hooked(
                 false,
                 "returnsplit"
             ))),
-            // (kuna) devectorize (option `devectorize`, default-OFF): re-roll a
+            // (unlace) devectorize (option `devectorize`, default-OFF): re-roll a
             // vectorized integer reduction -- guard, stride loop with one
             // accumulator per lane, fold, scalar remainder loop -- into its scalar
             // loop by removing the guard's vector edge.  Sits with the edge-removal
@@ -1587,7 +1587,7 @@ pub fn universal_sched_hooked(
                 false,
                 "returnsplit"
             ))),
-            // (kuna) strlenscan (option `strlenscan`): collapse the loop SLEIGH
+            // (unlace) strlenscan (option `strlenscan`): collapse the loop SLEIGH
             // lifts an inline `repnz scasb` string length to into `strlen`, by
             // giving the loop its final values and removing its back edge and
             // its never-taken count-exhausted exit.  Here with the edge-removal
@@ -1597,25 +1597,25 @@ pub fn universal_sched_hooked(
                 false,
                 "returnsplit"
             ))),
-            // (kuna) bitidioms: the one-instruction bsf/tzcnt/bsr loop becomes
+            // (unlace) bitidioms: the one-instruction bsf/tzcnt/bsr loop becomes
             // ctz / LZCOUNT, removed the same way.
             act!(Box::new(crate::bitidioms::ActionBitScanLoop::new(
                 "returnsplit"
             ))),
-            // (kuna) repstring (option `repstring`): the same loop shape for
+            // (unlace) repstring (option `repstring`): the same loop shape for
             // `rep movs`, `rep stos` and `repz cmpsb`, collapsed into a copy,
             // fill or compare builtin by removing the edge into the body.
             act!(Box::new(crate::repstring::ActionRepString::new(
                 "returnsplit"
             ))),
-            // (kuna) copyrun (option `copyrun`): an unrolled run of element
+            // (unlace) copyrun (option `copyrun`): an unrolled run of element
             // copies within one block, collapsed into memcpy.
             act!(Box::new(crate::copyrun::ActionCopyRun::new("returnsplit"))),
-            // (kuna) javatry: drop the DEX exceptional edges that bring their
+            // (unlace) javatry: drop the DEX exceptional edges that bring their
             // handler no value of its own; the next mainloop splices the halves.
             act!(crate::javatry::ActionJavaThrowPrune::boxed("returnsplit")),
             act!(ActionReturnSplit::boxed("returnsplit")),
-            // (kuna) angr SAILR gotoless `ReturnDuplicatorHigh` (option `returndup`,
+            // (unlace) angr SAILR gotoless `ReturnDuplicatorHigh` (option `returndup`,
             // default-OFF).  Runs right after ActionReturnSplit (the goto-driven
             // ReturnDuplicatorLow analog): for every shared *bare-epilogue* RETURN
             // block that ActionReturnSplit leaves merged (no goto-in edge), duplicate
@@ -1626,19 +1626,19 @@ pub fn universal_sched_hooked(
             // same merge/naming passes and are re-structured by the next fullloop
             // iteration (and the final ActionBlockStructure).
             act!(crate::returndup::ActionReturnDup::boxed("returnsplit")),
-            // (kuna) `returndup calls`: split a cross-jumped `call f; return`
+            // (unlace) `returndup calls`: split a cross-jumped `call f; return`
             // block per predecessor.
             act!(crate::returndupcalls::ActionReturnDupCalls::boxed(
                 "returnsplit"
             )),
-            // (kuna) angr SAILR `ReturnDuplicatorHigh`, per-edge const narrowing (option
+            // (unlace) angr SAILR `ReturnDuplicatorHigh`, per-edge const narrowing (option
             // `earlyreturn`, default-OFF).  Sibling of ActionReturnDup: peels only the
             // CONSTANT arm of a mixed return phi (the guard's `return K`), leaving the
             // variable body return merged — the early-return-guard shape the whole-block
             // returndup gate structurally cannot reach.  branchflip + ifelseflatten do the
             // hoist downstream.
             act!(crate::earlyreturn::ActionEarlyReturn::boxed("returnsplit")),
-            // (kuna) The direct continuation of ActionEarlyReturn: the SAME per-edge const
+            // (unlace) The direct continuation of ActionEarlyReturn: the SAME per-edge const
             // peel (option `switchreturn`, default-OFF), but with the in-edge cap lifted so
             // the WIDE multi-way switch-phi that overflows earlyreturn's 16-edge limit
             // (`switch (x) { case A: v = K0; break; … } return v;` with > 16 cases) is
@@ -1660,9 +1660,9 @@ pub fn universal_sched_hooked(
         max: 1,
         children: vec![
             settles(Maturity::Lifted, act!(ActionStart::boxed("base"))),
-            hooks.boundary(KunaPhase::P2),
+            hooks.boundary(UnlacePhase::P2),
             act!(ActionConstbase::boxed("base")),
-            // (kuna) linuxsyscall (option `linuxsyscall`, default-OFF): name the
+            // (unlace) linuxsyscall (option `linuxsyscall`, default-OFF): name the
             // 32-bit Linux `int 0x80` sites.  Placed here, not in mainloop, for
             // two reasons: the pattern is read off the RAW p-code (pre-SSA there
             // is no def-use edge to the `swi` output to follow), and the call spec
@@ -1672,31 +1672,31 @@ pub fn universal_sched_hooked(
             act!(crate::linuxsyscall::ActionLinuxSyscall::boxed(
                 "protorecovery"
             )),
-            // (kuna) evmcalls (option `evmcalls`, default-OFF): each recovered
+            // (unlace) evmcalls (option `evmcalls`, default-OFF): each recovered
             // EVM internal call removes its callee's stack effect, which has to
             // be the call's extrapop before ActionExtraPopSetup reads it. Inert
             // on every language without an `evmstack` space.
             act!(crate::evmcalls::ActionEvmCalls::boxed("protorecovery")),
-            // (kuna) x64syscall (option `x64syscall`, default-OFF): give the
+            // (unlace) x64syscall (option `x64syscall`, default-OFF): give the
             // x86-64 `SYSCALL` user-op the Linux ABI's register effects.  Here
             // for the same two reasons as its i386 neighbour above: the op is
             // matched on the RAW p-code, and adding a register read or write to
             // it is only legal before heritage builds SSA.  Inert on every
             // language but x86-64 and on any function with no SYSCALL.
             act!(crate::x64syscall::ActionX64Syscall::boxed("protorecovery")),
-            // (kuna) syscallregs (option `syscallregs`): the same rewrite for the
+            // (unlace) syscallregs (option `syscallregs`): the same rewrite for the
             // ARM, AArch64, RISC-V, MIPS and PowerPC system-call user-op, here for
             // the same reasons.
             act!(crate::syscallregs::ActionSyscallRegs::boxed(
                 "protorecovery"
             )),
-            // (kuna) pebnames (option `pebnames`, default `auto`): map `TEB *teb`
+            // (unlace) pebnames (option `pebnames`, default `auto`): map `TEB *teb`
             // over the Windows segment-base register input.  Here because the
             // Symbol must exist before heritage creates the input Varnode, which
             // is when its type and name locks are read.
             act!(crate::pebnames::ActionPebNames::boxed("typerecovery")),
             act!(crate::tlsnames::ActionTlsNames::boxed("typerecovery")),
-            // (kuna) msvcstrappend (option `msvcstrappend`, default-OFF): collapse
+            // (unlace) msvcstrappend (option `msvcstrappend`, default-OFF): collapse
             // an inlined MSVC x64 `std::string` push_back/append capacity diamond
             // into one call.  Here for linuxsyscall's reasons: the diamond is
             // proved over the RAW p-code, and the call it leaves carries a
@@ -1707,7 +1707,7 @@ pub fn universal_sched_hooked(
             act!(crate::rustprobestack::ActionRustProbestack::boxed(
                 "protorecovery"
             )),
-            // (kuna) chkstkdarwin (option `chkstkdarwin`, default on): remove the
+            // (unlace) chkstkdarwin (option `chkstkdarwin`, default on): remove the
             // AArch64 calls to `___chkstk_darwin`.  Here for the reason
             // rustprobestack is: the call is matched on the RAW p-code and must be
             // gone before FuncLink gives it trials and heritage kills the argument
@@ -1729,15 +1729,15 @@ pub fn universal_sched_hooked(
                 Maturity::CallsLinked,
                 act!(ActionFuncLinkOutOnly::boxed("noproto")),
             ),
-            // (kuna) swifterror (option `swiftcall`): the error register
+            // (unlace) swifterror (option `swiftcall`): the error register
             // defined after a throwing Swift call and read before a throwing
             // return. After FuncLink, which gives each call its model; before
             // heritage, which links the new write and read.
             act!(crate::swifterror::ActionSwiftError::boxed("protorecovery")),
             settles(Maturity::BandB, fullloop),
-            hooks.boundary(KunaPhase::P3),
-            hooks.boundary(KunaPhase::P4),
-            hooks.boundary(KunaPhase::P5),
+            hooks.boundary(UnlacePhase::P3),
+            hooks.boundary(UnlacePhase::P4),
+            hooks.boundary(UnlacePhase::P5),
             act!(ActionMappedLocalSync::boxed("localrecovery")),
             act!(ActionStartCleanUp::boxed("cleanup")),
             settles(
@@ -1753,7 +1753,7 @@ pub fn universal_sched_hooked(
             act!(ActionNormalizeBranches::boxed("normalizebranches")),
             act!(crate::armfloatargs::ActionArmFloatArgs::boxed("merge")),
             act!(crate::returnselector::ActionReturnSelector::boxed("merge")),
-            // (kuna) spphistack: a bare input stack pointer a phi reads becomes
+            // (unlace) spphistack: a bare input stack pointer a phi reads becomes
             // PTRSUB(sp, 0), before HighVariables are assigned and merged.
             act!(crate::spphistack::ActionSpPhiStack::boxed("merge")),
             act!(ActionAssignHigh::boxed("merge")),
@@ -1769,17 +1769,17 @@ pub fn universal_sched_hooked(
             act!(ActionMergeType::boxed("merge")),
             act!(ActionHideShadow::boxed("merge")),
             settles(Maturity::Merged, act!(ActionCopyMarker::boxed("merge"))),
-            hooks.boundary(KunaPhase::P6),
+            hooks.boundary(UnlacePhase::P6),
             act!(crate::typevote::ActionTypeVote::boxed("typerecovery")),
             act!(ActionLateDoNothing::boxed("blockrecovery")),
             settles(
                 Maturity::Structured,
                 act!(ActionBlockStructure::boxed("blockrecovery")),
             ),
-            hooks.boundary(KunaPhase::P7),
+            hooks.boundary(UnlacePhase::P7),
             act!(ActionPreferComplement::boxed("blockrecovery", false)),
             act!(ActionStructureTransform::boxed("blockrecovery", false)),
-            // (kuna, option `branchflip`, default-off) angr-SAILR-style negated-
+            // (unlace, option `branchflip`, default-off) angr-SAILR-style negated-
             // guard branch flip on the FINAL structured tree, after the second
             // `preferComplement` has normalized the positive-flip cases — so we
             // only catch the residual `if (x == 0)` / equality guards.
@@ -1796,7 +1796,7 @@ pub fn universal_sched_hooked(
             act!(ActionMapGlobals::boxed("fixateglobals")),
             act!(ActionDynamicSymbols::boxed("dynamic")),
             act!(ActionNameVars::boxed("merge")),
-            // (kuna) calltargettype (option `calltargettype`, default-ON): every
+            // (unlace) calltargettype (option `calltargettype`, default-ON): every
             // high is final here, so an indirect call's target takes the
             // function-pointer type its arguments and output state, just before
             // ActionSetCasts checks every use against it.
@@ -1806,27 +1806,27 @@ pub fn universal_sched_hooked(
             settles(Maturity::Casts, act!(ActionSetCasts::boxed("casts"))),
             act!(ActionFinalStructure::boxed("blockrecovery")),
             act!(crate::postinc::ActionPostIncrement::boxed("blockrecovery")),
-            // (kuna) angr SAILR return-tail goto-reduction (option `gotoreduce`):
+            // (unlace) angr SAILR return-tail goto-reduction (option `gotoreduce`):
             // call-free return tails at `return`, then return tails with a call
             // (`free(p); return;`) at `on`.  Runs after the tree is final + goto
             // targets labelled.
             act!(crate::gotoreduce::ActionGotoReduce::boxed("blockrecovery")),
             act!(crate::taildup::ActionTailDup::boxed("blockrecovery")),
-            // (kuna) angr `IfElseFlattener`: after the tree is final + goto
+            // (unlace) angr `IfElseFlattener`: after the tree is final + goto
             // targets labelled (and after gotoreduce), drop the `else` arm of a
             // 3-component `if` whose true-clause terminates, re-parenting the
             // else body as a follower (option `ifelseflatten`, default-OFF).
             act!(crate::ifelseflatten::ActionIfElseFlatten::boxed(
                 "blockrecovery"
             )),
-            // (kuna) angr SAILR cross-jump reversion (option `crossjumprevert`,
+            // (unlace) angr SAILR cross-jump reversion (option `crossjumprevert`,
             // default-OFF).  Runs *after* gotoreduce — per the CrossJumpReverter
             // docstring it is the last deoptimization, so return tails are already
             // structured early returns and only true cross-jump tails remain.
             act!(crate::crossjumpreverter::ActionCrossJumpReverter::boxed(
                 "blockrecovery"
             )),
-            // (kuna) angr structurer ITE region-dedup (option `dedupitetail`,
+            // (unlace) angr structurer ITE region-dedup (option `dedupitetail`,
             // default-OFF).  The inverse of the duplication passes above: after the
             // tree is final + goto targets labelled, merge a duplicated `if/else`
             // tail (shared prefix/suffix of statement-equivalent leaves across both
@@ -1834,20 +1834,20 @@ pub fn universal_sched_hooked(
             act!(crate::dedupitetail::ActionDedupIteTail::boxed(
                 "blockrecovery"
             )),
-            // (kuna) angr ITERegionConverter (option `iteregion`, default-OFF — a
+            // (unlace) angr ITERegionConverter (option `iteregion`, default-OFF — a
             // runtime choice).  After the tree is final + goto targets labelled,
             // mark a narrow two-arm assignment diamond (`if (c) v=A; else v=B;`,
             // both arms a single COPY to the same variable) so the S9 printer emits
             // it as a `?:` ternary (`v = c ? A : B;`).  Print-only mark; no p-code
             // is touched, so OFF is byte-identical.
             act!(crate::iteregion::ActionIteRegion::boxed("blockrecovery")),
-            // (kuna) iteboolean (option `iteboolean`, default-OFF - a runtime
+            // (unlace) iteboolean (option `iteboolean`, default-OFF - a runtime
             // choice).  Mark a `0`/`1` select diamond whose condition is a folded
             // short-circuit chain so the S9 printer emits `v = (a && b);` instead
             // of the constant if/else P3 RuleConditionalMove cannot fold.
             // Print-only mark; no p-code is touched, so OFF is byte-identical.
             act!(crate::iteboolean::ActionIteBoolean::boxed("blockrecovery")),
-            // (kuna) paramcopyhoist (option `paramcopyhoist`, default-OFF - a runtime
+            // (unlace) paramcopyhoist (option `paramcopyhoist`, default-OFF - a runtime
             // choice).  Re-anchors an unmodified incoming parameter's trim COPY in the
             // entry block so its copy-shadow prints with the other parameter spills.
             // Runs LAST, after every HighVariable is final AND the structured tree is
@@ -1862,7 +1862,7 @@ pub fn universal_sched_hooked(
                 "blockrecovery"
             )),
             act!(crate::paramcopyhoist::ActionParamCopyHoist::boxed("merge")),
-            hooks.boundary(KunaPhase::P8),
+            hooks.boundary(UnlacePhase::P8),
             act!(ActionPrototypeWarnings::boxed("protorecovery")),
             settles(Maturity::Complete, act!(ActionStop::boxed("base"))),
         ],

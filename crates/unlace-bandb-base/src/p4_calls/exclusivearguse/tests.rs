@@ -12,7 +12,7 @@ use unlace_base::space::{
 };
 use unlace_base::types::int4;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use crate::context::{ArchContext, TypeOp};
 use crate::dtype::{Datatype, type_metatype};
@@ -84,8 +84,8 @@ fn wire(fd: &mut Funcdata, vn: VarnodeId, op: OpId, slot: int4) {
         .set_input(Some(vn), slot);
 }
 
-fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+    |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
 }
 
 /// A Varnode defined by an `INT_ADD` in `bl` — the shape the rule demands, a

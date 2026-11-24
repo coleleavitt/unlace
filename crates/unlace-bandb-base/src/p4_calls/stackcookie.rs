@@ -1,4 +1,4 @@
-//! (kuna) The frame cookie MSVC pushes in an SEH prologue is no argument.
+//! (unlace) The frame cookie MSVC pushes in an SEH prologue is no argument.
 //!
 //! An x86-32 MSVC function with an EH frame pushes a cookie below its saved
 //! registers (`mov eax,[___security_cookie]; xor eax,esp; push eax`) and links

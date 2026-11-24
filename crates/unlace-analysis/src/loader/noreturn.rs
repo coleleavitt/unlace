@@ -1,4 +1,4 @@
-//! No-return known-function detection — the kuna analog of Ghidra's
+//! No-return known-function detection — the unlace analog of Ghidra's
 //! `NoReturnFunctionAnalyzer` ("Non-Returning Functions - Known").
 //!
 //! Ghidra ships **two** no-return analyzers:
@@ -14,7 +14,7 @@
 //!   decompilation, which the analyzer tier (object view only) does not have. It
 //!   is documented here as a deferred hook; see `docs/missing-analyses.md`.
 //!
-//! Origin (upstream Ghidra, the tree kuna was ported from):
+//! Origin (upstream Ghidra, the tree unlace was ported from):
 //! - matcher: `Ghidra/Features/Base/.../analysis/NoReturnFunctionAnalyzer.java`
 //!   (the `added` loop + `makeNoReturnFunction` namespace guard).
 //! - name set: `Ghidra/Features/Base/data/ElfFunctionsThatDoNotReturn`, vendored with GNU Fortran additions at `crates/unlace-analysis/data/ElfFunctionsThatDoNotReturn`.
@@ -22,7 +22,7 @@
 //!   adds a per-compiler list to the match set for an ELF whose compiler is
 //!   detected. The `compiler name="rustc"` arm adds `RustFunctionsThatDoNotReturn`;
 //!   the `compiler id="golang"` arm adds `GolangFunctionsThatDoNotReturn`; the base
-//!   `ElfFunctionsThatDoNotReturn` always applies. kuna mirrors this: when
+//!   `ElfFunctionsThatDoNotReturn` always applies. unlace mirrors this: when
 //!   [`crate::sourcelang::detect_compiler`] reports `Rustc` (resp. `Go`), the
 //!   Rust wildcard list (vendored at `data/RustFunctionsThatDoNotReturn`) (resp.
 //!   the Go list at `data/GolangFunctionsThatDoNotReturn`) is parsed **in addition**
@@ -126,7 +126,7 @@ impl NoReturnKnownPass {
         }
     }
 
-    /// The pass for the given detected [`Compiler`] — the kuna analog of selecting
+    /// The pass for the given detected [`Compiler`] — the unlace analog of selecting
     /// the matching `<compiler>` arm of `noReturnFunctionConstraints.xml`.
     pub fn for_compiler(compiler: Compiler) -> Self {
         NoReturnKnownPass { compiler }
@@ -141,7 +141,7 @@ fn strip_leading_underscores(s: &str) -> &str {
 }
 
 /// Split a (possibly namespaced) symbol name into `(base, namespace)`.
-/// kuna installs `::`-split namespaces, so a demangled `Menu::exit` has base
+/// unlace installs `::`-split namespaces, so a demangled `Menu::exit` has base
 /// `exit` in namespace `Menu`; a flat C import `exit` has no namespace.
 fn base_and_namespace(name: &str) -> (&str, Option<&str>) {
     match name.rfind("::") {
@@ -288,7 +288,7 @@ fn scan_noreturn(
     // per-compiler Rust/Go widening); a PE/COFF/Mach-O gets the PE/Mac list
     // (Windows-CRT + macOS no-return names, with the shared C names duplicated so
     // a PE still flags `exit`/`abort`). The names are format-neutral; only *which*
-    // shipped list applies differs — the kuna analog of
+    // shipped list applies differs — the unlace analog of
     // noReturnFunctionConstraints.xml's per-executable-format arms.
     let (mut exact, wildcard) = match file.format() {
         object::BinaryFormat::Elf => {
@@ -373,7 +373,7 @@ fn scan_noreturn(
     out
 }
 
-/// (kuna `armfuncmode`) The addresses (Thumb bit cleared) of the image's
+/// (unlace `armfuncmode`) The addresses (Thumb bit cleared) of the image's
 /// functions and PLT stubs the base ELF list names as never returning.
 pub(crate) fn known_noreturn_addrs(file: &object::File) -> std::collections::BTreeSet<u64> {
     scan_noreturn(file, &[], Compiler::Unknown, false)
@@ -567,7 +567,7 @@ mod tests {
     #[test]
     fn list_parses_to_exact_names_and_cxx_throw_wildcards() {
         let (exact, wildcard) = sets();
-        // Upstream's ELF list ships no wildcards; the only ones are kuna's
+        // Upstream's ELF list ships no wildcards; the only ones are unlace's
         // mangled `std::` / `std::__1::` function-name prefixes, which an
         // Itanium encoding keeps from reaching any other symbol.
         assert!(
@@ -589,7 +589,7 @@ mod tests {
         assert!(!exact.iter().any(|e| e.starts_with('_')));
     }
 
-    /// (kuna DIV-21) The genuinely-unconditional no-return libc/BSD names added beyond
+    /// (unlace DIV-21) The genuinely-unconditional no-return libc/BSD names added beyond
     /// upstream's ELF list — the `err`/`errx` family + `quick_exit`/`__assert_perror_fail`/
     /// `__chk_fail`/`__libc_fatal`. Each ALWAYS exits, so a `die()`/`fatal()` wrapper ending
     /// in one is no-return; without them its callers overrun into the next function (the
@@ -624,7 +624,7 @@ mod tests {
         }
     }
 
-    /// (kuna DIV-78, GH-273) The libstdc++ `std::__throw_*` family, in both the
+    /// (unlace DIV-78, GH-273) The libstdc++ `std::__throw_*` family, in both the
     /// spellings the two matchers see: the mangled `.dynsym` form the analysis-tier
     /// scan matches pre-demangle, and the demangled `std::__throw_x` form the
     /// flow-time matcher sees. Every one is `__attribute__((__noreturn__))`
@@ -909,7 +909,7 @@ mod tests {
         }
     }
 
-    /// (kuna DIV-78, GH-273) The libstdc++ throw family on a real clang-built ELF:
+    /// (unlace DIV-78, GH-273) The libstdc++ throw family on a real clang-built ELF:
     /// `_ZSt20__throw_length_errorPKc` / `_ZSt20__throw_out_of_rangePKc` are UND
     /// `.dynsym` imports (address 0), so — like `_ZSt9terminatev` — the fact must
     /// be emitted at the PLT-stub install address under the raw mangled name. The

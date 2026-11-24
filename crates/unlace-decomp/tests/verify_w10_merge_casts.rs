@@ -3,7 +3,7 @@
 //! `unlace_decomp::coreaction_casts`).
 //!
 //! The driver itself runs end-to-end over the datatest corpus (the parity check
-//! is `python -m kuna.run_tests --datatests --engine rust`).  These tests pin the
+//! is `python -m unlace.run_tests --datatests --engine rust`).  These tests pin the
 //! two cast *decision* predicates the corpus stresses hardest, at the exact
 //! boundaries the porter's own work could regress:
 //!
@@ -237,7 +237,7 @@ mod harness {
     use std::rc::Rc;
 
     use unlace_base::address::Address;
-    use unlace_base::error::{KunaError, KunaResult};
+    use unlace_base::error::{UnlaceError, UnlaceResult};
     use unlace_base::marshal::IdRegistry;
     use unlace_base::space::AddrSpaceManager;
     use unlace_base::xml::{DocumentStorage, Element};
@@ -330,8 +330,8 @@ mod harness {
         fn get_file_name(&self) -> &str {
             "dummy"
         }
-        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-            Err(KunaError::data_unavail("dummy"))
+        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+            Err(UnlaceError::data_unavail("dummy"))
         }
         fn get_arch_type(&self) -> Vec<u8> {
             Vec::new()
@@ -430,12 +430,12 @@ mod harness {
             .ok_or(format!("no space {space_name}"))?
             .clone();
         let entry = Address::new(space, off);
-        arch.kuna_options
-            .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
-        arch.kuna_options
-            .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+        arch.unlace_options
+            .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (unlace) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+        arch.unlace_options
+            .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
         let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
-        // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+        // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
         // single-statement if-body form; reset braceelide for the comparison.
         arch.print_mut().options.set_brace_elide(false);
         Ok(print_c(arch, &fd))
@@ -446,7 +446,7 @@ mod harness {
 /// now-active `ActionSetCasts` must leave this *exactly* unchanged — no spurious
 /// CAST/PTRSUB inserted into a typeless integer body.
 const BOOLLESS_CPP_B5: &str =
-    // (Header gap adjusted for the kuna DIV-34 brace-placement default.)
+    // (Header gap adjusted for the unlace DIV-34 brace-placement default.)
     "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";
 
 #[test]

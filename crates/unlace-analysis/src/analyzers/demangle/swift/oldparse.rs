@@ -1,4 +1,4 @@
-//! (kuna `swiftdemangle`) The Swift 3 (`_Tt`) type mangling, which the
+//! (unlace `swiftdemangle`) The Swift 3 (`_Tt`) type mangling, which the
 //! Objective-C runtime still uses for Swift class and protocol names
 //! (`_TtC6Sample24MainScreenViewController`). Only the type subset that
 //! can appear in a runtime name is read: nominal types with nested and

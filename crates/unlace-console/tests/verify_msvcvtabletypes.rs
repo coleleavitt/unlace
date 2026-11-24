@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) The typed MSVC vftables on a real clang-cl-built PE.
+//! (unlace `vtabletypes`) The typed MSVC vftables on a real clang-cl-built PE.
 //!
 //! `msvc_classes_{x64,x86}.exe` (source `msvc_classes.cpp`, recipe in
 //! `tests/fixtures/README.md`) carry the MSVC RTTI of Shape (never
@@ -46,7 +46,7 @@ fn bootstrap(name: &str, on: bool) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("vtabletypes", if on { "on" } else { "off" })
+        .set_unlace_option("vtabletypes", if on { "on" } else { "off" })
         .expect("vtabletypes flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -72,7 +72,7 @@ fn field(t: &Datatype, name: &str) -> Option<(i32, Rc<Datatype>)> {
 fn this_class(prog: &ConsoleProgram, func: u64) -> Option<String> {
     let hints = prog
         .arch()
-        .kuna_tables
+        .unlace_tables
         .get::<unlace_decomp::inputhints::ThisHints>();
     let (_, list) = hints.0.iter().find(|(a, _)| a.get_offset() == func)?;
     let hint = list.first()?;

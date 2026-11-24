@@ -58,7 +58,7 @@ was not written for, and it answers with a conflict the fold itself creates.
 
 ## The control
 
-Two fixtures differing in one instruction (`tests/stages/kuna-foldcallretphi.toml`
+Two fixtures differing in one instruction (`tests/stages/foldcallretphi.toml`
 and the control described in its header):
 
 | argument | pass 1 (`foldcallretphi off`) | pass 2 (`on`) |

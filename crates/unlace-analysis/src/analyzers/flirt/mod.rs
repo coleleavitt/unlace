@@ -1,6 +1,6 @@
-//! (kuna `flirt`) Name library functions with IDA FLIRT `.sig` signatures.
+//! (unlace `flirt`) Name library functions with IDA FLIRT `.sig` signatures.
 //!
-//! The `.sig` files ship with IDA (`<ida>/sig/<proc>/*.sig`); kuna reads them
+//! The `.sig` files ship with IDA (`<ida>/sig/<proc>/*.sig`); unlace reads them
 //! and matches every discovered function entry against them, the way
 //! IDA's `AU_LIBF` pass does. Reading the files and the byte-level match
 //! (trie, CRC, tail bytes, instruction bits) is the `flirt-sig` crate; this

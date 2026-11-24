@@ -212,7 +212,7 @@ fn reached(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.indirectreturn_target_encoding = Some(target_encoding);
 }
 
@@ -415,7 +415,7 @@ pub fn normalize_return_selector(data: &mut Funcdata, table: &JumpTable) -> bool
     let Some(branch) = table.get_indirect_op() else {
         return false;
     };
-    let Some(encoding) = table.kuna_target_encoding() else {
+    let Some(encoding) = table.unlace_target_encoding() else {
         return false;
     };
     let Some(root) = data.obank().get(branch).and_then(|op| op.get_in(0)) else {
@@ -677,17 +677,17 @@ mod tests {
             !crate::constselectjump::admits(&jt, ConstSelectMode::Reentry)
                 && crate::constselectjump::admits(&jt, ConstSelectMode::On)
         );
-        jt.kuna_retry_flow();
+        jt.unlace_retry_flow();
         assert!(crate::constselectjump::admits(
             &jt,
             ConstSelectMode::Reentry
         ));
-        assert!(!jt.kuna_keeps_recovered_targets());
-        jt.kuna_push_entry(Address::new(ram, 0x1040), 0, 0x1040);
-        assert!(jt.kuna_keeps_recovered_targets());
+        assert!(!jt.unlace_keeps_recovered_targets());
+        jt.unlace_push_entry(Address::new(ram, 0x1040), 0, 0x1040);
+        assert!(jt.unlace_keeps_recovered_targets());
         jt.mark_complete();
         assert!(
-            !jt.kuna_keeps_recovered_targets()
+            !jt.unlace_keeps_recovered_targets()
                 && crate::constselectjump::admits(&jt, ConstSelectMode::Reentry)
         );
     }
@@ -854,8 +854,8 @@ mod tests {
         }
         let mut jt = JumpTable::new(fd.obank().get(branch).unwrap().get_addr().clone());
         jt.set_indirect_op_addr(branch, fd.obank().get(branch).unwrap().get_addr().clone());
-        jt.kuna_set_target_encoding(Some((8, u64::MAX)));
-        jt.kuna_set_trivial_model();
+        jt.unlace_set_target_encoding(Some((8, u64::MAX)));
+        jt.unlace_set_trivial_model();
         let target = Address::new(
             fd.get_address().get_space().unwrap().clone(),
             if variant == "missing-target" {
@@ -864,7 +864,7 @@ mod tests {
                 0x1040
             },
         );
-        jt.kuna_push_entry(target, 0, 0x1040);
+        jt.unlace_push_entry(target, 0, 0x1040);
         (fd, jt, site)
     }
     #[test]
@@ -946,7 +946,7 @@ mod tests {
             );
             let mut model = crate::constselectjump::JumpModelConstSelect::new();
             if variant != "not-admitted" {
-                model.kuna_admit_return(Some((8, u64::MAX)));
+                model.unlace_admit_return(Some((8, u64::MAX)));
             }
             let found = model.recover_model(&mut fd, branch, 0, 64).unwrap();
             assert_eq!(
@@ -955,7 +955,7 @@ mod tests {
                 "{variant}"
             );
             assert_eq!(
-                model.kuna_returns_to_caller(),
+                model.unlace_returns_to_caller(),
                 variant == "return",
                 "{variant}"
             );

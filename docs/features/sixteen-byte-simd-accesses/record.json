@@ -16,8 +16,8 @@
   "files": [
     "decompiler/crates/kuna-decomp/src/p9_emit/langc.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/printc/tests.rs",
-    "decompiler/crates/kuna-console/src/grammar/tests.rs",
-    "decompiler/crates/kuna-console/tests/verify_return_uncomputed.rs",
+    "decompiler/crates/console/src/grammar/tests.rs",
+    "decompiler/crates/console/tests/verify_return_uncomputed.rs",
     "docs/spec/09-emission.md",
     "decompiler/crates/kuna-decomp/src/p9_emit/langtypes.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/rusttypes.rs",
@@ -25,7 +25,7 @@
     "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/dedupvardecls.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/dedupvardecls/tests.rs",
-    "decompiler/crates/kuna-console/tests/verify_ptrarray_declarators.rs",
+    "decompiler/crates/console/tests/verify_ptrarray_declarators.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/ptrarraydecl_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/ptrarraydecl_x86_64.c",
     "decompiler/crates/kuna-analysis/tests/fixtures/README.md"

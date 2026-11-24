@@ -7,7 +7,7 @@ use std::process::Command;
 fn aggregate_calls_and_function_pointers_compile_and_execute() {
     let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-indirect-value-arguments.toml"
+        "/../../tests/stages/indirect-value-arguments.toml"
     )))
     .unwrap();
     let chunk =

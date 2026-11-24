@@ -1,5 +1,5 @@
-//! (kuna `swiftdemangle`) The name-only printer: the dotted Swift
-//! reference path kuna installs as a symbol name (`Swift.String.count.getter`,
+//! (unlace `swiftdemangle`) The name-only printer: the dotted Swift
+//! reference path unlace installs as a symbol name (`Swift.String.count.getter`,
 //! `Sample.Foo.init(x:y:)`, `<Sample.Foo:Swift.Hashable>.hash(into:)`,
 //! `Sample.Foo.type_metadata`). It never contains a space; types appear only
 //! where the name is meaningless without them (conformances, specializations,

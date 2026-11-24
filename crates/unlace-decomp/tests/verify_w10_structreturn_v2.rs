@@ -191,7 +191,7 @@ fn at3_incompatible_root_symbol_offset_is_err_not_panic() {
 }
 
 /// AT4 — a groupless high (no `piece`) is a no-op for `establish_group_symbol_offset`
-/// (the kuna guard for the C++ unconditional `piece->getGroup()` deref) and its
+/// (the unlace guard for the C++ unconditional `piece->getGroup()` deref) and its
 /// `group_symbol_offset` is 0 — the binding branch only fires for genuine pieces.
 #[test]
 fn at4_groupless_high_is_noop() {

@@ -33,7 +33,7 @@
     }
   ],
   "tests": {
-    "stages": "tests/stages/kuna-decodehalt.xml (two-pass, 4 assertions, an x86-64 `test edi,edi / je +1 / ret / .byte 0x06` where 0x06 is not an instruction in 64-bit mode)",
+    "stages": "tests/stages/decodehalt.xml (two-pass, 4 assertions, an x86-64 `test edi,edi / je +1 / ret / .byte 0x06` where 0x06 is not an instruction in 64-bit mode)",
     "unit": "decompiler/crates/kuna-decomp/src/p2_lift/decodehalt/tests.rs (6 tests: the option parse, the three cause->pseudo-call mappings, the noreturn/halt/plain negatives, the combined-mask precedence, the upstream warning strings, the ElementId range)",
     "cli_probe": "tests/cli/undecodable-encrypted-code-becomes.json, hand-promoted: `verify --promote` refuses a `binary_source: dataset` target, so the probe is re-pointed at a new vendored fixture, decompiler/crates/kuna-analysis/tests/fixtures/decodehalt_x86_64 (9,824 bytes, source .s checked in beside it) -- an XOR-in-place decrypt loop over a payload whose first byte is 0x06 at load time, reached through `push $payload; pop %rbx; jmp *%rbx`. `--option decodehalt off` renders `case 0x101000: return;` and fails the probe's stdout_absent clause; the default renders `halt_baddata()`."
   },

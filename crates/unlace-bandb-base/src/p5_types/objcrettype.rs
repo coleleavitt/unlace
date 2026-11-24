@@ -1,4 +1,4 @@
-//! (kuna `objcrettype`, `objcresolve`) What a message send returns and whom it
+//! (unlace `objcrettype`, `objcresolve`) What a message send returns and whom it
 //! reaches, from its receiver.
 //!
 //! An Objective-C call site names its selector but not its method: `objc_msgSend`
@@ -151,7 +151,7 @@ const SEND_SUPER: &str = "objc_msgSendSuper2";
 /// The selector a varnode carries: the string a constant names, the slot a
 /// load reads, through copies and casts.
 fn selector_of(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<String> {
-    let table = &classes(&data.get_arch().kuna_states);
+    let table = &classes(&data.get_arch().unlace_states);
     if let Some(addr) = constant_address(data, vn, 0) {
         return table.selector_at.get(&addr).cloned();
     }
@@ -218,7 +218,7 @@ const IDENTITIES: [&str; 6] = [
 fn class_value(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> ClassValue {
     use ClassValue::*;
     let arch = data.get_arch();
-    let table = &classes(&arch.kuna_states);
+    let table = &classes(&arch.unlace_states);
     if let Some(addr) = constant_address(data, vn, 0) {
         return table.class_at.get(&addr).cloned().map_or(Unknown, Known);
     }
@@ -351,7 +351,7 @@ fn super_start(data: &Funcdata) -> Option<(String, bool)> {
         .strip_prefix('[')?
         .split([' ', '('])
         .next()?;
-    let table = &classes(&data.get_arch().kuna_states);
+    let table = &classes(&data.get_arch().unlace_states);
     Some((table.classes.get(class)?.superclass.clone()?, class_method))
 }
 
@@ -382,7 +382,7 @@ fn instancetype_at(
     depth: u32,
 ) -> Option<Rc<Datatype>> {
     let sel = selector(data, op, fc)?;
-    let table = &classes(&data.get_arch().kuna_states);
+    let table = &classes(&data.get_arch().unlace_states);
     match receiver(data, op, fc, depth) {
         Some(Receiver::Class(class)) => {
             let result = match table
@@ -440,7 +440,7 @@ fn instancetype_at(
 pub fn instancetype(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<Datatype>> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::objcrettype::ObjcRettype>()
         .0
     {
@@ -469,7 +469,11 @@ pub struct ResolvedSend {
 /// The method the send at `op` reaches when its receiver's class is known.
 pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     let arch = data.get_arch();
-    if !arch.kuna_options.get::<crate::objcrettype::ObjcResolve>().0 {
+    if !arch
+        .unlace_options
+        .get::<crate::objcrettype::ObjcResolve>()
+        .0
+    {
         return None;
     }
     let fc = data.get_call_specs(data.get_call_specs_index(op)?);
@@ -479,7 +483,7 @@ pub fn resolve_send(data: &Funcdata, op: OpId) -> Option<ResolvedSend> {
     }
     let sel = selector(data, op, fc)?;
     let site = data.obank().get(op)?.get_addr().clone();
-    let table = &classes(&arch.kuna_states);
+    let table = &classes(&arch.unlace_states);
     let (m, self_type, retarget) = match receiver(data, op, fc, 0)? {
         Receiver::Class(class) => (table.resolve(&class, &sel, true)?, None, true),
         Receiver::Super(class, class_method) => {
@@ -543,8 +547,8 @@ pub fn holds_loaded_value(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
         }
 }
 
-crate::kuna_flag!(
-    /// (kuna `objcrettype`) Type a message send's result by its receiver:
+crate::unlace_flag!(
+    /// (unlace `objcrettype`) Type a message send's result by its receiver:
     /// `[Foo alloc]` is a `Foo *`, `init…`/`self`/`retain`/`copy` return their
     /// receiver's class (`p5_types/objcrettype.rs`). Default on.
     ObjcRettype,
@@ -554,8 +558,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `objcresolve`) Render a message send whose receiver's class is
+crate::unlace_flag!(
+    /// (unlace `objcresolve`) Render a message send whose receiver's class is
     /// known as the method it reaches (`-[Foo bar:]`). Default on.
     ObjcResolve,
     "objcresolve",
@@ -564,7 +568,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_arch_state!(ObjcClassTable);
+crate::unlace_arch_state!(ObjcClassTable);
 
 /// The image's Objective-C class table, shared through the architecture's states; empty before
 /// the loader commits one.

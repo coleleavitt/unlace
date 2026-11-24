@@ -1,6 +1,6 @@
 //! Declared function boundaries end-to-end — `docs/re-needs/no-cli-function-boundary-override.md`.
 //!
-//! Every function boundary kuna knows is one it DERIVED: discovery finds the
+//! Every function boundary unlace knows is one it DERIVED: discovery finds the
 //! entries and the extent is the address-contiguous clip `[entry, next_entry)`
 //! over an unbounded flow follow. On an obfuscated or packed image, where
 //! discovery is exactly what fails, a caller had no way to correct either half —
@@ -94,7 +94,7 @@ fn body_at_entry(prog: &mut ConsoleProgram, name: &str) -> String {
     unlace_decomp::decompile_drive::print_c(prog.arch_mut(), &fd)
 }
 
-/// The inventory extent kuna reports for `ENTRY`.
+/// The inventory extent unlace reports for `ENTRY`.
 fn reported_extent(prog: &ConsoleProgram) -> u64 {
     prog.function_entries_canonical()
         .iter()
@@ -185,7 +185,7 @@ fn a_declared_end_a_branch_targets_clips_instead_of_aborting() {
     );
 }
 
-/// Declaring the extent kuna itself derived must change nothing — the whole point
+/// Declaring the extent unlace itself derived must change nothing — the whole point
 /// of an assertion is that asserting the truth is free.
 ///
 /// It was not: the fall-through bound treated the LAST in-body byte as already
@@ -282,7 +282,7 @@ fn load_fixture_with_options(rel: &str, options: &[(&str, &str)]) -> ConsoleProg
             .expect("bootstrap fixture with built processor specs");
     for (name, value) in options {
         prog.arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .unwrap_or_else(|e| panic!("option {name}={value} applies: {}", e.explain()));
     }
     prog.commit_pending_analysis()

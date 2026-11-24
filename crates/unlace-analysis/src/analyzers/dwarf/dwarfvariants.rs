@@ -1,4 +1,4 @@
-//! (kuna `dwarfvariants`) DWARF **discriminated-union** import —
+//! (unlace `dwarfvariants`) DWARF **discriminated-union** import —
 //! `DW_TAG_variant_part` / `DW_AT_discr` / `DW_TAG_variant` /
 //! `DW_AT_discr_value`, i.e. the layout a Rust tagged enum keeps there instead of
 //! in `DW_TAG_member` children.
@@ -176,7 +176,7 @@ use super::dwarfstructs::{
 };
 use super::typedepth::TypeWalk;
 
-/// One `DW_TAG_variant`, as read from DWARF and before any kuna type exists.
+/// One `DW_TAG_variant`, as read from DWARF and before any unlace type exists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct RawVariant {
     /// `DW_AT_discr_value`; `None` marks the DEFAULT (niche) variant.
@@ -496,7 +496,7 @@ fn install_layout(
         let done = types
             .set_fields_union_raw(shell, union_fields, size, align)
             .ok()?;
-        types.kuna_record_variant_layout(layout);
+        types.unlace_record_variant_layout(layout);
         return Some(done);
     }
 
@@ -519,7 +519,7 @@ fn install_layout(
     };
     layout.union_type = uname;
 
-    // (kuna `variantnames`) The tag member takes a synthesized enum built from
+    // (unlace `variantnames`) The tag member takes a synthesized enum built from
     // the variant part's own discriminant->name map, so a test of it renders
     // the variant name; the DWARF-declared integer stays when the gate is off,
     // the tag is already an enum, or no variant carries a usable (name, value).
@@ -540,7 +540,7 @@ fn install_layout(
     let done = types
         .set_fields_struct_raw(shell, fields, Vec::new(), size, align, 0)
         .ok()?;
-    types.kuna_record_variant_layout(layout);
+    types.unlace_record_variant_layout(layout);
     Some(done)
 }
 

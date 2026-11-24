@@ -1,4 +1,4 @@
-//! (kuna `blobs`) Commit the embedded images and archives the `blobs` pass
+//! (unlace `blobs`) Commit the embedded images and archives the `blobs` pass
 //! found: each becomes `<kind>_<addr>`, an `unsigned char[len]` data symbol,
 //! where nothing else names the address. Every blob's first address is also
 //! recorded on the architecture, so a constant equal to it is weighed as a
@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use unlace_analysis::pass::BlobFact;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::type_metatype;
 use unlace_decomp::varnode::varnode_flags;
@@ -39,7 +39,7 @@ pub(crate) fn commit(
     blobs: &[BlobFact],
     names: &mut Names,
     num_spaces: i32,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     for blob in blobs {
         let Ok(len) = i32::try_from(blob.len) else {
             continue;

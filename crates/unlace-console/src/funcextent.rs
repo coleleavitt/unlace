@@ -3,7 +3,7 @@
 //!
 //! # What this is
 //!
-//! kuna's model of a function is its **entry**: the Listing is keyed by entry
+//! unlace's model of a function is its **entry**: the Listing is keyed by entry
 //! VMA and [`ConsoleProgram::function_entries_canonical`] yields one record per
 //! entry address. Nothing in that model carries a body, so an inventory record
 //! had no extent at all and a caller could not tell a PLT thunk from `main`
@@ -126,7 +126,7 @@ pub(crate) fn extent_at(entry: u64, ascending_entries: &[u64], code: &[CodeSpan]
     clip(entry, next, code)
 }
 
-/// (kuna #1288) The extent of `vma` on an image that measured its functions'
+/// (unlace #1288) The extent of `vma` on an image that measured its functions'
 /// flow ends (`unlace_analysis::listing::rawextent`): `clip` cut at the end
 /// of the flow of `owner`, the greatest entry at or below `vma`.
 ///

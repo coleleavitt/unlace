@@ -10,7 +10,7 @@ pub fn scalar_bits(fd: &Funcdata, high: HighVariableId) -> bool {
     let Some(h) = fd.high_bank().get(high) else {
         return false;
     };
-    if h.num_instances() == 0 || h.kuna_symbol_type().is_some() {
+    if h.num_instances() == 0 || h.unlace_symbol_type().is_some() {
         return false;
     }
     (0..h.num_instances()).all(|i| {

@@ -12,7 +12,7 @@ fn hello() -> String {
 
 #[test]
 fn the_inventory_is_the_method_bodies_at_their_own_sizes() {
-    let (out, err, code) = common::run_kuna(&["functions", &hello()]);
+    let (out, err, code) = common::run_unlace(&["functions", &hello()]);
     assert_eq!(code, 0, "{err}");
     // An entry's aliases follow its name on the same line; only the names count here.
     let names: Vec<String> = out
@@ -29,7 +29,7 @@ fn the_inventory_is_the_method_bodies_at_their_own_sizes() {
     );
     assert_eq!(err, "", "nothing sends the reader to another tool");
 
-    let (json, err, code) = common::run_kuna(&["functions", &hello(), "--json"]);
+    let (json, err, code) = common::run_unlace(&["functions", &hello(), "--json"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(
         json.matches("\"size\": 28").count(),
@@ -45,7 +45,7 @@ fn the_inventory_is_the_method_bodies_at_their_own_sizes() {
 
 #[test]
 fn a_method_decompiles_to_its_loop_and_its_caller_names_it() {
-    let (out, err, code) = common::run_kuna(&["decompile", &hello(), SUM]);
+    let (out, err, code) = common::run_unlace(&["decompile", &hello(), SUM]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.starts_with("int Program::<<Main>$>g__Sum|0_0(int *a)\n"),
@@ -55,7 +55,7 @@ fn a_method_decompiles_to_its_loop_and_its_caller_names_it() {
         "  for (v1 = 0; v1 < (int)ldlen(a); v1 = v1 + 1) {\n    v2 += a[v1];\n  }\n  return v2;\n";
     assert!(out.contains(body), "{out}");
 
-    let (out, err, code) = common::run_kuna(&["decompile", &hello(), "0x402051", "--addr"]);
+    let (out, err, code) = common::run_unlace(&["decompile", &hello(), "0x402051", "--addr"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("  System.Console::WriteLine(Program::<<Main>$>g__Sum|0_0(a));\n"),
@@ -65,7 +65,7 @@ fn a_method_decompiles_to_its_loop_and_its_caller_names_it() {
 
 #[test]
 fn a_method_lists_only_its_own_instructions() {
-    let (out, err, code) = common::run_kuna(&["disassemble", &hello(), "0x40206e", "--addr"]);
+    let (out, err, code) = common::run_unlace(&["disassemble", &hello(), "0x40206e", "--addr"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.starts_with(
@@ -89,7 +89,7 @@ fn cil_off_and_an_explicit_target_read_the_native_stub() {
     for view in views {
         let mut args = vec!["functions", binary.as_str()];
         args.extend(view);
-        let (out, err, code) = common::run_kuna(&args);
+        let (out, err, code) = common::run_unlace(&args);
         assert_eq!(code, 0, "{view:?}: {err}");
         assert!(
             out.contains("_CorExeMain") && !out.contains("Program::"),

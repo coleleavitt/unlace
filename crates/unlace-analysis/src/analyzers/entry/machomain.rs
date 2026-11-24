@@ -1,4 +1,4 @@
-//! (kuna) `machomain` — name the Mach-O `LC_MAIN` entry routine `main` and give
+//! (unlace) `machomain` — name the Mach-O `LC_MAIN` entry routine `main` and give
 //! it the conventional `int main(int, char **)` prototype (P1 program prep).
 //!
 //! On a stripped Mach-O executable every function comes out `sub_<addr>`, and
@@ -19,7 +19,7 @@
 //! - the **prototype** `int main(int argc, char **argv)`, parked by that name.
 //!
 //! The prototype is the Mach-O analog of what [`super::entrymainproto`]
-//! recovers on a PE, and it exists for the same reason: kuna reads a callee's
+//! recovers on a PE, and it exists for the same reason: unlace reads a callee's
 //! parameters out of the callee's OWN body, so a `main` that ignores its
 //! arguments never reads `rdi`/`rsi` and is declared `void(void)`. On a PE the
 //! arguments are recoverable only by reading the in-image CRT startup's call
@@ -67,7 +67,7 @@ use super::{executable_sections, existing_function_addrs, in_executable_section}
 /// for the C name.
 const MAIN: &str = "main";
 
-/// (kuna) The Mach-O `LC_MAIN` entry naming + prototype pass (`machomain`).
+/// (unlace) The Mach-O `LC_MAIN` entry naming + prototype pass (`machomain`).
 pub struct MachoMainPass;
 
 impl AnalysisPass for MachoMainPass {
@@ -144,7 +144,7 @@ fn main_prototype(ctx: &AnalysisCtx) -> Option<PrototypePieces> {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

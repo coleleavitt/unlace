@@ -1,9 +1,9 @@
-//! (kuna `pdbtypes`) Types, prototypes, locals, globals and vftables from a
+//! (unlace `pdbtypes`) Types, prototypes, locals, globals and vftables from a
 //! fingerprint-matched `.pdb` (P1 external refinement).
 //!
 //! The `pdb` pass names functions; this one gives them what a `/Zi` build
 //! records beside the name, the PDB half of what [`crate::dwarf`] does for DWARF.
-//! The kuna analog of Ghidra's `PdbApplicator` symbol appliers
+//! The unlace analog of Ghidra's `PdbApplicator` symbol appliers
 //! (`FunctionSymbolApplier`, `LocalOptimizedSymbolApplier`,
 //! `RegisterRelativeSymbolApplier`, `DataSymbolApplier`). For each procedure in
 //! the module streams:
@@ -18,7 +18,7 @@
 //!   parameters rather than a variadic list.
 //! - **Stack locals.** `S_LOCAL` with an `S_DEFRANGE_FRAMEPOINTER_REL`,
 //!   `S_DEFRANGE_FRAMEPOINTER_REL_FULL_SCOPE` or `S_DEFRANGE_REGISTER_REL` range, and
-//!   the MSVC `S_REGREL32`/`S_BPREL32` records, placed in kuna stack coordinates
+//!   the MSVC `S_REGREL32`/`S_BPREL32` records, placed in unlace stack coordinates
 //!   (0 is the return-address slot) by [`base_offset`]. Only a slot below the
 //!   return address becomes a [`crate::pass::LocalFact`]; one above it is an
 //!   incoming argument, which the prototype already describes.
@@ -80,7 +80,7 @@ const S_DEFRANGE_REGISTER_REL: u16 = 0x1145;
 /// Scope bound inside one procedure.
 const MAX_SCOPE_DEPTH: u32 = 256;
 
-/// (kuna) The PDB types/prototypes/locals pass (`pdbtypes`).
+/// (unlace) The PDB types/prototypes/locals pass (`pdbtypes`).
 #[derive(Default)]
 pub struct PdbTypesPass;
 
@@ -188,7 +188,7 @@ fn register_base(family: Family, reg: u16) -> Option<Base> {
     }
 }
 
-/// Where `base` points in kuna stack coordinates during the procedure body (0
+/// Where `base` points in unlace stack coordinates during the procedure body (0
 /// is the return-address slot), when it is known: the x64 stack pointer from
 /// `S_FRAMEPROC`, the x64 frame register from the function's unwind data
 /// (`frame_register`, [`super::pdbframe`]), the i386 `EBP` frame.
@@ -253,7 +253,7 @@ fn x86_model(cc: u8) -> Option<&'static str> {
 /// Where one variable lives.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Loc {
-    /// Kuna stack coordinates.
+    /// Unlace stack coordinates.
     Stack(i64),
     /// A CodeView register from the given address on.
     Register(u16, u64),

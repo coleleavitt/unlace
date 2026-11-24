@@ -1,4 +1,4 @@
-//! (kuna) The staging-window half of a [`LoadImage`], written once and shared:
+//! (unlace) The staging-window half of a [`LoadImage`], written once and shared:
 //! the 512-byte read window ([`windowed_load_fill`]) and a [`LoadImage`] over
 //! bytes someone else owns ([`SharedBytesImage`]).
 //!
@@ -15,13 +15,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 
 use crate::loadimage::{IMAGE_WINDOW_BYTES, ImageBytes, LoadImage};
 
-/// (kuna) Refill the staging window of [`windowed_load_fill`] at `offset`, as
+/// (unlace) Refill the staging window of [`windowed_load_fill`] at `offset`, as
 /// a read there left it, or empty it for `!0` or an unmapped `offset`.
 pub fn restore_window(
     bytes: &dyn ImageBytes,
@@ -52,14 +52,14 @@ pub fn windowed_load_fill(
     bufoffset: &RefCell<u64>,
     ptr: &mut [u8],
     addr: &Address,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let curaddr0: u64 = addr.get_offset();
 
-    // (kuna) A request larger than the staging buffer cannot be served out
+    // (unlace) A request larger than the staging buffer cannot be served out
     // of it. Upstream copies the answer back with `memcpy(ptr,buffer,size)`
     // and so reads past the end of a 512-byte buffer for any such request --
     // a silent heap over-read that only upstream's own <= 16-byte callers
-    // keep out of reach. kuna reads whole objects (a typed global's
+    // keep out of reach. unlace reads whole objects (a typed global's
     // datatype size), which routinely exceed 512 bytes, and the same copy
     // spelled as a Rust slice panics instead.
     if ptr.len() > IMAGE_WINDOW_BYTES {
@@ -71,7 +71,7 @@ pub fn windowed_load_fill(
                 addr.get_shortcut()
             );
             addr.print_raw(&mut errmsg)?;
-            return Err(KunaError::data_unavail(errmsg));
+            return Err(UnlaceError::data_unavail(errmsg));
         }
         return Ok(());
     }
@@ -79,7 +79,7 @@ pub fn windowed_load_fill(
     let mut bufoffset = bufoffset.borrow_mut();
     let mut buffer = buffer.borrow_mut();
 
-    // (kuna) Upstream tests `curaddr0 + size < bufoffset + BUFSIZE`, which
+    // (unlace) Upstream tests `curaddr0 + size < bufoffset + BUFSIZE`, which
     // wraps for a request at the top of the address space (a sign-extended
     // negative pointer) and indexes far outside the window. Compare the
     // in-window offset instead.
@@ -99,7 +99,7 @@ pub fn windowed_load_fill(
     if cursize > 0 {
         // (offset==0 break path) Unable to load N bytes at <addr>.
         //
-        // (kuna) Restore the "nothing buffered" sentinel first.  `bufoffset`
+        // (unlace) Restore the "nothing buffered" sentinel first.  `bufoffset`
         // was claimed at the top of the fill, before any byte was read, so
         // leaving it set on the failure path makes the fast path above hand
         // out the 512-byte window starting at an address that is NOT MAPPED --
@@ -112,14 +112,14 @@ pub fn windowed_load_fill(
             addr.get_shortcut()
         );
         addr.print_raw(&mut errmsg)?;
-        return Err(KunaError::data_unavail(errmsg));
+        return Err(UnlaceError::data_unavail(errmsg));
     }
     // Copy the requested bytes out.
     ptr.copy_from_slice(&buffer[..ptr.len()]);
     Ok(())
 }
 
-/// (kuna) A reader's "a fetch started on an unmapped byte" flag.
+/// (unlace) A reader's "a fetch started on an unmapped byte" flag.
 ///
 /// [`ImageBytes::fill_span`] reports failure only when the very FIRST byte of a
 /// span is unmapped, and that is the one case in which the staging window in
@@ -130,7 +130,7 @@ pub fn windowed_load_fill(
 /// produced must be thrown away.
 pub type UnmappedTripwire = Rc<Cell<bool>>;
 
-/// \brief (kuna) A [`LoadImage`] over bytes another image owns.
+/// \brief (unlace) A [`LoadImage`] over bytes another image owns.
 ///
 /// Everything that cannot be shared is its own: the staging window and the
 /// space handle. Everything that can is behind the `Arc`. Built for a decoder
@@ -184,14 +184,14 @@ impl LoadImage for SharedBytesImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let space = addr
             .get_space()
             .expect("SharedBytesImage::loadFill: address with null space (C++ UB)");
         match &self.spaceid {
             Some(sp) if Rc::ptr_eq(sp, space) => {}
             _ => {
-                return Err(KunaError::data_unavail(format!(
+                return Err(UnlaceError::data_unavail(format!(
                     "Trying to get loadimage bytes from space: {}",
                     space.get_name()
                 )));

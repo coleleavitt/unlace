@@ -27,7 +27,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::marshal::{
     Decoder, Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode, XmlEncode,
 };
@@ -60,11 +60,11 @@ fn oracle_cell(s: &str) -> &str {
 }
 
 /// Map a Rust recover result onto the oracle cell text.
-fn recover_cell(res: Result<u64, KunaError>) -> String {
+fn recover_cell(res: Result<u64, UnlaceError>) -> String {
     match res {
         Ok(v) => format!("0x{v:x}"),
-        Err(KunaError::Evaluation { .. }) => "EVALERR".to_string(),
-        Err(KunaError::Lowlevel { .. }) => "LOWERR".to_string(),
+        Err(UnlaceError::Evaluation { .. }) => "EVALERR".to_string(),
+        Err(UnlaceError::Lowlevel { .. }) => "LOWERR".to_string(),
         Err(other) => format!("UNEXPECTED({other:?})"),
     }
 }
@@ -348,7 +348,7 @@ fn verify_packed_opcode_truncation_and_range() {
         match want {
             Some(op) => assert_eq!(got.unwrap(), op, "raw {raw:#x}"),
             None => match got {
-                Err(KunaError::Decoder { explain }) => {
+                Err(UnlaceError::Decoder { explain }) => {
                     assert_eq!(explain, "Bad encoded OpCode", "raw {raw:#x}")
                 }
                 other => panic!("raw {raw:#x}: expected Bad encoded OpCode, got {other:?}"),
@@ -410,7 +410,7 @@ fn verify_decode_bad_opcode_preserves_outvar() {
     );
     let mut outvar = Some(sentinel.clone());
     let res = PcodeOpRaw::decode(&mut dec, 0, &mut invar, &mut outvar);
-    assert!(matches!(res, Err(KunaError::Decoder { .. })));
+    assert!(matches!(res, Err(UnlaceError::Decoder { .. })));
     // the C++ throw happens before *outvar is written; the port must too
     assert_eq!(outvar.as_ref().unwrap(), &sentinel);
     assert!(invar.is_empty());

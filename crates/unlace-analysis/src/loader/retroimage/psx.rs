@@ -2,7 +2,7 @@
 //! copies to `t_addr` before jumping to `pc0` with `gp` set to `gp0`.
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{Bytes, MAX_MODULE, RetroImage, RetroSection, invalid};
 
@@ -14,7 +14,7 @@ pub fn probe(prefix: &[u8]) -> bool {
     prefix.starts_with(b"PS-X EXE")
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let file = Bytes {
         data: bytes,

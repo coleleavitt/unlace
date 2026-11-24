@@ -6,7 +6,7 @@
 //! The pass keys on the **Listing tier** and on AIF's gap walk over it, and both
 //! are built only from a real `ObjectLoadImage`. The datatest/stages harness embeds
 //! raw `<bytechunk>`s with explicit `<symbol>` definitions and never constructs a
-//! load image (`tests/stages/kuna-listing-flag.toml` says so in its own comment), so
+//! load image (`tests/stages/unlace-listing-flag.toml` says so in its own comment), so
 //! the option is structurally unobservable there — `fdeinterior`/DIV-61 shipped an
 //! entry-*removing* default-ON flip at 675/675 PARITY OK with no per-test opt-out
 //! for the same reason. Every sibling analysis-tier discovery flag
@@ -100,33 +100,33 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
-    // (kuna, GH-299) `aif on`, not `strict`: the aligned slide suppresses both
+    // (unlace, GH-299) `aif on`, not `strict`: the aligned slide suppresses both
     // phantoms this file exists to pin — it never probes `POOL+2`, which is 2-mod-4
     // and not a hole start — and these five assertions are about `poolentry`'s own
     // contract (pool inference, the paired MOVE, the unpaired KEEP, the disclosed
     // split), so they keep the byte-granular cursor they were written against.
     // `verify_aifstrict.rs` is the two-pass gate for the suppression itself.
     prog.arch_mut()
-        .set_kuna_option("aif", "on")
+        .set_unlace_option("aif", "on")
         .expect("aif flips on");
     // `aifpoolslide` (default-on) keeps the gap walk off both pool words in the first
     // place; it is pinned off here for the same reason. `verify_aifpoolslide.rs`
     // gates it on this fixture.
     prog.arch_mut()
-        .set_kuna_option("aifpoolslide", "off")
+        .set_unlace_option("aifpoolslide", "off")
         .expect("aifpoolslide flips off");
     // `aifdataveto` drops `F`, an AIF-only entry whose first word `G` reads as
     // data; it is pinned off so the disclosed split below stays observable.
     prog.arch_mut()
-        .set_kuna_option("aifdataveto", "off")
+        .set_unlace_option("aifdataveto", "off")
         .expect("aifdataveto flips off");
     prog.arch_mut()
-        .set_kuna_option("poolentry", if on { "on" } else { "off" })
+        .set_unlace_option("poolentry", if on { "on" } else { "off" })
         .expect("poolentry flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -292,13 +292,13 @@ fn poolentry_is_inert_without_aif() {
         let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
         prog.arch_mut()
-            .set_kuna_option("listing", "on")
+            .set_unlace_option("listing", "on")
             .expect("listing flips on");
         prog.arch_mut()
-            .set_kuna_option("funcstart_patterns", "on")
+            .set_unlace_option("funcstart_patterns", "on")
             .expect("funcstart_patterns flips on");
         prog.arch_mut()
-            .set_kuna_option("poolentry", if on { "on" } else { "off" })
+            .set_unlace_option("poolentry", if on { "on" } else { "off" })
             .expect("poolentry flips");
         prog.commit_pending_analysis()
             .expect("analysis commit succeeds");
@@ -351,7 +351,7 @@ fn checked_frame_program(
         ("ptrentry", pointers),
     ] {
         prog.arch_mut()
-            .set_kuna_option(name, if enabled { "on" } else { "off" })
+            .set_unlace_option(name, if enabled { "on" } else { "off" })
             .unwrap();
     }
     prog.commit_pending_analysis().unwrap();

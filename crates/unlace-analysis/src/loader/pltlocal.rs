@@ -1,4 +1,4 @@
-//! (kuna) `pltlocal` — the PLT stubs a linked ELF's own relocations bind to a
+//! (unlace) `pltlocal` — the PLT stubs a linked ELF's own relocations bind to a
 //! function the same image defines.
 //!
 //! A shared library that calls one of its own default-visibility functions

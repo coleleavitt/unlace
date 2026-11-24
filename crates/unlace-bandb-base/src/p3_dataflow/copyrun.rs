@@ -1,4 +1,4 @@
-//! (kuna `copyrun`) An unrolled run of element copies becomes `memcpy`.
+//! (unlace `copyrun`) An unrolled run of element copies becomes `memcpy`.
 //!
 //! A compiler expands a fixed-size copy (a struct assignment, `memcpy` with a
 //! constant length) into loads and stores of the widest registers it has:
@@ -52,7 +52,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode::{self, *};
 
@@ -69,7 +69,7 @@ const MIN_BYTES: i64 = 32;
 /// How far a pointer is followed to its base.
 const BASE_DEPTH: usize = 8;
 
-/// (kuna) `ActionCopyRun` — collapse an unrolled element-copy run into `memcpy`
+/// (unlace) `ActionCopyRun` — collapse an unrolled element-copy run into `memcpy`
 /// (option `copyrun`).
 pub struct ActionCopyRun {
     base: ActionBase,
@@ -100,7 +100,7 @@ impl Action for ActionCopyRun {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::copyrun::CopyRun>()
             .0
         {
@@ -388,7 +388,7 @@ fn runs(data: &Funcdata, block: BlockId) -> Vec<Run> {
 }
 
 /// `base + off` as a new op before `before`, or `base` itself when `off` is 0.
-fn offset(data: &mut Funcdata, base: VarnodeId, off: i64, before: OpId) -> KunaResult<VarnodeId> {
+fn offset(data: &mut Funcdata, base: VarnodeId, off: i64, before: OpId) -> UnlaceResult<VarnodeId> {
     if off == 0 {
         return Ok(base);
     }
@@ -406,18 +406,18 @@ fn offset(data: &mut Funcdata, base: VarnodeId, off: i64, before: OpId) -> KunaR
     Ok(out)
 }
 
-fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
+fn rewrite(data: &mut Funcdata, run: &Run) -> UnlaceResult<()> {
     let last = run
         .pairs
         .iter()
         .max_by_key(|p| p.at)
         .map(|p| p.store)
-        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: empty run"))?;
+        .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("copyrun: empty run"))?;
     let dst = offset(data, run.dst, run.dst_lo, last)?;
     let src = offset(data, run.src, run.src_lo, last)?;
     let at = op(data, last)
         .map(|p| p.get_addr().clone())
-        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: stale store"))?;
+        .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("copyrun: stale store"))?;
     let call = data.new_op(4, at);
     data.op_set_opcode_code(call, CPUI_CALLOTHER);
     let id = data.new_constant(4, BUILTIN_MEMCPY as uintb);
@@ -430,15 +430,16 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
     data.op_insert_before(call, last);
     let block = op(data, call).and_then(|p| p.get_parent());
     let ops = block.map(|b| data.bb_ops(b)).unwrap_or_default();
-    let chains = indirect_chains(data, &ops, &run.pairs)
-        .ok_or_else(|| unlace_base::error::KunaError::lowlevel("copyrun: broken INDIRECT chain"))?;
+    let chains = indirect_chains(data, &ops, &run.pairs).ok_or_else(|| {
+        unlace_base::error::UnlaceError::lowlevel("copyrun: broken INDIRECT chain")
+    })?;
     for chain in chains {
         let (Some(&first), Some(&ind)) = (chain.first(), chain.last()) else {
             continue;
         };
         if first != ind {
             let head = op(data, first).and_then(|p| p.get_in(0)).ok_or_else(|| {
-                unlace_base::error::KunaError::lowlevel("copyrun: INDIRECT without input")
+                unlace_base::error::UnlaceError::lowlevel("copyrun: INDIRECT without input")
             })?;
             data.op_set_input(ind, head, 0)?;
             for &dead in chain[..chain.len() - 1].iter().rev() {
@@ -462,8 +463,8 @@ fn rewrite(data: &mut Funcdata, run: &Run) -> KunaResult<()> {
     Ok(())
 }
 
-crate::kuna_flag!(
-    /// (kuna) Collapse an unrolled element-copy run into `memcpy` (option
+crate::unlace_flag!(
+    /// (unlace) Collapse an unrolled element-copy run into `memcpy` (option
     /// `copyrun`).  See [`crate::copyrun`].
     CopyRun,
     "copyrun",

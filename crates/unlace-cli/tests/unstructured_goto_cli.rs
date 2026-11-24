@@ -32,7 +32,7 @@ fn fixture() -> String {
         .to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
+fn run_unlace(args: &[&str]) -> (String, String, Option<i32>) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .env("SLEIGHHOME", repo_root().join("specs"))
         .args(args)
@@ -46,7 +46,7 @@ fn run_kuna(args: &[&str]) -> (String, String, Option<i32>) {
 }
 
 /// The marker the printer emits, spelled here exactly once so a drift in
-/// `kuna_langrust` fails this file rather than passing it silently.
+/// `unlace_langrust` fails this file rather than passing it silently.
 const MARKER: &str = "panic!(\"kuna: unstructured goto to ";
 
 /// The forked `decomp_dbg` surface: the note names the function and the count,
@@ -54,7 +54,7 @@ const MARKER: &str = "panic!(\"kuna: unstructured goto to ";
 #[test]
 fn the_text_surface_reports_the_marker_on_stderr() {
     let (stdout, stderr, code) =
-        run_kuna(&["decompile", &fixture(), "irreducible", "--language", "rust"]);
+        run_unlace(&["decompile", &fixture(), "irreducible", "--language", "rust"]);
     assert!(stdout.contains(MARKER), "expected the marker in:\n{stdout}");
     assert!(
         stderr.contains("note: 1 unstructured goto in irreducible"),
@@ -76,7 +76,7 @@ fn the_text_surface_reports_the_marker_on_stderr() {
 /// `decompile-all` consumer filters on. `error` stays `null` on purpose.
 #[test]
 fn the_json_surface_counts_the_marker_per_function() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(),
         "irreducible",
@@ -104,7 +104,7 @@ fn the_json_surface_counts_the_marker_per_function() {
 #[test]
 fn decompile_all_carries_the_count_on_every_record() {
     let (stdout, stderr, code) =
-        run_kuna(&["decompile-all", &fixture(), "--language", "rust", "--json"]);
+        run_unlace(&["decompile-all", &fixture(), "--language", "rust", "--json"]);
     assert!(
         stdout.contains("\"unstructured_gotos\": 1"),
         "expected one lossy record in:\n{stdout}"
@@ -120,7 +120,7 @@ fn decompile_all_carries_the_count_on_every_record() {
 /// count. Without this the count could be read off any rendered body.
 #[test]
 fn c_output_reports_nothing_and_counts_zero() {
-    let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "irreducible"]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &fixture(), "irreducible"]);
     assert!(
         stdout.contains("goto label_"),
         "C spells the jump for real:\n{stdout}"
@@ -131,7 +131,7 @@ fn c_output_reports_nothing_and_counts_zero() {
     );
     assert_eq!(code, Some(0));
 
-    let (stdout, stderr, code) = run_kuna(&["decompile", &fixture(), "irreducible", "--json"]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &fixture(), "irreducible", "--json"]);
     assert!(
         stdout.contains("\"unstructured_gotos\": 0"),
         "expected a zero count in:\n{stdout}"

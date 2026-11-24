@@ -1,4 +1,4 @@
-//! (kuna `armframes`) Follow an A32 jump table in the Listing and xrefs walks, so
+//! (unlace `armframes`) Follow an A32 jump table in the Listing and xrefs walks, so
 //! the case blocks of a switch belong to the function that dispatches to them.
 //!
 //! GCC lowers an A32 switch to a predicated computed jump right after the range
@@ -50,7 +50,7 @@ pub(crate) fn applies(
     arch: &unlace_decomp::architecture::Architecture,
 ) -> bool {
     use object::Object;
-    arch.kuna_options
+    arch.unlace_options
         .get::<unlace_decomp::analysisgates::ArmFrames>()
         .inventory
         && file.architecture() == object::Architecture::Arm

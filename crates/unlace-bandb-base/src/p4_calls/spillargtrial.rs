@@ -62,7 +62,7 @@
 //! constants -- it walks forward from the store's own base Varnode carrying the
 //! running offset delta.  That is also why it never scans the whole function.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::VarnodeStorage;
 use unlace_base::types::{int4, uintb};
 
@@ -94,7 +94,7 @@ impl OptionSpillArgTrial {
 
     /// Parse `off`/`reload`/`spill` into the predicate level + a confirmation
     /// message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         match p1 {
             "off" => Ok((
                 LEVEL_OFF,
@@ -115,7 +115,7 @@ impl OptionSpillArgTrial {
                  any caller-frame store of the argument value"
                     .to_string(),
             )),
-            _ => Err(unlace_base::error::KunaError::parse(
+            _ => Err(unlace_base::error::UnlaceError::parse(
                 "Must specify one of off, reload, spill",
             )),
         }
@@ -309,7 +309,7 @@ fn has_later_reload(
 pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId) -> bool {
     let level = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::spillargtrial::SpillArgTrial>()
         .0;
     if level <= LEVEL_OFF {
@@ -339,11 +339,11 @@ pub fn store_is_caller_save_spill(data: &Funcdata, store_op: OpId, vn: VarnodeId
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.spillargtrial_store_is_caller_save_spill = Some(store_is_caller_save_spill);
 }
 
-/// (kuna) Predicate strength for tolerating the caller's own caller-save
+/// (unlace) Predicate strength for tolerating the caller's own caller-save
 /// spill among a trial Varnode's descendants in `Funcdata::onlyOpUse`
 /// (option `spillargtrial`).  `0` = off (upstream-faithful: every
 /// `CPUI_STORE` makes the trial inactive), `1` = spill/reload pairs only,
@@ -352,9 +352,9 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpillArgTrial(pub int4);
 
-impl crate::optionset::KunaOption for SpillArgTrial {
+impl crate::optionset::UnlaceOption for SpillArgTrial {
     const NAME: &'static str = "spillargtrial";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SpillArgTrial(0)
@@ -364,7 +364,7 @@ impl crate::optionset::KunaOption for SpillArgTrial {
         SpillArgTrial(0)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::spillargtrial::OptionSpillArgTrial.apply(value)?;
         Ok((SpillArgTrial(v), msg))
     }

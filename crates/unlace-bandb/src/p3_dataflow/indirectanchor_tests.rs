@@ -5,10 +5,10 @@
 //! return-value trial — is built here against a real `Funcdata` and run through
 //! [`check_output_trial_use`](crate::funcdata_callsite::check_output_trial_use)
 //! against a real `Funcdata`.  The end-to-end witness is
-//! `tests/stages/kuna-indirectanchor.xml` and
+//! `tests/stages/unlace-indirectanchor.xml` and
 //! `tests/cli/bcryptgetproperty-status-tested-through.json`.
 
-/// The imports of `kuna_indirectanchor` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_indirectanchor` itself, as a glob so the tests' own imports win.
 #[allow(unused_imports)]
 mod module_scope {
     pub(super) use crate::context::OpId;

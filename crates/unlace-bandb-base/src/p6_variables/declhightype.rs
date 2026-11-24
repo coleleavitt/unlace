@@ -1,4 +1,4 @@
-//! (kuna) Declare a merged local at the data-type its own body was cast
+//! (unlace) Declare a merged local at the data-type its own body was cast
 //! against.
 //!
 //! Upstream declares a local from the *Symbol* it is mapped to
@@ -9,7 +9,7 @@
 //! `Varnode::getHighTypeReadFacing` when it decides whether a use needs a cast,
 //! so declaration and body agree by construction.
 //!
-//! kuna's printer walks HighVariables rather than Symbols and takes the declared
+//! unlace's printer walks HighVariables rather than Symbols and takes the declared
 //! type off its *declaration representative* — the first address-tied member, or
 //! member zero.  For a high whose members all carry one type the two
 //! representatives agree and nothing changes.  For a merged register high whose
@@ -27,7 +27,7 @@
 //! object, with the sign extension dropped.  The instruction is a one-byte signed
 //! load, and every other token on the line already says so.
 //!
-//! kuna declares the type representative's type instead, which is the
+//! unlace declares the type representative's type instead, which is the
 //! `sym->getType()` upstream would have written.  It moves no cast and no
 //! statement: the body is untouched, and the declaration stops contradicting it.
 
@@ -100,7 +100,7 @@ pub fn pick_representative(members: impl Iterator<Item = Option<Member>>) -> Opt
 ///
 /// Upstream declares a mapped local at `sym->getType()` (`printc.cc:1719`), and
 /// upstream's type representative IS that Symbol's Varnode, because
-/// `Varnode::setSymbolProperties` type-locks the storage a Symbol claims.  kuna
+/// `Varnode::setSymbolProperties` type-locks the storage a Symbol claims.  unlace
 /// does not always carry that lock, so on a mapped local the most specialized
 /// member can be some transient the Symbol never described — a DWARF
 /// `acl_entry_obj_tag *` re-declared as the `obj_prefix` struct one member was
@@ -111,7 +111,7 @@ pub fn pick_representative(members: impl Iterator<Item = Option<Member>>) -> Opt
 pub fn declares_from_high(fd: &Funcdata, high: HighVariableId) -> bool {
     fd.high_bank()
         .get(high)
-        .is_some_and(|h| h.kuna_symbol_type().is_none())
+        .is_some_and(|h| h.unlace_symbol_type().is_none())
 }
 
 #[cfg(test)]

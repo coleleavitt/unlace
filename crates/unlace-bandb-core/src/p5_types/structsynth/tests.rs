@@ -409,7 +409,7 @@ fn a_uniform_contiguous_run_reads_as_an_array() {
     assert!(!is_array_shaped(&gapped.slots, 8));
 }
 
-/// (kuna `calleevote fields`) One field at a constant offset other than zero, a
+/// (unlace `calleevote fields`) One field at a constant offset other than zero, a
 /// word or wider, is a lone field; offset 0, a byte or halfword, a second field,
 /// or an address derived from the base that a loop steps through (`argv[1]`
 /// read, then `argv + 2` walked) is not.
@@ -831,7 +831,7 @@ fn extent_is_where_the_last_access_ends_dropped_or_not() {
     assert_eq!(e.extent(), 0x68);
 }
 
-/// (kuna `structheadless`) `ls`'s `sub_53e7` reads `struct fileinfo` at 0x30,
+/// (unlace `structheadless`) `ls`'s `sub_53e7` reads `struct fileinfo` at 0x30,
 /// 0xac and 0xb9 and never at 0: a record only when the headless rule admits
 /// it, and still held to every other condition -- an index, or a uniform run of
 /// one width, declines it as it declines any record.

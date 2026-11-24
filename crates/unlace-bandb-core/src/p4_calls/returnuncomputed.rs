@@ -1,4 +1,4 @@
-//! (kuna, ida) Reject a return register that carries no value the function ever
+//! (unlace, ida) Reject a return register that carries no value the function ever
 //! computed — the `undefined16 main(...)` / `return v4;` phantom.
 //!
 //! # The symptom
@@ -77,7 +77,7 @@
 //! The global carve-out holds only for a pair joined in its ABI's order. On an
 //! ABI that returns the first register high, a pair [`crate::bejoin`] does
 //! not prove to be one value is joined first register low
-//! ([`Funcdata::kuna_pairs_first_low`]), on the reading that the second register
+//! ([`Funcdata::unlace_pairs_first_low`]), on the reading that the second register
 //! is a leftover this repair drops; keeping it there would return the halves
 //! swapped. A global in that second register proves nothing: SPARC's `restore`
 //! copies `%i1` into `%o1` whatever it holds, so `h = g2; return g1;` would come
@@ -242,7 +242,7 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
         if placed_at.is_some_and(|a| a == v.get_addr()) {
             return false;
         }
-        if v.is_persist() && !data.kuna_pairs_first_low() {
+        if v.is_persist() && !data.unlace_pairs_first_low() {
             return true;
         }
         return crate::retinputhalf::is_input_parameter(data, vn);
@@ -282,7 +282,7 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
 /// function recovered with ONE return register keeps whatever reached the
 /// RETURN. gnulib's `version_etc_arn` is `void`, ends its fallthrough path in a
 /// `__fprintf_chk` and keeps that call's `RAX` clobber -- an INDIRECT creation --
-/// as its "result", so kuna recovers it as returning `long`. A caller has no way
+/// as its "result", so unlace recovers it as returning `long`. A caller has no way
 /// to see that from the recovered prototype alone, which is why `passthrough`
 /// asks this question of the callee (see [`crate::passthrough`]).
 ///
@@ -405,7 +405,7 @@ fn zero_low_pair(data: &Funcdata, def: OpId) -> Option<(VarnodeId, i32, VarnodeI
 /// `EDX:EAX` join is never kept on its own; that RETURN returns nothing.
 ///
 /// A pair joined first register low on an ABI that returns the first register
-/// high ([`Funcdata::kuna_pairs_first_low`]) whose low half is a literal zero
+/// high ([`Funcdata::unlace_pairs_first_low`]) whose low half is a literal zero
 /// is read in its folded form `ZEXT(hi) << 8*k`: the zero is kept when the
 /// high half is uncomputed, as it is for any other literal.
 ///
@@ -417,7 +417,7 @@ fn zero_low_pair(data: &Funcdata, def: OpId) -> Option<(VarnodeId, i32, VarnodeI
 pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     let every_path = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::returnuncomputed::RetPairPaths>()
         .0;
     // Collect first: the rewrite mutates the op bank.
@@ -444,7 +444,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
             continue;
         };
         if let Some((hi, lo_size, whole)) = zero_low_pair(data, def) {
-            if !data.kuna_pairs_first_low() || !spans_two_locations(data, whole) {
+            if !data.unlace_pairs_first_low() || !spans_two_locations(data, whole) {
                 continue;
             }
             let hi_size = data.vbank().get(hi).map_or(0, |v| v.get_size());
@@ -593,11 +593,11 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
 /// CONCAT44(a1,v1);`. Any other storage answers `true`, today's answer.
 fn second_half_on_every_path(data: &Funcdata, hi: VarnodeId, slot: &Address, size: i32) -> bool {
     !crate::retcallhalf::in_pair_second(data, slot, size)
-        || computes_everywhere(data, hi, Some(slot), !data.kuna_pairs_first_low())
+        || computes_everywhere(data, hi, Some(slot), !data.unlace_pairs_first_low())
 }
 
-crate::kuna_flag!(
-    /// (kuna `retpairpaths`) Keep the second register of an `EDX:EAX`-style
+crate::unlace_flag!(
+    /// (unlace `retpairpaths`) Keep the second register of an `EDX:EAX`-style
     /// return join only when every path to the RETURN computes it.
     RetPairPaths,
     "retpairpaths",

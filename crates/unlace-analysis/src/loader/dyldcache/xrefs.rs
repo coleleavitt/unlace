@@ -99,7 +99,7 @@ pub fn decode(blob: &[u8]) -> Vec<Xref> {
 }
 
 /// The cross-image references a thin little-endian Mach-O carries in its
-/// `kuna.dyld.xrefs` note; empty for any other input.
+/// `unlace.dyld.xrefs` note; empty for any other input.
 pub fn read_note(bytes: &[u8]) -> Vec<Xref> {
     if bytes.len() < 32 {
         return Vec::new();

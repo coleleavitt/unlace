@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_compareform.{cc,hh}` — comparison-form
-//! presentation sub-stage (kuna GH-558, S3/S9 presentation split).
+//! presentation sub-stage (unlace GH-558, S3/S9 presentation split).
 //!
 //! The decompiler canonicalizes `V <= c` into `V < c+1` through one primitive
 //! ([`Funcdata::replace_lessequal`](crate::funcdata::Funcdata)), which records
@@ -22,21 +22,21 @@
 //!
 //! ## Gate wiring — STUB(W4)
 //!
-//! As in the sibling kuna sub-stages, the C++
+//! As in the sibling unlace sub-stages, the C++
 //! `if (!data.getArch()->present_lessequal) return 0;` gate is resolved at
 //! construction (the boundary `Funcdata::glb` does carry `present_lessequal`, but the
-//! kuna leaf actions take the resolved gate as a constructor argument to stay
+//! unlace leaf actions take the resolved gate as a constructor argument to stay
 //! uniform with the rule pool).  W8/W9 thread the live
 //! the registered option `PresentLessequal`; [`action`] uses the shipped default
-//! (`original` => `present_lessequal = true`, kuna DIV-2 default-on, GH-558).
+//! (`original` => `present_lessequal = true`, unlace DIV-2 default-on, GH-558).
 //!
 //! The option-apply body that selects that gate value — `OptionCompareForm::apply`
 //! (`kuna_compareform.cc:85`) — is ported as [`parse_compare_form`] (mirroring the
 //! sibling `parse_return_pair_form` / `parse_memset_recover_form`): it parses
 //! `original`/`canonical` into [`CompareForm`] (the `glb->present_lessequal` write
-//! becomes the returned form, threaded by `w4-kuna-p0-pack` into
+//! becomes the returned form, threaded by `w4-unlace-p0-pack` into
 //! [the registered option `PresentLessequal`]) and surfaces the C++ `throw ParseError(...)`
-//! as a [`KunaError::parse`].
+//! as a [`UnlaceError::parse`].
 //!
 //! ## STUB(W6) — opcode-flag resolution
 //!
@@ -54,7 +54,7 @@
 //! its `newConstant` default type.  Noted in the structured losses.
 
 use unlace_base::address::{calc_int_max, calc_int_min, calc_mask, calc_uint_max};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -63,7 +63,7 @@ use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::op::pcodeop_flags;
 
-/// (kuna GH-558) Restore canonicalized comparisons to their original LESSEQUAL
+/// (unlace GH-558) Restore canonicalized comparisons to their original LESSEQUAL
 /// form for presentation (C++ `ActionPresentCompareForm`).
 pub struct ActionPresentCompareForm {
     /// Engine-owned bookkeeping (C++ inherited `Action` base fields).
@@ -119,7 +119,7 @@ impl Action for ActionPresentCompareForm {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::compareform::PresentLessequal>()
                 .0
         {
@@ -248,7 +248,7 @@ fn lessequal_type_op(opc: OpCode) -> TypeOp {
     TypeOp::new(opc, flags, name)
 }
 
-/// (kuna GH-558) How canonicalized comparisons are presented
+/// (unlace GH-558) How canonicalized comparisons are presented
 /// (the two values of `option compareform`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompareForm {
@@ -281,19 +281,19 @@ impl CompareForm {
 /// `kuna_compareform.cc:85`).
 ///
 ///
-/// The C++ `throw ParseError(...)` surfaces as a [`KunaError::parse`] (the
+/// The C++ `throw ParseError(...)` surfaces as a [`UnlaceError::parse`] (the
 /// established option-parse error idiom shared with the sibling
 /// [`parse_return_pair_form`](crate::returnpair::parse_return_pair_form) /
 /// [`parse_memset_recover_form`](crate::memsetsequence::parse_memset_recover_form)).
 /// The caller writes the resolved [`CompareForm::present_lessequal`] into
 /// [the registered option `PresentLessequal`].
-pub fn parse_compare_form(p1: &str) -> KunaResult<(CompareForm, String)> {
+pub fn parse_compare_form(p1: &str) -> UnlaceResult<(CompareForm, String)> {
     let form = if p1 == "original" {
         CompareForm::Original
     } else if p1 == "canonical" {
         CompareForm::Canonical
     } else {
-        return Err(KunaError::parse(
+        return Err(UnlaceError::parse(
             "Must specify compareform as 'canonical' or 'original'",
         ));
     };
@@ -305,14 +305,14 @@ pub fn parse_compare_form(p1: &str) -> KunaResult<(CompareForm, String)> {
 /// last canonicalization site and before prototype/cast/naming fixation).
 ///
 /// Shipped default: `option compareform original` (`present_lessequal = true`;
-/// kuna DIV-2 default-on, GH-558).  The consuming action registry is wired by a
+/// unlace DIV-2 default-on, GH-558).  The consuming action registry is wired by a
 /// later wave; this is the per-file export, the analogue of the rule pool's
 /// `specs()`.
 pub fn action(group: impl Into<String>) -> Box<dyn Action> {
     ActionPresentCompareForm::boxed(true, group)
 }
 
-// --- Local IR read helpers (see kuna_addcarrychain for the rationale) --------
+// --- Local IR read helpers (see unlace_addcarrychain for the rationale) --------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
     data.obank().get(op).and_then(|o| o.get_in(slot))
@@ -333,14 +333,14 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
     data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0)
 }
 
-/// (kuna GH-558) Restore canonicalized comparisons to LESSEQUAL form for
+/// (unlace GH-558) Restore canonicalized comparisons to LESSEQUAL form for
 /// presentation (C++ `present_lessequal`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresentLessequal(pub bool);
 
-impl crate::optionset::KunaOption for PresentLessequal {
+impl crate::optionset::UnlaceOption for PresentLessequal {
     const NAME: &'static str = "compareform";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PresentLessequal(true)
@@ -350,7 +350,7 @@ impl crate::optionset::KunaOption for PresentLessequal {
         PresentLessequal(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::compareform::parse_compare_form(value)
             .map(|(form, msg)| (form.present_lessequal(), msg))?;
         Ok((PresentLessequal(v), msg))

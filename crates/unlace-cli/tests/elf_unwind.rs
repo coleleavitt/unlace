@@ -33,7 +33,7 @@ fn pc_read_keeps_the_complete_body_and_result() {
     for little in [false, true] {
         let path = common::scratch_file("elf-pc-read", "elf");
         std::fs::write(&path, fixture::image(little, false, true, false)).unwrap();
-        let (code, err, status) = common::run_kuna(&[
+        let (code, err, status) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "bump",
@@ -81,7 +81,7 @@ fn pc_read_needs_an_owned_body_without_a_named_inner_entry() {
             "--mode",
             "fast",
         ];
-        let (code, err, status) = common::run_kuna(&args);
+        let (code, err, status) = common::run_unlace(&args);
         assert_eq!(status, 0, "{code}\n{err}");
         assert!(code.contains("inner("), "{code}");
         assert!(!code.contains("return a0 * 3 + 7;"), "{code}");
@@ -135,7 +135,7 @@ fn fde_only_entries_keep_their_emitted_body() {
         bytes[shoff + 3 * 40 + 4..shoff + 3 * 40 + 8].copy_from_slice(&word(1));
         let path = common::scratch_file("elf-fde-only", "elf");
         std::fs::write(&path, bytes).unwrap();
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile-all",
             path.to_str().unwrap(),
             "--json",
@@ -263,7 +263,7 @@ fn bcl_to_a_returning_helper_remains_a_call() {
         ];
         let path = common::scratch_file("elf-bcl-helper", "elf");
         std::fs::write(&path, with_text(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "bump",
@@ -320,7 +320,7 @@ fn bcl_to_a_helper_without_a_literal_load_remains_a_call() {
         for little in [false, true] {
             let path = common::scratch_file("elf-bcl-lr-helper", "elf");
             std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-            let (out, err, status) = common::run_kuna(&[
+            let (out, err, status) = common::run_unlace(&[
                 "decompile",
                 path.to_str().unwrap(),
                 "bump",
@@ -370,7 +370,7 @@ fn bcl_to_a_helper_that_returns_into_the_skipped_words_remains_a_call() {
         for little in [false, true] {
             let path = common::scratch_file("elf-bcl-lr-resume", "elf");
             std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-            let (out, err, status) = common::run_kuna(&[
+            let (out, err, status) = common::run_unlace(&[
                 "decompile",
                 path.to_str().unwrap(),
                 "bump",
@@ -408,7 +408,7 @@ fn pc_read_literal_load_may_follow_other_instructions() {
     for little in [false, true] {
         let path = common::scratch_file("elf-pc-read-scheduled", "elf");
         std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "bump",
@@ -444,7 +444,7 @@ fn pc_read_through_a_branch_to_a_shared_lr_read() {
     for little in [false, true] {
         let path = common::scratch_file("elf-pc-read-branch", "elf");
         std::fs::write(&path, fixture::image_with_code(little, &code)).unwrap();
-        let (out, err, status) = common::run_kuna(&[
+        let (out, err, status) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "bump",

@@ -1,11 +1,11 @@
-//! (kuna) `simdlane` — resolve a byte-lane read of a CONSTANT-mask `pshufb`
+//! (unlace) `simdlane` — resolve a byte-lane read of a CONSTANT-mask `pshufb`
 //! shuffle to the source lane it actually selects.
 //!
 //! # The symptom
 //!
 //! A macOS crackme builds two consecutive character ranges with an SSE loop.
 //! The compiler broadcasts one byte across an XMM register with the standard
-//! `pxor xmm2,xmm2; pshufb xmm0,xmm2` idiom, and kuna renders the result as a
+//! `pxor xmm2,xmm2; pshufb xmm0,xmm2` idiom, and unlace renders the result as a
 //! wall of lane temporaries:
 //!
 //! ```text
@@ -80,7 +80,7 @@ use crate::funcdata::Funcdata;
 
 pub use crate::specnames::SIMDLANE_SHUFFLE_USEROPS as SHUFFLE_USEROP_NAMES;
 
-/// Marshalling element id (kuna 4000+ range).
+/// Marshalling element id (unlace 4000+ range).
 pub const ELEM_SIMDLANE: ElementId = ElementId::new("simdlane", 4142);
 
 /// Which source byte lane does `mask` select for output lane `k` of an
@@ -115,7 +115,7 @@ pub fn shuffle_lane_source(
     Some(Some((byte as int4) & (n - 1)))
 }
 
-/// (kuna) Resolve `SUBPIECE(pshufb(src, <const mask>), k)` to the source lane the
+/// (unlace) Resolve `SUBPIECE(pshufb(src, <const mask>), k)` to the source lane the
 /// mask selects.
 pub struct RuleSimdShuffleLane {
     /// Rule group.

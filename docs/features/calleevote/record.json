@@ -1,6 +1,6 @@
 {
  "opportunity": "Round E's O2 census: the largest O2-noinline blocker bucket is a program struct pointer declared void * in an otherwise-right function (143 functions O2-noinline, 20 O2; 66 gnulib Hash_table getters). Two causes: structsynth wants two offsets including 0 and never runs in a function whose lattice settles on its first pass, and nothing flows caller -> callee (protoorder is callee -> caller).",
- "test_name": "tests/cli calleevote-off-leaves-the-callee-untyped / calleevote-types-takes-what-every-caller-passes / calleevote-fields-reads-a-closed-getters-lone-field (two-pass over the whole-binary path), calleevote-leaves-a-relocatable-objects-callbacks-open (.o callback table), calleevote-leaves-a-mips-callback-open, calleevote-reads-a-table-in-code-at-address-zero, calleevote-keeps-a-frame-records-word-stores (+ its off arm), calleevote-leaves-a-long-callee-alone (+ calleevote-off-leaves-both-callees-untyped: the 32-line redo bound) + tests/stages/kuna-calleevote.xml (negative control) + 18 unit tests",
+ "test_name": "tests/cli calleevote-off-leaves-the-callee-untyped / calleevote-types-takes-what-every-caller-passes / calleevote-fields-reads-a-closed-getters-lone-field (two-pass over the whole-binary path), calleevote-leaves-a-relocatable-objects-callbacks-open (.o callback table), calleevote-leaves-a-mips-callback-open, calleevote-reads-a-table-in-code-at-address-zero, calleevote-keeps-a-frame-records-word-stores (+ its off arm), calleevote-leaves-a-long-callee-alone (+ calleevote-off-leaves-both-callees-untyped: the 32-line redo bound) + tests/stages/calleevote.xml (negative control) + 18 unit tests",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64",
  "selector": "peek_used",
  "func_addr": "0x1220",
@@ -728,14 +728,14 @@
   ],
   "driver": [
    "decompiler/crates/kuna-cli/src/decompile_all.rs",
-   "decompiler/crates/kuna-console/src/project.rs",
+   "decompiler/crates/console/src/project.rs",
    "decompiler/crates/kuna-analysis/src/loader/format/macho/chained.rs"
   ],
   "tests": [
    "tests/cli/calleevote-off-leaves-the-callee-untyped.json",
    "tests/cli/calleevote-types-takes-what-every-caller-passes.json",
    "tests/cli/calleevote-fields-reads-a-closed-getters-lone-field.json",
-   "tests/stages/kuna-calleevote.xml",
+   "tests/stages/calleevote.xml",
    "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_x86_64(.c)",
    "tests/cli/calleevote-leaves-a-relocatable-objects-callbacks-open.json",
    "decompiler/crates/kuna-analysis/tests/fixtures/calleevote_ops_x86_64.o(.c)",

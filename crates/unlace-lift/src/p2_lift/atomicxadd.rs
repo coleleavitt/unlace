@@ -36,11 +36,11 @@ fn overlaps(a: Storage, b: Storage) -> bool {
 /// independently checked by the emitter before any presentation changes.
 #[doc(hidden)]
 pub fn observe(fd: &mut Funcdata, ops: &[OpId]) {
-    if !fd.get_arch().source_lang.is_go() || fd.kuna_atomic_xadds().len() >= 2 {
+    if !fd.get_arch().source_lang.is_go() || fd.unlace_atomic_xadds().len() >= 2 {
         return;
     }
     if let Some(proof) = instruction(fd, ops) {
-        fd.kuna_atomic_xadds_mut().push(proof);
+        fd.unlace_atomic_xadds_mut().push(proof);
     }
 }
 
@@ -156,24 +156,24 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
     })
 }
 
-/// (kuna `atomicxadd`) The one-instruction atomic add envelopes the flow captured; reset by `Funcdata::clear`.
+/// (unlace `atomicxadd`) The one-instruction atomic add envelopes the flow captured; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct XaddsSlot(Vec<crate::p2_lift::atomicxadd::Instruction>);
-crate::kuna_func_state!(XaddsSlot, keep_across_clear: false);
+crate::unlace_func_state!(XaddsSlot, keep_across_clear: false);
 
-/// The `kuna_atomicxadd` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_atomicxadd` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataAtomicxaddExt {
-    fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::atomicxadd::Instruction>;
-    fn kuna_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::atomicxadd::Instruction>;
+    fn unlace_atomic_xadds(&self) -> &Vec<crate::p2_lift::atomicxadd::Instruction>;
+    fn unlace_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::atomicxadd::Instruction>;
 }
 
 impl FuncdataAtomicxaddExt for crate::funcdata::Funcdata {
-    fn kuna_atomic_xadds(&self) -> &Vec<crate::p2_lift::atomicxadd::Instruction> {
-        &self.kuna_state::<XaddsSlot>().0
+    fn unlace_atomic_xadds(&self) -> &Vec<crate::p2_lift::atomicxadd::Instruction> {
+        &self.unlace_state::<XaddsSlot>().0
     }
-    fn kuna_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::atomicxadd::Instruction> {
-        &mut self.kuna_state_mut::<XaddsSlot>().0
+    fn unlace_atomic_xadds_mut(&mut self) -> &mut Vec<crate::p2_lift::atomicxadd::Instruction> {
+        &mut self.unlace_state_mut::<XaddsSlot>().0
     }
 }
 

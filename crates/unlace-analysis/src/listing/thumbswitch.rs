@@ -1,4 +1,4 @@
-//! (kuna) `thumbswitch` — read a Thumb `tbb`/`tbh` switch table, so the walk
+//! (unlace) `thumbswitch` — read a Thumb `tbb`/`tbh` switch table, so the walk
 //! decodes the case bodies of the function that dispatches to them (GH-299).
 //!
 //! # The gap

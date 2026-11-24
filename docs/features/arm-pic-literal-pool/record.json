@@ -23,7 +23,7 @@
     "decompiler/crates/kuna-analysis/tests/fixtures/picpool_arm_le32",
     "decompiler/crates/kuna-analysis/tests/fixtures/picpool_arm_le32.py",
     "decompiler/crates/kuna-analysis/tests/fixtures/README.md",
-    "decompiler/crates/kuna-console/tests/verify_picpool.rs",
+    "decompiler/crates/console/tests/verify_picpool.rs",
     "tests/cli/arm-pic-literal-pool.json",
     "docs/spec/01-program-prep.md",
     "docs/re-needs/arm-pic-literal-pool.md"

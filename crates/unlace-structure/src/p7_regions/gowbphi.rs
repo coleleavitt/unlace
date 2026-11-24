@@ -37,7 +37,7 @@ use crate::funcdata::Funcdata;
 use crate::gowritebarrier::{is_write_barrier_name, live};
 use crate::idiom::match_guarded_cold_call_phi;
 
-/// (kuna) `ActionGoWriteBarrierPhi` — fold shared / phi-feeding Go GC
+/// (unlace) `ActionGoWriteBarrierPhi` — fold shared / phi-feeding Go GC
 /// write-barrier arms post-SSA (option `gowritebarrier`).
 pub struct ActionGoWriteBarrierPhi {
     base: ActionBase,

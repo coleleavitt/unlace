@@ -65,7 +65,7 @@ fn declared_preserved_input_does_not_hide_a_reused_stack_local() {
     );
     let project = root.join("project");
     let specs = common::repo_root().join("specs");
-    let (_, error, status) = common::run_kuna(&[
+    let (_, error, status) = common::run_unlace(&[
         "decompile-project",
         image.to_str().unwrap(),
         "--functions",

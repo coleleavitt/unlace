@@ -49,7 +49,7 @@ literal = 'if (8 < x)'          # a substring of one output line
   of `phases.toml` settables whose fields equal every given value (`option`, `values`,
   `default`, `subphase`, `issue`, `source_decompiler`, `inspiration`, `change_kind`,
   `tier`, `destructive`), plus `plus`; `settables = {}` counts every row.
-  `kuna-catalog.toml` uses it for its bucket totals.
+  `catalog.toml` uses it for its bucket totals.
 - **A TOML test is its own baseline.** Every assertion in it must pass; its names are not in
   `docs/baseline-stages.json`, which keeps only the XML files' passing assertions. Adding a TOML
   stage test therefore touches no baseline (the corpus count in `unlace-base/src/xml.rs` still
@@ -67,9 +67,9 @@ literal = 'if (8 < x)'          # a substring of one output line
 ## Running one file
 
 ```sh
-UNLACE_PARITY_FILES=kuna-wideslice cargo test -p unlace-harness --test parity stage_tests
+UNLACE_PARITY_FILES=wideslice cargo test -p unlace-harness --test parity stage_tests
 UNLACE_PARITY_FILES='tests/stages/kuna-swift*,gh558-*' cargo test -p unlace-harness --test parity stage_tests
-target/debug/decomp_test_dbg -sleighpath specs -path tests/stages datatests kuna-wideslice.toml
+target/debug/decomp_test_dbg -sleighpath specs -path tests/stages datatests wideslice.toml
 ```
 
 `UNLACE_PARITY_FILES` takes comma-separated paths, names, stems or globs (`docs/dev-setup.md`,
@@ -81,7 +81,7 @@ path. `target/parity-times.json` holds each file's wall time from the last parit
 ## Conventions
 
 - A test file opens with a comment, and its first paragraph is the test's description: what it
-  checks and the behaviour or option it pins (`kuna-wideslice.toml`, `gh558-compareform.toml`).
+  checks and the behaviour or option it pins (`wideslice.toml`, `gh558-compareform.toml`).
   Then, as they apply: the upstream issue (`GH-<n>`) or source it derives from, the phase that owns
   the decision, the option the script flips, the source and compiler of the bytes, and which
   assertions show the bug under the old behaviour and which show the fix.

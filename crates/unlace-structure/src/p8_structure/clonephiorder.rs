@@ -1,4 +1,4 @@
-//! (kuna) The order a cloned return block prints the stores its phis absorbed.
+//! (unlace) The order a cloned return block prints the stores its phis absorbed.
 //!
 //! When copy propagation folds a store's value into a MULTIEQUAL on a global (the
 //! phi reads the stored register directly and the store itself dies), the store's
@@ -8,7 +8,7 @@
 //! IR records the order the binary made them in.
 //!
 //! [`order_global_phis`] clones the phis on globals after the others and in
-//! address order, which is how kuna printed most of these stores before the
+//! address order, which is how unlace printed most of these stores before the
 //! clone kept its return guards' `return_copy` flag.  Block order would be the
 //! reverse of the order heritage placed them in, which is descending address
 //! order for phis one heritage pass placed.  Only the clone is reordered; the
@@ -49,6 +49,6 @@ pub fn order_global_phis(data: &Funcdata, ops: &mut [OpId]) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.clonephiorder_order_global_phis = Some(order_global_phis);
 }

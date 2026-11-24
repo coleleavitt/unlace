@@ -1,4 +1,4 @@
-//! (kuna) Bind the MSVC x86-32 one-operand x87 math intrinsics to their model.
+//! (unlace) Bind the MSVC x86-32 one-operand x87 math intrinsics to their model.
 //!
 //! `__CIsin`, `__CIcos`, `__CIsqrt` and their siblings take their operand in `ST0`
 //! (`__CIpow`, `__CIatan2` and `__CIfmod` take two, in `ST1` and `ST0`) and
@@ -502,7 +502,7 @@ fn bind(out: &mut AnalysisOutput, ctx: &AnalysisCtx, addr: u64, name: &str) {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         },
     ));
 }

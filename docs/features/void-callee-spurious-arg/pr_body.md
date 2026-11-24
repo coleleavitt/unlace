@@ -90,7 +90,7 @@ first argument register (AArch64/ARM) *plus* a producer call with a recovered re
 and this machine has no AArch64 linker (only `clang -c`, whose `.o` leaves every call an
 unnamed relocation and every callee prototype unlocked). All 132 in-repo fixture binaries
 were swept under both arms; none is a witness. The permanent regression pin is
-`tests/stages/kuna-calleedeadarg.toml` instead — a two-pass hand-assembled AArch64 fixture
+`tests/stages/calleedeadarg.toml` instead — a two-pass hand-assembled AArch64 fixture
 that asserts **both** arms and runs in `make test-stages`, a required CI gate.
 
 ## Collateral sweep — every changed line read
@@ -141,7 +141,7 @@ decoded instructions; both are re-pinned with that reason in the comment.
 
 ## Tests
 
-* `tests/stages/kuna-calleedeadarg.toml` — hand-assembled AArch64 two-pass fixture
+* `tests/stages/calleedeadarg.toml` — hand-assembled AArch64 two-pass fixture
   (`caller` → `producer` → `target`): `option off` renders `target(producer())` (the bug),
   `option on` renders `producer(); target();`.
 * `decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg/tests.rs` — option

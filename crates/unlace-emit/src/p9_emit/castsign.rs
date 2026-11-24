@@ -1,4 +1,4 @@
-//! (kuna `castsign`) Declare a variable signed when the program only ever reads it
+//! (unlace `castsign`) Declare a variable signed when the program only ever reads it
 //! signed, in the places the `signedness` walk leaves alone.
 //!
 //! `signedness auto` ([`crate::typeround`]) already re-declares a register
@@ -40,7 +40,7 @@
 //! into.  (The walk `signedness` runs for register locals accepts that trade; this
 //! option does not extend it.)
 //!
-//! **A wide literal keeps the declaration unsigned** ([`wide_literal`]).  kuna
+//! **A wide literal keeps the declaration unsigned** ([`wide_literal`]).  unlace
 //! may print a constant whose top bit is set as an unsuffixed decimal, and
 //! `3000000000` is a `long` in C (`10000000000000000000` is wider than `long`).
 //! `v == 3000000000` converts `v` to that type, zero-extending an `unsigned int`,
@@ -86,7 +86,7 @@ use unlace_base::address::Address;
 pub fn name_counts(fd: &Funcdata) -> HashMap<String, u32> {
     let mut out: HashMap<String, u32> = HashMap::new();
     for (_, h) in fd.high_bank().iter() {
-        if let Some(n) = h.kuna_name() {
+        if let Some(n) = h.unlace_name() {
             *out.entry(n.to_string()).or_default() += 1;
         }
     }
@@ -106,15 +106,15 @@ pub fn whole_slot_local(
     let Some(h) = fd.high_bank().get(high) else {
         return false;
     };
-    if h.kuna_symbol_offset() != 0 {
+    if h.unlace_symbol_offset() != 0 {
         return false;
     }
-    if h.kuna_symbol_type()
+    if h.unlace_symbol_type()
         .is_some_and(|t| !is_plain_integer(t) || t.get_size() != width)
     {
         return false;
     }
-    h.kuna_name()
+    h.unlace_name()
         .is_some_and(|n| names.get(n).copied() == Some(1))
 }
 
@@ -132,7 +132,7 @@ pub fn symbol_type_locked(fd: &Funcdata, high: HighVariableId) -> bool {
         return false;
     };
     let db = lm.database();
-    if [h.kuna_link_symbol(), h.kuna_dynamic_symbol()]
+    if [h.unlace_link_symbol(), h.unlace_dynamic_symbol()]
         .into_iter()
         .flatten()
         .any(|sid| db.symbol(sid).is_type_locked())
@@ -287,8 +287,8 @@ pub fn drops_printed_cast(fd: &Funcdata, casts: &[OpId], newty: &Datatype) -> bo
     })
 }
 
-crate::kuna_flag!(
-    /// (kuna `castsign`) Let `signedness` declare a frame local or a body local
+crate::unlace_flag!(
+    /// (unlace `castsign`) Let `signedness` declare a frame local or a body local
     /// with an input member signed, and read a same-width pointer conversion or a
     /// pointer-width index as neutral, when every signedness-sensitive use of the
     /// value is signed.  See [`crate::castsign`].

@@ -33,7 +33,7 @@ twin, `cast_output_token`, that takes the output token instead of computing it.
 
 ## 4. Tests
 
-- `tests/stages/kuna-castindex.toml`: pass 1 `option castindex off` (the bug), pass 2
+- `tests/stages/castindex.toml`: pass 1 `option castindex off` (the bug), pass 2
   on: an `int`, a `long` and a byte index, a 16-byte stride that keeps the integer form
   in both passes, a `strchr(s,c) - s` difference.
 - 12 unit tests in `p9_emit/castarith/tests.rs`: every width and index kind, a

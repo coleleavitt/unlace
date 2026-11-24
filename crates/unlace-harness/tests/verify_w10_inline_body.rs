@@ -268,7 +268,7 @@ print C";
     );
     // The inline header rendered (warningHeader path).
     assert!(
-        // (kuna DIV-38) inline warnstyle renders `// inlined: add50` on the
+        // (unlace DIV-38) inline warnstyle renders `// inlined: add50` on the
         // prototype line; the banner form appears under `option warnstyle banner`.
         body.contains("// inlined: add50") || body.contains("Inlined function: add50"),
         "EZ inline must emit the `WARNING: Inlined function: add50` header:\n{body}"
@@ -306,7 +306,7 @@ print C";
     let body = out.rsplit_once("print C").map(|(_, b)| b).unwrap_or(&out);
     // The outer inline succeeded (header emitted) ...
     assert!(
-        // (kuna DIV-38) slug form on the prototype line, or the banner form.
+        // (unlace DIV-38) slug form on the prototype line, or the banner form.
         body.contains("// inlined: collatz1") || body.contains("Inlined function: collatz1"),
         "collatz must inline collatz1 (warningHeader), body:\n{body}"
     );

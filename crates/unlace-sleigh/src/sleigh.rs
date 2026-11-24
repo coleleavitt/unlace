@@ -19,7 +19,7 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager, RegisterLookup, VarnodeStorage, spacetype};
 use unlace_base::xml::DocumentStorage;
 
@@ -303,12 +303,12 @@ impl ParserContext {
     }
 
     /// C++ `getInstructionBytes(int4 bytestart,int4 size,uint4 off)`.
-    fn get_instruction_bytes(&self, bytestart: i32, size: i32, off: u32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, bytestart: i32, size: i32, off: u32) -> UnlaceResult<u32> {
         // off += bytestart
         let off = off.wrapping_add(bytestart as u32); // C++ uint4 += int4
         // C++ `if (off >= MAX_INSTRUCTION_LEN)`: uint4 vs int4 (off >= 0)
         if off >= MAX_INSTRUCTION_LEN as u32 {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "Instruction is using more than {MAX_INSTRUCTION_LEN} bytes"
             )));
         }
@@ -320,11 +320,11 @@ impl ParserContext {
     }
 
     /// C++ `getInstructionBits(int4 startbit,int4 size,uint4 off)`.
-    fn get_instruction_bits(&self, startbit: i32, size: i32, off: u32) -> KunaResult<u32> {
+    fn get_instruction_bits(&self, startbit: i32, size: i32, off: u32) -> UnlaceResult<u32> {
         // off += (startbit/8)
         let off = off.wrapping_add((startbit / 8) as u32);
         if off >= MAX_INSTRUCTION_LEN as u32 {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "Instruction is using more than {MAX_INSTRUCTION_LEN} bytes"
             )));
         }
@@ -337,13 +337,13 @@ impl ParserContext {
     }
 
     /// C++ `getContextBytes(int4 bytestart,int4 size)`.
-    fn get_context_bytes(&self, bytestart: i32, size: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, bytestart: i32, size: i32) -> UnlaceResult<u32> {
         // sizeof(uintm) == 4
         let mut intstart = (bytestart / 4) as usize;
         let mut res = *self
             .context
             .get(intstart)
-            .ok_or_else(|| KunaError::bad_data("context word out of range"))?;
+            .ok_or_else(|| UnlaceError::bad_data("context word out of range"))?;
         let byte_offset = bytestart % 4;
         let unused_bytes = 4 - size;
         // res <<= byteOffset*8; res >>= unusedBytes*8 (counts in [0,31] for
@@ -362,12 +362,12 @@ impl ParserContext {
     }
 
     /// C++ `getContextBits(int4 startbit,int4 size)`.
-    fn get_context_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_context_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         let mut intstart = (startbit / 32) as usize;
         let mut res = *self
             .context
             .get(intstart)
-            .ok_or_else(|| KunaError::bad_data("context word out of range"))?;
+            .ok_or_else(|| UnlaceError::bad_data("context word out of range"))?;
         let bit_offset = startbit % 32;
         let unused_bits = 32 - size;
         res = res.wrapping_shl(bit_offset as u32);
@@ -489,9 +489,9 @@ impl<'a> ParserWalker<'a> {
     }
 
     /// C++ `pushOperand(int4 i)`.
-    fn push_operand_inner(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand_inner(&mut self, i: i32) -> UnlaceResult<()> {
         if self.cur.depth > MAX_DEPTH - 2 {
-            return Err(KunaError::lowlevel("SLEIGH exceeded maximum parse depth"));
+            return Err(UnlaceError::lowlevel("SLEIGH exceeded maximum parse depth"));
         }
         let cur = self.cur.to_mut();
         cur.breadcrumb[cur.depth as usize] = i + 1;
@@ -512,24 +512,24 @@ impl<'a> ParserWalker<'a> {
     }
 
     /// C++ `getConstructor`: identify the current node's constructor.
-    fn get_constructor_inner(&self) -> KunaResult<ConstructorRef> {
+    fn get_constructor_inner(&self) -> UnlaceResult<ConstructorRef> {
         self.ctx.state[self.point()]
             .ct
-            .ok_or_else(|| KunaError::sleigh("ParserWalker: no constructor at current node"))
+            .ok_or_else(|| UnlaceError::sleigh("ParserWalker: no constructor at current node"))
     }
 
     /// C++ `getFixedHandle(int4 i)`: handle of child operand `i`.
-    fn get_fixed_handle_inner(&self, i: i32) -> KunaResult<FixedHandle> {
+    fn get_fixed_handle_inner(&self, i: i32) -> UnlaceResult<FixedHandle> {
         self.borrow_fixed_handle_inner(i).cloned()
     }
 
-    fn borrow_fixed_handle_inner(&self, i: i32) -> KunaResult<&FixedHandle> {
+    fn borrow_fixed_handle_inner(&self, i: i32) -> UnlaceResult<&FixedHandle> {
         let pt = &self.ctx.state[self.point()];
         let child = pt
             .resolve
             .get(i as usize)
             .copied()
-            .ok_or_else(|| KunaError::sleigh("ParserWalker: operand not resolved"))?;
+            .ok_or_else(|| UnlaceError::sleigh("ParserWalker: operand not resolved"))?;
         Ok(&self.ctx.state[child].hand)
     }
 
@@ -547,7 +547,7 @@ impl<'a> ParserWalker<'a> {
         ct: ConstructorRef,
         index: i32,
         op: &OperandSymbol,
-    ) -> KunaResult<OobState> {
+    ) -> UnlaceResult<OobState> {
         self.out_of_band_offset(ct, index, op.get_offset_base(), op.get_relative_offset())
     }
 
@@ -557,7 +557,7 @@ impl<'a> ParserWalker<'a> {
         index: i32,
         offset_base: i32,
         relative_offset: u32,
-    ) -> KunaResult<OobState> {
+    ) -> UnlaceResult<OobState> {
         let mut pt = self.point();
         let mut curdepth = self.cur.depth;
         while self.ctx.state[pt].ct != Some(ct) {
@@ -571,7 +571,7 @@ impl<'a> ParserWalker<'a> {
             curdepth -= 1;
             pt = self.ctx.state[pt]
                 .parent
-                .ok_or_else(|| KunaError::sleigh("out-of-band: null parent"))?;
+                .ok_or_else(|| UnlaceError::sleigh("out-of-band: null parent"))?;
         }
         let offset = operand_offset(
             self.ctx,
@@ -604,14 +604,14 @@ fn operand_symbol(
     table: &SymbolTable,
     ct: ConstructorRef,
     index: i32,
-) -> KunaResult<&OperandSymbol> {
+) -> UnlaceResult<&OperandSymbol> {
     let id = table.get_constructor(ct)?.get_operand(index)?;
     let sym = table
         .find_symbol_by_id(id)
-        .ok_or_else(|| KunaError::sleigh("operand_value: operand symbol undefined"))?;
+        .ok_or_else(|| UnlaceError::sleigh("operand_value: operand symbol undefined"))?;
     match sym.kind() {
         SymbolKind::Operand(op) => Ok(op),
-        _ => Err(KunaError::sleigh("operand_value: not an operand symbol")),
+        _ => Err(UnlaceError::sleigh("operand_value: not an operand symbol")),
     }
 }
 
@@ -620,7 +620,7 @@ fn operand_symbol(
 fn operand_expression<'t>(
     table: &'t SymbolTable,
     op: &'t OperandSymbol,
-) -> KunaResult<Option<Cow<'t, PatternExpression>>> {
+) -> UnlaceResult<Option<Cow<'t, PatternExpression>>> {
     if let Some(pe) = op.get_defining_expression() {
         return Ok(Some(Cow::Borrowed(pe)));
     }
@@ -629,7 +629,7 @@ fn operand_expression<'t>(
     };
     let defsym = table
         .find_symbol_by_id(defid)
-        .ok_or_else(|| KunaError::sleigh("operand_value: defining symbol undefined"))?;
+        .ok_or_else(|| UnlaceError::sleigh("operand_value: defining symbol undefined"))?;
     Ok(defsym.get_pattern_expression()?.map(Cow::Owned))
 }
 
@@ -642,7 +642,7 @@ fn operand_offset(
     offset_base: i32,
     relative_offset: u32,
     index: i32,
-) -> KunaResult<u32> {
+) -> UnlaceResult<u32> {
     if offset_base < 0 {
         return Ok(base.wrapping_add(relative_offset));
     }
@@ -650,15 +650,15 @@ fn operand_offset(
         .and_then(|n| n.resolve.get(index as usize).copied())
         .and_then(|child| ctx.state.get(child))
         .map(|child| child.offset)
-        .ok_or_else(|| KunaError::sleigh("out-of-band: operand not resolved"))
+        .ok_or_else(|| UnlaceError::sleigh("out-of-band: operand not resolved"))
 }
 
 impl PatternExpressionContext for ParserWalker<'_> {
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         let off = self.ctx.state[self.point()].offset;
         self.ctx.get_instruction_bytes(byteoff, numbytes, off)
     }
-    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         self.ctx.get_context_bytes(byteoff, numbytes)
     }
     fn get_addr(&self) -> Address {
@@ -667,10 +667,10 @@ impl PatternExpressionContext for ParserWalker<'_> {
     fn get_naddr(&self) -> Address {
         self.addr_ctx().get_naddr().clone()
     }
-    fn get_n2addr(&self) -> KunaResult<Address> {
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
         self.engine.compute_n2addr(self.addr_ctx())
     }
-    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> KunaResult<i64> {
+    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> UnlaceResult<i64> {
         let ct = ConstructorRef { table_id, ct_id };
         if let Some(plan) = self.engine.primitive_operand(self.table, ct, index) {
             let state = self.out_of_band_offset(ct, index, -1, plan.relative_offset)?;
@@ -700,20 +700,20 @@ impl PatternExpressionContext for ParserWalker<'_> {
 }
 
 impl SymbolWalker for ParserWalker<'_> {
-    fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
         self.push_operand_inner(i)
     }
-    fn pop_operand(&mut self) -> KunaResult<()> {
+    fn pop_operand(&mut self) -> UnlaceResult<()> {
         self.pop_operand_inner();
         Ok(())
     }
-    fn get_constructor(&self) -> KunaResult<ConstructorRef> {
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
         self.get_constructor_inner()
     }
-    fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle> {
+    fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle> {
         self.get_fixed_handle_inner(i)
     }
-    fn borrow_fixed_handle(&self, i: i32) -> KunaResult<Cow<'_, FixedHandle>> {
+    fn borrow_fixed_handle(&self, i: i32) -> UnlaceResult<Cow<'_, FixedHandle>> {
         self.borrow_fixed_handle_inner(i).map(Cow::Borrowed)
     }
     fn get_const_space(&self) -> Rc<AddrSpace> {
@@ -722,17 +722,17 @@ impl SymbolWalker for ParserWalker<'_> {
     fn get_cur_space(&self) -> Rc<AddrSpace> {
         self.addr_ctx().get_cur_space()
     }
-    fn get_dest_addr(&self) -> KunaResult<Address> {
+    fn get_dest_addr(&self) -> UnlaceResult<Address> {
         Ok(self.addr_ctx().calladdr.clone())
     }
-    fn get_ref_addr(&self) -> KunaResult<Address> {
+    fn get_ref_addr(&self) -> UnlaceResult<Address> {
         Ok(self.addr_ctx().calladdr.clone())
     }
-    fn get_instruction_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_instruction_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         let off = self.ctx.state[self.point()].offset;
         self.ctx.get_instruction_bits(startbit, size, off)
     }
-    fn get_context_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_context_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         self.ctx.get_context_bits(startbit, size)
     }
 }
@@ -790,10 +790,10 @@ impl<'a> ParserWalkerChange<'a> {
     }
 
     /// C++ `getConstructor`.
-    fn get_constructor(&self) -> KunaResult<ConstructorRef> {
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
         self.ctx.state[self.point()]
             .ct
-            .ok_or_else(|| KunaError::sleigh("no constructor at current node"))
+            .ok_or_else(|| UnlaceError::sleigh("no constructor at current node"))
     }
 
     /// C++ `getOperand`.
@@ -842,9 +842,9 @@ impl<'a> ParserWalkerChange<'a> {
     }
 
     /// C++ `pushOperand`.
-    fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
         if self.cur.depth > MAX_DEPTH - 2 {
-            return Err(KunaError::lowlevel("SLEIGH exceeded maximum parse depth"));
+            return Err(UnlaceError::lowlevel("SLEIGH exceeded maximum parse depth"));
         }
         let parent = self.point(); // point->resolve[i] read with the OLD point
         let child = self.ctx.state[parent].resolve.get(i as usize).copied();
@@ -870,9 +870,9 @@ impl<'a> ParserWalkerChange<'a> {
     }
 
     /// C++ `ParserContext::allocateOperand`.
-    fn allocate_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn allocate_operand(&mut self, i: i32) -> UnlaceResult<()> {
         if i >= MAX_OPERAND {
-            return Err(KunaError::lowlevel("SLEIGH parser out of state space"));
+            return Err(UnlaceError::lowlevel("SLEIGH parser out of state space"));
         }
         if self.ctx.alloc < 0 {
             // The arena rebases its node references; the live cursor is outside
@@ -892,7 +892,7 @@ impl<'a> ParserWalkerChange<'a> {
         debug_assert_eq!(self.ctx.state[parent].resolve.len(), i as usize);
         self.ctx.state[parent].resolve.push(opstate);
         if self.cur.depth > MAX_DEPTH - 2 {
-            return Err(KunaError::lowlevel("SLEIGH exceeded maximum parse depth"));
+            return Err(UnlaceError::lowlevel("SLEIGH exceeded maximum parse depth"));
         }
         self.cur.breadcrumb[self.cur.depth as usize] += 1;
         self.cur.depth += 1;
@@ -933,11 +933,11 @@ struct OobWalker<'a> {
 }
 
 impl PatternExpressionContext for OobWalker<'_> {
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         self.ctx
             .get_instruction_bytes(byteoff, numbytes, self.state.offset)
     }
-    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         self.ctx.get_context_bytes(byteoff, numbytes)
     }
     fn get_addr(&self) -> Address {
@@ -946,7 +946,7 @@ impl PatternExpressionContext for OobWalker<'_> {
     fn get_naddr(&self) -> Address {
         self.cross.unwrap_or(self.ctx).get_naddr().clone()
     }
-    fn get_n2addr(&self) -> KunaResult<Address> {
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
         self.engine.compute_n2addr(self.cross.unwrap_or(self.ctx))
     }
     /// An operand named in another operand's expression.  As in C++, a
@@ -954,16 +954,16 @@ impl PatternExpressionContext for OobWalker<'_> {
     /// resolved operand is read from the real tree node, where C++ would index
     /// the empty temporary state.  A foreign constructor or a chain deeper
     /// than `MAX_DEPTH` is a decode error.
-    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> KunaResult<i64> {
+    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> UnlaceResult<i64> {
         if self.depth >= MAX_DEPTH {
-            return Err(KunaError::sleigh(
+            return Err(UnlaceError::sleigh(
                 "SLEIGH exceeded maximum operand expression depth",
             ));
         }
         let ct = ConstructorRef { table_id, ct_id };
         if let Some(plan) = self.engine.primitive_operand(self.table, ct, index) {
             if ct != self.state.ct {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "out-of-band: operand constructor outside current context",
                 ));
             }
@@ -981,7 +981,7 @@ impl PatternExpressionContext for OobWalker<'_> {
             return Ok(0);
         };
         if ct != self.state.ct {
-            return Err(KunaError::sleigh(
+            return Err(UnlaceError::sleigh(
                 "out-of-band: operand constructor outside current context",
             ));
         }
@@ -1103,12 +1103,12 @@ impl PcodeCacher {
     }
 
     /// C++ `resolveRelatives`.
-    fn resolve_relatives(&mut self) -> KunaResult<()> {
+    fn resolve_relatives(&mut self) -> UnlaceResult<()> {
         for rec in &self.label_refs {
             let varnode = &mut self.pool[rec.dataptr];
             let id = varnode.offset;
             if id >= self.labels.len() as u64 || self.labels[id as usize] == 0x0badbeef {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Reference to non-existant sleigh label",
                 ));
             }
@@ -1219,7 +1219,7 @@ impl<'a> SleighBuilder<'a> {
 
     /// The constructor template referenced by a handle (C++ `getTempl`);
     /// a lazily decoded one is decoded here on its first use.
-    fn templ(&self, handle: usize) -> KunaResult<&'a ConstructTpl> {
+    fn templ(&self, handle: usize) -> UnlaceResult<&'a ConstructTpl> {
         let engine: &'a Sleigh = self.engine;
         engine.base.template(handle)
     }
@@ -1230,12 +1230,12 @@ impl<'a> SleighBuilder<'a> {
     }
 
     /// C++ `SleighBuilder::generateLocation`.
-    fn generate_location(&self, vntpl: &VarnodeTpl, vn: &mut VarnodeData) -> KunaResult<()> {
+    fn generate_location(&self, vntpl: &VarnodeTpl, vn: &mut VarnodeData) -> UnlaceResult<()> {
         let walker = self.walker();
         let space = vntpl
             .get_space()
             .fix_space(&walker)?
-            .ok_or_else(|| KunaError::sleigh("generateLocation: null space"))?;
+            .ok_or_else(|| UnlaceError::sleigh("generateLocation: null space"))?;
         vn.size = vntpl.get_size().fix(&walker)? as u32; // C++ uintb -> uint4
         if Rc::ptr_eq(&space, &self.const_space) {
             vn.offset = vntpl.get_offset().fix(&walker)? & calc_mask(vn.size as i32);
@@ -1254,13 +1254,13 @@ impl<'a> SleighBuilder<'a> {
         &self,
         vntpl: &VarnodeTpl,
         vn: &mut VarnodeData,
-    ) -> KunaResult<Rc<AddrSpace>> {
+    ) -> UnlaceResult<Rc<AddrSpace>> {
         let walker = self.walker();
         let hand = walker.borrow_fixed_handle(vntpl.get_offset().get_handle_index())?;
         let space = hand
             .offset_space
             .clone()
-            .ok_or_else(|| KunaError::sleigh("generatePointer: null offset space"))?;
+            .ok_or_else(|| UnlaceError::sleigh("generatePointer: null offset space"))?;
         vn.size = hand.offset_size;
         if Rc::ptr_eq(&space, &self.const_space) {
             vn.offset = hand.offset_offset & calc_mask(vn.size as i32);
@@ -1271,11 +1271,11 @@ impl<'a> SleighBuilder<'a> {
         }
         vn.space = Some(space);
         crate::handleview::export_space(hand)
-            .ok_or_else(|| KunaError::sleigh("generatePointer: null pointed-to space"))
+            .ok_or_else(|| UnlaceError::sleigh("generatePointer: null pointed-to space"))
     }
 
     /// C++ `SleighBuilder::generatePointerAdd`.
-    fn generate_pointer_add(&mut self, op_idx: usize, vntpl: &VarnodeTpl) -> KunaResult<()> {
+    fn generate_pointer_add(&mut self, op_idx: usize, vntpl: &VarnodeTpl) -> UnlaceResult<()> {
         let offset_plus = vntpl.get_offset().get_real() & 0xffff;
         if offset_plus == 0 {
             return Ok(());
@@ -1305,14 +1305,14 @@ impl<'a> SleighBuilder<'a> {
     }
 
     /// C++ `SleighBuilder::buildEmpty`.
-    fn build_empty(&mut self, ct: ConstructorRef, secnum: i32) -> KunaResult<()> {
+    fn build_empty(&mut self, ct: ConstructorRef, secnum: i32) -> UnlaceResult<()> {
         let numops = self.table.get_constructor(ct)?.get_num_operands();
         for i in 0..numops {
             let opid = self.table.get_constructor(ct)?.get_operand(i)?;
             let opsym = self
                 .table
                 .find_symbol_by_id(opid)
-                .ok_or_else(|| KunaError::sleigh("buildEmpty: operand undefined"))?;
+                .ok_or_else(|| UnlaceError::sleigh("buildEmpty: operand undefined"))?;
             let SymbolKind::Operand(op) = opsym.kind() else {
                 continue;
             };
@@ -1323,7 +1323,7 @@ impl<'a> SleighBuilder<'a> {
             let defsym_obj = self
                 .table
                 .find_symbol_by_id(defsym)
-                .ok_or_else(|| KunaError::sleigh("buildEmpty: defining symbol undefined"))?;
+                .ok_or_else(|| UnlaceError::sleigh("buildEmpty: defining symbol undefined"))?;
             if defsym_obj.get_type() != SymbolType::Subtable {
                 continue;
             }
@@ -1343,9 +1343,9 @@ impl<'a> SleighBuilder<'a> {
     }
 
     /// C++ `pushOperand` on the builder's walker.
-    fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
         if self.cur.depth > MAX_DEPTH - 2 {
-            return Err(KunaError::lowlevel("SLEIGH exceeded maximum parse depth"));
+            return Err(UnlaceError::lowlevel("SLEIGH exceeded maximum parse depth"));
         }
         let parent = self.cur.point.expect("push: null point");
         let child = self.contexts[self.cur_ctx].ctx.state[parent]
@@ -1382,7 +1382,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
     }
 
     /// C++ `SleighBuilder::dump(OpTpl *op)`.
-    fn dump(&mut self, op: &OpTpl) -> KunaResult<()> {
+    fn dump(&mut self, op: &OpTpl) -> UnlaceResult<()> {
         let isize = op.num_input();
         // invars = allocateVarnodes(isize)
         let invars = self.cache.allocate_varnodes(isize as u32);
@@ -1454,14 +1454,14 @@ impl PcodeBuilder for SleighBuilder<'_> {
     }
 
     /// C++ `SleighBuilder::appendBuild`.
-    fn append_build(&mut self, bld: &OpTpl, secnum: i32) -> KunaResult<()> {
+    fn append_build(&mut self, bld: &OpTpl, secnum: i32) -> UnlaceResult<()> {
         let index = bld.get_in(0).get_offset().get_real() as i32; // C++ uintb -> int4
         let ct = self.walker().get_constructor_inner()?;
         let opid = self.table.get_constructor(ct)?.get_operand(index)?;
         let opsym = self
             .table
             .find_symbol_by_id(opid)
-            .ok_or_else(|| KunaError::sleigh("appendBuild: operand undefined"))?;
+            .ok_or_else(|| UnlaceError::sleigh("appendBuild: operand undefined"))?;
         let SymbolKind::Operand(op) = opsym.kind() else {
             return Ok(());
         };
@@ -1472,7 +1472,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
         let defsym = self
             .table
             .find_symbol_by_id(sym)
-            .ok_or_else(|| KunaError::sleigh("appendBuild: defining symbol undefined"))?;
+            .ok_or_else(|| UnlaceError::sleigh("appendBuild: defining symbol undefined"))?;
         if defsym.get_type() != SymbolType::Subtable {
             return Ok(());
         }
@@ -1497,7 +1497,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
     }
 
     /// C++ `SleighBuilder::delaySlot`.
-    fn delay_slot(&mut self, _op: &OpTpl) -> KunaResult<()> {
+    fn delay_slot(&mut self, _op: &OpTpl) -> UnlaceResult<()> {
         let saved_cur = self.cur.clone();
         let saved_ctx = self.cur_ctx;
         let saved_cross = self.cross_ctx;
@@ -1513,10 +1513,10 @@ impl PcodeBuilder for SleighBuilder<'_> {
             self.set_unique_offset(&newaddr);
             // Locate the resolved delay-slot context (must already be pcode).
             let idx = self.find_context(&newaddr).ok_or_else(|| {
-                KunaError::lowlevel("Could not obtain cached delay slot instruction")
+                UnlaceError::lowlevel("Could not obtain cached delay slot instruction")
             })?;
             if self.contexts[idx].ctx.get_parser_state() != ParseState::Pcode {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Could not obtain cached delay slot instruction",
                 ));
             }
@@ -1544,16 +1544,16 @@ impl PcodeBuilder for SleighBuilder<'_> {
     }
 
     /// C++ `SleighBuilder::setLabel`.
-    fn set_label(&mut self, op: &OpTpl) -> KunaResult<()> {
+    fn set_label(&mut self, op: &OpTpl) -> UnlaceResult<()> {
         let id = op.get_in(0).get_offset().get_real() as u32; // C++ uintb -> uint4
         self.cache.add_label(id.wrapping_add(self.get_label_base()));
         Ok(())
     }
 
     /// C++ `SleighBuilder::appendCrossBuild`.
-    fn append_cross_build(&mut self, bld: &OpTpl, secnum: i32) -> KunaResult<()> {
+    fn append_cross_build(&mut self, bld: &OpTpl, secnum: i32) -> UnlaceResult<()> {
         if secnum >= 0 {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "CROSSBUILD directive within a named section",
             ));
         }
@@ -1562,7 +1562,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
         let spc = vn
             .get_space()
             .fix_space(&self.walker())?
-            .ok_or_else(|| KunaError::sleigh("crossbuild: null space"))?;
+            .ok_or_else(|| UnlaceError::sleigh("crossbuild: null space"))?;
         let addr = spc.wrap_offset(vn.get_offset().fix(&self.walker())?);
 
         let saved_cur = self.cur.clone();
@@ -1587,7 +1587,7 @@ impl PcodeBuilder for SleighBuilder<'_> {
             }
         };
         if self.contexts[idx].ctx.get_parser_state() != ParseState::Pcode {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Could not obtain cached crossbuild instruction",
             ));
         }
@@ -1820,7 +1820,7 @@ impl Sleigh {
     /// the address, then byte-swap to host order if the space endianness differs
     /// from the host, and mask/shift down to `sz`.  Used by jump-table emulation
     /// (`EmulateFunction::executeLoad`) to read read-only switch tables.
-    pub fn read_loadimage_value(&self, addr: &Address, sz: i32) -> KunaResult<u64> {
+    pub fn read_loadimage_value(&self, addr: &Address, sz: i32) -> UnlaceResult<u64> {
         use unlace_base::address::byte_swap;
         use unlace_base::types::HOST_ENDIAN;
         let mut buf = [0u8; 8]; // sizeof(uintb)
@@ -1849,7 +1849,7 @@ impl Sleigh {
     }
 
     /// Install a [`RegisterLookup`] on the engine's address-space manager (the
-    /// kuna stand-in for the C++ `AddrSpace::trans` back-pointer that
+    /// unlace stand-in for the C++ `AddrSpace::trans` back-pointer that
     /// `getDefaultCodeSpace()->getTrans()` reaches).  The lookup is a standalone
     /// snapshot of the engine's register cross-reference, so there is no `Rc`
     /// cycle back into `self`.
@@ -1859,7 +1859,7 @@ impl Sleigh {
     /// `glb`/`open_image` share it) — i.e. in the bootstrap, right before the
     /// spec decode that resolves register names (`<context_data>` tracked sets,
     /// `<pentry>` `<addr name=…>`, etc.).
-    pub fn install_register_lookup(&mut self) -> KunaResult<()> {
+    pub fn install_register_lookup(&mut self) -> UnlaceResult<()> {
         let lookup: Rc<dyn RegisterLookup> = Rc::new(
             crate::sleighbase::SnapshotRegisterLookup::from_base(&self.base),
         );
@@ -1879,7 +1879,10 @@ impl Sleigh {
     /// Resolve a register by name to its [`VarnodeData`] storage (C++
     /// `Translate::getRegister(name)`).  Used by `set track` to record the tracked
     /// register's location.
-    pub fn get_register_varnode(&self, nm: &[u8]) -> KunaResult<unlace_num::pcoderaw::VarnodeData> {
+    pub fn get_register_varnode(
+        &self,
+        nm: &[u8],
+    ) -> UnlaceResult<unlace_num::pcoderaw::VarnodeData> {
         self.base.get_register(nm)
     }
 
@@ -1887,7 +1890,7 @@ impl Sleigh {
     /// the engine.  The `.sla` bytes are supplied directly (the C++ resolves
     /// the file name from the `<sleigh>` tag; the Rust caller passes the raw
     /// compressed file contents).
-    pub fn initialize_from_sla(&mut self, sla_bytes: &[u8]) -> KunaResult<()> {
+    pub fn initialize_from_sla(&mut self, sla_bytes: &[u8]) -> UnlaceResult<()> {
         self.constructor_matches.get_mut().clear();
         self.primitive_operands.take();
         if !self.base.is_initialized() {
@@ -1910,7 +1913,7 @@ impl Sleigh {
             let mut decoder = crate::slaformat::FormatDecode::new(unsafe { &*manager_ptr });
             decoder.ingest_stream(sla_bytes)?;
             let db_cell = &self.context_db;
-            let register_context = |nm: &[u8], sb: i32, eb: i32| -> KunaResult<()> {
+            let register_context = |nm: &[u8], sb: i32, eb: i32| -> UnlaceResult<()> {
                 db_cell.borrow_mut().register_variable(nm, sb, eb)
             };
             self.base.decode(&mut decoder, register_context)?;
@@ -1946,7 +1949,7 @@ impl Sleigh {
 
     /// Load the instruction bytes for `addr` into `pos.buf` (C++
     /// `loader->loadFill(pos.getBuffer(),16,pos.getAddr())`, here `MAX_INSTRUCTION_LEN` bytes).
-    fn load_fill_context(&self, pos: &mut ParserContext) -> KunaResult<()> {
+    fn load_fill_context(&self, pos: &mut ParserContext) -> UnlaceResult<()> {
         let addr = pos.addr.clone();
         let buf = pos.get_buffer_mut();
         self.loader.borrow_mut().load_fill(buf, &addr)
@@ -1977,7 +1980,7 @@ impl Sleigh {
         subtable: &crate::slghsymbol::SubtableSymbol,
         table: u32,
         walker: &ParserWalker<'_>,
-    ) -> KunaResult<u32> {
+    ) -> UnlaceResult<u32> {
         let offset = walker.ctx.state[walker.point()].offset;
         let mut saved = self.constructor_matches.borrow_mut();
         if let Some(previous) = saved.iter().find(|previous| {
@@ -2010,7 +2013,7 @@ impl Sleigh {
     }
 
     /// C++ `Sleigh::resolve`: build the constructor tree (disassembly state).
-    fn resolve(&self, pos: &mut ParserContext, reuse_matches: bool) -> KunaResult<()> {
+    fn resolve(&self, pos: &mut ParserContext, reuse_matches: bool) -> UnlaceResult<()> {
         self.load_fill_context(pos)?;
         // loadContext: pull context words for the current address.
         {
@@ -2026,7 +2029,7 @@ impl Sleigh {
         let root = self
             .base
             .root
-            .ok_or_else(|| KunaError::sleigh("SLEIGH not initialized (no root)"))?;
+            .ok_or_else(|| UnlaceError::sleigh("SLEIGH not initialized (no root)"))?;
         let mut walker = ParserWalkerChange::new(pos, table, self);
         walker.deallocate_state();
         walker.set_offset(0);
@@ -2063,9 +2066,9 @@ impl Sleigh {
                 let opid = constructor.get_operand(oper)?;
                 let opsym = table
                     .find_symbol_by_id(opid)
-                    .ok_or_else(|| KunaError::sleigh("resolve: operand undefined"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("resolve: operand undefined"))?;
                 let SymbolKind::Operand(op) = opsym.kind() else {
-                    return Err(KunaError::sleigh("resolve: not an operand symbol"));
+                    return Err(UnlaceError::sleigh("resolve: not an operand symbol"));
                 };
                 let offset_base = op.get_offset_base();
                 let rel = op.get_relative_offset();
@@ -2131,7 +2134,7 @@ impl Sleigh {
     }
 
     /// C++ `Sleigh::resolveHandles`.
-    fn resolve_handles(&self, pos: &mut ParserContext) -> KunaResult<()> {
+    fn resolve_handles(&self, pos: &mut ParserContext) -> UnlaceResult<()> {
         let table = &self.base.symtab;
         let mut walker = ParserWalkerChange::new(pos, table, self);
         walker.base_state();
@@ -2144,16 +2147,16 @@ impl Sleigh {
                 let opid = constructor.get_operand(oper)?;
                 let opsym = table
                     .find_symbol_by_id(opid)
-                    .ok_or_else(|| KunaError::sleigh("resolveHandles: operand undefined"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("resolveHandles: operand undefined"))?;
                 let SymbolKind::Operand(op) = opsym.kind() else {
-                    return Err(KunaError::sleigh("resolveHandles: not an operand"));
+                    return Err(UnlaceError::sleigh("resolveHandles: not an operand"));
                 };
                 walker.push_operand(oper)?;
                 let triple = op.get_defining_symbol();
                 if let Some(tid) = triple {
                     let tsym = table
                         .find_symbol_by_id(tid)
-                        .ok_or_else(|| KunaError::sleigh("resolveHandles: triple undefined"))?;
+                        .ok_or_else(|| UnlaceError::sleigh("resolveHandles: triple undefined"))?;
                     if tsym.get_type() == SymbolType::Subtable {
                         break;
                     } else {
@@ -2169,7 +2172,7 @@ impl Sleigh {
                     // expression operand: result is a constant
                     let patexp = op
                         .get_defining_expression()
-                        .ok_or_else(|| KunaError::sleigh("resolveHandles: no defining expr"))?;
+                        .ok_or_else(|| UnlaceError::sleigh("resolveHandles: no defining expr"))?;
                     let res = {
                         let reader = walker.as_reader();
                         patexp.get_value(&reader)?
@@ -2206,7 +2209,11 @@ impl Sleigh {
     }
 
     /// C++ `Sleigh::obtainContext`: resolve a checked-out context up to `state`.
-    fn obtain_context(&self, addr: &Address, state: ParseState) -> KunaResult<ParserContextGuard> {
+    fn obtain_context(
+        &self,
+        addr: &Address,
+        state: ParseState,
+    ) -> UnlaceResult<ParserContextGuard> {
         self.obtain_context_with_match_cache(addr, state, false)
     }
 
@@ -2215,7 +2222,7 @@ impl Sleigh {
         addr: &Address,
         state: ParseState,
         reuse_matches: bool,
-    ) -> KunaResult<ParserContextGuard> {
+    ) -> UnlaceResult<ParserContextGuard> {
         self.context_queries
             .set(self.context_queries.get().wrapping_add(1));
         let mut pos = self.checkout_context(addr);
@@ -2228,7 +2235,7 @@ impl Sleigh {
     }
 
     /// C++ `ParserContext::applyCommits`.
-    fn apply_commits(&self, pos: &ParserContext) -> KunaResult<()> {
+    fn apply_commits(&self, pos: &ParserContext) -> UnlaceResult<()> {
         if pos.contextcommit.is_empty() {
             return Ok(());
         }
@@ -2238,22 +2245,22 @@ impl Sleigh {
         for set in &pos.contextcommit {
             let sym = table
                 .find_symbol_by_id(set.sym)
-                .ok_or_else(|| KunaError::sleigh("applyCommits: symbol undefined"))?;
+                .ok_or_else(|| UnlaceError::sleigh("applyCommits: symbol undefined"))?;
             let commitaddr = if sym.get_type() == SymbolType::Operand {
                 let SymbolKind::Operand(op) = sym.kind() else {
-                    return Err(KunaError::sleigh("applyCommits: not operand"));
+                    return Err(UnlaceError::sleigh("applyCommits: not operand"));
                 };
                 let i = op.get_index();
                 let child = pos.state[set.point]
                     .resolve
                     .get(i as usize)
                     .copied()
-                    .ok_or_else(|| KunaError::sleigh("applyCommits: operand not resolved"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("applyCommits: operand not resolved"))?;
                 let h = &pos.state[child].hand;
                 Address::new(
                     h.space
                         .clone()
-                        .ok_or_else(|| KunaError::sleigh("applyCommits: null space"))?,
+                        .ok_or_else(|| UnlaceError::sleigh("applyCommits: null space"))?,
                     h.offset_offset,
                 )
             } else {
@@ -2261,7 +2268,7 @@ impl Sleigh {
                 sym.get_fixed_handle(&mut hand, &walker, table)?;
                 Address::new(
                     hand.space
-                        .ok_or_else(|| KunaError::sleigh("applyCommits: null space"))?,
+                        .ok_or_else(|| UnlaceError::sleigh("applyCommits: null space"))?,
                     hand.offset_offset,
                 )
             };
@@ -2303,9 +2310,9 @@ impl Sleigh {
     }
 
     /// C++ `ParserContext::getN2addr`: address of the instruction after next.
-    fn compute_n2addr(&self, pos: &ParserContext) -> KunaResult<Address> {
+    fn compute_n2addr(&self, pos: &ParserContext) -> UnlaceResult<Address> {
         if pos.parsestate == ParseState::Uninitialized {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "inst_next2 not available in this context",
             ));
         }
@@ -2339,17 +2346,17 @@ fn classify_handle(hand: &FixedHandle, is_code_address: bool) -> OpObject {
 }
 
 /// Helper: borrow a [`SubtableSymbol`](crate::slghsymbol::SubtableSymbol) by symbol id (C++ blind cast).
-fn subtable_ref(table: &SymbolTable, id: u32) -> KunaResult<&crate::slghsymbol::SubtableSymbol> {
+fn subtable_ref(table: &SymbolTable, id: u32) -> UnlaceResult<&crate::slghsymbol::SubtableSymbol> {
     let sym = table
         .find_symbol_by_id(id)
-        .ok_or_else(|| KunaError::sleigh("subtable id undefined"))?;
+        .ok_or_else(|| UnlaceError::sleigh("subtable id undefined"))?;
     match sym.kind() {
         SymbolKind::Subtable(s) => Ok(s),
-        _ => Err(KunaError::sleigh("symbol is not a subtable")),
+        _ => Err(UnlaceError::sleigh("symbol is not a subtable")),
     }
 }
 
-/// C++ `TripleSymbol::resolve`, plus (kuna-only) the matched `DisjointPattern`
+/// C++ `TripleSymbol::resolve`, plus (unlace-only) the matched `DisjointPattern`
 /// leaf alongside the constructor id: `(Some(ct_id), Some(pattern))` for a
 /// subtable triple, `(None, None)` for the table-driven validators / base
 /// no-ops.  Identical decision walk to upstream `TripleSymbol::resolve`; the
@@ -2359,10 +2366,10 @@ fn resolve_triple_matched(
     table: &SymbolTable,
     id: u32,
     walker: &ParserWalker<'_>,
-) -> KunaResult<(Option<u32>, Option<DisjointPattern>)> {
+) -> UnlaceResult<(Option<u32>, Option<DisjointPattern>)> {
     let sym = table
         .find_symbol_by_id(id)
-        .ok_or_else(|| KunaError::sleigh("triple symbol undefined"))?;
+        .ok_or_else(|| UnlaceError::sleigh("triple symbol undefined"))?;
     sym.resolve_matched(walker)
 }
 
@@ -2373,10 +2380,10 @@ fn resolve_triple(
     id: u32,
     walker: &ParserWalker<'_>,
     reuse_matches: bool,
-) -> KunaResult<Option<u32>> {
+) -> UnlaceResult<Option<u32>> {
     let sym = table
         .find_symbol_by_id(id)
-        .ok_or_else(|| KunaError::sleigh("triple symbol undefined"))?;
+        .ok_or_else(|| UnlaceError::sleigh("triple symbol undefined"))?;
     if let SymbolKind::Subtable(subtable) = sym.kind() {
         return if reuse_matches {
             walker.engine.resolve_cached(subtable, id, walker).map(Some)
@@ -2392,7 +2399,7 @@ fn apply_context(
     table: &SymbolTable,
     ct: ConstructorRef,
     walker: &mut ParserWalkerChange<'_>,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     for change in table.get_constructor(ct)?.get_context_changes() {
         change.apply(walker)?;
     }
@@ -2407,11 +2414,11 @@ fn pos_const_space(pos: &ParserContext) -> Rc<AddrSpace> {
 // ParserWalkerChange implements the full walker boundary (reads delegate to a
 // transient ParserWalker view; mutations go straight to the context).
 impl PatternExpressionContext for ParserWalkerChange<'_> {
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         let off = self.ctx.state[self.point()].offset;
         self.ctx.get_instruction_bytes(byteoff, numbytes, off)
     }
-    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
         self.ctx.get_context_bytes(byteoff, numbytes)
     }
     fn get_addr(&self) -> Address {
@@ -2420,35 +2427,35 @@ impl PatternExpressionContext for ParserWalkerChange<'_> {
     fn get_naddr(&self) -> Address {
         self.ctx.get_naddr().clone()
     }
-    fn get_n2addr(&self) -> KunaResult<Address> {
+    fn get_n2addr(&self) -> UnlaceResult<Address> {
         self.engine.compute_n2addr(self.ctx)
     }
-    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> KunaResult<i64> {
+    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> UnlaceResult<i64> {
         self.as_reader().operand_value(index, table_id, ct_id)
     }
 }
 
 impl SymbolWalker for ParserWalkerChange<'_> {
-    fn push_operand(&mut self, i: i32) -> KunaResult<()> {
+    fn push_operand(&mut self, i: i32) -> UnlaceResult<()> {
         ParserWalkerChange::push_operand(self, i)
     }
-    fn pop_operand(&mut self) -> KunaResult<()> {
+    fn pop_operand(&mut self) -> UnlaceResult<()> {
         ParserWalkerChange::pop_operand(self);
         Ok(())
     }
-    fn get_constructor(&self) -> KunaResult<ConstructorRef> {
+    fn get_constructor(&self) -> UnlaceResult<ConstructorRef> {
         ParserWalkerChange::get_constructor(self)
     }
-    fn get_fixed_handle(&self, i: i32) -> KunaResult<FixedHandle> {
+    fn get_fixed_handle(&self, i: i32) -> UnlaceResult<FixedHandle> {
         self.borrow_fixed_handle(i).map(Cow::into_owned)
     }
-    fn borrow_fixed_handle(&self, i: i32) -> KunaResult<Cow<'_, FixedHandle>> {
+    fn borrow_fixed_handle(&self, i: i32) -> UnlaceResult<Cow<'_, FixedHandle>> {
         let pt = &self.ctx.state[self.point()];
         let child = pt
             .resolve
             .get(i as usize)
             .copied()
-            .ok_or_else(|| KunaError::sleigh("getFixedHandle: operand not resolved"))?;
+            .ok_or_else(|| UnlaceError::sleigh("getFixedHandle: operand not resolved"))?;
         Ok(Cow::Borrowed(&self.ctx.state[child].hand))
     }
     fn get_const_space(&self) -> Rc<AddrSpace> {
@@ -2457,17 +2464,17 @@ impl SymbolWalker for ParserWalkerChange<'_> {
     fn get_cur_space(&self) -> Rc<AddrSpace> {
         self.ctx.get_cur_space()
     }
-    fn get_dest_addr(&self) -> KunaResult<Address> {
+    fn get_dest_addr(&self) -> UnlaceResult<Address> {
         Ok(self.ctx.calladdr.clone())
     }
-    fn get_ref_addr(&self) -> KunaResult<Address> {
+    fn get_ref_addr(&self) -> UnlaceResult<Address> {
         Ok(self.ctx.calladdr.clone())
     }
-    fn get_instruction_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_instruction_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         let off = self.ctx.state[self.point()].offset;
         self.ctx.get_instruction_bits(startbit, size, off)
     }
-    fn get_context_bits(&self, startbit: i32, size: i32) -> KunaResult<u32> {
+    fn get_context_bits(&self, startbit: i32, size: i32) -> UnlaceResult<u32> {
         self.ctx.get_context_bits(startbit, size)
     }
 }
@@ -2488,7 +2495,7 @@ impl SymbolWalkerChange for ParserWalkerChange<'_> {
 
 impl Sleigh {
     /// C++ `Translate::instructionLength`.
-    pub fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32> {
+    pub fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32> {
         let pos = self.obtain_context(baseaddr, ParseState::Disassembly)?;
         Ok(pos.get_length())
     }
@@ -2499,7 +2506,7 @@ impl Sleigh {
     ///
     /// Each [`OperandView`] snapshots the fixed bits available when its containing
     /// constructor is visited, before traversal of that constructor's children.
-    pub fn instruction_mask(&self, baseaddr: &Address) -> KunaResult<InsnMask> {
+    pub fn instruction_mask(&self, baseaddr: &Address) -> UnlaceResult<InsnMask> {
         // Operand classification requires resolved handles.
         self.capture_patterns.set(true);
         let pos = self.obtain_context(baseaddr, ParseState::Pcode);
@@ -2507,7 +2514,7 @@ impl Sleigh {
         let pos = pos?;
         let len = pos.get_length();
         if len <= 0 || len > MAX_INSTRUCTION_LEN {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "instruction_mask: out-of-range length {len} (cap {MAX_INSTRUCTION_LEN})"
             )));
         }
@@ -2525,7 +2532,7 @@ impl Sleigh {
             let node_off = node.offset as usize;
 
             let dp = node.matched_pattern.as_ref().ok_or_else(|| {
-                KunaError::sleigh("instruction_mask: node has no captured pattern")
+                UnlaceError::sleigh("instruction_mask: node has no captured pattern")
             })?;
             // Pattern offsets are relative to this node.
             let patlen = dp.get_length(false); // false == instruction stream only
@@ -2546,9 +2553,11 @@ impl Sleigh {
                 let opid = ct.get_operand(oper)?;
                 let opsym = table
                     .find_symbol_by_id(opid)
-                    .ok_or_else(|| KunaError::sleigh("instruction_mask: operand undefined"))?;
+                    .ok_or_else(|| UnlaceError::sleigh("instruction_mask: operand undefined"))?;
                 let SymbolKind::Operand(op) = opsym.kind() else {
-                    return Err(KunaError::sleigh("instruction_mask: not an operand symbol"));
+                    return Err(UnlaceError::sleigh(
+                        "instruction_mask: not an operand symbol",
+                    ));
                 };
 
                 // Use the child span when resolved; otherwise approximate from
@@ -2602,7 +2611,7 @@ impl Sleigh {
         &self,
         emit: &mut dyn AssemblyEmit,
         baseaddr: &Address,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         let (mut mnemonic, mut body) = std::mem::take(&mut *self.assembly_buffers.borrow_mut());
         let result = self.print_assembly_into(baseaddr, &mut mnemonic, &mut body);
         if result.is_ok() {
@@ -2621,7 +2630,7 @@ impl Sleigh {
         baseaddr: &Address,
         mnemonic: &mut String,
         body: &mut String,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         mnemonic.clear();
         body.clear();
         let result = (|| {
@@ -2641,7 +2650,7 @@ impl Sleigh {
         pos: &ParserContext,
         mnemonic: &mut String,
         body: &mut String,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let table = &self.base.symtab;
         let mut walker = ParserWalker::new(pos, table, self);
         walker.base_state();
@@ -2655,7 +2664,11 @@ impl Sleigh {
     }
 
     /// C++ `Translate::oneInstruction`.
-    pub fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+    pub fn one_instruction(
+        &self,
+        emit: &mut dyn PcodeEmit,
+        baseaddr: &Address,
+    ) -> UnlaceResult<i32> {
         self.one_instruction_with_map(emit, baseaddr, None, None, None)
     }
 
@@ -2664,7 +2677,7 @@ impl Sleigh {
         emit: &mut dyn PcodeEmit,
         baseaddr: &Address,
         image: &dyn ImageBytes,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         self.one_instruction_with_map(emit, baseaddr, Some(image), None, None)
     }
 
@@ -2675,7 +2688,7 @@ impl Sleigh {
         pcode: &mut dyn PcodeEmit,
         assembly: &mut dyn AssemblyEmit,
         baseaddr: &Address,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         self.one_instruction_with_map(pcode, baseaddr, None, Some(assembly), None)
     }
 
@@ -2683,7 +2696,7 @@ impl Sleigh {
         image: &dyn ImageBytes,
         addr: &Address,
         len: i32,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let lo = addr.get_offset();
         let mapped = u64::try_from(len)
             .ok()
@@ -2697,7 +2710,7 @@ impl Sleigh {
         if mapped {
             Ok(())
         } else {
-            Err(KunaError::data_unavail(format!(
+            Err(UnlaceError::data_unavail(format!(
                 "Instruction bytes at {lo:#x} are not mapped"
             )))
         }
@@ -2710,7 +2723,7 @@ impl Sleigh {
         image: Option<&dyn ImageBytes>,
         assembly: Option<&mut dyn AssemblyEmit>,
         mut reusable: Option<&mut Option<Vec<u32>>>,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         if let Some(key) = reusable.as_deref_mut() {
             *key = None;
         }
@@ -2721,7 +2734,7 @@ impl Sleigh {
         if alignment != 1 && !baseaddr.get_offset().is_multiple_of(alignment as u64) {
             let mut s = String::new();
             baseaddr.print_raw(&mut s)?;
-            return Err(KunaError::unimpl(
+            return Err(UnlaceError::unimpl(
                 format!("Instruction address not aligned: {s}"),
                 0,
             ));
@@ -2735,7 +2748,7 @@ impl Sleigh {
         if let Some(image) = image {
             Self::check_mapped_instruction(image, baseaddr, pos.get_length())?;
             if pos.get_delay_slot() > 0 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Checked instruction translation does not support delay slots",
                 ));
             }
@@ -2809,7 +2822,7 @@ impl Sleigh {
         let tpl = handle.map(|h| self.base.template(h)).transpose()?;
         match builder.build(tpl, -1) {
             Ok(()) => {}
-            Err(KunaError::Unimpl { .. }) => {
+            Err(UnlaceError::Unimpl { .. }) => {
                 // C++ rethrows with a descriptive message + instruction_length.
                 let mut s = String::from("Instruction not implemented in pcode:\n ");
                 let mut basewalker =
@@ -2831,7 +2844,7 @@ impl Sleigh {
                     .get_constructor(bct)?
                     .print_body(&mut bod, &mut basewalker, table)?;
                 s.push_str(&bod);
-                return Err(KunaError::unimpl(s, fall_offset));
+                return Err(UnlaceError::unimpl(s, fall_offset));
             }
             Err(e) => return Err(e),
         }
@@ -2884,7 +2897,7 @@ impl Sleigh {
 }
 
 impl RegisterLookup for Sleigh {
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
         let vd = self.base.get_register(nm.as_bytes())?;
         Ok(storage_from_varnode_data(&vd))
     }
@@ -2905,10 +2918,10 @@ impl Translate for Sleigh {
     fn translate_base_mut(&mut self) -> &mut TranslateBase {
         &mut self.base.base
     }
-    fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+    fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
         // The .sla file is supplied via initialize_from_sla; the DocumentStorage
         // path is the C++ console wiring (not needed for the lift gate).
-        Err(KunaError::lowlevel("use Sleigh::initialize_from_sla"))
+        Err(UnlaceError::lowlevel("use Sleigh::initialize_from_sla"))
     }
     fn register_context(&mut self, name: &str, sbit: i32, ebit: i32) {
         let _ = self
@@ -2960,10 +2973,10 @@ impl Translate for Sleigh {
             res.push(String::from_utf8_lossy(nm).into_owned());
         }
     }
-    fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32> {
+    fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32> {
         Sleigh::instruction_length(self, baseaddr)
     }
-    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+    fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> UnlaceResult<i32> {
         Sleigh::one_instruction(self, emit, baseaddr)
     }
     fn one_instruction_checked(
@@ -2971,10 +2984,10 @@ impl Translate for Sleigh {
         emit: &mut dyn PcodeEmit,
         baseaddr: &Address,
         image: &dyn ImageBytes,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         Sleigh::one_instruction_checked(self, emit, baseaddr, image)
     }
-    fn print_assembly(&self, emit: &mut dyn AssemblyEmit, baseaddr: &Address) -> KunaResult<i32> {
+    fn print_assembly(&self, emit: &mut dyn AssemblyEmit, baseaddr: &Address) -> UnlaceResult<i32> {
         Sleigh::print_assembly(self, emit, baseaddr)
     }
 
@@ -2983,7 +2996,7 @@ impl Translate for Sleigh {
         pcode: &mut dyn PcodeEmit,
         assembly: &mut dyn AssemblyEmit,
         baseaddr: &Address,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         Sleigh::one_instruction_with_assembly(self, pcode, assembly, baseaddr)
     }
     fn one_instruction_reusable(
@@ -2992,7 +3005,7 @@ impl Translate for Sleigh {
         assembly: &mut dyn AssemblyEmit,
         baseaddr: &Address,
         context: &mut Option<Vec<u32>>,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         self.one_instruction_with_map(pcode, baseaddr, None, Some(assembly), Some(context))
     }
 
@@ -3008,7 +3021,7 @@ impl Translate for Sleigh {
         baseaddr: &Address,
         mnemonic: &mut String,
         body: &mut String,
-    ) -> KunaResult<i32> {
+    ) -> UnlaceResult<i32> {
         Sleigh::print_assembly_into(self, baseaddr, mnemonic, body)
     }
 }

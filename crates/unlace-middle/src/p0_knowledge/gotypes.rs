@@ -1,4 +1,4 @@
-//! (kuna `gotypes`) The Go runtime-type harvest — walk a Go binary's own
+//! (unlace `gotypes`) The Go runtime-type harvest — walk a Go binary's own
 //! `moduledata → typelinks → _type` metadata and intern NAMED struct shells
 //! (`main.Point`, `os.File`, …) into the type factory, phase 1 of the
 //! `docs/multilang.md` W3 Go provider. The pass itself lives in

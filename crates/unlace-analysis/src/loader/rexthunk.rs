@@ -1,4 +1,4 @@
-//! (kuna) `rexthunk`: on x86-64, an `FF 25 <disp32>` right after a REX byte is
+//! (unlace) `rexthunk`: on x86-64, an `FF 25 <disp32>` right after a REX byte is
 //! the tail of a compiler-emitted `REX FF 25` jump, not an import thunk, unless
 //! the image references the `FF` as an address.
 //!

@@ -141,7 +141,7 @@ fn mk_input(fd: &mut Funcdata, off: u64, size: int4) -> VarnodeId {
     let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
                           _o: VarnodeId,
                           _n: VarnodeId|
-     -> unlace_base::error::KunaResult<()> {
+     -> unlace_base::error::UnlaceResult<()> {
         panic!("mk_input: distinct addresses must not collide")
     };
     fd.vbank_mut().set_input(vn, &mut noop_thunk).unwrap()
@@ -173,7 +173,7 @@ fn mk_out(fd: &mut Funcdata, op: OpId, off: u64, size: int4) -> VarnodeId {
         let mut noop_thunk = |_b: &mut crate::varnode::VarnodeBank,
                               _o: VarnodeId,
                               _n: VarnodeId|
-         -> unlace_base::error::KunaResult<()> {
+         -> unlace_base::error::UnlaceResult<()> {
             panic!("mk_out: distinct addresses must not collide (xref replace fired)")
         };
         fd.vbank_mut()

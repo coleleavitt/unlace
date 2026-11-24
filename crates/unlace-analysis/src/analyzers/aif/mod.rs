@@ -1,4 +1,4 @@
-//! Aggressive Instruction Finder gap-walk — the kuna analog of Ghidra's
+//! Aggressive Instruction Finder gap-walk — the unlace analog of Ghidra's
 //! `AggressiveInstructionFinderAnalyzer` ("Aggressive Instruction Finder"), a
 //! Listing/xref consumer.
 //!
@@ -21,7 +21,7 @@
 //! BOTH:
 //!
 //!  1. **disassembles into a valid subroutine** ([`check_valid_subroutine`] — the
-//!     kuna analog of `PseudoDisassembler.checkValidSubroutine` /
+//!     unlace analog of `PseudoDisassembler.checkValidSubroutine` /
 //!     `followSubFlows`: follow fall-through + intra-function branches from the gap
 //!     start, reaching a clean RET without hitting a bad/undecodable byte, an
 //!     out-of-range flow, or a too-short routine; > 2 instructions); and
@@ -36,10 +36,10 @@
 //! (`engine.rs` `commit_analysis_output`: `name_function` + `add_function` +
 //! `register_symbol`), so a discovered gap function becomes `sub_<addr>`,
 //! decompilable by name. The flow-repair half ("schedule myself to run again,
-//! disassemble the body") is **inherited**: kuna's engine decompiles any
+//! disassemble the body") is **inherited**: unlace's engine decompiles any
 //! registered entry on demand, so emitting the entry is the whole job here.
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Features/Base/src/main/java/ghidra/app/plugin/prototype/analysis/AggressiveInstructionFinderAnalyzer.java`
 //!   — `AnalyzerType.BYTE_ANALYZER`, **`setDefaultEnablement(false)`** with the
@@ -77,10 +77,10 @@
 //!   [`FINGERPRINT_INSNS`] instructions, not Ghidra's masked instruction bytes.**
 //!   Ghidra builds the fingerprint from `getInstructionMask` (the per-constructor
 //!   bit-mask that separates opcode bits from operand bits) — a SLEIGH capability
-//!   kuna's decoder does not surface (`docs/history/listing-tier-design.md` §8: the mask
+//!   unlace's decoder does not surface (`docs/history/listing-tier-design.md` §8: the mask
 //!   accessor "is the same one FID would need; build it independently only if FID
 //!   is taken"). The mnemonic sequence is the operand-insensitive opcode projection
-//!   the kuna decoder *does* expose (`print_assembly` splits mnemonic from operand
+//!   the unlace decoder *does* expose (`print_assembly` splits mnemonic from operand
 //!   body), so two functions with the same prologue opcodes but different operand
 //!   immediates (e.g. `add $0xb,%eax` vs `add $0x40,%eax`) hash to the SAME
 //!   fingerprint — exactly the masked-bytes equivalence class. This is a faithful
@@ -92,7 +92,7 @@
 //!   functions) clears this easily.
 //! - **Context-mode (ARM Thumb / MIPS16) gap probing is NOT handled** (the upstream
 //!   ARM variant `ArmAggressiveInstructionFinderAnalyzer` adds per-gap `TMode`
-//!   context). kuna's AIF probes gaps in the Listing's already-resolved decode
+//!   context). unlace's AIF probes gaps in the Listing's already-resolved decode
 //!   context; x86-64 (the gated target) needs no decode-mode context. Documented LOSS.
 //! - **DISABLED by default** (Ghidra `setDefaultEnablement(false)`): a speculative
 //!   gap-filler can create false-positive functions, so it ships behind its own
@@ -186,7 +186,7 @@ impl AnalysisPass for AggressiveInstructionFinderPass {
 /// those instructions (the upstream concatenates the masked bytes, so the prefix
 /// length is part of the identity).
 ///
-/// The mnemonic-sequence projection is the kuna substitute for Ghidra's masked
+/// The mnemonic-sequence projection is the unlace substitute for Ghidra's masked
 /// instruction bytes (see the module LOSS note): operand-insensitive, so functions
 /// with the same prologue opcodes but different operand immediates share a
 /// fingerprint, the same equivalence class the mask histogram forms.
@@ -197,7 +197,7 @@ type ProbedBody = BTreeMap<u64, Rc<ProbedInsn>>;
 ///
 /// It wraps the live SLEIGH decoder ([`Translate::one_instruction`] via
 /// [`decode_one_with_assembly`]) plus the code space + executable-range universe, and decodes one
-/// candidate instruction at a time — the kuna analog of the upstream
+/// candidate instruction at a time — the unlace analog of the upstream
 /// `PseudoDisassembler` that re-decodes gap bytes without persisting them. It caches
 /// each speculative decode so a re-probe of the same VMA is free.
 struct GapDecoder<'a> {
@@ -623,7 +623,7 @@ fn build_fingerprint_histogram(
     hist
 }
 
-/// The kuna analog of `PseudoDisassembler.checkValidSubroutine` /
+/// The unlace analog of `PseudoDisassembler.checkValidSubroutine` /
 /// `followSubFlows`: starting at `entry`, follow the speculatively-decoded control
 /// flow (fall-through + intra-function branches) and decide whether it is a valid
 /// subroutine.
@@ -707,7 +707,7 @@ pub(crate) fn validate_referenced_targets(
 /// `adds_info` that feeds the `didTerminate || didCallValidSubroutine` gate below:
 /// that one also fires on a plain fall-through out of the gap into decoded code,
 /// which is the signature of a mid-body phantom rather than evidence against one
-/// (see [`kuna_aifcorroborate`]). Only the gap-walk accept ([`probe_gap_start`])
+/// (see [`unlace_aifcorroborate`]). Only the gap-walk accept ([`probe_gap_start`])
 /// reads it; the two wrappers above drop it, because their callers carry their own
 /// corroboration.
 fn check_valid_subroutine_with_policy(
@@ -836,7 +836,7 @@ fn follow_subroutine(
             // Outside the gap: if it is decoded code, "adds info"; otherwise (data /
             // undecoded outside the gap) it is a bad flow target → reject.
             if listing.is_instruction_start(vma) {
-                // (kuna) A Thumb walk cannot reach code the
+                // (unlace) A Thumb walk cannot reach code the
                 // function symbols state is A32 without an exchange.
                 if thumb_walk && listing.in_a32_symbol_extent(vma) {
                     return None;
@@ -986,13 +986,13 @@ fn follow_subroutine(
 /// Bails (returns empty) unless there are ≥ [`MINIMUM_FUNCTION_COUNT`] discovered
 /// functions AND ≥ 1 decoded instruction (Ghidra's `funcCount` /
 /// `getNumInstructions()` gate), or if no fingerprint reaches the threshold.
-/// `aif strict` (GH-299) adds the structural rejects in [`kuna_aifstrict`]: the gap
+/// `aif strict` (GH-299) adds the structural rejects in [`unlace_aifstrict`]: the gap
 /// cursor slides to the next 4-byte boundary instead of the next byte, probing only
 /// an aligned address or a hole's first byte. `aif precise` (GH-313) also restores
-/// upstream's second fingerprint test in [`kuna_aifcorroborate`]: an accept must
+/// upstream's second fingerprint test in [`unlace_aifcorroborate`]: an accept must
 /// either add information or match a prologue 50 discovered functions share.
-/// [`kuna_aifnoppad`] (GH-299) keeps every entry off padding and zero fill, and
-/// `aifpoolslide` (GH-299) keeps it off literal-pool words in [`kuna_aifpoolslide`].
+/// [`unlace_aifnoppad`] (GH-299) keeps every entry off padding and zero fill, and
+/// `aifpoolslide` (GH-299) keeps it off literal-pool words in [`unlace_aifpoolslide`].
 #[allow(clippy::too_many_arguments)]
 pub fn run_aif(
     listing: &Listing,
@@ -1228,7 +1228,7 @@ fn aif_candidates(
             continue;
         }
 
-        // (kuna, `aif strict`) The cursor slides to the next instruction-alignment
+        // (unlace, `aif strict`) The cursor slides to the next instruction-alignment
         // boundary rather than the next byte, and only an aligned address or a
         // hole's first byte is a candidate at all.
         let mut advanced = if aifstrict {
@@ -1239,14 +1239,14 @@ fn aif_candidates(
         let probe_here = (!aifstrict || aifstrict::probe_allowed(listing, gap_start))
             && listing.is_undefined(gap_start)
             && !claimed.contains(&gap_start);
-        // (kuna, `aifnoppad`) No entry starts on filler: filler in front of a known
+        // (unlace, `aifnoppad`) No entry starts on filler: filler in front of a known
         // function or zero fill is not probed, and an accept moves past padding.
         let filler = match &mut padding {
             Some(runs) if probe_here => runs.classify(listing, decoder, gap_start),
             _ => aifnoppad::Filler::No,
         };
         if probe_here && filler != aifnoppad::Filler::Refuse {
-            // (kuna, `aifbracket`) A fragment of the enclosing known function is
+            // (unlace, `aifbracket`) A fragment of the enclosing known function is
             // refused but, like an `aif precise` refusal, consumes its body.
             let probe =
                 match probe_gap_start(decoder, listing, &hist, gap_start, gap_hi, aifcorroborate) {
@@ -1259,7 +1259,7 @@ fn aif_candidates(
                     }
                     other => other,
                 };
-            // (kuna, `aifpoolslide`) A candidate on a literal-pool word plants its
+            // (unlace, `aifpoolslide`) A candidate on a literal-pool word plants its
             // accept on the code after the pool; it is refused, consuming its body,
             // when that is data, and rejected when its body never decoded there.
             let pool_end = literals.as_ref().and_then(|lits| lits.run_end(gap_start));
@@ -1323,12 +1323,12 @@ fn aif_candidates(
                     advanced = body_max.saturating_add(1);
                     claimed.extend(body);
                 }
-                // (kuna, `aif precise`) An uncorroborated candidate is refused
+                // (unlace, `aif precise`) An uncorroborated candidate is refused
                 // as an ENTRY but still consumes its body. Without that, refusing
                 // an accept hands the cursor back to the interior of the same hole
                 // and it accepts a worse candidate deeper inside — measured on the
                 // 3.4 MB PE witness as mid-body entries RISING by 222 while 1,100
-                // real entries were lost. See `kuna_aifcorroborate`.
+                // real entries were lost. See `unlace_aifcorroborate`.
                 Probe::Uncorroborated(body) => {
                     if let Some(refused) = &mut decoder.straight_line {
                         refused.extend(body.iter().copied());
@@ -1371,7 +1371,7 @@ enum Probe {
 /// `aif precise` (GH-313) additionally applies upstream's SECOND fingerprint
 /// test here, which is the only frame where both of its inputs exist: the
 /// `startCount` histogram hit computed just above, and the corroboration flag the
-/// validity walk returns. See [`kuna_aifcorroborate`].
+/// validity walk returns. See [`unlace_aifcorroborate`].
 fn probe_gap_start(
     decoder: &mut GapDecoder,
     listing: &Listing,
@@ -1561,7 +1561,7 @@ pub(crate) fn raw_arm_frames(
             .collect();
         claimed.extend(spans.iter().copied());
         if arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::aif::AifMode>()
             .enabled()
             || capture_xrefs
@@ -1573,7 +1573,7 @@ pub(crate) fn raw_arm_frames(
     }
 
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::aif::AifMode>()
         .enabled()
         && !accepted.is_empty()
@@ -1604,7 +1604,7 @@ pub(crate) fn arm_frame_prefixes(
     code_space: Rc<AddrSpace>,
 ) -> BTreeMap<u64, u64> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::aif::AifMode>()
         .enabled()
         || roots.is_empty()
@@ -1719,7 +1719,7 @@ fn is_thumb_lr_prologue(data: &[u8], off: usize) -> bool {
 // Stage 3: code-pointer-table (vtable / callback / ISR-handler) gap seeding
 // ===========================================================================
 
-/// (kuna, Stage-3 ARM discovery) The **code-pointer-table seed** scan — the kuna
+/// (unlace, Stage-3 ARM discovery) The **code-pointer-table seed** scan — the unlace
 /// analog of Ghidra's reference-based function discovery (`ArmThumbFunctionTableScript`
 /// / the loader's data-pointer markup) and angr's `_seg_list` pointer scanning over
 /// `.data`/`.rodata`/`.text`.

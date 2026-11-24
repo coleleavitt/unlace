@@ -1,4 +1,4 @@
-//! (kuna) `calleescratchbody` — a helper that clobbers only the registers its
+//! (unlace) `calleescratchbody` — a helper that clobbers only the registers its
 //! convention already lets it clobber is still a decoded body.
 //!
 //! # The symptom
@@ -37,7 +37,7 @@
 //! ```
 //!
 //! So `RAX` holds `0x5e028` on both sides of the call, `sub rsp,rax` is a
-//! constant frame allocation, and every local is at a fixed offset. kuna instead
+//! constant frame allocation, and every local is at a fixed offset. unlace instead
 //! indexes the whole frame off a local with no definition anywhere in the
 //! function.
 //!
@@ -90,8 +90,8 @@ use unlace_base::types::int4;
 
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleescratchbody>` (kuna 4000+ range; 4158 = the
-/// previous kuna element).
+/// Marshaling element `<calleescratchbody>` (unlace 4000+ range; 4158 = the
+/// previous unlace element).
 pub const ELEM_CALLEESCRATCHBODY: ElementId = ElementId::new("calleescratchbody", 4159);
 
 /// How many decoded instructions a scratch-only body needs before its silence

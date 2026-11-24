@@ -52,7 +52,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Encoder, PackedEncode};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uintb};
@@ -500,12 +500,12 @@ pub trait Emit {
     fn stop_comment(&mut self, _id: int4) {}
 
     /// Flush any remaining buffered character data.  Default: no-op.
-    fn flush(&mut self) -> KunaResult<()> {
+    fn flush(&mut self) -> UnlaceResult<()> {
         Ok(())
     }
 
     /// Provide a maximum line size to the pretty printer.  Default: no effect.
-    fn set_max_line_size(&mut self, _mls: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, _mls: int4) -> UnlaceResult<()> {
         Ok(())
     }
     /// Get the current maximum line size, or -1 if there is none.
@@ -729,7 +729,7 @@ pub struct EmitBase {
     /// frame closes its `else { … }` brace only when its own brace opened, never
     /// on a stale sibling/descendant fire (the shared-slot bug).
     pub pend_fired: Vec<(u64, int4)>,
-    /// (kuna) A C label was the last thing printed: no statement or opening
+    /// (unlace) A C label was the last thing printed: no statement or opening
     /// brace has followed it yet (see [`crate::labelstmt`]).
     pub dangling_label: bool,
 }
@@ -878,7 +878,7 @@ impl Emit for EmitNoMarkup {
     fn end_block(&mut self, _id: int4) {}
 
     fn tag_line(&mut self) {
-        // In the kuna port the `print C` path drives `EmitNoMarkup` directly
+        // In the unlace port the `print C` path drives `EmitNoMarkup` directly
         // where C++ stacks `EmitPrettyPrint` over it (printlanguage.cc:69).
         // EmitPrettyPrint::tagLine fires the pending brace before the break, so
         // the collapsed EmitNoMarkup must absorb that responsibility here for the
@@ -1374,7 +1374,7 @@ impl Emit for EmitMarkup {
         });
     }
     fn tag_type(&mut self, name: &str, hl: SyntaxHighlight, markup: &MarkupRef) {
-        // (kuna, Phase 4) Declarator-token fidelity: kuna's declarator builder
+        // (unlace, Phase 4) Declarator-token fidelity: unlace's declarator builder
         // hands the WHOLE rendered front ("unsigned long *") to one tag_type
         // call, where upstream pushes only the base type name as the <type>
         // token and the stars/spaces as separate syntax tokens.  A multi-word
@@ -2196,7 +2196,7 @@ impl TokenSplit {
     /// `oinv_t`/`cinv_t` (invisible group delimiters) emit nothing; `line_t`/
     /// `bump_t` must never reach a low-level emitter (the pretty printer turns
     /// them into `tagLine` calls itself) and so throw, exactly as C++.
-    pub fn print_to(&self, emit: &mut dyn Emit) -> KunaResult<()> {
+    pub fn print_to(&self, emit: &mut dyn Emit) -> UnlaceResult<()> {
         match self.tagtype {
             TagType::DocuB => {
                 emit.begin_document();
@@ -2258,7 +2258,7 @@ impl TokenSplit {
             TagType::CinvT => {} // Invisible close
             TagType::SpacT => emit.spaces(self.numspaces, 0),
             TagType::LineT | TagType::BumpT => {
-                return Err(KunaError::lowlevel("Should never get called"));
+                return Err(UnlaceError::lowlevel("Should never get called"));
             }
         }
         Ok(())
@@ -2469,7 +2469,7 @@ impl EmitPrettyPrint {
     /// `indentstack` and `spaceremain` per the token's class.  The token is
     /// passed by reference index into [`tokqueue`] to avoid cloning; only the
     /// fields read here are touched.
-    fn print_token(&mut self, tok_ref: int4) -> KunaResult<()> {
+    fn print_token(&mut self, tok_ref: int4) -> UnlaceResult<()> {
         // C++ `int4 val = 0;` — declared once, assigned in the indent/break
         // arms.  Each arm assigns before reading, so no `mut` is needed.
         let val;
@@ -2502,7 +2502,7 @@ impl EmitPrettyPrint {
             }
             PrintClass::EndIndent => {
                 if self.indentstack.is_empty() {
-                    return Err(KunaError::lowlevel("indent error"));
+                    return Err(UnlaceError::lowlevel("indent error"));
                 }
                 self.indentstack.pop();
             }
@@ -2576,7 +2576,7 @@ impl EmitPrettyPrint {
     ///
     /// Emit groups of tokens that have been fully committed (non-negative size)
     /// from the bottom of [`tokqueue`], updating [`leftotal`].
-    fn advanceleft(&mut self) -> KunaResult<()> {
+    fn advanceleft(&mut self) -> UnlaceResult<()> {
         let mut l = self.tokqueue.bottom().get_size();
         while l >= 0 {
             let bottom_ref = self.tokqueue.bottomref();
@@ -2606,7 +2606,7 @@ impl EmitPrettyPrint {
     /// a size, update the open/break scanqueue and the running totals, and force
     /// line breaks (via [`advanceleft`](EmitPrettyPrint::advanceleft)) when the
     /// line would overflow.
-    fn scan(&mut self) -> KunaResult<()> {
+    fn scan(&mut self) -> UnlaceResult<()> {
         if self.tokqueue.empty() {
             // If we managed to overflow queue, expand it
             self.expand_buffers();
@@ -2686,7 +2686,7 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::checkstart()`.
-    fn checkstart(&mut self) -> KunaResult<()> {
+    fn checkstart(&mut self) -> UnlaceResult<()> {
         if self.needbreak {
             let slot = self.tokqueue.push();
             self.tokqueue.get_ref_mut(slot).spaces(0, 0);
@@ -2697,7 +2697,7 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::checkstring()`.
-    fn checkstring(&mut self) -> KunaResult<()> {
+    fn checkstring(&mut self) -> UnlaceResult<()> {
         if self.needbreak {
             let slot = self.tokqueue.push();
             self.tokqueue.get_ref_mut(slot).spaces(0, 0);
@@ -2708,7 +2708,7 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::checkend()`.
-    fn checkend(&mut self) -> KunaResult<()> {
+    fn checkend(&mut self) -> UnlaceResult<()> {
         if !self.needbreak {
             let slot = self.tokqueue.push();
             self.tokqueue
@@ -2721,7 +2721,7 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::checkbreak()`.
-    fn checkbreak(&mut self) -> KunaResult<()> {
+    fn checkbreak(&mut self) -> UnlaceResult<()> {
         if !self.needbreak {
             let slot = self.tokqueue.push();
             self.tokqueue
@@ -2742,7 +2742,7 @@ impl EmitPrettyPrint {
     // errors the way a C++ uncaught `LowlevelError` would abort.
 
     /// Fallible C++ `beginDocument()`.
-    pub fn try_begin_document(&mut self) -> KunaResult<int4> {
+    pub fn try_begin_document(&mut self) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_document();
@@ -2750,14 +2750,14 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endDocument(int4 id)`.
-    pub fn try_end_document(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_document(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_document(id);
         self.scan()
     }
     /// Fallible C++ `beginFunction(const Funcdata *fd)`.
-    pub fn try_begin_function(&mut self) -> KunaResult<int4> {
+    pub fn try_begin_function(&mut self) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_function();
@@ -2765,27 +2765,27 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endFunction(int4 id)`.
-    pub fn try_end_function(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_function(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_function(id);
         self.scan()
     }
     /// Fallible C++ `beginBlock(const FlowBlock *bl)`.
-    pub fn try_begin_block(&mut self, blockref: int4) -> KunaResult<int4> {
+    pub fn try_begin_block(&mut self, blockref: int4) -> UnlaceResult<int4> {
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_block(blockref);
         self.scan()?;
         Ok(id)
     }
     /// Fallible C++ `endBlock(int4 id)`.
-    pub fn try_end_block(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_block(&mut self, id: int4) -> UnlaceResult<()> {
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_block(id);
         self.scan()
     }
     /// Fallible C++ `tagLine()`.
-    pub fn try_tag_line(&mut self) -> KunaResult<()> {
+    pub fn try_tag_line(&mut self) -> UnlaceResult<()> {
         // emitPending() (C++ EmitPrettyPrint::tagLine): fire a registered
         // PendingBrace before the line break.  `emit_pending` clears the pending
         // slot before opening the brace, so the brace's own tag_line does not
@@ -2797,7 +2797,7 @@ impl EmitPrettyPrint {
         self.scan()
     }
     /// Fallible C++ `tagLine(int4 indent)`.
-    pub fn try_tag_line_indent(&mut self, indent: int4) -> KunaResult<()> {
+    pub fn try_tag_line_indent(&mut self, indent: int4) -> UnlaceResult<()> {
         Emit::emit_pending(self);
         self.checkbreak()?;
         let slot = self.tokqueue.push();
@@ -2805,7 +2805,7 @@ impl EmitPrettyPrint {
         self.scan()
     }
     /// Fallible C++ `beginReturnType(const Varnode *vn)`.
-    pub fn try_begin_return_type(&mut self, markup: &MarkupRef) -> KunaResult<int4> {
+    pub fn try_begin_return_type(&mut self, markup: &MarkupRef) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_return_type(markup);
@@ -2813,14 +2813,14 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endReturnType(int4 id)`.
-    pub fn try_end_return_type(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_return_type(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_return_type(id);
         self.scan()
     }
     /// Fallible C++ `beginVarDecl(const Symbol *sym)`.
-    pub fn try_begin_var_decl(&mut self, markup: &MarkupRef) -> KunaResult<int4> {
+    pub fn try_begin_var_decl(&mut self, markup: &MarkupRef) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_var_decl(markup);
@@ -2828,14 +2828,14 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endVarDecl(int4 id)`.
-    pub fn try_end_var_decl(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_var_decl(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_var_decl(id);
         self.scan()
     }
     /// Fallible C++ `beginStatement(const PcodeOp *op)`.
-    pub fn try_begin_statement(&mut self, markup: &MarkupRef) -> KunaResult<int4> {
+    pub fn try_begin_statement(&mut self, markup: &MarkupRef) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_statement(markup);
@@ -2843,14 +2843,14 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endStatement(int4 id)`.
-    pub fn try_end_statement(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_statement(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_statement(id);
         self.scan()
     }
     /// Fallible C++ `beginFuncProto()`.
-    pub fn try_begin_func_proto(&mut self) -> KunaResult<int4> {
+    pub fn try_begin_func_proto(&mut self) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).begin_func_proto();
@@ -2858,7 +2858,7 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `endFuncProto(int4 id)`.
-    pub fn try_end_func_proto(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_end_func_proto(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).end_func_proto(id);
@@ -2870,7 +2870,7 @@ impl EmitPrettyPrint {
         name: &str,
         hl: SyntaxHighlight,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2884,7 +2884,7 @@ impl EmitPrettyPrint {
         name: &str,
         hl: SyntaxHighlight,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).tag_op(name, hl, markup);
@@ -2896,7 +2896,7 @@ impl EmitPrettyPrint {
         name: &str,
         hl: SyntaxHighlight,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2910,7 +2910,7 @@ impl EmitPrettyPrint {
         name: &str,
         hl: SyntaxHighlight,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).tag_type(name, hl, markup);
@@ -2923,7 +2923,7 @@ impl EmitPrettyPrint {
         hl: SyntaxHighlight,
         o: int4,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2938,7 +2938,7 @@ impl EmitPrettyPrint {
         hl: SyntaxHighlight,
         id: int4,
         markup: &MarkupRef,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2953,7 +2953,7 @@ impl EmitPrettyPrint {
         hl: SyntaxHighlight,
         spc: &Rc<AddrSpace>,
         off: uintb,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2968,7 +2968,7 @@ impl EmitPrettyPrint {
         hl: SyntaxHighlight,
         spc: &Rc<AddrSpace>,
         off: uintb,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2983,7 +2983,7 @@ impl EmitPrettyPrint {
         hl: SyntaxHighlight,
         markup: &MarkupRef,
         value: uintb,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue
@@ -2992,14 +2992,14 @@ impl EmitPrettyPrint {
         self.scan()
     }
     /// Fallible C++ `print(const string &data,hl)`.
-    pub fn try_print(&mut self, data: &str, hl: SyntaxHighlight) -> KunaResult<()> {
+    pub fn try_print(&mut self, data: &str, hl: SyntaxHighlight) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).print_tok(data, hl);
         self.scan()
     }
     /// Fallible C++ `openParen(const string &paren,int4 id)`.
-    pub fn try_open_paren(&mut self, paren: &str, _id: int4) -> KunaResult<int4> {
+    pub fn try_open_paren(&mut self, paren: &str, _id: int4) -> UnlaceResult<int4> {
         let id = self.try_open_group()?; // Open paren automatically opens group
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).open_paren(paren, id);
@@ -3008,7 +3008,7 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `closeParen(const string &paren,int4 id)`.
-    pub fn try_close_paren(&mut self, paren: &str, id: int4) -> KunaResult<()> {
+    pub fn try_close_paren(&mut self, paren: &str, id: int4) -> UnlaceResult<()> {
         self.checkstring()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).close_paren(paren, id);
@@ -3016,7 +3016,7 @@ impl EmitPrettyPrint {
         self.try_close_group(id)
     }
     /// Fallible C++ `openGroup()`.
-    pub fn try_open_group(&mut self) -> KunaResult<int4> {
+    pub fn try_open_group(&mut self) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).open_group();
@@ -3024,14 +3024,14 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `closeGroup(int4 id)`.
-    pub fn try_close_group(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_close_group(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).close_group(id);
         self.scan()
     }
     /// Fallible C++ `startComment()`.
-    pub fn try_start_comment(&mut self) -> KunaResult<int4> {
+    pub fn try_start_comment(&mut self) -> UnlaceResult<int4> {
         self.checkstart()?;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).start_comment();
@@ -3039,21 +3039,21 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `stopComment(int4 id)`.
-    pub fn try_stop_comment(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_stop_comment(&mut self, id: int4) -> UnlaceResult<()> {
         self.checkend()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).stop_comment(id);
         self.scan()
     }
     /// Fallible C++ `spaces(int4 num,int4 bump)`.
-    pub fn try_spaces(&mut self, num: int4, bump: int4) -> KunaResult<()> {
+    pub fn try_spaces(&mut self, num: int4, bump: int4) -> UnlaceResult<()> {
         self.checkbreak()?;
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).spaces(num, bump);
         self.scan()
     }
     /// Fallible C++ `startIndent()`.
-    pub fn try_start_indent(&mut self) -> KunaResult<int4> {
+    pub fn try_start_indent(&mut self) -> UnlaceResult<int4> {
         let bump = self.base.indentincrement;
         let slot = self.tokqueue.push();
         let id = self.tokqueue.get_ref_mut(slot).start_indent(bump);
@@ -3061,7 +3061,7 @@ impl EmitPrettyPrint {
         Ok(id)
     }
     /// Fallible C++ `stopIndent(int4 id)`.
-    pub fn try_stop_indent(&mut self, id: int4) -> KunaResult<()> {
+    pub fn try_stop_indent(&mut self, id: int4) -> UnlaceResult<()> {
         let slot = self.tokqueue.push();
         self.tokqueue.get_ref_mut(slot).stop_indent(id);
         self.scan()
@@ -3087,11 +3087,11 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::flush()`.
-    pub fn try_flush(&mut self) -> KunaResult<()> {
+    pub fn try_flush(&mut self) -> UnlaceResult<()> {
         while !self.tokqueue.empty() {
             let bottom_ref = self.tokqueue.bottomref();
             if self.tokqueue.get_ref(bottom_ref).get_size() < 0 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot flush pretty printer. Missing group end",
                 ));
             }
@@ -3118,9 +3118,9 @@ impl EmitPrettyPrint {
     }
 
     /// C++ `EmitPrettyPrint::setMaxLineSize(int4 val)`.
-    pub fn set_max_line_size_pretty(&mut self, val: int4) -> KunaResult<()> {
+    pub fn set_max_line_size_pretty(&mut self, val: int4) -> UnlaceResult<()> {
         if !(20..=10000).contains(&val) {
-            return Err(KunaError::lowlevel("Bad maximum line size"));
+            return Err(UnlaceError::lowlevel("Bad maximum line size"));
         }
         self.maxlinesize = val;
         self.scanqueue.set_max(3 * val);
@@ -3296,10 +3296,10 @@ impl Emit for EmitPrettyPrint {
         self.try_stop_comment(id)
             .expect("EmitPrettyPrint::stopComment")
     }
-    fn flush(&mut self) -> KunaResult<()> {
+    fn flush(&mut self) -> UnlaceResult<()> {
         self.try_flush()
     }
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()> {
         self.set_max_line_size_pretty(val)
     }
     fn get_max_line_size(&self) -> int4 {

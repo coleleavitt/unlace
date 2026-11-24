@@ -1,4 +1,4 @@
-//! Unit tests for the kuna phase registry (`phases.rs`).
+//! Unit tests for the unlace phase registry (`phases.rs`).
 //!
 //! Parity targets (origin: `decompiler/cpp/kuna_stages.cc`, since grown):
 //! group/subphase/surface/settable counts read from `phases.toml` itself, plus the phase-code
@@ -59,13 +59,13 @@ mod registry {
 #[test]
 fn table_counts_match_the_registry() {
     let reg = registry::load();
-    assert_eq!(kuna_num_groups(), reg.group.len());
+    assert_eq!(unlace_num_groups(), reg.group.len());
     assert_eq!(GROUP_TABLE.len(), reg.group.len());
-    assert_eq!(kuna_num_subphases(), reg.subphase.len());
+    assert_eq!(unlace_num_subphases(), reg.subphase.len());
     assert_eq!(SUBPHASE_TABLE.len(), reg.subphase.len());
-    assert_eq!(kuna_num_surfaces(), reg.surface.len());
+    assert_eq!(unlace_num_surfaces(), reg.surface.len());
     assert_eq!(SURFACE_TABLE.len(), reg.surface.len());
-    assert_eq!(kuna_num_settables(), reg.settable.len());
+    assert_eq!(unlace_num_settables(), reg.settable.len());
     assert_eq!(SETTABLE_TABLE.len(), reg.settable.len());
     let options: Vec<&str> = SETTABLE_TABLE.iter().map(|s| s.option).collect();
     let rows: Vec<&str> = reg.settable.iter().map(|s| s.option.as_str()).collect();
@@ -105,99 +105,99 @@ fn noreturn_family_is_all_transform_tier() {
     }
 }
 
-// --- Stage helpers (kunaStageCode/Name/Artifact/InBandB/FromCode) ------------
+// --- Stage helpers (unlaceStageCode/Name/Artifact/InBandB/FromCode) ------------
 
 #[test]
 fn stage_codes() {
-    assert_eq!(KunaPhase::P0.code(), "P0");
-    assert_eq!(KunaPhase::P1.code(), "P1");
-    assert_eq!(KunaPhase::P9.code(), "P9");
+    assert_eq!(UnlacePhase::P0.code(), "P0");
+    assert_eq!(UnlacePhase::P1.code(), "P1");
+    assert_eq!(UnlacePhase::P9.code(), "P9");
     // C++ STAGE_CODES[10] for infra.
-    assert_eq!(KunaPhase::Infra.code(), "--");
+    assert_eq!(UnlacePhase::Infra.code(), "--");
 }
 
 #[test]
 fn stage_names_and_artifacts() {
-    assert_eq!(KunaPhase::P0.name(), "Knowledge & Configuration Plane");
-    assert_eq!(KunaPhase::P9.name(), "Surface Rendering & Refinement");
-    assert_eq!(KunaPhase::Infra.name(), "Infrastructure / orchestration");
+    assert_eq!(UnlacePhase::P0.name(), "Knowledge & Configuration Plane");
+    assert_eq!(UnlacePhase::P9.name(), "Surface Rendering & Refinement");
+    assert_eq!(UnlacePhase::Infra.name(), "Infrastructure / orchestration");
     assert_eq!(
-        KunaPhase::P7.artifact(),
+        UnlacePhase::P7.artifact(),
         "region tree (sblocks - physically distinct from the CFG)"
     );
     assert_eq!(
-        KunaPhase::Infra.artifact(),
+        UnlacePhase::Infra.artifact(),
         "(none - schedule/termination policy only)"
     );
 }
 
 #[test]
 fn band_b_membership() {
-    // C++ kunaStageInBandB: S3..S6 only.
-    assert!(!KunaPhase::P0.in_band_b());
-    assert!(!KunaPhase::P1.in_band_b());
-    assert!(!KunaPhase::P2.in_band_b());
-    assert!(KunaPhase::P3.in_band_b());
-    assert!(KunaPhase::P4.in_band_b());
-    assert!(KunaPhase::P5.in_band_b());
-    assert!(KunaPhase::P6.in_band_b());
-    assert!(!KunaPhase::P7.in_band_b());
-    assert!(!KunaPhase::P8.in_band_b());
-    assert!(!KunaPhase::P9.in_band_b());
-    assert!(!KunaPhase::Infra.in_band_b());
+    // C++ unlaceStageInBandB: S3..S6 only.
+    assert!(!UnlacePhase::P0.in_band_b());
+    assert!(!UnlacePhase::P1.in_band_b());
+    assert!(!UnlacePhase::P2.in_band_b());
+    assert!(UnlacePhase::P3.in_band_b());
+    assert!(UnlacePhase::P4.in_band_b());
+    assert!(UnlacePhase::P5.in_band_b());
+    assert!(UnlacePhase::P6.in_band_b());
+    assert!(!UnlacePhase::P7.in_band_b());
+    assert!(!UnlacePhase::P8.in_band_b());
+    assert!(!UnlacePhase::P9.in_band_b());
+    assert!(!UnlacePhase::Infra.in_band_b());
 }
 
 #[test]
 fn stage_from_code() {
-    // C++ kunaStageFromCode: P0/p0, S1..S9/s1..s9; everything else fails.
-    assert_eq!(KunaPhase::from_code("P0"), Some(KunaPhase::P0));
-    assert_eq!(KunaPhase::from_code("p0"), Some(KunaPhase::P0));
-    assert_eq!(KunaPhase::from_code("S3"), Some(KunaPhase::P3));
-    assert_eq!(KunaPhase::from_code("s3"), Some(KunaPhase::P3));
-    assert_eq!(KunaPhase::from_code("S9"), Some(KunaPhase::P9));
+    // C++ unlaceStageFromCode: P0/p0, S1..S9/s1..s9; everything else fails.
+    assert_eq!(UnlacePhase::from_code("P0"), Some(UnlacePhase::P0));
+    assert_eq!(UnlacePhase::from_code("p0"), Some(UnlacePhase::P0));
+    assert_eq!(UnlacePhase::from_code("S3"), Some(UnlacePhase::P3));
+    assert_eq!(UnlacePhase::from_code("s3"), Some(UnlacePhase::P3));
+    assert_eq!(UnlacePhase::from_code("S9"), Some(UnlacePhase::P9));
     // Failures.
-    assert_eq!(KunaPhase::from_code("P3"), Some(KunaPhase::P3));
-    assert_eq!(KunaPhase::from_code("p9"), Some(KunaPhase::P9));
-    assert_eq!(KunaPhase::from_code("S0"), None);
-    assert_eq!(KunaPhase::from_code("P0"), Some(KunaPhase::P0));
-    assert_eq!(KunaPhase::from_code("X3"), None);
-    assert_eq!(KunaPhase::from_code("S"), None);
-    assert_eq!(KunaPhase::from_code("S33"), None);
-    assert_eq!(KunaPhase::from_code(""), None);
-    assert_eq!(KunaPhase::from_code("--"), None);
+    assert_eq!(UnlacePhase::from_code("P3"), Some(UnlacePhase::P3));
+    assert_eq!(UnlacePhase::from_code("p9"), Some(UnlacePhase::P9));
+    assert_eq!(UnlacePhase::from_code("S0"), None);
+    assert_eq!(UnlacePhase::from_code("P0"), Some(UnlacePhase::P0));
+    assert_eq!(UnlacePhase::from_code("X3"), None);
+    assert_eq!(UnlacePhase::from_code("S"), None);
+    assert_eq!(UnlacePhase::from_code("S33"), None);
+    assert_eq!(UnlacePhase::from_code(""), None);
+    assert_eq!(UnlacePhase::from_code("--"), None);
 }
 
 #[test]
 fn stage_index_matches_cpp_enum() {
     // C++ enum: kstage_infra=-1, kstage_p0=0, kstage_s1=1 .. kstage_s9=9.
-    assert_eq!(KunaPhase::Infra.index(), -1);
-    assert_eq!(KunaPhase::P0.index(), 0);
-    assert_eq!(KunaPhase::P1.index(), 1);
-    assert_eq!(KunaPhase::P9.index(), 9);
+    assert_eq!(UnlacePhase::Infra.index(), -1);
+    assert_eq!(UnlacePhase::P0.index(), 0);
+    assert_eq!(UnlacePhase::P1.index(), 1);
+    assert_eq!(UnlacePhase::P9.index(), 9);
 }
 
-// --- Lookup API (kunaLookup*) ------------------------------------------------
+// --- Lookup API (unlaceLookup*) ------------------------------------------------
 
 #[test]
 fn lookup_group_parity() {
     // Every group in the table is findable by name and round-trips by index.
-    for i in 0..kuna_num_groups() {
-        let e = kuna_group_by_index(i);
+    for i in 0..unlace_num_groups() {
+        let e = unlace_group_by_index(i);
         let found = lookup_group(e.group).expect("group findable by name");
         assert_eq!(found.group, e.group);
         assert_eq!(found.phase, e.phase);
     }
     // A couple of known entries (transcribed from groupTable).
-    assert_eq!(lookup_group("base").unwrap().phase, KunaPhase::Infra);
-    assert_eq!(lookup_group("analysis").unwrap().phase, KunaPhase::P3);
-    assert_eq!(lookup_group("casts").unwrap().phase, KunaPhase::P9);
+    assert_eq!(lookup_group("base").unwrap().phase, UnlacePhase::Infra);
+    assert_eq!(lookup_group("analysis").unwrap().phase, UnlacePhase::P3);
+    assert_eq!(lookup_group("casts").unwrap().phase, UnlacePhase::P9);
     assert!(lookup_group("nonexistent").is_none());
 }
 
 #[test]
 fn lookup_subphase_parity() {
-    for i in 0..kuna_num_subphases() {
-        let e = kuna_subphase_by_index(i);
+    for i in 0..unlace_num_subphases() {
+        let e = unlace_subphase_by_index(i);
         let found = lookup_subphase(e.name).expect("subphase findable");
         assert_eq!(found.name, e.name);
         assert_eq!(found.phase, e.phase);
@@ -205,27 +205,27 @@ fn lookup_subphase_parity() {
     }
     // Known rewind targets (stage-model.md section 12).
     let typ = lookup_subphase("type-propagation").unwrap();
-    assert_eq!(typ.phase, KunaPhase::P5);
-    assert_eq!(typ.rewind, KunaPhase::P5);
+    assert_eq!(typ.phase, UnlacePhase::P5);
+    assert_eq!(typ.rewind, UnlacePhase::P5);
     let force = lookup_subphase("edge-virtualization").unwrap();
-    assert_eq!(force.phase, KunaPhase::P7);
-    assert_eq!(force.rewind, KunaPhase::P7);
+    assert_eq!(force.phase, UnlacePhase::P7);
+    assert_eq!(force.rewind, UnlacePhase::P7);
     // explicit-implied: rewinds to S9 (the only cross-stage rewind in the table).
     let ei = lookup_subphase("explicit-implied").unwrap();
-    assert_eq!(ei.phase, KunaPhase::P6);
-    assert_eq!(ei.rewind, KunaPhase::P9);
+    assert_eq!(ei.phase, UnlacePhase::P6);
+    assert_eq!(ei.rewind, UnlacePhase::P9);
     assert!(lookup_subphase("not-a-subphase").is_none());
 }
 
 #[test]
 fn lookup_surface_parity() {
-    for i in 0..kuna_num_surfaces() {
-        let e = kuna_surface_by_index(i);
+    for i in 0..unlace_num_surfaces() {
+        let e = unlace_surface_by_index(i);
         let found = lookup_surface(e.surface).expect("surface findable by exact string");
         assert_eq!(found.surface, e.surface);
         assert_eq!(found.phase, e.phase);
     }
-    assert_eq!(lookup_surface("force goto").unwrap().phase, KunaPhase::P7);
+    assert_eq!(lookup_surface("force goto").unwrap().phase, UnlacePhase::P7);
     assert_eq!(
         lookup_surface("option compareform").unwrap().subphase,
         "comparison-canonicalization"
@@ -235,8 +235,8 @@ fn lookup_surface_parity() {
 
 #[test]
 fn lookup_settable_parity() {
-    for i in 0..kuna_num_settables() {
-        let e = kuna_settable_by_index(i);
+    for i in 0..unlace_num_settables() {
+        let e = unlace_settable_by_index(i);
         let found = lookup_settable(e.option).expect("settable findable by option");
         assert_eq!(found.option, e.option);
         assert_eq!(found.shipped, e.shipped);
@@ -251,8 +251,8 @@ fn lookup_settable_parity() {
 #[test]
 fn option_values_defaults_match_shipped() {
     let ov = OptionValues::default();
-    for i in 0..kuna_num_settables() {
-        let st = kuna_settable_by_index(i);
+    for i in 0..unlace_num_settables() {
+        let st = unlace_settable_by_index(i);
         let live = ov
             .get(st.option)
             .unwrap_or_else(|| panic!("OptionValues field missing for {}", st.option));
@@ -287,7 +287,7 @@ fn option_values_live_value_exactly_for_live_field_rows() {
     let ov = OptionValues::default();
     let reg = registry::load();
     for (i, row) in reg.settable.iter().enumerate() {
-        let st = kuna_settable_by_index(i);
+        let st = unlace_settable_by_index(i);
         assert_eq!(st.option, row.option);
         match (ov.live_value(st.option), &row.live_field) {
             (Some(v), Some(_)) => {
@@ -350,7 +350,7 @@ fn live_from_arch_matches_cpp_ternaries() {
 #[test]
 fn emit_settable_json_first_row_shape() {
     // The first settable is `compareform`. Emit it with no live value (no
-    // program loaded form) and check the leading bytes match kunaEmitSettableJson.
+    // program loaded form) and check the leading bytes match unlaceEmitSettableJson.
     let st = lookup_settable("compareform").unwrap();
     let mut out = String::new();
     emit_settable_json(&mut out, st, None);
@@ -370,8 +370,8 @@ fn every_settable_has_nonempty_symptoms() {
     // C3: every catalog row carries at least one nonempty, output-shaped
     // symptom phrase (pipe-separated in the table, a JSON array in the
     // catalog) so an LLM can grep a natural-language symptom to its option.
-    for i in 0..kuna_num_settables() {
-        let st = kuna_settable_by_index(i);
+    for i in 0..unlace_num_settables() {
+        let st = unlace_settable_by_index(i);
         assert!(
             !st.symptoms.is_empty(),
             "settable `{}` has no symptoms",

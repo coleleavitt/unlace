@@ -1,4 +1,4 @@
-//! (kuna `strlenscan`) gcc 9's inline `repnz scasb` string length prints as
+//! (unlace `strlenscan`) gcc 9's inline `repnz scasb` string length prints as
 //! `strlen(s)`, taken where the scan was: before a store, a call or a free that
 //! follows it, once per inlined `strcat`, and once on each side of a branch that
 //! joins.  A scan for another byte and a scan whose raw count is used keep their
@@ -191,7 +191,7 @@ fn an_inline_string_length_round_trips_through_the_printed_strlen() {
                 "strlenscan",
                 opt,
             ];
-            let (text, err, rc) = common::run_kuna(&args);
+            let (text, err, rc) = common::run_unlace(&args);
             assert_eq!(rc, 0, "{image} strlenscan {opt}: {err}");
             for name in lengths {
                 let body = function(&text, name);

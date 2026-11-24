@@ -1,4 +1,4 @@
-//! (kuna `pdblines`) Source-line comments from a fingerprint-matched `.pdb`.
+//! (unlace `pdblines`) Source-line comments from a fingerprint-matched `.pdb`.
 //!
 //! The PDB twin of [`crate::dwarf::DwarfLinesPass`] (Ghidra's
 //! `DWARFLineInfoCommentScript`, and the line half of `PdbUniversalAnalyzer`'s
@@ -20,7 +20,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, CommentFact, Phase}
 /// Line numbers the compiler writes for code that has no source line.
 const HIDDEN_LINES: [u32; 2] = [0x00fe_efee, 0x00f0_0f00];
 
-/// (kuna) The PDB source-line comment pass (`pdblines`).
+/// (unlace) The PDB source-line comment pass (`pdblines`).
 #[derive(Default)]
 pub struct PdbLinesPass;
 

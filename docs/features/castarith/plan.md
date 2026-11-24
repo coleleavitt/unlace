@@ -60,7 +60,7 @@ Rust back-end never sees the rewrite.
 
 ## 5. Tests
 
-- `tests/stages/kuna-castarith.toml`: pass 1 `option castarith off` (the bug), pass 2
+- `tests/stages/castarith.toml`: pass 1 `option castarith off` (the bug), pass 2
   on, pass 3 `arraynotation off`; controls for a non-whole offset; a byte and a word
   widened under the subscript (castimplied).
 - 25 unit tests in `p9_emit/castarith/tests.rs`: every width and sign, float,

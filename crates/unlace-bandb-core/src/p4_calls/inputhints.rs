@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) Names and types for the inputs a function's own
+//! (unlace `swiftcall`) Names and types for the inputs a function's own
 //! analysis recovers, applied without locking them.
 //!
 //! A prototype that names one parameter must name them all: a locked input
@@ -32,7 +32,7 @@ pub struct InputHint {
 }
 
 fn hint_at<'a>(data: &'a Funcdata, addr: &Address, size: int4) -> Option<&'a InputHint> {
-    data.kuna_input_hints()?
+    data.unlace_input_hints()?
         .iter()
         .find(|h| &h.addr == addr && h.size == size)
 }
@@ -63,48 +63,48 @@ pub fn param_name(data: &Funcdata, addr: &Address, size: int4) -> Option<String>
     hint_at(data, addr, size).map(|h| h.name.clone())
 }
 
-/// (kuna `swiftcall`) Names and types for the inputs this function's analysis recovers; kept
+/// (unlace `swiftcall`) Names and types for the inputs this function's analysis recovers; kept
 /// across `Funcdata::clear`.
 #[derive(Default)]
 struct HintsSlot(Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>);
-crate::kuna_func_state!(HintsSlot, keep_across_clear: true);
+crate::unlace_func_state!(HintsSlot, keep_across_clear: true);
 
-/// The `kuna_inputhints` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_inputhints` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataInputhintsExt {
-    /// (kuna `swiftcall`) Seed the input hints.
-    fn kuna_set_input_hints(
+    /// (unlace `swiftcall`) Seed the input hints.
+    fn unlace_set_input_hints(
         &mut self,
         hints: Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>,
     );
-    /// (kuna `swiftcall`) The input hints of this function.
-    fn kuna_input_hints(&self) -> Option<&[crate::inputhints::InputHint]>;
+    /// (unlace `swiftcall`) The input hints of this function.
+    fn unlace_input_hints(&self) -> Option<&[crate::inputhints::InputHint]>;
 }
 
 impl FuncdataInputhintsExt for crate::funcdata::Funcdata {
-    /// (kuna `swiftcall`) Seed the input hints.
-    fn kuna_set_input_hints(
+    /// (unlace `swiftcall`) Seed the input hints.
+    fn unlace_set_input_hints(
         &mut self,
         hints: Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>,
     ) {
-        self.kuna_state_mut::<HintsSlot>().0 = hints;
+        self.unlace_state_mut::<HintsSlot>().0 = hints;
     }
-    /// (kuna `swiftcall`) The input hints of this function.
-    fn kuna_input_hints(&self) -> Option<&[crate::inputhints::InputHint]> {
-        self.kuna_state::<HintsSlot>()
+    /// (unlace `swiftcall`) The input hints of this function.
+    fn unlace_input_hints(&self) -> Option<&[crate::inputhints::InputHint]> {
+        self.unlace_state::<HintsSlot>()
             .0
             .as_deref()
             .map(Vec::as_slice)
     }
 }
 
-/// (kuna `swiftcall`) The input hints the IOKit pass gave each method's `this`, by entry; an
+/// (unlace `swiftcall`) The input hints the IOKit pass gave each method's `this`, by entry; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 #[derive(Default)]
 pub struct ThisHints(
     pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
 );
-crate::kuna_arch_table!(ThisHints);
+crate::unlace_arch_table!(ThisHints);
 
 /// The input hints the loader stated for each function, by entry; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
@@ -112,7 +112,7 @@ crate::kuna_arch_table!(ThisHints);
 pub struct LoaderHints(
     pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
 );
-crate::kuna_arch_table!(LoaderHints);
+crate::unlace_arch_table!(LoaderHints);
 
 /// Did a pass give any method's `this` input hints?
 fn has_this_hints(tables: &crate::archstate::ArchTables) -> bool {
@@ -120,6 +120,6 @@ fn has_this_hints(tables: &crate::archstate::ArchTables) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.inputhints_has_this_hints = Some(has_this_hints);
 }

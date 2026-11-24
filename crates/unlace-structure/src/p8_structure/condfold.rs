@@ -12,7 +12,7 @@
 //!
 //! # The structural gap
 //!
-//! Both of kuna's structurers implement the Ghidra `ruleBlockOr` short-circuit
+//! Both of unlace's structurers implement the Ghidra `ruleBlockOr` short-circuit
 //! schema: a 2-out condition `bl` whose sibling successor `orblock` is itself a
 //! single-in 2-out condition reconverging through a shared `clauseblock` folds into
 //! one [`BlockCondition`](crate::block::BlockKind::Condition), rendering
@@ -56,7 +56,7 @@
 //!   Every gate holds for `(B1,B2)` and then for `(B0, B1||B2)` **except**
 //!   `is_complex(orblock)` — B1/B2 each hold two calls plus the branch, three
 //!   statements.  So one of the two edges into `BODY` is virtualized into
-//!   `goto label_f6ec;` + a `label_f6ec:` inside the sibling arm: kuna emits
+//!   `goto label_f6ec;` + a `label_f6ec:` inside the sibling arm: unlace emits
 //!   1 goto / 1 label where angr emits 0 / 0.
 //!
 //! angr does not decline on either shape.
@@ -80,7 +80,7 @@
 //! `_build_multistatementexpr_statements` (phoenix.py:3495) refuses outright on a
 //! non-terminal `ConditionalJump` or any `Jump`.
 //!
-//! kuna's `COMMA_SEPARATE` printer modifier *is* `MultiStatementExpression`; kuna's
+//! unlace's `COMMA_SEPARATE` printer modifier *is* `MultiStatementExpression`; unlace's
 //! `is_complex` *is* `_is_single_statement_block`.
 //!
 //! # What this option does
@@ -263,7 +263,7 @@
 //!   structuring can still vanish.  Reproduced: `newbury::main` emits 4 `WARNING:`
 //!   lines at `off` and 3 at `on`/`wide`; the lost one is
 //!   `/* WARNING: branchflip: flipped negated guard for linearity ... */`.  These are
-//!   kuna advisory annotations, never a correctness signal, and the emitted C is
+//!   unlace advisory annotations, never a correctness signal, and the emitted C is
 //!   unaffected.
 //!
 //! When the option is OFF the whole precompute and every disjunct are dead and the
@@ -271,7 +271,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -279,7 +279,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, OpId};
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<condfold>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<condfold>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce, 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch, 4105 crossjumprevert, 4106 switchsharedcase,
 /// 4107 ifelseflatten, 4108 taildup, 4109 dedupitetail, 4110 returndup,
@@ -297,18 +297,18 @@ pub const MAX_PREFIX_STMTS_ANGR: int4 = 5;
 
 /// The shared printed-width budget at `option condfold wide`.
 ///
-/// kuna's *printed* statement granularity is finer than angr's AIL for the same
+/// unlace's *printed* statement granularity is finer than angr's AIL for the same
 /// source-level block, for two reasons that have nothing to do with the fold's
 /// soundness:
 ///
 /// * argument recovery — where angr renders `find_closing_delim(p, v11, *(char *)(v10
-///   + cur), &v7)` as ONE statement, kuna may recover only the first two arguments
+///   + cur), &v7)` as ONE statement, unlace may recover only the first two arguments
 ///   and print the remaining operand computations as separate assignments;
 /// * address-tied copy shadows — a stack variable that also lives in a register
 ///   prints a `v14 = v1;` / `v14 = v14;` pair the AIL never materializes.
 ///
 /// On `coreutils tr::build_spec_list` the block angr folds as 1 AIL statement prints
-/// as 7–8 kuna statements, so the angr-parity cap declines a fold angr makes.  `wide`
+/// as 7–8 unlace statements, so the angr-parity cap declines a fold angr makes.  `wide`
 /// raises the budget to 9 to cover that skew.  It is a *readability* knob only —
 /// every soundness and rendering-validity guard is identical at both levels.
 ///
@@ -877,9 +877,9 @@ pub fn compute_condfold_sets(data: &Funcdata, max_stmts: int4) -> CondFoldSets {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CondFold(pub int4);
 
-impl crate::optionset::KunaOption for CondFold {
+impl crate::optionset::UnlaceOption for CondFold {
     const NAME: &'static str = "condfold";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CondFold(0)
@@ -889,7 +889,7 @@ impl crate::optionset::KunaOption for CondFold {
         CondFold(MAX_PREFIX_STMTS_ANGR)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionCondFold
             .apply(value)
             .map(|(v, msg)| (CondFold(v), msg))
@@ -906,7 +906,7 @@ impl crate::optionset::KunaOption for CondFold {
 /// |--------|--------|---------|
 /// | `off`  | 0   | the fold is never relaxed — byte-identical to upstream |
 /// | `on`   | [`MAX_PREFIX_STMTS_ANGR`] (5) | angr's own statement threshold |
-/// | `wide` | [`MAX_PREFIX_STMTS_WIDE`] (9) | same guards, budget raised to absorb kuna's finer printed-statement granularity |
+/// | `wide` | [`MAX_PREFIX_STMTS_WIDE`] (9) | same guards, budget raised to absorb unlace's finer printed-statement granularity |
 pub struct OptionCondFold;
 
 impl OptionCondFold {
@@ -915,7 +915,7 @@ impl OptionCondFold {
 
     /// Parse `off`/`on`/`wide` into the shared printed-width budget (0 = the whole
     /// option off) + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         match p1 {
             "off" => Ok((
                 0,
@@ -941,7 +941,7 @@ impl OptionCondFold {
                      statement-root call) or the statement-shape allowlist)"
                 ),
             )),
-            _ => Err(unlace_base::error::KunaError::parse(
+            _ => Err(unlace_base::error::UnlaceError::parse(
                 "Must specify one of off, on, wide",
             )),
         }

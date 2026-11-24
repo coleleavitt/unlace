@@ -1,4 +1,4 @@
-//! Multi-format-loader PR-11 e2e gate: the DWARF analyzer (`dwarf`, the kuna
+//! Multi-format-loader PR-11 e2e gate: the DWARF analyzer (`dwarf`, the unlace
 //! analog of Ghidra's `DWARFAnalyzer`) now fires on **MinGW-PE** and **Mach-O**,
 //! not just ELF — gimli is format-neutral, so dropping the `BinaryFormat::Elf`
 //! gate and resolving the debug sections through `object`'s format-aware
@@ -82,7 +82,7 @@ fn boot(name: &str) -> ConsoleProgram {
 fn boot_dwarf_off(name: &str) -> ConsoleProgram {
     let mut prog = boot(name);
     prog.arch_mut()
-        .set_kuna_option("dwarf", "off")
+        .set_unlace_option("dwarf", "off")
         .expect("the dwarf gate flips off");
     prog
 }

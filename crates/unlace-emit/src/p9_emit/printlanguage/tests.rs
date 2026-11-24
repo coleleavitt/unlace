@@ -103,7 +103,7 @@ fn parentheses_binary_postsurround_first_stage() {
 
 #[test]
 fn parentheses_unary_adjacent_sign_gh2786() {
-    // (kuna) GH-2786: a unary '-' inside a unary '-' must parenthesize, else the
+    // (unlace) GH-2786: a unary '-' inside a unary '-' must parenthesize, else the
     // two tokens merge into '--'.
     static NEG: OpToken = OpToken {
         print1: "-",

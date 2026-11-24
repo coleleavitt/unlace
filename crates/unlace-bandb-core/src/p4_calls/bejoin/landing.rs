@@ -1,4 +1,4 @@
-//! (kuna) The C++ landing pads of an image, read from its exception tables
+//! (unlace) The C++ landing pads of an image, read from its exception tables
 //! for `option bejoin callers` ([`super`]).
 //!
 //! The unwinder enters a landing pad with the exception's selector in the

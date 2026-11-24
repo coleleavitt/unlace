@@ -1,6 +1,6 @@
 //! `Architecture::build_arch_handle` memoizes the two whole-`symboltab`
 //! derivations it hands each `Funcdata` (the `GlobalQuery` and the
-//! declared-callee prototype list) on `Database::kuna_generation()`.  A stale hit
+//! declared-callee prototype list) on `Database::unlace_generation()`.  A stale hit
 //! there silently emits wrong C, so this verifies the three halves of the
 //! contract:
 //!
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -56,8 +56,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

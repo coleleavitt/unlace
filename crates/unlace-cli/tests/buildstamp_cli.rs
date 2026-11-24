@@ -57,7 +57,7 @@ fn decomp_dbg(tag: &str, answers_as: Option<&str>) -> PathBuf {
     )
 }
 
-fn kuna(args: &[&str], envs: &[(&str, &Path)]) -> Output {
+fn unlace(args: &[&str], envs: &[(&str, &Path)]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_unlace"));
     cmd.args(args)
         .env_remove("UNLACE_DECOMP_DBG")
@@ -78,7 +78,7 @@ fn text(bytes: &[u8]) -> String {
 #[test]
 fn a_decomp_dbg_from_another_build_is_named_once_on_stderr() {
     let child = decomp_dbg("other", Some(OTHER_BUILD));
-    let out = kuna(
+    let out = unlace(
         &["decompile", fauxware().to_str().unwrap(), "main"],
         &[("UNLACE_DECOMP_DBG", &child)],
     );
@@ -116,7 +116,7 @@ fn a_decomp_dbg_from_another_build_is_named_once_on_stderr() {
 #[test]
 fn a_decomp_dbg_from_this_build_prints_nothing() {
     let child = decomp_dbg("same", Some(identity(ChildKind::Engine)));
-    let out = kuna(
+    let out = unlace(
         &[
             "decompile",
             fauxware().to_str().unwrap(),
@@ -136,7 +136,7 @@ fn a_decomp_dbg_from_this_build_prints_nothing() {
 #[test]
 fn a_decomp_dbg_that_predates_the_handshake_prints_nothing() {
     let child = decomp_dbg("old", None);
-    let out = kuna(
+    let out = unlace(
         &["decompile", fauxware().to_str().unwrap(), "main"],
         &[("UNLACE_DECOMP_DBG", &child)],
     );
@@ -153,7 +153,7 @@ fn the_warning_stays_out_of_catalog_json() {
         Some(OTHER_BUILD),
         "cat > /dev/null\nprintf '[decomp]> phase catalog\\n[{\"option\": \"loweredswitch\"}]\\n'\n",
     );
-    let out = kuna(
+    let out = unlace(
         &["catalog", "--json", "--option", "loweredswitch"],
         &[("UNLACE_DECOMP_DBG", &child)],
     );
@@ -181,7 +181,7 @@ fn a_catalog_flag_is_named_as_the_binary_selector() {
         Some(OTHER_BUILD),
         "cat > /dev/null\nprintf '[decomp]> phase catalog\\n[{\"option\": \"loweredswitch\"}]\\n'\n",
     );
-    let out = kuna(
+    let out = unlace(
         &[
             "catalog",
             "--json",

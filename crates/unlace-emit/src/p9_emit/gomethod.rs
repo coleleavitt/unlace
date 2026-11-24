@@ -36,7 +36,7 @@ pub fn direct_method<'a>(
     id: OpId,
 ) -> Option<DirectMethod<'a>> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::analysisgates::Godwarfsig>()
         .0
         || !fd.get_arch().source_lang.is_go()

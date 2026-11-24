@@ -9,7 +9,7 @@
 //! shared, multi-predecessor *return tail* as an unstructured `goto` — it has no
 //! schema that duplicates a tail to avoid the goto.  On `morton::my_message_callback`
 //! (x86-64) a common epilogue `free(ptr); return;` has several predecessors (each
-//! command arm), so kuna emits:
+//! command arm), so unlace emits:
 //!
 //! ```c
 //!   else {
@@ -56,10 +56,10 @@
 //! the tail.  Two source shapes carry the goto, and each gets the matching surgery:
 //!
 //! * a bare `BlockIf` `if (cond) goto T` → `if (cond) { <tail> }`
-//!   ([`kuna_inline_return_tail`](crate::block::BlockGraph::kuna_inline_return_tail),
+//!   ([`unlace_inline_return_tail`](crate::block::BlockGraph::unlace_inline_return_tail),
 //!   gotoreduce's surgery); and
 //! * a `BlockGoto` leaf `{ stmts; goto T }` → `{ stmts; <tail> }`
-//!   ([`kuna_inline_crossjump_tail`](crate::block::BlockGraph::kuna_inline_crossjump_tail),
+//!   ([`unlace_inline_crossjump_tail`](crate::block::BlockGraph::unlace_inline_crossjump_tail),
 //!   crossjumprevert's surgery).  This is the **morton** case: the goto sits at the
 //!   end of a multi-statement `if` arm (`if (c) { v2 = strlen(..); publish(..); goto
 //!   label; }`), so the structurer wraps it in a `BlockGoto`, not a bare `BlockIf`.
@@ -93,7 +93,7 @@ use crate::funcdata::Funcdata;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<taildup>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<taildup>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce, 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch, 4105 crossjumprevert, 4106 switchsharedcase,
 /// 4107 ifelseflatten are taken; this is 4108).
@@ -145,7 +145,7 @@ impl Action for ActionTailDup {
         unlace_middle::debug_assert_settled!(data, Casts);
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<super::gotoreduce::GotoReduceMode>()
             .call_tails()
         {
@@ -230,14 +230,14 @@ impl Action for ActionTailDup {
             if *is_goto_node {
                 // `{ stmts; goto T }` -> `{ stmts; <tail> }`: append the tail after the
                 // goto's body and switch the node from Goto to a plain list (the
-                // `kuna_inline_crossjump_tail` helper — no fall-through to reconcile here
+                // `unlace_inline_crossjump_tail` helper — no fall-through to reconcile here
                 // because the tail returns).
                 data.sblocks_mut()
-                    .kuna_inline_crossjump_tail(*src_id, chain);
+                    .unlace_inline_crossjump_tail(*src_id, chain);
             } else {
                 // `if (cond) goto T` -> `if (cond) { <tail> }`: attach the tail as the
                 // if's true clause and drop the goto target (gotoreduce's surgery).
-                data.sblocks_mut().kuna_inline_return_tail(*src_id, chain);
+                data.sblocks_mut().unlace_inline_return_tail(*src_id, chain);
             }
             data.warning(
                 "taildup: duplicated return-call tail to remove goto",
@@ -249,7 +249,7 @@ impl Action for ActionTailDup {
 
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
-        // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
+        // (`unlace_gotolabel`), so a target a switch arm still jumps to keeps its label.
         crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;

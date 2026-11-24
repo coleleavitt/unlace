@@ -1,4 +1,4 @@
-Stripped PE32 i386 fixture for kuna_calleestackargs (tests/stages/kuna-calleeargs.toml).
+Stripped PE32 i386 fixture for kuna_calleestackargs (tests/stages/calleeargs.toml).
 
 noargs_pe_i386.cpp and noargs_pe_i386_impl.cpp are compiled by Visual C++ 2005 SP1
 (`cl /O2 /GR- /c`, outputs renamed noargs_pe_i386_c.obj and noargs_pe_i386_impl.obj).

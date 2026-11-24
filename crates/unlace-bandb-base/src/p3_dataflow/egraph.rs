@@ -1,4 +1,4 @@
-//! (kuna `egraph`) Equality saturation over mixed boolean-arithmetic trees.
+//! (unlace `egraph`) Equality saturation over mixed boolean-arithmetic trees.
 //!
 //! The `mba` option solves classes of MBA in closed form (linear MBA by
 //! its 0/1 truth table, polynomial MBA by its conjunction-basis polynomial,
@@ -431,7 +431,7 @@ pub(crate) fn saturate(
     check(&full)
 }
 
-/// (kuna `egraph`) `RuleEgraphSimplify`.
+/// (unlace `egraph`) `RuleEgraphSimplify`.
 pub struct RuleEgraphSimplify {
     group: String,
     /// Fingerprints of the trees rewritten in this function without removing
@@ -479,7 +479,7 @@ impl Rule for RuleEgraphSimplify {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<Egraph>().0 {
+        if !data.get_arch().unlace_options.get::<Egraph>().0 {
             return 0;
         }
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
@@ -552,8 +552,8 @@ impl Rule for RuleEgraphSimplify {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `egraph`) Simplify MBA trees by equality saturation.
+crate::unlace_flag!(
+    /// (unlace `egraph`) Simplify MBA trees by equality saturation.
     Egraph,
     "egraph",
     "E-graph MBA simplification",

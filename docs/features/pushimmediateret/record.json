@@ -49,7 +49,7 @@
     "regressions_found": 0
   },
   "tests": {
-    "stage": "tests/stages/kuna-pushimmediateret.xml (two passes, two assertions)",
+    "stage": "tests/stages/pushimmediateret.xml (two passes, two assertions)",
     "cli": "decompiler/crates/kuna-cli/tests/push_immediate_ret_cli.rs (positive/off/negative/two-push/explicit-precedence)",
     "provenance": "kuna_retcallchain raw-op units plus verify_retcallchain fixture recognition and no-target-function check",
     "fixture": "push_immediate_ret_i386 (+ .s) and push_immediate_ret_i386.exe (+ deterministic .py generator)",

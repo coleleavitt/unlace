@@ -1,15 +1,15 @@
-//! Tests for the kuna stage-model console commands (W9, `console.rs`).
+//! Tests for the unlace stage-model console commands (W9, `console.rs`).
 //!
-//! The kuna registry (`unlace_decomp::phases`) is pure static data, so the
+//! The unlace registry (`unlace_decomp::phases`) is pure static data, so the
 //! registry-only commands (`phase list`/`map`/`catalog`, the `kassert`
 //! validation core) produce their exact bytes with no program loaded — that is
 //! what these tests pin. The `phase catalog` test compares against the **W4
 //! byte-compatible emitter** directly (`emit_catalog_json` /
-//! `emit_catalog_json_one`), which `tests/stages/kuna-catalog.toml`
+//! `emit_catalog_json_one`), which `tests/stages/unlace-catalog.toml`
 //! string-matches against the C++ binary, so reproducing the emitter output is
 //! the load-bearing contract.
 //!
-//! The engine-dependent kuna commands (`phase status`, `restarts`, `pipeline`
+//! The engine-dependent unlace commands (`phase status`, `restarts`, `pipeline`
 //! running a variant, `quality`, the `region *` commands, and a *routable*
 //! `kassert`) read accessors the merged `rust-port` tree does not yet expose;
 //! they are smoke-driven to confirm they *resolve and dispatch* — emitting their
@@ -24,12 +24,12 @@ use crate::interface::IfaceStatus;
 use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one};
 
 /// A console wired like the datatest runner: a `ConsoleCommands` feed with the
-/// full decompiler command set **and** the kuna stage commands registered.
+/// full decompiler command set **and** the unlace stage commands registered.
 fn console(commands: &[&str]) -> IfaceStatus {
     let cmds: Vec<String> = commands.iter().map(|s| s.to_string()).collect();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     status
 }
 
@@ -60,31 +60,31 @@ fn run_one(line: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn registers_all_twenty_five_kuna_commands() {
+fn registers_all_twenty_five_unlace_commands() {
     // register_decomp_commands registers 107 (see ifacedecomp/tests.rs); the
-    // kuna capability adds 25: phase list/map/status/catalog (plus the four
+    // unlace capability adds 25: phase list/map/status/catalog (plus the four
     // deprecated `stage ...` alias registrations), kassert, restarts,
     // pipeline, mode, quality, functions, region tree/blocks/walk,
     // `function bounds`/`function symbol`/`function noreturn`/`function containing`,
     // `map prototype`
     // `override bytes`, `override indirect`, and `callwide prepare`.
-    let only_kuna = {
+    let only_unlace = {
         let mut st = ConsoleCommands::into_status(vec![]);
-        register_kuna_commands(&mut st);
+        register_unlace_commands(&mut st);
         st.num_commands()
     };
-    assert_eq!(only_kuna, 25);
+    assert_eq!(only_unlace, 25);
     assert_eq!(console(&[]).num_commands(), 107 + 25);
 }
 
 #[test]
-fn kuna_command_prefixes_expand() {
+fn unlace_command_prefixes_expand() {
     let mut status = console(&[]);
     assert_eq!(
         status.resolve("function noreturn").unwrap(),
         vec!["function", "noreturn"]
     );
-    // The abbreviations the kuna datatests / kuna.catalog drive.
+    // The abbreviations the unlace datatests / unlace.catalog drive.
     assert_eq!(status.resolve("phase list").unwrap(), vec!["phase", "list"]);
     assert_eq!(status.resolve("phase map").unwrap(), vec!["phase", "map"]);
     assert_eq!(
@@ -259,7 +259,7 @@ fn stage_map_unknown_token_is_execution_error() {
 
 #[test]
 fn stage_catalog_full_matches_w4_emitter_byte_for_byte() {
-    // No program loaded -> the static, no-`current` form (kuna_live_value is
+    // No program loaded -> the static, no-`current` form (unlace_live_value is
     // never called). The command must equal the W4 emitter exactly.
     let out = run_one("phase catalog");
     let expected = emit_catalog_json(|_| None);
@@ -405,34 +405,34 @@ fn region_commands_without_function_are_no_function_selected() {
     }
 }
 
-// NOTE: `kuna_live_value` (the `kunaLiveValue` port) reads a live
+// NOTE: `unlace_live_value` (the `unlaceLiveValue` port) reads a live
 // `&Architecture`'s option flags; constructing a real `Architecture` requires a
 // loaded `Sleigh` spec (impractical in a console unit test, and no console test
 // builds one). Its `current`-field contribution to `phase catalog` is exercised
-// at the integration level by `tests/stages/kuna-catalog.toml` (which loads a
+// at the integration level by `tests/stages/unlace-catalog.toml` (which loads a
 // real program and string-matches the `current` values); the function itself is
-// a direct field-read transcription of the C++ `kunaLiveValue` switch.
+// a direct field-read transcription of the C++ `unlaceLiveValue` switch.
 
 // ===========================================================================
-// VERIFIER adversarial tests (w9-con-kuna-console, round 1).
+// VERIFIER adversarial tests (w9-con-unlace-console, round 1).
 //
 // Targeting the spots the hunt list flagged as most fragile for this item:
 // the multi-token `phase map` join loop (which carries the datatest
-// KUNA-CONSOLE #5 contract `stage map force goto`), the `kassert` guard
+// UNLACE-CONSOLE #5 contract `stage map force goto`), the `kassert` guard
 // precedence (image check BEFORE tokenizing), and the `phase catalog`
 // single-option live-value join vs the no-program path (exact bytes the
-// `kuna.catalog` parser + `tests/stages/kuna-catalog.toml` depend on).
+// `unlace.catalog` parser + `tests/stages/unlace-catalog.toml` depend on).
 // ===========================================================================
 
 /// `stage map force goto` — the C++ token-join loop
 /// (`while(!s.eof()){ s>>word>>ws; if(empty)break; if(!token.empty())token+=' ';
 /// token+=word; }`) must rebuild the SPACE-JOINED surface key "force goto", not
-/// resolve on the first token alone. This is the exact datatest KUNA-CONSOLE #5
+/// resolve on the first token alone. This is the exact datatest UNLACE-CONSOLE #5
 /// surface (`surface "force goto" -> P7 (Region Hierarchy) sub-phase
 /// edge-virtualization`); a join bug would silently drop the second word and
 /// report "Unknown group/surface/sub-phase: force".
 #[test]
-fn w9_con_kuna_console_stage_map_joins_multiword_surface_key() {
+fn w9_con_unlace_console_stage_map_joins_multiword_surface_key() {
     let out = run_one("phase map force goto");
     assert!(
         out.contains(
@@ -452,7 +452,7 @@ fn w9_con_kuna_console_stage_map_joins_multiword_surface_key() {
 /// discards every run of whitespace; the Rust `read_token()` + `skip_ws()` pair
 /// must too (a stray double-space in the rebuilt token would miss the table).
 #[test]
-fn w9_con_kuna_console_stage_map_collapses_irregular_whitespace() {
+fn w9_con_unlace_console_stage_map_collapses_irregular_whitespace() {
     let out = run_one("phase map   force   goto   ");
     assert!(
         out.contains("surface \"force goto\" -> P7"),
@@ -467,7 +467,7 @@ fn w9_con_kuna_console_stage_map_collapses_irregular_whitespace() {
 /// validate_assertion path must NOT run first. A reordering that validated
 /// before the image guard would surface a different (or no) error.
 #[test]
-fn w9_con_kuna_console_kassert_image_guard_precedes_validation() {
+fn w9_con_unlace_console_kassert_image_guard_precedes_validation() {
     // Valid S3 substage + trailing `hint`: were validation to run first this
     // would route/parse; the image guard must short-circuit it.
     // Legacy S-code input alias driven on purpose.
@@ -493,9 +493,9 @@ fn w9_con_kuna_console_kassert_image_guard_precedes_validation() {
 /// the option token (`s >> ws >> option`) and emit the single-row form that
 /// byte-matches the W4 emitter — not the full-array form. A failure to skip the
 /// leading whitespace would read an empty option and dump the whole catalog
-/// (the `kuna.catalog --json` single-option probe would then break).
+/// (the `unlace.catalog --json` single-option probe would then break).
 #[test]
-fn w9_con_kuna_console_stage_catalog_single_option_skips_leading_ws() {
+fn w9_con_unlace_console_stage_catalog_single_option_skips_leading_ws() {
     let out = run_one("phase catalog    returnpair");
     let expected = emit_catalog_json_one("returnpair", None).expect("returnpair is a settable");
     assert_eq!(out, expected, "leading-ws single-option form drifted");
@@ -512,10 +512,10 @@ fn w9_con_kuna_console_stage_catalog_single_option_skips_leading_ws() {
 
 /// A bare `phase catalog` (no option, no program) must equal the full W4 emitter
 /// array with the no-`current` closure — the load-bearing contract the
-/// `kuna.catalog` parser greps. Pinned here independently of the existing test
+/// `unlace.catalog` parser greps. Pinned here independently of the existing test
 /// to guard the empty-option branch selection (option.is_empty() -> full form).
 #[test]
-fn w9_con_kuna_console_stage_catalog_bare_is_full_array() {
+fn w9_con_unlace_console_stage_catalog_bare_is_full_array() {
     // Drives the deprecated `phase catalog` alias on purpose: alias smoke test.
     let out = run_one("stage catalog");
     assert_eq!(out, emit_catalog_json(|_| None));

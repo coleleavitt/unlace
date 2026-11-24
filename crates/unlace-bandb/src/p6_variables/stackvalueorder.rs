@@ -245,6 +245,6 @@ fn is_matching_call_guard(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackvalueorder_moves_write = Some(moves_write);
 }

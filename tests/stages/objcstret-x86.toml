@@ -1,0 +1,58 @@
+# kuna calleeretpurge, ObjC: `objc_msgSend_stret` pops the hidden result
+# pointer.
+#
+# On i386 the ObjC message senders that return a structure in memory take
+# the result pointer as a hidden first argument and pop it with `ret $4`,
+# like any struct-returning function, and the caller is compiled around that.
+# They are imports, so there is no body to read the `ret $4` from: IDA
+# special-cases the three names (pc.so 0x37670). The caller here is the
+# i386 gcc -O2 `use` of calleeretpurge-x86.xml, with its callee
+# replaced by an import stub (`jmp [slot]`) named `_objc_msgSend_stret`.
+#
+# Stage: P4 call prototypes (ActionExtraPopSetup), option calleeretpurge
+# off|on. Pass 1 (off) pins the bug, pass 2 (on, the default) the fix.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x8049190', name = '_objc_msgSend_stret' },
+    { space = 'ram', offset = '0x80491b0', name = 'sink' },
+    { space = 'ram', offset = '0x80491c0', name = 'use' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x8049190'
+hex = 'ff2500a00408'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x80491b0'
+hex = '8b442404c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x80491c0'
+hex = '565383ec348b7424408d4424086a075650e8baffffff8b442418f30f7e44241089742434894424308d442428660fd644242850e8b8ffffff8b5c24308d442420565350e888ffffff8b4424340fafc30344243c2b4424400344243083c4485b5ec3'
+
+[script]
+commands = [
+    'option calleeretpurge off',
+    'lo fu use',
+    'decompile',
+    'print C',
+    'option calleeretpurge on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCSTRET #1: off, the result pointer is four bytes past the slot the caller passes'
+count = 1
+regex = '_objc_msgSend_stret\(\(int4\)&\w+ \+ 4,'
+
+[[match]]
+name = "OBJCSTRET #2: on, the sender receives the address of the caller's slot"
+count = 1
+regex = '_objc_msgSend_stret\(&\w+,'

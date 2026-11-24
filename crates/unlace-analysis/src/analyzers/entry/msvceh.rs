@@ -1,4 +1,4 @@
-//! (kuna `msvceh`) MSVC C++ exception metadata, the `throw` side.
+//! (unlace `msvceh`) MSVC C++ exception metadata, the `throw` side.
 //!
 //! An MSVC `throw e;` compiles to `_CxxThrowException(&e, &_TI<n><type>)`. The
 //! second argument is a `ThrowInfo` in `.rdata`: attributes, the object's
@@ -45,7 +45,7 @@ const ARG_WINDOW: usize = 32;
 /// Chained `UNWIND_INFO` links followed to a function's primary record.
 const MAX_CHAIN: usize = 32;
 
-/// (kuna `msvceh`) `ThrowInfo` labels and throw-site comments on an MSVC PE.
+/// (unlace `msvceh`) `ThrowInfo` labels and throw-site comments on an MSVC PE.
 /// Facts are computed at load and committed only under `--option msvceh on`.
 pub struct MsvcEhPass;
 

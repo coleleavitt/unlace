@@ -100,7 +100,7 @@ fn fixture(prefix: &[u32], split: bool) -> std::path::PathBuf {
 fn inventory_and_decompile_own_the_constant_prefix() {
     let path = fixture(&[0x033f_fff7, 0x8210_6388], false);
     let name = path.to_str().unwrap();
-    let (out, err, status) = common::run_kuna(&["functions", name, "--json"]);
+    let (out, err, status) = common::run_unlace(&["functions", name, "--json"]);
     assert_eq!(status, 0, "{err}");
     let doc: Value = serde_json::from_str(&out).unwrap();
     let addresses: Vec<_> = doc["functions"]
@@ -113,7 +113,7 @@ fn inventory_and_decompile_own_the_constant_prefix() {
     assert!(!addresses.contains(&0x1408), "{out}");
     let unmatched = fixture(&[0x033f_fff7, 0x8410_6388], false);
     let (control, err, status) =
-        common::run_kuna(&["functions", unmatched.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", unmatched.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{err}");
     let control: Value = serde_json::from_str(&control).unwrap();
     let expected: Vec<_> = control["functions"]
@@ -127,7 +127,7 @@ fn inventory_and_decompile_own_the_constant_prefix() {
         .collect();
     assert_eq!(addresses, expected, "only the accepted SAVE entry may move");
     std::fs::remove_file(unmatched).unwrap();
-    let (out, err, status) = common::run_kuna(&["decompile", name, "--addr", "0x1400"]);
+    let (out, err, status) = common::run_unlace(&["decompile", name, "--addr", "0x1400"]);
     assert_eq!(status, 0, "{err}");
     assert!(
         !out.contains("g1"),
@@ -151,7 +151,8 @@ fn mismatched_transferred_and_section_split_prefixes_keep_the_old_candidate() {
         ([0x033f_fff7, 0x8210_6388], true),
     ] {
         let path = fixture(&prefix, split);
-        let (out, err, status) = common::run_kuna(&["functions", path.to_str().unwrap(), "--json"]);
+        let (out, err, status) =
+            common::run_unlace(&["functions", path.to_str().unwrap(), "--json"]);
         assert_eq!(status, 0, "{err}");
         let doc: Value = serde_json::from_str(&out).unwrap();
         let addresses: Vec<_> = doc["functions"]

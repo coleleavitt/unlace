@@ -1,6 +1,6 @@
 //! Unknown call argument storage does not declare an integer C contract, and
 //! neither does an untyped word a format-call override places before the format
-//! (`kuna_fmtcallee`).
+//! (`unlace_fmtcallee`).
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;

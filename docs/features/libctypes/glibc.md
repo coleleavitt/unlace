@@ -175,7 +175,7 @@ place.
 
 Where the image's own debug info already describes the aggregate, the adoption
 rule is unchanged — a held definition of the declared width is taken whole and no
-published layout is installed over it. That is what `tests/stages/kuna-libctypes.toml`
+published layout is installed over it. That is what `tests/stages/libctypes.toml`
 passes 1-3 pin, and why passes 4/5 use a fixture built without `-g`.
 
 A name the operator declares by hand (`--define-function 0x…=fopen`) arrives long

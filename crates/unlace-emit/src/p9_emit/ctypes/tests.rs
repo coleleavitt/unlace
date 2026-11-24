@@ -58,7 +58,7 @@ fn lp64_prefers_long_over_long_long() {
 
 /// The small widths, and the signedness split. A 1-byte integer is `signed char`
 /// / `unsigned char`, never bare `char` — whose signedness is
-/// implementation-defined and which kuna reserves for text.
+/// implementation-defined and which unlace reserves for text.
 #[test]
 fn small_integers_are_explicitly_signed() {
     assert_eq!(LP64.integer_spelling(1, true), Some("signed char"));

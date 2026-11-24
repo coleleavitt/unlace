@@ -1,4 +1,4 @@
-//! A function input used only as a memory base is a pointer (kuna `ptrfromuse`, P5).
+//! A function input used only as a memory base is a pointer (unlace `ptrfromuse`, P5).
 //!
 //! `ActionInferTypes` seeds every live Varnode from local op semantics
 //! (`getLocalType`, `coreaction_infertypes.rs`) and then pushes those seeds along
@@ -41,7 +41,7 @@ use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uintb};
 
 use crate::context::{OpId, VarnodeId};
@@ -53,7 +53,7 @@ use unlace_num::opcodes::OpCode;
 /// access-chain walk uses the same bound.
 const HOP_CAP: usize = 10;
 
-/// (kuna) What a use-derived pointer points at: `ptrfromuse off|byte|void`.
+/// (unlace) What a use-derived pointer points at: `ptrfromuse off|byte|void`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PtrFromUseMode {
     /// Upstream: a dereferenced-only input keeps its integer vote.
@@ -65,9 +65,9 @@ pub enum PtrFromUseMode {
     Void,
 }
 
-impl crate::optionset::KunaOption for PtrFromUseMode {
+impl crate::optionset::UnlaceOption for PtrFromUseMode {
     const NAME: &'static str = "ptrfromuse";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PtrFromUseMode::Void
@@ -77,7 +77,7 @@ impl crate::optionset::KunaOption for PtrFromUseMode {
         PtrFromUseMode::Void
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionPtrFromUse.apply(value)
     }
 }
@@ -89,7 +89,7 @@ impl PtrFromUseMode {
     }
 }
 
-/// (kuna) Parse `option ptrfromuse off|byte|void`; the caller writes the live field.
+/// (unlace) Parse `option ptrfromuse off|byte|void`; the caller writes the live field.
 pub struct OptionPtrFromUse;
 
 impl OptionPtrFromUse {
@@ -97,13 +97,13 @@ impl OptionPtrFromUse {
     pub const NAME: &'static str = "ptrfromuse";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(PtrFromUseMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(PtrFromUseMode, String)> {
         let mode = match p1 {
             "off" => PtrFromUseMode::Off,
             "byte" => PtrFromUseMode::Byte,
             "void" => PtrFromUseMode::Void,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown ptrfromuse value: {other} (expected off|byte|void)"
                 )));
             }
@@ -179,8 +179,8 @@ pub fn pointer_from_use(
     tlst.get_type_pointer(ptrsize, ptrto, word_size).ok()
 }
 
-crate::kuna_flag!(
-    /// (kuna `ptrfromlocal`) Extend [`pointer_from_use`]'s walk to a pointer-width value a call
+crate::unlace_flag!(
+    /// (unlace `ptrfromlocal`) Extend [`pointer_from_use`]'s walk to a pointer-width value a call
     /// returns or a load reads, when its type is still unknown.
     PtrFromLocal,
     "ptrfromlocal",
@@ -189,7 +189,7 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna `ptrfromlocal`) The `void *` candidate for a pointer-width value `vn` that a `CALL`,
+/// (unlace `ptrfromlocal`) The `void *` candidate for a pointer-width value `vn` that a `CALL`,
 /// `CALLIND` or `LOAD` writes, when the same walk as [`pointer_from_use`] finds it used as a
 /// memory base and nothing inconsistent with a pointer. A call whose prototype locks its output
 /// declines; the caller offers the candidate only over an unknown or integer vote (the `int8`
@@ -319,7 +319,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> Use {
                 // A named global object: the constant IS the base, so `vn` is a
                 // subscript and nothing else about it can make it a pointer.
                 BaseEvidence::Object => Use::Refuse,
-                // Address-like, but kuna knows of nothing there.  Ambiguous in
+                // Address-like, but unlace knows of nothing there.  Ambiguous in
                 // exactly the way a variable addend is, so say nothing: a
                 // parameter with no other use stops being a candidate, while one
                 // the function also dereferences at a field offset keeps it.
@@ -381,7 +381,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId) -> Use {
 
 /// How much a constant addend looks like the base of the expression.
 enum BaseEvidence {
-    /// It resolves to a global object kuna knows about.
+    /// It resolves to a global object unlace knows about.
     Object,
     /// It is address-like but names nothing: could be a base, could be a large
     /// field offset.
@@ -458,7 +458,7 @@ pub fn is_float_op(opcode: OpCode) -> bool {
     )
 }
 
-/// Does the constant `cvn` of `op` resolve to a global object kuna knows about,
+/// Does the constant `cvn` of `op` resolve to a global object unlace knows about,
 /// making it the BASE of its `INT_ADD` rather than a field offset?  Shared with
 /// [`crate::charptr`], whose walk grades a literal addend the same way.
 #[doc(hidden)]
@@ -468,7 +468,7 @@ pub fn constant_is_global_base(data: &Funcdata, op: OpId, cvn: VarnodeId) -> boo
 
 /// Could the constant `cvn` of `op` be the base of its `INT_ADD` -- a global
 /// object, or an address-like value that names nothing?  Shared with
-/// `kuna_castarith`, which keeps such a sum in its integer form.
+/// `unlace_castarith`, which keeps such a sum in its integer form.
 #[doc(hidden)]
 pub fn constant_may_be_global_base(data: &Funcdata, op: OpId, cvn: VarnodeId) -> bool {
     !matches!(const_base_evidence(data, op, cvn), BaseEvidence::No)

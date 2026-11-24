@@ -1,5 +1,5 @@
 //! End-to-end gate for the libstdc++ `std::__throw_*` no-return family (GH-273,
-//! kuna DIV-78).
+//! unlace DIV-78).
 //!
 //! Fixture: `cxxthrow_noreturn_x86_64` (`+.cpp`), a non-PIE x86-64 ELF built with
 //! the local **clang++** at `-O1`. It declares two libstdc++ throw helpers itself,
@@ -70,7 +70,7 @@ fn decompile(func: &str, mode: Mode) -> String {
     // analysis commit), so the flags are set before the pass would run.
     if let Mode::ListOff = mode {
         prog.arch_mut()
-            .set_kuna_option("noreturn_known", "off")
+            .set_unlace_option("noreturn_known", "off")
             .expect("noreturn_known flips off");
     }
     prog.commit_pending_analysis()

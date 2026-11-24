@@ -50,12 +50,12 @@ fn table_slots_are_data_references_under_addrtable() {
     let (table, h2) = (address("table"), address("h2"));
     let path = binary.to_str().unwrap();
 
-    let (off, err, status) = common::run_kuna(&["xrefs", path, "--to", "h2"]);
+    let (off, err, status) = common::run_unlace(&["xrefs", path, "--to", "h2"]);
     assert_eq!(status, 0, "{err}");
     assert!(off.starts_with("# 0 references"), "{off}");
 
     let (on, err, status) =
-        common::run_kuna(&["xrefs", path, "--to", "h2", "--option", "addrtable", "on"]);
+        common::run_unlace(&["xrefs", path, "--to", "h2", "--option", "addrtable", "on"]);
     assert_eq!(status, 0, "{err}");
     let row = format!(
         "0x{:x}\tdata\t0x{:x}\taddr 0x{h2:x}",

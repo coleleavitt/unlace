@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::calc_mask;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
@@ -274,7 +274,7 @@ fn trip_count(fd: &Funcdata, block: BlockId) -> Option<usize> {
     None
 }
 
-fn expand(fd: &mut Funcdata, block: BlockId, count: usize) -> KunaResult<()> {
+fn expand(fd: &mut Funcdata, block: BlockId, count: usize) -> UnlaceResult<()> {
     let operations = fd.bb_ops(block);
     let branch = *operations.last().unwrap();
     let body = &operations[..operations.len() - 1];
@@ -286,7 +286,7 @@ fn expand(fd: &mut Funcdata, block: BlockId, count: usize) -> KunaResult<()> {
             let code = op.code();
             let address = op.get_addr().clone();
             let flags = op.get_flags() & pcodeop_flags::startmark;
-            let additional = op.get_addlflags() & pcodeop_addlflags::kuna_exactfloat;
+            let additional = op.get_addlflags() & pcodeop_addlflags::unlace_exactfloat;
             let inputs: Vec<_> = (0..op.num_input())
                 .map(|slot| op.get_in(slot).unwrap())
                 .collect();
@@ -356,7 +356,7 @@ impl Action for ActionStackByteCopy {
         if !fd.stack_store_guard()
             || fd
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::indexaliasguard::IndexAliasGuard>()
                 .0
                 == super::indexaliasguard::LEVEL_OFF

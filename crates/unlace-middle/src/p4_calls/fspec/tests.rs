@@ -11,7 +11,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{AddrSpace, AddrSpaceManager, spacetype};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -1239,7 +1239,7 @@ fn fcs_out(fd: &mut Funcdata, op: OpId, space: Rc<AddrSpace>, off: u64, size: in
         let mut noop = |_b: &mut crate::varnode::VarnodeBank,
                         _o: VarnodeId,
                         _n: VarnodeId|
-         -> KunaResult<()> { panic!("collision") };
+         -> UnlaceResult<()> { panic!("collision") };
         fd.vbank_mut()
             .create_def(
                 size,
@@ -1439,8 +1439,8 @@ fn func_call_specs_do_input_join_locked_errs() {
     // any join-address construction, so a dummy lookup is fine.
     struct NoLookup;
     impl unlace_base::space::RegisterLookup for NoLookup {
-        fn get_register(&self, _nm: &str) -> KunaResult<unlace_base::space::VarnodeStorage> {
-            Err(unlace_base::error::KunaError::lowlevel("no register"))
+        fn get_register(&self, _nm: &str) -> UnlaceResult<unlace_base::space::VarnodeStorage> {
+            Err(unlace_base::error::UnlaceError::lowlevel("no register"))
         }
         fn get_register_name(&self, _base: &Rc<AddrSpace>, _off: u64, _size: int4) -> String {
             String::new()
@@ -1533,28 +1533,28 @@ fn func_call_specs_fspec_registry_roundtrip() {
     fc.set_funcdata(Address::new(Rc::clone(&ram), 0x2000), "my_func")
         .unwrap();
     assert_eq!(
-        fc.fspec_printed_name(crate::database::KunaNameStyle::Func),
+        fc.fspec_printed_name(crate::database::UnlaceNameStyle::Func),
         "my_func"
     );
     assert_eq!(
-        fc.fspec_printed_name(crate::database::KunaNameStyle::Angr),
+        fc.fspec_printed_name(crate::database::UnlaceNameStyle::Angr),
         "my_func"
     );
 
     // Unnamed: angr => sub_<addr>, non-angr => func_<addr>.
     let fc2 = FuncCallSpecs::new(call, Address::new(Rc::clone(&ram), 0x3000));
     assert!(
-        fc2.fspec_printed_name(crate::database::KunaNameStyle::Angr)
+        fc2.fspec_printed_name(crate::database::UnlaceNameStyle::Angr)
             .starts_with("sub_")
     );
     assert!(
-        fc2.fspec_printed_name(crate::database::KunaNameStyle::Func)
+        fc2.fspec_printed_name(crate::database::UnlaceNameStyle::Func)
             .starts_with("func_")
     );
 
     // Register and look up via the unlace-base FspecSpace registry.
     let handle: u64 = 0xCAFE;
-    fc.register_in_fspec_space(handle, crate::database::KunaNameStyle::Func);
+    fc.register_in_fspec_space(handle, crate::database::UnlaceNameStyle::Func);
     let info = unlace_base::space::fspec_lookup(handle).unwrap();
     assert_eq!(info.printed_name, "my_func");
     assert_eq!(info.entry.get_offset(), 0x2000);

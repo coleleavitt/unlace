@@ -1,4 +1,4 @@
-//! (kuna `--jobs`) The discovery walk on N decode lanes: address-interval
+//! (unlace `--jobs`) The discovery walk on N decode lanes: address-interval
 //! ownership with bulk-synchronous reconciliation.
 //!
 //! One rule, enforced by construction: **a lane decodes only the addresses it
@@ -58,7 +58,7 @@ use super::walk::{
     WalkState,
 };
 
-/// How many decode lanes the walk should use. Set by `kuna --jobs N` for the
+/// How many decode lanes the walk should use. Set by `unlace --jobs N` for the
 /// duration of the load; absent means the serial walk.
 pub const DECODE_JOBS_ENV: &str = "UNLACE_DECODE_JOBS";
 /// Lower the [`Refusal::TooSmall`] floor (tests set `0`).

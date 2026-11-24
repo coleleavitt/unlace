@@ -1,8 +1,8 @@
-//! (kuna) Which namespaces to print in front of a symbol's name.
+//! (unlace) Which namespaces to print in front of a symbol's name.
 //!
 //! The port of `PrintC::pushSymbolScope`/`emitSymbolScope` (`printc.cc:202-256`)
 //! and `Symbol::getResolutionDepth` (`database.cc:324`), computed over namespace
-//! NAME paths: kuna's scopes for a symbol Ghidra describes over the wire, or that
+//! NAME paths: unlace's scopes for a symbol Ghidra describes over the wire, or that
 //! a `::`-qualified console name implies, are not the live `Scope` tree upstream
 //! walks, so both sides arrive as lists of names.
 

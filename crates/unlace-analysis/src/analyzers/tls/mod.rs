@@ -1,4 +1,4 @@
-//! (kuna `tlsnames`) The static TLS block of an x86 or AArch64 ELF image: `PT_TLS`
+//! (unlace `tlsnames`) The static TLS block of an x86 or AArch64 ELF image: `PT_TLS`
 //! and the `STT_TLS` symbols of an executable, or the `SHF_TLS` sections of a
 //! relocatable object (the layout the loader applies the AArch64 TLSLE
 //! relocations with), for `unlace_decomp::tlsnames`.

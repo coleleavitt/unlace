@@ -23,7 +23,7 @@ fn program(image: &str, enabled: bool) -> ConsoleProgram {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+        .set_unlace_option("godwarfsig", if enabled { "on" } else { "off" })
         .unwrap();
     program
 }
@@ -40,7 +40,7 @@ fn bodies(mut program: ConsoleProgram, names: &[&str]) -> Vec<String> {
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()
@@ -124,13 +124,13 @@ fn int_error_metadata_is_deferred_and_collision_guarded() {
     let mut off = program("contracts", false);
     off.commit_pending_analysis().unwrap();
     assert!(off.arch().types().find_by_name(CARRIER).unwrap().is_none());
-    assert!(off.arch().types().kuna_lang_facet(CARRIER).is_none());
+    assert!(off.arch().types().unlace_lang_facet(CARRIER).is_none());
     let mut on = program("contracts", true);
     on.commit_pending_analysis().unwrap();
     let types = on.arch().types();
     let ty = types.find_by_name(CARRIER).unwrap().unwrap();
     assert_eq!(
-        types.kuna_lang_facet(CARRIER),
+        types.unlace_lang_facet(CARRIER),
         Some(LangFacet::GoIntErrorResults)
     );
     assert!(
@@ -146,7 +146,7 @@ fn int_error_metadata_is_deferred_and_collision_guarded() {
         }
         if collision != 0 {
             types
-                .kuna_register_lang_facet(CARRIER, LangFacet::GoIntErrorResults)
+                .unlace_register_lang_facet(CARRIER, LangFacet::GoIntErrorResults)
                 .unwrap();
         }
         let output = bodies(program, &["forward"]);

@@ -1,6 +1,6 @@
-// Tests for `kuna_ptrauthtrap` (included into `mod tests` in
+// Tests for `unlace_ptrauthtrap` (included into `mod tests` in
 // ptrauthtrap.rs). The end-to-end cut is pinned by
-// `tests/stages/kuna-ptrauthtrap.toml` over the `macho_arm64e_auth` fixture.
+// `tests/stages/unlace-ptrauthtrap.toml` over the `macho_arm64e_auth` fixture.
 
 use super::*;
 

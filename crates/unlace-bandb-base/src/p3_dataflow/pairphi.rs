@@ -1,4 +1,4 @@
-//! (kuna `pairlocal`) A 64-bit local held in a 32-bit register pair.
+//! (unlace `pairlocal`) A 64-bit local held in a 32-bit register pair.
 //!
 //! On a 32-bit target a `long long` local lives in two registers
 //! (`edx:eax`), so heritage gives each half its own MULTIEQUAL where control
@@ -154,7 +154,7 @@ fn half_phis(data: &Funcdata, op: OpId) -> Option<(OpId, OpId, BlockId)> {
     Some((hp, lp, bl))
 }
 
-/// (kuna `pairlocal`) `RulePairPhi`.
+/// (unlace `pairlocal`) `RulePairPhi`.
 pub struct RulePairPhi {
     group: String,
 }
@@ -179,7 +179,7 @@ impl Rule for RulePairPhi {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<PairLocal>().0 {
+        if !data.get_arch().unlace_options.get::<PairLocal>().0 {
             return 0;
         }
         let Some((hp, lp, bl)) = half_phis(data, op) else {
@@ -283,8 +283,8 @@ impl Rule for RulePairPhi {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `pairlocal`) Join a 64-bit local's two register halves at their phis.
+crate::unlace_flag!(
+    /// (unlace `pairlocal`) Join a 64-bit local's two register halves at their phis.
     PairLocal,
     "pairlocal",
     "Register-pair local joining",

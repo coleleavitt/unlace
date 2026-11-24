@@ -41,7 +41,7 @@ fn render_store(
         fd.high_bank_mut()
             .get_mut(high)
             .unwrap()
-            .set_kuna_name(name);
+            .set_unlace_name(name);
     }
     let mut printer = PrintC::new();
     printer.set_name(lang);

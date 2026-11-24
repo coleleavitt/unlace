@@ -512,7 +512,7 @@ def reprint() -> int:
     """Rewrite every TOML stage test whose XML is still at HEAD (after a converter fix)."""
     n = 0
     for p in sorted(STAGES.glob("*.toml")):
-        if p.stem == "kuna-catalog":
+        if p.stem == "catalog":
             continue
         show = subprocess.run(["git", "show", "HEAD:tests/stages/{}.xml".format(p.stem)], cwd=ROOT,
                               capture_output=True)

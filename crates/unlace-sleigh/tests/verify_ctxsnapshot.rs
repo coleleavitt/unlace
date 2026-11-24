@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::ctxsnapshot::{ContextValueSnapshot, restore_context, snapshot_context};
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -23,7 +23,7 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
         ptr.fill(0);
         Ok(())
     }

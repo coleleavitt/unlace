@@ -1,11 +1,11 @@
 //! Architecture option parsing and upstream element-id dispatch.
 //!
-//! Kuna options dispatch by name through `Architecture::set_kuna_option`;
+//! Unlace options dispatch by name through `Architecture::set_unlace_option`;
 //! their handler declarations also provide the frontend allowlist.
 
 use std::collections::BTreeMap;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_CONTENT, Decoder, ELEM_UNKNOWN, ElementId, IdRegistry};
 use unlace_base::types::{int4, uint4};
 
@@ -160,7 +160,7 @@ pub const ELEM_READONLY: ElementId = ElementId::new("readonly", 151);
 /// `hideextensions` option name.  Upstream registers no dedicated element id and
 /// `OptionDatabase` does NOT register `OptionHideExtensions` (it is reachable
 /// only via the console `option` command, which matches the name directly).
-/// A kuna-local id (4090, in the 4000+ kuna range) is assigned so the
+/// A unlace-local id (4090, in the 4000+ unlace range) is assigned so the
 /// struct/apply transcription is complete and testable; it is never wired into
 /// the upstream `OptionDatabase::new` map.
 pub const ELEM_HIDEEXTENSIONS: ElementId = ElementId::new("hideextensions", 4090);
@@ -238,7 +238,7 @@ pub mod comment_type {
 /// STUB(W8): the canonical encoder lives on the (stub) `comment` module; this
 /// copy lets the comment-toggle options finish parsing.  Throws the exact C++
 /// `LowlevelError` text on an unknown name.
-fn encode_comment_type(name: &str) -> KunaResult<uint4> {
+fn encode_comment_type(name: &str) -> UnlaceResult<uint4> {
     match name {
         "user1" => Ok(comment_type::USER1),
         "user2" => Ok(comment_type::USER2),
@@ -246,7 +246,9 @@ fn encode_comment_type(name: &str) -> KunaResult<uint4> {
         "header" => Ok(comment_type::HEADER),
         "warning" => Ok(comment_type::WARNING),
         "warningheader" => Ok(comment_type::WARNINGHEADER),
-        _ => Err(KunaError::lowlevel(format!("Unknown comment type: {name}"))),
+        _ => Err(UnlaceError::lowlevel(format!(
+            "Unknown comment type: {name}"
+        ))),
     }
 }
 
@@ -431,10 +433,10 @@ impl IntParse for uint4 {
 /// `split_datatype_config`, `nan_ignore_*`) are expected to be concrete;
 /// methods whose subsystem is W5/W6/W8 carry a `// STUB` note — the caller still
 /// fully parses + validates and hands a typed value, so only the final mutation
-/// is deferred.  `w4-fw-architecture` / `w4-kuna-p0-pack` implement this for the
+/// is deferred.  `w4-fw-architecture` / `w4-unlace-p0-pack` implement this for the
 /// real `Architecture`.
 ///
-/// Methods return [`KunaResult`] where the C++ access can itself fail (an
+/// Methods return [`UnlaceResult`] where the C++ access can itself fail (an
 /// unknown prototype model, an unknown function name); a `Result` mutation that
 /// the C++ does unconditionally is modeled as an infallible method.
 pub trait ArchOptionContext {
@@ -489,34 +491,34 @@ pub trait ArchOptionContext {
     /// after `symboltab->getGlobalScope()->queryFunction(name)`
     /// (options.cc:273-277).  Returns the unknown-function error faithfully.
     /// // STUB(W4 symboltab + W6 fspec)
-    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> KunaResult<()>;
+    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> UnlaceResult<()>;
     /// `glb->setDefaultModel(getModel(p1))` (options.cc:313-316); returns the
     /// unknown-model error.  // STUB(W6)
-    fn set_default_model(&mut self, name: &str) -> KunaResult<()>;
+    fn set_default_model(&mut self, name: &str) -> UnlaceResult<()>;
     /// `glb->evalfp_current = getModel(p1)` / defaultfp (options.cc:844-852);
     /// returns the unknown-model error.  // STUB(W6)
-    fn set_eval_current_model(&mut self, name: &str) -> KunaResult<()>;
+    fn set_eval_current_model(&mut self, name: &str) -> UnlaceResult<()>;
 
     // --- per-function properties (STUB W4 symboltab + W6 fspec) ------------
 
     /// `fd->getFuncProto().setInline(val)` after a name lookup
     /// (options.cc:368-376).  // STUB
-    fn set_function_inline(&mut self, name: &str, val: bool) -> KunaResult<()>;
+    fn set_function_inline(&mut self, name: &str, val: bool) -> UnlaceResult<()>;
     /// `fd->getFuncProto().setNoReturn(val)` after a name lookup
     /// (options.cc:394-402).  // STUB
-    fn set_function_no_return(&mut self, name: &str, val: bool) -> KunaResult<()>;
+    fn set_function_no_return(&mut self, name: &str, val: bool) -> UnlaceResult<()>;
 
     // --- printer (STUB W8: printc / printlanguage) -------------------------
 
     /// Whether the active printer is the C language (`glb->print->getName() ==
     /// "c-language"`, options.cc:441/456/471).  // STUB(W8)
     fn print_is_c_language(&self) -> bool;
-    /// Whether the active print language is one kuna can actually emit.
+    /// Whether the active print language is one unlace can actually emit.
     ///
-    /// (kuna outlang) The display options below used to gate on
+    /// (unlace outlang) The display options below used to gate on
     /// `print_is_c_language`, which was the same question while C was the only
     /// back-end. It no longer is: brace format, in-place operators, cast
-    /// printing and the rest are meaningful in every language kuna emits, and
+    /// printing and the rest are meaningful in every language unlace emits, and
     /// gating them on "is C" would silently turn them into no-ops the moment a
     /// second language was selected. The default body preserves the old
     /// behaviour for the stub contexts in the tests.
@@ -534,11 +536,11 @@ pub trait ArchOptionContext {
     /// `PrintC::setHideImpliedExts(val)` (options.cc:504).  // STUB(W8)
     fn set_hide_implied_exts(&mut self, val: bool);
     /// `glb->print->setMaxLineSize(val)` (options.cc:524).
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()>;
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()>;
     /// `glb->print->setIndentIncrement(val)` (options.cc:541).  // STUB(W8)
     fn set_indent_increment(&mut self, val: int4);
     /// `glb->print->setLineCommentIndent(val)` (options.cc:559).
-    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()>;
+    fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()>;
     /// `glb->print->setCommentStyle(p1)` (options.cc:570).  // STUB(W8)
     fn set_comment_style(&mut self, style: &str);
     /// `glb->print->getHeaderComment()` (options.cc:583).  // STUB(W8)
@@ -614,7 +616,7 @@ pub trait ArchOption {
         p1: &str,
         p2: &str,
         p3: &str,
-    ) -> KunaResult<String>;
+    ) -> UnlaceResult<String>;
 }
 
 /// Read a loader toggle, retaining its default for unknown or non-Unicode values.
@@ -636,7 +638,7 @@ pub fn parse_env_toggle(value: &str, default: bool) -> bool {
 ///
 /// Empty or "on" => `true`, "off" => `false`, anything else throws a
 /// `ParseError` with the exact upstream text.
-pub fn on_or_off(p: &str) -> KunaResult<bool> {
+pub fn on_or_off(p: &str) -> UnlaceResult<bool> {
     if p.is_empty() {
         return Ok(true);
     }
@@ -646,7 +648,7 @@ pub fn on_or_off(p: &str) -> KunaResult<bool> {
     if p == "off" {
         return Ok(false);
     }
-    Err(KunaError::parse("Must specify toggle value, on/off"))
+    Err(UnlaceError::parse("Must specify toggle value, on/off"))
 }
 
 // ---------------------------------------------------------------------------
@@ -682,7 +684,7 @@ impl ArchOption for OptionExtraPop {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let mut expop: int4 = -300;
         if p1 == "unknown" {
             expop = PROTOMODEL_EXTRAPOP_UNKNOWN;
@@ -690,7 +692,7 @@ impl ArchOption for OptionExtraPop {
             expop = v;
         }
         if expop == -300 {
-            return Err(KunaError::parse("Bad extrapop adjustment parameter"));
+            return Err(UnlaceError::parse("Bad extrapop adjustment parameter"));
         }
         if !p2.is_empty() {
             glb.set_function_extra_pop(p2, expop)?;
@@ -718,9 +720,9 @@ impl ArchOption for OptionReadOnly {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse(
+            return Err(UnlaceError::parse(
                 "Read-only option must be set \"on\" or \"off\"",
             ));
         }
@@ -750,7 +752,7 @@ impl ArchOption for OptionDefaultPrototype {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         // getModel(p1)==0 => LowlevelError("Unknown prototype model :"+p1)
         glb.set_default_model(p1)?;
         Ok(format!("Set default prototype to {p1}"))
@@ -773,7 +775,7 @@ impl ArchOption for OptionInferConstPtr {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         if val {
             glb.set_infer_pointers(true);
@@ -801,7 +803,7 @@ impl ArchOption for OptionForLoops {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         glb.set_analyze_for_loops(on_or_off(p1)?);
         Ok(format!("Recovery of for-loops is {p1}"))
     }
@@ -823,7 +825,7 @@ impl ArchOption for OptionInline {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = if p2.is_empty() { true } else { p2 == "true" };
         // queryFunction(p1)==0 => RecovError("Unknown function name: "+p1)
         glb.set_function_inline(p1, val)?;
@@ -848,7 +850,7 @@ impl ArchOption for OptionNoReturn {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = if p2.is_empty() { true } else { p2 == "true" };
         glb.set_function_no_return(p1, val)?;
         let prop = if val { "true" } else { "false" };
@@ -872,13 +874,15 @@ impl ArchOption for OptionWarning {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("No action/rule specified"));
+            return Err(UnlaceError::parse("No action/rule specified"));
         }
         let val = if p2.is_empty() { true } else { on_or_off(p2)? };
         if !glb.set_action_warning(val, p1) {
-            return Err(KunaError::recov(format!("Bad action/rule specifier: {p1}")));
+            return Err(UnlaceError::recov(format!(
+                "Bad action/rule specifier: {p1}"
+            )));
         }
         let prop = if val { "on" } else { "off" };
         Ok(format!("Warnings for {p1} turned {prop}"))
@@ -901,7 +905,7 @@ impl ArchOption for OptionNullPrinting {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         if !glb.print_lang_known() {
             return Ok("Only a known output language accepts the null printing option".to_string());
@@ -928,7 +932,7 @@ impl ArchOption for OptionInPlaceOps {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         if !glb.print_lang_known() {
             return Ok("Can only set inplace operators for a known output language".to_string());
@@ -955,7 +959,7 @@ impl ArchOption for OptionConventionPrinting {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         if !glb.print_lang_known() {
             return Ok("Can only set convention printing for a known output language".to_string());
@@ -982,7 +986,7 @@ impl ArchOption for OptionNoCastPrinting {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         // dynamic_cast<PrintC*> == 0 => not C language.
         if !glb.print_lang_known() {
@@ -1011,7 +1015,7 @@ impl ArchOption for OptionHideExtensions {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         if !glb.print_lang_known() {
             return Ok("Can only toggle extension hiding for a known output language".to_string());
@@ -1038,11 +1042,11 @@ impl ArchOption for OptionMaxLineWidth {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         // int4 val = -1; s >> val; if(val==-1) ParseError.
         let val = parse_int_auto::<int4>(p1).unwrap_or(-1);
         if val == -1 {
-            return Err(KunaError::parse("Must specify integer linewidth"));
+            return Err(UnlaceError::parse("Must specify integer linewidth"));
         }
         glb.set_max_line_size(val)?;
         Ok(format!("Maximum line width set to {p1}"))
@@ -1065,10 +1069,10 @@ impl ArchOption for OptionIndentIncrement {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = parse_int_auto::<int4>(p1).unwrap_or(-1);
         if val == -1 {
-            return Err(KunaError::parse("Must specify integer increment"));
+            return Err(UnlaceError::parse("Must specify integer increment"));
         }
         glb.set_indent_increment(val);
         Ok(format!("Characters per indent level set to {p1}"))
@@ -1091,10 +1095,10 @@ impl ArchOption for OptionCommentIndent {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = parse_int_auto::<int4>(p1).unwrap_or(-1);
         if val == -1 {
-            return Err(KunaError::parse("Must specify integer comment indent"));
+            return Err(UnlaceError::parse("Must specify integer comment indent"));
         }
         glb.set_line_comment_indent(val)?;
         Ok(format!("Comment indent set to {p1}"))
@@ -1117,7 +1121,7 @@ impl ArchOption for OptionCommentStyle {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         glb.set_comment_style(p1);
         Ok(format!("Comment style set to {p1}"))
     }
@@ -1139,7 +1143,7 @@ impl ArchOption for OptionCommentHeader {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let toggle = on_or_off(p2)?;
         let mut flags = glb.header_comment_flags();
         let val = encode_comment_type(p1)?;
@@ -1170,7 +1174,7 @@ impl ArchOption for OptionCommentInstruction {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let toggle = on_or_off(p2)?;
         let mut flags = glb.instruction_comment_flags();
         let val = encode_comment_type(p1)?;
@@ -1201,7 +1205,7 @@ impl ArchOption for OptionIntegerFormat {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         glb.set_integer_format(p1);
         Ok(format!("Integer format set to {p1}"))
     }
@@ -1223,7 +1227,7 @@ impl ArchOption for OptionBraceFormat {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if !glb.print_lang_known() {
             return Ok("Can only set brace formatting for a known output language".to_string());
         }
@@ -1231,7 +1235,7 @@ impl ArchOption for OptionBraceFormat {
             "same" => BraceStyle::SameLine,
             "next" => BraceStyle::NextLine,
             "skip" => BraceStyle::SkipLine,
-            _ => return Err(KunaError::parse(format!("Unknown brace style: {p2}"))),
+            _ => return Err(UnlaceError::parse(format!("Unknown brace style: {p2}"))),
         };
         let category = match p1 {
             "function" => BraceCategory::Function,
@@ -1239,7 +1243,7 @@ impl ArchOption for OptionBraceFormat {
             "loop" => BraceCategory::Loop,
             "switch" => BraceCategory::Switch,
             _ => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown brace format category: {p1}"
                 )));
             }
@@ -1265,9 +1269,9 @@ impl ArchOption for OptionSetAction {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("Must specify preexisting action"));
+            return Err(UnlaceError::parse("Must specify preexisting action"));
         }
         if !p2.is_empty() {
             glb.clone_action_group(p1, p2);
@@ -1295,9 +1299,9 @@ impl ArchOption for OptionCurrentAction {
         p1: &str,
         p2: &str,
         p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() || p2.is_empty() {
-            return Err(KunaError::parse("Must specify subaction, on/off"));
+            return Err(UnlaceError::parse("Must specify subaction, on/off"));
         }
         let mut res = "Toggled ".to_string();
         if !p3.is_empty() {
@@ -1331,7 +1335,7 @@ impl ArchOption for OptionAllowContextSet {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         let res = format!("Toggled allowcontextset to {prop}");
@@ -1356,7 +1360,7 @@ impl ArchOption for OptionIgnoreUnimplemented {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let mut flags = glb.flow_options();
         if val {
@@ -1387,7 +1391,7 @@ impl ArchOption for OptionErrorUnimplemented {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let mut flags = glb.flow_options();
         if val {
@@ -1418,7 +1422,7 @@ impl ArchOption for OptionErrorReinterpreted {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let mut flags = glb.flow_options();
         if val {
@@ -1449,7 +1453,7 @@ impl ArchOption for OptionErrorTooManyInstructions {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let mut flags = glb.flow_options();
         if val {
@@ -1480,9 +1484,9 @@ impl ArchOption for OptionProtoEval {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("Must specify prototype model"));
+            return Err(UnlaceError::parse("Must specify prototype model"));
         }
         // "default" => defaultfp; else getModel(p1)==0 => ParseError.
         glb.set_eval_current_model(p1)?;
@@ -1506,14 +1510,14 @@ impl ArchOption for OptionSetLanguage {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
-        // (kuna outlang) C++ `Architecture::setPrintLanguage` throws
+    ) -> UnlaceResult<String> {
+        // (unlace outlang) C++ `Architecture::setPrintLanguage` throws
         // `LowlevelError("Unknown print language: ...")` on a name no capability
-        // claims; kuna owns a fixed set, so the check is a table lookup. Without
+        // claims; unlace owns a fixed set, so the check is a table lookup. Without
         // it a typo would silently keep emitting C under a name that says
         // otherwise.
         let Some(lang) = crate::outlang::OutLang::from_print_name(p1) else {
-            return Err(KunaError::parse(format!("Unknown print language: {p1}")));
+            return Err(UnlaceError::parse(format!("Unknown print language: {p1}")));
         };
         glb.set_print_language(lang.print_name());
         Ok(format!("Decompiler produces {}", lang.print_name()))
@@ -1536,11 +1540,11 @@ impl ArchOption for OptionJumpTableMax {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         // uint4 val = 0; s >> val; if(val==0) ParseError.
         let val = parse_int_auto::<uint4>(p1).unwrap_or(0);
         if val == 0 {
-            return Err(KunaError::parse("Must specify integer maximum"));
+            return Err(UnlaceError::parse("Must specify integer maximum"));
         }
         glb.set_max_jumptable_size(val);
         Ok(format!("Maximum jumptable size set to {p1}"))
@@ -1563,7 +1567,7 @@ impl ArchOption for OptionJumpLoad {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let val = on_or_off(p1)?;
         let mut flags = glb.flow_options();
         if val {
@@ -1597,17 +1601,17 @@ impl ArchOption for OptionToggleRule {
         p1: &str,
         p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("Must specify rule path"));
+            return Err(UnlaceError::parse("Must specify rule path"));
         }
         if p2.is_empty() {
-            return Err(KunaError::parse("Must specify on/off"));
+            return Err(UnlaceError::parse("Must specify on/off"));
         }
         let val = on_or_off(p2)?;
         // getCurrent()==0 => LowlevelError("Missing current action")
         if !glb.has_current_action() {
-            return Err(KunaError::lowlevel("Missing current action"));
+            return Err(UnlaceError::lowlevel("Missing current action"));
         }
         let mut res;
         if !val {
@@ -1645,9 +1649,9 @@ impl ArchOption for OptionAliasBlock {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("Must specify alias block level"));
+            return Err(UnlaceError::parse("Must specify alias block level"));
         }
         let old_val = glb.alias_block_level();
         let new_val = match p1 {
@@ -1655,7 +1659,11 @@ impl ArchOption for OptionAliasBlock {
             "struct" => 1,
             "array" => 2,
             "all" => 3,
-            _ => return Err(KunaError::parse(format!("Unknown alias block level: {p1}"))),
+            _ => {
+                return Err(UnlaceError::parse(format!(
+                    "Unknown alias block level: {p1}"
+                )));
+            }
         };
         glb.set_alias_block_level(new_val);
         if old_val == new_val {
@@ -1681,14 +1689,14 @@ impl ArchOption for OptionMaxInstruction {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         if p1.is_empty() {
-            return Err(KunaError::parse("Must specify number of instructions"));
+            return Err(UnlaceError::parse("Must specify number of instructions"));
         }
         // int4 newMax = -1; s1 >> newMax; if(newMax<0) ParseError.
         let new_max = parse_int_auto::<int4>(p1).unwrap_or(-1);
         if new_max < 0 {
-            return Err(KunaError::parse("Bad maxinstruction parameter"));
+            return Err(UnlaceError::parse("Bad maxinstruction parameter"));
         }
         glb.set_max_instructions(new_max);
         Ok("Maximum instructions per function set".to_string())
@@ -1711,12 +1719,12 @@ impl ArchOption for OptionNamespaceStrategy {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let strategy = match p1 {
             "minimal" => NamespaceStrategy::Minimal,
             "all" => NamespaceStrategy::All,
             "none" => NamespaceStrategy::None,
-            _ => return Err(KunaError::parse("Must specify a valid strategy")),
+            _ => return Err(UnlaceError::parse("Must specify a valid strategy")),
         };
         glb.set_namespace_strategy(strategy);
         Ok("Namespace strategy set".to_string())
@@ -1744,7 +1752,7 @@ arch_option!(
 impl OptionSplitDatatypes {
     /// Translate an option string to a configuration bit (C++
     /// `OptionSplitDatatypes::getOptionBit`, options.cc:1026).
-    pub fn get_option_bit(val: &str) -> KunaResult<uint4> {
+    pub fn get_option_bit(val: &str) -> UnlaceResult<uint4> {
         if val.is_empty() {
             return Ok(0);
         }
@@ -1752,7 +1760,7 @@ impl OptionSplitDatatypes {
             "struct" => Ok(split_datatype::OPTION_STRUCT),
             "array" => Ok(split_datatype::OPTION_ARRAY),
             "pointer" => Ok(split_datatype::OPTION_POINTER),
-            _ => Err(KunaError::lowlevel(format!(
+            _ => Err(UnlaceError::lowlevel(format!(
                 "Unknown data-type split option: {val}"
             ))),
         }
@@ -1768,7 +1776,7 @@ impl ArchOption for OptionSplitDatatypes {
         p1: &str,
         p2: &str,
         p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let old_config = glb.split_datatype_config();
         let mut config = Self::get_option_bit(p1)?;
         config |= Self::get_option_bit(p2)?;
@@ -1808,7 +1816,7 @@ impl ArchOption for OptionNanIgnore {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let old_ignore_all = glb.nan_ignore_all();
         let old_ignore_compare = glb.nan_ignore_compare();
         match p1 {
@@ -1825,7 +1833,7 @@ impl ArchOption for OptionNanIgnore {
                 glb.set_nan_ignore_compare(true);
             }
             _ => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Unknown nanignore option: {p1}"
                 )));
             }
@@ -1877,7 +1885,7 @@ impl OptionDatabase {
     /// (C++ `OptionDatabase::OptionDatabase`, options.cc:115; in the same
     /// registration order).
     ///
-    /// Kuna options dispatch by name through `Architecture::set_kuna_option`.
+    /// Unlace options dispatch by name through `Architecture::set_unlace_option`.
     pub fn new() -> Self {
         let mut db = OptionDatabase {
             optionmap: BTreeMap::new(),
@@ -1933,7 +1941,7 @@ impl OptionDatabase {
     /// (C++ `OptionDatabase::registerOption`, options.cc:106).
     ///
     /// In C++ the key is `ElementId::find(option->getName(),0)`; the Rust API
-    /// takes the `ElementId` directly so a caller (the kuna `kuna_*.rs` modules,
+    /// takes the `ElementId` directly so a caller (the unlace `unlace_*.rs` modules,
     /// or the upstream ctor above) supplies the matching id with no global
     /// registry lookup.  A duplicate id overwrites, matching `optionmap[id] =`.
     pub fn register_option(&mut self, elem: ElementId, option: Box<dyn ArchOption>) {
@@ -1951,9 +1959,9 @@ impl OptionDatabase {
         p1: &str,
         p2: &str,
         p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         match self.optionmap.get(&name_id) {
-            None => Err(KunaError::parse("Unknown option")),
+            None => Err(UnlaceError::parse("Unknown option")),
             Some(opt) => opt.apply(glb, p1, p2, p3),
         }
     }
@@ -1967,7 +1975,7 @@ impl OptionDatabase {
         &self,
         decoder: &mut dyn Decoder,
         glb: &mut dyn ArchOptionContext,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut p1 = String::new();
         let mut p2 = String::new();
         let mut p3 = String::new();
@@ -2002,7 +2010,7 @@ impl OptionDatabase {
         &self,
         decoder: &mut dyn Decoder,
         glb: &mut dyn ArchOptionContext,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_OPTIONSLIST)?;
         while decoder.peek_element()? != 0 {
             self.decode_one(decoder, glb)?;
@@ -2011,14 +2019,14 @@ impl OptionDatabase {
         Ok(())
     }
 
-    /// (kuna, ghidra-mode) Parse an `<optionslist>` like [`decode`](Self::decode),
+    /// (unlace, ghidra-mode) Parse an `<optionslist>` like [`decode`](Self::decode),
     /// but skip any option element that cannot be parsed or applied instead of
     /// failing the list — the documented ghidra-mode divergence
     /// (`docs/ghidra-integration.md` §8): upstream throws on the first unknown
     /// element, `setOptions` answers `f`, and Java fails the whole program open
     /// ("Did not accept decompiler options"), so one option from a newer Java
     /// vocabulary (e.g. 12.2's `baddatacount`, element 290) bricks the decompiler
-    /// view.  kuna applies what it knows and reports each skipped element as a
+    /// view.  unlace applies what it knows and reports each skipped element as a
     /// returned warning line (each begins with "Warning", which Java's
     /// `isErrorMessage` treats as non-fatal).
     ///
@@ -2029,7 +2037,7 @@ impl OptionDatabase {
         &self,
         decoder: &mut dyn Decoder,
         glb: &mut dyn ArchOptionContext,
-    ) -> KunaResult<Vec<String>> {
+    ) -> UnlaceResult<Vec<String>> {
         let elem_id = decoder.open_element_id(&ELEM_OPTIONSLIST)?;
         let mut warnings = Vec::new();
         while decoder.peek_element()? != 0 {
@@ -2057,12 +2065,12 @@ impl OptionDatabase {
         decoder: &mut dyn Decoder,
         glb: &mut dyn ArchOptionContext,
         opt_id: uint4,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let mut p1 = String::new();
         let mut p2 = String::new();
         let mut p3 = String::new();
         let mut saw_child = false;
-        let mut content_err: Option<KunaError> = None;
+        let mut content_err: Option<UnlaceError> = None;
         loop {
             let sub_id = decoder.open_element()?;
             if sub_id == 0 {
@@ -2113,7 +2121,7 @@ fn option_element_name(id: uint4) -> Option<&'static str> {
 /// The C++ `Decoder::readString` returns a `std::string` (raw bytes); option
 /// parameters are ASCII keywords, so a lossy conversion is faithful for every
 /// value the options accept and keeps the comparison string-typed.
-fn read_content_string(decoder: &mut dyn Decoder) -> KunaResult<String> {
+fn read_content_string(decoder: &mut dyn Decoder) -> UnlaceResult<String> {
     let bytes = decoder.read_string_id(&ATTRIB_CONTENT)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }

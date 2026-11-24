@@ -1,4 +1,4 @@
-//! (kuna `armconstshift all`) Defined C for fixed 64-bit left shifts.
+//! (unlace `armconstshift all`) Defined C for fixed 64-bit left shifts.
 use std::rc::Rc;
 
 use crate::architecture::Architecture;
@@ -24,7 +24,7 @@ pub fn plan_fixed64_lsl(
     printed: impl Fn(VarnodeId) -> Rc<Datatype>,
 ) -> Option<ConstantLslPlan> {
     if arch
-        .kuna_options
+        .unlace_options
         .get::<crate::armconstantshift::ConstShiftMode>()
         != crate::armconstantshift::ConstShiftMode::All
     {

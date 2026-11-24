@@ -160,10 +160,10 @@ fn narrow_guards_with_empty_rust_arms_preserve_enclosing_loops() {
             .arg(&native),
     );
     let names = "empty_case,empty_default,empty_shared,empty_loop,loop_break_control";
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let result = process::required_output(
-        Command::new(kuna)
+        Command::new(unlace)
             .args(["decompile-all", "--option", "highsliceguard", "on"])
             .arg(&native)
             .args([
@@ -254,12 +254,12 @@ fn narrow_guards_with_empty_rust_arms_preserve_enclosing_loops() {
 
 #[test]
 fn every_preset_keeps_high_slice_recovery_explicit() {
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for mode in ["auto", "reliable", "aggressive", "fast"] {
         let mut previous = None;
         for explicit in [false, true] {
-            let mut command = Command::new(&kuna);
+            let mut command = Command::new(&unlace);
             command.args([
                 "decompile",
                 &common::fixture("highslice_guard_x86_64"),

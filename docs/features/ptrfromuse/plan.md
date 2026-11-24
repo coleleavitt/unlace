@@ -26,7 +26,7 @@ is neutral, one below the space's pointer lower bound is a field offset.
 | `decompiler/crates/kuna-decomp/src/substrate/context.rs` | the `ArchSeam` field the pass reads |
 | `decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs` | registration |
 | `decompiler/crates/kuna-decomp/phases.toml` | the `[[settable]]` row |
-| `tests/stages/kuna-ptrfromuse.toml` | the three-pass end-to-end test (11 assertions: one witness, three controls) |
+| `tests/stages/ptrfromuse.toml` | the three-pass end-to-end test (11 assertions: one witness, three controls) |
 | `docs/spec/05-types.md` | §5.2 prose, next to `ptrdepthcap` and `codescalar` |
 
 ## Order of work
@@ -49,7 +49,7 @@ is neutral, one below the space's pointer lower bound is a field offset.
 `settables` 211 → 212, tiers `(68, 80, 63)` → `(68, 81, 63)`,
 `SETTABLE_TABLE` len, `catalog-json-records` 210 → 211,
 `catalog_bytecompat` fixture (recaptured, never hand-edited),
-`tests/stages/kuna-catalog.toml` `#6 source_decompiler angr` 32 → 33 and
+`tests/stages/catalog.toml` `#6 source_decompiler angr` 32 → 33 and
 `#8 change_kind opt-in-tool` 20 → 21, corpus file count 300 → 301 (one file),
 `docs/baseline-stages.json` re-recorded, `docs/options.md` regenerated.
 `ptrfromuse` is added to the no-live-reader allowlist in `phases/tests.rs`

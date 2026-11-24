@@ -43,7 +43,7 @@
 //!   - The speculative-merge *backout* in [`MergeIntersect::intersection`] and
 //!     [`Merge::merge`] reproduces the cache-then-cover order exactly.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uintm};
 
 use std::borrow::Cow;
@@ -143,7 +143,7 @@ pub type BoundType = int4;
 /// the surrounding structure verbatim so the body is correct once the hook fills.
 pub trait MergeContext: HighContext {
     /// The pass hooks the merge calls through ([`crate::passhooks`]).
-    fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
+    fn pass_hooks(&self) -> &'static crate::passhooks::UnlaceHooks {
         crate::architecture::default_pass_hooks()
     }
     fn fpu_trunc_views_enabled(&self) -> bool {
@@ -228,7 +228,7 @@ pub trait MergeContext: HighContext {
         high2: HighVariableId,
         isspeculative: bool,
         cache: &mut HighIntersectTest,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
     /// `high->updateCover()`.
     fn bank_update_cover(&mut self, high: HighVariableId);
     /// `vn2->getHigh()->groupWith(off, vn1->getHigh())`.
@@ -237,7 +237,7 @@ pub trait MergeContext: HighContext {
         high2: HighVariableId,
         off: int4,
         high1: HighVariableId,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
     /// `high->setMark()`.
     fn bank_set_mark(&mut self, high: HighVariableId);
     /// `high->clearMark()`.
@@ -312,17 +312,17 @@ pub trait MergeContext: HighContext {
     fn vn_constant_value(&self, _vn: VarnodeId) -> Option<u64> {
         None
     }
-    /// (kuna) Does the function's own prototype model leave `[addr, addr+size)`
+    /// (unlace) Does the function's own prototype model leave `[addr, addr+size)`
     /// unaffected by a call (a callee-saved register)?
     fn storage_callee_saved(&self, _addr: &unlace_base::address::Address, _size: int4) -> bool {
         false
     }
-    /// (kuna) `vn->getAddr()` and `vn->getSize()`; `None` when the context
+    /// (unlace) `vn->getAddr()` and `vn->getSize()`; `None` when the context
     /// does not model storage (option `typemerge storage` then joins nothing).
     fn vn_storage(&self, _vn: VarnodeId) -> Option<(unlace_base::address::Address, int4)> {
         None
     }
-    /// (kuna) Does a load of a global `vn` was stored to read `vn` instead?
+    /// (unlace) Does a load of a global `vn` was stored to read `vn` instead?
     fn vn_is_global_load(&self, _vn: VarnodeId) -> bool {
         false
     }
@@ -395,7 +395,7 @@ pub trait MergeContext: HighContext {
 
     // --- Op mutation (obank); funcdata mutators that already exist ---------
     /// `data.opSetInput(op,vn,slot)`.
-    fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> KunaResult<()>;
+    fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> UnlaceResult<()>;
     /// `data.opInsertBefore(op,follow)`.
     fn op_insert_before(&mut self, op: OpId, follow: OpId);
     /// `data.opInsertAfter(op,prev)`.
@@ -426,26 +426,26 @@ pub trait MergeContext: HighContext {
     /// `data.beginOpAlive()..endOpAlive()` — the alive-op list in C++ order.
     fn ops_alive(&self) -> Vec<OpId>;
 
-    /// (kuna) [`crate::stablenames::same_variable`].
-    fn kuna_same_prior_variable(&self, _a: HighVariableId, _b: HighVariableId) -> Option<bool> {
+    /// (unlace) [`crate::stablenames::same_variable`].
+    fn unlace_same_prior_variable(&self, _a: HighVariableId, _b: HighVariableId) -> Option<bool> {
         None
     }
-    /// (kuna) [`crate::stablenames::variable_groups`].
-    fn kuna_prior_variable_groups(&self, _highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
+    /// (unlace) [`crate::stablenames::variable_groups`].
+    fn unlace_prior_variable_groups(&self, _highs: &[HighVariableId]) -> Vec<Vec<HighVariableId>> {
         Vec::new()
     }
-    /// (kuna) [`crate::p6_variables::pointeevalue::load_crosses_write`].
+    /// (unlace) [`crate::p6_variables::pointeevalue::load_crosses_write`].
     fn vn_loads_across_write(&self, _vn: VarnodeId) -> bool {
         false
     }
-    /// (kuna) [`crate::p6_variables::loadorder::crosses_global_write`].
+    /// (unlace) [`crate::p6_variables::loadorder::crosses_global_write`].
     fn vn_load_crosses_global_write(&mut self, _vn: VarnodeId, _except: HighVariableId) -> bool {
         false
     }
     fn global_copy_moves_write(&self, _global: HighVariableId, _value: HighVariableId) -> bool {
         false
     }
-    /// (kuna `persistcalls`) A merge copy is about to trim `op`'s input.
+    /// (unlace `persistcalls`) A merge copy is about to trim `op`'s input.
     fn persist_trim(&mut self, _op: OpId) {}
     fn stack_copy_moves_write(&self, _storage: HighVariableId, _value: HighVariableId) -> bool {
         false
@@ -458,7 +458,7 @@ pub trait MergeContext: HighContext {
     /// Build the `Cover range` of `checkCopyPair` (`addDefPoint(domOp->getOut())`
     /// then `addRefPoint(subOp,subOp->getIn(0))`).
     fn copy_pair_range(&self, dom_op: OpId, sub_op: OpId) -> Cover;
-    /// (kuna) The COPYs of `copy`, COPYs into `high` from one Varnode in
+    /// (unlace) The COPYs of `copy`, COPYs into `high` from one Varnode in
     /// `compareCopyByInVarnode` order, that `Merge::markRedundantCopies` marks
     /// (see [`redundant_in_order`]).
     fn redundant_copies(&self, high: HighVariableId, copy: &[OpId]) -> Vec<OpId> {
@@ -475,9 +475,9 @@ pub trait MergeContext: HighContext {
         in_vn: VarnodeId,
         addr: unlace_base::address::Address,
         trim_op: OpId,
-    ) -> KunaResult<OpId>;
+    ) -> UnlaceResult<OpId>;
     /// `Merge::trimOpOutput` body (the INDIRECT-aware output bump).
-    fn trim_op_output(&mut self, op: OpId) -> KunaResult<()>;
+    fn trim_op_output(&mut self, op: OpId) -> UnlaceResult<()>;
     /// `Merge::trimOpInput` prelude: the `(inVn, pc, isMultiequal)` it computes
     /// before allocating the trim COPY.
     fn trim_op_input_prep(
@@ -508,7 +508,7 @@ pub trait MergeContext: HighContext {
         copy: &[OpId],
         pos: int4,
         size: int4,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
 
     // --- mergeAddrTied / mergeMultiEntry hooks (overlapLoc/scope; W7/W4) ----
     /// `Merge::mergeAddrTied` range collection (`overlapLoc` over the location set).
@@ -712,7 +712,7 @@ impl Merge {
             return false;
         }
 
-        let prior = ctx.kuna_same_prior_variable(high_out, high_in);
+        let prior = ctx.unlace_same_prior_variable(high_out, high_in);
         if prior == Some(false) {
             return false;
         }
@@ -787,11 +787,11 @@ impl Merge {
 
     /// Test that a Varnode that *must* merge *can* merge (C++
     /// `Merge::mergeTestMust`, `merge.cc:241-247`).  Errors otherwise.
-    pub fn merge_test_must(ctx: &dyn MergeContext, vn: VarnodeId) -> KunaResult<()> {
+    pub fn merge_test_must(ctx: &dyn MergeContext, vn: VarnodeId) -> UnlaceResult<()> {
         if ctx.vn_has_cover_flag(vn) && !ctx.vn_is_implied(vn) {
             return Ok(());
         }
-        Err(KunaError::lowlevel("Cannot force merge of range"))
+        Err(UnlaceError::lowlevel("Cannot force merge of range"))
     }
 
     /// Test if a Varnode can ever be merged (C++ `Merge::mergeTestBasic`,
@@ -909,7 +909,7 @@ pub fn compare_copy_by_in_varnode(ctx: &dyn MergeContext, op1: OpId, op2: OpId) 
 /// `HighIntersectTest::{intersection,updateHigh,blockIntersection,…}`).
 pub struct MergeIntersect;
 
-/// (kuna) A high with at least this many instances is looked up by block
+/// (unlace) A high with at least this many instances is looked up by block
 /// while a run of tests is open ([`HighIntersectTest::begin_instance_blocks`]).
 const INDEXED_INSTANCES: int4 = 64;
 
@@ -1167,7 +1167,7 @@ impl MergeIntersect {
 // Merge (merge.hh:83-139)
 // =============================================================================
 
-/// (kuna) What refused a high in a merge-test pass: no Cover, or a Cover
+/// (unlace) What refused a high in a merge-test pass: no Cover, or a Cover
 /// intersection with a high listed before it.
 #[derive(Clone, Copy, Debug)]
 struct MergeConflict {
@@ -1209,15 +1209,15 @@ pub struct Merge {
     copy_trims: Vec<OpId>,
     /// Roots of unmapped CONCAT trees (C++ `protoPartial`).
     proto_partial: Vec<OpId>,
-    /// (kuna) The outputs of the MULTIEQUALs `kuna_tiedphitrim` trimmed, with
+    /// (unlace) The outputs of the MULTIEQUALs `unlace_tiedphitrim` trimmed, with
     /// the storage each was trimmed away from.
     tied_phis: Vec<(VarnodeId, unlace_base::address::Address)>,
-    /// (kuna) Option `phiarm`: trim phi arms that are variables of their own
+    /// (unlace) Option `phiarm`: trim phi arms that are variables of their own
     /// ([`crate::phiarm`]).
     phi_arm_split: bool,
-    /// (kuna) Option `calleesaved` ([`crate::calleesaved`]).
+    /// (unlace) Option `calleesaved` ([`crate::calleesaved`]).
     callee_saved_split: bool,
-    /// (kuna) Each arm value `kuna_phiarm` trimmed, with the MULTIEQUAL output
+    /// (unlace) Each arm value `unlace_phiarm` trimmed, with the MULTIEQUAL output
     /// it was trimmed from.
     phi_arms: Vec<(VarnodeId, VarnodeId)>,
     /// (unlace decompile-all watchdog) Budget probes taken, and whether one saw
@@ -1258,26 +1258,26 @@ impl Merge {
     /// budget spent every later step fails at once. The merge actions drop the
     /// error and the drive reports the budget.
     #[doc(hidden)]
-    pub fn budget(&mut self) -> KunaResult<()> {
+    pub fn budget(&mut self) -> UnlaceResult<()> {
         if !self.spent {
             self.probes = self.probes.wrapping_add(1);
             self.spent = self.probes % BUDGET_STRIDE == 0
                 && crate::budget::deadline_passed_in("variable merging");
         }
         if self.spent {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "variable merging stopped at the function's budget",
             ));
         }
         Ok(())
     }
 
-    /// (kuna) Turn option `phiarm` on or off for the next `merge_marker`.
+    /// (unlace) Turn option `phiarm` on or off for the next `merge_marker`.
     pub fn set_phi_arm_split(&mut self, on: bool) {
         self.phi_arm_split = on;
     }
 
-    /// (kuna) Turn option `calleesaved` on or off for the next
+    /// (unlace) Turn option `calleesaved` on or off for the next
     /// `merge_by_datatype`.
     pub fn set_callee_saved_split(&mut self, on: bool) {
         self.callee_saved_split = on;
@@ -1348,7 +1348,7 @@ impl Merge {
         high1: HighVariableId,
         high2: HighVariableId,
         isspeculative: bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if high1 == high2 {
             return Ok(true); // Already merged
         }
@@ -1386,7 +1386,7 @@ impl Merge {
         &mut self,
         ctx: &mut dyn MergeContext,
         highvec: &mut [HighVariableId],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if highvec.len() <= 1 {
             return Ok(());
         }
@@ -1449,7 +1449,7 @@ impl Merge {
     /// already tested against its first entry; nothing edits the function
     /// between the tests of one list, so a repeat gives the cached answer of its
     /// first test. A high already listed is tested only against itself (which
-    /// `kuna_tiedphitrim` can refuse) and is not listed twice.
+    /// `unlace_tiedphitrim` can refuse) and is not listed twice.
     pub fn merge_test(
         &mut self,
         ctx: &mut dyn MergeContext,
@@ -1460,7 +1460,7 @@ impl Merge {
     }
 
     /// [`Self::merge_test`], naming what refused `high`: a [`MergeConflict`],
-    /// or `None` when `kuna_tiedphitrim` did.
+    /// or `None` when `unlace_tiedphitrim` did.
     fn merge_test_why(
         &mut self,
         ctx: &mut dyn MergeContext,
@@ -1585,7 +1585,7 @@ impl Merge {
 
     /// Force input/output merges of all ops of a given opcode (C++
     /// `Merge::mergeOpcode`, `merge.cc:326-350`).  Merges in linear block order.
-    pub fn merge_opcode(&mut self, ctx: &mut dyn MergeContext, opc: OpCode) -> KunaResult<()> {
+    pub fn merge_opcode(&mut self, ctx: &mut dyn MergeContext, opc: OpCode) -> UnlaceResult<()> {
         let nblocks = ctx.bblocks_get_size();
         for i in 0..nblocks {
             let bl = ctx.bblocks_get_block(i);
@@ -1637,7 +1637,7 @@ impl Merge {
     /// `range` is the location-ordered list of Varnodes for the address range (the
     /// C++ `[startiter,enditer)`).  Highs are gathered (deduped by `setMark`),
     /// grouped by exact type identity preserving discovery order, and each group is
-    /// merged with [`merge_linear`](Self::merge_linear).  (kuna) `mode` (option
+    /// merged with [`merge_linear`](Self::merge_linear).  (unlace) `mode` (option
     /// `typemerge`, [`crate::typemerge`]) narrows which same-typed highs
     /// share a group; `On` is upstream.
     pub fn merge_by_datatype(
@@ -1645,7 +1645,7 @@ impl Merge {
         ctx: &mut dyn MergeContext,
         range: &[VarnodeId],
         mode: crate::typemerge::TypeMergeMode,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // Gather all highs, deduped by mark.
         let mut highlist: Vec<HighVariableId> = Vec::new();
         for &vn in range {
@@ -1712,7 +1712,7 @@ impl Merge {
             remaining = rest;
             self.merge_linear(ctx, &mut highvec)?;
         }
-        for mut highvec in ctx.kuna_prior_variable_groups(&gathered) {
+        for mut highvec in ctx.unlace_prior_variable_groups(&gathered) {
             self.merge_linear(ctx, &mut highvec)?;
         }
         Ok(())
@@ -1720,7 +1720,7 @@ impl Merge {
 
     /// Speculatively merge input/output Varnodes of the same op when they share a
     /// data-type (C++ `Merge::mergeAdjacent`, `merge.cc:983-1013`).
-    pub fn merge_adjacent(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn merge_adjacent(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let ops: Vec<OpId> = ctx.ops_alive();
         for op in ops {
             if ctx.op_is_call(op) {
@@ -1740,7 +1740,7 @@ impl Merge {
                 if !std::rc::Rc::ptr_eq(&ct, &ctx.op_input_type_local(op, i))
                     && vn2
                         .and_then(|vn2| ctx.vn_high(vn2))
-                        .and_then(|h| ctx.kuna_same_prior_variable(high_out, h))
+                        .and_then(|h| ctx.unlace_same_prior_variable(high_out, h))
                         != Some(true)
                 {
                     continue; // Only merge if types should be the same
@@ -1778,7 +1778,7 @@ impl Merge {
 
     /// Force the merge of input/output Varnodes to MULTIEQUAL and INDIRECT ops
     /// (C++ `Merge::mergeMarker`, `merge.cc:889-902`).
-    pub fn merge_marker(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn merge_marker(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let ops: Vec<OpId> = ctx.ops_alive();
         for op in ops {
             if !ctx.op_is_marker(op) || ctx.op_is_indirect_creation(op) {
@@ -1796,7 +1796,7 @@ impl Merge {
 
     /// Run through CONCAT-tree roots and group each tree (C++
     /// `Merge::groupPartials`, `merge.cc:967-976`).
-    pub fn group_partials(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn group_partials(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let roots = self.proto_partial.clone();
         for op in roots {
             if ctx.op_is_dead(op) {
@@ -1814,7 +1814,11 @@ impl Merge {
 
     /// Group the nodes of one CONCAT tree into a VariableGroup (C++
     /// `Merge::groupPartialRoot`, `merge.cc:1374-1407`).
-    fn group_partial_root(&mut self, ctx: &mut dyn MergeContext, vn: VarnodeId) -> KunaResult<()> {
+    fn group_partial_root(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        vn: VarnodeId,
+    ) -> UnlaceResult<()> {
         let high = ctx.vn_high(vn).expect("groupPartialRoot: vn no high");
         if ctx.high_num_instances(high) != 1 {
             return Ok(());
@@ -1855,7 +1859,7 @@ impl Merge {
     /// input. Only a trim edits the op, and it ends that input's tests, so the
     /// earlier inputs are tested by distinct high, in first-input order: a
     /// repeated high answers as its first test did.
-    fn merge_op(&mut self, ctx: &mut dyn MergeContext, op: OpId) -> KunaResult<()> {
+    fn merge_op(&mut self, ctx: &mut dyn MergeContext, op: OpId) -> UnlaceResult<()> {
         let max = if ctx.op_code(op) == OpCode::CPUI_INDIRECT {
             1
         } else {
@@ -1932,12 +1936,12 @@ impl Merge {
             let out_h = ctx.vn_high(ctx.op_out(op).unwrap()).unwrap();
             let in_h = ctx.vn_high(ctx.op_in(op, i).unwrap()).unwrap();
             if !Self::merge_test_required(ctx, out_h, in_h) {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Non-cover related merge restriction violated, despite trims",
                 ));
             }
             if !self.merge(ctx, out_h, in_h, false)? {
-                return Err(KunaError::lowlevel("Unable to force merge of op"));
+                return Err(UnlaceError::lowlevel("Unable to force merge of op"));
             }
         }
         Ok(())
@@ -1945,7 +1949,7 @@ impl Merge {
 
     /// Force the merge of input/output to an INDIRECT, handling address-forced
     /// output (C++ `Merge::mergeIndirect`, `merge.cc:846-882`).
-    fn merge_indirect(&mut self, ctx: &mut dyn MergeContext, indop: OpId) -> KunaResult<()> {
+    fn merge_indirect(&mut self, ctx: &mut dyn MergeContext, indop: OpId) -> UnlaceResult<()> {
         let outvn = ctx.op_out(indop).expect("mergeIndirect: no output");
         if !ctx.vn_is_addr_force(outvn) {
             // Output NOT address forced: merge like a MULTIEQUAL.
@@ -1978,7 +1982,7 @@ impl Merge {
         if !Self::merge_test_required(ctx, out_h, new_in_h)
             || !self.merge(ctx, new_in_h, out_h, false)?
         {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Unable to merge address forced indirect",
             ));
         }
@@ -1991,7 +1995,7 @@ impl Merge {
         &mut self,
         ctx: &mut dyn MergeContext,
         indop: OpId,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let op = ctx.indirect_effect_op(indop); // getOpFromConst(getIn(1)->getAddr())
         let out_high = ctx.vn_high(ctx.op_out(indop).unwrap()).unwrap();
         let mut correctable = self.collect_inputs(ctx, out_high, op);
@@ -2072,7 +2076,7 @@ impl Merge {
         in_vn: VarnodeId,
         addr: unlace_base::address::Address,
         trim_op: OpId,
-    ) -> KunaResult<OpId> {
+    ) -> UnlaceResult<OpId> {
         ctx.persist_trim(trim_op);
         let copy_op = ctx.copy_trim_op(in_vn, addr, trim_op)?;
         self.copy_trims.push(copy_op);
@@ -2081,7 +2085,7 @@ impl Merge {
 
     /// Trim the output HighVariable of `op` so its Cover is tiny (C++
     /// `Merge::trimOpOutput`, `merge.cc:656-682`).
-    fn trim_op_output(&mut self, ctx: &mut dyn MergeContext, op: OpId) -> KunaResult<()> {
+    fn trim_op_output(&mut self, ctx: &mut dyn MergeContext, op: OpId) -> UnlaceResult<()> {
         ctx.trim_op_output(op)
     }
 
@@ -2092,7 +2096,7 @@ impl Merge {
         ctx: &mut dyn MergeContext,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let (in_vn, pc, is_multiequal) = ctx.trim_op_input_prep(op, slot);
         let copy_op = self.allocate_copy_trim(ctx, in_vn, pc, op)?;
         let copy_out = ctx.op_out(copy_op).expect("trimOpInput: copy no out");
@@ -2113,7 +2117,7 @@ impl Merge {
     /// is not yet ported, so the iteration is driven through
     /// [`MergeContext::addr_tied_ranges`] which returns the maximally-overlapping
     /// ranges (a boundary; recorded as a loss).
-    pub fn merge_addr_tied(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn merge_addr_tied(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let ranges = ctx.addr_tied_ranges();
         for range in ranges {
             // range.bounds: Vec<Vec<VarnodeId>> sub-ranges, range.addrtied flag,
@@ -2124,12 +2128,12 @@ impl Merge {
             self.budget()?;
             self.unify_address(ctx, &range.all_varnodes)?;
             for sub in &range.must_merge_ranges {
-                // (kuna divergence) A forced merge that intersects — a heavily-reused
+                // (unlace divergence) A forced merge that intersects — a heavily-reused
                 // stack slot (compiler stack-coloring, hundreds of SSA versions) the
                 // port's `eliminate_intersect` cannot fully snip — is SKIPPED, not fatal.
                 // Upstream Ghidra's `mergeAddrTied` is INFALLIBLE (its `eliminateIntersect`
                 // always resolves, `merge.cc:489`), so `mergeRangeMust` never throws there.
-                // When kuna's does, `?`-propagating it aborts the WHOLE loop, which skips
+                // When unlace's does, `?`-propagating it aborts the WHOLE loop, which skips
                 // the `bank_group_with` VariablePiece grouping below for every OTHER slot
                 // too — so `mark_internal_copies` can hide no partial-preserve SUBPIECE and
                 // the function renders `SUB84(x,4)`/`CONCAT44(…)` reconstruction soup
@@ -2155,7 +2159,7 @@ impl Merge {
         &mut self,
         ctx: &mut dyn MergeContext,
         range: &[VarnodeId],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if range.is_empty() {
             return Ok(());
         }
@@ -2170,7 +2174,7 @@ impl Merge {
             }
             Self::merge_test_must(ctx, vn)?;
             if !self.merge(ctx, high, vh, false)? {
-                return Err(KunaError::lowlevel("Forced merge caused intersection"));
+                return Err(UnlaceError::lowlevel("Forced merge caused intersection"));
             }
         }
         Ok(())
@@ -2178,7 +2182,11 @@ impl Merge {
 
     /// Make sure all Varnodes at one storage address can be merged, snipping
     /// discovered intersections (C++ `Merge::unifyAddress`, `merge.cc:581-601`).
-    fn unify_address(&mut self, ctx: &mut dyn MergeContext, range: &[VarnodeId]) -> KunaResult<()> {
+    fn unify_address(
+        &mut self,
+        ctx: &mut dyn MergeContext,
+        range: &[VarnodeId],
+    ) -> UnlaceResult<()> {
         let mut isectlist: Vec<VarnodeId> = Vec::new();
         for &vn in range {
             if ctx.vn_is_free(vn) {
@@ -2214,7 +2222,7 @@ impl Merge {
         ctx: &mut dyn MergeContext,
         vn: VarnodeId,
         blocksort: &[BlockVarnode],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut markedop: Vec<OpId> = Vec::new();
         let descend = ctx.vn_descend(vn);
         for op in descend {
@@ -2321,7 +2329,7 @@ impl Merge {
         ctx: &mut dyn MergeContext,
         vn: VarnodeId,
         markedop: &[OpId],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if markedop.is_empty() {
             return Ok(());
         }
@@ -2372,7 +2380,7 @@ impl Merge {
         &mut self,
         ctx: &mut dyn MergeContext,
         high: HighVariableId,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mut sl = Vec::new();
         Self::find_single_copy(ctx, high, &mut sl);
         let mut singlelist: Vec<Option<VarnodeId>> = sl.into_iter().map(Some).collect();
@@ -2472,7 +2480,7 @@ impl Merge {
         copy: &[OpId],
         pos: int4,
         size: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         ctx.build_dominant_copy(high, copy, pos, size)
     }
 
@@ -2539,7 +2547,7 @@ impl Merge {
         &mut self,
         ctx: &mut dyn MergeContext,
         high: HighVariableId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut copy_ins: Vec<OpId> = Vec::new();
         Self::find_all_into_copies(ctx, high, &mut copy_ins, true);
         if copy_ins.len() < 2 {
@@ -2592,7 +2600,7 @@ impl Merge {
 
     /// Reduce/eliminate COPYs produced by trimming (C++ `Merge::processCopyTrims`,
     /// `merge.cc:1415-1436`).
-    pub fn process_copy_trims(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn process_copy_trims(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let mut multi_copy: Vec<HighVariableId> = Vec::new();
         let trims = std::mem::take(&mut self.copy_trims);
         for op in &trims {
@@ -2735,7 +2743,7 @@ impl Merge {
     /// STUB(W4-symbol): iterates `getScopeLocal()->beginMultiEntry()` and calls
     /// `findLinkedVarnodes`; the symbol scope is a W4 surface.  Driven through
     /// [`MergeContext::multi_entry_symbols`] (a boundary; recorded as a loss).
-    pub fn merge_multi_entry(&mut self, ctx: &mut dyn MergeContext) -> KunaResult<()> {
+    pub fn merge_multi_entry(&mut self, ctx: &mut dyn MergeContext) -> UnlaceResult<()> {
         let symbols = ctx.multi_entry_symbols();
         for sym in symbols {
             let merge_list = ctx.symbol_linked_varnodes(sym);
@@ -3075,7 +3083,7 @@ mod tests {
             high2: HighVariableId,
             isspeculative: bool,
             _cache: &mut HighIntersectTest,
-        ) -> KunaResult<()> {
+        ) -> UnlaceResult<()> {
             self.merged.push((high1, high2, isspeculative));
             // Move high2's instances into high1, union covers, drop high2.
             let h2 = self.highs.remove(&high2.0).expect("merge: missing high2");
@@ -3092,7 +3100,7 @@ mod tests {
             _h2: HighVariableId,
             _off: int4,
             _h1: HighVariableId,
-        ) -> KunaResult<()> {
+        ) -> UnlaceResult<()> {
             Ok(())
         }
         fn bank_set_mark(&mut self, h: HighVariableId) {
@@ -3285,7 +3293,7 @@ mod tests {
         fn indirect_effect_op(&self, _indop: OpId) -> OpId {
             oid(0)
         }
-        fn op_set_input(&mut self, _op: OpId, _vn: VarnodeId, _slot: int4) -> KunaResult<()> {
+        fn op_set_input(&mut self, _op: OpId, _vn: VarnodeId, _slot: int4) -> UnlaceResult<()> {
             Ok(())
         }
         fn op_insert_before(&mut self, _op: OpId, _follow: OpId) {}
@@ -3329,10 +3337,10 @@ mod tests {
             _in_vn: VarnodeId,
             _addr: Address,
             _trim_op: OpId,
-        ) -> KunaResult<OpId> {
+        ) -> UnlaceResult<OpId> {
             panic!("mock: copy_trim_op not under test")
         }
-        fn trim_op_output(&mut self, _op: OpId) -> KunaResult<()> {
+        fn trim_op_output(&mut self, _op: OpId) -> UnlaceResult<()> {
             panic!("mock: trim_op_output not under test")
         }
         fn trim_op_input_prep(&self, _op: OpId, _slot: int4) -> (VarnodeId, Address, bool) {
@@ -3353,7 +3361,7 @@ mod tests {
             _copy: &[OpId],
             _pos: int4,
             _size: int4,
-        ) -> KunaResult<()> {
+        ) -> UnlaceResult<()> {
             panic!("mock: build_dominant_copy not under test")
         }
         fn addr_tied_ranges(&self) -> Vec<AddrTiedRange> {

@@ -47,7 +47,7 @@
 //! [`FlowEnvironment`] carrying exactly the slice `FlowInfo` needs: the
 //! `Translate` for `oneInstruction`, an op-code→`TypeOp` resolver (the W6 table),
 //! the flow-override lookup (W4 `Override`), the CALLOTHER-injected predicate
-//! (W4 user-ops), and the V850/SPARC kuna anchor predicates.  The W3-portable
+//! (W4 user-ops), and the V850/SPARC unlace anchor predicates.  The W3-portable
 //! algorithms drive `FlowInfo` against this trait, so they compile and are
 //! testable against a real [`Translate`] instance now; W4 supplies the concrete
 //! `Architecture`-backed impl by wiring the trait, without touching the ported
@@ -65,12 +65,12 @@
 //! `injectUserOp`/`inlineSubFunction`/the inline-clone family), `Override` hooks,
 //! and the `warning`/`warningHeader`/`removeUnreachableBlocks` reporting are all
 //! W4 subsystems — their methods are present as faithful skeletons that drive the
-//! W3-portable parts and return a precise [`KunaError`] / `// STUB(W4)` note at
+//! W3-portable parts and return a precise [`UnlaceError`] / `// STUB(W4)` note at
 //! the subsystem boundary.  Recorded in the structured `losses`.
 //!
 //! ## GH-8817 V850 anchor (`flow.cc:278`)
 //!
-//! The kuna `xref_control_flow` anchor edit (reclassify a V850 `jmp [reg]` CALLIND
+//! The unlace `xref_control_flow` anchor edit (reclassify a V850 `jmp [reg]` CALLIND
 //! to BRANCHIND for switch recovery) is transcribed; the `option
 //! v850indirectbranch` read is the `// STUB(W4): ArchOption v850indirectbranch`
 //! default-false predicate on [`FlowEnvironment`] (and the SPARC struct-return
@@ -84,7 +84,7 @@ pub use crate::funcdata_block::VisitedMap;
 use crate::ppc32piccalls::FuncdataPpc32piccallsExt;
 use std::collections::BTreeMap;
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4, uintb, uintm};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::{PcodeEmit, Translate};
@@ -96,7 +96,7 @@ use crate::op::pcodeop_flags;
 
 pub use crate::flow_flags;
 
-/// The kuna flow-override modes (C++ `Override::NONE`/... , `override.hh`).
+/// The unlace flow-override modes (C++ `Override::NONE`/... , `override.hh`).
 ///
 /// STUB(W4): the per-function `Override` subsystem (`override.{hh,cc}`) is W4;
 /// only the `NONE` sentinel is reached by `process_instruction`'s override branch,
@@ -109,7 +109,7 @@ pub enum FlowOverride {
     NONE,
 }
 
-/// (kuna `evmcalls`) A classified EVM `JUMP`.
+/// (unlace `evmcalls`) A classified EVM `JUMP`.
 enum EvmJump {
     /// A call to the function at this entry, and the return label when it is
     /// not the next instruction.
@@ -138,10 +138,10 @@ enum InjectSource {
     CallFixup(int4),
 }
 
-/// (kuna) Second stagings one flow spends on re-entered dispatch tables. Each
+/// (unlace) Second stagings one flow spends on re-entered dispatch tables. Each
 /// finds one more target with a partial decompile of the function so far, so
 /// a longer chain keeps what it has and says so.
-const KUNA_MAX_REENTRY_STAGES: usize = 128;
+const UNLACE_MAX_REENTRY_STAGES: usize = 128;
 
 /// The W4/W6 subsystem slice [`FlowInfo`] reaches through its owning
 /// `Architecture` (C++ `glb`) and per-function `Override`.
@@ -198,7 +198,7 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna) Does `addr` have at least one byte backed by the load image?
+    /// (unlace) Does `addr` have at least one byte backed by the load image?
     ///
     /// Consulted by [`FlowInfo::new_address`] before a branch target is queued
     /// for decode: an address the image cannot supply bytes for is a dead end,
@@ -240,8 +240,8 @@ pub trait FlowEnvironment {
         _userop_index: uintb,
         _context: &mut crate::pcodeinject::InjectContext,
         _emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-    ) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "inject_userop: no inject engine in this FlowEnvironment",
         ))
     }
@@ -267,8 +267,8 @@ pub trait FlowEnvironment {
         _inject_id: int4,
         _context: &mut crate::pcodeinject::InjectContext,
         _emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-    ) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    ) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "inject_call_fixup_payload: no inject engine in this FlowEnvironment",
         ))
     }
@@ -305,11 +305,11 @@ pub trait FlowEnvironment {
     fn build_override_proto(
         &self,
         _pieces: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<Option<crate::fspec::FuncProto>> {
+    ) -> UnlaceResult<Option<crate::fspec::FuncProto>> {
         Ok(None)
     }
 
-    /// (kuna) The prototype the loader parked for the call instruction at `site`
+    /// (unlace) The prototype the loader parked for the call instruction at `site`
     /// ([`crate::p2_lift::callsiteproto`]).
     fn call_site_prototype(&self, _site: &Address) -> Option<crate::fspec::PrototypePieces> {
         None
@@ -320,8 +320,8 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna) GH-8817: is `op` a V850 `jmp [reg]` CALLIND to reclassify as
-    /// BRANCHIND? (C++ `kunaIsV850IndirectJmp`).
+    /// (unlace) GH-8817: is `op` a V850 `jmp [reg]` CALLIND to reclassify as
+    /// BRANCHIND? (C++ `unlaceIsV850IndirectJmp`).
     ///
     /// // STUB(W4): ArchOption v850indirectbranch — gated on `option
     /// v850indirectbranch on|off`, default \b false (upstream byte-identical).
@@ -334,16 +334,16 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `fastfailnoreturn`) Is `op` the CALLIND half of a Windows `int 0x29`
+    /// (unlace `fastfailnoreturn`) Is `op` the CALLIND half of a Windows `int 0x29`
     /// (`__fastfail`), which never returns?  See
-    /// [`kuna_fastfailnoreturn`](crate::fastfailnoreturn).  The default shell
+    /// [`unlace_fastfailnoreturn`](crate::fastfailnoreturn).  The default shell
     /// reports `false` (upstream behavior: the interrupt is an ordinary modelled
     /// call, so the cspec's `extrapop` raises the stack pointer by 8 at every site).
     fn is_fastfail_callind(&self, _fd: &Funcdata, _op: OpId) -> bool {
         false
     }
 
-    /// (kuna #1288) Is `op` the CALLIND half of an interrupt that ends an MS-DOS
+    /// (unlace #1288) Is `op` the CALLIND half of an interrupt that ends an MS-DOS
     /// program (`INT 20h`, `INT 27h`, `INT 21h` with AH 00h/31h/4Ch)?  Flow ends
     /// there as after a call to a no-return function.  The default shell reports
     /// `false`.
@@ -351,16 +351,16 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `msvcsig`) The import slot the CALLIND `op` calls through, when that
+    /// (unlace `msvcsig`) The import slot the CALLIND `op` calls through, when that
     /// slot carries a locked MSVC prototype, so the call is direct from the flow
-    /// on. See [`kuna_msvcimportcall`](crate::msvcimportcall). The default
+    /// on. See [`unlace_msvcimportcall`](crate::msvcimportcall). The default
     /// shell reports `None` (upstream behavior: `ActionDeindirect` resolves it
     /// later and the function restarts).
     fn msvc_import_slot(&self, _fd: &Funcdata, _op: OpId) -> Option<Address> {
         None
     }
 
-    /// (kuna) The function the CALLIND `op` reaches through a relocated read-only
+    /// (unlace) The function the CALLIND `op` reaches through a relocated read-only
     /// slot (a RELRO `.got` word the loader filled), when that function never
     /// returns, so the call is direct and halts from the flow on. The default
     /// shell reports `None` (upstream behavior: `ActionDeindirect` resolves the
@@ -369,7 +369,7 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `arm64evcall`) The direct callee of the arm64e virtual call at
+    /// (unlace `arm64evcall`) The direct callee of the arm64e virtual call at
     /// `site` when its vtable slot holds one method in this image, or a note
     /// naming the candidates when it holds several. The default shell knows
     /// none.
@@ -377,9 +377,9 @@ pub trait FlowEnvironment {
         (None, None)
     }
 
-    /// (kuna `guarddispatch`) The register holding the real target, when the
+    /// (unlace `guarddispatch`) The register holding the real target, when the
     /// CALLIND `op` calls through a Control Flow Guard dispatch slot. See
-    /// [`kuna_guarddispatch`](crate::guarddispatch). The default shell
+    /// [`unlace_guarddispatch`](crate::guarddispatch). The default shell
     /// reports `None`.
     fn guard_dispatch_target(
         &self,
@@ -389,13 +389,13 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `--assert callee`) Did the caller state where the indirect jump at
-    /// `site` goes? See [`kuna_calleeoverride`](crate::calleeoverride).
+    /// (unlace `--assert callee`) Did the caller state where the indirect jump at
+    /// `site` goes? See [`unlace_calleeoverride`](crate::calleeoverride).
     fn stated_callee_site(&self, _fd: &Funcdata, _site: &Address) -> bool {
         false
     }
 
-    /// (kuna `msvcsig`) Does `entry` carry a locked MSVC prototype? Such a callee's
+    /// (unlace `msvcsig`) Does `entry` carry a locked MSVC prototype? Such a callee's
     /// copied prototype gets the stack adjustment its parameter list implies, as
     /// `ActionDefaultParams` gives a declared callee it seeds itself
     /// (`calleeprotostack`). The default shell reports `false`.
@@ -403,26 +403,26 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `int3pad`) Is `op` the CALLIND half of a decoded `int3`, and if so
+    /// (unlace `int3pad`) Is `op` the CALLIND half of a decoded `int3`, and if so
     /// how long is the pad and does the flow end there?  See
-    /// [`kuna_int3pad`](crate::int3pad).  The default shell reports `None`
+    /// [`unlace_int3pad`](crate::int3pad).  The default shell reports `None`
     /// (upstream behavior: the pad prints as an indirect call through the `swi`
     /// userop and nothing says control ran into it).
     fn int3_pad_site(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::int3pad::Int3PadSite> {
         None
     }
 
-    /// (kuna) Is `op` the BRANCHIND half of an AArch64 `brk` whose immediate a
+    /// (unlace) Is `op` the BRANCHIND half of an AArch64 `brk` whose immediate a
     /// compiler emits for a trap that does not return?  Matched, it becomes a
-    /// no-return halt.  See [`kuna_brktrap`](crate::brktrap).
+    /// no-return halt.  See [`unlace_brktrap`](crate::brktrap).
     fn brk_trap(&self, _fd: &Funcdata, _op: OpId) -> Option<crate::brktrap::BrkTrap> {
         None
     }
 
-    /// (kuna) Is `op` the BRANCHIND half of a trap a Linux kernel `__bug_table`
+    /// (unlace) Is `op` the BRANCHIND half of a trap a Linux kernel `__bug_table`
     /// entry names? Matched, the trap's CALLOTHER and the entry are returned and
     /// the site prints as `BUG()` or `__WARN(file,line)`. See
-    /// [`kuna_kernelbug`](crate::kernelbug).
+    /// [`unlace_kernelbug`](crate::kernelbug).
     fn kernel_bug_site(
         &self,
         _fd: &Funcdata,
@@ -431,17 +431,17 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna) Does a Linux kernel `__bug_table` entry name the trap at `addr`?
+    /// (unlace) Does a Linux kernel `__bug_table` entry name the trap at `addr`?
     /// Such a `ud2` is a `WARN`/`BUG` statement of its own, not evidence about
     /// the call before it (`trapaftercall`).
     fn kernel_bug_trap_at(&self, _addr: u64) -> bool {
         false
     }
 
-    /// (kuna) Is the direct BRANCH or bounded CBRANCH `op`, whose target is
+    /// (unlace) Is the direct BRANCH or bounded CBRANCH `op`, whose target is
     /// `dest`, an `-O2` tail call to another known function's entry (and so should
     /// be recovered as a `CALL` + `RETURN` rather than flow-followed into the
-    /// callee)?  See [`kuna_tailcalljump`](crate::tailcalljump).
+    /// callee)?  See [`unlace_tailcalljump`](crate::tailcalljump).
     ///
     /// // STUB(W4): ArchOption tailcalljump — gated on `option tailcalljump
     /// on|off`, default \b false (default-pipeline byte-identical).
@@ -449,11 +449,11 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `tailcalljump`) Same question as
+    /// (unlace `tailcalljump`) Same question as
     /// [`is_tail_call_branch`](FlowEnvironment::is_tail_call_branch) for a
     /// `CPUI_BRANCHIND` whose recovered jump table has the single destination
     /// `dest`, which may lie outside the declared extent.  See
-    /// [`kuna_is_tail_call_table`](crate::tailcalljump::kuna_is_tail_call_table).
+    /// [`unlace_is_tail_call_table`](crate::tailcalljump::unlace_is_tail_call_table).
     fn is_tail_call_table(
         &self,
         _fd: &Funcdata,
@@ -464,19 +464,19 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `tailcallframe`) Same question as
+    /// (unlace `tailcallframe`) Same question as
     /// [`is_tail_call_branch`](FlowEnvironment::is_tail_call_branch) for a `dest`
     /// the symbol table does NOT know: does the run of instructions ending at
     /// `op` tear down exactly the frame the entry block built, so the jump is a
     /// tail call into a callee no discovery oracle reached?  See
-    /// [`kuna_tailcallframe`](crate::tailcallframe).  The default shell
+    /// [`unlace_tailcallframe`](crate::tailcallframe).  The default shell
     /// reports `false`.
     fn is_frame_teardown_tail_call(&self, _fd: &Funcdata, _op: OpId, _dest: &Address) -> bool {
         false
     }
 
-    /// (kuna `evmcalls`) The image's classified EVM internal calls and
-    /// returns. See [`kuna_evmcalls`](crate::evmcalls). The default
+    /// (unlace `evmcalls`) The image's classified EVM internal calls and
+    /// returns. See [`unlace_evmcalls`](crate::evmcalls). The default
     /// shell has none.
     fn evm_calls(&self) -> Option<std::rc::Rc<crate::evmcalls::EvmCallMap>> {
         None
@@ -497,13 +497,13 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `objcresolve`) The method a message send at `callsite` was resolved
+    /// (unlace `objcresolve`) The method a message send at `callsite` was resolved
     /// to by an earlier decompile: the CALL goes there instead.
     fn query_call_retarget(&self, _callsite: &Address) -> Option<Address> {
         None
     }
 
-    /// (kuna `objcresolve`) The prototype a retargeted stub site keeps.
+    /// (unlace `objcresolve`) The prototype a retargeted stub site keeps.
     fn query_call_site_pieces(&self, _callsite: &Address) -> Option<crate::fspec::PrototypePieces> {
         None
     }
@@ -518,7 +518,7 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `pltlocal`) The function the PLT stub at a direct-call `entry` is
+    /// (unlace `pltlocal`) The function the PLT stub at a direct-call `entry` is
     /// bound to by the image's own relocations, which the call spec is built at.
     /// The default shell has no loader and reports `None`. See
     /// [`crate::p4_calls::pltlocal`].
@@ -526,7 +526,7 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `spsolve`) What the returns of the function at the direct-call
+    /// (unlace `spsolve`) What the returns of the function at the direct-call
     /// `entry` do to the stack pointer. See `p4_calls/spsolve.rs`.
     fn query_call_returns(&self, _entry: &Address) -> Option<crate::calleefacts::CalleeReturns> {
         None
@@ -604,7 +604,7 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `noreturn_known`) Is this one direct call to `entry`, the instruction
+    /// (unlace `noreturn_known`) Is this one direct call to `entry`, the instruction
     /// at `call` falling through to `fallthrough`, no-return although the callee
     /// is not? See
     /// [`is_proxy_no_return_at`](crate::p4_calls::calleenoreturn::is_proxy_no_return_at).
@@ -618,18 +618,18 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `funcboundflow`) Is the fall-through bound at a known function entry
+    /// (unlace `funcboundflow`) Is the fall-through bound at a known function entry
     /// enabled (`option funcboundflow`, the registered option `FuncboundFlow`)?  When on,
     /// `process_instruction` truncates a fall-through that reaches the entry of
     /// another known function (via [`query_call`](FlowEnvironment::query_call))
     /// instead of decoding the next function's body into this one.  The default
     /// shell reports `false` (no bounding, upstream behavior).  See
-    /// [`kuna_funcboundflow`](crate::funcboundflow).
+    /// [`unlace_funcboundflow`](crate::funcboundflow).
     fn funcbound_flow_enabled(&self) -> bool {
         false
     }
 
-    /// (kuna `funcboundflow`) Does the complete instruction at a distinct known
+    /// (unlace `funcboundflow`) Does the complete instruction at a distinct known
     /// function entry describe an unconditional `CPUI_RETURN`?
     ///
     /// A true answer lets the current flow admit exactly that instruction as a
@@ -642,51 +642,51 @@ pub trait FlowEnvironment {
         false
     }
 
-    /// (kuna `funcboundflow`) How far past the fall-through `next` the
+    /// (unlace `funcboundflow`) How far past the fall-through `next` the
     /// function's literal pool starts, from the extents the analysis tier
-    /// proved ([`kuna_pool_pad`](crate::funcboundflow::kuna_pool_pad));
+    /// proved ([`unlace_pool_pad`](crate::funcboundflow::unlace_pool_pad));
     /// `None` when none starts within the padding allowance. The default shell
     /// reports `None`, so no call's fall-through is bounded at a pool.
     fn funcbound_pool_pad(&self, _next: &Address) -> Option<u64> {
         None
     }
 
-    /// (kuna `funcboundflow`) Do the `len` bytes at `addr` decode as instructions
+    /// (unlace `funcboundflow`) Do the `len` bytes at `addr` decode as instructions
     /// that do nothing — the alignment padding a compiler can leave between a
     /// call and the literal pool after it
-    /// ([`kuna_is_padding_run`](crate::funcboundflow::kuna_is_padding_run))?
+    /// ([`unlace_is_padding_run`](crate::funcboundflow::unlace_is_padding_run))?
     /// The default shell reports `false`, keeping the fall-through.
     fn funcbound_padding_run(&self, _addr: &Address, _len: int4) -> bool {
         false
     }
 
-    /// (kuna `overlapbranch`) Is the overlapping-branch truncation enabled
+    /// (unlace `overlapbranch`) Is the overlapping-branch truncation enabled
     /// (`option overlapbranch`, the registered option `OverlapBranch`)?  When on,
     /// `process_instruction` truncates a conditional branch's fall-through
     /// instruction when the branch's own target lies strictly inside that
     /// instruction's encoding (the anti-disassembly junk-byte idiom), instead of
     /// letting the fall-through decode swallow the target and desynchronise the
     /// stream.  The default shell reports `false` (upstream behavior).  See
-    /// [`kuna_overlapbranch`](crate::overlapbranch).
+    /// [`unlace_overlapbranch`](crate::overlapbranch).
     fn overlap_branch_enabled(&self) -> bool {
         false
     }
 
-    /// (kuna `decodehalt`) Does an artificial halt planted because the decode
+    /// (unlace `decodehalt`) Does an artificial halt planted because the decode
     /// failed report itself?  When on, `handle_decode_error` buffers upstream's
     /// truncation warning and header warning at the failure, which the P9
     /// printer renders beside the `halt_baddata()` / `halt_unimplemented()`
     /// statement.  The live environment always reports; the default shell
     /// reports `false` (the silent `return;`).  See
-    /// [`kuna_decodehalt`](crate::decodehalt).
+    /// [`unlace_decodehalt`](crate::decodehalt).
     fn decode_halt_reports(&self) -> bool {
         false
     }
 
-    /// (kuna `honestgaps`) Does an instruction stepped over under the
+    /// (unlace `honestgaps`) Does an instruction stepped over under the
     /// `ignoreunimplemented` policy get a warning at its address naming it?
     /// The default shell reports `false`.  See
-    /// [`kuna_honestgaps`](crate::honestgaps).
+    /// [`unlace_honestgaps`](crate::honestgaps).
     fn honest_gaps(&self) -> bool {
         false
     }
@@ -696,20 +696,20 @@ pub trait FlowEnvironment {
         None
     }
 
-    /// (kuna `calltrampoline`) Is the direct-call target `dest` a fragment that
+    /// (unlace `calltrampoline`) Is the direct-call target `dest` a fragment that
     /// discards the pushed return address and jumps back into the instruction
     /// stream, so the `CALL` should be flowed through as a branch rather than
     /// decoding a fall-through at the return address?  See
-    /// [`kuna_calltrampoline`](crate::calltrampoline).  The default shell
+    /// [`unlace_calltrampoline`](crate::calltrampoline).  The default shell
     /// reports `false` (upstream behavior: every `CALL` falls through).
     fn is_return_discarding_trampoline(&self, _dest: &Address) -> bool {
         false
     }
 
-    /// (kuna `callpopret`) Is the direct-call target `dest` a fragment that pops
+    /// (unlace `callpopret`) Is the direct-call target `dest` a fragment that pops
     /// the pushed return address off the stack and `ret`s through the word above
     /// it — returning to the caller's own caller, so control never reaches the
-    /// return address?  See [`kuna_callpopret`](crate::callpopret).  The
+    /// return address?  See [`unlace_callpopret`](crate::callpopret).  The
     /// default shell reports `false` (upstream behavior: every `CALL` falls
     /// through).
     fn pops_return_address(&self, _dest: &Address) -> bool {
@@ -747,7 +747,7 @@ pub trait FlowEnvironment {
     /// Returns `Ok(None)` when there is no callee symbol at `entry` (the C++
     /// `fc->getFuncdata() == 0` short-circuit in `inlineSubFunction`).  The W3
     /// shell has no symbol table / architecture and reports `None`.
-    fn build_inline_funcdata(&self, _entry: &Address) -> KunaResult<Option<Funcdata>> {
+    fn build_inline_funcdata(&self, _entry: &Address) -> UnlaceResult<Option<Funcdata>> {
         Ok(None)
     }
 }
@@ -772,17 +772,17 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     env: &'a E,
     /// Addresses which are permanently unprocessed (C++ `unprocessed`).
     unprocessed: Vec<Address>,
-    /// (kuna) The subset of [`Self::unprocessed`] that flow reached by leaving the
+    /// (unlace) The subset of [`Self::unprocessed`] that flow reached by leaving the
     /// declared extent, i.e. every address [`Self::handle_out_of_bounds`] warned
     /// about.  [`Self::fillin_branch_stubs`] registers these in [`Self::visited`]
     /// so a branch to one resolves to its stub instead of aborting the function.
     outofbounds: std::collections::BTreeSet<Address>,
-    /// (kuna `funcboundflow`) Foreign function entries that stopped a
+    /// (unlace `funcboundflow`) Foreign function entries that stopped a
     /// fall-through walk. An unprocessed target at or beyond one of these
     /// same-space cutoffs was deliberately clipped just like an out-of-range
     /// target; an address before the cutoff remains a genuine missing-op error.
     funcbound_cutoffs: std::collections::BTreeSet<Address>,
-    /// (kuna `funcboundflow`) Is the literal-pool bound live: the gate is on and
+    /// (unlace `funcboundflow`) Is the literal-pool bound live: the gate is on and
     /// the code space is byte-addressed (a pool word's address is a byte
     /// address, as the fall-through's is).
     pool_bound: bool,
@@ -803,11 +803,11 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     insn_count: uint4,
     /// Maximum number of instructions (C++ `insn_max`).
     insn_max: uint4,
-    /// (kuna `jumptablework`) Instructions flowed at each jump-table recovery,
+    /// (unlace `jumptablework`) Instructions flowed at each jump-table recovery,
     /// summed.
-    kuna_jt_work: u64,
-    /// (kuna `jumptablework`) The bound was reached and warned about.
-    kuna_jt_work_spent: bool,
+    unlace_jt_work: u64,
+    /// (unlace `jumptablework`) The bound was reached and warned about.
+    unlace_jt_work_spent: bool,
     /// Start of range in which we are allowed to flow (C++ `baddr`).
     baddr: Address,
     /// End of range in which we are allowed to flow (C++ `eaddr`).
@@ -819,7 +819,7 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     /// Does the function have registered flow override instructions
     /// (C++ `flowoverride_present`).
     flowoverride_present: bool,
-    /// Whether loader-proven stub transfers (`kuna_stubtailcall`) apply to this run.
+    /// Whether loader-proven stub transfers (`unlace_stubtailcall`) apply to this run.
     loader_transfers_present: bool,
     /// Exact instruction addresses where a `BRANCH` override applied during
     /// this flow follow.
@@ -849,14 +849,14 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     /// cannot be inlined again (the cycle break that prints "Could not inline
     /// here").
     inline_recursion: std::collections::BTreeSet<Address>,
-    /// (kuna `overlapbranch`) The `(fall-through address, branch target)` pair
+    /// (unlace `overlapbranch`) The `(fall-through address, branch target)` pair
     /// recorded when the instruction just processed was a conditional branch with
     /// a forward target.  Consumed by the very next
     /// [`process_instruction`](FlowInfo::process_instruction), which truncates the
     /// fall-through when the branch target turns out to lie strictly inside it.
-    /// See [`kuna_overlapbranch`](crate::overlapbranch).
+    /// See [`unlace_overlapbranch`](crate::overlapbranch).
     overlap_watch: Option<(Address, Address)>,
-    /// (kuna `overlapbranch`) Direct target of the CBRANCH seen while
+    /// (unlace `overlapbranch`) Direct target of the CBRANCH seen while
     /// xref-classifying the current instruction, staged for `overlap_watch`.
     overlap_cbranch_target: Option<Address>,
     /// Entry address of the call-fixup whose body is currently being woven in
@@ -866,12 +866,12 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     /// the SAME entry must `cancel_inject_id` so the injection does not recurse.
     /// `None` outside a call-fixup injection (the user-op path passes NULL `fc`).
     injecting_entry: Option<Address>,
-    /// (kuna `itaniumeh`) Instructions of a landing-pad stub: the pad and its
+    /// (unlace `itaniumeh`) Instructions of a landing-pad stub: the pad and its
     /// fall-through successors, up to the stub's first branch.
     eh_pad_stub: std::collections::BTreeSet<Address>,
-    /// (kuna `itaniumeh`) Landing pads that already have their edge.
+    /// (unlace `itaniumeh`) Landing pads that already have their edge.
     eh_records_seen: std::collections::BTreeSet<u64>,
-    /// (kuna `javatry`) The DEX model of a method decoded with the option on,
+    /// (unlace `javatry`) The DEX model of a method decoded with the option on,
     /// and its try items.
     java_try: Option<(
         crate::javatry::JavaTryPlan,
@@ -932,7 +932,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             .as_ref()
             .filter(|_| {
                 data.get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::coreoptions::JavaTry>()
                     .0
             })
@@ -959,8 +959,8 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             block_edge2: Vec::new(),
             insn_count: 0,
             insn_max: !0u32,
-            kuna_jt_work: 0,
-            kuna_jt_work_spent: false,
+            unlace_jt_work: 0,
+            unlace_jt_work_spent: false,
             baddr,
             eaddr,
             minaddr: entry.clone(),
@@ -1065,7 +1065,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     pub fn has_reinterpreted(&self) -> bool {
         (self.flags & flow_flags::reinterpreted_present) != 0
     }
-    /// (kuna) Did \b this flow reach a branch target with no mapped bytes.
+    /// (unlace) Did \b this flow reach a branch target with no mapped bytes.
     pub fn has_unmapped_target(&self) -> bool {
         (self.flags & flow_flags::unmappedtarget_present) != 0
     }
@@ -1140,7 +1140,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     ///
     /// If the instruction generated no p-code, fall-thru to the next instruction.
     /// If no op is ultimately found, returns an error (the C++ `LowlevelError`).
-    pub fn target(&self, addr: &Address) -> KunaResult<OpId> {
+    pub fn target(&self, addr: &Address) -> UnlaceResult<OpId> {
         let mut cur = addr.clone();
         while let Some(stat) = self.visited.get(&cur) {
             if !stat.seqnum.get_addr().is_invalid() {
@@ -1152,7 +1152,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             // Visit fall thru address in case of no-op:
             cur = &cur + stat.size as i64;
         }
-        Err(KunaError::lowlevel(Self::target_error_message(addr)))
+        Err(UnlaceError::lowlevel(Self::target_error_message(addr)))
     }
 
     /// Snapshot the `visited` map for a post-FlowInfo `target` lookup
@@ -1181,7 +1181,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// Returns `Ok(Some(op))` for a properly-internal branch, `Ok(None)` with the
     /// fall-thru address passed back in `res` when the relative branch is really to
     /// the next instruction, and `Err` otherwise (C++ `LowlevelError`).
-    fn find_rel_target(&self, op: OpId, res: &mut Address) -> KunaResult<Option<OpId>> {
+    fn find_rel_target(&self, op: OpId, res: &mut Address) -> UnlaceResult<Option<OpId>> {
         let o = self
             .data
             .obank()
@@ -1231,12 +1231,12 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         let _ = opaddr.print_raw(&mut raw);
         msg.push_str(&raw);
         msg.push(')');
-        Err(KunaError::lowlevel(msg))
+        Err(UnlaceError::lowlevel(msg))
     }
 
     /// Return the p-code op a BRANCH/CBRANCH refers to (C++ `branchTarget`,
     /// `flow.cc:189`).
-    pub fn branch_target(&self, op: OpId) -> KunaResult<OpId> {
+    pub fn branch_target(&self, op: OpId) -> UnlaceResult<OpId> {
         let in0 = self
             .data
             .obank()
@@ -1299,7 +1299,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     }
 
     /// Register a new (non fall-thru) flow target (C++ `newAddress`, `flow.cc:221`).
-    fn new_address(&mut self, from: OpId, to: &Address) -> KunaResult<()> {
+    fn new_address(&mut self, from: OpId, to: &Address) -> UnlaceResult<()> {
         if to < &self.baddr || &self.eaddr < to {
             let fromaddr = self
                 .data
@@ -1318,7 +1318,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             self.op_mark_start_basic(op);
             return Ok(());
         }
-        // (kuna, RE-need `discovered-mapped-function-mislabeled`) The target has
+        // (unlace, RE-need `discovered-mapped-function-mislabeled`) The target has
         // no bytes in the image, so queueing it decodes nothing: the walk pops it
         // and `load_fill` raises out of the whole flow follow, losing a function
         // whose own bytes disassemble cleanly.  End the path instead, exactly as a
@@ -1398,11 +1398,11 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// STUB(W4): the `data.warning`/`warningHeader` reporting is the W4 comment
     /// store; the W3 shell sets the discovery flag and returns the error in the
     /// `error_outofbounds` case (faithful), suppressing only the warning text.
-    fn handle_out_of_bounds(&mut self, fromaddr: &Address, toaddr: &Address) -> KunaResult<()> {
+    fn handle_out_of_bounds(&mut self, fromaddr: &Address, toaddr: &Address) -> UnlaceResult<()> {
         if (self.flags & flow_flags::ignore_outofbounds) == 0 {
             let msg = Self::out_of_bounds_message(fromaddr, toaddr);
             if (self.flags & flow_flags::error_outofbounds) == 0 {
-                // (kuna) The C++ `data.warning`/`data.warningHeader` calls, no
+                // (unlace) The C++ `data.warning`/`data.warningHeader` calls, no
                 // longer stubbed: the range is the whole entry-point space unless
                 // a caller declares a function extent, so this fires only under a
                 // declared boundary — and a declared end that cuts real flow must
@@ -1413,13 +1413,13 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                     self.data.warning_header("Function flows out of bounds");
                 }
             } else {
-                return Err(KunaError::lowlevel(msg));
+                return Err(UnlaceError::lowlevel(msg));
             }
         }
         Ok(())
     }
 
-    /// (kuna) Report flow into an address the load image cannot supply bytes for.
+    /// (unlace) Report flow into an address the load image cannot supply bytes for.
     ///
     /// Unlike [`Self::handle_out_of_bounds`] this has no error/ignore mode: an
     /// unmapped address is a fact about the image, not a declared-range policy,
@@ -1438,7 +1438,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         self.note_unmapped_flow(&msg, toaddr);
     }
 
-    /// (kuna) Warn at `addr`, and once per function in the header, that flow reached unmapped memory.
+    /// (unlace) Warn at `addr`, and once per function in the header, that flow reached unmapped memory.
     fn note_unmapped_flow(&mut self, msg: &str, addr: &Address) {
         self.data.warning(msg, addr);
         if !self.has_unmapped_target() {
@@ -1448,12 +1448,12 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         }
     }
 
-    /// (kuna `mappedflowboundary`) Did this checked decode fail on an instruction that flow
+    /// (unlace `mappedflowboundary`) Did this checked decode fail on an instruction that flow
     /// reached on a mapped byte but whose encoding runs past the mapped run? That is proved
     /// from the image, whatever error the decode raised first. The flow's own entry has no
     /// decoded path to retain, and an in-lined callee's missing halt would be cloned into a
     /// normal return, so both keep the error.
-    fn kuna_truncated_mapped_instruction(&self, curaddr: &Address) -> bool {
+    fn unlace_truncated_mapped_instruction(&self, curaddr: &Address) -> bool {
         !self.is_flow_for_inline()
             && curaddr != self.data.get_address()
             && self.env.mapped_flow_image().is_some_and(|image| {
@@ -1484,7 +1484,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// `reinterpreted`, `flow.cc:624`).
     ///
     /// STUB(W4): warning store; the `error_reinterpreted` exception is faithful.
-    fn reinterpreted(&mut self, addr: &Address) -> KunaResult<()> {
+    fn reinterpreted(&mut self, addr: &Address) -> UnlaceResult<()> {
         let addr2 = match self.visited_last_le_owned(addr) {
             Some((k, _)) => k,
             None => return Ok(()), // Should never happen
@@ -1508,7 +1508,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         s.push(')');
         s.push('\n');
         if (self.flags & flow_flags::error_reinterpreted) != 0 {
-            return Err(KunaError::lowlevel(s));
+            return Err(UnlaceError::lowlevel(s));
         }
         if (self.flags & flow_flags::reinterpreted_present) == 0 {
             self.flags |= flow_flags::reinterpreted_present;
@@ -1524,7 +1524,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// Create an artificial halt p-code op (C++ `artificialHalt`, `flow.cc:610`).
     ///
     /// A special form of RETURN op annotated with the desired \e type.
-    fn artificial_halt(&mut self, addr: &Address, flag: uint4) -> KunaResult<OpId> {
+    fn artificial_halt(&mut self, addr: &Address, flag: uint4) -> UnlaceResult<OpId> {
         let haltop = self.data.new_op(1, addr.clone());
         let retop = self.env.resolve_typeop(OpCode::CPUI_RETURN);
         self.data.op_set_opcode(haltop, retop);
@@ -1551,7 +1551,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
     /// the `funcdata_op` wave's `op_destroy_raw` returns the boundary error.  The set
     /// of ops to delete is computed faithfully; the destruction is deferred and
     /// recorded as a loss.  Returns the list of ops the C++ would have destroyed.
-    fn delete_remaining_ops(&mut self, start: Option<OpId>) -> KunaResult<()> {
+    fn delete_remaining_ops(&mut self, start: Option<OpId>) -> UnlaceResult<()> {
         let start = match start {
             Some(s) => s,
             None => return Ok(()), // oiter == endDead(): nothing to delete
@@ -1586,7 +1586,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         maxtime: uintm,
         cursor: &mut Option<OpId>,
         startbasic: &mut bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.data.op_set_opcode_code(curop, OpCode::CPUI_BRANCH);
         self.new_address(curop, dest)?;
         if self
@@ -1625,7 +1625,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
         start: Option<OpId>,
         startbasic: &mut bool,
         isfallthru: &mut bool,
-    ) -> KunaResult<Option<OpId>> {
+    ) -> UnlaceResult<Option<OpId>> {
         let mut op: Option<OpId> = None;
         *isfallthru = false;
         let mut maxtime: uintm = 0; // Deepest internal relative branch
@@ -1641,7 +1641,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                 self.op_mark_start_basic(curop);
                 *startbasic = false;
             }
-            // (kuna) GH-8817: reclassify V850 jmp [reg] CALLIND -> BRANCHIND.
+            // (unlace) GH-8817: reclassify V850 jmp [reg] CALLIND -> BRANCHIND.
             if self.env.is_v850_indirect_jmp(&self.data, curop) {
                 let branchind = self.env.resolve_typeop(OpCode::CPUI_BRANCHIND);
                 self.data.op_set_opcode(curop, branchind);
@@ -1685,7 +1685,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                         *isfallthru = true;
                         break;
                     } else {
-                        // (kuna overlapbranch) stage the machine-level conditional
+                        // (unlace overlapbranch) stage the machine-level conditional
                         // target for the fall-through overlap check.
                         self.overlap_cbranch_target = Some(destaddr.clone());
                         self.new_address(curop, &destaddr)?; // generate branch address
@@ -1720,7 +1720,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                         .then(|| self.tail_call_kind(curop, &destaddr))
                         .flatten()
                     {
-                        // (kuna) tee-O2 tail-jump: a direct `jmp` to another known
+                        // (unlace) tee-O2 tail-jump: a direct `jmp` to another known
                         // function's entry is a tail call, instead of
                         // new_address()-following the jump INTO the callee (which
                         // would inline a PLT thunk and mis-render it as a
@@ -1835,7 +1835,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                         }
                         continue;
                     }
-                    // (kuna) GH-6882: SPARC struct-return `unimp` after a call.
+                    // (unlace) GH-6882: SPARC struct-return `unimp` after a call.
                     if let Some(producer) =
                         self.env.sparc_struct_ret_trap_producer(&self.data, curop)
                     {
@@ -1909,7 +1909,7 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                     } else if !destaddr.is_constant()
                         && (popret || self.env.is_return_discarding_trampoline(&destaddr))
                     {
-                        // (kuna calltrampoline / callpopret) The callee throws
+                        // (unlace calltrampoline / callpopret) The callee throws
                         // the return address away -- jumping back into the
                         // stream, or `ret`ing through the word above it -- so
                         // control never reaches the return address and the
@@ -2008,7 +2008,7 @@ following this call as a branch"
         Ok(op)
     }
 
-    /// (kuna `evmcalls`) What the EVM `JUMP` holding `op` is, when the image
+    /// (unlace `evmcalls`) What the EVM `JUMP` holding `op` is, when the image
     /// classification says it calls a function whose return label is the next
     /// instruction, or returns.
     fn evm_jump(&self, op: OpId) -> Option<EvmJump> {
@@ -2042,7 +2042,7 @@ following this call as a branch"
         ))
     }
 
-    /// (kuna) Is `op` past every op an earlier relative branch of its instruction
+    /// (unlace) Is `op` past every op an earlier relative branch of its instruction
     /// targets?  A BRANCH that an internal branch skips does not end the
     /// instruction, so it is never a tail call: the tail-call rewrite plants a
     /// RETURN whose fresh time would delete the ops that branch reaches (#686).
@@ -2070,7 +2070,7 @@ following this call as a branch"
             .clone()
     }
 
-    /// (kuna) Rewrite the jump `op` to `destaddr` as a tail call: a CALL with a
+    /// (unlace) Rewrite the jump `op` to `destaddr` as a tail call: a CALL with a
     /// full call spec (so the callee resolves by name and its return value flows
     /// out) followed by an artificial RETURN, unless the callee is no-return and
     /// its halt is already planted.  The mirror of the CPUI_CALL arm and
@@ -2081,7 +2081,7 @@ following this call as a branch"
         op: OpId,
         destaddr: &Address,
         tailkind: &str,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.data.op_set_opcode_code(op, OpCode::CPUI_CALL);
         let site = self
             .data
@@ -2105,7 +2105,7 @@ following this call as a branch"
 
     /// Keep the false edge at the next instruction and call only on the taken
     /// edge. Relative targets keep both synthetic blocks at the branch site.
-    fn recover_conditional_tail_call(&mut self, branch: OpId, dest: &Address) -> KunaResult<()> {
+    fn recover_conditional_tail_call(&mut self, branch: OpId, dest: &Address) -> UnlaceResult<()> {
         let (skip, taken, call) =
             crate::tailcalljump::conditional_tail_branches(&mut self.data, branch, dest)?;
         self.recover_tail_call(call, dest, "tailcalljump")?;
@@ -2133,11 +2133,11 @@ following this call as a branch"
         Ok(())
     }
 
-    /// (kuna `tailcalljump`) The destination of the computed jump `op` when its
+    /// (unlace `tailcalljump`) The destination of the computed jump `op` when its
     /// recovered table `jt_idx` names exactly one address and the environment
     /// accepts that address as a tail-call target.
     fn tail_call_table_dest(&self, op: OpId, jt_idx: usize) -> Option<Address> {
-        let dest = crate::tailcalljump::kuna_sole_table_destination(
+        let dest = crate::tailcalljump::unlace_sole_table_destination(
             self.data.get_jump_table(jt_idx as int4),
         )?;
         if self.is_inside_declared_extent(&dest) {
@@ -2149,13 +2149,13 @@ following this call as a branch"
             .then_some(dest)
     }
 
-    /// (kuna `tailcalljump`) Turn the computed jump `op` into a tail call to its
+    /// (unlace `tailcalljump`) Turn the computed jump `op` into a tail call to its
     /// sole table destination `dest`: the input becomes a code reference to
     /// `dest`, exactly as upstream `RuleSwitchSingle` rewrites a one-destination
     /// switch, and the resulting direct jump takes the direct tail-call rewrite.
     /// The register that carried the address is recorded on the call spec so it
     /// is not recovered as an argument.
-    fn recover_table_tail_call(&mut self, op: OpId, dest: &Address) -> KunaResult<()> {
+    fn recover_table_tail_call(&mut self, op: OpId, dest: &Address) -> UnlaceResult<()> {
         let oldin = self.data.obank().get(op).and_then(|o| o.get_in(0));
         let carrier = self.jump_target_carrier(op);
         let coderef = self.data.new_code_ref(dest);
@@ -2179,7 +2179,7 @@ following this call as a branch"
         Ok(())
     }
 
-    /// (kuna `tailcalljump`) The register a computed jump `op` reads its target
+    /// (unlace `tailcalljump`) The register a computed jump `op` reads its target
     /// from (`bx r1`, `mov pc,ip`), traced back through the COPY and mask ops of
     /// the jump's own instruction to a register that instruction does not write;
     /// `None` when the target is computed from no single register
@@ -2226,9 +2226,9 @@ following this call as a branch"
     ///
     /// A target inside the current function's declared extent is
     /// intraprocedural, so neither inference rule is consulted there. Else,
-    /// [`kuna_tailcalljump`](crate::tailcalljump) is asked first, so a
+    /// [`unlace_tailcalljump`](crate::tailcalljump) is asked first, so a
     /// branch to a known function entry keeps the existing decision and the
-    /// existing `tailcalljump:` warning text; [`kuna_tailcallframe`](
+    /// existing `tailcalljump:` warning text; [`unlace_tailcallframe`](
     /// crate::tailcallframe) then gets the targets the symbol table does not
     /// know.  The returned name is the option that fired, so the introduced call
     /// is attributable to the rule that introduced it.
@@ -2239,7 +2239,7 @@ following this call as a branch"
             .get(op)
             .expect("tail_call_kind: stale op")
             .get_addr();
-        // (kuna itaniumeh) A jump out of a landing-pad stub enters the pad's
+        // (unlace itaniumeh) A jump out of a landing-pad stub enters the pad's
         // `.cold` code, which belongs to this function.
         if self.eh_pad_stub.contains(site) {
             return None;
@@ -2256,19 +2256,19 @@ following this call as a branch"
     /// is nonzero only when `function bounds` / `--define-function START-END`
     /// supplied an explicit size; the `baddr`/`eaddr` pair is the same range the
     /// flow follower enforces (inclusive at the end).
-    /// (kuna `fdeflowbound`) Does fall-through to `next` leave the unwind-table
+    /// (unlace `fdeflowbound`) Does fall-through to `next` leave the unwind-table
     /// extent (`.eh_frame` FDE, `.pdata`, Go `functab`) that starts at this
     /// function's entry? The extent is the compiler's own statement of where the
     /// function ends, so walking past it decodes the next function's bytes.
     fn leaves_own_fde(&self, next: &Address) -> bool {
         let arch = self.data.get_arch();
-        if !arch.kuna_options.get::<crate::flow::FdeFlowBound>().0
+        if !arch.unlace_options.get::<crate::flow::FdeFlowBound>().0
             || self.is_inside_declared_extent(next)
         {
             return false;
         }
         let entry = self.data.get_address().get_offset();
-        let extents = &arch.kuna_fde_extents;
+        let extents = &arch.unlace_fde_extents;
         let i = extents.partition_point(|&(start, _)| start < entry);
         extents
             .get(i)
@@ -2295,20 +2295,20 @@ following this call as a branch"
         &mut self,
         curaddr: &Address,
         startbasic: &mut bool,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let mut isfallthru = true;
         let mut step: int4;
-        // (kuna overlapbranch) the pair staged by the previous instruction; valid
+        // (unlace overlapbranch) the pair staged by the previous instruction; valid
         // for exactly this call and cleared whether or not it fires.
         let overlap_watch = self.overlap_watch.take();
 
         if self.insn_count >= self.insn_max {
             if (self.flags & flow_flags::error_toomanyinstructions) != 0 {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Flow exceeded maximum allowable instructions",
                 ));
             }
-            // (kuna) Truncate and STOP.  The C++ plants the halt and then decodes
+            // (unlace) Truncate and STOP.  The C++ plants the halt and then decodes
             // `curaddr` anyway, so the next address is queued and the next call
             // truncates again: the "truncation" still walks every reachable
             // instruction, which on an obfuscated function of millions of them is
@@ -2428,7 +2428,7 @@ following this call as a branch"
                 }
             }
             Err(err) => {
-                let overlap_step = if matches!(err, KunaError::DataUnavail { .. }) {
+                let overlap_step = if matches!(err, UnlaceError::DataUnavail { .. }) {
                     self.env.mapped_flow_image().and_then(|image| {
                         crate::mappedflowboundary::unmapped_overlap_step(
                             image,
@@ -2443,7 +2443,7 @@ following this call as a branch"
                 };
                 step = match overlap_step {
                     Some(step) => step,
-                    None if self.kuna_truncated_mapped_instruction(curaddr) => {
+                    None if self.unlace_truncated_mapped_instruction(curaddr) => {
                         self.artificial_halt(curaddr, pcodeop_flags::missing)?;
                         let msg = crate::mappedflowboundary::truncated_warning(curaddr);
                         self.note_unmapped_flow(&msg, curaddr);
@@ -2454,7 +2454,7 @@ following this call as a branch"
             }
         }
 
-        // (kuna overlapbranch) The previous instruction was a conditional branch
+        // (unlace overlapbranch) The previous instruction was a conditional branch
         // whose own target lands strictly inside the instruction just decoded --
         // the fall-through decode has swallowed the branch target (the x86
         // anti-disassembly junk-lead-byte idiom).  The explicitly encoded target
@@ -2471,12 +2471,12 @@ following this call as a branch"
                 None
             }
         });
-        if crate::overlapbranch::kuna_overlaps_pending_branch(
+        if crate::overlapbranch::unlace_overlaps_pending_branch(
             self.env.overlap_branch_enabled(),
             curaddr.get_offset(),
             step,
             overlap_offsets,
-        ) && !self.kuna_overlap_reconverges(curaddr, step, &overlap_watch)
+        ) && !self.unlace_overlap_reconverges(curaddr, step, &overlap_watch)
         {
             let bogus = if emptyflag {
                 self.dead_head()
@@ -2499,7 +2499,7 @@ truncating the fall-through here"
             step = 1;
         }
 
-        // (kuna javatry) Dalvik `throw` ends its path: its RETURN is a halt, so
+        // (unlace javatry) Dalvik `throw` ends its path: its RETURN is a halt, so
         // return recovery gives it no value.
         if let Some((_, model)) = self.java_try.as_ref() {
             if model.bytes_at(curaddr.get_offset(), 1) == Some(&[0x27]) {
@@ -2540,7 +2540,7 @@ truncating the fall-through here"
             self.maxaddr = endaddr.clone();
         }
 
-        if !crate::nullable_reloc::relocations(&self.data.get_arch().kuna_states).is_empty() {
+        if !crate::nullable_reloc::relocations(&self.data.get_arch().unlace_states).is_empty() {
             let first = if emptyflag {
                 self.dead_head()
             } else {
@@ -2562,11 +2562,11 @@ truncating the fall-through here"
             marker.and_then(|m| self.dead_next(m))
         };
 
-        self.overlap_cbranch_target = None; // (kuna overlapbranch) per-instruction
+        self.overlap_cbranch_target = None; // (unlace overlapbranch) per-instruction
         let mut ends_in_call = false;
         let mut call_before_pad = false;
         if let Some(mut firstop) = first_new {
-            // (kuna retpushedhalf) The push/pop stack-maintenance shape is only
+            // (unlace retpushedhalf) The push/pop stack-maintenance shape is only
             // visible here: copy propagation later collapses the store and the
             // load into a bare register-to-register COPY.
             let mut insn_ops = vec![firstop];
@@ -2605,7 +2605,7 @@ truncating the fall-through here"
             if self
                 .data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::LaneFuse>()
                 .on
             {
@@ -2638,18 +2638,18 @@ truncating the fall-through here"
                         || self
                             .data
                             .get_arch()
-                            .kuna_options
+                            .unlace_options
                             .get::<crate::coreoptions::LaneFuse>()
                             .all;
-                    if !self.data.kuna_vector_code
+                    if !self.data.unlace_vector_code
                         && crate::lanefuse::has_vector_run(&self.data, &ops)
                     {
-                        self.data.kuna_vector_code = true;
+                        self.data.unlace_vector_code = true;
                     }
                     crate::lanefuse::fuse(&mut self.data, &ops, vex)?;
-                    if !self.data.kuna_vector_code {
+                    if !self.data.unlace_vector_code {
                         let vector = &self.data.get_arch().vector_userops;
-                        self.data.kuna_vector_code = ops.iter().any(|&op| {
+                        self.data.unlace_vector_code = ops.iter().any(|&op| {
                             self.data.obank().get(op).is_some_and(|o| {
                                 o.code() == OpCode::CPUI_CALLOTHER
                                     && o.get_in(0)
@@ -2671,7 +2671,7 @@ truncating the fall-through here"
             if self
                 .data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::neonintrin::NeonIntrin>()
                 .fuse
             {
@@ -2686,7 +2686,7 @@ truncating the fall-through here"
             if self
                 .data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::VexZeroUpper>()
                 .0
             {
@@ -2712,7 +2712,7 @@ truncating the fall-through here"
                     && (!self
                         .data
                         .get_arch()
-                        .kuna_options
+                        .unlace_options
                         .get::<crate::itaniumeh::ItaniumEh>()
                         .catch_only
                         || site
@@ -2739,7 +2739,7 @@ truncating the fall-through here"
                     crate::itaniumeh::insert_unwind_edge(&mut self.data, op, &pad)?;
                 }
             }
-            // (kuna `msvceh`) An MSVC try region: the first call in it gets one
+            // (unlace `msvceh`) An MSVC try region: the first call in it gets one
             // edge per catch funclet, the first handler's test first; a catch
             // funclet's `ret` decoded inside a parent continues in the parent.
             if let Some(table) = eh_table.as_deref().filter(|_| !self.is_flow_for_inline()) {
@@ -2753,7 +2753,7 @@ truncating the fall-through here"
                 let catch_only = self
                     .data
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::itaniumeh::ItaniumEh>()
                     .catch_only;
                 let sites: Vec<_> = sites
@@ -2796,7 +2796,7 @@ truncating the fall-through here"
                 }
             }
             if flowoverride != crate::overrides::flow_type::NONE {
-                // (kuna) A refused override is a rejected caller assertion, not a
+                // (unlace) A refused override is a rejected caller assertion, not a
                 // dead function.  `override_flow` refuses before it mutates
                 // anything, so what follows is the IR this run would have produced
                 // with no override at all -- decompile it, and let the front-end
@@ -2823,7 +2823,7 @@ truncating the fall-through here"
 
         if isfallthru {
             let next = curaddr + step as i64;
-            // (kuna overlapbranch) arm the overlap check for the fall-through this
+            // (unlace overlapbranch) arm the overlap check for the fall-through this
             // instruction is about to push: only a forward conditional target can
             // be swallowed by the fall-through's own encoding.
             self.overlap_watch = match self.overlap_cbranch_target.take() {
@@ -2831,9 +2831,9 @@ truncating the fall-through here"
                 _ => None,
             };
             if self.is_funcbound_fallthru(&next) {
-                // (kuna funcboundflow) Fall-through has reached the entry of the
+                // (unlace funcboundflow) Fall-through has reached the entry of the
                 // next function -- the callee just executed (an unnamed static
-                // `exit`/`abort`/`die()` wrapper kuna could not prove no-return)
+                // `exit`/`abort`/`die()` wrapper unlace could not prove no-return)
                 // must be no-return.  Plant a no-return artificial RETURN and
                 // stop, instead of decoding the next function's body into this
                 // one (the cross-function merge bug).  Mirrors the noreturn-call
@@ -2884,7 +2884,7 @@ truncating the fall-through here"
                 self.data.warning(text, curaddr);
                 isfallthru = false;
             } else if ends_in_call && self.is_pool_fallthru(&next) {
-                // (kuna funcboundflow) The call's fall-through is the function's
+                // (unlace funcboundflow) The call's fall-through is the function's
                 // own literal pool, so the call does not return. The halt stays
                 // in the call's block, as a known no-return callee's does, and
                 // `next` out of `visited`: only this fall-through reaches a pool
@@ -2896,7 +2896,7 @@ truncating the fall-through here"
                 );
                 isfallthru = false;
             } else if call_before_pad {
-                // (kuna itaniumeh) Only the unwinder enters a landing pad, so a
+                // (unlace itaniumeh) Only the unwinder enters a landing pad, so a
                 // call whose fall-through is one does not return.
                 self.artificial_halt(curaddr, pcodeop_flags::noreturn)?;
                 self.data.warning(
@@ -2926,15 +2926,15 @@ truncating the fall-through here"
         Ok(isfallthru)
     }
 
-    /// (kuna `overlapbranch`) Do the fall-through decode at `curaddr` and the
+    /// (unlace `overlapbranch`) Do the fall-through decode at `curaddr` and the
     /// branch target's own decode end at the same address?  True means they are
     /// the same instruction with leading bytes skipped — glibc's conditional-`LOCK`
     /// idiom, where both streams are real — and the truncation must not fire.
-    /// See [`overlapbranch::kuna_streams_reconverge`](crate::overlapbranch).
+    /// See [`overlapbranch::unlace_streams_reconverge`](crate::overlapbranch).
     ///
     /// Runs only once the cheap strict-interior test has already matched, which it
     /// never does in ordinary code, so the extra decode costs nothing in practice.
-    fn kuna_overlap_reconverges(
+    fn unlace_overlap_reconverges(
         &self,
         curaddr: &Address,
         step: int4,
@@ -2945,7 +2945,7 @@ truncating the fall-through here"
             None => return true,
         };
         let len = self.env.translate().instruction_length(target).ok();
-        crate::overlapbranch::kuna_streams_reconverge(
+        crate::overlapbranch::unlace_streams_reconverge(
             curaddr.get_offset(),
             step,
             target.get_offset(),
@@ -2953,7 +2953,7 @@ truncating the fall-through here"
         )
     }
 
-    /// (kuna `funcboundflow`) Is the last op of one instruction's `ops` a
+    /// (unlace `funcboundflow`) Is the last op of one instruction's `ops` a
     /// `CALL`/`CALLIND` that no `CBRANCH` makes conditional?
     fn ends_in_unconditional_call(&self, ops: &[OpId]) -> bool {
         let mut last = None;
@@ -2968,19 +2968,19 @@ truncating the fall-through here"
         !conditional && matches!(last, Some(OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
     }
 
-    /// (kuna `funcboundflow`) Is the fall-through to `next` the start of this
+    /// (unlace `funcboundflow`) Is the fall-through to `next` the start of this
     /// function's literal pool, allowing for the compiler's alignment padding?
     /// See
-    /// [`kuna_should_bound_at_pool`](crate::funcboundflow::kuna_should_bound_at_pool).
+    /// [`unlace_should_bound_at_pool`](crate::funcboundflow::unlace_should_bound_at_pool).
     fn is_pool_fallthru(&self, next: &Address) -> bool {
         let pad = self.env.funcbound_pool_pad(next);
-        crate::funcboundflow::kuna_should_bound_at_pool(
+        crate::funcboundflow::unlace_should_bound_at_pool(
             pad,
             pad.is_some_and(|pad| pad == 0 || self.env.funcbound_padding_run(next, pad as int4)),
         )
     }
 
-    /// (kuna `funcboundflow`) Should a fall-through to `next` be truncated because
+    /// (unlace `funcboundflow`) Should a fall-through to `next` be truncated because
     /// it is the entry of another known function (so the walk has run off the end
     /// of the current function)?  Gated by `option funcboundflow`
     /// (`funcbound_flow_enabled`); when on, resolves `next` against the symbol
@@ -2989,7 +2989,7 @@ truncating the fall-through here"
     /// function extent in the same flow. A foreign entry whose instruction is a
     /// real `RETURN` is admitted; processing that one instruction terminates the
     /// walk naturally and cannot consume anything beyond it. See
-    /// [`kuna_funcboundflow`].
+    /// [`unlace_funcboundflow`].
     fn is_funcbound_fallthru(&self, next: &Address) -> bool {
         if self.leaves_own_fde(next) {
             return true;
@@ -3011,7 +3011,7 @@ truncating the fall-through here"
         let next_is_unconditional_return = next_is_known_function
             && !next_is_self
             && self.env.funcbound_entry_is_unconditional_return(next);
-        crate::funcboundflow::kuna_should_bound_at_entry(
+        crate::funcboundflow::unlace_should_bound_at_entry(
             true,
             next_is_known_function,
             next_is_self,
@@ -3024,9 +3024,9 @@ truncating the fall-through here"
     ///
     /// Returns the instruction `step` to record.  The unimplemented/baddata
     /// branches and the ignore/error/truncate policy bits are transcribed.
-    fn handle_decode_error(&mut self, curaddr: &Address, err: KunaError) -> KunaResult<int4> {
+    fn handle_decode_error(&mut self, curaddr: &Address, err: UnlaceError) -> UnlaceResult<int4> {
         match &err {
-            KunaError::Unimpl {
+            UnlaceError::Unimpl {
                 instruction_length,
                 explain,
             } => {
@@ -3064,7 +3064,7 @@ truncating the fall-through here"
                     Ok(1)
                 }
             }
-            KunaError::BadData { .. } => {
+            UnlaceError::BadData { .. } => {
                 if (self.flags & flow_flags::error_unimplemented) != 0 {
                     Err(err) // rethrow
                 } else {
@@ -3111,7 +3111,7 @@ truncating the fall-through here"
     ///
     /// Passes back the first already-seen address in `bound`; returns `false` if
     /// the top address has already been visited (it is popped).
-    fn set_fallthru_bound(&mut self, bound: &mut Address) -> KunaResult<bool> {
+    fn set_fallthru_bound(&mut self, bound: &mut Address) -> UnlaceResult<bool> {
         let addr = self
             .addrlist
             .last()
@@ -3149,7 +3149,7 @@ truncating the fall-through here"
 
     /// Process the next sequence of instructions in fall-thru order (C++
     /// `fallthru`, `flow.cc:563`).
-    fn fallthru(&mut self) -> KunaResult<()> {
+    fn fallthru(&mut self) -> UnlaceResult<()> {
         let mut bound = self.eaddr.clone();
         if !self.set_fallthru_bound(&mut bound)? {
             return Ok(());
@@ -3180,7 +3180,7 @@ truncating the fall-through here"
                 }
                 if bound == self.eaddr {
                     if backaddr <= self.eaddr {
-                        // (kuna) `eaddr` is the last IN-BODY byte, so an
+                        // (unlace) `eaddr` is the last IN-BODY byte, so an
                         // instruction that STARTS on it is inside the range --
                         // `new_address` admits a branch to the very same address
                         // (`eaddr < to`).  Upstream can compare equal here only at
@@ -3212,7 +3212,7 @@ truncating the fall-through here"
 
     /// Add any remaining un-followed addresses to the `unprocessed` list (C++
     /// `findUnprocessed`, `flow.cc:852`).
-    fn find_unprocessed(&mut self) -> KunaResult<()> {
+    fn find_unprocessed(&mut self) -> UnlaceResult<()> {
         let addrs: Vec<Address> = self.addrlist.clone();
         for addr in addrs {
             if self.seen_instruction(&addr) {
@@ -3254,7 +3254,7 @@ truncating the fall-through here"
     /// Only an existing missing halt is shared; any other op at `addr` (a
     /// `funcboundflow` no-return halt, say) belongs to another edge and is replaced
     /// in `visited`, as upstream stub filling does.
-    fn register_missing_halt(&mut self, addr: &Address) -> KunaResult<()> {
+    fn register_missing_halt(&mut self, addr: &Address) -> UnlaceResult<()> {
         if let Some(op) = self.visited.get(addr).and_then(|stat| {
             if stat.seqnum.get_addr().is_invalid() {
                 None
@@ -3290,11 +3290,11 @@ truncating the fall-through here"
         Ok(())
     }
 
-    /// (kuna) Plant the RETURN a dispatch reaches when its target is the
+    /// (unlace) Plant the RETURN a dispatch reaches when its target is the
     /// caller's return address, at an address no instruction is decoded from.
     /// `false` when an instruction is already decoded there: the caller-return
     /// destination cannot be represented and must be dropped.
-    fn kuna_return_stub(&mut self, addr: &Address) -> KunaResult<bool> {
+    fn unlace_return_stub(&mut self, addr: &Address) -> UnlaceResult<bool> {
         if let Some(stat) = self.visited.get(addr) {
             let planted = self
                 .data
@@ -3332,12 +3332,12 @@ truncating the fall-through here"
 
     /// Fill-in artificial HALT p-code for `unprocessed` addresses (C++
     /// `fillinBranchStubs`, `flow.cc:891`).
-    fn fillin_branch_stubs(&mut self) -> KunaResult<()> {
+    fn fillin_branch_stubs(&mut self) -> UnlaceResult<()> {
         self.find_unprocessed()?;
         self.dedup_unprocessed();
         let addrs: Vec<Address> = self.unprocessed.clone();
         for addr in addrs {
-            // (kuna) A caller-declared extent (`--define-function START-END`) is the
+            // (unlace) A caller-declared extent (`--define-function START-END`) is the
             // only thing that narrows the flow range, and a branch that leaves it
             // leaves an address the walk deliberately never decoded.  `collect_edges`
             // then asks `target` for the edge head and upstream throws "Could not
@@ -3375,9 +3375,9 @@ truncating the fall-through here"
     /// `JumpTable`; the W3 shell treats every BRANCHIND as having no table (the
     /// "partial flow analysis: assume no branches out" C++ path), which is exactly
     /// the C++ behavior when `findJumpTable` returns null.
-    fn collect_edges(&mut self) -> KunaResult<()> {
+    fn collect_edges(&mut self) -> UnlaceResult<()> {
         if self.data.bblocks_get_size() != 0 {
-            return Err(KunaError::lowlevel("Basic blocks already calculated\n"));
+            return Err(UnlaceError::lowlevel("Basic blocks already calculated\n"));
         }
         let order: Vec<OpId> = self.data.obank().iter_dead().collect();
         for (idx, &op) in order.iter().enumerate() {
@@ -3406,7 +3406,7 @@ truncating the fall-through here"
                     //   no JumpTable -> assume no out-branches (partial flow).
                     if let Some(jt_idx) = self.data.find_jump_table_index(op) {
                         let num = self.data.get_jump_table(jt_idx as int4).num_entries();
-                        // (kuna, angr `test_decompiling_optimized_memcpy`,
+                        // (unlace, angr `test_decompiling_optimized_memcpy`,
                         // `option unrolledguard`) Inside a jump-table-recovery
                         // partial clone, a case target may belong to an
                         // already-recovered SIBLING table whose case body was
@@ -3414,7 +3414,7 @@ truncating the fall-through here"
                         // decoded into the parent flow only after the recovery
                         // pass returns).  Upstream never reaches this because it
                         // builds one shared partial and runs collectEdges once
-                        // while sibling tables are still empty; kuna rebuilds a
+                        // while sibling tables are still empty; unlace rebuilds a
                         // fresh partial per table, re-cloning recovered siblings.
                         // When the gate is on, skip an unresolvable case-target
                         // edge instead of throwing -- the same "assume no branches
@@ -3422,7 +3422,7 @@ truncating the fall-through here"
                         let tolerate_missing = self
                             .data
                             .get_arch()
-                            .kuna_options
+                            .unlace_options
                             .get::<crate::flow::UnrolledGuard>()
                             .0
                             && (self.data.flags()
@@ -3441,7 +3441,7 @@ truncating the fall-through here"
                                 match self.target(&addr) {
                                     Ok(t) => t,
                                     Err(_) => {
-                                        // (kuna) Sibling table body not decoded in
+                                        // (unlace) Sibling table body not decoded in
                                         // this partial -- skip the edge.
                                         skipped += 1;
                                         continue;
@@ -3470,7 +3470,7 @@ truncating the fall-through here"
                             self.data.obank_mut().get_mut(targ).unwrap().clear_mark();
                         }
                         if skipped != 0 {
-                            // (kuna, `option unrolledguard`) Log the recovery
+                            // (unlace, `option unrolledguard`) Log the recovery
                             // (standing requirement: "log when it recovers the
                             // table").  Only reached with the gate on, so it never
                             // pollutes the default datatest run.
@@ -3500,7 +3500,7 @@ truncating the fall-through here"
                         // The C++ pushes whatever fallthruOp returns (it asserts
                         // non-null for a CBRANCH that can fall thru); a missing
                         // fallthru is a malformed graph — surface it.
-                        return Err(KunaError::lowlevel(
+                        return Err(UnlaceError::lowlevel(
                             "collectEdges: CBRANCH has no fall-thru op",
                         ));
                     }
@@ -3527,7 +3527,7 @@ truncating the fall-through here"
     /// PcodeOps are moved out of the dead list into their assigned
     /// `PcodeBlockBasic` (created at each `startbasic`-marked op), and the
     /// instruction address ranges are recorded.
-    fn split_basic(&mut self) -> KunaResult<()> {
+    fn split_basic(&mut self) -> UnlaceResult<()> {
         let order: Vec<OpId> = self.data.obank().iter_dead().collect();
         let mut it = order.into_iter();
         let first = match it.next() {
@@ -3541,7 +3541,7 @@ truncating the fall-through here"
             .expect("split_basic: stale first")
             .is_block_start()
         {
-            return Err(KunaError::lowlevel("First op not marked as entry point"));
+            return Err(UnlaceError::lowlevel("First op not marked as entry point"));
         }
         let root = self.bblocks_root();
         let mut cur = self.data.bblocks_mut().new_block_basic(root);
@@ -3638,7 +3638,7 @@ truncating the fall-through here"
     /// caller, which owns `&mut Architecture` for the "jumptable" action set).
     /// `injectPcode`/`checkContainedCall`/`checkMultistageJumptables` remain
     /// `// STUB(W4)`.
-    pub fn generate_ops(&mut self) -> KunaResult<()> {
+    pub fn generate_ops(&mut self) -> UnlaceResult<()> {
         self.clear_properties();
         self.addrlist.push(self.data.get_address().clone());
         while !self.addrlist.is_empty() {
@@ -3674,12 +3674,12 @@ truncating the fall-through here"
     pub fn generate_ops_with_jumptables(
         &mut self,
         run_pipeline: &mut JtPipelineFn<'_>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.generate_ops()?;
         let reentry = self
             .data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::constselectjump::ConstSelectMode>()
             .admits_reentry();
         let mut provisional = std::collections::BTreeSet::new();
@@ -3701,13 +3701,13 @@ truncating the fall-through here"
                     if let Some(stub) = self
                         .data
                         .get_jump_table(jt_idx as int4)
-                        .kuna_return_default()
+                        .unlace_return_default()
                         .cloned()
                     {
-                        if !self.kuna_return_stub(&stub)? {
+                        if !self.unlace_return_stub(&stub)? {
                             self.data
                                 .get_jump_table_mut(jt_idx as int4)
-                                .kuna_drop_return_default();
+                                .unlace_drop_return_default();
                             let address = self
                                 .data
                                 .obank()
@@ -3727,7 +3727,10 @@ truncating the fall-through here"
                             .data
                             .get_jump_table(jt_idx as int4)
                             .get_address_by_index(i);
-                        if !self.data.get_jump_table(jt_idx as int4).kuna_is_reentered()
+                        if !self
+                            .data
+                            .get_jump_table(jt_idx as int4)
+                            .unlace_is_reentered()
                             || followed.insert((
                                 indop,
                                 addr.get_space().map(|s| s.get_index()),
@@ -3739,7 +3742,7 @@ truncating the fall-through here"
                                 && self
                                     .data
                                     .get_jump_table(jt_idx as int4)
-                                    .kuna_return_default()
+                                    .unlace_return_default()
                                     != Some(&addr)
                             {
                                 if let Ok(to) = self.target(&addr) {
@@ -3825,7 +3828,7 @@ truncating the fall-through here"
                             let limit = self.data.get_arch().max_jumptable_size as usize;
                             self.data
                                 .get_jump_table_mut(idx as int4)
-                                .kuna_extend_flow_target(target, limit)
+                                .unlace_extend_flow_target(target, limit)
                         });
                         match result {
                             Some(new) => added |= new,
@@ -3844,9 +3847,11 @@ truncating the fall-through here"
                         let Some(idx) = self.data.find_jump_table_index(op) else {
                             continue;
                         };
-                        if stages < KUNA_MAX_REENTRY_STAGES {
+                        if stages < UNLACE_MAX_REENTRY_STAGES {
                             stages += 1;
-                            self.data.get_jump_table_mut(idx as int4).kuna_retry_flow();
+                            self.data
+                                .get_jump_table_mut(idx as int4)
+                                .unlace_retry_flow();
                             self.tablelist.push(op);
                         } else if exhausted.insert(op) {
                             let address = self.data.obank().get(op).unwrap().get_addr().clone();
@@ -3873,7 +3878,7 @@ truncating the fall-through here"
     /// Queue each jump-table that a multistage hint asks to recover again,
     /// now that flow has filled in more of the function (C++
     /// `FlowInfo::checkMultistageJumptables`, `flow.cc:1393`).
-    fn check_multistage_jumptables(&mut self) -> KunaResult<()> {
+    fn check_multistage_jumptables(&mut self) -> UnlaceResult<()> {
         for i in 0..self.data.num_jump_tables() {
             let mut jt = std::mem::replace(
                 self.data.get_jump_table_mut(i),
@@ -3897,7 +3902,7 @@ truncating the fall-through here"
     /// STUB(W4): `removeUnreachableBlocks` is the W4 structuring sweep; the new
     /// entry-block insertion when the start block has incoming edges, and the
     /// fillin/collect/split/connect pipeline, are faithful.
-    pub fn generate_blocks(&mut self) -> KunaResult<()> {
+    pub fn generate_blocks(&mut self) -> UnlaceResult<()> {
         self.fillin_branch_stubs()?;
         self.collect_edges()?;
         self.split_basic()?; // Split ops up into basic blocks
@@ -3942,7 +3947,7 @@ truncating the fall-through here"
     /// `checkForFlowModification` flow-modification family are W4; the proto query
     /// returns only the callee name (the full proto copy lands at
     /// `ActionDefaultParams` time, exactly as the C++ `queryCall` postpone notes).
-    fn setup_call_specs(&mut self, op: OpId) -> KunaResult<bool> {
+    fn setup_call_specs(&mut self, op: OpId) -> UnlaceResult<bool> {
         // C++ FuncCallSpecs(op) reads the entry address off op->getIn(0) for a
         // direct CALL (fspec.cc:4938-4945).
         let mut entry = self
@@ -3969,7 +3974,7 @@ truncating the fall-through here"
                 entry = info.entry;
             }
         }
-        // (kuna `objcresolve`) A send whose method a first decompile resolved
+        // (unlace `objcresolve`) A send whose method a first decompile resolved
         // goes to the IMP.
         if let Some(target) = self
             .data
@@ -4024,7 +4029,7 @@ truncating the fall-through here"
     /// `op` is the CALL/CALLIND op and `entry` its resolved direct entry address
     /// (invalid for an indirect call); the inline/noreturn flow effects were
     /// already copied onto the fspec by [`build_call_specs`].
-    fn check_for_flow_modification(&mut self, op: OpId, entry: &Address) -> KunaResult<bool> {
+    fn check_for_flow_modification(&mut self, op: OpId, entry: &Address) -> UnlaceResult<bool> {
         // The flow effects live on the just-built fspec; recover its flags.
         let (is_inline, is_no_return) = match self.data.get_call_specs_index(op) {
             Some(idx) => {
@@ -4081,7 +4086,7 @@ truncating the fall-through here"
         Ok(false)
     }
 
-    /// (kuna `trapaftercall`) Is `op`'s instruction a machine `call` followed by
+    /// (unlace `trapaftercall`) Is `op`'s instruction a machine `call` followed by
     /// the `ud2` clang emits after a no-return call (trap-unreachable, the
     /// Darwin and rustc default)? Execution never reaches it after a call that
     /// returns. A tail `jmp` the flow turned into a call is not evidence, and
@@ -4093,7 +4098,7 @@ truncating the fall-through here"
         if !self
             .data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::TrapAfterCall>()
             .0
         {
@@ -4169,7 +4174,7 @@ truncating the fall-through here"
         }
     }
 
-    fn setup_callind_specs(&mut self, op: OpId) -> KunaResult<bool> {
+    fn setup_callind_specs(&mut self, op: OpId) -> UnlaceResult<bool> {
         // C++ `data.getOverride().applyIndirect(data,*res)` (flow.cc:729): an
         // indirect-call destination override (planted by `FuncCallSpecs::deindirect`
         // on the previous decompilation pass) redirects this CALLIND to a known
@@ -4237,7 +4242,7 @@ truncating the fall-through here"
         }
         self.build_call_specs(op, Address::default(), true)?;
         self.qlst_count += 1;
-        // (kuna `fastfailnoreturn`) A Windows `int 0x29` lifts to `intloc =
+        // (unlace `fastfailnoreturn`) A Windows `int 0x29` lifts to `intloc =
         // swi(0x29); call [intloc]` — a call with no matching push, which the
         // cspec's `extrapop` then hands 8 bytes back for.  `__fastfail` never
         // returns, so mark the spec and plant the halt here; downstream that is
@@ -4262,7 +4267,7 @@ truncating the fall-through here"
             self.data.op_dead_insert_after(haltop, op);
             return Ok(true);
         }
-        // (kuna #1288) An interrupt that ends an MS-DOS program is a no-return
+        // (unlace #1288) An interrupt that ends an MS-DOS program is a no-return
         // call. The warning is kept: which service an `INT 21h` asks for is in
         // AH, which the C does not show.
         if self.env.is_dos_exit_callind(&self.data, op) {
@@ -4274,7 +4279,7 @@ truncating the fall-through here"
             }
             return self.check_for_flow_modification(op, &Address::default());
         }
-        // (kuna `int3pad`) The same lowering over vector 3 is a decoded `int3`:
+        // (unlace `int3pad`) The same lowering over vector 3 is a decoded `int3`:
         // control ran into a breakpoint byte, which the printer otherwise renders
         // as an ordinary call through a pointer.  Name it, and under `int3pad
         // halt` end the flow there as well.
@@ -4309,7 +4314,7 @@ truncating the fall-through here"
     /// Shared body of [`setup_call_specs`]/[`setup_callind_specs`]: create the
     /// `FuncCallSpecs`, push it onto `qlst`, and (for a direct CALL) install the
     /// \e fspec annotation in0 + register the printed name.
-    fn build_call_specs(&mut self, op: OpId, entry: Address, indirect: bool) -> KunaResult<()> {
+    fn build_call_specs(&mut self, op: OpId, entry: Address, indirect: bool) -> UnlaceResult<()> {
         use crate::fspec::FuncCallSpecs;
         if crate::ppc32piccalls::bind(&mut self.data, op, &entry, indirect)? {
             return Ok(());
@@ -4422,10 +4427,10 @@ truncating the fall-through here"
             // RELOCATION STUB(W4 callee-Funcdata copy): the C++ does this copy at
             // ActionDefaultParams time; flow.cc:683-686 deliberately POSTPONES the
             // full copy from queryCall to ActionDefaultParams "so last-second
-            // prototype changes can come in".  kuna performs the copy HERE instead
+            // prototype changes can come in".  unlace performs the copy HERE instead
             // — `coreaction_protos.rs` (which hosts `ActionDefaultParams::apply`)
             // is a reserved file, and a new schedule node would break the B0
-            // byte-identical `list action` listing.  On the kuna analysis path the
+            // byte-identical `list action` listing.  On the unlace analysis path the
             // declared callee signature is locked by `parse line extern` BEFORE
             // flow runs, so no last-second change occurs and the observable result
             // (the call spec carrying the callee's recovered FuncProto) is
@@ -4445,7 +4450,7 @@ truncating the fall-through here"
             // datatest renders the cloned body, not a modeled call).  So we
             // restrict the pre-seat to NON-inline calls, exactly mirroring which
             // calls the C++ ActionDefaultParams copy arm actually reaches.
-            // (kuna `armfloatreturn`) A declared AEABI helper is laid out under
+            // (unlace `armfloatreturn`) A declared AEABI helper is laid out under
             // the core-register model by ActionDefaultParams instead.
             let helper = (self.data.hooks().armfloatreturn_declared_helper_model)(
                 self.data.get_arch(),
@@ -4498,7 +4503,7 @@ truncating the fall-through here"
             // process-unique counter; the printed name + entry are registered in
             // the fspec-space side table (the C++ pointer-cast equivalent).
             let handle = next_fspec_handle();
-            let angr = self.data.get_arch().kuna_name_style();
+            let angr = self.data.get_arch().unlace_name_style();
             // Register the call spec's printed name under the handle.
             self.data
                 .get_call_specs(self.data.num_calls() - 1)
@@ -4517,7 +4522,7 @@ truncating the fall-through here"
     /// is generated for the sub-function ([`inline_flow`](Self::inline_flow)) and
     /// then woven into \b this flow at the call site.  The `inline_recursion`
     /// cycle tracking prevents a function from being inlined into itself.
-    fn inline_sub_function(&mut self, op: OpId, entry: &Address) -> KunaResult<bool> {
+    fn inline_sub_function(&mut self, op: OpId, entry: &Address) -> UnlaceResult<bool> {
         // The callee Funcdata is built fresh from the entry address (queryCall
         // associated the symbol; here we build it on demand).
         let mut inlinefd = match self.env.build_inline_funcdata(entry)? {
@@ -4577,7 +4582,7 @@ truncating the fall-through here"
     ///
     /// Returns 0 for the easy model, 1 for the hard model, -1 if inlining was not
     /// successful (`callop` is the site of the injection).
-    fn inline_flow(&mut self, inlinefd: &mut Funcdata, callop: OpId) -> KunaResult<int4> {
+    fn inline_flow(&mut self, inlinefd: &mut Funcdata, callop: OpId) -> UnlaceResult<int4> {
         // inlinefd->getArch()->clearAnalysis(inlinefd): the callee Funcdata is
         // built fresh (no prior analysis to clear).
         inlinefd
@@ -4610,13 +4615,13 @@ truncating the fall-through here"
         // Carry any warnings the nested flow buffered back to the top-level
         // function's comment store (the C++ `inline_head`/`data` reach the same
         // `glb->commentdb`).  This includes nested "Could not inline here".
-        // (kuna `outlinedinline`) A fragment whose flow leaves the image (a
+        // (unlace `outlinedinline`) A fragment whose flow leaves the image (a
         // dyld-cache extract tail-calling into another library) stays a call.
         if inlineflow.has_unmapped_target()
             && self
                 .data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::flow::OutlinedInline>()
                 .0
             && crate::outlinedinline::is_outlined_name(inlineflow.data.get_name())
@@ -4714,8 +4719,8 @@ truncating the fall-through here"
         // Move the (now spent) callee data back out.
         *inlinefd = inlineflow.data;
         self.data
-            .kuna_fspec_handles
-            .append(&mut inlinefd.kuna_fspec_handles);
+            .unlace_fspec_handles
+            .append(&mut inlinefd.unlace_fspec_handles);
         Ok(res)
     }
 
@@ -4753,7 +4758,7 @@ truncating the fall-through here"
         inlineflow: &FlowInfo<'a, E>,
         op: OpId,
         retaddr: &mut Address,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if !inlineflow.data.get_func_proto().is_no_return() {
             if self.ends_without_return_site(inlineflow, op) {
                 return Ok(true);
@@ -4798,7 +4803,7 @@ truncating the fall-through here"
         Ok(true)
     }
 
-    /// (kuna `outlinedinline`) Does the call `op` to a MachineOutliner fragment
+    /// (unlace `outlinedinline`) Does the call `op` to a MachineOutliner fragment
     /// end its function, so the fragment's own RETURN is the caller's? That is
     /// the case for a tail call (`b OUTLINED_FUNCTION_n`, a CALL with a RETURN at
     /// its own address) and for a call nothing follows (the fragment ends the
@@ -4808,7 +4813,7 @@ truncating the fall-through here"
         if !self
             .data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::flow::OutlinedInline>()
             .0
             || !crate::outlinedinline::is_outlined_name(inlineflow.data.get_name())
@@ -4827,7 +4832,7 @@ truncating the fall-through here"
 
     /// If the given injected op is a CALL, CALLIND, or BRANCHIND, add references to
     /// it in other flow tables (C++ `FlowInfo::xrefInlinedBranch`, `flow.cc:1055`).
-    fn xref_inlined_branch(&mut self, op: OpId) -> KunaResult<()> {
+    fn xref_inlined_branch(&mut self, op: OpId) -> UnlaceResult<()> {
         match self
             .data
             .obank()
@@ -4861,7 +4866,11 @@ truncating the fall-through here"
     /// Individual PcodeOps from the in-lined Funcdata are cloned into \b this flow,
     /// preserving their original address.  Any RETURN op is replaced with a jump to
     /// the first address following the call site (`retaddr`).
-    fn inline_clone(&mut self, inlineflow: &FlowInfo<'a, E>, retaddr: &Address) -> KunaResult<()> {
+    fn inline_clone(
+        &mut self,
+        inlineflow: &FlowInfo<'a, E>,
+        retaddr: &Address,
+    ) -> UnlaceResult<()> {
         let src = &inlineflow.data;
         let src_ops: Vec<OpId> = src.obank().iter_dead().collect();
         for op in src_ops {
@@ -4923,7 +4932,7 @@ truncating the fall-through here"
         &mut self,
         inlineflow: &FlowInfo<'a, E>,
         calladdr: &Address,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let src = &inlineflow.data;
         let src_ops: Vec<OpId> = src.obank().iter_dead().collect();
         for op in src_ops {
@@ -4961,7 +4970,7 @@ truncating the fall-through here"
     /// which need the `PcodeInjectLibrary` payload + `doInjection`) are deferred to
     /// the injection wave; the in-lining arm (`inlineSubFunction`) — the load-
     /// bearing path for `inline.xml` — is fully wired.
-    fn inject_pcode(&mut self) -> KunaResult<()> {
+    fn inject_pcode(&mut self) -> UnlaceResult<()> {
         // Index walk: inlineSubFunction
         // (via inline_clone -> xref_inlined_branch -> setup_call_specs) can push
         // MORE ops onto injectlist (nested inlines), so re-read the length.
@@ -5000,7 +5009,7 @@ truncating the fall-through here"
                 // at the call site, replacing the original CALL/CALLIND.
                 if self.inject_sub_function(idx, op)? {
                     let fixup = self.env.call_fixup_name(inject_id);
-                    // (kuna `objcarc`) Hidden ARC bookkeeping is not worth a
+                    // (unlace `objcarc`) Hidden ARC bookkeeping is not worth a
                     // header line per call; the option says what happened.
                     if !fixup.starts_with(crate::objcarc::FIXUP_PREFIX) {
                         self.data.warning_header(&format!(
@@ -5028,7 +5037,7 @@ truncating the fall-through here"
     /// CALLOTHER's operands (skipping in0, the inject-id annotation) and output,
     /// then drives [`do_injection`](Self::do_injection) to weave the fixup body in
     /// and destroy the original op.
-    fn inject_user_op(&mut self, op: OpId) -> KunaResult<()> {
+    fn inject_user_op(&mut self, op: OpId) -> UnlaceResult<()> {
         let in0 = self
             .data
             .obank()
@@ -5121,7 +5130,7 @@ truncating the fall-through here"
     /// param-shift is propagated to the injected call's call spec (the last one
     /// pushed onto `qlst` during the woven body's xref).  Returns `true` (the
     /// injection happened; the caller deletes the original call spec).
-    fn inject_sub_function(&mut self, idx: int4, op: OpId) -> KunaResult<bool> {
+    fn inject_sub_function(&mut self, idx: int4, op: OpId) -> UnlaceResult<bool> {
         let fc = self.data.get_call_specs(idx);
         let inject_id = fc.proto().get_inject_id();
         let entry = fc.get_entry_address().clone();
@@ -5175,7 +5184,7 @@ truncating the fall-through here"
         source: InjectSource,
         icontext: &mut crate::pcodeinject::InjectContext,
         op: OpId,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // (the marker op just before the injection lands).
         let marker = self.dead_tail(); // there must be at least one op (`op` itself)
 
@@ -5215,7 +5224,7 @@ truncating the fall-through here"
                 // Empty injection: C++ throws LowlevelError("Empty injection: ...").
                 // The setISAMode fixup is a non-empty `v0 = v0;` body, so an empty
                 // emit means the payload mis-compiled.
-                return Err(KunaError::lowlevel("Empty injection"));
+                return Err(UnlaceError::lowlevel("Empty injection"));
             }
         };
         let mut isfallthru = true;
@@ -5263,7 +5272,7 @@ truncating the fall-through here"
     fn recover_jump_tables(
         &mut self,
         run_pipeline: &mut JtPipelineFn<'_>,
-    ) -> KunaResult<Vec<usize>> {
+    ) -> UnlaceResult<Vec<usize>> {
         let mut new_tables: Vec<usize> = Vec::new();
         let table_ops: Vec<OpId> = self.tablelist.clone();
         let record = self.does_jump_record();
@@ -5289,7 +5298,7 @@ truncating the fall-through here"
             let retried = self.data.find_jump_table_index(op).filter(|&idx| {
                 self.data
                     .get_jump_table(idx as int4)
-                    .kuna_keeps_recovered_targets()
+                    .unlace_keeps_recovered_targets()
             });
             let mut mode = if crate::budget::deadline_passed_in("jump-table recovery")
                 || self.jt_work_exhausted(op)
@@ -5316,22 +5325,22 @@ truncating the fall-through here"
                 }
                 mode
             };
-            // (kuna `switchextent`) A table nothing bounded: decode the
+            // (unlace `switchextent`) A table nothing bounded: decode the
             // function's extent once, name its jump tables, and when it has
             // another table to end this one at, try again with that bound
             // (`switchextent.rs`).
             // A table that is its function's last and whose rows run on asked
             // for the next functions' tables too, on either attempt.
-            let mut wanted = self.data.kuna_later_wanted.take();
+            let mut wanted = self.data.unlace_later_wanted.take();
             let mut rounds = 0;
             while rounds < 2
                 && matches!(mode, Ok(None) | Err(RecoveryMode::FailNormal))
                 && retried.is_none()
-                && (self.data.kuna_extent_tables().is_none() || wanted.is_some())
+                && (self.data.unlace_extent_tables().is_none() || wanted.is_some())
                 && self
                     .data
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::jumptable::SwitchExtent>()
                     .0
                 && !crate::budget::deadline_passed_in("jump-table recovery")
@@ -5340,7 +5349,7 @@ truncating the fall-through here"
                 let entry = self.data.get_address().clone();
                 let end = self.data.get_arch().function_entry_after(&entry);
                 let mut bounded = false;
-                if self.data.kuna_extent_tables().is_none() {
+                if self.data.unlace_extent_tables().is_none() {
                     let arch = self.data.get_arch();
                     let tables = std::rc::Rc::new(super::switchextent::function_tables(
                         self.env.translate(),
@@ -5351,10 +5360,10 @@ truncating the fall-through here"
                             .as_ref(),
                     ));
                     if let Some(partial) = shared_partial.as_mut() {
-                        *partial.kuna_extent_tables_mut() = Some(std::rc::Rc::clone(&tables));
+                        *partial.unlace_extent_tables_mut() = Some(std::rc::Rc::clone(&tables));
                     }
                     bounded = tables.tables.len() >= 2 || !tables.cases.is_empty();
-                    *self.data.kuna_extent_tables_mut() = Some(tables);
+                    *self.data.unlace_extent_tables_mut() = Some(tables);
                 }
                 if let Some(table) = wanted {
                     let arch = self.data.get_arch();
@@ -5374,9 +5383,9 @@ truncating the fall-through here"
                         )
                     }));
                     if let Some(partial) = shared_partial.as_mut() {
-                        partial.kuna_later_tables = Some(std::rc::Rc::clone(&later));
+                        partial.unlace_later_tables = Some(std::rc::Rc::clone(&later));
                     }
-                    self.data.kuna_later_tables = Some(later);
+                    self.data.unlace_later_tables = Some(later);
                     bounded = true;
                 }
                 if bounded {
@@ -5388,7 +5397,7 @@ truncating the fall-through here"
                         &mut shared_partial,
                     );
                 }
-                wanted = self.data.kuna_later_wanted.take();
+                wanted = self.data.unlace_later_wanted.take();
             }
             let mode = match (mode, retried) {
                 (Ok(Some(idx)), _) => Ok(Some(idx)),
@@ -5442,22 +5451,24 @@ truncating the fall-through here"
         Ok(new_tables)
     }
 
-    /// (kuna `jumptablework`) Charge one recovery of the dispatch `op` the
+    /// (unlace `jumptablework`) Charge one recovery of the dispatch `op` the
     /// instructions flowed so far; `true` (with a warning the first time) once
     /// the function's recoveries have passed the bound.
     fn jt_work_exhausted(&mut self, op: OpId) -> bool {
-        if !self.kuna_jt_work_spent {
-            self.kuna_jt_work = self.kuna_jt_work.saturating_add(self.visited.len() as u64);
+        if !self.unlace_jt_work_spent {
+            self.unlace_jt_work = self
+                .unlace_jt_work
+                .saturating_add(self.visited.len() as u64);
             let limit = self
                 .data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::jumptablework::JumpTableWork>()
                 .0;
-            if !crate::jumptablework::exhausted(limit, self.kuna_jt_work) {
+            if !crate::jumptablework::exhausted(limit, self.unlace_jt_work) {
                 return false;
             }
-            self.kuna_jt_work_spent = true;
+            self.unlace_jt_work_spent = true;
             if let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) {
                 self.data.warning(
                     "Jump-table recovery work bound reached (option jumptablework): later indirect jumps are not recovered",
@@ -5468,7 +5479,7 @@ truncating the fall-through here"
         true
     }
 
-    /// (kuna `--assert callee`) Is the BRANCHIND `op` a jump the caller stated
+    /// (unlace `--assert callee`) Is the BRANCHIND `op` a jump the caller stated
     /// the destination function of? It is a tail call, not a switch.
     fn is_stated_tail_call(&self, op: OpId) -> bool {
         self.data
@@ -5477,10 +5488,10 @@ truncating the fall-through here"
             .is_some_and(|o| self.env.stated_callee_site(&self.data, o.get_addr()))
     }
 
-    /// (kuna `--assert callee`) Turn the stated BRANCHIND `op` into a call to the
+    /// (unlace `--assert callee`) Turn the stated BRANCHIND `op` into a call to the
     /// stated callee followed by a return, or by nothing when the callee never
     /// returns, as a direct tail call to it is built.
-    fn stated_tail_call(&mut self, op: OpId) -> KunaResult<()> {
+    fn stated_tail_call(&mut self, op: OpId) -> UnlaceResult<()> {
         self.data.op_set_opcode_code(op, OpCode::CPUI_CALLIND);
         if self.setup_callind_specs(op)? {
             return Ok(());
@@ -5502,7 +5513,7 @@ truncating the fall-through here"
     /// resolves to a no-return callee, `setup_callind_specs` has already planted
     /// the halt after it, so no artificial return follows (upstream adds one
     /// anyway, which prints a dead `return;` after the no-return tail call).
-    fn truncate_indirect_jump(&mut self, op: OpId, mode: RecoveryMode) -> KunaResult<()> {
+    fn truncate_indirect_jump(&mut self, op: OpId, mode: RecoveryMode) -> UnlaceResult<()> {
         if mode == RecoveryMode::FailReturn {
             self.data.op_set_opcode_code(op, OpCode::CPUI_RETURN);
             let addr = self.data.obank().get(op).unwrap().get_addr().clone();
@@ -5584,22 +5595,22 @@ truncating the fall-through here"
         start: OpId,
         startbasic: &mut bool,
         isfallthru: &mut bool,
-    ) -> KunaResult<Option<OpId>> {
+    ) -> UnlaceResult<Option<OpId>> {
         self.xref_control_flow(Some(start), startbasic, isfallthru)
     }
 
     /// Build an artificial halt (C++ `artificialHalt`).  Verification support.
-    pub fn artificial_halt_for_test(&mut self, addr: &Address, flag: uint4) -> KunaResult<OpId> {
+    pub fn artificial_halt_for_test(&mut self, addr: &Address, flag: uint4) -> UnlaceResult<OpId> {
         self.artificial_halt(addr, flag)
     }
 
     /// Collect basic-block edges (C++ `collectEdges`).  W4-driver / verification.
-    pub fn collect_edges_for_test(&mut self) -> KunaResult<()> {
+    pub fn collect_edges_for_test(&mut self) -> UnlaceResult<()> {
         self.collect_edges()
     }
 
     /// Split the dead-list ops into basic blocks (C++ `splitBasic`).
-    pub fn split_basic_for_test(&mut self) -> KunaResult<()> {
+    pub fn split_basic_for_test(&mut self) -> UnlaceResult<()> {
         self.split_basic()
     }
 
@@ -5617,7 +5628,7 @@ truncating the fall-through here"
     /// `fillinBranchStubs`).  Verification support: the out-of-extent subset is
     /// also registered in `visited`, which is what a caller-declared boundary
     /// depends on and what an in-extent gap must NOT get.
-    pub fn fillin_branch_stubs_for_test(&mut self) -> KunaResult<()> {
+    pub fn fillin_branch_stubs_for_test(&mut self) -> UnlaceResult<()> {
         self.fillin_branch_stubs()
     }
 
@@ -5676,7 +5687,7 @@ pub struct FlowEmit<'f, 'e, E: FlowEnvironment> {
     emitted: Vec<OpId>,
     /// The first factory error a `dump` hit (the C++ exception out of a `new*`
     /// factory), captured because the `PcodeEmit::dump` signature is infallible.
-    error: Option<KunaError>,
+    error: Option<UnlaceError>,
 }
 
 impl<'f, 'e, E: FlowEnvironment> FlowEmit<'f, 'e, E> {
@@ -5796,7 +5807,7 @@ impl<E: FlowEnvironment> PcodeEmit for FlowEmit<'_, '_, E> {
 /// starting its instruction's basic block, following no-p-code fall-thru.  Used
 /// by `switchOverJumpTables` after the FlowInfo's `data` has been moved out.
 #[allow(clippy::mutable_key_type)]
-pub fn target_in(fd: &Funcdata, visited: &VisitedMap, addr: &Address) -> KunaResult<OpId> {
+pub fn target_in(fd: &Funcdata, visited: &VisitedMap, addr: &Address) -> UnlaceResult<OpId> {
     let mut cur = addr.clone();
     while let Some(stat) = visited.get(&cur) {
         if !stat.seqnum.get_addr().is_invalid() {
@@ -5807,7 +5818,7 @@ pub fn target_in(fd: &Funcdata, visited: &VisitedMap, addr: &Address) -> KunaRes
         }
         cur = &cur + stat.size as i64;
     }
-    Err(KunaError::lowlevel(format!(
+    Err(UnlaceError::lowlevel(format!(
         "Could not find op at target address: {addr:?}"
     )))
 }
@@ -5826,7 +5837,7 @@ pub fn build_partial_blocks<E: FlowEnvironment>(
     partial: &mut Funcdata,
     env: &E,
     visited: &VisitedMap,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     // Move the partial's data into a FlowInfo, build blocks, move it back.
     let placeholder = Funcdata::new_placeholder_like(partial)?;
     let data = std::mem::replace(partial, placeholder);
@@ -5841,12 +5852,12 @@ pub fn build_partial_blocks<E: FlowEnvironment>(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.flow_next_fspec_handle = Some(next_fspec_handle);
 }
 
-crate::kuna_flag!(
-    /// (kuna) `option outlinedinline`: inline the MachineOutliner's
+crate::unlace_flag!(
+    /// (unlace) `option outlinedinline`: inline the MachineOutliner's
     /// `OUTLINED_FUNCTION_<n>` fragments.  Default on.
     OutlinedInline,
     "outlinedinline",
@@ -5855,8 +5866,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Stop fall-through at the end of the function's own unwind-table
+crate::unlace_flag!(
+    /// (unlace) Stop fall-through at the end of the function's own unwind-table
     /// extent (option `fdeflowbound`).
     FdeFlowBound,
     "fdeflowbound",
@@ -5865,11 +5876,11 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna, angr `test_decompiling_optimized_memcpy`) Recover the interleaved
+crate::unlace_flag!(
+    /// (unlace, angr `test_decompiling_optimized_memcpy`) Recover the interleaved
     /// jump tables of an MSVC optimized memcpy/memmove (Duff's device).  When a
     /// function holds several jump tables whose case bodies are reachable only as
-    /// one another's case targets, kuna recovers them one at a time, each in its
+    /// one another's case targets, unlace recovers them one at a time, each in its
     /// own fresh partial-flow clone; a later table's clone re-clones an
     /// already-recovered sibling table into its jumpvec, and that partial's
     /// `collect_edges` then calls `target()` on a sibling case body that was

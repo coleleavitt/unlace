@@ -2,7 +2,7 @@
 //!
 //! These pin the *predicate* on a hand-built `Funcdata`; the end-to-end witness
 //! (a `wide`/`w2` pair whose only difference is copy-vs-arithmetic in the high
-//! half) lives in `tests/stages/kuna-retinputhalf.toml`. The negative control —
+//! half) lives in `tests/stages/unlace-retinputhalf.toml`. The negative control —
 //! that the callee-saved-restore phantom this carve-out sits inside stays killed —
 //! is `unlace-console/tests/verify_return_uncomputed.rs`.
 
@@ -329,7 +329,7 @@ fn the_record_is_per_register() {
     let mut fd = build_reg_fd();
     let ret = ret_op(&mut fd);
     let (r0a, r1a) = (reg(&fd, R0), reg(&fd, R1));
-    fd.kuna_set_moved_back_returns(vec![(r1a.clone(), 4)]);
+    fd.unlace_set_moved_back_returns(vec![(r1a.clone(), 4)]);
     assert!(is_moved_back(&fd, &r1a, 4));
     assert!(!is_moved_back(&fd, &r0a, 4));
     assert!(!is_moved_back(&fd, &r1a, 8));

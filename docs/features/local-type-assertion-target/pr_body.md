@@ -51,7 +51,7 @@ counter, no DIV row.
 `tests/cli/local-type-assertion-target.json` is the promoted acceptance, pinned to
 the in-repo `cet_pie_x86_64` twin and asserting the retyped declaration, not just
 the status — it fails on `main`. Five cases in
-`kuna-console/tests/verify_assertplane.rs` cover the type, the name, each of the
+`console/tests/verify_assertplane.rs` cover the type, the name, each of the
 rejections, and the batch case where an earlier `name` renamed the symbol a later
 `type` names.
 

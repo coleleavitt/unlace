@@ -1,4 +1,4 @@
-//! (kuna `tlsnames`) Name an ELF executable's static TLS variables at their
+//! (unlace `tlsnames`) Name an ELF executable's static TLS variables at their
 //! thread-pointer offsets.
 //!
 //! A local-exec access to a `__thread` variable is a load through the thread
@@ -214,7 +214,7 @@ fn block_type(types: &dyn TypeFactory, layout: &TlsLayout, ptr: int4) -> Option<
     types.get_type_pointer_rel(parent, block, size).ok()
 }
 
-/// (kuna) `ActionTlsNames` -- map the relative `tls` pointer over the
+/// (unlace) `ActionTlsNames` -- map the relative `tls` pointer over the
 /// thread-pointer register input (option `tlsnames`).
 pub struct ActionTlsNames {
     base: ActionBase,
@@ -244,7 +244,7 @@ impl Action for ActionTlsNames {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let Some(layout) = data.get_arch().kuna_states.get_rc::<TlsLayout>() else {
+        let Some(layout) = data.get_arch().unlace_states.get_rc::<TlsLayout>() else {
             return 0;
         };
         let Some((reg, size)) = thread_pointer(data, layout.tcb != 0) else {
@@ -288,8 +288,8 @@ impl Action for ActionTlsNames {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Gate the static-TLS naming (`tlsnames`); default on.
+crate::unlace_flag!(
+    /// (unlace) Gate the static-TLS naming (`tlsnames`); default on.
     Tlsnames,
     "tlsnames",
     "Gate the static-TLS naming (`tlsnames`); default on.",
@@ -297,7 +297,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_arch_state!(TlsLayout);
+crate::unlace_arch_state!(TlsLayout);
 
 #[cfg(test)]
 mod tests {

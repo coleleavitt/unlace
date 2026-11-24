@@ -1,4 +1,4 @@
-//! Tests moved out of `kuna_indexaliasguard` because they read higher-band modules. They live in the
+//! Tests moved out of `unlace_indexaliasguard` because they read higher-band modules. They live in the
 //! driver so the middle band can become its own crate (unlace-middle).
 
 #![allow(unused_imports, dead_code)]
@@ -14,5 +14,5 @@ use unlace_num::opcodes::OpCode;
 
 #[test]
 fn option_is_registered() {
-    assert!(crate::option_dispatch::KUNA_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME));
+    assert!(crate::option_dispatch::UNLACE_OPTION_NAMES.contains(&OptionIndexAliasGuard::NAME));
 }

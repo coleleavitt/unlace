@@ -4,10 +4,10 @@ use std::process::Command;
 
 #[test]
 fn complete_element_copies_initialize_a_rust_local_array() {
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let render = |language: &str| {
-        let output = process::required_output(Command::new(&kuna).args([
+        let output = process::required_output(Command::new(&unlace).args([
             "decompile",
             &common::fixture("typedepth_x86_64"),
             "main",

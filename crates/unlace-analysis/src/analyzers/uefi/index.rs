@@ -11,7 +11,7 @@
 //! The file is line-oriented text ([`FILE_NAME`]):
 //!
 //! ```text
-//! kuna-uefi-index 1
+//! unlace-uefi-index 1
 //! module <file> <ffs-type-hex>
 //! struct <name> <Member>:<TYPE> ...
 //! install <file> <guid-hex> <address-hex> <struct> [<Member>=<address-hex> ...]

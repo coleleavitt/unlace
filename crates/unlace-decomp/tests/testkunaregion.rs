@@ -1,30 +1,30 @@
-//! Port of `decompiler/unittests/testkunaregion.cc` (kuna-owned unit tests for
+//! Port of `decompiler/unittests/testkunaregion.cc` (unlace-owned unit tests for
 //! the angr `RegionIdentifier` port, S7).
 //!
 //! These are NOT upstream Ghidra tests.  `regionid_diamond0` / `regionid_diamond1`
 //! are direct ports of angr's `test_region_identifier_0` / `test_region_identifier_1`
 //! (angr/tests/analyses/decompiler/test_structurer.py:50,80): synthetic DummyNode
 //! graphs, asserting the final top-level region graph has exactly two nodes.
-//! `regionid_loop` is kuna-added cyclic coverage (angr's two synthetic tests are
+//! `regionid_loop` is unlace-added cyclic coverage (angr's two synthetic tests are
 //! both acyclic).
 //!
 //! Ported 1:1 from the C++ `TEST(...)` macros, assertion-for-assertion, against
-//! the merged `kuna_regionid` public API.  The C++ collector keeps
-//! `const KunaGraphRegion *` pointers and re-walks one region later; the external
+//! the merged `unlace_regionid` public API.  The C++ collector keeps
+//! `const UnlaceGraphRegion *` pointers and re-walks one region later; the external
 //! Rust test crate has no node-pool access, so the visitor captures the head and
 //! body of every cyclic region during the single tree walk — equivalent for the
 //! asserted shapes (the loop head is the first block visited in a cyclic region,
 //! and its body is exactly the blocks visited while that region is open).
 
 use unlace_decomp::context::BlockId;
-use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
+use unlace_decomp::regionid::{UnlaceGraphRegion, UnlaceRegionIdentifier, UnlaceRegionVisitor};
 
 /// Collect every leaf block address (in walk order) and every cyclic region.
 ///
-/// Port of the C++ `KunaTestCollector`.  For each cyclic region the collector
+/// Port of the C++ `UnlaceTestCollector`.  For each cyclic region the collector
 /// records `(head addr, sorted body block addrs)`: the head is the first block
 /// visited while the region is open (its `node_keys()` iterate in
-/// `KunaNodeOrder`, so the lowest-address member — the loop head — comes first),
+/// `UnlaceNodeOrder`, so the lowest-address member — the loop head — comes first),
 /// and the body is every block visited while the region is on the stack.
 ///
 /// `direct_subregions` additionally counts the sub-regions entered as direct
@@ -32,11 +32,11 @@ use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionV
 /// equivalent of the C++ `top->getGraph()` region-node count: every region node
 /// in the top graph wraps exactly one such direct-child region.
 #[derive(Default)]
-struct KunaTestCollector {
+struct UnlaceTestCollector {
     /// Every leaf block address, in walk order (C++ `vector<uintb> addrs`).
     addrs: Vec<u64>,
     /// `(head addr, sorted body addrs)` for each cyclic region (C++
-    /// `vector<const KunaGraphRegion *> cyclics`, dereferenced eagerly here).
+    /// `vector<const UnlaceGraphRegion *> cyclics`, dereferenced eagerly here).
     cyclics: Vec<(u64, Vec<u64>)>,
     /// Count of direct-child sub-regions of the top region (stack depth 1).
     direct_subregions: i32,
@@ -45,8 +45,8 @@ struct KunaTestCollector {
     stack: Vec<(bool, u64, Vec<u64>)>,
 }
 
-impl KunaRegionVisitor for KunaTestCollector {
-    fn enter_region(&mut self, region: &KunaGraphRegion) {
+impl UnlaceRegionVisitor for UnlaceTestCollector {
+    fn enter_region(&mut self, region: &UnlaceGraphRegion) {
         // A direct child of the top region is entered while exactly the top frame
         // (depth 0) is open, i.e. the stack has length 1 at entry time.
         if self.stack.len() == 1 {
@@ -56,7 +56,7 @@ impl KunaRegionVisitor for KunaTestCollector {
         // by pushing an open frame whose head is filled from the first block.
         self.stack.push((region.is_cyclic(), u64::MAX, Vec::new()));
     }
-    fn exit_region(&mut self, _region: &KunaGraphRegion) {
+    fn exit_region(&mut self, _region: &UnlaceGraphRegion) {
         if let Some((cyclic, head, mut body)) = self.stack.pop() {
             if cyclic {
                 body.sort_unstable();
@@ -85,10 +85,10 @@ fn sorted_addrs(input: &[u64]) -> Vec<u64> {
 }
 
 /// The address of a region's head, read through the public API: the head node
-/// lives inside the region's own graph, so its `KunaNodeKey` (carrying the addr)
+/// lives inside the region's own graph, so its `UnlaceNodeKey` (carrying the addr)
 /// appears in `node_keys()`.  This is the public-API equivalent of the C++
 /// `region->getHead()->getAddr()`.
-fn head_addr(region: &KunaGraphRegion) -> u64 {
+fn head_addr(region: &UnlaceGraphRegion) -> u64 {
     let head = region.get_head().expect("region has a head");
     region
         .get_graph()
@@ -109,7 +109,7 @@ fn regionid_diamond0() {
     //       5
     //       |
     //       6
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     let n1 = ri.add_synthetic_block(1);
     let n2 = ri.add_synthetic_block(2);
     let n3 = ri.add_synthetic_block(3);
@@ -132,7 +132,7 @@ fn regionid_diamond0() {
     }
 
     // The recursive walker covers every input block exactly once.
-    let mut col = KunaTestCollector::default();
+    let mut col = UnlaceTestCollector::default();
     ri.walk_blocks(&mut col).expect("walk succeeds");
 
     // Exactly one of the two top-level nodes is a sub-region (the public-API
@@ -165,9 +165,9 @@ fn regionid_diamond1() {
     //        7
     //        |
     //        8
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     // nodes[1..=8] hold the synthetic blocks (index 0 is an unused placeholder,
-    // mirroring the C++ `KunaRegionNode *nodes[9]` 1-based layout).
+    // mirroring the C++ `UnlaceRegionNode *nodes[9]` 1-based layout).
     let n1 = ri.add_synthetic_block(1);
     let nodes = {
         let mut v = vec![n1, n1];
@@ -189,7 +189,7 @@ fn regionid_diamond1() {
     let top_id = ri.compute().expect("compute returns a top region");
     assert_eq!(ri.region(top_id).get_graph().num_nodes(), 2); // The angr assertion
 
-    let mut col = KunaTestCollector::default();
+    let mut col = UnlaceTestCollector::default();
     ri.walk_blocks(&mut col).expect("walk succeeds");
     assert_eq!(col.addrs.len(), 8_usize);
     let got = sorted_addrs(&col.addrs);
@@ -203,7 +203,7 @@ fn regionid_loop() {
     //   1 -> 2 -> 3 -> 4
     //        ^    |
     //        +----+        (3 loops back to 2)
-    let mut ri = KunaRegionIdentifier::new();
+    let mut ri = UnlaceRegionIdentifier::new();
     let n1 = ri.add_synthetic_block(1);
     let n2 = ri.add_synthetic_block(2);
     let n3 = ri.add_synthetic_block(3);
@@ -217,7 +217,7 @@ fn regionid_loop() {
     assert!(!ri.region(top_id).is_cyclic());
 
     // Exactly one cyclic region, headed at address 2, containing blocks {2,3}.
-    let mut col = KunaTestCollector::default();
+    let mut col = UnlaceTestCollector::default();
     ri.walk_blocks(&mut col).expect("walk succeeds");
     assert_eq!(col.cyclics.len(), 1_usize);
     let (loop_head, loop_addrs) = &col.cyclics[0];

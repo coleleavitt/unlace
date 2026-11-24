@@ -1,4 +1,4 @@
-//! (kuna `switchextent`) Bound a jump table no range check reaches at the next
+//! (unlace `switchextent`) Bound a jump table no range check reaches at the next
 //! jump table of the same function.
 //!
 //! A compiler that knows its selector is in range checks nothing before the
@@ -18,13 +18,13 @@
 //! from its entry to the next known entry, or a MiB) before it recovers any
 //! table, folds every register through the small lattice the dispatch
 //! shapes need, and names the table of each computed jump the fold proves
-//! reads one. The model's fallback ([`JumpBasicModel::kuna_try_extent_bound_table`])
+//! reads one. The model's fallback ([`JumpBasicModel::unlace_try_extent_bound_table`])
 //! then re-bounds a table it could not guard to `[0, N)` with `N` the entries
 //! that fit before the next one. A function's last table has no such bound
 //! and is left as it was: an object the function merely reads may sit
 //! anywhere in the section, and a bound taken from one could run the table on
 //! into another function's, whose entries are plausible code addresses
-//! measured from the wrong base. The run-on cut (`kuna_switchrunon`) still
+//! measured from the wrong base. The run-on cut (`unlace_switchrunon`) still
 //! applies to the rows a bound admits.
 //!
 //! A table a mask bounds only to its selector's width (the `and x8, x0,
@@ -675,6 +675,6 @@ fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.switchextent_table_read = Some(table_read);
 }

@@ -1,4 +1,4 @@
-//! (kuna DIV-50) Reconcile a renaming input Varnode against the write-masked
+//! (unlace DIV-50) Reconcile a renaming input Varnode against the write-masked
 //! input pieces a previous `Heritage::guardInput` left behind.
 //!
 //! `Heritage::guardInput` (`heritage.cc:1953`) tiles a partially-input range with
@@ -26,7 +26,7 @@
 //! Varnode this rewrite destroys.  Any other overlap still raises the upstream error.
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 use crate::context::VarnodeId;
@@ -44,7 +44,7 @@ use crate::varnode::varnode_flags;
 /// shape of the conflicting Varnode(s) — straddling vs. fully-contained,
 /// write-masked vs. live — rather than the bare "Overlapping input varnodes"
 /// the C++ `LowlevelError` carries.
-pub fn new_tiled_input(fd: &mut Funcdata, size: int4, addr: &Address) -> KunaResult<VarnodeId> {
+pub fn new_tiled_input(fd: &mut Funcdata, size: int4, addr: &Address) -> UnlaceResult<VarnodeId> {
     let candidate = fd.new_varnode(size, addr, None);
     let overlap_err = match fd.set_input_varnode(candidate) {
         Ok(vn) => return Ok(vn),
@@ -57,7 +57,7 @@ pub fn new_tiled_input(fd: &mut Funcdata, size: int4, addr: &Address) -> KunaRes
         let spacename = addr.get_space().map(|s| s.get_name()).unwrap_or("?");
         let lo = addr.get_offset();
         let hi = lo.wrapping_add(size as u64);
-        KunaError::lowlevel(format!(
+        UnlaceError::lowlevel(format!(
             "{overlap_err} (requested input {spacename}[{lo:#x},{hi:#x}); {reason})"
         ))
     })
@@ -193,7 +193,7 @@ fn combine_covered_pieces(
 // =====================================================================
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.inputtile_new_tiled_input = Some(new_tiled_input);
 }
 
@@ -244,7 +244,7 @@ mod tests {
     }
 
     fn no_replace()
-    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
+    -> impl FnMut(&mut crate::varnode::VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
         |_, _, _| Ok(())
     }
 

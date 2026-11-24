@@ -66,7 +66,7 @@ pub fn formatter_symbols(
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust
@@ -108,14 +108,14 @@ pub fn recover_inputs_at(
     kind: MacroKind,
 ) -> Option<Plan> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || (arch.rust_display_formatters.is_empty()
             && arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::rustfmtflags::IntegerFormatters>()
                 .is_empty()
             && arch.rust_str_display_formatters.is_empty())
@@ -187,7 +187,7 @@ pub fn primitive_arguments(
         let pointer = cells[index * 2];
         let address = constant_word(fd, cells[index * 2 + 1])?;
         let Some(formatter) = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustfmtflags::IntegerFormatters>()
             .get(&address)
             .copied()

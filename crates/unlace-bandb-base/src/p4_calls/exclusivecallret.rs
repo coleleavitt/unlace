@@ -118,7 +118,7 @@ fn shared_producer(data: &Funcdata, producer: BlockId, a: BlockId, b: BlockId) -
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.exclusivecallret_applies = Some(applies);
     hooks.exclusivecallret_skips_use = Some(skips_use);
 }

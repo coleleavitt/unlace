@@ -28,7 +28,7 @@ const MAX_TYPE_DEPTH: u32 = 3;
 
 /// The recursion guard threaded through [`super::build_datatype`].
 ///
-/// [`Guard`] is the guard proper; `active` is the (kuna `dwarfstructs`) set of
+/// [`Guard`] is the guard proper; `active` is the (unlace `dwarfstructs`) set of
 /// aggregate names whose field population is on the current path, so a
 /// self-referential member resolves to the interned shell instead of re-entering
 /// the populate — see [`super::dwarfstructs`].
@@ -70,14 +70,14 @@ impl TypeWalk {
         }
     }
 
-    /// (kuna `dwarfstructs`) Claim `name` for field population on this path.
+    /// (unlace `dwarfstructs`) Claim `name` for field population on this path.
     /// `false` => the aggregate is already being populated by an outer frame, so
     /// the caller must hand back the interned shell rather than recurse.
     pub(super) fn begin_aggregate(&mut self, name: &str) -> bool {
         self.active.insert(name.to_string())
     }
 
-    /// (kuna `dwarfstructs`) Release a name claimed by [`Self::begin_aggregate`].
+    /// (unlace `dwarfstructs`) Release a name claimed by [`Self::begin_aggregate`].
     pub(super) fn end_aggregate(&mut self, name: &str) {
         self.active.remove(name);
     }
@@ -173,7 +173,7 @@ mod tests {
         );
     }
 
-    /// (kuna `dwarfstructs`) The aggregate-in-progress claim is exact and
+    /// (unlace `dwarfstructs`) The aggregate-in-progress claim is exact and
     /// path-local: the same name cannot be claimed twice, and releasing it makes
     /// it claimable again (a struct reached a second time on a SIBLING branch
     /// must still be populatable).

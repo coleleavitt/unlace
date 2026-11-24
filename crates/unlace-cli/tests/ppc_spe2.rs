@@ -3,7 +3,7 @@
 //! loads and lane arithmetic decompile; before, most SPE2 words were bad
 //! instructions and the rest decoded as other instructions at the same encoding.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 const TARGET: &str = "PowerPC:BE:32:e200-SPE2";
 
@@ -30,7 +30,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile(args: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(&[&["decompile"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["decompile"][..], args].concat());
     assert_eq!(code, 0, "unlace decompile {args:?}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{args:?}:\n{stdout}");
@@ -41,7 +41,7 @@ fn decompile(args: &[&str]) -> String {
 #[test]
 fn every_spe2_and_efs2_encoding_decodes_as_binutils_names_it() {
     let probe = fixture("spe2_probe.o");
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "disassemble",
         &probe,
         "probe",

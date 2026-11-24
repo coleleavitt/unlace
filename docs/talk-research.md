@@ -181,7 +181,7 @@ Focused SIMD regressions passed 12/12:
 
 ```sh
 target/release/decomp_test_dbg -sleighpath specs -path tests/stages \
-  datatests kuna-devectorize.xml kuna-devectorize-effects.xml kuna-wideslice.xml
+  datatests devectorize.xml devectorize-effects.xml wideslice.xml
 ```
 
 The lifetime replay used the checked-in fixture and assertions; changing `on` to `off` reproduces the incompatible aggregate assignment:

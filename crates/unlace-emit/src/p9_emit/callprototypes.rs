@@ -27,7 +27,7 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
         if op.is_dead() || op.code() != OpCode::CPUI_CALL {
             continue;
         }
-        let name = call.fspec_printed_name(arch.kuna_name_style());
+        let name = call.fspec_printed_name(arch.unlace_name_style());
         let wide = crate::callwide::call_prototype(fd, call, &name)?;
         let proto = call.proto();
         if wide.is_none()
@@ -122,7 +122,7 @@ pub fn field_declarations(
     fd: &Funcdata,
 ) -> Vec<crate::calltargettype::FieldDecl> {
     let rt = crate::printc::RealTypeCtx::from_arch(arch, arch.print().out_lang());
-    fd.kuna_field_calls()
+    fd.unlace_field_calls()
         .iter()
         .map(|call| crate::calltargettype::FieldDecl {
             record: call.record.clone(),

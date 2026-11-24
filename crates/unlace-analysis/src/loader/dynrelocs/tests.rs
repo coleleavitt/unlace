@@ -3,7 +3,7 @@
 //! defined-vs-undefined symbol split, the `REL` implicit addend and the
 //! `PT_GNU_RELRO` intersection are all proven without a checked-in binary.
 //!
-//! The env GATE itself is NOT tested here: `KUNA_DYNRELOCS` is process-global and
+//! The env GATE itself is NOT tested here: `UNLACE_DYNRELOCS` is process-global and
 //! cargo runs these in parallel threads, so flipping it mid-suite perturbs every
 //! other test in this binary. Its two arms live in their own integration target,
 //! `tests/verify_dynrelocs_gate.rs`, exactly as `relocrebase`'s do.
@@ -419,7 +419,7 @@ fn i386_rel_table_reads_the_implicit_addend_from_the_slot() {
     );
 }
 
-/// An architecture kuna has no triple for produces nothing rather than guessing.
+/// An architecture unlace has no triple for produces nothing rather than guessing.
 #[test]
 fn unhandled_machine_is_inert() {
     // EM_SPARCV9 (43) — parsed fine, but `dyn_types` has no entry for it.
@@ -428,7 +428,7 @@ fn unhandled_machine_is_inert() {
 }
 
 /// Only the import's slot holds a value this image does not determine; an
-/// image whose relocations kuna cannot classify lists nothing as known.
+/// image whose relocations unlace cannot classify lists nothing as known.
 #[test]
 fn runtime_written_is_the_slots_resolve_leaves_alone() {
     assert_eq!(
@@ -474,10 +474,10 @@ fn fixup_sites_list_every_slot_with_its_kind() {
     );
 }
 
-/// A relocation outside the triple is listed, never valued, on a machine kuna
+/// A relocation outside the triple is listed, never valued, on a machine unlace
 /// has no triple for as on one it has.
 #[test]
-fn a_relocation_kuna_does_not_apply_is_listed_unvalued() {
+fn a_relocation_unlace_does_not_apply_is_listed_unvalued() {
     let bytes = image64(21, 8, 6, 7);
     let file = object::File::parse(&*bytes).unwrap();
     let listed = fixup_sites(&file, &bytes);

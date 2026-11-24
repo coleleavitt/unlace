@@ -17,7 +17,7 @@ use unlace_base::address::{
     calc_mask, count_leading_zeros, popcount, sign_extend, sign_extend_sized, signbit_negative,
     uintb_negate, zero_extend,
 };
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::Wrap;
 
 use crate::float::FloatFormat;
@@ -41,27 +41,27 @@ pub trait FloatFormatProvider {
 // ---------------------------------------------------------------------------
 
 /// The base-class `OpBehavior::evaluateUnary` throw.
-fn unary_unimplemented(opcode: OpCode) -> KunaError {
+fn unary_unimplemented(opcode: OpCode) -> UnlaceError {
     let name = get_opname(opcode);
-    KunaError::lowlevel(format!("Unary emulation unimplemented for {name}"))
+    UnlaceError::lowlevel(format!("Unary emulation unimplemented for {name}"))
 }
 
 /// The base-class `OpBehavior::evaluateBinary` throw.
-fn binary_unimplemented(opcode: OpCode) -> KunaError {
+fn binary_unimplemented(opcode: OpCode) -> UnlaceError {
     let name = get_opname(opcode);
-    KunaError::lowlevel(format!("Binary emulation unimplemented for {name}"))
+    UnlaceError::lowlevel(format!("Binary emulation unimplemented for {name}"))
 }
 
 /// The base-class `OpBehavior::evaluateTernary` throw.
-fn ternary_unimplemented(opcode: OpCode) -> KunaError {
+fn ternary_unimplemented(opcode: OpCode) -> UnlaceError {
     let name = get_opname(opcode);
-    KunaError::lowlevel(format!("Ternary emulation unimplemented for {name}"))
+    UnlaceError::lowlevel(format!("Ternary emulation unimplemented for {name}"))
 }
 
 /// The base-class `OpBehavior::recoverInputUnary` / `recoverInputBinary`
 /// throw.
-fn recover_unimplemented() -> KunaError {
-    KunaError::lowlevel("Cannot recover input parameter without loss of information")
+fn recover_unimplemented() -> UnlaceError {
+    UnlaceError::lowlevel("Cannot recover input parameter without loss of information")
 }
 
 /// \brief Class encapsulating the action/behavior of specific pcode opcodes
@@ -102,7 +102,7 @@ pub trait OpBehavior {
     /// \param sizein is the size of the input in bytes
     /// \param in1 is the input value
     /// \return the output value
-    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, _in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, _in1: u64) -> UnlaceResult<u64> {
         Err(unary_unimplemented(self.get_opcode()))
     }
 
@@ -119,7 +119,7 @@ pub trait OpBehavior {
         _sizein: i32,
         _in1: u64,
         _in2: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         Err(binary_unimplemented(self.get_opcode()))
     }
 
@@ -138,7 +138,7 @@ pub trait OpBehavior {
         _in1: u64,
         _in2: u64,
         _in3: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         Err(ternary_unimplemented(self.get_opcode()))
     }
 
@@ -159,7 +159,7 @@ pub trait OpBehavior {
         _out: u64,
         _sizein: i32,
         _in: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         Err(recover_unimplemented())
     }
 
@@ -170,7 +170,7 @@ pub trait OpBehavior {
     /// \param out is the output value
     /// \param sizein is the size of the input in bytes
     /// \return the input value
-    fn recover_input_unary(&self, _sizeout: i32, _out: u64, _sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, _sizeout: i32, _out: u64, _sizein: i32) -> UnlaceResult<u64> {
         Err(recover_unimplemented())
     }
 }
@@ -246,11 +246,11 @@ impl OpBehavior for OpBehaviorCopy {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> UnlaceResult<u64> {
         Ok(in1)
     }
 
-    fn recover_input_unary(&self, _sizeout: i32, out: u64, _sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, _sizeout: i32, out: u64, _sizein: i32) -> UnlaceResult<u64> {
         Ok(out)
     }
 }
@@ -266,7 +266,13 @@ impl OpBehavior for OpBehaviorEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         let res: u64 = if in1 == in2 { 1 } else { 0 };
         Ok(res)
     }
@@ -283,7 +289,13 @@ impl OpBehavior for OpBehaviorNotEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         let res: u64 = if in1 != in2 { 1 } else { 0 };
         Ok(res)
     }
@@ -300,7 +312,7 @@ impl OpBehavior for OpBehaviorIntSless {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res: u64;
         if sizein <= 0 {
             res = 0;
@@ -332,7 +344,7 @@ impl OpBehavior for OpBehaviorIntSlessEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res: u64;
         if sizein <= 0 {
             res = 0;
@@ -362,7 +374,13 @@ impl OpBehavior for OpBehaviorIntLess {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         let res: u64 = if in1 < in2 { 1 } else { 0 };
         Ok(res)
     }
@@ -379,7 +397,13 @@ impl OpBehavior for OpBehaviorIntLessEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         let res: u64 = if in1 <= in2 { 1 } else { 0 };
         Ok(res)
     }
@@ -396,14 +420,14 @@ impl OpBehavior for OpBehaviorIntZext {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> UnlaceResult<u64> {
         Ok(in1)
     }
 
-    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> UnlaceResult<u64> {
         let mask = calc_mask(sizein);
         if (mask & out) != out {
-            return Err(KunaError::evaluation(
+            return Err(UnlaceError::evaluation(
                 "Output is not in range of zext operation",
             ));
         }
@@ -422,27 +446,27 @@ impl OpBehavior for OpBehaviorIntSext {
         true
     }
 
-    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         // C++ calls the uintb sign_extend(in,sizein,sizeout) overload
         let res = sign_extend_sized(in1, sizein, sizeout);
         Ok(res)
     }
 
-    fn recover_input_unary(&self, sizeout: i32, out: u64, sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, sizeout: i32, out: u64, sizein: i32) -> UnlaceResult<u64> {
         let masklong = calc_mask(sizeout);
         let maskshort = calc_mask(sizein);
 
         if (out & (maskshort ^ (maskshort >> 1))) == 0 {
             // Positive input
             if (out & maskshort) != out {
-                return Err(KunaError::evaluation(
+                return Err(UnlaceError::evaluation(
                     "Output is not in range of sext operation",
                 ));
             }
         } else {
             // Negative input
             if (out & (masklong ^ maskshort)) != (masklong ^ maskshort) {
-                return Err(KunaError::evaluation(
+                return Err(UnlaceError::evaluation(
                     "Output is not in range of sext operation",
                 ));
             }
@@ -462,7 +486,7 @@ impl OpBehavior for OpBehaviorIntAdd {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wadd(in2) & calc_mask(sizeout);
         Ok(res)
     }
@@ -474,7 +498,7 @@ impl OpBehavior for OpBehaviorIntAdd {
         out: u64,
         _sizein: i32,
         in_: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         let res = out.wsub(in_) & calc_mask(sizeout);
         Ok(res)
     }
@@ -491,7 +515,7 @@ impl OpBehavior for OpBehaviorIntSub {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wsub(in2) & calc_mask(sizeout);
         Ok(res)
     }
@@ -503,7 +527,7 @@ impl OpBehavior for OpBehaviorIntSub {
         out: u64,
         _sizein: i32,
         in_: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         let mut res: u64;
         if slot == 0 {
             res = in_.wadd(out);
@@ -526,7 +550,7 @@ impl OpBehavior for OpBehaviorIntCarry {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res: u64 = if in1 > (in1.wadd(in2) & calc_mask(sizein)) {
             1
         } else {
@@ -547,7 +571,7 @@ impl OpBehavior for OpBehaviorIntScarry {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wadd(in2);
 
         // sign-bit extraction: shift count sizein*8-1 (sizein <= 0 is C++
@@ -575,7 +599,7 @@ impl OpBehavior for OpBehaviorIntSborrow {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wsub(in2);
 
         let mut a = (in1.wshr((sizein * 8 - 1) as u32) & 1) as u32; // cast: uintb -> uint4, value is 0/1; Grab sign bit
@@ -601,12 +625,12 @@ impl OpBehavior for OpBehaviorInt2Comp {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let res = uintb_negate(in1.wsub(1), sizein);
         Ok(res)
     }
 
-    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> UnlaceResult<u64> {
         let res = uintb_negate(out.wsub(1), sizein);
         Ok(res)
     }
@@ -623,12 +647,12 @@ impl OpBehavior for OpBehaviorIntNegate {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let res = uintb_negate(in1, sizein);
         Ok(res)
     }
 
-    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> KunaResult<u64> {
+    fn recover_input_unary(&self, _sizeout: i32, out: u64, sizein: i32) -> UnlaceResult<u64> {
         let res = uintb_negate(out, sizein);
         Ok(res)
     }
@@ -645,7 +669,13 @@ impl OpBehavior for OpBehaviorIntXor {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 ^ in2)
     }
 }
@@ -661,7 +691,13 @@ impl OpBehavior for OpBehaviorIntAnd {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 & in2)
     }
 }
@@ -677,7 +713,13 @@ impl OpBehavior for OpBehaviorIntOr {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 | in2)
     }
 }
@@ -693,7 +735,7 @@ impl OpBehavior for OpBehaviorIntLeft {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         // mixed comparison: uintb in2 vs int4 sizeout*8 — the int converts
         // to uintb by sign-extension (a negative product compares huge)
         if in2 >= sizeout.wmul(8) as i64 as u64 {
@@ -713,7 +755,7 @@ impl OpBehavior for OpBehaviorIntLeft {
         out: u64,
         _sizein: i32,
         in_: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         // mixed comparison: uintb in vs int4 sizeout*8 (sign-extends)
         if slot != 0 || in_ >= sizeout.wmul(8) as i64 as u64 {
             // cast: int4 -> uintb sign-extension as in C++
@@ -724,7 +766,7 @@ impl OpBehavior for OpBehaviorIntLeft {
         // x86 shift masks the count, which wshl reproduces
         if (out.wshl((8 * sizeout - sa) as u32) & calc_mask(sizeout)) != 0 {
             // cast above: shift count
-            return Err(KunaError::evaluation(
+            return Err(UnlaceError::evaluation(
                 "Output is not in range of left shift operation",
             ));
         }
@@ -743,7 +785,7 @@ impl OpBehavior for OpBehaviorIntRight {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         // mixed comparison: uintb in2 vs int4 sizeout*8 (sign-extends)
         if in2 >= sizeout.wmul(8) as i64 as u64 {
             // cast: int4 -> uintb sign-extension as in C++
@@ -760,7 +802,7 @@ impl OpBehavior for OpBehaviorIntRight {
         out: u64,
         sizein: i32,
         in_: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         // mixed comparison: uintb in vs int4 sizeout*8 (sign-extends)
         if slot != 0 || in_ >= sizeout.wmul(8) as i64 as u64 {
             // cast: int4 -> uintb sign-extension as in C++
@@ -771,7 +813,7 @@ impl OpBehavior for OpBehaviorIntRight {
         // 8*sizein-sa can hit 64 (sa=0, sizein=8): C++ UB, x86-masked count
         if out.wshr((8 * sizein - sa) as u32) != 0 {
             // cast above: shift count
-            return Err(KunaError::evaluation(
+            return Err(UnlaceError::evaluation(
                 "Output is not in range of right shift operation",
             ));
         }
@@ -790,7 +832,7 @@ impl OpBehavior for OpBehaviorIntSright {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         // mixed comparison: uintb in2 vs int4 8*sizeout (sign-extends)
         if in2 >= 8i32.wmul(sizeout) as i64 as u64 {
             // cast: int4 -> uintb sign-extension as in C++
@@ -819,7 +861,7 @@ impl OpBehavior for OpBehaviorIntSright {
         out: u64,
         sizein: i32,
         in_: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         // mixed comparison: uintb in vs int4 sizeout*8 (sign-extends)
         if slot != 0 || in_ >= sizeout.wmul(8) as i64 as u64 {
             // cast: int4 -> uintb sign-extension as in C++
@@ -840,7 +882,7 @@ impl OpBehavior for OpBehaviorIntSright {
             i += 1;
         }
         if count != sa + 1 {
-            return Err(KunaError::evaluation(
+            return Err(UnlaceError::evaluation(
                 "Output is not in range of right shift operation",
             ));
         }
@@ -859,7 +901,7 @@ impl OpBehavior for OpBehaviorIntMult {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wmul(in2) & calc_mask(sizeout);
         Ok(res)
     }
@@ -876,9 +918,15 @@ impl OpBehavior for OpBehaviorIntDiv {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         if in2 == 0 {
-            return Err(KunaError::evaluation("Divide by 0"));
+            return Err(UnlaceError::evaluation("Divide by 0"));
         }
         Ok(in1 / in2)
     }
@@ -895,9 +943,9 @@ impl OpBehavior for OpBehaviorIntSdiv {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         if in2 == 0 {
-            return Err(KunaError::evaluation("Divide by 0"));
+            return Err(UnlaceError::evaluation("Divide by 0"));
         }
         let num = sign_extend(in1 as i64, 8 * sizein - 1); // cast: uintb -> intb reinterpret (C++ implicit); Convert to signed
         let denom = sign_extend(in2 as i64, 8 * sizein - 1); // cast: uintb -> intb reinterpret (C++ implicit)
@@ -906,7 +954,7 @@ impl OpBehavior for OpBehaviorIntSdiv {
         // instead of trapping (golden vectors pin these cells as TRAP rows,
         // TRAP == error).  It must NOT panic and must NOT wrap.
         if num == i64::MIN && denom == -1 {
-            return Err(KunaError::evaluation("Signed division overflow"));
+            return Err(UnlaceError::evaluation("Signed division overflow"));
         }
         let sres = num / denom; // Do the signed division
         let sres = zero_extend(sres, 8 * sizeout - 1); // Cut to appropriate size
@@ -925,9 +973,15 @@ impl OpBehavior for OpBehaviorIntRem {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         if in2 == 0 {
-            return Err(KunaError::evaluation("Remainder by 0"));
+            return Err(UnlaceError::evaluation("Remainder by 0"));
         }
         let res = in1 % in2;
         Ok(res)
@@ -945,16 +999,16 @@ impl OpBehavior for OpBehaviorIntSrem {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         if in2 == 0 {
-            return Err(KunaError::evaluation("Remainder by 0"));
+            return Err(UnlaceError::evaluation("Remainder by 0"));
         }
         let val = sign_extend(in1 as i64, 8 * sizein - 1); // cast: uintb -> intb reinterpret (C++ implicit); Convert inputs to signed values
         let mod_ = sign_extend(in2 as i64, 8 * sizein - 1); // cast: uintb -> intb reinterpret (C++ implicit)
         // UB-2 (docs/rust-port/upstream-bugs.md): INT64_MIN % -1 raises the
         // same x86 #DE trap as the division; return an error, never panic.
         if val == i64::MIN && mod_ == -1 {
-            return Err(KunaError::evaluation("Signed division overflow"));
+            return Err(UnlaceError::evaluation("Signed division overflow"));
         }
         let sres = val % mod_; // Do the remainder
         let sres = zero_extend(sres, 8 * sizeout - 1); // Convert back to unsigned
@@ -973,7 +1027,7 @@ impl OpBehavior for OpBehaviorBoolNegate {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> UnlaceResult<u64> {
         Ok(in1 ^ 1)
     }
 }
@@ -989,7 +1043,13 @@ impl OpBehavior for OpBehaviorBoolXor {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 ^ in2)
     }
 }
@@ -1005,7 +1065,13 @@ impl OpBehavior for OpBehaviorBoolAnd {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 & in2)
     }
 }
@@ -1021,7 +1087,13 @@ impl OpBehavior for OpBehaviorBoolOr {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(
+        &self,
+        _sizeout: i32,
+        _sizein: i32,
+        in1: u64,
+        in2: u64,
+    ) -> UnlaceResult<u64> {
         Ok(in1 | in2)
     }
 }
@@ -1047,7 +1119,7 @@ impl OpBehavior for OpBehaviorFloatEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1077,7 +1149,7 @@ impl OpBehavior for OpBehaviorFloatNotEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1107,7 +1179,7 @@ impl OpBehavior for OpBehaviorFloatLess {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1137,7 +1209,7 @@ impl OpBehavior for OpBehaviorFloatLessEqual {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1167,7 +1239,7 @@ impl OpBehavior for OpBehaviorFloatNan {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1197,7 +1269,7 @@ impl OpBehavior for OpBehaviorFloatAdd {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1227,7 +1299,7 @@ impl OpBehavior for OpBehaviorFloatDiv {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1257,7 +1329,7 @@ impl OpBehavior for OpBehaviorFloatMult {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1287,7 +1359,7 @@ impl OpBehavior for OpBehaviorFloatSub {
         false
     }
 
-    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, _sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(binary_unimplemented(self.get_opcode())),
@@ -1317,7 +1389,7 @@ impl OpBehavior for OpBehaviorFloatNeg {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1347,7 +1419,7 @@ impl OpBehavior for OpBehaviorFloatAbs {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1377,7 +1449,7 @@ impl OpBehavior for OpBehaviorFloatSqrt {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1407,7 +1479,7 @@ impl OpBehavior for OpBehaviorFloatInt2Float {
         true
     }
 
-    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         // NOTE: the format is looked up by the OUTPUT size
         let format = match self.translate.get_float_format(sizeout) {
             Some(f) => f,
@@ -1438,7 +1510,7 @@ impl OpBehavior for OpBehaviorFloatFloat2Float {
         true
     }
 
-    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let formatout = match self.translate.get_float_format(sizeout) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1472,7 +1544,7 @@ impl OpBehavior for OpBehaviorFloatTrunc {
         true
     }
 
-    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1502,7 +1574,7 @@ impl OpBehavior for OpBehaviorFloatCeil {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1532,7 +1604,7 @@ impl OpBehavior for OpBehaviorFloatFloor {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1562,7 +1634,7 @@ impl OpBehavior for OpBehaviorFloatRound {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         let format = match self.translate.get_float_format(sizein) {
             Some(f) => f,
             None => return Err(unary_unimplemented(self.get_opcode())),
@@ -1582,7 +1654,7 @@ impl OpBehavior for OpBehaviorPiece {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         // shift count (sizeout-sizein)*8 goes negative for the golden
         // sizeout==1 rows: C++ UB resolved by the oracle's x86 `shl` masking
         // the (two's-complement) count to 6 bits — wshl reproduces exactly
@@ -1603,7 +1675,7 @@ impl OpBehavior for OpBehaviorSubpiece {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         // C++ `in2 >= sizeof(uintb)`: uintb vs size_t, both unsigned
         if in2 >= 8 {
             return Ok(0);
@@ -1631,7 +1703,7 @@ impl OpBehavior for OpBehaviorPtradd {
         in1: u64,
         in2: u64,
         in3: u64,
-    ) -> KunaResult<u64> {
+    ) -> UnlaceResult<u64> {
         let res = in1.wadd(in2.wmul(in3)) & calc_mask(sizeout);
         Ok(res)
     }
@@ -1648,7 +1720,7 @@ impl OpBehavior for OpBehaviorPtrsub {
         false
     }
 
-    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> KunaResult<u64> {
+    fn evaluate_binary(&self, sizeout: i32, _sizein: i32, in1: u64, in2: u64) -> UnlaceResult<u64> {
         let res = in1.wadd(in2) & calc_mask(sizeout);
         Ok(res)
     }
@@ -1665,7 +1737,7 @@ impl OpBehavior for OpBehaviorPopcount {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, _sizein: i32, in1: u64) -> UnlaceResult<u64> {
         Ok(popcount(in1) as u64) // cast: int4 -> uintb, popcount is in 0..=64
     }
 }
@@ -1681,7 +1753,7 @@ impl OpBehavior for OpBehaviorLzcount {
         true
     }
 
-    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> KunaResult<u64> {
+    fn evaluate_unary(&self, _sizeout: i32, sizein: i32, in1: u64) -> UnlaceResult<u64> {
         // C++ `count_leading_zeros(in1) - 8*(sizeof(uintb) - sizein)`:
         // sizeof(uintb) is size_t, so the whole expression computes in
         // unsigned 64-bit arithmetic and wraps if in1 has bits above
@@ -1938,11 +2010,11 @@ mod tests {
         for sizeout in [8, 1] {
             assert!(matches!(
                 sdiv.evaluate_binary(sizeout, 8, 0x8000000000000000, 0xffffffffffffffff),
-                Err(KunaError::Evaluation { .. })
+                Err(UnlaceError::Evaluation { .. })
             ));
             assert!(matches!(
                 srem.evaluate_binary(sizeout, 8, 0x8000000000000000, 0xffffffffffffffff),
-                Err(KunaError::Evaluation { .. })
+                Err(UnlaceError::Evaluation { .. })
             ));
         }
         // The same bit pattern at a smaller size is an ordinary division:
@@ -1955,11 +2027,11 @@ mod tests {
         // Divide by zero is the EvaluationError path, not a panic.
         assert!(matches!(
             sdiv.evaluate_binary(8, 8, 1, 0),
-            Err(KunaError::Evaluation { explain }) if explain == "Divide by 0"
+            Err(UnlaceError::Evaluation { explain }) if explain == "Divide by 0"
         ));
         assert!(matches!(
             srem.evaluate_binary(8, 8, 1, 0),
-            Err(KunaError::Evaluation { explain }) if explain == "Remainder by 0"
+            Err(UnlaceError::Evaluation { explain }) if explain == "Remainder by 0"
         ));
     }
 
@@ -1969,25 +2041,25 @@ mod tests {
         // UB-1: in C++ this very error path reads past the name table for
         // SPULL; here it formats the canonical name.
         match beh.evaluate_binary(8, 8, 1, 2) {
-            Err(KunaError::Lowlevel { explain }) => {
+            Err(UnlaceError::Lowlevel { explain }) => {
                 assert_eq!(explain, "Binary emulation unimplemented for SPULL");
             }
             other => panic!("expected Lowlevel error, got {other:?}"),
         }
         match beh.evaluate_unary(8, 8, 1) {
-            Err(KunaError::Lowlevel { explain }) => {
+            Err(UnlaceError::Lowlevel { explain }) => {
                 assert_eq!(explain, "Unary emulation unimplemented for SPULL");
             }
             other => panic!("expected Lowlevel error, got {other:?}"),
         }
         match beh.evaluate_ternary(8, 8, 1, 2, 3) {
-            Err(KunaError::Lowlevel { explain }) => {
+            Err(UnlaceError::Lowlevel { explain }) => {
                 assert_eq!(explain, "Ternary emulation unimplemented for SPULL");
             }
             other => panic!("expected Lowlevel error, got {other:?}"),
         }
         match beh.recover_input_binary(0, 8, 1, 8, 2) {
-            Err(KunaError::Lowlevel { explain }) => {
+            Err(UnlaceError::Lowlevel { explain }) => {
                 assert_eq!(
                     explain,
                     "Cannot recover input parameter without loss of information"
@@ -2037,7 +2109,7 @@ mod tests {
         );
         assert!(matches!(
             OpBehaviorIntZext.recover_input_unary(4, 0x100, 1),
-            Err(KunaError::Evaluation { .. })
+            Err(UnlaceError::Evaluation { .. })
         ));
         // SEXT: negative path recovers the truncated input, positive path
         // rejects values with bits above sizein.
@@ -2068,11 +2140,11 @@ mod tests {
         // throw; in-range shifts validate the recovered bits.
         assert!(matches!(
             OpBehaviorIntLeft.recover_input_binary(1, 4, 8, 4, 1),
-            Err(KunaError::Lowlevel { .. })
+            Err(UnlaceError::Lowlevel { .. })
         ));
         assert!(matches!(
             OpBehaviorIntLeft.recover_input_binary(0, 4, 8, 4, 32),
-            Err(KunaError::Lowlevel { .. })
+            Err(UnlaceError::Lowlevel { .. })
         ));
         assert_eq!(
             OpBehaviorIntLeft
@@ -2082,7 +2154,7 @@ mod tests {
         );
         assert!(matches!(
             OpBehaviorIntLeft.recover_input_binary(0, 4, 9, 4, 3),
-            Err(KunaError::Evaluation { .. })
+            Err(UnlaceError::Evaluation { .. })
         ));
         // INT_RIGHT recover.
         assert_eq!(
@@ -2093,7 +2165,7 @@ mod tests {
         );
         assert!(matches!(
             OpBehaviorIntRight.recover_input_binary(0, 4, 0x20000000, 4, 3),
-            Err(KunaError::Evaluation { .. })
+            Err(UnlaceError::Evaluation { .. })
         ));
         // INT_SRIGHT recover: sign bits must replicate across sa+1 places.
         // out 0xc0 at size 1, sa 1: top two bits set -> input 0x80 << 1.
@@ -2105,7 +2177,7 @@ mod tests {
         );
         assert!(matches!(
             OpBehaviorIntSright.recover_input_binary(0, 1, 0x40, 1, 1),
-            Err(KunaError::Evaluation { .. })
+            Err(UnlaceError::Evaluation { .. })
         ));
     }
 

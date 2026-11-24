@@ -1,6 +1,6 @@
-//! (kuna `libgccsigs`) Compiler-runtime contracts whose integer widths come from
+//! (unlace `libgccsigs`) Compiler-runtime contracts whose integer widths come from
 //! machine modes, not the host C data model. Also the libgcc routines with an
-//! eight-byte result on a big-endian target (`kuna_softfpsigs`). Off by default: a caller that
+//! eight-byte result on a big-endian target (`unlace_softfpsigs`). Off by default: a caller that
 //! returns arithmetic on the locked eight-byte quotient still loses a word.
 //!
 //! `__divdi3` is `di_int (di_int, di_int)`, with `di_int = int64_t`:

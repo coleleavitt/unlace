@@ -166,7 +166,7 @@ impl Descriptors {
     }
 }
 
-/// The 8-byte words at `begin` as the dynamic linker leaves them at kuna's zero load bias:
+/// The 8-byte words at `begin` as the dynamic linker leaves them at unlace's zero load bias:
 /// `None` where a relocation other than one exact RELA relative writes them.
 pub(crate) fn relocated_words(
     file: &object::File<'_>,
@@ -200,7 +200,7 @@ fn relocated_word(
     Some(value)
 }
 
-/// Resolve RELA relative words at kuna's initial zero load bias; uncertain writes invalidate affected words.
+/// Resolve RELA relative words at unlace's initial zero load bias; uncertain writes invalidate affected words.
 fn descriptor_relocations(
     file: &object::File<'_>,
     begin: u64,

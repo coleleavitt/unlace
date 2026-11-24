@@ -1,4 +1,4 @@
-//! (kuna `msvcstackguard`) An x86-32 MSVC `/GS` checker whose pop only the
+//! (unlace `msvcstackguard`) An x86-32 MSVC `/GS` checker whose pop only the
 //! stack solver guessed is kept, but it is still the exact checker the cookie
 //! algebra proves, and `__security_check_cookie` preserves EAX: the caller's
 //! return value survives it. Fixture: `gsreturn_pe_i386.dll` (fixtures README),
@@ -7,7 +7,7 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
@@ -15,7 +15,7 @@ fn kuna() -> std::ffi::OsString {
 #[test]
 fn a_kept_cookie_checker_does_not_kill_the_return_value() {
     let fixture = common::fixture("gsreturn_pe_i386.dll");
-    let mut command = Command::new(kuna());
+    let mut command = Command::new(unlace());
     command.args(["decompile", &fixture, "relay"]);
     let output = process::required_output(&mut command);
     let text = String::from_utf8_lossy(&output.stdout);

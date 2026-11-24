@@ -3,7 +3,7 @@
 //! and the SmartMIPS SPECIAL/SPECIAL2 forms were bad instructions or opaque
 //! `SPECIAL2` placeholders.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -28,7 +28,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile(args: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(&[&["decompile"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["decompile"][..], args].concat());
     assert_eq!(code, 0, "unlace decompile {args:?}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{args:?}:\n{stdout}");
@@ -48,7 +48,7 @@ const PROBES: [(&str, &str, &str); 2] = [
 #[test]
 fn every_mips3d_and_smartmips_encoding_decodes_as_binutils_names_it() {
     for (object, expected, target) in PROBES {
-        let (stdout, stderr, code) = run_kuna(&[
+        let (stdout, stderr, code) = run_unlace(&[
             "disassemble",
             &fixture(object),
             "probe",

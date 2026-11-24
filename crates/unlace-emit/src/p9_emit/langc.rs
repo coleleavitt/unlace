@@ -1,9 +1,9 @@
-//! (kuna) The c-language policy objects: the concrete half of the output-language
+//! (unlace) The c-language policy objects: the concrete half of the output-language
 //! seam for C.
 //!
 //! [`CSpeller`] carries the declarator algorithm transcribed from
 //! `PrintC::pushTypeStart` / `pushTypeEnd` (printc.cc:265/314) plus
-//! `buildTypeStack` (printc.cc:143), together with the kuna `realtypes`/`ctypes`
+//! `buildTypeStack` (printc.cc:143), together with the unlace `realtypes`/`ctypes`
 //! relabelling (DIV-5/DIV-6). The bodies are moved verbatim out of `printc.rs`,
 //! which now keeps only thin dispatchers so its existing free-function callers
 //! and their tests are unchanged.
@@ -90,7 +90,7 @@ impl TypeSpeller for CSpeller {
             }
             return self.unknown_base(dt.get_size(), under_pointer, cx.long_is_8);
         }
-        // (kuna `ctypes`) Every OTHER core type -- the named `int4`/`uint1`/
+        // (unlace `ctypes`) Every OTHER core type -- the named `int4`/`uint1`/
         // `float8`/`code` vocabulary -- spells as the target's own C type.
         // Restricted to core types so a user-defined or DWARF-recovered type keeps
         // the name it was declared with; that name is already C.
@@ -147,7 +147,7 @@ impl TypeSpeller for CSpeller {
         }
         // The base type's display name (anonymous -> `undefined<N>` / `void`).
         let (base, qualifiers) = stack.last().expect("declarator: non-empty stack");
-        // (kuna) realtypes: relabel a residual TYPE_UNKNOWN base as a real C type
+        // (unlace) realtypes: relabel a residual TYPE_UNKNOWN base as a real C type
         // by size. Under a pointer modifier the same size table applies, so the
         // pointee width survives into the declaration; only a residual size with
         // no natural C type degrades to `void` there (the `*` chain is laid out by
@@ -243,7 +243,7 @@ impl TypeSpeller for CSpeller {
         if t.qualified_base().is_some() {
             return self.declarator(cx, t);
         }
-        // (kuna) realtypes: a scalar residual TYPE_UNKNOWN (the named `xunknownN`
+        // (unlace) realtypes: a scalar residual TYPE_UNKNOWN (the named `xunknownN`
         // core type or an anonymous `undefined<N>`) becomes its real C type by size.
         if let Some(n) = self.relabel(cx, t, false) {
             return (n.into_owned(), String::new());

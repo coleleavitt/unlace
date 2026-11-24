@@ -69,7 +69,7 @@ use unlace_base::types::int4;
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<orchain>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<orchain>` (unlace).  ElementIds live in the 4000+ range
 /// (Originally 4122, which collided: funcboundflow claimed the same id a day earlier from
 /// the same "next free above itecondlist" reasoning. Renumbered to 4136; run
 /// `python3 -m scripts.repipe.counters --check`, which now fails on a duplicate.)
@@ -81,7 +81,7 @@ pub const ELEM_ORCHAIN: ElementId = ElementId::new("orchain", 4136);
 #[doc(hidden)]
 pub fn shortcircuit_shared_targets(data: &Funcdata) -> BTreeSet<BlockId> {
     let mut shared: BTreeSet<BlockId> = BTreeSet::new();
-    let live_out = data.get_arch().kuna_options.get::<OrchainLive>().0;
+    let live_out = data.get_arch().unlace_options.get::<OrchainLive>().0;
     let nbb = data.bblocks_get_size();
     if nbb < 3 {
         return shared;
@@ -223,8 +223,8 @@ fn preds_of(data: &Funcdata, b: BlockId) -> Vec<BlockId> {
     (0..blk.size_in()).map(|i| blk.get_in(i)).collect()
 }
 
-crate::kuna_flag!(
-    /// (kuna `orchainlive`) Leave a short-circuit fold unprotected from `returndup` when its
+crate::unlace_flag!(
+    /// (unlace `orchainlive`) Leave a short-circuit fold unprotected from `returndup` when its
     /// operand block computes a value read after the chain.
     OrchainLive,
     "orchainlive",
@@ -234,6 +234,6 @@ crate::kuna_flag!(
 );
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.orchain_shortcircuit_shared_targets = Some(shortcircuit_shared_targets);
 }

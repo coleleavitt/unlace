@@ -24,7 +24,7 @@ pub struct Assignment {
 pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::StackViews>()
         .0
     {
@@ -46,11 +46,11 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
         (value.get_addr().clone(), None)
     } else {
         let high = fd.high_bank().get(value.get_high()?)?;
-        let symbol = high.kuna_link_symbol()?;
+        let symbol = high.unlace_link_symbol()?;
         if scope.database().symbol(symbol).scope != scope.scope_id() {
             return None;
         }
-        let offset = high.kuna_symbol_offset();
+        let offset = high.unlace_symbol_offset();
         if offset < 0 {
             return None;
         }

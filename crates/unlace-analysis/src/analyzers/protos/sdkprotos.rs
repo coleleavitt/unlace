@@ -1,4 +1,4 @@
-//! (kuna `objcsdk`) C function prototypes from SDK headers, for the functions
+//! (unlace `objcsdk`) C function prototypes from SDK headers, for the functions
 //! an image imports.
 //!
 //! The headers `objcsdk` names declare far more than Objective-C methods:
@@ -2171,7 +2171,7 @@ impl<'i, 'a> Builder<'i, 'a> {
             Some(_) => self.types.get_type_void().ok(),
             None => self
                 .types
-                .kuna_declare_record(name, union)
+                .unlace_declare_record(name, union)
                 .ok()
                 .or_else(|| self.types.get_type_void().ok()),
         };
@@ -2207,7 +2207,7 @@ impl<'i, 'a> Builder<'i, 'a> {
                 return Some((Rc::clone(&t), t.get_size(), t.get_alignment()));
             }
             Some(t) => t,
-            None => self.types.kuna_declare_record(name, union).ok()?,
+            None => self.types.unlace_declare_record(name, union).ok()?,
         };
         let mut fields = Vec::new();
         let (mut offset, mut size, mut align) = (0i32, 0i32, 1i32);

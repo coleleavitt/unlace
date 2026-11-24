@@ -15,14 +15,14 @@
 //! as wrong as `sink >> 4`), or through an operation a later rule makes
 //! sign-sensitive ([`may_read_signedness`]): the marker join this decision
 //! allows is forced, so it cannot wait for the rules to finish.  The `COPY` stays
-//! alive at the binary's own store, and chapter 06's `kuna_globalvalue`
+//! alive at the binary's own store, and chapter 06's `unlace_globalvalue`
 //! refuses the copy-shadow join, so the value keeps its own variable and the
 //! store prints where the binary makes it.  A store after which an earlier
 //! value of the global is still used is left alone ([`old_value_read_after`]):
 //! kept, it would make `Merge` copy that earlier value out above a pointer store
 //! the binary loads the global after.
 //!
-//! A load is the other reader of that `COPY`: kuna's SSA gives a pointer store
+//! A load is the other reader of that `COPY`: unlace's SSA gives a pointer store
 //! no effect on a global, so after `gi = u; *p = k;` the binary's load of `gi`
 //! still reads the store's `COPY`, and propagating `u` into it would print `u`
 //! where the binary reads memory that `*p` may have changed.  [`declines`]

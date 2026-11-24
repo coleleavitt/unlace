@@ -1,10 +1,10 @@
 //! MIPS `$gp` (global-pointer) recovery via per-function `t9` register-value
-//! tracking — the kuna analog of Ghidra's `MipsAddressAnalyzer`.
+//! tracking — the unlace analog of Ghidra's `MipsAddressAnalyzer`.
 //!
 //! Unlike ARM `TMode` ([`crate::loader::arm_markers`]), which paints a SLEIGH
 //! decode-mode context *bit*, MIPS `$gp` recovery is a **tracked register VALUE**:
 //! a constant seeded at a register at a function entry that the decompiler's
-//! constant-value analysis then propagates. The boundary it uses is kuna's
+//! constant-value analysis then propagates. The boundary it uses is unlace's
 //! `TrackedSet`/`TrackedContext` (`globalcontext.rs`), driven exactly like the
 //! console `set track <reg> <val> <start> <end>` command (`IfcSettrackedrange`):
 //! the commit boundary (`engine.rs::commit_analysis_output`) calls
@@ -31,9 +31,9 @@
 //!    `gp = _gp_disp + t9` (`lui gp; addiu gp; addu gp,gp,t9`), which folds to the
 //!    real `$gp`.
 //!
-//! kuna ports mechanism **(2) `t9 = func_entry`** as the broadly-correct,
+//! unlace ports mechanism **(2) `t9 = func_entry`** as the broadly-correct,
 //! parity-safe choice for this tier. mechanism (1) — seeding `gp` directly — is
-//! **deliberately NOT** ported here, because kuna's `ActionConstbase` is the
+//! **deliberately NOT** ported here, because unlace's `ActionConstbase` is the
 //! *unconditional* `COPY #val -> reg` form (it lacks Ghidra's *lazy* `unknownValue`
 //! propagator that only assumes a value when the register is genuinely unknown and
 //! `clearRegister`s it after a PIC call). An unconditional `COPY #_gp -> gp` at
@@ -76,7 +76,7 @@ const T9: &str = "t9";
 /// for the documented cross-check, never to seed the `t9` fact.
 pub const MIPS_GP_BIAS: u64 = 0x7ff0;
 
-/// Recover the program-wide `$gp` value from the ELF symbol table — the kuna
+/// Recover the program-wide `$gp` value from the ELF symbol table — the unlace
 /// analog of `MipsAddressAnalyzer.checkForGlobalGP` (`:137-191`). Prefers
 /// `_mips_gp_value` (`MIPS_ElfExtension.MIPS_GP_VALUE_SYMBOL`), then `_gp`/`_GP`.
 /// Returns `None` if no such symbol is present (a stripped binary). This is the
@@ -122,7 +122,7 @@ fn scan_mips_markers(file: &object::File, t9_size: u32) -> AnalysisOutput {
     if !super::mipsabi::is_mips(file.architecture()) {
         return out;
     }
-    // Only ELF carries these conventions (the only format kuna loads for MIPS).
+    // Only ELF carries these conventions (the only format unlace loads for MIPS).
     if !matches!(file.format(), object::BinaryFormat::Elf) {
         return out;
     }
@@ -235,7 +235,7 @@ pub(crate) fn scan_mips_isa_markers(file: &object::File) -> AnalysisOutput {
     if !super::mipsabi::is_mips(file.architecture()) {
         return out;
     }
-    // Only ELF carries these conventions (the only format kuna loads for MIPS).
+    // Only ELF carries these conventions (the only format unlace loads for MIPS).
     if !matches!(file.format(), object::BinaryFormat::Elf) {
         return out;
     }

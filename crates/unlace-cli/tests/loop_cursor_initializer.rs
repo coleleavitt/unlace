@@ -32,7 +32,7 @@ fn loop_cursor_preserves_empty_branches_and_live_callback_uses() {
     let expected = process::required_output(&mut Command::new(&native)).stdout;
     let specs = common::repo_root().join("specs");
     for for_loops in ["on", "off"] {
-        let (printed, stderr, status) = common::run_kuna(&[
+        let (printed, stderr, status) = common::run_unlace(&[
             "decompile",
             native.to_str().unwrap(),
             "cursor_walk",

@@ -928,7 +928,7 @@ fn walks_frame(fd: &Funcdata, sp: VarnodeId, moves: &[RepMove]) -> bool {
     })
 }
 
-fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::KunaResult<()> {
+fn expand(fd: &mut Funcdata, rep: &RepMove) -> unlace_base::error::UnlaceResult<()> {
     let body_ops = fd.bb_ops(rep.body);
     let body = &body_ops[..body_ops.len() - 1];
     let mut after: Vec<(VarnodeId, Vec<(OpId, i32)>)> = Vec::new();
@@ -1056,7 +1056,7 @@ fn expand_with(fd: &mut Funcdata, returned: bool) -> i32 {
         || !fd.stack_store_guard()
         || fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::indexaliasguard::IndexAliasGuard>()
             .0
             == super::indexaliasguard::LEVEL_OFF

@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_switchmodbound.{cc,hh}` — modulo/and-mask
-//! jump-table index-bound option (kuna GH-9191, S2 switch-model).
+//! jump-table index-bound option (unlace GH-9191, S2 switch-model).
 //!
 //! When a jump-table index is bounded only by an in-band `index % N` (or
 //! `& mask`) — with no CBRANCH guard and no direct INT_AND on the normalized
@@ -13,14 +13,14 @@
 //! The assigned C++ scope (`kuna_switchmodbound.cc/.hh`) contains **only** the
 //! `ElementId` and the `ArchOption` that sets the arch flag — *not* the recovery
 //! logic.  As the C++ header states, the recovery walk
-//! `JumpBasic::kunaTryModuloBoundTable(Funcdata*, PcodeOp* indop, uint4
+//! `JumpBasic::unlaceTryModuloBoundTable(Funcdata*, PcodeOp* indop, uint4
 //! maxtablesize)` is a member of `JumpBasic` and lives next to the rest of the
 //! model in `jumptable.cc` (it needs the protected `pathMeld`/`jrange`/
 //! `varnodeIndex` state).  That member therefore ports with the **W4 jumptable**
 //! wave, on the `JumpBasic` model — see the loss note below; only the gate
 //! (the registered option `SwitchModuloBound`, default off) is owned here.
 //!
-//! STUB(W4): `JumpBasic::kunaTryModuloBoundTable` walks the strictly-linear
+//! STUB(W4): `JumpBasic::unlaceTryModuloBoundTable` walks the strictly-linear
 //! chain `BRANCHIND <- LOAD( index*stride + base )` with `index` bounded by
 //! `% N` (`CPUI_INT_REM`/`CPUI_INT_SREM`) or `& mask` (`CPUI_INT_AND`, a clean
 //! `coveringmask`), allowing only the realigning ops `INT_ADD`/`INT_MULT`/
@@ -31,7 +31,7 @@
 //! table.  Ported by the W4 jumptable porter on `JumpBasic`, gated on
 //! [`SwitchModBoundOption`].
 
-/// (kuna) Toggle bounding a LOAD-table jumptable by a modulo/and-mask on its
+/// (unlace) Toggle bounding a LOAD-table jumptable by a modulo/and-mask on its
 /// index (C++ `OptionSwitchModBound`, GH-9191).
 ///
 /// STUB(W4): the C++ `OptionSwitchModBound::apply` flips
@@ -39,7 +39,7 @@
 /// [`Default`] is the *shipped* default (`option switchmodbound off`, i.e.
 /// \b false — upstream byte-identical; `architecture.cc:1440`).  W4's
 /// `JumpBasic::recoverModel` reads this gate before calling
-/// `kunaTryModuloBoundTable`.
+/// `unlaceTryModuloBoundTable`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwitchModBoundOption {
     /// True if a modulo/and-mask on a LOAD-table jumptable index bounds the
@@ -56,7 +56,7 @@ impl Default for SwitchModBoundOption {
 }
 
 impl SwitchModBoundOption {
-    /// (kuna) Set the gate (C++ `OptionSwitchModBound::apply`).
+    /// (unlace) Set the gate (C++ `OptionSwitchModBound::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {

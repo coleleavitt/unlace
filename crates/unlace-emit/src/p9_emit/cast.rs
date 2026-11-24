@@ -61,7 +61,7 @@ use crate::typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use unlace_base::address::{mostsigbit_set, signbit_negative, uintb_negate};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -232,7 +232,7 @@ pub trait CastStrategy {
         &self,
         ctx: &dyn CastContext,
         op: OpRef,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
 
     /// C++ `isSubpieceCast` — is truncating `intype` to `outtype` (SUBPIECE,
     /// byte `offset`) a cast?
@@ -388,14 +388,14 @@ impl CastStrategyC {
         }
     }
 
-    /// (kuna `calltargettype`) Treat a record's declaration and its completed
+    /// (unlace `calltargettype`) Treat a record's declaration and its completed
     /// definition as one type ([`same_record`](crate::calltargettype::same_record)).
     pub fn with_record_identity(mut self, on: bool) -> CastStrategyC {
         self.record_identity = on;
         self
     }
 
-    /// (kuna) Decide casts as `CastStrategyJava` does: object references are
+    /// (unlace) Decide casts as `CastStrategyJava` does: object references are
     /// pointers that never need one.
     pub fn with_java(mut self, on: bool) -> CastStrategyC {
         self.java = on;
@@ -859,7 +859,7 @@ impl CastStrategy for CastStrategyC {
         &self,
         ctx: &dyn CastContext,
         op: OpRef,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         let mut res1 = ctx.vn_high_type_read_facing(ctx.op_in(op, 0), op);
         if res1.get_metatype() == type_metatype::TYPE_BOOL {
             // Treat boolean as if it is cast to an integer
@@ -1037,7 +1037,7 @@ impl CastStrategy for CastStrategyJava {
         &self,
         ctx: &dyn CastContext,
         op: OpRef,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         self.inner.arithmetic_output_standard(ctx, op)
     }
 

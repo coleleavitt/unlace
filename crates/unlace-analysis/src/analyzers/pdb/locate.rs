@@ -10,7 +10,7 @@
 //! [`pdb_candidates`] returns the paths to try, most specific first; the caller
 //! opens each in turn and applies the first that passes the fingerprint gate.
 //!
-//! 1. **`kuna_pdb_path`** — an explicitly supplied path (the `fid` `kuna_fid_db`
+//! 1. **`unlace_pdb_path`** — an explicitly supplied path (the `fid` `unlace_fid_db`
 //!    external-artifact precedent). Whatever the user names is tried first.
 //! 2. **The CodeView record's own filename, beside the image.** A `/Zi` build
 //!    records the `.pdb` it emitted; the *basename* of that record is resolved in
@@ -20,7 +20,7 @@
 //!    name inside a directory the caller already handed us.
 //! 3. **`<image stem>.pdb` beside the image** — the sidecar convention that holds
 //!    when the recorded name has been rewritten (a renamed or repackaged binary).
-//! 4. **A symbol store** (`kuna_pdb_symsrv`, opt-in, tried only when the tiers
+//! 4. **A symbol store** (`unlace_pdb_symsrv`, opt-in, tried only when the tiers
 //!    above found no match): `<cache>/<name>/<key>/<name>` in the SymStore
 //!    layout, the key being the GUID's hex digits and the age in hex. With a
 //!    server URL (`<cache>*<url>`) a missing file is downloaded from
@@ -47,7 +47,7 @@ use std::sync::Mutex;
 use crate::pdb::codeview::CodeViewInfo;
 
 /// The environment variable naming the external `.pdb` file to apply. Mirrors the
-/// `fid` `kuna_fid_db` env gate (the FID-database external-artifact precedent):
+/// `fid` `unlace_fid_db` env gate (the FID-database external-artifact precedent):
 /// the `.pdb` source is kept OFF the per-decompilation `--option` surface (so the
 /// catalog carries a single on|off `pdb` settable, not a path-valued one).
 pub const PDB_PATH_ENV: &str = unlace_decomp::loadoptions::PDB_PATH_ENV;
@@ -97,7 +97,7 @@ pub fn pdb_candidates(image_path: Option<&Path>, cv: &CodeViewInfo) -> Vec<PathB
 }
 
 /// The symbol-store setting: the load's `LoadOptions::pdb_symsrv`, else
-/// `kuna_pdb_symsrv`. `None` when neither names one.
+/// `unlace_pdb_symsrv`. `None` when neither names one.
 pub fn symbol_store() -> Option<String> {
     use unlace_decomp::loadoptions::{env, scoped};
     scoped(|o| o.pdb_symsrv.clone()).unwrap_or_else(env::pdb_symsrv)
@@ -255,7 +255,7 @@ pub fn fingerprint_ok(cv: &CodeViewInfo, pdb_guid: &str, pdb_age: u32) -> bool {
 mod tests {
     use super::*;
 
-    /// `kuna_pdb_path` is process-global, so every test that sets or clears it
+    /// `unlace_pdb_path` is process-global, so every test that sets or clears it
     /// holds this for its whole body; cargo runs them on parallel threads in one
     /// process and they would otherwise clobber each other.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

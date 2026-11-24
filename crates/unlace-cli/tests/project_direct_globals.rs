@@ -25,7 +25,7 @@ fn exported_scalar_global_compiles_and_matches_the_original_shared_library() {
         "{}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let (out, err, status) = common::run_kuna(&[
+    let (out, err, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "--functions",

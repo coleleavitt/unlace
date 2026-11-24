@@ -18,8 +18,8 @@ The counters, how each is measured, and where each is hard-coded:
     tiers (28/52/47)        row["tier"] tally from `unlace catalog --json`
                             -> phases/tests.rs   the tuple assert + the test fn NAME
     catalog buckets         field/value tallies over the same catalog rows
-                            -> tests/stages/kuna-catalog.xml  per-bucket stringmatch min/max
-                            (kuna-catalog.toml computes its bucket counts from the compiled
+                            -> tests/stages/catalog.xml  per-bucket stringmatch min/max
+                            (catalog.toml computes its bucket counts from the compiled
                             catalog at test time, so it has no hard-coded bucket sites)
     stage corpus (222)      tests/datatests/*.xml + tests/stages/*.{xml,toml}, non-recursive
                             -> unlace-base/src/xml.rs   "corpus file count drifted"
@@ -68,8 +68,8 @@ REL_PHASES_TOML = "crates/unlace-decomp/phases.toml"
 REL_TESTS_RS = "crates/unlace-middle/src/p0_knowledge/phases/tests.rs"
 REL_BYTECOMPAT_RS = "crates/unlace-decomp/tests/catalog_bytecompat.rs"
 REL_CATALOG_FIXTURE = "crates/unlace-decomp/tests/fixtures/phase_catalog.json"
-REL_CATALOG_XML = "tests/stages/kuna-catalog.xml"
-REL_CATALOG_TOML = "tests/stages/kuna-catalog.toml"
+REL_CATALOG_XML = "tests/stages/catalog.xml"
+REL_CATALOG_TOML = "tests/stages/catalog.toml"
 REL_BASE_XML_RS = "crates/unlace-base/src/xml.rs"
 
 TIERS = ("core", "transform", "analysis")
@@ -332,7 +332,7 @@ def _bucket_expect(rows, key, val, single_opts) -> int:
 
 
 def _catalog_toml_buckets(rows, repo=None) -> list:
-    """The buckets of kuna-catalog.toml: a computed `count` is no site; a literal one is checked."""
+    """The buckets of catalog.toml: a computed `count` is no site; a literal one is checked."""
     import tomllib
     p = path_of(REL_CATALOG_TOML, repo)
     doc = tomllib.loads(p.read_text(encoding="utf-8"))
@@ -366,7 +366,7 @@ def _catalog_toml_buckets(rows, repo=None) -> list:
 
 
 def catalog_buckets(rows, repo=None) -> list:
-    """Derive the expected count for every *bucket* stringmatch in kuna-catalog.xml.
+    """Derive the expected count for every *bucket* stringmatch in catalog.xml.
 
     A bucket is a bare `"<field>": ` or `"<field>": "<value>"` pattern -- a tally over rows.
     The per-option row assertions (patterns that open `"option": "<name>"`) are not counters

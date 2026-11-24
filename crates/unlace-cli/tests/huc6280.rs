@@ -1,7 +1,7 @@
 //! The HuC6280 language loads a raw image and decompiles it: a zero-page add,
 //! a T-mode (`SET`) OR into the zero-page byte at X, and a `TII` block copy.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 #[test]
 fn huc6280_add_tmode_and_block_copy_decompile() {
@@ -10,7 +10,7 @@ fn huc6280_add_tmode_and_block_copy_decompile() {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         "0xe000",

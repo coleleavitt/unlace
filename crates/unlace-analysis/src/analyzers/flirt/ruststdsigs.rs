@@ -1,4 +1,4 @@
-//! (kuna `ruststdsigs`) FLIRT signatures for the Rust standard library, built
+//! (unlace `ruststdsigs`) FLIRT signatures for the Rust standard library, built
 //! from an installed rustup toolchain and cached.
 //!
 //! A Rust binary links the precompiled `std`, `core` and `alloc` its rustc

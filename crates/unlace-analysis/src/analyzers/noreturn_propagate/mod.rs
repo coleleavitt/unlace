@@ -1,4 +1,4 @@
-//! Structural no-return **propagation** — the kuna analog of angr's `CFGFast`
+//! Structural no-return **propagation** — the unlace analog of angr's `CFGFast`
 //! call-graph no-return propagation (the `returning` /
 //! `_iteratively_analyze_function_features` fixpoint).
 //!
@@ -14,7 +14,7 @@
 //! static void xalloc_die(void) { error(0, 0, "%s", _("memory exhausted")); abort(); }
 //! ```
 //!
-//! `xalloc_die` (coreutils) ends, unconditionally, in `call abort` — and kuna
+//! `xalloc_die` (coreutils) ends, unconditionally, in `call abort` — and unlace
 //! *already* models `abort` no-return. But:
 //!
 //! - the **Known** list does not carry `xalloc_die` (it is a custom name), and
@@ -25,7 +25,7 @@
 //!   padding as a returning fall-through and never concludes no-return.
 //!
 //! The result: when decompiling a *caller* of `xalloc_die` (e.g. `x2nrealloc`),
-//! kuna assumes control returns from the `call xalloc_die`, and at `-O2` (where
+//! unlace assumes control returns from the `call xalloc_die`, and at `-O2` (where
 //! the cold error path is laid out last) the bytes after the call become a
 //! spurious fall-through back-edge → an invalid `while(true)` loop + `goto` +
 //! dead stack-spill artifacts. angr, whose CFGFast propagates no-return over the
@@ -115,7 +115,7 @@ impl AnalysisPass for NoReturnPropagatePass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        // (kuna, decbench F2) The `error(status,…)`-conditional recognizer:
+        // (unlace, decbench F2) The `error(status,…)`-conditional recognizer:
         // glibc `error`/`error_at_line` never return WHEN the `status` argument is
         // a nonzero constant (they call `exit(status)`), so a wrapper whose tail is
         // `call error(2,…)` is itself no-return — but `error` is NOT on the Known
@@ -127,7 +127,7 @@ impl AnalysisPass for NoReturnPropagatePass {
         let imports = crate::loader::format::resolve_imports(ctx.file, ctx.bytes);
         let error_recog = if ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::NoreturnKnown>()
             .0
         {
@@ -136,14 +136,14 @@ impl AnalysisPass for NoReturnPropagatePass {
             ErrorRecognizer::disabled()
         };
         let stubs = import_stubs(&imports);
-        // (kuna, ghidra port) The CFG-reachability rule (Ghidra's
+        // (unlace, ghidra port) The CFG-reachability rule (Ghidra's
         // `targetOnlyCallsNoReturn`) generalizes the tail-call rule to mid-body
         // no-return calls, dead returns, and switch-of-no-return. Its own flag
         // (`--option noreturn_reach`, default-on, DIV-19); Listing-gated like the rest,
         // so every parity gate stays byte-identical.
         let reach = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::NoreturnReach>()
             .0;
         let resuming_entry = crate::pclntab::gomcall::resuming_entry(ctx, listing);
@@ -158,7 +158,7 @@ impl AnalysisPass for NoReturnPropagatePass {
         ) {
             out.noreturn.push(fact);
         }
-        // (kuna, Ghidra-gap) Emit every `call error(nonzero,…)` site so the decompile
+        // (unlace, Ghidra-gap) Emit every `call error(nonzero,…)` site so the decompile
         // seam prunes its fall-through (CALL_RETURN override). The recognizer is
         // `disabled()` (no addresses) under `noreturn_known off`, so this yields an
         // empty set then.
@@ -167,7 +167,7 @@ impl AnalysisPass for NoReturnPropagatePass {
     }
 }
 
-/// (kuna, Ghidra-gap) Every `call error(nonzero,…)` / `error_at_line(nonzero,…)`
+/// (unlace, Ghidra-gap) Every `call error(nonzero,…)` / `error_at_line(nonzero,…)`
 /// call-site address in the program. glibc `error()` with a nonzero constant status
 /// calls `exit(status)` and never returns, so the CALL's fall-through must be pruned
 /// exactly as Ghidra does ("Subroutine does not return"). Unlike [`function_is_no_return`]
@@ -216,7 +216,7 @@ struct ErrorRecognizer {
     /// Entry addresses (PLT stub + any defined funcsym) of `error`/`error_at_line`.
     /// Empty ⇒ the recognizer is inert (disabled, or no `error` import present).
     error_addrs: BTreeSet<u64>,
-    /// (kuna #1288) The MS-DOS exit interrupts ([`crate::listing::dosexit`]):
+    /// (unlace #1288) The MS-DOS exit interrupts ([`crate::listing::dosexit`]):
     /// call sites that never return whatever their arguments.
     exit_sites: BTreeSet<u64>,
 }
@@ -508,7 +508,7 @@ fn function_is_no_return(
     let last_is_terminal_transfer = ((last.flow.is_call || last.flow.is_jump)
         && last.flows.iter().any(|t| terminal.contains(t)))
         || slot_calls.contains(&last_vma);
-    // (kuna, decbench F2) …or a tail `call error(nonzero,…)`: glibc error()/
+    // (unlace, decbench F2) …or a tail `call error(nonzero,…)`: glibc error()/
     // error_at_line() with a nonzero constant status calls exit() and never
     // returns, so the wrapper is no-return even though `error` itself is NOT on the
     // Known no-return list (it returns for error(0,…)). Value-conditional, checked
@@ -568,7 +568,7 @@ fn function_is_no_return(
 /// whose arms all `call` the log-die) → then `sshpkt_fatal` (whose *first* stmt is
 /// `call sshpkt_vfatal`, the write/return tail dead).
 ///
-/// Instruction-level reachability over the Listing body (kuna has no separate
+/// Instruction-level reachability over the Listing body (unlace has no separate
 /// block CFG in this tier, but `Insn` carries `fall_through` + resolved `flows` +
 /// the flow flags — enough). **Conservative by construction:** every uncertainty
 /// (a reachable `RETURN`/terminal, an unresolved indirect jump, a branch escaping
@@ -849,7 +849,7 @@ fn bytes_at<'a>(file: &'a object::File, vma: u64, len: usize) -> Option<&'a [u8]
     data.get(start..start.checked_add(len)?)
 }
 
-/// (kuna #1288) The propagation of [`propagate_noreturn`] seeded from the DOS
+/// (unlace #1288) The propagation of [`propagate_noreturn`] seeded from the DOS
 /// exit interrupts `sites` instead of the Known list: a function is no-return
 /// when every path it can take ends at one, or at a call to a function already
 /// concluded.

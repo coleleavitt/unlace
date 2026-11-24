@@ -19,7 +19,7 @@ const OBJECTS: [&str; 2] = [
     "switch_self_loop_clang_x86_64.o",
 ];
 
-fn kuna() -> Command {
+fn unlace() -> Command {
     Command::new(
         unlace_base::env::var_os("UNLACE_TEST_BIN")
             .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
@@ -27,7 +27,7 @@ fn kuna() -> Command {
 }
 
 fn decompile(object: &str, function: &str) -> String {
-    let mut command = kuna();
+    let mut command = unlace();
     command
         .args([
             "decompile",

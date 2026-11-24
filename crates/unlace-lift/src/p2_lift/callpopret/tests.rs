@@ -1,4 +1,4 @@
-//! Logic-level tests for `kuna_call_pops_return_address`, exercising the
+//! Logic-level tests for `unlace_call_pops_return_address`, exercising the
 //! stack-slot scan on hand-built raw p-code.
 
 use std::rc::Rc;
@@ -137,7 +137,7 @@ fn pop_adjust_ret_discards_the_return_address() {
         vec![eax(&s), vn(&s.cnst, 0, 4)],
     ));
     ops.extend(ret_tail(&s));
-    assert!(kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// `add esp,4; ret` — the same transfer with no register captured.
@@ -147,7 +147,7 @@ fn bare_stack_adjust_then_ret_matches() {
     let s = spaces(&m);
     let mut ops = vec![add_sp(&s, 4)];
     ops.extend(ret_tail(&s));
-    assert!(kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// `mov ebx,[esp]; ret` — the `__x86.get_pc_thunk` family reads the return
@@ -158,7 +158,7 @@ fn get_pc_thunk_returns_to_the_call_site() {
     let s = spaces(&m);
     let mut ops = vec![load_from_sp(&s, vn(&s.reg, 0x20, 4))];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// A bare `ret` loads and returns through the call site's own return address.
@@ -166,7 +166,7 @@ fn get_pc_thunk_returns_to_the_call_site() {
 fn bare_ret_returns_to_the_call_site() {
     let m = build_manager();
     let s = spaces(&m);
-    assert!(!kuna_call_pops_return_address(
+    assert!(!unlace_call_pops_return_address(
         &ret_tail(&s),
         &sp_storage(&s)
     ));
@@ -184,7 +184,7 @@ fn ret_immediate_returns_to_the_call_site() {
         add_sp(&s, 12),
         op(OpCode::CPUI_RETURN, None, vec![tmp]),
     ];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// A balanced stack frame returns through slot zero and never discards the
@@ -202,7 +202,7 @@ fn balanced_frame_returns_to_the_call_site() {
         add_sp(&s, 0x10),
     ];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// A callee that pops twice returns through a word the caller's frame owns;
@@ -218,7 +218,7 @@ fn two_pops_return_past_the_callers_frame() {
         add_sp(&s, 4),
     ];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// An ordinary prologue lowers the stack pointer and never reaches `entrySP + 4`.
@@ -232,7 +232,7 @@ fn ordinary_prologue_never_discards() {
         vec![esp(&s), vn(&s.cnst, 0x10, 4)],
     )];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// The `jmp` flavour belongs to `calltrampoline`, not here.
@@ -244,7 +244,7 @@ fn trampoline_flavour_is_not_claimed() {
         add_sp(&s, 4),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.ram, 0x40d1b4, 4)]),
     ];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn conditional_branch_ends_the_scan() {
         add_sp(&s, 4),
         op(OpCode::CPUI_CBRANCH, None, vec![vn(&s.ram, 0x40d1b4, 4)]),
     ];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 #[test]
@@ -266,7 +266,7 @@ fn indirect_branch_ends_the_scan() {
         add_sp(&s, 4),
         op(OpCode::CPUI_BRANCHIND, None, vec![eax(&s)]),
     ];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// Constant-space branches are internal to one instruction's p-code, but the
@@ -279,7 +279,7 @@ fn internal_pcode_branch_ends_the_scan() {
         add_sp(&s, 4),
         op(OpCode::CPUI_BRANCH, None, vec![vn(&s.cnst, 2, 4)]),
     ];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// A store can rewrite the slot the `ret` is about to read; the scan does not
@@ -297,7 +297,7 @@ fn a_store_ends_the_scan() {
         ),
     ];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// A call in the middle of the fragment ends the scan.
@@ -310,7 +310,7 @@ fn an_inner_call_ends_the_scan() {
         op(OpCode::CPUI_CALL, None, vec![vn(&s.ram, 0x401000, 4)]),
     ];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// An unaccountable write to the stack pointer ends the scan even though the
@@ -328,7 +328,7 @@ fn an_opaque_stack_pointer_write_ends_the_scan() {
         ),
     ];
     ops.extend(ret_tail(&s));
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }
 
 /// An empty decode is not the idiom.
@@ -336,7 +336,7 @@ fn an_opaque_stack_pointer_write_ends_the_scan() {
 fn an_empty_run_declines() {
     let m = build_manager();
     let s = spaces(&m);
-    assert!(!kuna_call_pops_return_address(&[], &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&[], &sp_storage(&s)));
 }
 
 /// A link-register architecture: the `call` pushes nothing and the return's
@@ -347,5 +347,5 @@ fn link_register_return_declines() {
     let s = spaces(&m);
     let lr = vn(&s.reg, 0x30, 4);
     let ops = vec![op(OpCode::CPUI_RETURN, None, vec![lr])];
-    assert!(!kuna_call_pops_return_address(&ops, &sp_storage(&s)));
+    assert!(!unlace_call_pops_return_address(&ops, &sp_storage(&s)));
 }

@@ -35,7 +35,7 @@ numbers ready.
 
 ## Verification
 
-- Two-pass stage test `tests/stages/kuna-foldcallretphi.toml` (off = the spill, on
+- Two-pass stage test `tests/stages/foldcallretphi.toml` (off = the spill, on
   = the fold) over a bytechunk whose one-instruction control (a constant argument
   instead of the global) folds with `foldcallret` alone.
 - Unit tests for the option parse + the shipped default.

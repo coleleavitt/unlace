@@ -1,4 +1,4 @@
-//! (kuna `aifdataveto`) A discovered entry whose bytes are a C string is data.
+//! (unlace `aifdataveto`) A discovered entry whose bytes are a C string is data.
 //!
 //! A Windows driver keeps its `DbgPrint` format strings in the code sections it
 //! pages with the code (`PAGE`, `INIT`, `.text`), and passes them as pushed

@@ -1,7 +1,7 @@
-//! (kuna `indexrescale`) A byte offset into an array becomes an element index.
+//! (unlace `indexrescale`) A byte offset into an array becomes an element index.
 //!
 //! A loop or a table walk often keeps a byte offset in a register and adds it
-//! to the base, so kuna printed `*(int *)((long)rule + v2)` with `v2 = 4;` and
+//! to the base, so unlace printed `*(int *)((long)rule + v2)` with `v2 = 4;` and
 //! `v2 = 0xc;`. Hex-Rays rescales such a variable by its divisor (`lvar_t::
 //! divisor`) and prints `rule[v2]` with `v2 = 1;` and `v2 = 3;`.
 //!
@@ -237,7 +237,7 @@ fn collect(data: &Funcdata, start: VarnodeId, k: u64) -> Option<Web> {
     })
 }
 
-fn rewrite(data: &mut Funcdata, web: &Web) -> unlace_base::error::KunaResult<()> {
+fn rewrite(data: &mut Funcdata, web: &Web) -> unlace_base::error::UnlaceResult<()> {
     for &(op, slot) in &web.constants {
         let Some(v) = data.obank().get(op).and_then(|o| o.get_in(slot)) else {
             continue;
@@ -297,7 +297,7 @@ impl Action for ActionIndexRescale {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::indexrescale::IndexRescale>()
             .0
         {
@@ -336,8 +336,8 @@ impl Action for ActionIndexRescale {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `indexrescale`) A byte offset into an array becomes an element index.
+crate::unlace_flag!(
+    /// (unlace `indexrescale`) A byte offset into an array becomes an element index.
     IndexRescale,
     "indexrescale",
     "Byte offsets rescaled to element indexes",

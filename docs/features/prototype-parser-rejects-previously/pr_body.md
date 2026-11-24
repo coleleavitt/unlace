@@ -47,7 +47,7 @@ struct JSValue
 
 ## The tests
 
-Five cases in `kuna-console/src/grammar/tests.rs` cover the tag as a return
+Five cases in `console/src/grammar/tests.rs` cover the tag as a return
 type, as a pointer parameter, outside a prototype, and for `union` / `enum`;
 each fails without the change. `reject_struct_type_name_is_syntax_error` pinned
 the old expectation and now asserts the kind error under its new name.

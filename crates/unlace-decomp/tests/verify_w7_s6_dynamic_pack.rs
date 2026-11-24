@@ -1,5 +1,5 @@
 // Verifier-authored adversarial tests for item `w7-s6-dynamic-pack`
-// (DynamicHash / ToOpEdge / kuna_dynamichashmax / kuna_stackguard).
+// (DynamicHash / ToOpEdge / unlace_dynamichashmax / unlace_stackguard).
 //
 // These exercise the spots the hunt list flagged as most fragile for this item,
 // against the public crate surface only:
@@ -284,7 +284,7 @@ fn t4_input_cast_is_invisible_to_op_hash() {
 }
 
 // =============================================================================
-// T5 — kuna option bodies + the stackguard Action seam boundary
+// T5 — unlace option bodies + the stackguard Action seam boundary
 // =============================================================================
 
 /// Build a real glibc-style canary epilogue: header CBRANCH on an INT_NOTEQUAL

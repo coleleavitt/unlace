@@ -1,4 +1,4 @@
-//! The kuna-native `.fid` format and full-hash lookup interface.
+//! The unlace-native `.fid` format and full-hash lookup interface.
 //!
 //! [`FidDb`] stores records in full-hash buckets, preserving insertion order
 //! within each bucket. [`FidDatabase`] exposes metadata and matching records.
@@ -23,7 +23,7 @@
 //! All multi-byte integers are little-endian; string lengths are `u32` byte
 //! counts. A name offset points into the trailing string blob. Loading checks
 //! lengths, offsets and UTF-8, bounds the text the records expand to, and
-//! reports malformed input as `KunaError`.
+//! reports malformed input as `UnlaceError`.
 //!
 //! Version 2 lets a record carry the function's prototype as C text
 //! ([`NO_STRING`] for none) and the type declarations it needs: a run of
@@ -39,7 +39,7 @@
 use std::collections::{BTreeMap, HashMap, hash_map::Entry};
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// `"KFID"` — the `.fid` file magic.
 pub const FID_DB_MAGIC: &[u8; 4] = b"KFID";
@@ -255,18 +255,18 @@ impl FidDb {
     /// Parse a `.fid` byte stream (§5.1). **Never panics**: a truncated or
     /// malformed input is an `Err`, every read bounds-checked. On success the
     /// records are indexed by `full_hash`.
-    pub fn load(bytes: &[u8]) -> KunaResult<Self> {
+    pub fn load(bytes: &[u8]) -> UnlaceResult<Self> {
         let mut r = Reader::new(bytes);
 
         let magic = r.take(4)?;
         if magic != FID_DB_MAGIC {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "fid: bad magic {magic:02x?} (expected {FID_DB_MAGIC:02x?})"
             )));
         }
         let version = r.u32()?;
         if version != FID_DB_VERSION && version != FID_DB_VERSION_NAMES {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "fid: version {version} != supported {FID_DB_VERSION_NAMES} or {FID_DB_VERSION}"
             )));
         }
@@ -304,11 +304,11 @@ impl FidDb {
 
         let budget = DECODED_TEXT_FLOOR.max(bytes.len().saturating_mul(DECODED_TEXT_PER_BYTE));
         let mut decoded = 0usize;
-        let mut text = |off: u32| -> KunaResult<String> {
+        let mut text = |off: u32| -> UnlaceResult<String> {
             let text = read_interned_name(blob, off as usize)?;
             decoded += text.len() + std::mem::size_of::<String>();
             if decoded > budget {
-                return Err(KunaError::bad_data(format!(
+                return Err(UnlaceError::bad_data(format!(
                     "fid: the records of a {}-byte file expand past {budget} bytes of text",
                     bytes.len()
                 )));
@@ -327,14 +327,14 @@ impl FidDb {
             let run = first
                 .checked_add(count)
                 .and_then(|end| types.get(first..end))
-                .ok_or_else(|| KunaError::bad_data("fid: type run past the type table"))?;
+                .ok_or_else(|| UnlaceError::bad_data("fid: type run past the type table"))?;
             let typedefs = match decoded_runs.get(&(first, count)) {
                 Some(shared) => Rc::clone(shared),
                 None => {
                     let decoded: Rc<[String]> = run
                         .iter()
                         .map(|off| text(*off))
-                        .collect::<KunaResult<Vec<String>>>()?
+                        .collect::<UnlaceResult<Vec<String>>>()?
                         .into();
                     decoded_runs.insert((first, count), Rc::clone(&decoded));
                     decoded
@@ -417,9 +417,9 @@ fn write_str(out: &mut Vec<u8>, s: &str) {
 
 /// Read a NUL-terminated UTF-8 name from the blob at `off`. A bad offset or a
 /// non-UTF-8 / unterminated name is an error (never a panic).
-fn read_interned_name(blob: &[u8], off: usize) -> KunaResult<String> {
+fn read_interned_name(blob: &[u8], off: usize) -> UnlaceResult<String> {
     if off > blob.len() {
-        return Err(KunaError::bad_data(format!(
+        return Err(UnlaceError::bad_data(format!(
             "fid: name offset {off} past blob end {}",
             blob.len()
         )));
@@ -428,10 +428,10 @@ fn read_interned_name(blob: &[u8], off: usize) -> KunaResult<String> {
     let end = tail
         .iter()
         .position(|&b| b == 0)
-        .ok_or_else(|| KunaError::bad_data("fid: unterminated name in string blob"))?;
+        .ok_or_else(|| UnlaceError::bad_data("fid: unterminated name in string blob"))?;
     std::str::from_utf8(&tail[..end])
         .map(str::to_owned)
-        .map_err(|_| KunaError::bad_data("fid: non-UTF-8 name in string blob"))
+        .map_err(|_| UnlaceError::bad_data("fid: non-UTF-8 name in string blob"))
 }
 
 /// A bounds-checked little-endian byte reader. Every accessor returns `Err`
@@ -447,13 +447,13 @@ impl<'a> Reader<'a> {
         Self { buf, pos: 0 }
     }
 
-    fn take(&mut self, n: usize) -> KunaResult<&'a [u8]> {
+    fn take(&mut self, n: usize) -> UnlaceResult<&'a [u8]> {
         let end = self
             .pos
             .checked_add(n)
-            .ok_or_else(|| KunaError::bad_data("fid: length overflow"))?;
+            .ok_or_else(|| UnlaceError::bad_data("fid: length overflow"))?;
         if end > self.buf.len() {
-            return Err(KunaError::bad_data(format!(
+            return Err(UnlaceError::bad_data(format!(
                 "fid: truncated (need {n} bytes at {}, have {})",
                 self.pos,
                 self.buf.len()
@@ -464,34 +464,34 @@ impl<'a> Reader<'a> {
         Ok(s)
     }
 
-    fn u8(&mut self) -> KunaResult<u8> {
+    fn u8(&mut self) -> UnlaceResult<u8> {
         Ok(self.take(1)?[0])
     }
 
-    fn u32(&mut self) -> KunaResult<u32> {
+    fn u32(&mut self) -> UnlaceResult<u32> {
         let b = self.take(4)?;
         Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
-    fn u64(&mut self) -> KunaResult<u64> {
+    fn u64(&mut self) -> UnlaceResult<u64> {
         let b = self.take(8)?;
         Ok(u64::from_le_bytes([
             b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
         ]))
     }
 
-    fn i16(&mut self) -> KunaResult<i16> {
+    fn i16(&mut self) -> UnlaceResult<i16> {
         let b = self.take(2)?;
         Ok(i16::from_le_bytes([b[0], b[1]]))
     }
 
     /// A length-prefixed UTF-8 string (`u32` LE length + bytes).
-    fn string(&mut self) -> KunaResult<String> {
+    fn string(&mut self) -> UnlaceResult<String> {
         let len = self.u32()? as usize;
         let b = self.take(len)?;
         std::str::from_utf8(b)
             .map(str::to_owned)
-            .map_err(|_| KunaError::bad_data("fid: non-UTF-8 length-prefixed string"))
+            .map_err(|_| UnlaceError::bad_data("fid: non-UTF-8 length-prefixed string"))
     }
 
     /// The unconsumed remainder (the string blob).

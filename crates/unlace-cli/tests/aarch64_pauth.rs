@@ -1,8 +1,8 @@
 //! AArch64 pointer authentication: every FEAT_PAuth and FEAT_PAuth_LR encoding of
-//! LLVM 22's TableGen decodes and prints as LLVM does (numbers in kuna's hex), and
+//! LLVM 22's TableGen decodes and prints as LLVM does (numbers in unlace's hex), and
 //! the odd BTI hints are hints, not `bti`.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -18,7 +18,7 @@ fn every_pauth_encoding_decodes() {
     let expected = std::fs::read_to_string(fixture("probe.txt")).unwrap();
     let expected: Vec<&str> = expected.lines().collect();
     let elf = fixture("pauth.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe", "--count", "4096"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe", "--count", "4096"]);
     assert_eq!(code, 0, "{stderr}");
     let listing: Vec<String> = stdout
         .lines()

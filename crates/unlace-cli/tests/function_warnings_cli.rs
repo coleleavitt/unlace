@@ -17,7 +17,7 @@ const RAW: [&str; 6] = [
 ];
 
 fn document(args: &[&str]) -> Value {
-    let (stdout, stderr, code) = common::run_kuna(args);
+    let (stdout, stderr, code) = common::run_unlace(args);
     assert_eq!(code, 0, "{args:?}: {stdout}\n{stderr}");
     serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("{e}: {stdout}"))
 }
@@ -467,9 +467,9 @@ fn a_line_width_leaves_json_records_on_their_lines() {
         "{narrow}"
     );
 
-    let (unbroken, _, code) = common::run_kuna(&["decompile", &pe, "0x406de0"]);
+    let (unbroken, _, code) = common::run_unlace(&["decompile", &pe, "0x406de0"]);
     assert_eq!(code, 0);
-    let (broken, stderr, code) = common::run_kuna(&[
+    let (broken, stderr, code) = common::run_unlace(&[
         "decompile",
         &pe,
         "0x406de0",

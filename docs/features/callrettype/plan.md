@@ -3,7 +3,7 @@
 ## The seams
 
 - `p4_calls/callrettype.rs (record)`: after a function's final decompile
-  in callee-first order (`kuna-console` `project.rs`, where
+  in callee-first order (`console` `project.rs`, where
   `park_recovered_proto` is set), keep its recovered return (storage, width,
   type) when it has no declared prototype, the type is a pointer, an integer
   wider than a byte or a float, and every live RETURN hands back a computed
@@ -26,7 +26,7 @@
 - `kuna-cli/src/decompile_all.rs (callee_vote_rounds, converge_callee_first)`:
   a redo the run discards puts the callee's earlier statement back
   (`statement`, `restore`).
-- `kuna-console/src/decompile_step.rs (decompile_one_prefollowed)`: after the
+- `console/src/decompile_step.rs (decompile_one_prefollowed)`: after the
   drive (and the format-string redo), `contradicted` audits the finished
   function; contradicted statements are withdrawn for the caller (`refuse`,
   `Architecture::kuna_callret_refused`) and the caller is driven once more.
@@ -38,7 +38,7 @@
   compiles every printed fixture function with gcc and clang at -O0 and -O2,
   option off and on, and checks the program's output; the `cached` control
   pins the tie shape.
-- Negative control stage test `tests/stages/kuna-callrettype.toml`; CLI probes
+- Negative control stage test `tests/stages/callrettype.toml`; CLI probes
   `tests/cli/callrettype-*.json`.
 - castbench full, typesweep (444 slices), whole-corpus hunks
   (`corpus.py`, `hunkclass.py`), speed (`speed.py`): `record.json`.

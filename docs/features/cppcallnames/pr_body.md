@@ -109,7 +109,7 @@ selection alias.
 Deliberate, for three reasons:
 
 1. **There is no driver-tier option axis.** All 76 `phases.toml` settables carry an
-   engine phase P1–P9; `kuna-console`/`kuna-cli` only ever *write* options. Gating
+   engine phase P1–P9; `console`/`kuna-cli` only ever *write* options. Gating
    this would mean inventing an axis, not filling in a row (precedent:
    `--max-fn-seconds`, "Driver policy, not a stage-model settable").
 2. **The "after" behavior already ships** under `--mode reliable`. This removes an
@@ -206,7 +206,7 @@ only on a miss.
 
 ## Tests
 
-`decompiler/crates/kuna-console/tests/verify_cppcallnames.rs` — real engine over the
+`decompiler/crates/console/tests/verify_cppcallnames.rs` — real engine over the
 already-vendored `cpp_noreturn_x86_64`, discovery passes enabled in the live-CLI
 order (`option` before `read symbols`):
 
@@ -244,9 +244,9 @@ workspace that moved.
 
 | file | change |
 |---|---|
-| `kuna-console/src/engine.rs` | discovered-entry commit arm: cross-scope idempotence probe |
-| `kuna-console/src/ifacedecomp.rs` | `IfcAddrrangeLoad`: prefer the installed qualified name |
-| `kuna-console/tests/verify_cppcallnames.rs` | **new** — 3 tests |
+| `console/src/engine.rs` | discovered-entry commit arm: cross-scope idempotence probe |
+| `console/src/ifacedecomp.rs` | `IfcAddrrangeLoad`: prefer the installed qualified name |
+| `console/tests/verify_cppcallnames.rs` | **new** — 3 tests |
 | `docs/spec/00-overview.md` | §0.1 commit idempotence is cross-scope; §0.2 both selection forms name identically |
 | `docs/history.md` | DIV-59 |
 | `docs/features/cppcallnames/` | `analysis.md`, `plan.md`, `record.json` |

@@ -6,7 +6,7 @@
 //!
 //! - [`IfaceError`] / [`IfaceParseError`] / [`IfaceExecutionError`]: the
 //!   interface exception hierarchy.  These are **not** part of
-//!   [`unlace_base::error::KunaError`] (`LowlevelError` and friends) — in C++
+//!   [`unlace_base::error::UnlaceError`] (`LowlevelError` and friends) — in C++
 //!   `IfaceError` is its own standalone `struct` (`interface.hh`), with
 //!   `IfaceParseError` and `IfaceExecutionError` deriving from it.  A console
 //!   command-dispatch frame catches `IfaceError` broadly, which catches both
@@ -65,7 +65,7 @@
 //! ## Documented losses
 //!
 //! - The `__REMOTE_SOCKET__` `RemoteSocket` class (a build-flag-gated UNIX
-//!   domain socket transport, off in every kuna build) is not ported.
+//!   domain socket transport, off in every unlace build) is not ported.
 //! - The interactive readline path (`IfaceTerm::readLine`'s key-by-key line
 //!   editing, history scroll, TAB completion) is a documented loss; the
 //!   non-interactive batch path that the datatests drive is ported faithfully.
@@ -177,7 +177,7 @@ pub type IfaceResult<T> = Result<T, IfaceError>;
 /// - [`eof`](CommandStream::eof) reports the latched eof flag, exactly like the
 ///   stream's `eofbit`.
 ///
-/// [`read_filename`](CommandStream::read_filename) is the one kuna addition: C++
+/// [`read_filename`](CommandStream::read_filename) is the one unlace addition: C++
 /// reads every path with `s >> filename`, which silently splits a path on its
 /// spaces. It layers an optional double-quoted form over `read_token` and is
 /// byte-identical to it for unquoted input.
@@ -859,7 +859,7 @@ pub struct IfaceStatus {
     /// The input behavior (C++ virtual `readLine`/`pushScript`/...).
     source: Box<dyn LineSource>,
 
-    /// (kuna) How many commands this session has dispatched, incremented just
+    /// (unlace) How many commands this session has dispatched, incremented just
     /// before each `execute`.  A command that wants to know whether it runs
     /// *immediately* after another one compares stamps: `load function` records
     /// this counter and `decompile` adopts its already-followed IR only when the

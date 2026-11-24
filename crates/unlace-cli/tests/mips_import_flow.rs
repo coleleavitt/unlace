@@ -15,7 +15,7 @@ fn run(image: &Value, options: &[&str]) -> Value {
         .join(image["file"].as_str().unwrap());
     let mut args = vec!["decompile-all", path.to_str().unwrap(), "--json"];
     args.extend_from_slice(options);
-    let (out, err, rc) = common::run_kuna(&args);
+    let (out, err, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{}: {err}\n{out}", path.display());
     let doc: Value = serde_json::from_str(&out).unwrap();
     for f in doc["functions"].as_array().unwrap() {
@@ -182,7 +182,7 @@ fn import_prototypes_and_continuations_survive_single_and_worker_paths() {
         let path = common::repo_root()
             .join("tests/fixtures/mips-import-flow")
             .join(image["file"].as_str().unwrap());
-        let (code, err, rc) = common::run_kuna(&[
+        let (code, err, rc) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             &format!("0x{address:x}"),
@@ -202,7 +202,7 @@ fn import_prototypes_and_continuations_survive_single_and_worker_paths() {
 #[test]
 fn memcpy_and_printf_calls_keep_their_continuations() {
     let path = common::fixture("floatret_chain_mips_O0");
-    let (out, err, rc) = common::run_kuna(&["decompile-all", &path, "--json"]);
+    let (out, err, rc) = common::run_unlace(&["decompile-all", &path, "--json"]);
     assert_eq!(rc, 0, "{err}");
     let doc: Value = serde_json::from_str(&out).unwrap();
     let copy = body(&doc, 0x400c64);

@@ -1,4 +1,4 @@
-//! (kuna `narrowargs callers`) What a 32-bit ARM image's bytes say about who
+//! (unlace `narrowargs callers`) What a 32-bit ARM image's bytes say about who
 //! can reach a function, read once per binary.
 //!
 //! A function's callers can be listed only when nothing takes its address and

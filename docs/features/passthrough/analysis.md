@@ -155,7 +155,7 @@ Nothing is added where a callee stated nothing: `kuna decompile`, a narrowed or
 sharded `decompile-all`, an import, `--option protoorder off`, and under
 `--option protoorder types` a recursive component, all leave every call as it
 was (under the default `cycles` a recursive callee states its list like any
-other). `tests/stages/kuna-passthrough.toml`
+other). `tests/stages/passthrough.toml`
 is the negative control for that clause; the positive witness is
 `decompiler/crates/kuna-analysis/tests/fixtures/passthrough_x86_64` under
 `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json`, with a

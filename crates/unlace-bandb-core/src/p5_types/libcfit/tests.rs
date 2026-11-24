@@ -1,7 +1,7 @@
-//! Tests for the libc-aggregate fit rule (kuna `libctypes`, `kuna_libcfit`).
+//! Tests for the libc-aggregate fit rule (unlace `libctypes`, `unlace_libcfit`).
 //!
 //! The walk needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-libctypes.toml` (the `kwset`-shaped container passes).
+//! `tests/stages/unlace-libctypes.toml` (the `kwset`-shaped container passes).
 //! These pin which declared types and access ranges can refuse the vote.
 
 use super::*;

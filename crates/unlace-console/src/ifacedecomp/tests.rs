@@ -405,29 +405,29 @@ fn produce_prototypes_without_callgraph_guard() {
 }
 
 // ---------------------------------------------------------------------------
-// render_engine_error: the KunaError → console-prefix grammar (the catch arms
+// render_engine_error: the UnlaceError → console-prefix grammar (the catch arms
 // of C++ execute() that fire once the engine integration lands).
 // ---------------------------------------------------------------------------
 
 #[test]
 fn render_engine_error_prefixes() {
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     let mut dcp = IfaceDecompData::default();
 
     let mut out = String::new();
-    render_engine_error(&KunaError::parse("bad"), &mut dcp, &mut out);
+    render_engine_error(&UnlaceError::parse("bad"), &mut dcp, &mut out);
     assert_eq!(out, "Parse ERROR: bad\n");
 
     let mut out = String::new();
-    render_engine_error(&KunaError::recov("oops"), &mut dcp, &mut out);
+    render_engine_error(&UnlaceError::recov("oops"), &mut dcp, &mut out);
     assert_eq!(out, "Function ERROR: oops\n");
 
     let mut out = String::new();
-    render_engine_error(&KunaError::decoder("xml"), &mut dcp, &mut out);
+    render_engine_error(&UnlaceError::decoder("xml"), &mut dcp, &mut out);
     assert_eq!(out, "Decoding ERROR: xml\n");
 
     let mut out = String::new();
-    render_engine_error(&KunaError::lowlevel("deep"), &mut dcp, &mut out);
+    render_engine_error(&UnlaceError::lowlevel("deep"), &mut dcp, &mut out);
     assert_eq!(out, "Low-level ERROR: deep\n");
 }
 
@@ -447,7 +447,7 @@ fn render_engine_error_prefixes() {
 /// sequence (ifacedecomp.cc:37-147), MINUS the console-only `source`
 /// (registered in consolemain.cc, not ifacedecomp.cc) and the
 /// `#ifdef CPUI_RULECOMPILE` / `#ifdef OPACTION_DEBUG` / `#ifdef TYPEPROP_DEBUG`
-/// blocks (compiled out of every kuna build).  Transcribed by hand from the C++
+/// blocks (compiled out of every unlace build).  Transcribed by hand from the C++
 /// so a single-token drift in register_decomp_commands is caught positionally —
 /// the `num_commands()==105` count test cannot see a swap that keeps the count.
 const CPP_REGISTER_ORDER: &[&[&str]] = &[
@@ -663,7 +663,7 @@ fn w9_con_ifacedecomp_v3_execute_exception_prefix_grammar() {
 fn w9_con_ifacedecomp_v4_deliberate_omissions_absent() {
     // `source` is registered in consolemain.cc (console-only), NOT by
     // register_decomp_commands; and `parse rule` / `experimental rules` are
-    // #ifdef CPUI_RULECOMPILE (compiled out of every kuna build).  None must
+    // #ifdef CPUI_RULECOMPILE (compiled out of every unlace build).  None must
     // resolve through the decompiler command set.
     let mut status = console(&[]);
     assert!(

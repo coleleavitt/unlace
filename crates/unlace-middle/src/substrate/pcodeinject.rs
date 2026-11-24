@@ -22,7 +22,7 @@
 //!     abstracted behind the [`InjectEngine`] trait here; `inject_sleigh.rs`
 //!     records the precise missing-public-API note (LOSS reported in output).
 //!
-//! Per ADR 0004 fallible decode/registration returns `Result<_, KunaError>`;
+//! Per ADR 0004 fallible decode/registration returns `Result<_, UnlaceError>`;
 //! per ADR 0002 the name->id namespaces are `BTreeMap` keyed on the C++
 //! byte-string name order. Integer widths follow ADR 0003 (`int4`->`i32`,
 //! `uint4`->`u32`, `uintb`->`u64`).
@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_NAME, ATTRIB_SIZE, AttributeId, Decoder, ELEM_INPUT, ELEM_OUTPUT, ElementId, IdRegistry,
 };
@@ -270,7 +270,7 @@ impl InjectPayloadCore {
     ///
     /// Returns `(name, size)`; errors with the C++ message when the name is
     /// empty.
-    pub fn decode_parameter(decoder: &mut dyn Decoder) -> KunaResult<(Vec<u8>, uint4)> {
+    pub fn decode_parameter(decoder: &mut dyn Decoder) -> UnlaceResult<(Vec<u8>, uint4)> {
         let mut name: Vec<u8> = Vec::new();
         let mut size: uint4 = 0;
         let elem_id = decoder.open_element()?;
@@ -289,7 +289,7 @@ impl InjectPayloadCore {
         }
         decoder.close_element(elem_id)?;
         if name.is_empty() {
-            return Err(KunaError::lowlevel("Missing inject parameter name"));
+            return Err(UnlaceError::lowlevel("Missing inject parameter name"));
         }
         Ok((name, size))
     }
@@ -312,7 +312,7 @@ impl InjectPayloadCore {
     /// (C++ `InjectPayload::decodePayloadAttributes`).
     ///
     /// The `<pcode>` element must be current and already opened.
-    pub fn decode_payload_attributes(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_payload_attributes(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         self.paramshift = 0;
         self.dynamic = false;
         loop {
@@ -344,7 +344,7 @@ impl InjectPayloadCore {
     ///
     /// Elements are processed until the first child that isn't `<input>` or
     /// `<output>` is encountered. The `<pcode>` element must be current/open.
-    pub fn decode_payload_params(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_payload_params(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         loop {
             let sub_id = decoder.peek_element()?;
             if sub_id == ELEM_INPUT {
@@ -430,7 +430,7 @@ pub trait InjectPayload {
     fn core_mut(&mut self) -> &mut InjectPayloadCore;
 
     /// Decode this payload from a stream (C++ pure-virtual `decode`).
-    fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()>;
+    fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()>;
 
     /// Return a string describing the \e source of the injection
     /// (C++ pure-virtual `getSource`).
@@ -481,7 +481,7 @@ pub trait InjectEngine {
         payload: &dyn InjectPayload,
         context: &mut InjectContext,
         emit: &mut dyn PcodeEmit,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
 }
 
 /// The compile half of the SLEIGH inject path (C++
@@ -499,7 +499,7 @@ pub trait SnippetLanguageProvider {
         payload: &dyn InjectPayload,
         parsestring: &[u8],
         tempbase: uint4,
-    ) -> KunaResult<(unlace_sleigh::semantics::ConstructTpl, uint4)>;
+    ) -> UnlaceResult<(unlace_sleigh::semantics::ConstructTpl, uint4)>;
 }
 
 // ---------------------------------------------------------------------------
@@ -562,9 +562,9 @@ impl PcodeInjectLibraryBase {
 
     /// \brief Map a \e call-fixup name to a payload id
     /// (C++ `registerCallFixup`).
-    pub fn register_call_fixup(&mut self, fixup_name: &[u8], injectid: int4) -> KunaResult<()> {
+    pub fn register_call_fixup(&mut self, fixup_name: &[u8], injectid: int4) -> UnlaceResult<()> {
         if self.call_fixup_map.contains_key(fixup_name) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Duplicate <callfixup>: {}",
                 String::from_utf8_lossy(fixup_name)
             )));
@@ -583,9 +583,9 @@ impl PcodeInjectLibraryBase {
         &mut self,
         fixup_name: &[u8],
         injectid: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if self.call_other_fixup_map.contains_key(fixup_name) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Duplicate <callotherfixup>: {}",
                 String::from_utf8_lossy(fixup_name)
             )));
@@ -601,9 +601,13 @@ impl PcodeInjectLibraryBase {
 
     /// \brief Map a \e call \e mechanism name to a payload id
     /// (C++ `registerCallMechanism`).
-    pub fn register_call_mechanism(&mut self, fixup_name: &[u8], injectid: int4) -> KunaResult<()> {
+    pub fn register_call_mechanism(
+        &mut self,
+        fixup_name: &[u8],
+        injectid: int4,
+    ) -> UnlaceResult<()> {
         if self.call_mech_fixup_map.contains_key(fixup_name) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Duplicate <callmechanism>: {}",
                 String::from_utf8_lossy(fixup_name)
             )));
@@ -619,9 +623,9 @@ impl PcodeInjectLibraryBase {
 
     /// \brief Map a \e p-code \e script name to a payload id
     /// (C++ `registerExeScript`).
-    pub fn register_exe_script(&mut self, script_name: &[u8], injectid: int4) -> KunaResult<()> {
+    pub fn register_exe_script(&mut self, script_name: &[u8], injectid: int4) -> UnlaceResult<()> {
         if self.script_map.contains_key(script_name) {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Duplicate <script>: {}",
                 String::from_utf8_lossy(script_name)
             )));

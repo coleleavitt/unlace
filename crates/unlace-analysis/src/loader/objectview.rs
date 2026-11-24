@@ -1,4 +1,4 @@
-//! (kuna `objectview`) An `object::File` view of an image the loader maps
+//! (unlace `objectview`) An `object::File` view of an image the loader maps
 //! without one: a UEFI TE image or a headerless `--raw-image`.
 //!
 //! Every analyzer pass, and every CLI consumer that scans sections, starts from

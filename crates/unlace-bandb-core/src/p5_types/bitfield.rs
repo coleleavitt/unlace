@@ -692,7 +692,7 @@ impl Rule for RuleBitFieldIn {
             Some(v) => v,
             None => return 0,
         };
-        // (kuna) A constant already is the value of the bits it fills.
+        // (unlace) A constant already is the value of the bits it fills.
         if data.vbank().get(invn).is_none_or(|v| v.is_constant()) {
             return 0;
         }

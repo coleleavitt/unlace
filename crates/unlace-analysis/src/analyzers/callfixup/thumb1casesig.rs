@@ -1,4 +1,4 @@
-//! (kuna) Recognize libgcc's Thumb-1 switch helpers and armcc's
+//! (unlace) Recognize libgcc's Thumb-1 switch helpers and armcc's
 //! `__ARM_common_switch8` in a stripped ARM image by their instructions, so the
 //! `switch*_r0` and `switch8_r3` call-fixups of the ARM cspecs reach them.
 //!

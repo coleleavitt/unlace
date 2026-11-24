@@ -1,4 +1,4 @@
-//! (kuna) The `ppcapu` option gate: select the e500 language for a 32-bit
+//! (unlace) The `ppcapu` option gate: select the e500 language for a 32-bit
 //! PowerPC ELF image whose `.PPC.EMB.apuinfo` note requires SPE.
 //!
 //! The language is chosen while the image loads, before any `option` command
@@ -16,15 +16,15 @@ pub fn ppcapu_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.ppcapu).unwrap_or_else(crate::loadoptions::env::ppcapu)
 }
 
-/// Bridge a `set_kuna_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later
+/// Bridge a `set_unlace_option("ppcapu", val)` toggle to [`PPCAPU_ENV`] so a later
 /// `load file` in the same process sees the choice.
 pub fn set_ppcapu_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(PPCAPU_ENV, if on { "on" } else { "off" }) };
 }
 
-crate::kuna_flag!(
-    /// (kuna `ppcapu`) The requested state of the load-time APU-note language selection; the catalog's live `current` field reads it.
+crate::unlace_flag!(
+    /// (unlace `ppcapu`) The requested state of the load-time APU-note language selection; the catalog's live `current` field reads it.
     PpcApu,
     "ppcapu",
     "PowerPC APU-note language selection",

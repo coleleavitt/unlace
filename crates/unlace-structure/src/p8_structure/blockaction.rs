@@ -7,7 +7,7 @@
 
 #![allow(clippy::needless_range_loop)] // C++ indexes by edge/path slot; preserve it
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
@@ -323,7 +323,7 @@ impl LoopBody {
     }
 
     /// [`find_exit`](Self::find_exit) that takes a block in `avoid` (a `try`
-    /// handler, kuna `javatry`) only when no other exit qualifies, so the handler
+    /// handler, unlace `javatry`) only when no other exit qualifies, so the handler
     /// stays inside the loop as a catch clause.
     pub fn find_exit_avoiding(
         &mut self,
@@ -1437,8 +1437,8 @@ impl<'a> TraceDAG<'a> {
 /// public.  [`CollapseStructure::rule_block_switch`] performs the full match /
 /// exit-block / skip-edge decision (the structuring novelty) but cannot build
 /// the node here; this returns an `Err` so the stub is visible.  See losses.
-fn new_block_switch_stub(_has_exit: bool) -> KunaResult<()> {
-    Err(KunaError::lowlevel(
+fn new_block_switch_stub(_has_exit: bool) -> UnlaceResult<()> {
+    Err(UnlaceError::lowlevel(
         "kuna rust port: BlockGraph::newBlockSwitch needs getExitLeaf + grabCaseBasic \
          (JumpTable labels, W4) which block.rs leaves as STUB(W7); not available at this \
          item's boundary",
@@ -1507,7 +1507,7 @@ pub struct CollapseStructure<'a> {
     /// resolution must use the stable bblocks topology.  Precomputed in
     /// `ActionBlockStructure::apply` (which holds `&mut Funcdata`).
     switch_case_edges: std::collections::BTreeMap<(BlockId, BlockId), (int4, bool)>,
-    /// (kuna, `option condfold`) the two admission-rule verdicts for every bblocks
+    /// (unlace, `option condfold`) the two admission-rule verdicts for every bblocks
     /// `BlockBasic`: Rule A (bounded, branch-free, comment-free printed-statement
     /// prefix in front of the trailing CBRANCH) and Rule B (statement-shape
     /// allowlist).  A *complex* sibling may be folded into a short-circuit condition
@@ -1516,29 +1516,29 @@ pub struct CollapseStructure<'a> {
     /// [`crate::condfold`].  Empty (and every use dead) when the
     /// option is off.
     condfold_sets: crate::condfold::CondFoldSets,
-    /// (kuna, `option condfold`) structuring nodes produced by a condfold-relaxed
+    /// (unlace, `option condfold`) structuring nodes produced by a condfold-relaxed
     /// [`rule_block_or`](Self::rule_block_or) fold.  `BlockCondition::isComplex`
     /// delegates to sub-block 0, so a folded node whose *right* operand carries a
     /// comma chain would look trivial to `ruleBlockWhileDo` and the whole chain
     /// would be swallowed into a `while(...)` header.  [`is_complex`](Self::is_complex)
     /// reports these as complex unconditionally.
     condfolded: std::collections::BTreeSet<BlockId>,
-    /// (kuna) Per-`bblocks`-block facts the `BlockCopy` mirror cannot read for
+    /// (unlace) Per-`bblocks`-block facts the `BlockCopy` mirror cannot read for
     /// itself — the artificial-halt type of a block's trailing `RETURN` and its
     /// start address.  Precomputed by `ActionBlockStructure::apply`; see
     /// [`crate::ifnoexit`].
     exitleaf_facts: crate::ifnoexit::ExitLeafFacts,
-    /// (kuna) `UNLACE_RS_DEBUG` decision trace for `rule_block_if_no_exit`.
+    /// (unlace) `UNLACE_RS_DEBUG` decision trace for `rule_block_if_no_exit`.
     dbg_ifne: bool,
-    /// (kuna) `ActionBlockStructure::apply` invocation index, for the trace.
+    /// (unlace) `ActionBlockStructure::apply` invocation index, for the trace.
     dbg_apply: u32,
-    /// (kuna, `option guardarm`) break a two-eligible-arm `ruleBlockIfNoExit`
+    /// (unlace, `option guardarm`) break a two-eligible-arm `ruleBlockIfNoExit`
     /// tie by source layout instead of by out-index.
     guard_arm: bool,
-    /// (kuna, `option loopcondhoist`) defer a live loop head in the deferred
+    /// (unlace, `option loopcondhoist`) defer a live loop head in the deferred
     /// `ruleBlockIfNoExit` scan while a non-head candidate is available.
     loop_cond_hoist: bool,
-    /// (kuna, `option noretfirst`) break a two-eligible-arm `ruleBlockIfNoExit`
+    /// (unlace, `option noretfirst`) break a two-eligible-arm `ruleBlockIfNoExit`
     /// tie toward the arm that ends in a no-return call.
     noret_first: bool,
 }
@@ -1572,7 +1572,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna) Install the `guardarm` / `loopcondhoist` verdicts.  Builder
+    /// (unlace) Install the `guardarm` / `loopcondhoist` verdicts.  Builder
     /// method; hand-built unit-test graphs keep the upstream-identical default.
     pub fn with_ifnoexit_options(mut self, guard_arm: bool, loop_cond_hoist: bool) -> Self {
         self.guard_arm = guard_arm;
@@ -1580,14 +1580,14 @@ impl<'a> CollapseStructure<'a> {
         self
     }
 
-    /// (kuna) Install the `noretfirst` verdict.  Builder method; hand-built
+    /// (unlace) Install the `noretfirst` verdict.  Builder method; hand-built
     /// unit-test graphs keep the upstream-identical default.
     pub fn with_noret_first(mut self, noret_first: bool) -> Self {
         self.noret_first = noret_first;
         self
     }
 
-    /// (kuna) Install the precomputed exit-leaf facts (artificial-halt type and
+    /// (unlace) Install the precomputed exit-leaf facts (artificial-halt type and
     /// start address per `bblocks` block).  Builder method; hand-built unit-test
     /// graphs keep the empty default.
     pub fn with_exitleaf_facts(
@@ -1600,7 +1600,7 @@ impl<'a> CollapseStructure<'a> {
         self
     }
 
-    /// (kuna, `option condfold`) install the precomputed admission-rule verdicts (see
+    /// (unlace, `option condfold`) install the precomputed admission-rule verdicts (see
     /// [`condfold::compute_condfold_sets`](crate::condfold::compute_condfold_sets)).
     /// Builder method; the empty default (option off, and every hand-built unit-test
     /// graph) means "nothing is condfold-eligible", i.e. upstream-identical behavior.
@@ -1770,7 +1770,7 @@ impl<'a> CollapseStructure<'a> {
     /// Mark edges exiting the body as \e unstructured gotos (C++
     /// `CollapseStructure::markExitsAsGotos`, `blockaction.cc:1083`).  Returns the
     /// number of edges marked.
-    fn mark_exits_as_gotos(&mut self, body: &[BlockId]) -> KunaResult<int4> {
+    fn mark_exits_as_gotos(&mut self, body: &[BlockId]) -> UnlaceResult<int4> {
         let mut changecount = 0;
         for i in 0..body.len() {
             let bl = body[i];
@@ -1789,7 +1789,7 @@ impl<'a> CollapseStructure<'a> {
     /// Mark edges between root components as \e unstructured gotos (C++
     /// `CollapseStructure::clipExtraRoots`, `blockaction.cc:1108`).  Returns
     /// `true` if any cross-over edges were found (and marked).
-    fn clip_extra_roots(&mut self) -> KunaResult<bool> {
+    fn clip_extra_roots(&mut self) -> UnlaceResult<bool> {
         for i in 1..self.size() {
             // Skip the canonical root
             let bl = self.block_at(i);
@@ -2041,7 +2041,7 @@ impl<'a> CollapseStructure<'a> {
     /// `blockaction.cc:1260`).  Returns the FlowBlock whose outgoing edge was
     /// marked, or `None`.  Errors (the C++ `throw LowlevelError`) if it cannot
     /// finish collapsing.
-    fn select_goto(&mut self) -> KunaResult<Option<BlockId>> {
+    fn select_goto(&mut self) -> UnlaceResult<Option<BlockId>> {
         while self.update_loop_body() {
             while self.likelyiter != self.likelygoto.len() {
                 let graph_id = self.graph_id;
@@ -2055,7 +2055,7 @@ impl<'a> CollapseStructure<'a> {
             }
         }
         if !self.clip_extra_roots()? {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Could not finish collapsing block structure",
             ));
         }
@@ -2064,7 +2064,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Attempt to apply a BlockList structure (C++ `CollapseStructure::ruleBlockCat`,
     /// `blockaction.cc:1284`).
-    fn rule_block_cat(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn rule_block_cat(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if self.graph.block(bl).size_out() != 1 {
             return Ok(false);
         }
@@ -2112,7 +2112,7 @@ impl<'a> CollapseStructure<'a> {
             nodes.push(outblock); // Extend the cat chain
         }
 
-        // (kuna javatry) A `try` dispatch must not become the leading statement of
+        // (unlace javatry) A `try` dispatch must not become the leading statement of
         // a condition: leave the trailing condition to structure first.
         let last = *nodes.last().expect("nodes");
         if nodes.len() > 1
@@ -2133,7 +2133,7 @@ impl<'a> CollapseStructure<'a> {
         Ok(true)
     }
 
-    /// (kuna javatry) Is `bl` an `if` whose condition is a `try` dispatch?
+    /// (unlace javatry) Is `bl` an `if` whose condition is a `try` dispatch?
     fn is_java_dispatch_if(&self, bl: BlockId) -> bool {
         if self.exitleaf_facts.java_dispatch.is_empty() {
             return false;
@@ -2174,7 +2174,7 @@ impl<'a> CollapseStructure<'a> {
     pub fn is_complex(&self, bl: BlockId) -> bool {
         let mut bl = bl;
         loop {
-            // (kuna, `option condfold`) a node produced by a condfold-relaxed fold
+            // (unlace, `option condfold`) a node produced by a condfold-relaxed fold
             // is complex regardless of its left operand: its RIGHT operand carries
             // a comma chain that `BlockCondition::isComplex`'s delegation to
             // sub-block 0 cannot see, and `ruleBlockWhileDo` must never lift that
@@ -2203,7 +2203,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Attempt to apply a BlockCondition structure (C++ `CollapseStructure::ruleBlockOr`,
     /// `blockaction.cc:1321`).
-    fn rule_block_or(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn rule_block_or(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if self.graph.block(bl).size_out() != 2 {
             return Ok(false);
         }
@@ -2236,11 +2236,11 @@ impl<'a> CollapseStructure<'a> {
             if self.graph.block(bl).is_back_edge_out(i) {
                 continue; // Don't use loop branch to get to orblock
             }
-            // (kuna javatry) A `try` dispatch never joins a short-circuit condition.
+            // (unlace javatry) A `try` dispatch never joins a short-circuit condition.
             if self.is_java_dispatch(bl) || self.is_java_dispatch(orblock) {
                 continue;
             }
-            // (kuna, `option condfold`) upstream declines outright on a complex
+            // (unlace, `option condfold`) upstream declines outright on a complex
             // sibling.  When condfold is on, a complex sibling is still accepted if
             // EITHER admission rule takes it — angr Phoenix's
             // MultiStatementExpression relaxation.  See
@@ -2290,7 +2290,7 @@ impl<'a> CollapseStructure<'a> {
             let graph_id = self.graph_id;
             let newcond = self.graph.new_block_condition(graph_id, bl, orblock)?;
             if relaxed {
-                // (kuna, `option condfold`) the right operand carries a comma
+                // (unlace, `option condfold`) the right operand carries a comma
                 // chain: force the folded node complex so `ruleBlockWhileDo` can
                 // never hoist it into a `while(...)` header.
                 self.condfolded.insert(newcond);
@@ -2300,7 +2300,7 @@ impl<'a> CollapseStructure<'a> {
         Ok(false)
     }
 
-    /// (kuna, `option condfold`) may the fold of `bl` with the *complex* sibling
+    /// (unlace, `option condfold`) may the fold of `bl` with the *complex* sibling
     /// `orblock` proceed anyway?  The union of the two admission rules — see
     /// [`crate::condfold`] for why they are a union and not an
     /// intersection.
@@ -2332,7 +2332,7 @@ impl<'a> CollapseStructure<'a> {
         self.shape_admits(bl, orblock)
     }
 
-    /// (kuna, `option condfold`, Rule B) Is `bl` safe to absorb into a short-circuit
+    /// (unlace, `option condfold`, Rule B) Is `bl` safe to absorb into a short-circuit
     /// condition as a **comma-separated multi-statement operand** under the
     /// statement-shape allowlist, even though [`Self::is_complex`] says it exceeds
     /// Ghidra's readability budget?
@@ -2371,7 +2371,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) Number of condition leaves under `bl` — 1 for
+    /// (unlace, `option condfold`, Rule B) Number of condition leaves under `bl` — 1 for
     /// a leaf, the sum of both operands for a `BlockCondition`.  Caps how wide a
     /// compound condition a relaxed fold may build (`collapse_conditions` is a fixpoint
     /// loop with no natural bound).
@@ -2386,7 +2386,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) Conservatively-scored printed statements that
+    /// (unlace, `option condfold`, Rule B) Conservatively-scored printed statements that
     /// `bl` would contribute to a comma-separated condition.  A leaf with no recorded
     /// score is charged the per-block maximum
     /// [`MAX_SHAPE_STMTS`](crate::condfold::MAX_SHAPE_STMTS) (a
@@ -2413,7 +2413,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) May the fold of `bl` with the complex
+    /// (unlace, `option condfold`, Rule B) May the fold of `bl` with the complex
     /// `orblock` proceed under the statement-shape rule?  The per-block allowlist and
     /// caps were resolved when `condfold_sets` was precomputed; this is the
     /// expression-size half.
@@ -2558,7 +2558,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Attempt to apply the BlockGoto or BlockMultiGoto structure (C++
     /// `CollapseStructure::ruleBlockGoto`, `blockaction.cc:1450`).
-    fn rule_block_goto(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn rule_block_goto(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         let sizeout = self.graph.block(bl).size_out();
         for i in 0..sizeout {
             if self.graph.block(bl).is_goto_out(i) {
@@ -2588,7 +2588,7 @@ impl<'a> CollapseStructure<'a> {
         Ok(false)
     }
 
-    /// (kuna, trace) One-line description of a structuring node: index, type,
+    /// (unlace, trace) One-line description of a structuring node: index, type,
     /// the start address of its front leaf, and its in/out degree.
     fn dbg_node(&self, bl: BlockId) -> String {
         let b = self.graph.block(bl);
@@ -2610,7 +2610,7 @@ impl<'a> CollapseStructure<'a> {
         )
     }
 
-    /// (kuna, trace) The artificial-halt type of a structuring node's exit leaf.
+    /// (unlace, trace) The artificial-halt type of a structuring node's exit leaf.
     fn dbg_exit_halt(&self, bl: BlockId) -> String {
         match self
             .graph
@@ -2622,7 +2622,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna, trace) Is `bl` still a live loop head in the `loopbody` list?
+    /// (unlace, trace) Is `bl` still a live loop head in the `loopbody` list?
     fn dbg_loop_head(&self, bl: BlockId) -> String {
         for lb in self.loopbody.iter() {
             if lb.get_head() == Some(bl) {
@@ -2632,7 +2632,7 @@ impl<'a> CollapseStructure<'a> {
         "no".to_string()
     }
 
-    /// (kuna, trace) Would [`rule_block_while_do`](Self::rule_block_while_do)
+    /// (unlace, trace) Would [`rule_block_while_do`](Self::rule_block_while_do)
     /// fire on `bl` right now?  Read-only mirror of its predicate.
     fn dbg_whiledo_would(&self, bl: BlockId) -> String {
         let b = self.graph.block(bl);
@@ -2668,7 +2668,7 @@ impl<'a> CollapseStructure<'a> {
             && self.graph.block(bl).is_decision_out(i)
     }
 
-    /// (kuna javatry) Does `bl` start at a block a `java_try` dispatch enters?
+    /// (unlace javatry) Does `bl` start at a block a `java_try` dispatch enters?
     fn is_java_handler(&self, bl: BlockId) -> bool {
         self.graph
             .get_front_leaf(bl)
@@ -2676,7 +2676,7 @@ impl<'a> CollapseStructure<'a> {
             .is_some_and(|bb| self.exitleaf_facts.java_handlers.contains(&bb))
     }
 
-    /// (kuna javatry) Does `bl` end in a `java_try` dispatch?
+    /// (unlace javatry) Does `bl` end in a `java_try` dispatch?
     fn is_java_dispatch(&self, bl: BlockId) -> bool {
         if self.exitleaf_facts.java_dispatch.is_empty() {
             return false;
@@ -2687,7 +2687,7 @@ impl<'a> CollapseStructure<'a> {
             .is_some_and(|bb| self.exitleaf_facts.java_dispatch.contains(&bb))
     }
 
-    /// (kuna `noretfirst`) Does the structuring node `bl` end in a no-return call
+    /// (unlace `noretfirst`) Does the structuring node `bl` end in a no-return call
     /// (its exit leaf's trailing `RETURN` is an artificial no-return halt)?
     fn ifnoexit_arm_noreturn(&self, bl: BlockId) -> bool {
         self.graph
@@ -2704,7 +2704,7 @@ impl<'a> CollapseStructure<'a> {
         self.exitleaf_facts.addr.get(&bb).copied()
     }
 
-    /// (kuna, `option guardarm`) The order in which `ruleBlockIfNoExit` tries
+    /// (unlace, `option guardarm`) The order in which `ruleBlockIfNoExit` tries
     /// the two arms.  Upstream is out-index order, which is arbitrary once
     /// `negateCondition`'s `swapEdges` has re-oriented the block — and when
     /// BOTH arms are eligible (both terminal, both in-degree 1) the choice is a
@@ -2715,7 +2715,7 @@ impl<'a> CollapseStructure<'a> {
     /// `if (c) A; B;` out in front of `B`.  Ties only; a single eligible arm is
     /// unaffected, so the vast majority of guards are untouched.
     fn ifnoexit_arm_order(&self, bl: BlockId) -> [int4; 2] {
-        // (kuna `javatry`) A dispatch's handler is the clause, so the protected
+        // (unlace `javatry`) A dispatch's handler is the clause, so the protected
         // code stays in the enclosing sequence.
         if !self.exitleaf_facts.java_handlers.is_empty() {
             let handler = |i| self.is_java_handler(self.graph.block(bl).get_out(i));
@@ -2726,7 +2726,7 @@ impl<'a> CollapseStructure<'a> {
                 return [0, 1];
             }
         }
-        // (kuna `noretfirst`) Of two eligible arms, the one that ends in a no-return
+        // (unlace `noretfirst`) Of two eligible arms, the one that ends in a no-return
         // call is the clause, so `if (bad) fatal(); rest;` keeps `rest` flat.
         if self.noret_first
             && self.ifnoexit_arm_eligible(bl, 0)
@@ -2753,7 +2753,7 @@ impl<'a> CollapseStructure<'a> {
         }
     }
 
-    /// (kuna, `option loopcondhoist`) Is `bl` the *current* collapsed-graph node
+    /// (unlace, `option loopcondhoist`) Is `bl` the *current* collapsed-graph node
     /// of a live loop head?  Mirrors `LoopBody::update`'s head resolution (walk
     /// the recorded head up to the top-level component) without mutating.
     fn ifnoexit_is_loop_head(&self, bl: BlockId) -> bool {
@@ -2850,7 +2850,7 @@ impl<'a> CollapseStructure<'a> {
     /// `CollapseStructure::ruleBlockWhileDo`, `blockaction.cc:1518`).
     fn rule_block_while_do(&mut self, bl: BlockId) -> bool {
         if self.is_java_dispatch(bl) {
-            return false; // (kuna javatry) a `try` dispatch is no loop condition
+            return false; // (unlace javatry) a `try` dispatch is no loop condition
         }
         if self.graph.block(bl).size_out() != 2 {
             return false; // Must be binary condition
@@ -2909,7 +2909,7 @@ impl<'a> CollapseStructure<'a> {
     /// `CollapseStructure::ruleBlockDoWhile`, `blockaction.cc:1555`).
     fn rule_block_do_while(&mut self, bl: BlockId) -> bool {
         if self.is_java_dispatch(bl) {
-            return false; // (kuna javatry) a `try` dispatch is no loop condition
+            return false; // (unlace javatry) a `try` dispatch is no loop condition
         }
         if self.graph.block(bl).size_out() != 2 {
             return false; // Must be binary condition
@@ -2965,7 +2965,7 @@ impl<'a> CollapseStructure<'a> {
         &mut self,
         switchbl: BlockId,
         exitblock: Option<BlockId>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let exitblock = match exitblock {
             Some(e) => e,
             None => return Ok(true),
@@ -3012,7 +3012,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Attempt to apply the BlockSwitch structure (C++
     /// `CollapseStructure::ruleBlockSwitch`, `blockaction.cc:1649`).
-    fn rule_block_switch(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn rule_block_switch(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if !self.graph.block(bl).is_switch_out() {
             return Ok(false);
         }
@@ -3148,7 +3148,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Attempt to mark switch cases that fall through to another case (C++
     /// `CollapseStructure::ruleCaseFallthru`, `blockaction.cc:1729`).
-    fn rule_case_fallthru(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn rule_case_fallthru(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if !self.graph.block(bl).is_switch_out() {
             return Ok(false);
         }
@@ -3195,7 +3195,7 @@ impl<'a> CollapseStructure<'a> {
     /// `blockaction.cc:1768`).  Collapse everything until no additional rules
     /// apply; if handed a particular `targetbl`, try simplifying from it first.
     /// Returns the count of \e isolated FlowBlocks.
-    fn collapse_internal(&mut self, mut targetbl: Option<BlockId>) -> KunaResult<int4> {
+    fn collapse_internal(&mut self, mut targetbl: Option<BlockId>) -> UnlaceResult<int4> {
         let mut isolated_count;
         let mut fullchange;
 
@@ -3274,7 +3274,7 @@ impl<'a> CollapseStructure<'a> {
                     order.join(" ")
                 );
             }
-            // (kuna, `option loopcondhoist`) First-match in component order puts
+            // (unlace, `option loopcondhoist`) First-match in component order puts
             // a loop head ahead of the blocks in its own body, and folding the
             // head's terminal exit arm into a BlockIf drops the head to one
             // out-edge, after which `rule_block_while_do` can never match it and
@@ -3314,7 +3314,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Simplify just the conditional AND/OR constructions (C++
     /// `CollapseStructure::collapseConditions`, `blockaction.cc:1854`).
-    fn collapse_conditions(&mut self) -> KunaResult<()> {
+    fn collapse_conditions(&mut self) -> UnlaceResult<()> {
         let mut change = true;
         while change {
             change = false;
@@ -3335,7 +3335,7 @@ impl<'a> CollapseStructure<'a> {
 
     /// Run the whole algorithm (C++ `CollapseStructure::collapseAll`,
     /// `blockaction.cc:1877`).  Collapse everything to isolated blocks.
-    pub fn collapse_all(&mut self) -> KunaResult<()> {
+    pub fn collapse_all(&mut self) -> UnlaceResult<()> {
         self.finaltrace = false;
         let graph_id = self.graph_id;
         self.graph.clear_visit_count(graph_id);
@@ -3383,7 +3383,7 @@ fn next_op_in_block(data: &Funcdata, op: crate::context::OpId) -> Option<crate::
     next
 }
 
-/// (kuna `noretfirst`) Does the halt `tail` of `bb` follow a call to a function
+/// (unlace `noretfirst`) Does the halt `tail` of `bb` follow a call to a function
 /// the source calls?  Either a `CALL`/`CALLIND` precedes it in `bb`, or `bb`
 /// holds only the halt and every predecessor ends in a call (the
 /// `funcboundflow` halt starts its own block).  A `__stack_chk_fail` call does
@@ -3444,7 +3444,7 @@ pub struct MergePair {
 /// [`move_cbranch`](ConditionalJoin::move_cbranch) +
 /// [`cut_down_multiequals`](ConditionalJoin::cut_down_multiequals)) reproduces the
 /// C++ mutation sequence verbatim (`newOp`/`newUniqueOut`/`opSetOutput` +
-/// `opSetOpcode` are all available at this merge base); it returns a `KunaResult`
+/// `opSetOpcode` are all available at this merge base); it returns a `UnlaceResult`
 /// only to surface the unreachable bank errors of the underlying primitives.
 pub struct ConditionalJoin {
     block1: Option<BlockId>,
@@ -3875,7 +3875,7 @@ impl ConditionalJoin {
     }
 
     /// Execute the merge (C++ `ConditionalJoin::execute`, `blockaction.cc:2094`).
-    pub fn execute(&mut self, data: &mut Funcdata) -> KunaResult<()> {
+    pub fn execute(&mut self, data: &mut Funcdata) -> UnlaceResult<()> {
         let block1 = self.block1.expect("execute: block1");
         let block2 = self.block2.expect("execute: block2");
         let exita = self.exita.expect("execute: exita");
@@ -4054,7 +4054,7 @@ impl Action for ActionPreferComplement {
     }
 }
 
-/// \brief (kuna, option `branchflip`) Flip negated-guard `if/else` branches for
+/// \brief (unlace, option `branchflip`) Flip negated-guard `if/else` branches for
 /// linearity — the angr-SAILR-style condition-polarity normalization that turns
 /// `if (x == 0) {A} else {B}` into the positive complement `if (x != 0) {B} else {A}`.
 ///
@@ -4103,7 +4103,7 @@ impl Action for ActionBranchFlip {
         // the 675-datatest parity and the default rendering are untouched.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::blockaction::BranchFlip>()
             .0
         {
@@ -4165,23 +4165,23 @@ impl Action for ActionBlockStructure {
         // so the printer can walk its op list).
         data.seed_sblocks_copy();
         crate::javatry::drop_throws_edges(data);
-        // (kuna) Region-based (Phoenix/SAILR) structurer — `option regionstructure
+        // (unlace) Region-based (Phoenix/SAILR) structurer — `option regionstructure
         // on` (default-off, parity-safe).  When ON, replace Ghidra's
         // `CollapseStructure` with the region-driven structurer
-        // (`run_region_structurer`): it runs the KunaRegionIdentifier over the real
+        // (`run_region_structurer`): it runs the UnlaceRegionIdentifier over the real
         // CFG and structures the seeded `sblocks` graph with the acyclic-sequence
         // schema + SAILR-ordered virtualize-to-goto fallback.  Honest-partial-safe:
         // if it cannot collapse the graph to a single root (an un-virtualizable
         // knot or the hang-guard), re-seed `sblocks` and fall through to the
         // unchanged `CollapseStructure` path.  OFF (default) skips this entirely and
         // output is byte-identical.
-        // (kuna javatry) A DEX method with `try` dispatches takes CollapseStructure,
+        // (unlace javatry) A DEX method with `try` dispatches takes CollapseStructure,
         // which knows to keep a dispatch out of `&&`/`||` and to make its handler
         // the `if` clause.
         let java_try = !crate::javatry::dispatch_blocks(data).is_empty();
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::region_structurer::RegionStructure>()
             .0
             && !java_try
@@ -4224,7 +4224,7 @@ impl Action for ActionBlockStructure {
         // recovered JumpTable in `jumpvec`.
         let mut switch_blocks: std::collections::BTreeMap<BlockId, usize> =
             std::collections::BTreeMap::new();
-        // (kuna) Per-block exit-leaf facts the BlockCopy mirror cannot read: the
+        // (unlace) Per-block exit-leaf facts the BlockCopy mirror cannot read: the
         // artificial-halt type of a trailing RETURN (`op_mark_halt`), which tells
         // a no-return-callee halt apart from a genuine source `return`, and the
         // block start address (trace only).
@@ -4232,17 +4232,17 @@ impl Action for ActionBlockStructure {
         let dbg_ifne = crate::ifnoexit::trace_enabled();
         let guard_arm = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::ifnoexit::GuardArm>()
             .0;
         let loop_cond_hoist = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::ifnoexit::LoopCondHoist>()
             .0;
         let noret_first = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::Noretfirst>()
             .0;
         exitleaf_facts.java_handlers = crate::javatry::dispatch_targets(data);
@@ -4295,7 +4295,7 @@ impl Action for ActionBlockStructure {
                 switch_case_edges.entry((sbb, target)).or_insert((j, isdef));
             }
         }
-        // (kuna, `option condfold`) the condfold-admissible subset of the *complex*
+        // (unlace, `option condfold`) the condfold-admissible subset of the *complex*
         // blocks under either admission rule: a bounded, branch-free, comment-free
         // printed-statement prefix in front of the trailing CBRANCH (Rule A), or the
         // statement-shape allowlist (Rule B).  Such a sibling may still be folded
@@ -4306,11 +4306,11 @@ impl Action for ActionBlockStructure {
             data,
             crate::condstmts::condfold_budget(
                 data.get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::condfold::CondFold>()
                     .0,
                 data.get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::condstmts::CondStmts>()
                     .0,
             ),
@@ -4327,7 +4327,7 @@ impl Action for ActionBlockStructure {
         let sroot = data.sblocks_root();
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loopcontinue::LoopContinue>()
             .0
         {
@@ -4416,18 +4416,18 @@ impl Action for ActionFinalStructure {
         data.finalize_forloop_printing();
         // graph.scopeBreak(-1,-1): lower loop-exit `goto <successor>` edges to
         // structured `break;` (a port of Ghidra `BlockGraph::scopeBreak`, the
-        // `scopeBreak` STUB filled by `kuna_loopbreak_recovery`).  Gated by the
+        // `scopeBreak` STUB filled by `unlace_loopbreak_recovery`).  Gated by the
         // `loopbreak_recovery` P0 assertion (`recover_loop_break`, opt-in
         // default-off); must run BEFORE `markUnstructured` so a converted break's
-        // target is no longer marked as an unstructured goto label.  (kuna)
+        // target is no longer marked as an unstructured goto label.  (unlace)
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loopbreak_recovery::RecoverLoopBreak>()
             .0
         {
             let sroot = data.sblocks_root();
-            crate::loopbreak_recovery::kuna_scope_break(data.sblocks_mut(), sroot);
+            crate::loopbreak_recovery::unlace_scope_break(data.sblocks_mut(), sroot);
         }
         // graph.markUnstructured(): flag goto targets so the printer emits a label
         // line for them (and a clause carrying one suppresses the `else if`
@@ -4436,7 +4436,7 @@ impl Action for ActionFinalStructure {
         let sroot = data.sblocks_root();
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::loopcontinue::LoopContinue>()
             .0
         {
@@ -4578,8 +4578,8 @@ impl Action for ActionReturnSplit {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Flip negated-guard if/else branches for linearity: when an
+crate::unlace_flag!(
+    /// (unlace) Flip negated-guard if/else branches for linearity: when an
     /// `if (x == 0) {A} else {B}` (equality-to-zero / negated guard) can be flipped
     /// in place, rewrite it to the positive `if (x) {B} else {A}` so the common
     /// path reads top-to-bottom (angr-style `if (x)` vs `if (x == 0)`).  Default

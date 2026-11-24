@@ -41,7 +41,7 @@
   },
   "tests": {
     "unit": "macho_stubs::external_import_slot_eligibility_is_exact; macho_stubs::import_slot_ranges_exclude_objc_message_refs; passes::peimportcall_pass_is_pe_coff_macho_gated",
-    "end_to_end": "kuna-console/tests/verify_macho_import_slots.rs (default/off, typed slot plus ordinary-data control)",
+    "end_to_end": "console/tests/verify_macho_import_slots.rs (default/off, typed slot plus ordinary-data control)",
     "stage": "tests/stages/ghdec-peimportcall.xml assertions #6-#8 (off/on plus negative control)",
     "promoted_cli": "tests/cli/mach-o-objc-msgsend.json",
     "compatibility": "kuna-cli/tests/typed_macho_tail_cli.rs and tests/cli/typed-mach-o-tail.json preserve typed import arguments under the new bound name"

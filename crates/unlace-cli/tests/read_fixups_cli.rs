@@ -2,7 +2,7 @@
 //! stay the load image's, which is what every other surface reads; each fixup
 //! slot they overlap is reported in `fixups` with its kind, the symbol a bind
 //! names, the file's own bytes and whether the listed bytes there are the
-//! file's, the loader's value, or kuna's zero placeholder for an import.
+//! file's, the loader's value, or unlace's zero placeholder for an import.
 //!
 //! Fixtures: `macho_ptrslots_arm64` (two chained rebases and a bind at
 //! 0x100004000, see `macho_ptrslots_arm64.provenance`), `dataptrs_so_x86_64.so`
@@ -15,7 +15,7 @@ fn read(binary: &str, start: &str, bytes: &str, extra: &[&str]) -> serde_json::V
     let path = common::fixture(binary);
     let mut argv = vec!["read", &path, start, "--addr", "--bytes", bytes, "--json"];
     argv.extend_from_slice(extra);
-    let (stdout, stderr, rc) = common::run_kuna(&argv);
+    let (stdout, stderr, rc) = common::run_unlace(&argv);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     serde_json::from_str(&stdout).unwrap()
 }
@@ -71,7 +71,7 @@ fn row(
     )
 }
 
-/// The issue's question: a bind's zero is kuna's placeholder, not the file's
+/// The issue's question: a bind's zero is unlace's placeholder, not the file's
 /// bytes (`0000000000000080`, the chain entry), and a rebase holds the pointer
 /// the loader stores.
 #[test]
@@ -142,7 +142,7 @@ fn a_slot_the_span_only_overlaps_is_listed_whole() {
 /// applied, so is an absolute relocation against one (`S + A`), and
 /// a `RELATIVE` slot whose file word already holds the target is the file's.
 #[test]
-fn elf_dynamic_relocations_say_which_slots_kuna_applied() {
+fn elf_dynamic_relocations_say_which_slots_unlace_applied() {
     let doc = read("dataptrs_so_x86_64.so", "0x3ff8", "72", &[]);
     assert_eq!(doc["fixups_coverage"], "dynamic-relocations");
     assert_eq!(
@@ -189,7 +189,7 @@ fn elf_dynamic_relocations_say_which_slots_kuna_applied() {
 }
 
 /// Packed relative relocations (`SHT_RELR`) are rebases too, listed beside the
-/// `.rela.dyn` ones; kuna leaves them as the file holds them, which is already
+/// `.rela.dyn` ones; unlace leaves them as the file holds them, which is already
 /// the pointer, so they draw no note.
 #[test]
 fn relr_slots_are_listed_as_rebases() {
@@ -242,7 +242,7 @@ fn relr_slots_are_listed_as_rebases() {
 }
 
 /// Bytes no fixup touches carry an empty list and no note; an image whose
-/// fixups kuna does not read says `none`.
+/// fixups unlace does not read says `none`.
 #[test]
 fn bytes_no_fixup_touches_list_none() {
     let code = read("macho_ptrslots_arm64", "0x1000003c8", "8", &[]);
@@ -276,7 +276,7 @@ fn an_unread_relocation_table_makes_the_fixups_partial() {
     std::fs::write(&path, &bytes).unwrap();
     let path = path.to_str().unwrap();
     let (stdout, stderr, rc) =
-        common::run_kuna(&["read", path, "0x3ff8", "--addr", "--bytes", "72", "--json"]);
+        common::run_unlace(&["read", path, "0x3ff8", "--addr", "--bytes", "72", "--json"]);
     assert_eq!(rc, 0, "{stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(doc["fixups_coverage"], "partial", "{doc}");

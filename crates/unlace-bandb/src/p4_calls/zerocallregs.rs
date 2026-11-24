@@ -1,4 +1,4 @@
-//! (kuna) A register gcc's `-fzero-call-used-regs` epilogue clears before the
+//! (unlace) A register gcc's `-fzero-call-used-regs` epilogue clears before the
 //! return is not part of the value the function returns.
 //!
 //! With `-fzero-call-used-regs=all` (openssh's hardened builds, the kernel's
@@ -26,11 +26,11 @@
 //! wrote; a RETURN with no run (a tail call) has no say. The x87 `fldz`/`fstp`
 //! block that `=all` puts first stops the walk, so a body's own `xor
 //! %eax,%eax` before it is still the returned zero. A declared output, and
-//! storage the callers forced (`kuna_voidret`), are never touched.
+//! storage the callers forced (`unlace_voidret`), are never touched.
 //!
 //! What is left is what the same code returns without the epilogue: a
 //! computed `eax`, `xmm0` or `rdx:rax`, or nothing for a function that only
-//! forwards an unresolved call's result, which `kuna_voidret` settles from
+//! forwards an unresolved call's result, which `unlace_voidret` settles from
 //! its callers. Under `=all-gpr` a `return 0` written right before the run
 //! cannot be told from the run's own first clear and returns `void`.
 

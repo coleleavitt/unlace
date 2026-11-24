@@ -1,5 +1,5 @@
-//! (kuna) Recognize the statically linked MSVC x86-32 64-bit arithmetic CRT
-//! helpers in a stripped PE by their bytes, so the `kuna_arithhelpers`
+//! (unlace) Recognize the statically linked MSVC x86-32 64-bit arithmetic CRT
+//! helpers in a stripped PE by their bytes, so the `unlace_arithhelpers`
 //! call-fixups reach them.
 //!
 //! The fixups are installed by name, and a stripped image names nothing: a

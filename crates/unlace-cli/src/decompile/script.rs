@@ -121,7 +121,7 @@ pub(super) fn build_script_for_input(
     for (name, value) in injected {
         lines.push(format!("option {name} {value}"));
     }
-    // (kuna `--assert`) A `readonly` range is inert unless read-only propagation
+    // (unlace `--assert`) A `readonly` range is inert unless read-only propagation
     // is on, and that option is default-off; asserting the range turns it on.
     // Emitted BEFORE the caller's own `--option` lines so an explicit
     // `--option readonly off` still wins.
@@ -134,7 +134,7 @@ pub(super) fn build_script_for_input(
     if defer_fast_funcdisc {
         lines.push("option fast_funcdisc off".into());
     }
-    // (kuna `--assert`) IMAGE-scoped directives -- a read-only or volatile
+    // (unlace `--assert`) IMAGE-scoped directives -- a read-only or volatile
     // memory range -- must precede `read symbols`: mapping a symbol folds the
     // range property into its SymbolEntry and never looks at the range again.
     for form in forms(crate::assertdecl::Slot::Image) {
@@ -148,7 +148,7 @@ pub(super) fn build_script_for_input(
     for decl in func_decls {
         lines.push(decl.console_line());
     }
-    // (kuna, RE-need `prototype-assertion-rejects-explicit`) A by-address run
+    // (unlace, RE-need `prototype-assertion-rejects-explicit`) A by-address run
     // ensures that a function symbol exists where it points: `load addr` follows flow
     // from the address without installing a `FunctionSymbol`, so a directive
     // naming the very address this run decompiles was answered `no function
@@ -170,7 +170,7 @@ pub(super) fn build_script_for_input(
     {
         lines.push(format!("function symbol {vma:#x}"));
     }
-    // (kuna `--assert`) The PROGRAM-scoped directives -- a parsed type, a
+    // (unlace `--assert`) The PROGRAM-scoped directives -- a parsed type, a
     // declared prototype, a named global -- go here, after the analysis commit
     // and before the selection, so the function is loaded against them.
     for form in forms(crate::assertdecl::Slot::Program) {

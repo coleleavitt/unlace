@@ -1,9 +1,9 @@
-//! String-literal detection — the kuna analog of Ghidra's `StringsAnalyzer`
+//! String-literal detection — the unlace analog of Ghidra's `StringsAnalyzer`
 //! ("ASCII Strings"), `Ghidra/Features/Base/.../plugin/core/string/StringsAnalyzer.java`.
 //!
-//! ## Why this lives in kuna
+//! ## Why this lives in unlace
 //!
-//! kuna ports Ghidra's C++ *decompiler*; the detection of a NUL-terminated string
+//! unlace ports Ghidra's C++ *decompiler*; the detection of a NUL-terminated string
 //! at a data address (and the `char[N]` type it gets) is done by Ghidra's Java
 //! *analyzer* tier, which the port never carried over. Without it a constant
 //! pointer into `.rodata` (e.g. `0x400915`) prints as a bare integer instead of
@@ -28,7 +28,7 @@
 //!
 //! The pass is always `requireNullEnd`, because the markup it commits is a
 //! `char[N]`. The read-only inventory behind `unlace strings` runs the same matcher
-//! under a caller-chosen [`Termination`] — see [`kuna_stringinv`].
+//! under a caller-chosen [`Termination`] — see [`unlace_stringinv`].
 //!
 //! ## LOSS vs Ghidra (documented divergence)
 //!
@@ -72,7 +72,7 @@ pub(crate) fn is_string_char(b: u8) -> bool {
 /// [`StringLiteralPass`] is always [`Termination::Nul`] — the markup it commits is
 /// a `char[N]`, which only a NUL-ended run describes. The relaxed arm exists for
 /// the read-only inventory query behind `unlace strings`
-/// ([`kuna_stringinv`](self::stringinv)), where the question is "what text is
+/// ([`unlace_stringinv`](self::stringinv)), where the question is "what text is
 /// in this image", not "where can a `char[N]` be planted".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Termination {
@@ -232,7 +232,7 @@ pub(crate) fn scan_strings(
     out
 }
 
-/// (kuna `codestrings`) IDA's final-pass rule for a string inside code: a run
+/// (unlace `codestrings`) IDA's final-pass rule for a string inside code: a run
 /// of at least 17 bytes (16 visible plus the NUL), or of at least 5 (4 visible
 /// plus the NUL) that starts right after one to three zero bytes, the padding a
 /// compiler puts before a string it places among instructions, or right after
@@ -285,12 +285,12 @@ fn called_over(data: &[u8], at: usize, visible: usize) -> bool {
 /// string literals in the loaded+initialized image and emit a [`StringFact`]
 /// (a `char[N]` data object) per find.
 ///
-/// (kuna `widestrings`) Also emits the 2-byte width — `StringsAnalyzer`'s
+/// (unlace `widestrings`) Also emits the 2-byte width — `StringsAnalyzer`'s
 /// `allCharWidths` arm — into [`AnalysisOutput::wide_strings`], where each fact
-/// becomes a `wchar2[N]` instead. See [`kuna_widestrings`].
+/// becomes a `wchar2[N]` instead. See [`unlace_widestrings`].
 ///
-/// (kuna) A run that starts on a pointer slot holding an address of the image is
-/// a table entry, not text, and is not emitted. See [`kuna_ptrslot`].
+/// (unlace) A run that starts on a pointer slot holding an address of the image is
+/// a table entry, not text, and is not emitted. See [`unlace_ptrslot`].
 pub struct StringLiteralPass {
     /// Minimum visible ASCII string length.
     pub min_len: usize,

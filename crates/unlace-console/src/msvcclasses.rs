@@ -1,4 +1,4 @@
-//! (kuna `vtabletypes`) Commit what the typed MSVC vftables say about
+//! (unlace `vtabletypes`) Commit what the typed MSVC vftables say about
 //! functions and data, once [`unlace_decomp::vtabletypes::install`] has
 //! built the class structures.
 //!
@@ -8,14 +8,14 @@
 //! body. Each vftable becomes a data object of its class's `C_vtbl` type: the
 //! `rtti` label already at its address is retyped, else a `C_vftable` object
 //! is added. A constructor's store of the vftable then carries `C_vtbl *`, which
-//! types the object it stores through as `C *` (`kuna_vtblbase`).
+//! types the object it stores through as `C *` (`unlace_vtblbase`).
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use unlace_analysis::rtti::vtabletypes::{VtableFacts, VtableObject};
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::Datatype;
 use unlace_decomp::inputhints::InputHint;
@@ -31,7 +31,7 @@ pub(crate) fn commit(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     facts: &VtableFacts,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     commit_this(prog, code_space, &facts.this_types)?;
     for t in &facts.tables {
         commit_table(prog, code_space, t)?;
@@ -39,7 +39,11 @@ pub(crate) fn commit(
     Ok(())
 }
 
-fn class_pointer(prog: &ConsoleProgram, class: &str, ws: u32) -> KunaResult<Option<Rc<Datatype>>> {
+fn class_pointer(
+    prog: &ConsoleProgram,
+    class: &str,
+    ws: u32,
+) -> UnlaceResult<Option<Rc<Datatype>>> {
     let types = prog.arch().types();
     let Some(st) = types.find_by_name(class)?.filter(|t| !t.is_incomplete()) else {
         return Ok(None);
@@ -55,7 +59,7 @@ fn commit_this(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     this_types: &[(u64, String)],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     if this_types.is_empty() {
         return Ok(());
     }
@@ -91,7 +95,7 @@ fn commit_this(
     #[allow(clippy::mutable_key_type)]
     let table = &mut prog
         .arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::inputhints::ThisHints>()
         .0;
     for (entry, hint) in hints {
@@ -104,7 +108,7 @@ fn commit_table(
     prog: &mut ConsoleProgram,
     code_space: &Rc<AddrSpace>,
     t: &VtableObject,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let arch = prog.arch_mut();
     let Some(vtbl) = arch
         .types()

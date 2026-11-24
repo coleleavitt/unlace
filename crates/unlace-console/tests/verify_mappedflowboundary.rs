@@ -244,7 +244,7 @@ fn byte_overlays_remain_exclusive_and_repeated_flows_use_current_bytes() {
         .translate()
         .loader_rc()
         .borrow_mut()
-        .kuna_overlay_bytes(&address(&prog, 0x10000), &[0xb8, 9, 0, 0, 0, 0xc3])
+        .unlace_overlay_bytes(&address(&prog, 0x10000), &[0xb8, 9, 0, 0, 0, 0xc3])
         .unwrap();
     let changed = code(&mut prog);
     assert!(changed.contains("return 9;"), "{changed}");
@@ -387,7 +387,7 @@ fn mapping_warnings_survive_failed_reloads_and_refresh_after_an_overlay() {
             .translate()
             .loader_rc()
             .borrow_mut()
-            .kuna_overlay_bytes(&entry, &[0xb8, 9, 0, 0, 0, 0xc3])
+            .unlace_overlay_bytes(&entry, &[0xb8, 9, 0, 0, 0, 0xc3])
             .unwrap();
         for _ in 0..3 {
             assert!(status.run_command().unwrap());
@@ -464,7 +464,7 @@ fn declared_boundary_policy_precedes_mapping_recovery() {
 #[test]
 fn a_mapped_loader_failure_is_not_recovered_as_a_missing_edge() {
     use std::sync::Arc;
-    use unlace_base::error::{KunaError, KunaResult};
+    use unlace_base::error::{UnlaceError, UnlaceResult};
     use unlace_sleigh::loadimage::{ImageBytes, LoadImage};
     struct FailingImage(Arc<dyn ImageBytes>, u64);
     impl LoadImage for FailingImage {
@@ -478,9 +478,9 @@ fn a_mapped_loader_failure_is_not_recovered_as_a_missing_edge() {
         fn shared_bytes(&self) -> Option<Arc<dyn ImageBytes>> {
             Some(Arc::clone(&self.0))
         }
-        fn load_fill(&mut self, buf: &mut [u8], addr: &Address) -> KunaResult<()> {
+        fn load_fill(&mut self, buf: &mut [u8], addr: &Address) -> UnlaceResult<()> {
             if addr.get_offset() >= self.1 {
-                return Err(KunaError::data_unavail("synthetic mapped read failure"));
+                return Err(UnlaceError::data_unavail("synthetic mapped read failure"));
             }
             self.0.fill_span(buf, addr.get_offset());
             Ok(())

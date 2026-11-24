@@ -57,7 +57,7 @@ use crate::funcdata::Funcdata;
 use crate::ptrfromuse::is_float_op;
 
 /// Whether the register range at `addr` (`size` bytes, widest access `maxw`) is
-/// an integer register pair to refine at its midpoint (kuna `pairrefine`).
+/// an integer register pair to refine at its midpoint (unlace `pairrefine`).
 /// Requires a whole-pair load, not just half writes followed by a whole store.
 pub fn split_pair(
     fd: &Funcdata,
@@ -259,7 +259,7 @@ pub fn straddles_middle(fd: &Funcdata, vn: VarnodeId, addr: &Address, size: int4
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.pairrefine_split_pair = Some(split_pair);
     hooks.pairrefine_straddles_middle = Some(straddles_middle);
 }

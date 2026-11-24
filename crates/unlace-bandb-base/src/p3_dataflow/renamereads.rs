@@ -18,7 +18,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::fasthash::FxHashMap;
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::op_iop_encode;
-use crate::op::pcodeop_addlflags::kuna_rename_read;
+use crate::op::pcodeop_addlflags::unlace_rename_read;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
@@ -29,7 +29,7 @@ use unlace_num::opcodes::OpCode;
 pub fn pending(fd: &Funcdata, op: OpId) -> bool {
     fd.obank()
         .get(op)
-        .is_some_and(|o| o.get_addlflags() & kuna_rename_read != 0)
+        .is_some_and(|o| o.get_addlflags() & unlace_rename_read != 0)
 }
 
 /// Mark `op`, whose `n` empty input slots read its output storage, for
@@ -43,7 +43,7 @@ pub fn mark(fd: &mut Funcdata, op: OpId, n: uint4, pending: &mut Vec<(OpId, uint
 
 fn push(fd: &mut Funcdata, op: OpId, first: uint4, pending: &mut Vec<(OpId, uint4)>) {
     if let Some(o) = fd.obank_mut().get_mut(op) {
-        o.set_additional_flag(kuna_rename_read);
+        o.set_additional_flag(unlace_rename_read);
     }
     pending.push((op, first));
 }
@@ -112,10 +112,10 @@ pub fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
         let Some(o) = fd.obank_mut().get_mut(op) else {
             continue;
         };
-        if o.get_addlflags() & kuna_rename_read == 0 {
+        if o.get_addlflags() & unlace_rename_read == 0 {
             continue;
         }
-        o.clear_additional_flag(kuna_rename_read);
+        o.clear_additional_flag(unlace_rename_read);
         let phi = o.code() == OpCode::CPUI_MULTIEQUAL;
         let slots = if phi { o.num_input() } else { 1 };
         let Some((addr, size)) = storage(fd, op) else {
@@ -138,7 +138,7 @@ pub fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.renamereads_finish = Some(finish);
     hooks.renamereads_mark = Some(mark);
     hooks.renamereads_new_indirect = Some(new_indirect);

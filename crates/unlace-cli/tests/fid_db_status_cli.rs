@@ -28,7 +28,7 @@ fn relabeled(lang: &str, cspec: &str) -> PathBuf {
     path
 }
 
-fn kuna(db: Option<&Path>, args: &[&str]) -> Output {
+fn unlace(db: Option<&Path>, args: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
     command
         .args(args)
@@ -41,7 +41,7 @@ fn kuna(db: Option<&Path>, args: &[&str]) -> Output {
 }
 
 fn functions(db: Option<&Path>) -> (Value, String) {
-    let out = kuna(
+    let out = unlace(
         db,
         &[
             "functions",
@@ -178,7 +178,7 @@ fn without_a_configured_database_the_documents_are_unchanged() {
     assert!(doc.get("fid_databases").is_none());
     assert_eq!(names(&doc), ["sub_401000", "sub_401020"]);
     assert!(!stderr.contains("FID database"), "{stderr}");
-    let out = kuna(
+    let out = unlace(
         None,
         &["decompile", &binary(), "--addr", "0x401020", "--json"],
     );
@@ -189,7 +189,7 @@ fn without_a_configured_database_the_documents_are_unchanged() {
 #[test]
 fn every_document_that_reports_a_run_carries_the_status() {
     let db = relabeled("AARCH64:LE:64:v8A", "default");
-    let decompiled = kuna(
+    let decompiled = unlace(
         Some(&db),
         &["decompile", &binary(), "--addr", "0x401020", "--json"],
     );
@@ -197,13 +197,13 @@ fn every_document_that_reports_a_run_carries_the_status() {
     let doc: Value = serde_json::from_slice(&decompiled.stdout).unwrap();
     assert_eq!(only_report(&doc)["status"], "incompatible");
     assert_eq!(doc["functions"][0]["name"], "sub_401020");
-    let all = kuna(Some(&db), &["decompile-all", &binary(), "--json"]);
+    let all = unlace(Some(&db), &["decompile-all", &binary(), "--json"]);
     assert_eq!(
         only_report(&serde_json::from_slice(&all.stdout).unwrap())["status"],
         "incompatible"
     );
 
-    let summary = kuna(Some(&db), &["functions", &binary(), "--summary", "--json"]);
+    let summary = unlace(Some(&db), &["functions", &binary(), "--summary", "--json"]);
     let doc: Value = serde_json::from_slice(&summary.stdout).unwrap();
     assert_eq!(only_report(&doc)["status"], "incompatible");
     let warnings = doc["warnings"].as_array().unwrap();
@@ -214,7 +214,7 @@ fn every_document_that_reports_a_run_carries_the_status() {
             .starts_with(&format!("FID database {}: ", db.display()))),
         "{warnings:?}"
     );
-    let text = kuna(Some(&db), &["functions", &binary(), "--summary"]);
+    let text = unlace(Some(&db), &["functions", &binary(), "--summary"]);
     let text = String::from_utf8(text.stdout).unwrap();
     assert!(
         text.contains(&format!(
@@ -228,7 +228,7 @@ fn every_document_that_reports_a_run_carries_the_status() {
 #[test]
 fn the_text_decompile_surface_warns_too() {
     let db = relabeled("AARCH64:LE:64:v8A", "default");
-    let out = kuna(Some(&db), &["decompile", &binary(), "0x401020", "--addr"]);
+    let out = unlace(Some(&db), &["decompile", &binary(), "0x401020", "--addr"]);
     let stdout = String::from_utf8(out.stdout).unwrap();
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert_eq!(out.status.code(), Some(0), "{stderr}");
@@ -240,7 +240,7 @@ fn the_text_decompile_surface_warns_too() {
         1,
         "{stderr}"
     );
-    let matched = kuna(
+    let matched = unlace(
         Some(Path::new(&database())),
         &["decompile", &binary(), "0x401020", "--addr"],
     );
@@ -304,7 +304,7 @@ fn build_refuses_a_language_that_does_not_describe_the_object() {
 #[test]
 fn query_uses_the_same_rule() {
     let query = |db: &Path| {
-        kuna(
+        unlace(
             None,
             &[
                 "fid",

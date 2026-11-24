@@ -1,4 +1,4 @@
-//! (kuna `dexmodel`) Method references resolved across every DEX file of an APK.
+//! (unlace `dexmodel`) Method references resolved across every DEX file of an APK.
 //!
 //! An `invoke` names its method by an index into its own file's `method_ids`:
 //! the declaring class, the name and the prototype, all as strings. The method

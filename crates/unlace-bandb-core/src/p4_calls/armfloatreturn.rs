@@ -15,7 +15,7 @@ use unlace_num::opcodes::OpCode;
 
 /// The option is on and the loaded ARM image states the VFP procedure-call standard.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.kuna_options.get::<ArmFloatReturn>().0
+    arch.unlace_options.get::<ArmFloatReturn>().0
         && arch.archid.starts_with("ARM:")
         && arch.translate().loader_rc().borrow().arm_vfp_args()
 }
@@ -39,7 +39,7 @@ pub fn park_float_library_prototypes(arch: &mut Architecture) {
     let pending = std::mem::take(&mut arch.arm_float_library_prototypes);
     if !applies(arch) && crate::typedcallabi::image_evidence(arch) != Some(false) {
         let withheld = arch
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_lift::honestgaps::WithheldPrototypes>();
         for (at, pieces) in &pending {
             withheld.record(
@@ -252,7 +252,7 @@ fn add_pairs(list: &mut ParamListStandard, manager: &AddrSpaceManager, limit: us
             list.get_entry(),
             manager,
         ) {
-            entry.kuna_whole_register(lo.is_first_in_class());
+            entry.unlace_whole_register(lo.is_first_in_class());
             list.push_entry(entry);
         }
     }
@@ -1009,7 +1009,7 @@ pub fn forwarded_vfp_return(data: &Funcdata, addr: &Address, size: i32) -> bool 
     let space = addr.get_space().map(|s| s.get_index());
     let end = addr.get_offset() + size.max(0) as u64;
     let claims: Vec<_> = data
-        .kuna_passthrough_claims()
+        .unlace_passthrough_claims()
         .iter()
         .filter(|c| {
             c.addr.get_space().map(|s| s.get_index()) == space
@@ -1195,7 +1195,7 @@ pub fn call_input_allowed(
             .filter_map(|i| call.proto().get_param(i))
             .any(|p| p.get_address() == *addr && p.get_size() == size);
     }
-    data.kuna_protoorder_types(call.get_entry_address())
+    data.unlace_protoorder_types(call.get_entry_address())
         .is_some_and(|stated| {
             stated.arity_sound
                 && stated.inputs.iter().any(|(a, s, ty)| {
@@ -1205,7 +1205,7 @@ pub fn call_input_allowed(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.armfloatreturn_declared_helper_model = Some(declared_helper_model);
     hooks.armfloatreturn_applies = Some(applies);
     hooks.armfloatreturn_base_pcs_helper = Some(base_pcs_helper);
@@ -1213,13 +1213,13 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.armfloatreturn_call_input_allowed = Some(call_input_allowed);
 }
 
-/// (kuna `armfloatreturn`) Recover VFP return values; the message echoes the value as given.
+/// (unlace `armfloatreturn`) Recover VFP return values; the message echoes the value as given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArmFloatReturn(pub bool);
 
-impl crate::optionset::KunaOption for ArmFloatReturn {
+impl crate::optionset::UnlaceOption for ArmFloatReturn {
     const NAME: &'static str = "armfloatreturn";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArmFloatReturn(false)
@@ -1229,7 +1229,7 @@ impl crate::optionset::KunaOption for ArmFloatReturn {
         ArmFloatReturn(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let on = crate::options::on_or_off(value)?;
         Ok((
             ArmFloatReturn(on),

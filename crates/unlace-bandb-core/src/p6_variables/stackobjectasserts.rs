@@ -14,7 +14,7 @@ use crate::funcdata::Funcdata;
 use crate::stackobjects::{ByteSource, SourcePoint};
 use crate::unionresolve::{ResolveEdge, ResolvedUnion};
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 #[derive(Clone)]
@@ -177,7 +177,7 @@ pub fn validate(fd: &Funcdata) -> Result<(), String> {
     for assertion in specs(fd) {
         if !fd
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::StackViews>()
             .0
         {
@@ -274,7 +274,7 @@ fn ptrsub(
     input: VarnodeId,
     offset: u64,
     ty: Rc<Datatype>,
-) -> KunaResult<(OpId, VarnodeId)> {
+) -> UnlaceResult<(OpId, VarnodeId)> {
     let pc = fd.obank().get(call).unwrap().get_addr().clone();
     let op = fd.new_op(2, pc);
     fd.op_set_opcode_code(op, OpCode::CPUI_PTRSUB);
@@ -363,10 +363,10 @@ pub fn backing_view(
     let offset = fd.obank().get(root_op)?.get_in(1)?;
     let reference = fd.vbank().get(offset)?.get_high()?;
     let high = fd.high_bank_mut().get_mut(reference)?;
-    high.set_kuna_name(info.display_name.clone());
+    high.set_unlace_name(info.display_name.clone());
     high.set_symbol_offset(0);
     high.set_symbol_type(Rc::clone(backing));
-    high.set_kuna_ref_symbol(info.symbol);
+    high.set_unlace_ref_symbol(info.symbol);
     let (facet, mut value) = ptrsub(fd, call, storage, 0, pointer(member_ty)?).ok()?;
     let mut parent = ResolvedUnion::new_field(backing_ptr.clone(), -1, factory).ok()?;
     parent.set_lock(true);
@@ -531,12 +531,12 @@ pub fn seed_writes(
     }
 }
 
-/// (kuna `stackobjects`) The stack-object assertions the drive seeded; kept across `Funcdata::clear`.
+/// (unlace `stackobjects`) The stack-object assertions the drive seeded; kept across `Funcdata::clear`.
 #[derive(Default)]
 struct AssertionsSlot(Vec<crate::stackobjectasserts::ObjectAssertion>);
-crate::kuna_func_state!(AssertionsSlot, keep_across_clear: true);
+crate::unlace_func_state!(AssertionsSlot, keep_across_clear: true);
 
-/// The `kuna_stackobjectasserts` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stackobjectasserts` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackobjectassertsExt {
     fn stack_object_assertions(&self) -> &Vec<crate::stackobjectasserts::ObjectAssertion>;
@@ -547,11 +547,11 @@ pub trait FuncdataStackobjectassertsExt {
 
 impl FuncdataStackobjectassertsExt for crate::funcdata::Funcdata {
     fn stack_object_assertions(&self) -> &Vec<crate::stackobjectasserts::ObjectAssertion> {
-        &self.kuna_state::<AssertionsSlot>().0
+        &self.unlace_state::<AssertionsSlot>().0
     }
     fn stack_object_assertions_mut(
         &mut self,
     ) -> &mut Vec<crate::stackobjectasserts::ObjectAssertion> {
-        &mut self.kuna_state_mut::<AssertionsSlot>().0
+        &mut self.unlace_state_mut::<AssertionsSlot>().0
     }
 }

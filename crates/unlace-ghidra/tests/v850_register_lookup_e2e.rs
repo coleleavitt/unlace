@@ -66,7 +66,7 @@ fn v850_predicate_queries_register_names_without_a_sleigh_downcast() {
 
     assert_eq!(process.read_command().expect("registerProgram"), 0);
     process
-        .set_kuna_option_for_test(0, "v850indirectbranch", "on")
+        .set_unlace_option_for_test(0, "v850indirectbranch", "on")
         .expect("enable v850 predicate");
     assert_eq!(process.read_command().expect("setAction"), 0);
     assert_eq!(process.read_command().expect("decompileAt"), 0);

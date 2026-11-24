@@ -17,7 +17,7 @@
     },
     {
       "what": "all three styles, rendered by the same functions name_function calls",
-      "detail": "engine.rs (minted_function_names) returns ghidra_function_name / kuna_function_name / printc::generic_function_name for an address -- one per KunaNameStyle arm, the same three calls Architecture::name_function dispatches between. Deriving them rather than formatting them locally means a change to any spelling reaches the selector for free, and the existing word-addressed-space candidate loop (spelled vs address_to_byte-scaled) is untouched. Placed in kuna-console rather than kuna-cli: kuna-cli only translates the console's miss into its error text (decompile.rs:505), and a fix there would have closed the round trip for `kuna decompile` while disassemble/xrefs/decompile-all kept refusing the same name."
+      "detail": "engine.rs (minted_function_names) returns ghidra_function_name / kuna_function_name / printc::generic_function_name for an address -- one per KunaNameStyle arm, the same three calls Architecture::name_function dispatches between. Deriving them rather than formatting them locally means a change to any spelling reaches the selector for free, and the existing word-addressed-space candidate loop (spelled vs address_to_byte-scaled) is untouched. Placed in console rather than kuna-cli: kuna-cli only translates the console's miss into its error text (decompile.rs:505), and a fix there would have closed the round trip for `kuna decompile` while disassemble/xrefs/decompile-all kept refusing the same name."
     },
     {
       "what": "nothing that already resolved can change",

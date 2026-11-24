@@ -1,4 +1,4 @@
-//! (kuna) MSVC `__ftol` family call-fixup — lower the x86-32 floating-point to
+//! (unlace) MSVC `__ftol` family call-fixup — lower the x86-32 floating-point to
 //! 64-bit-integer CRT helper to p-code so its x87 argument survives.
 //!
 //! # The defect
@@ -73,7 +73,7 @@
 //! (`CallFixupAnalyzer.getCallFixupNameForFunction`), so each `__`-spelled target
 //! also covers the `_`- and bare-spelled function names.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// The `<callfixup name=…>` of the 64-bit helpers, `__ftol` and `__ftol2`.
 pub const FIXUP_NAME: &str = "kuna_msvcftol";
@@ -149,8 +149,8 @@ pub fn language_is_x86_32(
 /// hand each to `register`. Split from the architecture so the XML and the guard
 /// can be unit-tested without a bootstrapped engine.
 pub fn decode_payload(
-    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> KunaResult<()>,
-) -> KunaResult<()> {
+    register: &mut dyn FnMut(&std::rc::Rc<unlace_base::xml::Element>) -> UnlaceResult<()>,
+) -> UnlaceResult<()> {
     use unlace_base::xml::DocumentStorage;
     for xml in [payload_xml(), payload_sse_xml()] {
         let mut store = DocumentStorage::new();
@@ -161,7 +161,7 @@ pub fn decode_payload(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.msvcftol_decode_payload = Some(decode_payload);
     hooks.msvcftol_language_is_x86_32 = Some(language_is_x86_32);
 }

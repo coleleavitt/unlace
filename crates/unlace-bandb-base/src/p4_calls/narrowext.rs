@@ -1,4 +1,4 @@
-//! (kuna) `narrowext`: the extension a calling convention gives an integer
+//! (unlace) `narrowext`: the extension a calling convention gives an integer
 //! narrower than the register that carries it, as an argument or a return value.
 //!
 //! A compiler spec states one extension per register entry, which cannot say
@@ -53,13 +53,13 @@ pub struct OptionNarrowExt;
 impl OptionNarrowExt {
     pub const NAME: &'static str = "narrowext";
 
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(NarrowExtMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(NarrowExtMode, String)> {
         let mode = match p1 {
             "off" => NarrowExtMode::Off,
             "abi" => NarrowExtMode::Abi,
             "compiler" => NarrowExtMode::Compiler,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown narrowext value: {other} (expected off|abi|compiler)"
                 )));
             }
@@ -77,9 +77,9 @@ pub use crate::context::NarrowExtRules as Rules;
 pub fn rules(arch: &Architecture) -> Rules {
     let id = arch.archid.as_str();
     let compiler =
-        arch.kuna_options.get::<crate::narrowext::NarrowExtMode>() == NarrowExtMode::Compiler;
+        arch.unlace_options.get::<crate::narrowext::NarrowExtMode>() == NarrowExtMode::Compiler;
     let gated = |w, documented: bool| (compiler || documented).then_some(w);
-    match arch.kuna_options.get::<crate::narrowext::NarrowExtMode>() {
+    match arch.unlace_options.get::<crate::narrowext::NarrowExtMode>() {
         NarrowExtMode::Off => Rules::default(),
         _ if id.starts_with("RISCV:") || id.starts_with("Loongarch:") => Rules {
             input: Some(Widen::Register),
@@ -135,7 +135,7 @@ fn is_apple_arm64(arch: &Architecture) -> bool {
 
 /// Whether `ty` is an integer whose sign is known. The target's own character
 /// types (core `char` and the wide ones) are not: their sign is the platform's,
-/// and kuna's `char` is signed on every target. `signed char` and `unsigned
+/// and unlace's `char` is signed on every target. `signed char` and `unsigned
 /// char` are character types too, but they state their sign.
 fn signed(ty: &Datatype) -> Option<bool> {
     if ty.is_char_print() && (ty.is_core_type() || ty.get_size() != 1) {
@@ -260,7 +260,7 @@ pub fn or_model(
 /// Mark `op` as the extension the rule states.
 pub fn mark(data: &mut Funcdata, op: OpId) {
     if let Some(o) = data.obank_mut().get_mut(op) {
-        o.set_additional_flag(pcodeop_addlflags::kuna_narrowext);
+        o.set_additional_flag(pcodeop_addlflags::unlace_narrowext);
     }
 }
 
@@ -283,7 +283,7 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
     seen.push(vn);
     let op = data.obank().get(data.vbank().get(vn)?.get_def()?)?;
     match op.code() {
-        OpCode::CPUI_INT_SEXT if op.get_addlflags() & pcodeop_addlflags::kuna_narrowext != 0 => {
+        OpCode::CPUI_INT_SEXT if op.get_addlflags() & pcodeop_addlflags::unlace_narrowext != 0 => {
             Some(calc_mask(data.vbank().get(op.get_in(0)?)?.get_size()))
         }
         OpCode::CPUI_COPY => implied_mask(data, op.get_in(0)?, seen),
@@ -295,15 +295,15 @@ fn implied_mask(data: &Funcdata, vn: VarnodeId, seen: &mut Vec<VarnodeId>) -> Op
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.narrowext_or_model = Some(or_model);
     hooks.narrowext_mark = Some(mark);
     hooks.narrowext_rules = Some(rules);
 }
 
-impl crate::optionset::KunaOption for NarrowExtMode {
+impl crate::optionset::UnlaceOption for NarrowExtMode {
     const NAME: &'static str = "narrowext";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NarrowExtMode::Off
@@ -313,7 +313,7 @@ impl crate::optionset::KunaOption for NarrowExtMode {
         NarrowExtMode::Abi
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionNarrowExt.apply(value)
     }
 }

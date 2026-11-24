@@ -4,7 +4,7 @@
 //! No Swift toolchain exists on this host or CI, so the image is SYNTHESIZED:
 //! an ELF object whose `.text` carries two functions under genuine
 //! Swift-mangled names (verified against `swift-demangle`, like the
-//! `kuna_swift` unit-test corpus). What this proves is the PIPELINE:
+//! `unlace_swift` unit-test corpus). What this proves is the PIPELINE:
 //! loader → `demangle_name` → the canonical entry inventory renders the
 //! demangled path. What it cannot prove is real-swiftc codegen; the Swift pack
 //! proper adds a vendored binary fixture (devcontainer-built) when one exists.

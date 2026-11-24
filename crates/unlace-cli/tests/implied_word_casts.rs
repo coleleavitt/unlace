@@ -33,7 +33,7 @@ __attribute__((naked)) unsigned int transfer(unsigned int index) {
         String::from_utf8_lossy(&result.stderr)
     );
     let export = dir.join("export");
-    let (_, stderr, status) = common::run_kuna(&[
+    let (_, stderr, status) = common::run_unlace(&[
         "decompile-project",
         object.to_str().unwrap(),
         "-o",
@@ -52,7 +52,7 @@ __attribute__((naked)) unsigned int transfer(unsigned int index) {
         "prototype {name} unsigned int {}transfer(unsigned int index)",
         if windows { "__cdecl " } else { "" }
     );
-    let (_, stderr, status) = common::run_kuna(&[
+    let (_, stderr, status) = common::run_unlace(&[
         "decompile-project",
         object.to_str().unwrap(),
         "-o",

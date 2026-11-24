@@ -1,4 +1,4 @@
-//! (kuna `cppsig`) Hermetic tests for the demangled-signature parse and the
+//! (unlace `cppsig`) Hermetic tests for the demangled-signature parse and the
 //! `this` decision — the two places a mistake shifts every parameter by one.
 
 use super::*;
@@ -134,7 +134,7 @@ fn explicit_function_template_specializations_are_refused() {
 fn reference_parameters_become_pointers() {
     let d = decl("_ZNSt6vectorIiSaIiEE9push_backERKi");
     assert_eq!(d.params, vec!["int const&".to_string()]);
-    // `const Slice&` and `Slice*` must map to the same kuna type shape.
+    // `const Slice&` and `Slice*` must map to the same unlace type shape.
     let s = decl("_ZN7leveldb6Status10CorruptionERKNS_5SliceES3_");
     assert_eq!(s.params, vec!["leveldb::Slice const&".to_string(); 2]);
 }
@@ -222,7 +222,7 @@ fn msvc_32bit_thiscall_is_refused_not_misplaced() {
     // `?foo@Bar@@QAEXXZ` = `public: void __thiscall Bar::foo(void)`. The 32-bit
     // MSVC ABI passes `this` in ECX, NOT as ordinary argument 0, so placing it
     // positionally would be wrong. This reading refuses it; the MSVC arm
-    // (`kuna_msvcsig`) lays it out under `__thiscall`.
+    // (`unlace_msvcsig`) lays it out under `__thiscall`.
     assert!(try_decl("?foo@Bar@@QAEXXZ").is_none());
 }
 
@@ -236,7 +236,7 @@ fn msvc_gate_picks_one_reading_of_an_msvc_name() {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let facts = || CppSigFacts {
         proven: vec![(0x10, pieces("itanium"))],

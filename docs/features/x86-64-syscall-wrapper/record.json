@@ -12,7 +12,7 @@
     "The filed hypothesis ('the x86-64 syscall userop likely lacks register input/output effects') is right on both counts, and so is the captain's in-tick refutation: the fix has to be NUMBER-INDEPENDENT, because the number here is an incoming parameter. linuxsyscall's shape does not transfer -- there is no CALLIND to retarget (a bare CALLOTHER, not the `int 0x80` `intloc = swi(0x80); call [intloc]` pair), the number is not a constant to look up in the 332-entry table, and it is gated to x86-32.",
     "The rewrite is op-level and pre-heritage, not a <callotherfixup>. cortexmpriv's fixup path can only REPLACE the CALLOTHER with a p-code snippet, and no snippet can produce an opaque value out of the ABI registers without emitting a false statement (`RAX = number + address + ...`). Inserting register inputs and an RAX output on the CALLOTHER itself keeps the operation opaque, which is what is true about it.",
     "The read set is the one judgement in the pass, so the option carries both answers rather than picking one. `on` reads only argument registers a bounded backward walk of the CALLOTHER's own basic block proves are written first, which introduces no undefined register anywhere; `abi` reads all six, which the kernel contract permits and which a multi-block wrapper needs, at the cost of reads the function never writes. RAX is read and written under both.",
-    "Over-reading was rejected as the single default because it can ADD A PARAMETER the source has not got: R8/R9 are in the SysV input list, so on `abi` the witness's prototype grows from three parameters to six. Measured, not argued -- it is the `abi` arm of tests/stages/kuna-x64syscall.xml.",
+    "Over-reading was rejected as the single default because it can ADD A PARAMETER the source has not got: R8/R9 are in the SysV input list, so on `abi` the witness's prototype grows from three parameters to six. Measured, not argued -- it is the `abi` arm of tests/stages/x64syscall.xml.",
     "The user-op ids are resolved once per program into the ArchSeam (`simd_shuffle_userops`' precedent), because the boundary ArchContext carries no userop table. An op a compiler spec specialized with its own <callotherfixup> carries an injection id and is dropped there, so a spec-declared model always wins -- cortexmpriv's third guard, at a different seam.",
     "No OS gate. On Windows x86-64 the instruction is also the syscall entry (RAX = number, R10 = arg1), so the RAX output is right there too and the in-block walk picks up whatever the stub sets; the pass degrades to an incomplete argument list rather than a wrong one. Naming the option's model 'the Linux ABI' in the catalog and spec is the honest framing.",
     "Delivery is preset membership, exactly as for cortexmpriv (DIV-99): the catalog default stays `off` because the read set is a modelling judgement, and `aggressive` -- which `auto` selects under 500 KiB -- carries `on`. That is what makes the need's acceptance probe, which passes no x64syscall flag, go green."
@@ -27,7 +27,7 @@
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/modes.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
-    "tests/stages/kuna-x64syscall.xml",
+    "tests/stages/x64syscall.xml",
     "tests/cli/x86-64-syscall-wrapper.json",
     "decompiler/crates/kuna-analysis/tests/fixtures/x64syscall_x86_64",
     "decompiler/crates/kuna-analysis/tests/fixtures/x64syscall_x86_64.s",

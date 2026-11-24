@@ -1,4 +1,4 @@
-//! (kuna `structheadless`) A record whose first bytes a function never reads.
+//! (unlace `structheadless`) A record whose first bytes a function never reads.
 //!
 //! # The gap
 //!
@@ -22,7 +22,7 @@
 //!
 //! Under `closed`, a parameter read at two or more constant offsets none of which
 //! is zero is a record when every caller of its function is a known direct call
-//! (`Funcdata::kuna_calleevote_closed`) and nothing outside the function gave
+//! (`Funcdata::unlace_calleevote_closed`) and nothing outside the function gave
 //! the parameter its pointee (`structsynth::pointee_is_given`). Every other
 //! condition a parameter is held to still applies, and the one `locals` adds for
 //! a partial view: no address is formed at or past the end of every access
@@ -51,13 +51,13 @@
 //! `structsynth::wants_settle_pass` already asks for on behalf of a lone
 //! field.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::context::VarnodeId;
 use crate::dtype::Datatype;
 use crate::funcdata::Funcdata;
 
-/// (kuna) Whether a record needs an access at offset 0.
+/// (unlace) Whether a record needs an access at offset 0.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StructHeadlessMode {
     /// Upstream `structsynth`: a record is read at offset 0.
@@ -68,9 +68,9 @@ pub enum StructHeadlessMode {
     Closed,
 }
 
-impl crate::optionset::KunaOption for StructHeadlessMode {
+impl crate::optionset::UnlaceOption for StructHeadlessMode {
     const NAME: &'static str = "structheadless";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         StructHeadlessMode::Off
@@ -80,7 +80,7 @@ impl crate::optionset::KunaOption for StructHeadlessMode {
         StructHeadlessMode::Closed
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionStructHeadless.apply(value)
     }
 }
@@ -92,7 +92,7 @@ impl StructHeadlessMode {
     }
 }
 
-/// (kuna) Parse `option structheadless off|closed`; the caller writes the live field.
+/// (unlace) Parse `option structheadless off|closed`; the caller writes the live field.
 pub struct OptionStructHeadless;
 
 impl OptionStructHeadless {
@@ -100,12 +100,12 @@ impl OptionStructHeadless {
     pub const NAME: &'static str = "structheadless";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(StructHeadlessMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(StructHeadlessMode, String)> {
         let mode = match p1 {
             "off" => StructHeadlessMode::Off,
             "closed" => StructHeadlessMode::Closed,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown structheadless value: {other} (expected off|closed)"
                 )));
             }
@@ -121,10 +121,10 @@ impl OptionStructHeadless {
 #[doc(hidden)]
 pub fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<StructHeadlessMode>()
         .fires()
-        && data.kuna_calleevote_closed()
+        && data.unlace_calleevote_closed()
         && data.vbank().get(base).is_some_and(|v| v.is_input())
         && !crate::calleevote::took_stated_type(data, base, ct)
 }
@@ -140,7 +140,7 @@ pub fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
 pub fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote: &Datatype) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<StructHeadlessMode>()
         .fires()
         || !crate::structsynth::points_at_synthesized_record(vote)
@@ -195,7 +195,7 @@ pub fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote: &Datat
 pub fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<Datatype>> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<StructHeadlessMode>()
         .fires()
         || !crate::structsynth::points_at_headless_record(vote)
@@ -229,7 +229,7 @@ pub fn gives_a_pointee(ct: &Datatype) -> bool {
 #[doc(hidden)]
 pub fn types_a_pointer_as_a_word(data: &Funcdata, vote: &Datatype, member: &Datatype) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<StructHeadlessMode>()
         .fires()
         && data

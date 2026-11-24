@@ -1,10 +1,10 @@
 use super::*;
 
 struct Table(Vec<u32>);
-crate::kuna_arch_state!(Table);
+crate::unlace_arch_state!(Table);
 
 struct Other(u8);
-crate::kuna_arch_state!(Other);
+crate::unlace_arch_state!(Other);
 
 #[test]
 fn a_state_reads_as_none_until_set_and_a_clone_shares_it() {
@@ -27,7 +27,7 @@ fn a_state_reads_as_none_until_set_and_a_clone_shares_it() {
 
 #[derive(Default)]
 struct Ledger(Vec<u32>);
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);
 
 #[test]
 fn a_table_starts_at_its_default_and_keeps_writes() {

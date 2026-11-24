@@ -112,7 +112,7 @@ fn a_zero_extended_narrow_return_round_trips_through_the_printed_c() {
         let path = common::fixture(fixture);
         let mut args = vec!["decompile-all", path.as_str()];
         args.extend_from_slice(options);
-        let (text, err, rc) = common::run_kuna(&args);
+        let (text, err, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{fixture}: {err}");
         let names = if callers {
             [CALLEES, CALLERS].concat()

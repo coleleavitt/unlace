@@ -17,7 +17,7 @@
 //! (`database.hh:599` -> `rangetree.inRange`), whose range tree owns the
 //! stack/local space, never a processor register.  So C++ leaves a transient
 //! return *register* un-tied; `baseExplicit` then marks the forward-computed
-//! value IMPLIED and the printer emits `return <expr>;`.  The kuna stand-in keeps
+//! value IMPLIED and the printer emits `return <expr>;`.  The unlace stand-in keeps
 //! ONE shape tied: a register heritage left at a fixed address across a
 //! control-flow join (a CPUI_MULTIEQUAL/INDIRECT marker — the genuine
 //! whole-function local), plus the forwarding-alias exception above (the
@@ -215,7 +215,7 @@ fn partialmerge_3_forwarding_alias_storage_stays_tied() {
     // The recovered local `a_simple` survives to anchor the forwarded value — it is
     // assigned the partial load (`a_simple = glob1.a;`) and returned (`return
     // a_simple + 10;`).  This is the oracle-faithful form (byte-identical to C++);
-    // the prior extra `v1 = a_simple + 10; return v1;` tied round-trip was a kuna
+    // the prior extra `v1 = a_simple + 10; return v1;` tied round-trip was a unlace
     // over-tie the LOSS-234 narrowing removed.
     assert!(
         body.contains("a_simple = glob1.a;") && body.contains("return a_simple + 10;"),

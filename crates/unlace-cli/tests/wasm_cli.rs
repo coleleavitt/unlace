@@ -2,7 +2,7 @@
 //! commands that need an object-file view refuse it by name, and a body the
 //! lowering refuses is reported instead of mis-decompiled.
 
-use crate::common::{self, process, run_kuna};
+use crate::common::{self, process, run_unlace};
 
 use std::process::Command;
 
@@ -24,7 +24,7 @@ fn written(stem: &str, bytes: &[u8]) -> String {
 }
 
 fn decompile(module: &str, function: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&["decompile", module, function]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", module, function]);
     assert_eq!(code, 0, "decompile {function}: {stderr}");
     stdout
 }
@@ -32,7 +32,7 @@ fn decompile(module: &str, function: &str) -> String {
 #[test]
 fn the_issue_module_lists_and_decompiles() {
     let module = fixture("mul_add.wasm");
-    let (stdout, stderr, code) = run_kuna(&["functions", &module]);
+    let (stdout, stderr, code) = run_unlace(&["functions", &module]);
     assert_eq!((code, stderr.as_str()), (0, ""));
     assert_eq!(
         stdout,
@@ -47,13 +47,13 @@ fn the_issue_module_lists_and_decompiles() {
 #[test]
 fn imports_are_named_call_targets_and_not_bodies() {
     let module = fixture("calls.wasm");
-    let (stdout, _, code) = run_kuna(&["functions", &module]);
+    let (stdout, _, code) = run_unlace(&["functions", &module]);
     assert_eq!(code, 0);
     assert!(
         stdout.ends_with("0xf0000000\text_log\n0xf0000010\text_fill\n"),
         "{stdout}"
     );
-    let (all, stderr, code) = run_kuna(&["decompile-all", &module]);
+    let (all, stderr, code) = run_unlace(&["decompile-all", &module]);
     assert_eq!(code, 0, "{stderr}");
     assert_eq!(all.matches("// Function: ").count(), 10, "{all}");
     assert!(!all.contains("// Function: ext_"), "{all}");
@@ -64,10 +64,10 @@ fn imports_are_named_call_targets_and_not_bodies() {
 #[test]
 fn read_and_disassemble_see_the_flat_image() {
     let module = fixture("calls.wasm");
-    let (stdout, stderr, code) = run_kuna(&["read", &module, "0x10000", "--bytes", "8"]);
+    let (stdout, stderr, code) = run_unlace(&["read", &module, "0x10000", "--bytes", "8"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("03 00 00 00 01 00 00 00"), "{stdout}");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &module, "mix", "--count", "3"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &module, "mix", "--count", "3"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         stdout.ends_with("0x80000d70    20000000000000000100000000000000 local.get 0x1\n"),
@@ -85,7 +85,7 @@ fn object_view_commands_refuse_a_module_by_name() {
     ] {
         let mut args = vec![command[0], module.as_str()];
         args.extend_from_slice(&command[1..]);
-        let (_, stderr, code) = run_kuna(&args);
+        let (_, stderr, code) = run_unlace(&args);
         assert_ne!(code, 0, "{command:?}");
         assert!(
             stderr.contains("WebAssembly input has no object-file view"),
@@ -96,7 +96,7 @@ fn object_view_commands_refuse_a_module_by_name() {
 
 #[test]
 fn a_module_decodes_as_no_other_language() {
-    let (_, stderr, code) = run_kuna(&[
+    let (_, stderr, code) = run_unlace(&[
         "decompile",
         &fixture("mul_add.wasm"),
         "mul_add",
@@ -123,7 +123,7 @@ fn a_refused_body_is_reported_and_the_rest_decompile() {
             &[indexed(0x20, 0), i32_const(3), vec![0x6c]].concat(),
         );
     let module = written("wasm-refused", &builder.build());
-    let (all, stderr, code) = run_kuna(&["decompile-all", &module]);
+    let (all, stderr, code) = run_unlace(&["decompile-all", &module]);
     assert_eq!(code, 0, "{stderr}");
     assert!(
         stderr.contains("1 of 2 function bodies were not lowered")
@@ -142,7 +142,7 @@ fn a_damaged_module_is_an_error_at_every_length() {
     let bytes = std::fs::read(fixture("mul_add.wasm")).unwrap();
     for len in [8, 9, 20, 0x90, 0x148, bytes.len() - 1] {
         let module = written("wasm-cut", &bytes[..len]);
-        let (_, stderr, code) = run_kuna(&["functions", &module]);
+        let (_, stderr, code) = run_unlace(&["functions", &module]);
         assert!(
             code == 0 || stderr.starts_with("error: "),
             "cut at {len}: {stderr}"

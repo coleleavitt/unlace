@@ -5,7 +5,7 @@
 //! A compiler that merges string constants (`-fmerge-constants`, on at `-O2`)
 //! stores a literal that is a suffix of another literal only once and points at
 //! the interior of the longer one. In GNU coreutils `fmt`, `"coreutils"` is the
-//! tail of `"GNU coreutils"` and `"%s"` the tail of `"%s: %s"`, so kuna rendered
+//! tail of `"GNU coreutils"` and `"%s"` the tail of `"%s: %s"`, so unlace rendered
 //! `bindtextdomain(0x68d8, ...)` and `error(1, ..., 0x6f0c, ...)` where IDA shows
 //! the literals.
 //!

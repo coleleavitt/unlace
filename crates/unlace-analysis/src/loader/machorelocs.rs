@@ -1,4 +1,4 @@
-//! (kuna `dynrelocs`, Mach-O arm) Apply a linked Mach-O image's chained-fixup
+//! (unlace `dynrelocs`, Mach-O arm) Apply a linked Mach-O image's chained-fixup
 //! rebases (and a zero for each bind) into the loaded image, and report the
 //! slots `SG_READ_ONLY` freezes as constant — the twin of the ELF walk in [`super::dynrelocs`].
 //!

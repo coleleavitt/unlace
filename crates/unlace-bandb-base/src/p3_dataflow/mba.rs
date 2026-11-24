@@ -1,4 +1,4 @@
-//! (kuna `mba`) Mixed boolean-arithmetic simplification.
+//! (unlace `mba`) Mixed boolean-arithmetic simplification.
 //!
 //! Obfuscators (Tigress, OLLVM) hide `x + y` as `(x ^ y) + 2 * (x & y)`. Such an
 //! expression is a *linear MBA*: an integer combination of bitwise functions of
@@ -1583,7 +1583,7 @@ fn emit(data: &mut Funcdata, root: OpId, e: &Expr, rw: &Rewrite, size: int4) -> 
     }
 }
 
-/// (kuna `mba`) `RuleMbaSimplify`.
+/// (unlace `mba`) `RuleMbaSimplify`.
 pub struct RuleMbaSimplify {
     group: String,
 }
@@ -1617,7 +1617,7 @@ impl Rule for RuleMbaSimplify {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<crate::mba::Mba>().0 {
+        if !data.get_arch().unlace_options.get::<crate::mba::Mba>().0 {
             return 0;
         }
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {
@@ -1651,8 +1651,8 @@ impl Rule for RuleMbaSimplify {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `mba`) Simplify linear mixed boolean-arithmetic expressions.
+crate::unlace_flag!(
+    /// (unlace `mba`) Simplify linear mixed boolean-arithmetic expressions.
     Mba,
     "mba",
     "Linear MBA simplification",

@@ -112,7 +112,7 @@ fn run_with(
         Mode::Annotate => "annotate",
     };
     prog.arch_mut()
-        .set_kuna_option("cfstrings", value)
+        .set_unlace_option("cfstrings", value)
         .expect("cfstrings takes the value");
     if let Some((name, meta)) = planted {
         let arch = prog.arch_mut();

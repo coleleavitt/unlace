@@ -19,10 +19,10 @@ fn bootstrap(functails: &str, nullsubs: &str) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("functails", functails)
+        .set_unlace_option("functails", functails)
         .expect("functails flips");
     prog.arch_mut()
-        .set_kuna_option("nullsubs", nullsubs)
+        .set_unlace_option("nullsubs", nullsubs)
         .expect("nullsubs flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

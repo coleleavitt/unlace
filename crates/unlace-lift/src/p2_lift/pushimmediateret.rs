@@ -1,4 +1,4 @@
-//! (kuna) `pushimmediateret` — marshal identity for one-store RET tail
+//! (unlace) `pushimmediateret` — marshal identity for one-store RET tail
 //! transfer recovery (P2 flow classification).
 //!
 //! A packer can encode a terminal jump as `push <immediate>; ret`. The shared
@@ -10,7 +10,7 @@
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<pushimmediateret>` (kuna). ElementIds live in the
+/// Marshaling element `<pushimmediateret>` (unlace). ElementIds live in the
 /// 4000+ range; 4165 was the next free id when this module was added.
 pub const ELEM_PUSHIMMEDIATERET: ElementId = ElementId::new("pushimmediateret", 4165);
 

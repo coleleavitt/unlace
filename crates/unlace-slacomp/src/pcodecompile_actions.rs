@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::pcodecompile::{Location, PcodeCompileSymbol};
@@ -153,7 +153,7 @@ impl<'a> MacroBuilder<'a> {
     /// slgh_compile.cc:1809-1820).  Inputs `1..numInput` of the MACRO op are the
     /// actual call-site arguments; each becomes a `HandleTpl` parameter
     /// (input 0 is the macro symbol itself).
-    pub fn set_macro_op(&mut self, macroop: &OpTpl) -> KunaResult<()> {
+    pub fn set_macro_op(&mut self, macroop: &OpTpl) -> UnlaceResult<()> {
         // C++ free(): clear any prior params.
         self.params.clear();
         for i in 1..macroop.num_input() {
@@ -176,7 +176,7 @@ impl<'a> MacroBuilder<'a> {
     /// `outvec`.  Returns `true` if there were no illegal truncations.  The C++
     /// passes `params` explicitly but always as `this->params`; the port reads
     /// `self.params` directly.
-    fn transfer_op(&mut self, mut op: OpTpl) -> KunaResult<bool> {
+    fn transfer_op(&mut self, mut op: OpTpl) -> UnlaceResult<bool> {
         // Fix handle details of a macro generated OpTpl relative to its specific
         // invocation and transfer it into the output stream.
         let mut handle_index: i32 = 0;
@@ -268,7 +268,7 @@ impl PcodeBuilder for MacroBuilder<'_> {
     /// `MacroBuilder::dump` (slgh_compile.cc:1886-1910): clone `op`, fix up
     /// relative (label) operands against the current `labelbase`, then
     /// substitute macro parameters via `transferOp`.
-    fn dump(&mut self, op: &OpTpl) -> KunaResult<()> {
+    fn dump(&mut self, op: &OpTpl) -> UnlaceResult<()> {
         let mut clone = OpTpl::new(op.get_opcode());
         if let Some(vn) = op.get_out() {
             clone.set_output(vn.clone());
@@ -293,19 +293,19 @@ impl PcodeBuilder for MacroBuilder<'_> {
     }
 
     /// BUILD directive -> `dump` (C++ `appendBuild(bld,secnum){ dump(bld); }`).
-    fn append_build(&mut self, bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
+    fn append_build(&mut self, bld: &OpTpl, _secnum: i32) -> UnlaceResult<()> {
         self.dump(bld)
     }
 
     /// DELAY_SLOT directive -> `dump` (C++ `delaySlot(op){ dump(op); }`).
-    fn delay_slot(&mut self, op: &OpTpl) -> KunaResult<()> {
+    fn delay_slot(&mut self, op: &OpTpl) -> UnlaceResult<()> {
         self.dump(op)
     }
 
     /// `MacroBuilder::setLabel` (slgh_compile.cc:1912-1928): a label within a
     /// macro is local to the macro; when expanded, its index must be adjusted by
     /// `labelbase` so it fits with the parent's labels.
-    fn set_label(&mut self, op: &OpTpl) -> KunaResult<()> {
+    fn set_label(&mut self, op: &OpTpl) -> UnlaceResult<()> {
         let mut clone = OpTpl::new(op.get_opcode());
         let mut v_clone = op.get_in(0).clone(); // Clone the label index
         // Make adjustment to macro local value so that it is parent local.
@@ -320,7 +320,7 @@ impl PcodeBuilder for MacroBuilder<'_> {
     }
 
     /// CROSSBUILD directive -> `dump` (C++ `appendCrossBuild(bld,secnum){ dump(bld); }`).
-    fn append_cross_build(&mut self, bld: &OpTpl, _secnum: i32) -> KunaResult<()> {
+    fn append_cross_build(&mut self, bld: &OpTpl, _secnum: i32) -> UnlaceResult<()> {
         self.dump(bld)
     }
 }

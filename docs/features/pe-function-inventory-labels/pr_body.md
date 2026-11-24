@@ -92,7 +92,7 @@ pair inside an inventory sort that already compares those strings.
 | `make check-spec` | `check-spec OK` |
 | `kuna catalog --check` | `catalog OK: documents exactly the registered kuna options` |
 | `python -m scripts.repipe.clitests` | 17/17 |
-| new unit tests | 3 in `kuna-console::engine`, 1 in `kuna-analysis::rtti`, `verify_rtti.rs` updated |
+| new unit tests | 3 in `console::engine`, 1 in `kuna-analysis::rtti`, `verify_rtti.rs` updated |
 
 Tooling track: no option, no `phases.toml` row, no catalog counter, no `tests/stages` case — so
 no counter or file lease was taken.

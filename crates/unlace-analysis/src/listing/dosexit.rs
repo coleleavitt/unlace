@@ -1,4 +1,4 @@
-//! (kuna #1288) The MS-DOS interrupts that end a program.
+//! (unlace #1288) The MS-DOS interrupts that end a program.
 //!
 //! `INT 20h` and `INT 27h` terminate a DOS program, and so does `INT 21h` with
 //! AH = 00h (terminate), 31h (terminate and stay resident) or 4Ch (terminate
@@ -67,7 +67,7 @@ pub fn analyze(
     let sites = exit_sites(arch, translate, code_space, listing);
     let noreturn = if sites.is_empty()
         || !arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::NoreturnPropagate>()
             .0
     {
@@ -76,7 +76,7 @@ pub fn analyze(
         crate::analyzers::noreturn_propagate::propagate_exits(
             listing,
             &sites,
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::analysisgates::NoreturnReach>()
                 .0,
         )

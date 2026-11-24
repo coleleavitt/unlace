@@ -21,7 +21,7 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use crate::funcdata_union::FuncdataUnionExt;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, int8};
 use unlace_num::opcodes::OpCode;
 
@@ -38,14 +38,14 @@ pub trait FuncdataResolveFlowExt {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     fn resolve_truncation(
         &mut self,
         ct: &Rc<Datatype>,
         offset: int8,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>>;
+    ) -> UnlaceResult<Option<(int4, int8)>>;
     fn find_truncation(
         &self,
         ct: &Rc<Datatype>,
@@ -53,7 +53,7 @@ pub trait FuncdataResolveFlowExt {
         sz: int4,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>>;
+    ) -> UnlaceResult<Option<(int4, int8)>>;
 }
 
 /// [`Funcdata`] methods for union resolution along data flow private to this module.
@@ -63,32 +63,32 @@ trait FuncdataResolveFlowLocalExt {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     fn resolve_in_flow_single_component(
         &mut self,
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     fn score_single_component(
         &self,
         parent: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<int4>;
+    ) -> UnlaceResult<int4>;
     fn resolve_in_flow_partial(
         &mut self,
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
     fn resolve_truncation_union(
         &mut self,
         ct: &Rc<Datatype>,
         offset: int8,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>>;
+    ) -> UnlaceResult<Option<(int4, int8)>>;
 }
 
 impl FuncdataResolveFlowExt for Funcdata {
@@ -112,7 +112,7 @@ impl FuncdataResolveFlowExt for Funcdata {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         match &ct.kind {
             // TypePointer::resolveInFlow (type.cc:1314-1333).
             //
@@ -162,12 +162,12 @@ impl FuncdataResolveFlowExt for Funcdata {
         offset: int8,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
+    ) -> UnlaceResult<Option<(int4, int8)>> {
         match &ct.kind {
             // TypePartialUnion::resolveTruncation (type.cc:2994-2998).
             DatatypeKind::PartialUnion { .. } => {
                 let container = ct.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("resolveTruncation: partial union missing container")
+                    UnlaceError::lowlevel("resolveTruncation: partial union missing container")
                 })?;
                 let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
                 self.resolve_truncation(&container, offset + part_off, op, slot)
@@ -195,12 +195,12 @@ impl FuncdataResolveFlowExt for Funcdata {
         sz: int4,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
+    ) -> UnlaceResult<Option<(int4, int8)>> {
         match &ct.kind {
             // TypePartialUnion::findTruncation (type.cc:2882-2884).
             DatatypeKind::PartialUnion { .. } => {
                 let container = ct.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("findTruncation: partial union missing container")
+                    UnlaceError::lowlevel("findTruncation: partial union missing container")
                 })?;
                 let part_off = ct.get_partial_offset().unwrap_or(0) as int8;
                 self.find_truncation(&container, off + part_off, sz, op, slot)
@@ -238,7 +238,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         if let Some(res) = self.get_union_field(ct, op, slot) {
             return Ok(Rc::clone(res.get_datatype()));
         }
@@ -253,10 +253,9 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                 .get_address_based_union_field(ct, addr, slot)
                 .map(|r| r.get_field_num());
             if let Some(field_num) = field_num {
-                let typegrp = self
-                    .get_arch()
-                    .types_rc()
-                    .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
+                let typegrp = self.get_arch().types_rc().ok_or_else(|| {
+                    UnlaceError::lowlevel("resolveInFlow: TypeFactory unavailable")
+                })?;
                 let resolve = ResolvedUnion::new_field(Rc::clone(ct), field_num, typegrp.as_ref())?;
                 let dt = Rc::clone(resolve.get_datatype());
                 self.set_union_field(ct, op, slot, resolve);
@@ -266,7 +265,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         let typegrp = self
             .get_arch()
             .types_rc()
-            .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
         let result = {
             let scorer =
                 ScoreUnionFields::new_edge(self, typegrp.as_ref(), Rc::clone(ct), op, slot)?;
@@ -285,7 +284,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         if let Some(res) = self.get_union_field(ct, op, slot) {
             return Ok(Rc::clone(res.get_datatype()));
         }
@@ -293,7 +292,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         let typegrp = self
             .get_arch()
             .types_rc()
-            .ok_or_else(|| KunaError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("resolveInFlow: TypeFactory unavailable"))?;
         let comp_fill = ResolvedUnion::new_field(Rc::clone(ct), field_num, typegrp.as_ref())?;
         let dt = Rc::clone(comp_fill.get_datatype());
         self.set_union_field(ct, op, slot, comp_fill);
@@ -307,7 +306,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         parent: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<int4> {
+    ) -> UnlaceResult<int4> {
         let o = match self.obank().get(op) {
             Some(o) => o,
             None => return Ok(0),
@@ -389,7 +388,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         ct: &Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Rc<Datatype>> {
+    ) -> UnlaceResult<Rc<Datatype>> {
         if let Some(res) = self.get_union_field(ct, op, slot) {
             return Ok(Rc::clone(res.get_datatype()));
         }
@@ -404,7 +403,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
             if meta == type_metatype::TYPE_PARTIALUNION {
                 cur_off += cur.get_partial_offset().unwrap_or(0) as int8;
                 let parent_union = cur.get_partial_base().ok_or_else(|| {
-                    KunaError::lowlevel("resolveInFlow: partial union missing container")
+                    UnlaceError::lowlevel("resolveInFlow: partial union missing container")
                 })?;
                 let resolved = self.resolve_truncation(&parent_union, cur_off, op, slot)?;
                 cur_type = None;
@@ -414,7 +413,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                         .map(|f| Rc::clone(&f.field_type))
                     {
                         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-                            KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
+                            UnlaceError::lowlevel("resolveInFlow: TypeFactory unavailable")
                         })?;
                         cur_type = typegrp.get_exact_piece(ftype, cur_off as int4, size)?;
                     }
@@ -428,7 +427,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                     if let Some(ftype) = cur.get_field(field_idx).map(|f| Rc::clone(&f.field_type))
                     {
                         let typegrp = self.get_arch().types_rc().ok_or_else(|| {
-                            KunaError::lowlevel("resolveInFlow: TypeFactory unavailable")
+                            UnlaceError::lowlevel("resolveInFlow: TypeFactory unavailable")
                         })?;
                         cur_type = typegrp.get_exact_piece(ftype, cur_off as int4, size)?;
                     }
@@ -443,7 +442,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         let cur_type = match cur_type {
             Some(c) if c.get_size() as int4 == size => c,
             _ => ct.get_stripped().ok_or_else(|| {
-                KunaError::lowlevel("resolveInFlow: partial union missing stripped")
+                UnlaceError::lowlevel("resolveInFlow: partial union missing stripped")
             })?,
         };
         self.update_union_field(ct, op, slot, Rc::clone(&cur_type));
@@ -461,7 +460,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         offset: int8,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<Option<(int4, int8)>> {
+    ) -> UnlaceResult<Option<(int4, int8)>> {
         let mut have_cached: Option<int4> = self
             .get_union_resolution(ct, op, slot)
             .map(|r| r.get_field_num());
@@ -494,7 +493,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
         let typegrp = self
             .get_arch()
             .types_rc()
-            .ok_or_else(|| KunaError::lowlevel("resolveTruncation: TypeFactory unavailable"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("resolveTruncation: TypeFactory unavailable"))?;
         if opc == OpCode::CPUI_SUBPIECE && slot == 1 {
             // constructor 2
             let result = {

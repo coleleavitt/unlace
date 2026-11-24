@@ -1,4 +1,4 @@
-//! (kuna) `peordinal` — name a PE import-by-ordinal from a built-in export table.
+//! (unlace) `peordinal` — name a PE import-by-ordinal from a built-in export table.
 //!
 //! A PE may import a function by ordinal only, with no name in its Import Name
 //! Table. `pe_iat` then synthesizes `<DLL>_Ordinal_<n>`, which carries no

@@ -1,6 +1,6 @@
 {
   "opportunity": "The `decompile-all --json` `variables` surface spelled a one-byte value the type system never committed to `char` -- what the printer emits for the residual TYPE_UNKNOWN carrier under the default `realtypes`. On a machine-readable surface that asserts an element type the recovery never established (the program's own type may as well be `_Bool`, `unsigned char`, a one-byte enum or one byte of an unsplit struct). Ghidra reports the same fact as `undefined1`, IDA as `_BYTE`, and kuna's own framelayout section already reported an uncommitted frame slot as `undefined<N>` -- so one array reported the same fact two different ways.",
-  "test_name": "kuna-console verify_bytehonest (two-pass e2e over every function of the vendored fauxware) + 5 hermetic predicate unit tests + the tests/cli two-pass probe pair",
+  "test_name": "console verify_bytehonest (two-pass e2e over every function of the vendored fauxware) + 5 hermetic predicate unit tests + the tests/cli two-pass probe pair",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/i386_pie_nl",
   "selector": "close_stdout_set_ignore_EPIPE",
   "func_addr": "0x2260",
@@ -150,7 +150,7 @@
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs (byte_honest field, reset_defaults, set_kuna_option)",
     "decompiler/crates/kuna-decomp/phases.toml ([[settable]] bytehonest)",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-console/tests/verify_bytehonest.rs (new)",
+    "decompiler/crates/console/tests/verify_bytehonest.rs (new)",
     "tests/cli/bytehonest-uncommitted-byte-arg.json (new)",
     "tests/cli/bytehonest-uncommitted-byte-arg-option-off.json (new)",
     "docs/spec/06-variables-and-merge.md (\u00a76.2)",
@@ -166,8 +166,8 @@
   },
   "consumers": [
     "kuna decompile --json / decompile-all --json (`variables[].type`)",
-    "kuna-console/src/project.rs (`decompile-project`): the .asm per-function frame comments print the same string -- `; arg:   param_1 (undefined1)` on the fixture above (a disassembly-listing comment, which is where a width-only spelling belongs, and what IDA's stack view shows). The exported .c/.h are unchanged: the .c still declares `void close_stdout_set_ignore_EPIPE(char a0)`.",
-    "kuna-console/tests/verify_framelayout.rs: its `framelayout retyped an existing variable` assertion still holds and is kept strict -- sections 1 and 2 never read `framelayout`, so both of its arms carry the same bytehonest spelling. A comment there now records that a row's type_name is no longer the printer's spelling in general, and points at verify_bytehonest.rs for the other axis."
+    "console/src/project.rs (`decompile-project`): the .asm per-function frame comments print the same string -- `; arg:   param_1 (undefined1)` on the fixture above (a disassembly-listing comment, which is where a width-only spelling belongs, and what IDA's stack view shows). The exported .c/.h are unchanged: the .c still declares `void close_stdout_set_ignore_EPIPE(char a0)`.",
+    "console/tests/verify_framelayout.rs: its `framelayout retyped an existing variable` assertion still holds and is kept strict -- sections 1 and 2 never read `framelayout`, so both of its arms carry the same bytehonest spelling. A comment there now records that a row's type_name is no longer the printer's spelling in general, and points at verify_bytehonest.rs for the other axis."
   ],
   "notes": "The C text and the JSON surface disagree on purpose for exactly this carrier: `char a0` in the .c, `undefined1` in `variables[]`. The C text must be legal C and `undefined1` is not a C type; `variables[]` is a report of what the recovery established. Written down in docs/spec/06-variables-and-merge.md \u00a76.2.",
   "preset_decision": "default ON in the catalog, so it is on in every preset; there is nothing for AGGRESSIVE_OVERRIDES to add.",

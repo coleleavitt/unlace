@@ -105,7 +105,7 @@
       "non_runtime_call_changes": []
     }
   ],
-  "stage": "tests/stages/kuna-gojumpchain.xml",
+  "stage": "tests/stages/gojumpchain.xml",
   "validation": {
     "focused": "4/4 assertions passed",
     "workspace": "make rust-test passed with Go 1.22.5: 9869 passed, 0 failed, 39 ignored",

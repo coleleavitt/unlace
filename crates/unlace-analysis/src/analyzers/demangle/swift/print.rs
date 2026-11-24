@@ -1,4 +1,4 @@
-//! (kuna `swiftdemangle`) The full-form printer: renders a demangling tree
+//! (unlace `swiftdemangle`) The full-form printer: renders a demangling tree
 //! the way `swift-demangle` does (`Swift.String.count.getter : Swift.Int`,
 //! `protocol witness for … in conformance …`). Every node kind the parser
 //! can build has a rendering; a kind without one fails the whole print so

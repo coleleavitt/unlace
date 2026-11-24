@@ -1,4 +1,4 @@
-//! (kuna `selectmul`) A select the lifter wrote as arithmetic prints as `?:`.
+//! (unlace `selectmul`) A select the lifter wrote as arithmetic prints as `?:`.
 //!
 //! SLEIGH has no select operator, so a spec that picks one of two values without a
 //! branch computes `a * zext(c) + b * zext(!c)`: TriCore's `ternary` macro behind
@@ -170,8 +170,8 @@ pub fn select_plan(fd: &Funcdata, op: OpId) -> Option<SelectPlan> {
     })
 }
 
-crate::kuna_flag!(
-    /// (kuna `selectmul`) Print `a * zext(c) + b * zext(!c)` as `c ? a : b`.
+crate::unlace_flag!(
+    /// (unlace `selectmul`) Print `a * zext(c) + b * zext(!c)` as `c ? a : b`.
     SelectMul,
     "selectmul",
     "arithmetic select as ?:",

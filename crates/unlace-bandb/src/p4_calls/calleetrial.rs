@@ -1,4 +1,4 @@
-//! (kuna `protoorder` trial storage) Which direct calls the P4 bootstrap may retype.
+//! (unlace `protoorder` trial storage) Which direct calls the P4 bootstrap may retype.
 //!
 //! A single-function drive has no callee-first order behind it, so a call's
 //! parameter types are whatever the caller itself wrote into registers.  The
@@ -82,7 +82,7 @@ pub fn split_trial_callee(data: &Funcdata, call_index: int4) -> Option<Address> 
     if entry.is_invalid() || entry == data.get_address() {
         return None;
     }
-    if data.kuna_protoorder_types(entry).is_some() {
+    if data.unlace_protoorder_types(entry).is_some() {
         return None;
     }
     let active = fc.active_input();

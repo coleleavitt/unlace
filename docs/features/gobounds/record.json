@@ -106,7 +106,7 @@
     "compiler": "Go 1.22.5; new gobounds amd64/arm64 fixture additionally passed with Go 1.18.1"
   },
   "speed_method": "CLI wall clock including image load; 21 interleaved alternating pairs, two warmups",
-  "stage": "tests/stages/kuna-gobounds.xml",
+  "stage": "tests/stages/gobounds.xml",
   "source_files": [
     "decompiler/crates/kuna-decomp/src/p7_regions/gobounds.rs"
   ],

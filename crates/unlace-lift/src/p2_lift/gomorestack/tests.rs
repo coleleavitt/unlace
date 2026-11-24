@@ -1,4 +1,4 @@
-// Tests for `kuna_gomorestack` (included into `mod tests` in
+// Tests for `unlace_gomorestack` (included into `mod tests` in
 // gomorestack.rs).
 //
 // Covered:
@@ -8,7 +8,7 @@
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `ActionGoMorestack::apply` and the `match_entry_guard_loop` shape
 //     matcher are inert on a function with no calls (the end-to-end fold is
-//     pinned by `tests/stages/kuna-gomorestack.toml` and the unlace-console
+//     pinned by `tests/stages/unlace-gomorestack.toml` and the unlace-console
 //     `verify_go_morestack` integration test over a real Go build).
 
 use super::*;
@@ -42,7 +42,7 @@ fn build_fd(mode: GoMorestackMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

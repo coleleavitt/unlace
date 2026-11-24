@@ -99,7 +99,7 @@ tokens removed and **0** added, and **0** hunks of any other kind — no stateme
 moved, deleted, re-anchored or re-worded, and no declaration appeared or
 disappeared. Also **0** flips on a declaration narrower than `int`, which is the
 promotion-width guard holding on every one of these targets (all 4-byte-`int`;
-`tests/stages/kuna-signedness-int16.toml` is what pins the guard where the
+`tests/stages/signedness-int16.toml` is what pins the guard where the
 target's own `int` is 2 bytes).
 
 The stderr of each pair is identical too, so no analysis-tier decision moved.

@@ -3,7 +3,7 @@
 
 use std::cell::OnceCell;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{ConstructorRef, OperandSymbol, SymbolKind, SymbolTable};
 use crate::slghpatexpress::{
@@ -57,7 +57,7 @@ impl OperandPlan {
     pub(crate) fn get_value(
         &self,
         walker: &(impl PatternExpressionContext + ?Sized),
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         match &self.value {
             PrimitiveValue::Token(token) => token.get_value(walker),
             PrimitiveValue::Constant(value) => Ok(*value),

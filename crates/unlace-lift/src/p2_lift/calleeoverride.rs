@@ -1,4 +1,4 @@
-//! (kuna `--assert callee`) A caller-stated destination for an indirect call.
+//! (unlace `--assert callee`) A caller-stated destination for an indirect call.
 //!
 //! The front-ends park `call site -> callee entry` facts on the
 //! [`Architecture`], keyed by the entry of the function holding the call.
@@ -20,7 +20,7 @@ pub const NOT_APPLIED: &str = "the function's flow makes no indirect call at thi
 
 /// Seed `fd`'s indirect-call overrides from the facts parked for its entry.
 pub fn seed(arch: &Architecture, fd: &mut Funcdata) {
-    let Some(sites) = arch.kuna_callee_overrides.get(fd.get_address()) else {
+    let Some(sites) = arch.unlace_callee_overrides.get(fd.get_address()) else {
         return;
     };
     for (site, callee) in sites {
@@ -31,14 +31,14 @@ pub fn seed(arch: &Architecture, fd: &mut Funcdata) {
 
 /// Is a fact parked for the instruction at `site` of `fd`?
 pub fn is_stated(arch: &Architecture, fd: &Funcdata, site: &Address) -> bool {
-    arch.kuna_callee_overrides
+    arch.unlace_callee_overrides
         .get(fd.get_address())
         .is_some_and(|sites| sites.contains_key(site))
 }
 
 /// Record on `fd` each parked fact its followed flow did not apply.
 pub fn audit(arch: &Architecture, fd: &mut Funcdata) {
-    let Some(sites) = arch.kuna_callee_overrides.get(fd.get_address()) else {
+    let Some(sites) = arch.unlace_callee_overrides.get(fd.get_address()) else {
         return;
     };
     let unapplied: Vec<(Address, Address)> = sites

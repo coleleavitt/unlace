@@ -1,7 +1,7 @@
 from common import *
 import datetime
 base=Path('/home/mahaloz/kwt/angr-base-db2d')
-run(r,w,['cargo','build','--release','-p','kuna-cli','-p','kuna-console','-p','kuna-harness'],'build-final.log',r/'decompiler')
+run(r,w,['cargo','build','--release','-p','kuna-cli','-p','console','-p','kuna-harness'],'build-final.log',r/'decompiler')
 k=r/'decompiler/target/release/kuna'
 run(r,w,[str(k),'test','--datatests','--datatests-dir','tests/stages','--name','ghangr-rust-empty-match'],'stage-focused.log')
 run(r,w,[str(k),'test','--datatests','--datatests-dir','tests/stages','--save-baseline','docs/baseline-stages.json'],'record-stages.log')

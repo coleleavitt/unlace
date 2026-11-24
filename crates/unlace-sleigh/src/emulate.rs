@@ -13,14 +13,14 @@
 //! Breakpoint callbacks receive `&mut dyn EmulateMemory` during invocation rather
 //! than storing an emulator back-pointer. Re-entering the same break table from
 //! a callback panics on its active `RefCell` borrow. Operation and callback errors
-//! propagate as `KunaResult` with their original messages.
+//! propagate as `UnlaceResult` with their original messages.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::Wrap;
 use unlace_num::float::FloatFormat;
@@ -44,7 +44,7 @@ pub trait BreakCallBack {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         op: &PcodeOpRaw,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let _ = (emulate, op);
         Ok(true)
     }
@@ -55,7 +55,7 @@ pub trait BreakCallBack {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         addr: &Address,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let _ = (emulate, addr);
         Ok(true)
     }
@@ -70,7 +70,7 @@ pub trait BreakTable {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         curop: &PcodeOpRaw,
-    ) -> KunaResult<bool>;
+    ) -> UnlaceResult<bool>;
 
     /// Invoke a matching address callback. Return `true` if it replaces the
     /// entire machine instruction, or `false` if execution should continue.
@@ -78,7 +78,7 @@ pub trait BreakTable {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         addr: &Address,
-    ) -> KunaResult<bool>;
+    ) -> UnlaceResult<bool>;
 }
 
 /// Breakpoint registry with shared, mutable callbacks.
@@ -111,13 +111,13 @@ impl BreakTableCallBack {
     }
 
     /// Register for the first matching user-operation name, replacing its prior
-    /// callback. Unknown names return `KunaError::Lowlevel`. The table retains the
+    /// callback. Unknown names return `UnlaceError::Lowlevel`. The table retains the
     /// supplied shared callback.
     pub fn register_pcode_callback(
         &mut self,
         name: &str,
         func: Rc<RefCell<dyn BreakCallBack>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut userops: Vec<String> = Vec::new();
         self.trans.get_user_op_names(&mut userops);
         let mut i: i32 = 0;
@@ -129,7 +129,7 @@ impl BreakTableCallBack {
             }
             i += 1;
         }
-        Err(KunaError::lowlevel(format!("Bad userop name: {name}")))
+        Err(UnlaceError::lowlevel(format!("Bad userop name: {name}")))
     }
 
     /// Register a callback for an instruction address, replacing its prior
@@ -150,7 +150,7 @@ impl BreakTable for BreakTableCallBack {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         curop: &PcodeOpRaw,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let val = curop.get_input(0).offset;
 
         match self.pcodecallback.get(&val) {
@@ -164,7 +164,7 @@ impl BreakTable for BreakTableCallBack {
         &mut self,
         emulate: &mut dyn EmulateMemory,
         addr: &Address,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         match self.addresscallback.get(addr) {
             None => Ok(false),
             Some(func) => func.borrow_mut().address_callback(emulate, addr),
@@ -206,7 +206,7 @@ impl Default for EmulateCore {
 /// operations. Engines provide operation handlers and machine-address tracking;
 /// the trait supplies dispatch through the current operation behavior.
 pub trait Emulate {
-    /// Access the concrete C++ base-class members (kuna boundary; see
+    /// Access the concrete C++ base-class members (unlace boundary; see
     /// [`EmulateCore`]).
     fn emulate_core(&self) -> &EmulateCore;
 
@@ -214,63 +214,63 @@ pub trait Emulate {
     fn emulate_core_mut(&mut self) -> &mut EmulateCore;
 
     /// Execute a unary arithmetic/logical operation
-    fn execute_unary(&mut self) -> KunaResult<()>;
+    fn execute_unary(&mut self) -> UnlaceResult<()>;
 
     /// Execute a binary arithmetic/logical operation
-    fn execute_binary(&mut self) -> KunaResult<()>;
+    fn execute_binary(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a p-code LOAD
-    fn execute_load(&mut self) -> KunaResult<()>;
+    fn execute_load(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a p-code STORE
-    fn execute_store(&mut self) -> KunaResult<()>;
+    fn execute_store(&mut self) -> UnlaceResult<()>;
 
     /// \brief Standard behavior for a BRANCH
     ///
     /// This routine performs a standard p-code BRANCH operation on the
     /// memory state.  This same routine is used for CBRANCH operations if
     /// the condition has evaluated to \b true.
-    fn execute_branch(&mut self) -> KunaResult<()>;
+    fn execute_branch(&mut self) -> UnlaceResult<()>;
 
     /// \brief Check if the conditional of a CBRANCH is \b true
     ///
     /// This routine only checks if the condition for a p-code CBRANCH is
     /// true.  It does \e not perform the actual branch.
     /// \return the boolean state indicated by the condition
-    fn execute_cbranch(&mut self) -> KunaResult<bool>;
+    fn execute_cbranch(&mut self) -> UnlaceResult<bool>;
 
     /// Standard behavior for a BRANCHIND
-    fn execute_branchind(&mut self) -> KunaResult<()>;
+    fn execute_branchind(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a p-code CALL
-    fn execute_call(&mut self) -> KunaResult<()>;
+    fn execute_call(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a CALLIND
-    fn execute_callind(&mut self) -> KunaResult<()>;
+    fn execute_callind(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a user-defined p-code op
-    fn execute_callother(&mut self) -> KunaResult<()>;
+    fn execute_callother(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a MULTIEQUAL (phi-node)
-    fn execute_multiequal(&mut self) -> KunaResult<()>;
+    fn execute_multiequal(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for an INDIRECT op
-    fn execute_indirect(&mut self) -> KunaResult<()>;
+    fn execute_indirect(&mut self) -> UnlaceResult<()>;
 
     /// Behavior for a SEGMENTOP
-    fn execute_segment_op(&mut self) -> KunaResult<()>;
+    fn execute_segment_op(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for a CPOOLREF (constant pool reference) op
-    fn execute_cpool_ref(&mut self) -> KunaResult<()>;
+    fn execute_cpool_ref(&mut self) -> UnlaceResult<()>;
 
     /// Standard behavior for (low-level) NEW op
-    fn execute_new(&mut self) -> KunaResult<()>;
+    fn execute_new(&mut self) -> UnlaceResult<()>;
 
     /// Standard p-code fall-thru semantics
-    fn fallthru_op(&mut self) -> KunaResult<()>;
+    fn fallthru_op(&mut self) -> UnlaceResult<()>;
 
     /// Set the address of the next instruction to emulate
-    fn set_execute_address(&mut self, addr: &Address) -> KunaResult<()>;
+    fn set_execute_address(&mut self, addr: &Address) -> UnlaceResult<()>;
 
     /// Get the address of the current instruction being executed
     fn get_execute_address(&self) -> Address;
@@ -297,7 +297,7 @@ pub trait Emulate {
     /// This method executes a single pcode operation, the current one.  The
     /// MemoryState of the emulator is queried and changed as needed to
     /// accomplish this.  (C++ `Emulate::executeCurrentOp`, non-virtual.)
-    fn execute_current_op(&mut self) -> KunaResult<()> {
+    fn execute_current_op(&mut self) -> UnlaceResult<()> {
         let current_behave = match &self.emulate_core().current_behave {
             None => {
                 // Presumably a NO-OP
@@ -360,7 +360,7 @@ pub trait Emulate {
                     self.execute_new()?;
                     self.fallthru_op()?;
                 }
-                _ => return Err(KunaError::lowlevel("Bad special op")),
+                _ => return Err(UnlaceError::lowlevel("Bad special op")),
             }
         } else if current_behave.is_unary() {
             // Unary operation
@@ -394,7 +394,7 @@ pub trait EmulateMemory: Emulate {
     /// The current op to execute (the C++ protected `currentOp` member).
     fn current_op_raw(&self) -> Option<&Rc<PcodeOpRaw>>;
 
-    /// kuna boundary: the `AddrSpaceManager` that the C++ `Translate`
+    /// unlace boundary: the `AddrSpaceManager` that the C++ `Translate`
     /// inheritance made implicitly reachable (resolves `<spaceid>` constants
     /// through `VarnodeData::get_space_from_const`; module docs).
     fn addr_space_manager(&self) -> &AddrSpaceManager;
@@ -424,7 +424,7 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeUnary`
-    pub fn execute_unary<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_unary<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let behave = current_behave(emu);
         let memstate = Rc::clone(emu.get_memory_state());
@@ -442,7 +442,7 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeBinary`
-    pub fn execute_binary<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_binary<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let behave = current_behave(emu);
         let memstate = Rc::clone(emu.get_memory_state());
@@ -462,7 +462,7 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeLoad`
-    pub fn execute_load<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_load<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let off = memstate.borrow().get_value_data(op.get_input(1))?;
@@ -481,7 +481,7 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeStore`
-    pub fn execute_store<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_store<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let val = memstate.borrow().get_value_data(op.get_input(2))?; // Value being stored
@@ -499,13 +499,13 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeBranch`
-    pub fn execute_branch<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_branch<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         emu.set_execute_address(&op.get_input(0).get_addr())
     }
 
     /// C++ `EmulateMemory::executeCbranch`
-    pub fn execute_cbranch<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<bool> {
+    pub fn execute_cbranch<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<bool> {
         let op = current_op(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let cond = memstate.borrow().get_value_data(op.get_input(1))?;
@@ -513,7 +513,7 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeBranchind`
-    pub fn execute_branchind<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_branchind<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let off = memstate.borrow().get_value_data(op.get_input(0))?;
@@ -526,13 +526,13 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeCall`
-    pub fn execute_call<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_call<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         emu.set_execute_address(&op.get_input(0).get_addr())
     }
 
     /// C++ `EmulateMemory::executeCallind`
-    pub fn execute_callind<T: EmulateMemory + ?Sized>(emu: &mut T) -> KunaResult<()> {
+    pub fn execute_callind<T: EmulateMemory + ?Sized>(emu: &mut T) -> UnlaceResult<()> {
         let op = current_op(emu);
         let memstate = Rc::clone(emu.get_memory_state());
         let off = memstate.borrow().get_value_data(op.get_input(0))?;
@@ -545,43 +545,45 @@ pub mod emulate_memory {
     }
 
     /// C++ `EmulateMemory::executeCallother`
-    pub fn execute_callother<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn execute_callother<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "CALLOTHER emulation not currently supported",
         ))
     }
 
     /// C++ `EmulateMemory::executeMultiequal`
-    pub fn execute_multiequal<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn execute_multiequal<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "MULTIEQUAL appearing in unheritaged code?",
         ))
     }
 
     /// C++ `EmulateMemory::executeIndirect`
-    pub fn execute_indirect<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn execute_indirect<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "INDIRECT appearing in unheritaged code?",
         ))
     }
 
     /// C++ `EmulateMemory::executeSegmentOp`
-    pub fn execute_segment_op<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn execute_segment_op<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "SEGMENTOP emulation not currently supported",
         ))
     }
 
     /// C++ `EmulateMemory::executeCpoolRef`
-    pub fn execute_cpool_ref<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel(
+    pub fn execute_cpool_ref<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
             "Cannot currently emulate cpool operator",
         ))
     }
 
     /// C++ `EmulateMemory::executeNew`
-    pub fn execute_new<T: EmulateMemory + ?Sized>(_emu: &mut T) -> KunaResult<()> {
-        Err(KunaError::lowlevel("Cannot currently emulate new operator"))
+    pub fn execute_new<T: EmulateMemory + ?Sized>(_emu: &mut T) -> UnlaceResult<()> {
+        Err(UnlaceError::lowlevel(
+            "Cannot currently emulate new operator",
+        ))
     }
 }
 
@@ -686,7 +688,7 @@ pub struct EmulatePcodeCache {
     current_op_ptr: Option<Rc<PcodeOpRaw>>,
     /// The SLEIGH translator
     trans: Rc<dyn Translate>,
-    /// kuna manager boundary (module docs)
+    /// unlace manager boundary (module docs)
     manage: Rc<AddrSpaceManager>,
     /// The cache of current p-code ops (C++ also keeps a `varcache`; the
     /// Rust ops own their varnodes by value — module docs)
@@ -711,7 +713,7 @@ impl EmulatePcodeCache {
     ///
     /// \param t is the SLEIGH translator
     /// \param manage is the AddrSpaceManager the C++ `Translate` inherits
-    ///        (kuna boundary; module docs)
+    ///        (unlace boundary; module docs)
     /// \param s is the MemoryState the emulator should manipulate
     /// \param b is the table of breakpoints the emulator should invoke
     pub fn new(
@@ -757,7 +759,7 @@ impl EmulatePcodeCache {
     /// machine instruction into pcode, putting it into the cache, and
     /// setting up the iterators
     /// \param addr is the address of the instruction to translate
-    fn create_instruction(&mut self, addr: &Address) -> KunaResult<()> {
+    fn create_instruction(&mut self, addr: &Address) -> UnlaceResult<()> {
         self.clear_cache();
         let trans = Rc::clone(&self.trans);
         let mut emit = PcodeEmitCache::new(&mut self.opcache, &self.inst, 0);
@@ -832,7 +834,7 @@ impl EmulatePcodeCache {
     /// needed for the current address.  If this routine is invoked while
     /// execution is in the middle of a machine instruction, execution is
     /// continued until the current instruction completes.
-    pub fn execute_instruction(&mut self) -> KunaResult<()> {
+    pub fn execute_instruction(&mut self) -> UnlaceResult<()> {
         if self.instruction_start {
             let breaktable = Rc::clone(&self.breaktable);
             let addr = self.current_address.clone();
@@ -861,19 +863,19 @@ impl Emulate for EmulatePcodeCache {
 
     // inherited from C++ EmulateMemory (the delegation is the inheritance
     // edge; module docs)
-    fn execute_unary(&mut self) -> KunaResult<()> {
+    fn execute_unary(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_unary(self)
     }
 
-    fn execute_binary(&mut self) -> KunaResult<()> {
+    fn execute_binary(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_binary(self)
     }
 
-    fn execute_load(&mut self) -> KunaResult<()> {
+    fn execute_load(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_load(self)
     }
 
-    fn execute_store(&mut self) -> KunaResult<()> {
+    fn execute_store(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_store(self)
     }
 
@@ -881,7 +883,7 @@ impl Emulate for EmulatePcodeCache {
     ///
     /// Since the full instruction is cached, we can do relative branches
     /// properly (C++ `EmulatePcodeCache::executeBranch` override).
-    fn execute_branch(&mut self) -> KunaResult<()> {
+    fn execute_branch(&mut self) -> UnlaceResult<()> {
         let current_op_ptr = Rc::clone(
             self.current_op_ptr
                 .as_ref()
@@ -897,7 +899,7 @@ impl Emulate for EmulatePcodeCache {
                 self.fallthru_op()?;
             } else if self.current_op < 0 || (self.current_op as usize) >= self.opcache.len() {
                 // cast: C++ int4 >= size_t comparison (negative int wraps)
-                return Err(KunaError::lowlevel("Bad intra-instruction branch"));
+                return Err(UnlaceError::lowlevel("Bad intra-instruction branch"));
             } else {
                 self.establish_op();
             }
@@ -907,19 +909,19 @@ impl Emulate for EmulatePcodeCache {
         Ok(())
     }
 
-    fn execute_cbranch(&mut self) -> KunaResult<bool> {
+    fn execute_cbranch(&mut self) -> UnlaceResult<bool> {
         emulate_memory::execute_cbranch(self)
     }
 
-    fn execute_branchind(&mut self) -> KunaResult<()> {
+    fn execute_branchind(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_branchind(self)
     }
 
-    fn execute_call(&mut self) -> KunaResult<()> {
+    fn execute_call(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_call(self)
     }
 
-    fn execute_callind(&mut self) -> KunaResult<()> {
+    fn execute_callind(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_callind(self)
     }
 
@@ -928,7 +930,7 @@ impl Emulate for EmulatePcodeCache {
     /// Look for a breakpoint for the given user-defined op and invoke it.
     /// If it doesn't exist, or doesn't replace the action, an error is
     /// returned (C++ `EmulatePcodeCache::executeCallother` override).
-    fn execute_callother(&mut self) -> KunaResult<()> {
+    fn execute_callother(&mut self) -> UnlaceResult<()> {
         let breaktable = Rc::clone(&self.breaktable);
         let current_op_ptr = Rc::clone(
             self.current_op_ptr
@@ -939,28 +941,28 @@ impl Emulate for EmulatePcodeCache {
             .borrow_mut()
             .do_pcode_op_break(self, &current_op_ptr)?
         {
-            return Err(KunaError::lowlevel("Userop not hooked"));
+            return Err(UnlaceError::lowlevel("Userop not hooked"));
         }
         self.fallthru_op()
     }
 
-    fn execute_multiequal(&mut self) -> KunaResult<()> {
+    fn execute_multiequal(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_multiequal(self)
     }
 
-    fn execute_indirect(&mut self) -> KunaResult<()> {
+    fn execute_indirect(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_indirect(self)
     }
 
-    fn execute_segment_op(&mut self) -> KunaResult<()> {
+    fn execute_segment_op(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_segment_op(self)
     }
 
-    fn execute_cpool_ref(&mut self) -> KunaResult<()> {
+    fn execute_cpool_ref(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_cpool_ref(self)
     }
 
-    fn execute_new(&mut self) -> KunaResult<()> {
+    fn execute_new(&mut self) -> UnlaceResult<()> {
         emulate_memory::execute_new(self)
     }
 
@@ -969,7 +971,7 @@ impl Emulate for EmulatePcodeCache {
     /// Update the iterator into the current pcode cache, and if necessary,
     /// generate the pcode for the fallthru instruction and reset the
     /// iterator.
-    fn fallthru_op(&mut self) -> KunaResult<()> {
+    fn fallthru_op(&mut self) -> UnlaceResult<()> {
         self.instruction_start = false;
         self.current_op += 1;
         if self.current_op as usize >= self.opcache.len() {
@@ -987,7 +989,7 @@ impl Emulate for EmulatePcodeCache {
     /// Set the current execution address and cache the pcode translation of
     /// the machine instruction at that address
     /// \param addr is the address where execution should continue
-    fn set_execute_address(&mut self, addr: &Address) -> KunaResult<()> {
+    fn set_execute_address(&mut self, addr: &Address) -> UnlaceResult<()> {
         // Copy -addr- BEFORE calling createInstruction
         // as it calls clear and may delete -addr-
         self.current_address = addr.clone();
@@ -1083,11 +1085,11 @@ pub(crate) mod test_support {
             "testloader"
         }
 
-        fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+        fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
             let off = addr.get_offset();
             let end = self.start + self.bytes.len() as u64;
             if off >= end || off + ptr.len() as u64 <= self.start {
-                return Err(KunaError::data_unavail("TestLoader: range outside image"));
+                return Err(UnlaceError::data_unavail("TestLoader: range outside image"));
             }
             for (i, b) in ptr.iter_mut().enumerate() {
                 let a = off + i as u64;
@@ -1148,7 +1150,7 @@ pub(crate) mod test_support {
     }
 
     impl RegisterLookup for TestTranslator {
-        fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+        fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
             if let Some(num) = nm.strip_prefix('r') {
                 if let Ok(index) = num.parse::<u64>() {
                     if index < 8 {
@@ -1156,7 +1158,7 @@ pub(crate) mod test_support {
                     }
                 }
             }
-            Err(KunaError::sleigh(format!("Unknown register name: {nm}")))
+            Err(UnlaceError::sleigh(format!("Unknown register name: {nm}")))
         }
 
         fn get_register_name(&self, base: &Rc<AddrSpace>, off: u64, size: i32) -> String {
@@ -1185,7 +1187,7 @@ pub(crate) mod test_support {
             &mut self.base
         }
 
-        fn initialize(&mut self, _store: &mut DocumentStorage) -> KunaResult<()> {
+        fn initialize(&mut self, _store: &mut DocumentStorage) -> UnlaceResult<()> {
             Ok(())
         }
 
@@ -1209,9 +1211,9 @@ pub(crate) mod test_support {
             res.extend(self.userops.iter().cloned());
         }
 
-        fn instruction_length(&self, baseaddr: &Address) -> KunaResult<i32> {
+        fn instruction_length(&self, baseaddr: &Address) -> UnlaceResult<i32> {
             match self.program.get(&baseaddr.get_offset()) {
-                None => Err(KunaError::bad_data(format!(
+                None => Err(UnlaceError::bad_data(format!(
                     "TestTranslator: no instruction at 0x{:x}",
                     baseaddr.get_offset()
                 ))),
@@ -1219,9 +1221,13 @@ pub(crate) mod test_support {
             }
         }
 
-        fn one_instruction(&self, emit: &mut dyn PcodeEmit, baseaddr: &Address) -> KunaResult<i32> {
+        fn one_instruction(
+            &self,
+            emit: &mut dyn PcodeEmit,
+            baseaddr: &Address,
+        ) -> UnlaceResult<i32> {
             match self.program.get(&baseaddr.get_offset()) {
-                None => Err(KunaError::bad_data(format!(
+                None => Err(UnlaceError::bad_data(format!(
                     "TestTranslator: no instruction at 0x{:x}",
                     baseaddr.get_offset()
                 ))),
@@ -1238,8 +1244,8 @@ pub(crate) mod test_support {
             &self,
             _emit: &mut dyn AssemblyEmit,
             _baseaddr: &Address,
-        ) -> KunaResult<i32> {
-            Err(KunaError::lowlevel("TestTranslator: no assembly"))
+        ) -> UnlaceResult<i32> {
+            Err(UnlaceError::lowlevel("TestTranslator: no assembly"))
         }
     }
 
@@ -1531,7 +1537,7 @@ mod tests {
             &mut self,
             emulate: &mut dyn EmulateMemory,
             _op: &PcodeOpRaw,
-        ) -> KunaResult<bool> {
+        ) -> UnlaceResult<bool> {
             let mem = Rc::clone(emulate.get_memory_state());
             let r0 = mem.borrow().get_value_by_name("r0")?;
             mem.borrow_mut().set_value_by_name("r3", 2 * r0)?;
@@ -1548,7 +1554,7 @@ mod tests {
             &mut self,
             emulate: &mut dyn EmulateMemory,
             addr: &Address,
-        ) -> KunaResult<bool> {
+        ) -> UnlaceResult<bool> {
             let mem = Rc::clone(emulate.get_memory_state());
             mem.borrow_mut().set_value_by_name("r1", 100)?;
             let spc = Rc::clone(addr.get_space().unwrap());

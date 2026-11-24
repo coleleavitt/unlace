@@ -139,7 +139,7 @@ All re-run on the rebase onto `cb357826`.
 | gate | result |
 |---|---|
 | `make test` | **PARITY OK**, 675/675 — `docs/baseline.json` byte-identical to `origin/main` |
-| `make test-stages` | **PARITY OK**, 600/600 (597 -> 600 with the new `tests/stages/kuna-picbase.toml`) |
+| `make test-stages` | **PARITY OK**, 600/600 (597 -> 600 with the new `tests/stages/picbase.toml`) |
 | `make rust-test` | green — **5297 passed, 0 failed** (CI skips the workspace suite on an internal-branch PR, so this was run locally on the rebased tree; `full-ci` is set so it also runs here) |
 | `make check-spec` | OK |
 | `kuna catalog --check` | catalog OK |

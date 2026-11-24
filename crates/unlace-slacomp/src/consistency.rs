@@ -11,7 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::semantics::{
     BUILD, CROSSBUILD, ConstTpl, ConstType, DELAY_SLOT, LABELBUILD, MACROBUILD, VField, VarnodeTpl,
@@ -191,7 +191,7 @@ impl UniqueState {
 impl SleighCompile {
     /// Runs template validation and copy propagation (`checkConsistency`,
     /// slgh_compile.cc:2148), propagating unrecoverable errors to the caller.
-    pub(crate) fn check_consistency(&mut self) -> KunaResult<()> {
+    pub(crate) fn check_consistency(&mut self) -> UnlaceResult<()> {
         let mut cc = CcState::default();
         self.set_post_order(&mut cc);
         if !self.test_size_restrictions(&mut cc) {
@@ -1187,7 +1187,7 @@ impl SleighCompile {
 
     // --- pass 3: optimization (optimizeAll) ---
 
-    fn optimize_all(&mut self, cc: &mut CcState) -> KunaResult<()> {
+    fn optimize_all(&mut self, cc: &mut CcState) -> UnlaceResult<()> {
         for i in 0..cc.postorder.len() {
             let sym = cc.postorder[i];
             let numconstruct = self.subtable_num_constructors(sym);
@@ -1198,7 +1198,7 @@ impl SleighCompile {
         Ok(())
     }
 
-    fn optimize(&mut self, sym: SymbolId, ctidx: u32, cc: &mut CcState) -> KunaResult<()> {
+    fn optimize(&mut self, sym: SymbolId, ctidx: u32, cc: &mut CcState) -> UnlaceResult<()> {
         let numsections = self.constructor_num_sections(sym, ctidx);
         let mut state = UniqueState::default();
         loop {
@@ -1274,7 +1274,7 @@ impl SleighCompile {
         sym: SymbolId,
         ctidx: u32,
         state: &UniqueState,
-    ) -> KunaResult<Option<OptimizeRecord>> {
+    ) -> UnlaceResult<Option<OptimizeRecord>> {
         for currec in state.recs.values() {
             if currec.writecount == 1
                 && currec.readcount == 1
@@ -1284,7 +1284,7 @@ impl SleighCompile {
                     return Ok(None);
                 };
                 if currec.writeop >= currec.readop {
-                    return Err(KunaError::sleigh("Read of temporary before write"));
+                    return Err(UnlaceError::sleigh("Read of temporary before write"));
                 }
                 let writevn = self.template_varnode(h, currec.writeop as usize, -1);
                 let readvn = self.template_varnode(h, currec.readop as usize, currec.inslot);

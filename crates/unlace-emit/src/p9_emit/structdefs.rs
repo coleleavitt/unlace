@@ -1,10 +1,10 @@
-//! (kuna) The per-function type-definition preamble — no upstream Ghidra
+//! (unlace) The per-function type-definition preamble — no upstream Ghidra
 //! equivalent, and the one half of `docTypeDefinitions` that never had a caller
 //! outside `unlace decompile-project`.
 //!
 //! A decompiled body that reads `*(int *)(a0 + 8)` and one that reads
 //! `f->_flags` are the same recovery; only the second one tells the reader what
-//! the argument IS.  kuna already knows: the type factory holds the composite,
+//! the argument IS.  unlace already knows: the type factory holds the composite,
 //! and `unlace decompile-project` writes every one of them into the export's
 //! `.h`.  A single function printed to a terminal got none of it — the struct
 //! name appeared in the signature (`int get_prefix(FILE *f)`) and nothing said
@@ -50,7 +50,7 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 
 use crate::dtype::{Datatype, DatatypeKind};
@@ -61,11 +61,11 @@ use crate::printc::{
     compose_enum_body, compose_type_body, compose_typedef_line, sanitize_type_name,
 };
 
-/// Marshaling element `<structdefs>` (kuna 4000+ range; 4173 = the previous
-/// highest kuna id).
+/// Marshaling element `<structdefs>` (unlace 4000+ range; 4173 = the previous
+/// highest unlace id).
 pub const ELEM_STRUCTDEFS: ElementId = ElementId::new("structdefs", 4174);
 
-/// (kuna) Toggle the per-function type-definition preamble: `structdefs on|off`.
+/// (unlace) Toggle the per-function type-definition preamble: `structdefs on|off`.
 ///
 /// "off" (the default) keeps the bare function document; "on" prints the
 /// definitions of the composite/enum/typedef types the function's C names above
@@ -79,7 +79,7 @@ impl OptionStructDefs {
 
     /// Parse + validate the `on`/`off` value; the caller performs the printer
     /// write ([`crate::printc::PrintCOptions::set_struct_defs`]).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Per-function type definitions turned {prop}")))
@@ -129,7 +129,7 @@ pub fn referenced_types(fd: &Funcdata) -> Vec<Rc<Datatype>> {
         if let Some(sym) = vn
             .get_high()
             .and_then(|h| fd.high_bank().get(h))
-            .and_then(|h| h.kuna_symbol_type())
+            .and_then(|h| h.unlace_symbol_type())
         {
             visit(sym, &mut seen, &mut order);
         }

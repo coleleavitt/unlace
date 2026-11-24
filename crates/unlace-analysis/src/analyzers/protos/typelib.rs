@@ -1,7 +1,7 @@
-//! (kuna `typelib`) What the prebuilt type library needs to know about an image.
+//! (unlace `typelib`) What the prebuilt type library needs to know about an image.
 //!
-//! The library itself is read where the C grammar lives, in `kuna-console`
-//! (`kuna_typelib`), at the analysis commit. That is after the object file is
+//! The library itself is read where the C grammar lives, in `unlace-console`
+//! (`unlace_typelib`), at the analysis commit. That is after the object file is
 //! out of reach, so this pass carries forward the two facts only the object
 //! file states: which library target the image is, and which functions it
 //! imports at which addresses. It interns nothing and types nothing.

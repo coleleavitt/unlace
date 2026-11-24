@@ -1,4 +1,4 @@
-//! (kuna `strlenscan`) An inline `repnz scasb` string length becomes `strlen`.
+//! (unlace `strlenscan`) An inline `repnz scasb` string length becomes `strlen`.
 //!
 //! gcc up to version 9 (at -O1 and above) and older MSVC expand `strlen(s)`
 //! inline as
@@ -93,7 +93,7 @@ pub const PURE: &[OpCode] = &[
     CPUI_PTRADD,
 ];
 
-/// (kuna) `ActionStrlenScan` — collapse an inline `repnz scasb` string length
+/// (unlace) `ActionStrlenScan` — collapse an inline `repnz scasb` string length
 /// into `strlen` (option `strlenscan`).
 pub struct ActionStrlenScan {
     base: ActionBase,
@@ -130,7 +130,7 @@ impl Action for ActionStrlenScan {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::strlenscan::StrlenScan>()
                 .0
         {
@@ -402,19 +402,19 @@ fn match_scan(data: &Funcdata, head: BlockId) -> Option<Scan> {
     })
 }
 
-fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> {
-    use unlace_base::error::KunaError;
+fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::UnlaceResult<()> {
+    use unlace_base::error::UnlaceError;
     let at = op(data, s.count_dec)
         .map(|p| p.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("strlenscan: stale op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("strlenscan: stale op"))?;
     let first = *data
         .bb_ops(s.body)
         .first()
-        .ok_or_else(|| KunaError::lowlevel("strlenscan: empty body"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("strlenscan: empty body"))?;
     let to_exit = data.bblocks_ref().block(s.head).get_out_index(s.exit);
     let to_head = data.bblocks_ref().block(s.body).get_out_index(s.head);
     if to_exit < 0 || to_head < 0 {
-        return Err(KunaError::lowlevel("strlenscan: missing loop edge"));
+        return Err(UnlaceError::lowlevel("strlenscan: missing loop edge"));
     }
 
     let call = data.new_op(2, at.clone());
@@ -465,8 +465,8 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
     Ok(())
 }
 
-crate::kuna_flag!(
-    /// (kuna) Collapse an inline `repnz scasb` string length into `strlen`
+crate::unlace_flag!(
+    /// (unlace) Collapse an inline `repnz scasb` string length into `strlen`
     /// (option `strlenscan`).  See [`crate::strlenscan`].
     StrlenScan,
     "strlenscan",

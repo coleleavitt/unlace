@@ -81,15 +81,15 @@ struct StackSolver {
     soln: Vec<Option<int4>>,
     /// Number of variables missing an equation (C++ `missedvariables`).
     missedvariables: int4,
-    /// (kuna) The pops settled so far, by INDIRECT output.
+    /// (unlace) The pops settled so far, by INDIRECT output.
     settled: crate::calleepopslot::SettledPops,
-    /// (kuna `stackexitanchor`) `(variable, value)` read off the epilogue:
+    /// (unlace `stackexitanchor`) `(variable, value)` read off the epilogue:
     /// applied after the exact equations and before any guess.
     anchors: Vec<(int4, int4)>,
-    /// (kuna `stackexitanchor`) The variable each unknown-purge call's
+    /// (unlace `stackexitanchor`) The variable each unknown-purge call's
     /// stack-pointer INDIRECT defines, by call op.
     call_out: std::collections::HashMap<OpId, int4>,
-    /// (kuna) Variables whose value depends on a runtime amount: the stack
+    /// (unlace) Variables whose value depends on a runtime amount: the stack
     /// pointer moved by a non-constant (`sub sp,ax`), and every merge such a
     /// value reaches. They have no constant solution, so no equation may
     /// assign one through a merge, and they are never rewritten.
@@ -266,7 +266,7 @@ impl StackSolver {
                     continue;
                 }
             };
-            // (kuna) Arithmetic moving the stack pointer by a non-constant
+            // (unlace) Arithmetic moving the stack pointer by a non-constant
             // amount: a runtime reservation.
             if matches!(
                 opc,
@@ -331,7 +331,7 @@ impl StackSolver {
                         rhs,
                     });
                 }
-                // (kuna) `sub sp,c` is `add sp,-c`: give it its equation, so a
+                // (unlace) `sub sp,c` is `add sp,-c`: give it its equation, so a
                 // constant reservation on one path of a merge is solved, not
                 // equated with the other path.
                 OpCode::CPUI_INT_SUB
@@ -428,7 +428,7 @@ impl StackSolver {
                             }
                         }
                     }
-                    // Otherwise make a guess.  (kuna) upstream's constant 4
+                    // Otherwise make a guess.  (unlace) upstream's constant 4
                     // assumes the callee pops nothing, which is wrong for the
                     // majority of calls under a spec whose default model is
                     // `__stdcall extrapop="unknown"`, and is the x86-32
@@ -534,11 +534,11 @@ impl StackSolver {
         }
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::stackexitanchor::StackExitAnchor>()
             .0
         {
-            for &(call, value) in data.kuna_stack_exit_anchors() {
+            for &(call, value) in data.unlace_stack_exit_anchors() {
                 if let Some(&var) = self.call_out.get(&call) {
                     self.anchors.push((var, value));
                 }
@@ -549,7 +549,7 @@ impl StackSolver {
         Ok(())
     }
 
-    /// (kuna) A non-constant SP adjustment is often a constant the solver has
+    /// (unlace) A non-constant SP adjustment is often a constant the solver has
     /// not yet seen (`add sp,si` with `si == 2` on that path, popping a pushed
     /// argument): there the upstream solve implies a nonzero move, a real
     /// adjustment. Only an adjustment whose solved move is zero, i.e. one the
@@ -576,7 +576,7 @@ impl StackSolver {
         }
     }
 
-    /// (kuna) A value computed from a dynamic one is dynamic, transitively;
+    /// (unlace) A value computed from a dynamic one is dynamic, transitively;
     /// then drop every equation equating a dynamic variable with a fixed one. Upstream's merge equation
     /// would otherwise equate `sp - n` on one path with the constant frame of
     /// another and rewrite the runtime reservation away.
@@ -632,7 +632,7 @@ impl StackSolver {
             .retain(|e| dynamic[e.var1 as usize] == dynamic[e.var2 as usize]);
     }
 
-    /// (kuna) A literal, or a value that evaluates to one (`mov ax,8;
+    /// (unlace) A literal, or a value that evaluates to one (`mov ax,8;
     /// sub sp,ax`): the adjustment then has its exact equation.
     fn is_const(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
         vn.and_then(|v| crate::bejoin::literal_value(data, v, 8))
@@ -966,7 +966,7 @@ pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbas
     solver.solve();
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::stackexitanchor::StackExitAnchor>()
         .0
     {

@@ -1,11 +1,11 @@
-// Tests for `kuna_gobool` (included into `mod tests` in gobool.rs).
+// Tests for `unlace_gobool` (included into `mod tests` in gobool.rs).
 //
 // Covered:
 //   - `GoBoolMode`: parse vocabulary, u8 round-trip, default.
 //   - `produces_boolean`: the genuine 0/1 producers, and the near-misses.
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `RuleGoBoolReturn::apply_op` is inert on a function with no matching op
-//     (the end-to-end rewrite is pinned by `tests/stages/kuna-gobool.toml` and
+//     (the end-to-end rewrite is pinned by `tests/stages/unlace-gobool.toml` and
 //     the corpus measurement).
 
 use super::*;
@@ -38,7 +38,7 @@ fn build_fd(mode: GoBoolMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

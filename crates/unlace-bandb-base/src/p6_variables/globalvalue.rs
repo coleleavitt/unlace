@@ -7,10 +7,10 @@
 //!
 //! ```text
 //! u = init * 3; sink = u; r = (int)(u >> 4);   (u unsigned: INT_RIGHT, a logical shift)
-//! dat_4068 = a0 * 3; v2 = dat_4068 >> 4;       (kuna before: re-reads the global)
+//! dat_4068 = a0 * 3; v2 = dat_4068 >> 4;       (unlace before: re-reads the global)
 //! ```
 //!
-//! kuna never declares the global, so a reader who gives it its real type —
+//! unlace never declares the global, so a reader who gives it its real type —
 //! `sink` is `volatile int` — makes `dat_4068 >> 4` an arithmetic shift: for
 //! `init = 0x80000000` the rebuilt program returns `-134217728` where the binary
 //! returns `134217728`.  An expression printed around the value takes the
@@ -175,6 +175,6 @@ fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighV
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.globalvalue_keeps_apart = Some(keeps_apart);
 }

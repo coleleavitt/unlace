@@ -19,7 +19,7 @@ pub struct MachineRead {
 pub struct ReadScopes {
     pub lowered: std::collections::HashMap<OpId, MachineRead>,
     pub by_call: std::collections::HashMap<OpId, Vec<MachineRead>>,
-    /// (kuna `loadguardreads`) The reads of LOAD guards that build no `COPY`.
+    /// (unlace `loadguardreads`) The reads of LOAD guards that build no `COPY`.
     pub guarded: crate::fasthash::FxHashSet<MachineRead>,
 }
 
@@ -54,16 +54,16 @@ pub fn mark_stack_read(data: &mut Funcdata, op: OpId) {
         offset: value.get_offset(),
         size: value.get_size(),
     };
-    data.kuna_guarded_reads_mut()
+    data.unlace_guarded_reads_mut()
         .lowered
         .entry(op)
         .or_insert(read);
     if let Some(operation) = data.obank_mut().get_mut(op) {
-        operation.set_additional_flag(crate::op::pcodeop_addlflags::kuna_stack_read);
+        operation.set_additional_flag(crate::op::pcodeop_addlflags::unlace_stack_read);
     }
 }
 
-/// (kuna `loadguardreads`) Record the read a LOAD guard `COPY` of the stack
+/// (unlace `loadguardreads`) Record the read a LOAD guard `COPY` of the stack
 /// range `addr`/`size` in front of `load` would have marked.
 #[doc(hidden)]
 pub fn mark_guarded_read(
@@ -90,7 +90,7 @@ pub fn mark_guarded_read(
         offset: addr.get_offset(),
         size,
     };
-    data.kuna_guarded_reads_mut().guarded.insert(read);
+    data.unlace_guarded_reads_mut().guarded.insert(read);
 }
 
 #[inline]
@@ -99,7 +99,7 @@ pub fn record_propagated_read(data: &mut Funcdata, op: OpId, source: VarnodeId) 
     let Some(operation) = data.obank().get(op) else {
         return;
     };
-    if operation.get_addlflags() & crate::op::pcodeop_addlflags::kuna_stack_read == 0 {
+    if operation.get_addlflags() & crate::op::pcodeop_addlflags::unlace_stack_read == 0 {
         return;
     }
     let Some(value) = data.vbank().get(source) else {
@@ -124,11 +124,11 @@ pub fn record_propagated_read(data: &mut Funcdata, op: OpId, source: VarnodeId) 
     if !data.obank().get(effect).is_some_and(|op| op.is_call()) {
         return;
     }
-    let Some(read) = data.kuna_guarded_reads().lowered.get(&op).cloned() else {
+    let Some(read) = data.unlace_guarded_reads().lowered.get(&op).cloned() else {
         return;
     };
     let reads = data
-        .kuna_guarded_reads_mut()
+        .unlace_guarded_reads_mut()
         .by_call
         .entry(effect)
         .or_default();
@@ -142,7 +142,7 @@ pub fn record_current_read(data: &mut Funcdata, op: OpId) {
     let Some(operation) = data.obank().get(op) else {
         return;
     };
-    if operation.get_addlflags() & crate::op::pcodeop_addlflags::kuna_stack_read == 0 {
+    if operation.get_addlflags() & crate::op::pcodeop_addlflags::unlace_stack_read == 0 {
         return;
     }
     let count = operation.num_input();
@@ -154,24 +154,24 @@ pub fn record_current_read(data: &mut Funcdata, op: OpId) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackreadscope_mark_guarded_read = Some(mark_guarded_read);
 }
 
-crate::kuna_func_state!(crate::stackreadscope::ReadScopes, keep_across_clear: false);
+crate::unlace_func_state!(crate::stackreadscope::ReadScopes, keep_across_clear: false);
 
-/// The `kuna_stackreadscope` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stackreadscope` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackreadscopeExt {
-    fn kuna_guarded_reads(&self) -> &crate::stackreadscope::ReadScopes;
-    fn kuna_guarded_reads_mut(&mut self) -> &mut crate::stackreadscope::ReadScopes;
+    fn unlace_guarded_reads(&self) -> &crate::stackreadscope::ReadScopes;
+    fn unlace_guarded_reads_mut(&mut self) -> &mut crate::stackreadscope::ReadScopes;
 }
 
 impl FuncdataStackreadscopeExt for crate::funcdata::Funcdata {
-    fn kuna_guarded_reads(&self) -> &crate::stackreadscope::ReadScopes {
-        self.kuna_state::<crate::stackreadscope::ReadScopes>()
+    fn unlace_guarded_reads(&self) -> &crate::stackreadscope::ReadScopes {
+        self.unlace_state::<crate::stackreadscope::ReadScopes>()
     }
-    fn kuna_guarded_reads_mut(&mut self) -> &mut crate::stackreadscope::ReadScopes {
-        self.kuna_state_mut::<crate::stackreadscope::ReadScopes>()
+    fn unlace_guarded_reads_mut(&mut self) -> &mut crate::stackreadscope::ReadScopes {
+        self.unlace_state_mut::<crate::stackreadscope::ReadScopes>()
     }
 }

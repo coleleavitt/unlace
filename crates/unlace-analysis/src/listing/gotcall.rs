@@ -189,11 +189,11 @@ impl GotCalls {
 
 /// Leave the legacy listing path at a site with a user-stated callee.
 pub(super) fn has_stated_callee(arch: &Architecture, code: &Rc<AddrSpace>, site: u64) -> bool {
-    if arch.kuna_callee_overrides.is_empty() {
+    if arch.unlace_callee_overrides.is_empty() {
         return false;
     }
     let site = Address::new(Rc::clone(code), site);
-    arch.kuna_callee_overrides
+    arch.unlace_callee_overrides
         .values()
         .any(|sites| sites.contains_key(&site))
 }

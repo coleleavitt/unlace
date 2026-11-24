@@ -61,7 +61,7 @@ fn pe_imports() -> String {
 }
 
 /// Run the built `unlace` binary, returning `(stdout, stderr, exit code)`.
-fn run_kuna(args: &[&str]) -> (String, String, i32) {
+fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -77,7 +77,7 @@ fn run_kuna(args: &[&str]) -> (String, String, i32) {
 fn xrefs(args: &[&str]) -> String {
     let mut argv = vec!["xrefs"];
     argv.extend_from_slice(args);
-    let (stdout, stderr, code) = run_kuna(&argv);
+    let (stdout, stderr, code) = run_unlace(&argv);
     if code != 0 {
         panic!("unlace xrefs {args:?} failed ({code}): {stderr}");
     }
@@ -642,7 +642,7 @@ fn a_name_folds_whichever_half_of_the_import_is_called() {
 #[test]
 fn two_genuinely_distinct_functions_of_one_name_are_still_refused() {
     let object = fixture("entry_selectors_x86_64.o");
-    let (_, stderr, code) = run_kuna(&["xrefs", &object, "--to", "duplicate_local"]);
+    let (_, stderr, code) = run_unlace(&["xrefs", &object, "--to", "duplicate_local"]);
     assert_eq!(code, 1, "{stderr}");
     assert!(stderr.contains("ambiguous"), "{stderr}");
     assert!(stderr.contains(".text.selector_a+0x0"), "{stderr}");
@@ -674,7 +674,7 @@ fn a_target_with_no_references_is_an_empty_success() {
 /// distinct from a usage error (exit 2).
 #[test]
 fn an_unresolvable_target_fails_with_a_reason() {
-    let (_, stderr, code) = run_kuna(&["xrefs", &fauxware(), "--to", "no_such_symbol_here"]);
+    let (_, stderr, code) = run_unlace(&["xrefs", &fauxware(), "--to", "no_such_symbol_here"]);
     assert_eq!(code, 1, "{stderr}");
     assert!(stderr.contains("no symbol named"), "{stderr}");
 }
@@ -696,7 +696,7 @@ fn usage_errors_exit_two() {
             "sideways",
         ],
     ] {
-        let (_, stderr, code) = run_kuna(&args);
+        let (_, stderr, code) = run_unlace(&args);
         assert_eq!(
             code, 2,
             "{args:?} should be a usage error, got {code}: {stderr}"

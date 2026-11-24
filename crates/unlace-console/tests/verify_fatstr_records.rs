@@ -159,7 +159,7 @@ fn committed_extent(bin: &str, vma: u64, option: Option<&str>) -> Option<i32> {
         .expect("bootstrap rust fixture with built processor specs");
     if let Some(v) = option {
         prog.arch_mut()
-            .set_kuna_option("fatstr", v)
+            .set_unlace_option("fatstr", v)
             .expect("fatstr option applies");
     }
     prog.commit_pending_analysis()

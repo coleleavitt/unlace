@@ -30,7 +30,7 @@
     "decompiler/crates/kuna-decomp/src/substrate/context.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-analysis/tests/fixtures/getpcthunk_i386",
-    "tests/stages/kuna-calleepreserves.xml",
+    "tests/stages/calleepreserves.xml",
     "tests/cli/get-pc-helper-loses.json",
     "docs/spec/03-ssa-and-simplification.md",
     "docs/history.md",

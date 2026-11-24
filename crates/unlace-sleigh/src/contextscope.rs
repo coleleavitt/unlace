@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use crate::globalcontext::{ContextCache, ContextDatabase};
 
@@ -31,7 +31,7 @@ impl<'a> ContextScope<'a> {
 
     /// Prevent translation from changing one variable inside this scope. Other
     /// commits, such as Thumb IT state needed by subsequent instructions, remain enabled.
-    pub fn protect_variable(&self, name: &[u8]) -> KunaResult<()> {
+    pub fn protect_variable(&self, name: &[u8]) -> UnlaceResult<()> {
         let var = self.database.borrow().get_variable(name)?;
         let word = var.get_word() as usize;
         let mut cache = self.cache.borrow_mut();
@@ -94,7 +94,7 @@ impl<'a> DecodeContextScope<'a> {
     }
 
     /// Prevent translation from writing a variable while preserving other masks.
-    pub fn protect_variable(&self, name: &[u8]) -> KunaResult<()> {
+    pub fn protect_variable(&self, name: &[u8]) -> UnlaceResult<()> {
         let var = self.database.borrow().get_variable(name)?;
         let word = var.get_word() as usize;
         let mut cache = self.cache.borrow_mut();

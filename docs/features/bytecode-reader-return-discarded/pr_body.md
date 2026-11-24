@@ -52,7 +52,7 @@ returned in `r0:r1` on ARM.
 
 ## The tests
 
-`tests/stages/kuna-callretpair.toml` is two-pass over a newly vendored
+`tests/stages/callretpair.toml` is two-pass over a newly vendored
 `callretpair_x86_64`; pass 1 (`off`) pins the bare call and the unassigned `rdx`
 local, pass 2 pins the pair. Its `read_tag_clobber` control is identical in both
 passes, because the callee-body veto refuses a pair whose callee provably never

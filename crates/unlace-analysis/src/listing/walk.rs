@@ -385,7 +385,7 @@ where
         out.insn(fall);
         refs.file(vma, fall, RefKind::Code);
     }
-    // (kuna) `thumbswitch`: the case bodies of a Thumb `tbb`/`tbh` are this
+    // (unlace) `thumbswitch`: the case bodies of a Thumb `tbb`/`tbh` are this
     // function's own successors. See [`super::thumbswitch`].
     if let Some(tables) = ctx
         .tables
@@ -851,7 +851,7 @@ struct WalkSinks<'a> {
     callbacks: &'a mut CallbackEvidence,
 }
 
-/// (kuna `armwalkmode`) The serial walk with each instruction decoded in the
+/// (unlace `armwalkmode`) The serial walk with each instruction decoded in the
 /// mode its control flow carries, or in the database's where none does; it
 /// drains `func_worklist`, then resumes the instructions after calls it held.
 fn walk_carried(

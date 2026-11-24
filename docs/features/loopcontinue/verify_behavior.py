@@ -76,7 +76,7 @@ int main(void) {
 def main():
     engine = ROOT / "decompiler/target/release/decomp_dbg"
     script = "\n".join([
-        f"load file {ROOT / 'tests/stages/kuna-loopcontinue.xml'}",
+        f"load file {ROOT / 'tests/stages/loopcontinue.xml'}",
         "option loopcontinue on", "load function retry_server", "decompile",
         "print C", "quit", "",
     ])

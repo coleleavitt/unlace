@@ -1,6 +1,6 @@
 {
   "opportunity": "The two thresholds ActionMarkExplicit uses to decide whether a computed value gets its own declared local or is inlined at every use (Architecture::max_implied_ref and max_term_duplication) were compiled-in constants, both 2, with no command reaching either. Upstream's own comments next to them read '2 is best, in specific cases a higher number might be good' and '2 and 3 (4) are reasonable' -- values it expects to be tried. Exposing them turns a rebuild into a per-run flag, and gives the variable-count lane its ablation lever.",
-  "test_name": "tests/stages/kuna-impliedrefs.xml (6 assertions, two synthetic gcc -O2 functions, four passes) + 3 unit tests in p6_variables/impliedrefs.rs",
+  "test_name": "tests/stages/impliedrefs.xml (6 assertions, two synthetic gcc -O2 functions, four passes) + 3 unit tests in p6_variables/impliedrefs.rs",
   "binary": "decbench full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
   "selector": "0x26a0",
   "func_addr": "0x26a0",
@@ -157,7 +157,7 @@
     "tiers": "core 66 / transform 78 -> 80 / analysis 61",
     "catalog_json_rows": "204 -> 206",
     "bytecompat_fixture": "recaptured from the fresh decomp_dbg build",
-    "kuna-catalog.xml bucket #8 (opt-in-tool)": "18 -> 20",
+    "catalog.xml bucket #8 (opt-in-tool)": "18 -> 20",
     "stage corpus files (kuna-base/src/xml.rs)": "293 -> 294",
     "baseline-stages keys": "1007 -> 1013",
     "option_values_live_value_present_for_85": "unchanged -- a 3+-valued option carries no live_field (the codegen live reader is a bool ternary), so both names join the no-live-reader allow-list next to int3pad/warnstyle/namestyle"
@@ -172,8 +172,8 @@
     "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
     "decompiler/crates/kuna-base/src/xml.rs",
-    "tests/stages/kuna-impliedrefs.xml (new)",
-    "tests/stages/kuna-catalog.xml",
+    "tests/stages/impliedrefs.xml (new)",
+    "tests/stages/catalog.xml",
     "docs/baseline-stages.json",
     "docs/options.md",
     "docs/spec/06-variables-and-merge.md",

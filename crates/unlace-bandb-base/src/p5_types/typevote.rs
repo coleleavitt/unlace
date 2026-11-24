@@ -1,4 +1,4 @@
-//! (kuna `typevote`) A variable the type passes leave `undefinedN` takes the
+//! (unlace `typevote`) A variable the type passes leave `undefinedN` takes the
 //! type its uses vote for.
 //!
 //! Type propagation leaves a variable `undefinedN` when no typed operation
@@ -178,7 +178,7 @@ impl Action for ActionTypeVote {
         unlace_middle::debug_assert_settled!(data, Merge);
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::typevote::TypeVote>()
             .0
         {
@@ -240,8 +240,8 @@ impl Action for ActionTypeVote {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `typevote`) A variable left `undefinedN` takes the type the ops
+crate::unlace_flag!(
+    /// (unlace `typevote`) A variable left `undefinedN` takes the type the ops
     /// on it vote for (`p5_types/typevote.rs`). Default on.
     TypeVote,
     "typevote",

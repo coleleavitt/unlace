@@ -1,4 +1,4 @@
-//! (kuna) A function whose result a caller reads returns it (P4).
+//! (unlace) A function whose result a caller reads returns it (P4).
 //!
 //! `call g; ret` is what both `void f(void) { g(); }` and `T f(void) { return
 //! g(); }` compile to, and the function alone cannot tell them apart: upstream's
@@ -172,7 +172,7 @@ pub struct Ledger {
     /// Per function returning a float, the callees whose float return it hands
     /// on as its own ([`float_sources`]).
     pub float_sources: BTreeMap<(int4, uintb), BTreeSet<(int4, uintb)>>,
-    /// (kuna `floatbits`) The functions whose float return the bits of a
+    /// (unlace `floatbits`) The functions whose float return the bits of a
     /// float-register input made one.
     pub float_bits: BTreeSet<(int4, uintb)>,
     /// The functions returning a float a float op of their own computes
@@ -239,13 +239,13 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     };
     match returns {
         Some(r) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .returns
                 .insert(own, r);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .returns
                 .remove(&own);
@@ -256,7 +256,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         .filter(|out| !out.get_address().is_invalid() && out.get_size() > 0)
         .map(|out| (out.get_address(), out.get_size()));
     let word = stored.as_ref().and_then(|(addr, size)| {
-        let &(ref noted, width, sign) = data.kuna_zext_word()?;
+        let &(ref noted, width, sign) = data.unlace_zext_word()?;
         let signed = proto.get_output_type().is_some_and(|t| {
             matches!(
                 t.get_metatype(),
@@ -267,13 +267,13 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     });
     match stored {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .storage
                 .insert(own, s);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .storage
                 .remove(&own);
@@ -281,7 +281,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
     }
     file_word(arch, own, word);
     if declared || !proto.has_store() || proto.is_input_locked() {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .params
             .remove(&own);
@@ -300,29 +300,29 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
                     })
             })
             .collect();
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .params
             .insert(own, params);
     }
     for refused in arch
-        .kuna_tables
+        .unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .float_refused
         .values_mut()
     {
         refused.remove(&own);
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .displacing
         .remove(&own);
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .ops
         .insert(own, data.obank().iter_alive().count());
     if returns == Some(Returns::Float) && converts_its_return(data) {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .float_refused
             .entry(own)
@@ -330,9 +330,9 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
             .insert(own);
     }
     let float = returns == Some(Returns::Float);
-    let float_bits = float && data.kuna_float_bits_return();
+    let float_bits = float && data.unlace_float_bits_return();
     let own_float = float && returns_its_own_float(data);
-    let ledger = arch.kuna_tables.get_mut::<crate::voidret::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::voidret::Ledger>();
     for (set, member) in [
         (&mut ledger.float_bits, float_bits),
         (&mut ledger.own_float, own_float),
@@ -349,18 +349,18 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         BTreeSet::new()
     };
     if sources.is_empty() {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .float_sources
             .remove(&own);
     } else {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .float_sources
             .insert(own, sources);
     }
-    if !data.kuna_forced_return().is_empty() && returns_a_call_clobber(data) {
-        arch.kuna_tables
+    if !data.unlace_forced_return().is_empty() && returns_a_call_clobber(data) {
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .unset
             .insert(own);
@@ -375,12 +375,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
             continue;
         }
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .float_bits
             .contains(&callee)
         {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .bits_callers
                 .entry(callee)
@@ -395,28 +395,28 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         else {
             continue;
         };
-        let before = data.kuna_narrowret_read(fc.get_op()).cloned();
+        let before = data.unlace_narrowret_read(fc.get_op()).cloned();
         let outvn = crate::narrowret::widened_read(data, outvn);
         let result = holder(data, outvn);
         if hands_on(data, result) {
             handed.insert(callee);
         }
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .returns
             .get(&callee)
             == Some(&Returns::Float)
             && !wider_than_return(arch, callee, data, outvn)
             && !(arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .float_bits
                 .contains(&callee)
                 && elsewhere_than_return(arch, callee, data, result))
             && !held_as_float(data, outvn, result)
             && !arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .storage
                 .get(&callee)
@@ -424,7 +424,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
                     crate::armfloatreturn::convention_float_storage(data, addr, *size)
                 })
         {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .float_refused
                 .entry(callee)
@@ -432,12 +432,12 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
                 .insert(own);
         }
         if let Some(h) = held(data, result) {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .held
                 .insert((own, callee), h);
         }
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .readers
             .entry(callee)
@@ -459,7 +459,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         }
         file_claim(arch, own, callee, storage);
     }
-    for (callee, storage) in data.kuna_forced_claims().to_vec() {
+    for (callee, storage) in data.unlace_forced_claims().to_vec() {
         file_claim(arch, own, callee, storage);
     }
     file_handed(arch, own, handed);
@@ -469,14 +469,14 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
 /// and hand them what its callers already compute with.
 fn file_handed(arch: &mut Architecture, own: (int4, uintb), handed: BTreeSet<(int4, uintb)>) {
     if handed.is_empty() {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::voidret::Ledger>()
             .handed
             .remove(&own);
         return;
     }
     let uses = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::voidret::Ledger>()
         .used
         .get(&own)
@@ -487,7 +487,7 @@ fn file_handed(arch: &mut Architecture, own: (int4, uintb), handed: BTreeSet<(in
             file_use(arch, callee, storage.clone());
         }
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .handed
         .insert(own, handed);
@@ -521,7 +521,7 @@ fn wider_than_return(
     outvn: crate::context::VarnodeId,
 ) -> bool {
     let Some((_, size)) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::voidret::Ledger>()
         .storage
         .get(&callee)
@@ -533,7 +533,7 @@ fn wider_than_return(
         .is_some_and(|v| v.get_size() > *size)
 }
 
-/// (kuna `floatbits`) Does the caller hold the call's result, `result`
+/// (unlace `floatbits`) Does the caller hold the call's result, `result`
 /// ([`holder`]), in another register than the one `callee` returns its float
 /// in?  That is what the call left there, not the callee's value: betaflight's
 /// `bl fabsf; vcmpe.f32 s0, s15; .. pop {r4, pc}` hands back the `r0` the call
@@ -546,7 +546,7 @@ fn elsewhere_than_return(
     result: crate::context::VarnodeId,
 ) -> bool {
     let Some((addr, _)) = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::voidret::Ledger>()
         .storage
         .get(&callee)
@@ -925,7 +925,8 @@ fn float_call_result(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
             .get_output_type()
             .is_some_and(|t| t.get_metatype() == crate::dtype::type_metatype::TYPE_FLOAT);
     }
-    key(fc.get_entry_address()).is_some_and(|k| data.kuna_callee_returns(k) == Some(Returns::Float))
+    key(fc.get_entry_address())
+        .is_some_and(|k| data.unlace_callee_returns(k) == Some(Returns::Float))
 }
 
 /// The functions returning a float that a reader keeps as another type, not yet
@@ -940,7 +941,7 @@ fn float_call_result(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
 /// converts by value. So the callees whose float it hands on are withdrawn
 /// with it, and theirs in turn, down the chain ([`float_sources`]).
 ///
-/// (kuna `floatbits`) A function whose float is only what such callees return
+/// (unlace `floatbits`) A function whose float is only what such callees return
 /// for the bits of their float-register input is left as it is: withdrawn, it
 /// would lose the return its readers forced, and it returns what the callees
 /// return once they are withdrawn and it is decompiled again as their reader.
@@ -950,7 +951,7 @@ fn float_call_result(data: &Funcdata, node: &crate::varnode::Varnode) -> bool {
 /// code that leaves a vector in `d0` was each decompiled twice for it.
 pub fn withdrawals(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
     let vfp = crate::armfloatreturn::applies(arch);
-    let ledger = arch.kuna_tables.get_mut::<crate::voidret::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::voidret::Ledger>();
     let bounded = |k: &(int4, uintb)| {
         vfp && ledger
             .ops
@@ -1116,7 +1117,7 @@ fn float_sources(data: &Funcdata) -> BTreeSet<(int4, uintb)> {
         let Some(k) = key(fc.get_entry_address()) else {
             continue;
         };
-        if data.kuna_callee_returns(k) == Some(Returns::Float) {
+        if data.unlace_callee_returns(k) == Some(Returns::Float) {
             out.insert(k);
         }
     }
@@ -1131,7 +1132,7 @@ fn file_claim(
     storage: (Address, int4),
 ) {
     let claims = arch
-        .kuna_tables
+        .unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .read
         .entry(callee)
@@ -1139,7 +1140,7 @@ fn file_claim(
     if !claims.contains(&storage) {
         claims.push(storage);
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .readers
         .entry(callee)
@@ -1151,7 +1152,7 @@ fn file_claim(
 /// with the result of each callee whose result `callee` returns as it is,
 /// making each due when that is wider than a zero-extended word it returns.
 fn file_use(arch: &mut Architecture, callee: (int4, uintb), storage: (Address, int4)) {
-    let ledger = arch.kuna_tables.get_mut::<crate::voidret::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::voidret::Ledger>();
     let mut work = vec![callee];
     while let Some(k) = work.pop() {
         let uses = ledger.used.entry(k).or_default();
@@ -1197,7 +1198,7 @@ fn hands_on(data: &Funcdata, out: crate::context::VarnodeId) -> bool {
 /// decompile trimmed one out of a wider register, making the function due when
 /// a caller already computes with more of the register.
 fn file_word(arch: &mut Architecture, own: (int4, uintb), word: Option<(Address, int4, bool)>) {
-    let ledger = arch.kuna_tables.get_mut::<crate::voidret::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::voidret::Ledger>();
     let Some(word) = word else {
         ledger.words.remove(&own);
         return;
@@ -1400,7 +1401,7 @@ pub fn read_storage(out: &crate::varnode::Varnode) -> Option<(Address, int4)> {
 /// returning a zero-extended word a caller reads wider, kept whole at the
 /// widest such read ([`crate::zextreturn::zero_extended_word`]).
 pub fn due(arch: &mut Architecture) -> BTreeSet<(int4, uintb)> {
-    let ledger = arch.kuna_tables.get_mut::<crate::voidret::Ledger>();
+    let ledger = arch.unlace_tables.get_mut::<crate::voidret::Ledger>();
     let mut force: Vec<((int4, uintb), (Address, int4))> = Vec::new();
     let mut withdraw: Vec<(int4, uintb)> = Vec::new();
     let mut displace: Vec<(int4, uintb)> = Vec::new();
@@ -1659,7 +1660,7 @@ impl WatchedSet {
 /// something else does not count: the widened model makes many more callees
 /// return a float, and those redos were most of the option's cost.
 ///
-/// (kuna `floatbits`) A function whose bit-op float its withdrawal took back
+/// (unlace `floatbits`) A function whose bit-op float its withdrawal took back
 /// also takes back its float parameters, so every function that called it
 /// before is decompiled again, a reader or not: `from_bits`'s tail call
 /// `fbabs(((union { unsigned int from; float to; }){ .from = a0 }).to)` would
@@ -1673,33 +1674,33 @@ pub fn stale_readers(
     let mut out = BTreeSet::new();
     for (callee, &at) in changed {
         let float = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .returns
             .get(callee)
             == Some(&Returns::Float);
         let withdrawn = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .withdrawn
             .contains(callee);
         let widened = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .wide
             .contains_key(callee);
         let states = float
             || withdrawn
             || arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::callrettype::StatedReturns>()
                 .contains_key(callee)
             || arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::narrowret::NarrowReturns>()
                 .contains_key(callee);
         let scaled = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::callrettype::StatedReturns>()
             .get(callee)
             .is_some_and(|s| {
@@ -1710,13 +1711,13 @@ pub fn stale_readers(
                     })
             });
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .bits_withdrawn
             .contains(callee)
         {
             let callers = arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .bits_callers
                 .get(callee)
@@ -1727,7 +1728,7 @@ pub fn stale_readers(
             );
         }
         for reader in arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::voidret::Ledger>()
             .readers
             .get(callee)
@@ -1738,12 +1739,12 @@ pub fn stale_readers(
                 continue;
             }
             let waiting = arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .forced
                 .contains_key(reader)
                 && arch
-                    .kuna_tables
+                    .unlace_tables
                     .get::<crate::voidret::Ledger>()
                     .returns
                     .get(reader)
@@ -1752,13 +1753,13 @@ pub fn stale_readers(
                 continue;
             }
             let large = arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .ops
                 .get(reader)
                 .is_some_and(|&n| n > crate::callrettype::AUDIT_MAX_OPS);
             let wrong = arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .held
                 .get(&(*reader, *callee))
@@ -1806,10 +1807,10 @@ pub fn narrowed_call_result(
         return None;
     }
     let k = key(fc.get_entry_address())?;
-    if data.kuna_callee_returns(k) != Some(Returns::Other) {
+    if data.unlace_callee_returns(k) != Some(Returns::Other) {
         return None;
     }
-    let (addr, size) = data.kuna_callee_return_storage(k)?.clone();
+    let (addr, size) = data.unlace_callee_return_storage(k)?.clone();
     let register = addr
         .get_space()
         .is_some_and(|s| s.get_type() == spacetype::IPTR_PROCESSOR);
@@ -1821,7 +1822,7 @@ pub fn narrowed_call_result(
     }
     let unsigned = signed_use(data, o.get_out()?, true)?;
     let stated = data
-        .kuna_callret_stated(k)
+        .unlace_callret_stated(k)
         .filter(|s| s.size == size && s.ct.get_size() == size);
     let wide = match stated {
         Some(s) => std::rc::Rc::clone(&s.ct),
@@ -1836,7 +1837,7 @@ pub fn narrowed_call_result(
 
 /// What the function keyed `k` was last recovered to return, for [`restore`].
 pub fn returns(arch: &Architecture, k: (int4, uintb)) -> Option<Returns> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::voidret::Ledger>()
         .returns
         .get(&k)
@@ -1846,7 +1847,7 @@ pub fn returns(arch: &Architecture, k: (int4, uintb)) -> Option<Returns> {
 /// Was the function keyed `k` decompiled again for a caller computing with
 /// more of its register than the zero-extended value it returned?
 pub fn widened(arch: &Architecture, k: (int4, uintb)) -> bool {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::voidret::Ledger>()
         .wide
         .contains_key(&k)
@@ -1854,7 +1855,7 @@ pub fn widened(arch: &Architecture, k: (int4, uintb)) -> bool {
 
 /// The storage the function keyed `k` last returned a value in, for [`restore`].
 pub fn return_storage(arch: &Architecture, k: (int4, uintb)) -> Option<(Address, int4)> {
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::voidret::Ledger>()
         .storage
         .get(&k)
@@ -1871,19 +1872,19 @@ pub fn restore(
     returns: Option<Returns>,
     storage: Option<(Address, int4)>,
 ) {
-    arch.kuna_tables
+    arch.unlace_tables
         .get_mut::<crate::voidret::Ledger>()
         .displacing
         .remove(&k);
     match returns {
         Some(r) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .returns
                 .insert(k, r);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .returns
                 .remove(&k);
@@ -1891,13 +1892,13 @@ pub fn restore(
     }
     match storage {
         Some(s) => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .storage
                 .insert(k, s);
         }
         None => {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::voidret::Ledger>()
                 .storage
                 .remove(&k);
@@ -1915,20 +1916,20 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             Some((
                 k,
                 *arch
-                    .kuna_tables
+                    .unlace_tables
                     .get::<crate::voidret::Ledger>()
                     .returns
                     .get(&k)?,
             ))
         })
         .collect();
-    data.kuna_set_callee_returns(returns);
+    data.unlace_set_callee_returns(returns);
     let params: BTreeMap<(int4, uintb), Vec<Option<bool>>> = (0..data.num_calls())
         .filter_map(|i| key(data.get_call_specs(i).get_entry_address()))
         .filter_map(|k| {
             Some((
                 k,
-                arch.kuna_tables
+                arch.unlace_tables
                     .get::<crate::voidret::Ledger>()
                     .params
                     .get(&k)?
@@ -1936,13 +1937,13 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             ))
         })
         .collect();
-    data.kuna_set_callee_params(params);
+    data.unlace_set_callee_params(params);
     let storage: BTreeMap<(int4, uintb), (Address, int4)> = (0..data.num_calls())
         .filter_map(|i| key(data.get_call_specs(i).get_entry_address()))
         .filter_map(|k| {
             Some((
                 k,
-                arch.kuna_tables
+                arch.unlace_tables
                     .get::<crate::voidret::Ledger>()
                     .storage
                     .get(&k)?
@@ -1950,40 +1951,40 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             ))
         })
         .collect();
-    data.kuna_set_callee_return_storage(storage);
+    data.unlace_set_callee_return_storage(storage);
     let float_bits = (0..data.num_calls())
         .filter_map(|i| key(data.get_call_specs(i).get_entry_address()))
         .filter(|k| {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get::<crate::voidret::Ledger>()
                 .float_bits
                 .contains(k)
         })
         .collect();
-    data.kuna_set_callee_float_bits(float_bits);
+    data.unlace_set_callee_float_bits(float_bits);
     let own = key(data.get_address());
-    data.kuna_set_wide_return(own.and_then(|k| {
-        arch.kuna_tables
+    data.unlace_set_wide_return(own.and_then(|k| {
+        arch.unlace_tables
             .get::<crate::voidret::Ledger>()
             .wide
             .get(&k)
             .cloned()
     }));
     let withdrawn = own.is_some_and(|k| {
-        arch.kuna_tables
+        arch.unlace_tables
             .get::<crate::voidret::Ledger>()
             .withdrawn
             .contains(&k)
     });
-    data.kuna_set_float_return_withdrawn(withdrawn);
+    data.unlace_set_float_return_withdrawn(withdrawn);
     let Some((addr, size)) = own.filter(|_| !withdrawn).and_then(|k| {
-        arch.kuna_tables
+        arch.unlace_tables
             .get::<crate::voidret::Ledger>()
             .forced
             .get(&k)
             .cloned()
     }) else {
-        data.kuna_set_forced_return(Vec::new());
+        data.unlace_set_forced_return(Vec::new());
         return;
     };
     let joined = addr
@@ -2005,7 +2006,7 @@ pub fn seed(arch: &Architecture, data: &mut Funcdata) {
             Err(_) => Vec::new(),
         }
     };
-    data.kuna_set_forced_return(pieces);
+    data.unlace_set_forced_return(pieces);
 }
 
 /// Give every live RETURN a read of the storage the function's callers read,
@@ -2016,7 +2017,7 @@ pub fn plant(data: &mut Funcdata) {
     if data.get_func_proto().is_output_locked() || data.get_active_output().is_none() {
         return;
     }
-    for (addr, size) in data.kuna_forced_return().to_vec() {
+    for (addr, size) in data.unlace_forced_return().to_vec() {
         plant_piece(data, addr, size);
     }
 }
@@ -2057,7 +2058,7 @@ pub fn plant_piece(data: &mut Funcdata, addr: Address, size: int4) {
         let t = active.get_num_trials() - 1;
         active.get_trial_mut(t).set_slot(slot);
     }
-    data.kuna_note_forced_return_planted(addr, size);
+    data.unlace_note_forced_return_planted(addr, size);
 }
 
 /// Does a Varnode of the function share a byte with `[addr, addr+size)` and
@@ -2088,7 +2089,7 @@ fn touched_beyond(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// because [`plant`] made the trial itself?  Only the pieces it planted: the
 /// `edx` of `call zsum; or $0xff,%edx` beside a planted `eax` keeps its trial.
 pub fn planted_overlaps(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_forced_return_planted()
+    data.unlace_forced_return_planted()
         .iter()
         .any(|(paddr, psize)| overlaps(addr, size, paddr, *psize))
 }
@@ -2121,7 +2122,7 @@ pub fn score_forced(
     return_ops: &[crate::context::OpId],
     maxancestor: int4,
 ) {
-    if data.kuna_forced_return().is_empty() {
+    if data.unlace_forced_return().is_empty() {
         return;
     }
     let live: Vec<crate::context::OpId> = return_ops
@@ -2153,7 +2154,7 @@ pub fn score_forced(
 /// clobbered register) would leave its callers reading a value the function
 /// no longer returns.
 pub fn whole_or_none(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
-    if data.kuna_forced_return().is_empty() {
+    if data.unlace_forced_return().is_empty() {
         return;
     }
     let live: Vec<crate::context::OpId> = data
@@ -2199,7 +2200,7 @@ pub fn whole_or_none(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
 /// restart took and the pass after it refused printed `unsigned int f(..)`
 /// around a bare `return;`.
 pub fn void_unless_returned(data: &mut Funcdata) {
-    if data.kuna_forced_return().is_empty()
+    if data.unlace_forced_return().is_empty()
         || !data.get_func_proto().has_store()
         || data.get_func_proto().is_output_locked()
         || data
@@ -2251,7 +2252,7 @@ fn score_trial(
         for &r in live {
             if let Some(vn) = data.obank().get(r).and_then(|o| o.get_in(slot)) {
                 for (callee, storage) in void_results(data, vn) {
-                    data.kuna_note_forced_claim((callee, as_wide_as(storage, callers.as_ref())));
+                    data.unlace_note_forced_claim((callee, as_wide_as(storage, callers.as_ref())));
                 }
             }
         }
@@ -2274,9 +2275,9 @@ fn score_trial(
         if !(realistic || solid) {
             return false;
         }
-        data.kuna_set_forced_scoring(true);
+        data.unlace_set_forced_scoring(true);
         let only = data.ancestor_op_use(maxancestor, vn, r, active.get_trial_mut(i), 0, 0);
-        data.kuna_set_forced_scoring(false);
+        data.unlace_set_forced_scoring(false);
         only
     });
     if !every || (width < size && !narrow(data, active, i, live, slot, width)) {
@@ -2344,12 +2345,12 @@ fn callee_return(data: &Funcdata, fc: &crate::fspec::FuncCallSpecs) -> CalleeRet
     let Some(k) = key(fc.get_entry_address()) else {
         return CalleeReturn::Unknown;
     };
-    if let Some(stated) = data.kuna_callret_stated(k) {
+    if let Some(stated) = data.unlace_callret_stated(k) {
         return CalleeReturn::Stored(stated.addr.clone(), stated.size);
     }
     match (
-        data.kuna_callee_returns(k),
-        data.kuna_callee_return_storage(k),
+        data.unlace_callee_returns(k),
+        data.unlace_callee_return_storage(k),
     ) {
         (Some(Returns::Void), _) => CalleeReturn::Stored(Address::new_invalid(), 0),
         (Some(_), Some((addr, size))) => CalleeReturn::Stored(addr.clone(), *size),
@@ -2437,7 +2438,7 @@ fn covered_from(low: &Address, raddr: &Address, rsize: int4) -> Option<int4> {
 /// The widest storage the callers read anchored at the trial's least
 /// significant end.
 fn callers_storage(data: &Funcdata, addr: &Address, size: int4) -> Option<(Address, int4)> {
-    data.kuna_forced_return()
+    data.unlace_forced_return()
         .iter()
         .filter(|(fa, fs)| same_low_end(fa, *fs, addr, size))
         .max_by_key(|(_, fs)| *fs)
@@ -2704,9 +2705,9 @@ fn returned_by_the_call(
         else {
             return size;
         };
-        match data.kuna_callret_stated(k) {
+        match data.unlace_callret_stated(k) {
             Some(stated) => (stated.addr.clone(), stated.size),
-            None if data.kuna_callee_returns(k) == Some(Returns::Void) => return 0,
+            None if data.unlace_callee_returns(k) == Some(Returns::Void) => return 0,
             None => return size,
         }
     };
@@ -2769,7 +2770,7 @@ fn void_results(
                     continue;
                 };
                 if !fc.proto().is_output_locked()
-                    && data.kuna_callee_returns(k) == Some(Returns::Void)
+                    && data.unlace_callee_returns(k) == Some(Returns::Void)
                 {
                     out.push((k, (node.get_addr().clone(), node.get_size())));
                 }
@@ -2867,7 +2868,7 @@ fn narrow(
 /// Is the return trial `[addr, addr+size)` on the storage the function's
 /// callers read?
 pub fn forced(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.kuna_forced_return()
+    data.unlace_forced_return()
         .iter()
         .any(|(faddr, fsize)| overlaps(addr, size, faddr, *fsize))
 }
@@ -2877,7 +2878,7 @@ pub fn forced(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// function's result whatever else the function does with it, and
 /// `only_op_use` lets it be stored and branched on as well ([`returned_use`]).
 pub fn scoring_return(data: &Funcdata, opmatch: crate::context::OpId) -> bool {
-    data.kuna_forced_scoring()
+    data.unlace_forced_scoring()
         && data
             .obank()
             .get(opmatch)
@@ -2913,13 +2914,13 @@ pub fn returned_use(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.voidret_planted_overlaps = Some(planted_overlaps);
     hooks.voidret_returned_use = Some(returned_use);
     hooks.voidret_scoring_return = Some(scoring_return);
 }
 
-/// (kuna `voidret`) What each callee's last decompile recovered it returns; kept across
+/// (unlace `voidret`) What each callee's last decompile recovered it returns; kept across
 /// `Funcdata::clear`.
 #[derive(Default)]
 struct CalleeReturnsSlot(
@@ -2928,44 +2929,47 @@ struct CalleeReturnsSlot(
         crate::voidret::Returns,
     >,
 );
-crate::kuna_func_state!(CalleeReturnsSlot, keep_across_clear: true);
+crate::unlace_func_state!(CalleeReturnsSlot, keep_across_clear: true);
 
-/// The `kuna_voidret` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_voidret` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataVoidretExt {
-    /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
-    fn kuna_set_callee_returns(
+    /// (unlace `voidret`) Record what each callee's last decompile recovered it returns.
+    fn unlace_set_callee_returns(
         &mut self,
         returns: std::collections::BTreeMap<
             (unlace_base::types::int4, unlace_base::types::uintb),
             crate::voidret::Returns,
         >,
     );
-    /// (kuna `voidret`) What the callee at `key` was last recovered to return.
-    fn kuna_callee_returns(
+    /// (unlace `voidret`) What the callee at `key` was last recovered to return.
+    fn unlace_callee_returns(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<crate::voidret::Returns>;
 }
 
 impl FuncdataVoidretExt for crate::funcdata::Funcdata {
-    /// (kuna `voidret`) Record what each callee's last decompile recovered it returns.
-    fn kuna_set_callee_returns(
+    /// (unlace `voidret`) Record what each callee's last decompile recovered it returns.
+    fn unlace_set_callee_returns(
         &mut self,
         returns: std::collections::BTreeMap<
             (unlace_base::types::int4, unlace_base::types::uintb),
             crate::voidret::Returns,
         >,
     ) {
-        self.kuna_state_mut::<CalleeReturnsSlot>().0 = returns;
+        self.unlace_state_mut::<CalleeReturnsSlot>().0 = returns;
     }
-    /// (kuna `voidret`) What the callee at `key` was last recovered to return.
-    fn kuna_callee_returns(
+    /// (unlace `voidret`) What the callee at `key` was last recovered to return.
+    fn unlace_callee_returns(
         &self,
         key: (unlace_base::types::int4, unlace_base::types::uintb),
     ) -> Option<crate::voidret::Returns> {
-        self.kuna_state::<CalleeReturnsSlot>().0.get(&key).copied()
+        self.unlace_state::<CalleeReturnsSlot>()
+            .0
+            .get(&key)
+            .copied()
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);

@@ -1,4 +1,4 @@
-//! (kuna `cfstrings`) Type and render a Mach-O Core Foundation constant string.
+//! (unlace `cfstrings`) Type and render a Mach-O Core Foundation constant string.
 //!
 //! The `cfstrings` commit types each `__cfstring` entry as an opaque
 //! `struct __CFString` the size of the entry, and [`declare_types`] makes
@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 
 use crate::dtype::type_metatype::{TYPE_PTR, TYPE_STRUCT};
@@ -30,7 +30,7 @@ pub fn declare_types(
     types: &dyn TypeFactory,
     size: int4,
     ws: uint4,
-) -> KunaResult<Option<Rc<Datatype>>> {
+) -> UnlaceResult<Option<Rc<Datatype>>> {
     let ps = types.get_size_of_pointer();
     let existing = types
         .find_by_name(REF)?
@@ -56,7 +56,7 @@ pub fn declare_types(
         Some(_) => return Ok(None),
         None => types.get_type_pointer_named(ps, Rc::clone(&record), ws, REF)?,
     };
-    types.kuna_prefer_named_pointer(&ptr);
+    types.unlace_prefer_named_pointer(&ptr);
     Ok(Some(record))
 }
 

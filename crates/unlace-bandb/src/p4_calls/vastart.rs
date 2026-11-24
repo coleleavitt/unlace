@@ -1,4 +1,4 @@
-//! (kuna `vastart`) The x86-64 SysV `va_start` prologue prints as
+//! (unlace `vastart`) The x86-64 SysV `va_start` prologue prints as
 //! `va_start(ap, last)`.
 //!
 //! A variadic function that materializes a `va_list` spills every argument
@@ -6,7 +6,7 @@
 //! and initializes the four `__va_list_tag` fields: `gp_offset` (8 per named
 //! integer argument), `fp_offset` (48 plus 16 per named float argument),
 //! `overflow_arg_area` (the caller's stack arguments) and `reg_save_area`.
-//! Hex-Rays prints the whole sequence as `va_start(va, fmt);`; kuna printed a
+//! Hex-Rays prints the whole sequence as `va_start(va, fmt);`; unlace printed a
 //! dozen register copies and four field stores.
 //!
 //! [`ActionVaStart`] finds the two offset constants (two 4-byte writes or one
@@ -212,23 +212,23 @@ pub fn last_named(data: &Funcdata, named: int4, gp: int4) -> Option<VarnodeId> {
         .find_map(|size| data.vbank().find_input(size, &addr))
 }
 
-fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<()> {
-    use unlace_base::error::KunaError;
+fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::UnlaceResult<()> {
+    use unlace_base::error::UnlaceError;
     let block = data
         .obank()
         .get(m.offsets[0])
         .and_then(|o| o.get_parent())
-        .ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("vastart: stale op"))?;
     let first = data
         .bb_ops(block)
         .into_iter()
         .find(|o| m.offsets.contains(o))
-        .ok_or_else(|| KunaError::lowlevel("vastart: no first"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("vastart: no first"))?;
     let at = data
         .obank()
         .get(first)
         .map(|o| o.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("vastart: stale op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("vastart: stale op"))?;
     let sb_size = data.vbank().get(m.spacebase).map_or(8, |v| v.get_size());
     let ptr = data.new_op(2, at.clone());
     data.op_set_opcode_code(ptr, m.address_op);
@@ -272,13 +272,13 @@ fn rewrite(data: &mut Funcdata, m: &VaStart) -> unlace_base::error::KunaResult<(
             .vbank()
             .get(out)
             .map(|v| (v.get_addr().clone(), v.get_size()))
-            .ok_or_else(|| KunaError::lowlevel("vastart: stale out"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("vastart: stale out"))?;
         let created = data.new_indirect_creation(call, &addr, size, false);
         let value = data
             .obank()
             .get(created)
             .and_then(|o| o.get_out())
-            .ok_or_else(|| KunaError::lowlevel("vastart: no creation"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("vastart: no creation"))?;
         data.op_set_input(op, value, 0)?;
     }
     if let Some(stack) = data.get_arch().manage().get_stack_space().cloned() {
@@ -340,7 +340,7 @@ impl Action for ActionVaStart {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::vastart::VaStartRewrite>()
             .0
         {
@@ -355,8 +355,8 @@ impl Action for ActionVaStart {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `vastart`) The x86-64 va_start prologue as va_start(ap, last).
+crate::unlace_flag!(
+    /// (unlace `vastart`) The x86-64 va_start prologue as va_start(ap, last).
     VaStartRewrite,
     "vastart",
     "va_start prologue as one call",

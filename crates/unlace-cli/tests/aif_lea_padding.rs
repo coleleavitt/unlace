@@ -64,7 +64,7 @@ fn fixture(cc: &str, body: &str) -> Fixture {
 }
 
 fn inventory(binary: &Path) -> Vec<u64> {
-    let (stdout, stderr, rc) = common::run_kuna(&[
+    let (stdout, stderr, rc) = common::run_unlace(&[
         "functions",
         binary.to_str().unwrap(),
         "--mode",
@@ -99,7 +99,7 @@ fn a_zero_extending_lea_stays_at_the_discovered_entry_and_round_trips() {
         let entries = inventory(&fixture.binary);
         assert!(entries.contains(&0x401200), "LEA entry lost: {entries:x?}");
         assert!(!entries.iter().any(|&at| (0x401201..0x401210).contains(&at)));
-        let (code, stderr, rc) = common::run_kuna(&[
+        let (code, stderr, rc) = common::run_unlace(&[
             "decompile-all",
             fixture.binary.to_str().unwrap(),
             "--mode",

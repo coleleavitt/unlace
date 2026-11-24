@@ -1,4 +1,4 @@
-//! (kuna `uefi`) The protocol and PPI interface instances an EFI module
+//! (unlace `uefi`) The protocol and PPI interface instances an EFI module
 //! installs, as the `uefi` analysis pass found them.
 //!
 //! Parked on the [`Architecture`](crate::architecture::Architecture) so a

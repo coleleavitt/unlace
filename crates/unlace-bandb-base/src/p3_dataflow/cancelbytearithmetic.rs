@@ -14,7 +14,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-/// Marshalling element id (kuna 4000+ range).
+/// Marshalling element id (unlace 4000+ range).
 pub const ELEM_CANCELBYTEARITHMETIC: ElementId = ElementId::new("cancelbytearithmetic", 4166);
 
 /// A proven cancellation, represented by the one operation that must change.

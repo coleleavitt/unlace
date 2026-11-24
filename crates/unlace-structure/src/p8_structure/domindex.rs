@@ -3,7 +3,7 @@
 //! Interval slots are indexed by arena id, so the index is sized by the
 //! largest node id in the graph; P8 snapshots come from a fresh pool.
 
-use crate::regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionGraph};
+use crate::regiongraph::{UnlaceIncrementalDominators, UnlaceNodeId, UnlaceRegionGraph};
 
 const ABSENT: u32 = u32::MAX;
 
@@ -14,7 +14,7 @@ pub struct DominanceIndex {
 
 impl DominanceIndex {
     #[doc(hidden)]
-    pub fn new(doms: &KunaIncrementalDominators, graph: &KunaRegionGraph) -> Self {
+    pub fn new(doms: &UnlaceIncrementalDominators, graph: &UnlaceRegionGraph) -> Self {
         let mut nodes = Vec::new();
         graph.get_nodes(&mut nodes);
         let slots = nodes
@@ -56,11 +56,11 @@ impl DominanceIndex {
     }
 
     #[doc(hidden)]
-    pub fn dominates(&self, dominator: KunaNodeId, node: KunaNodeId) -> bool {
+    pub fn dominates(&self, dominator: UnlaceNodeId, node: UnlaceNodeId) -> bool {
         if dominator == node {
             return true;
         }
-        let slot = |id: KunaNodeId| {
+        let slot = |id: UnlaceNodeId| {
             self.intervals
                 .get(id.0 as usize)
                 .copied()
@@ -76,12 +76,12 @@ impl DominanceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::regiongraph::{KunaNodePool, NodeKind};
+    use crate::regiongraph::{NodeKind, UnlaceNodePool};
 
     #[test]
     fn deep_chain_uses_an_iterative_traversal() {
-        let mut pool = KunaNodePool::new();
-        let mut graph = KunaRegionGraph::new();
+        let mut pool = UnlaceNodePool::new();
+        let mut graph = UnlaceRegionGraph::new();
         let nodes: Vec<_> = (0..10_000)
             .map(|i| pool.make(NodeKind::Block, i as u64, i))
             .collect();
@@ -91,7 +91,7 @@ mod tests {
         for edge in nodes.windows(2) {
             graph.add_edge(&pool, edge[0], edge[1]);
         }
-        let doms = KunaIncrementalDominators::new(&pool, &graph, nodes[0], false).unwrap();
+        let doms = UnlaceIncrementalDominators::new(&pool, &graph, nodes[0], false).unwrap();
         let index = DominanceIndex::new(&doms, &graph);
         for &node in &nodes {
             assert!(index.dominates(nodes[0], node));
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn agrees_with_chain_walk_on_four_node_digraphs() {
-        let mut pool = KunaNodePool::new();
+        let mut pool = UnlaceNodePool::new();
         let nodes: Vec<_> = (0..4)
             .map(|i| pool.make(NodeKind::Block, i as u64, i))
             .collect();
@@ -110,7 +110,7 @@ mod tests {
             .flat_map(|a| (0..4).filter(move |&b| a != b).map(move |b| (a, b)))
             .collect();
         for mask in 0..(1 << edges.len()) {
-            let mut graph = KunaRegionGraph::new();
+            let mut graph = UnlaceRegionGraph::new();
             for &node in &nodes {
                 graph.add_node(&pool, node);
             }
@@ -120,9 +120,9 @@ mod tests {
                 }
             }
             for post in [false, true] {
-                let doms = KunaIncrementalDominators::new(&pool, &graph, nodes[0], post).unwrap();
+                let doms = UnlaceIncrementalDominators::new(&pool, &graph, nodes[0], post).unwrap();
                 let index = DominanceIndex::new(&doms, &graph);
-                let queries: Vec<_> = nodes.iter().copied().chain([KunaNodeId(99)]).collect();
+                let queries: Vec<_> = nodes.iter().copied().chain([UnlaceNodeId(99)]).collect();
                 for &a in &queries {
                     for &b in &queries {
                         assert_eq!(

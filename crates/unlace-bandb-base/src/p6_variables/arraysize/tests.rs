@@ -1,4 +1,4 @@
-//! Unit tests for (kuna) `arraysize`.
+//! Unit tests for (unlace) `arraysize`.
 
 use std::collections::BTreeMap;
 use std::rc::Rc;

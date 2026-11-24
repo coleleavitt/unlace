@@ -24,8 +24,8 @@ use unlace_base::address::calc_mask;
 use unlace_base::address::count_leading_zeros;
 use unlace_base::address::coveringmask;
 use unlace_base::address::mostsigbit_set;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ATTRIB_FORMAT;
 use unlace_base::marshal::ATTRIB_SIZE;
 use unlace_base::marshal::AttributeId;
@@ -116,7 +116,7 @@ fn pair_with_gate(
     enabled: bool,
 ) -> (Funcdata, OpId, OpId) {
     let mut arch = ArchContext::new(build_manager());
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::jumptable::HighsliceGuard(enabled));
     let arch = Rc::new(arch);
     let ram = Rc::clone(arch.manage().get_space_by_name("ram").unwrap());

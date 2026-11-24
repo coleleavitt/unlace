@@ -1,4 +1,4 @@
-//! (kuna) Constructor p-code templates decoded on first use.
+//! (unlace) Constructor p-code templates decoded on first use.
 //!
 //! Most of a `.sla` is the `<construct_tpl>` of every constructor, and a run
 //! builds p-code for a small fraction of them. When the `.sla` is read through a
@@ -15,7 +15,7 @@
 
 use std::cell::OnceCell;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, PackedDecode};
 use unlace_base::space::AddrSpaceManager;
 
@@ -72,7 +72,7 @@ impl LazyTemplates {
     pub fn take(
         &mut self,
         decoder: &mut dyn unlace_num::opcodes::OpcodeDecoder,
-    ) -> KunaResult<(i32, usize)> {
+    ) -> UnlaceResult<(i32, usize)> {
         let start = self.bytes.len();
         if !decoder.skip_element_raw(&mut self.bytes)? {
             let mut tpl = ConstructTpl::new();
@@ -98,19 +98,19 @@ impl LazyTemplates {
     }
 
     /// The delay-slot count of a template, without decoding it.
-    pub fn delay_slot(&self, handle: usize) -> KunaResult<u32> {
+    pub fn delay_slot(&self, handle: usize) -> UnlaceResult<u32> {
         self.slots
             .get(handle)
             .map(|slot| slot.delayslot)
-            .ok_or_else(|| KunaError::sleigh("bad ConstructTpl handle"))
+            .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle"))
     }
 
     /// The template behind `handle`, decoded now if this is its first use.
-    pub fn get(&self, handle: usize, manager: &AddrSpaceManager) -> KunaResult<&ConstructTpl> {
+    pub fn get(&self, handle: usize, manager: &AddrSpaceManager) -> UnlaceResult<&ConstructTpl> {
         let slot = self
             .slots
             .get(handle)
-            .ok_or_else(|| KunaError::sleigh("bad ConstructTpl handle"))?;
+            .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle"))?;
         if let Some(tpl) = slot.tpl.get() {
             return Ok(tpl);
         }
@@ -122,7 +122,7 @@ impl LazyTemplates {
     }
 
     /// Every template, decoded, in handle order (the encoder needs them all).
-    pub fn all(&self, manager: &AddrSpaceManager) -> KunaResult<Vec<ConstructTpl>> {
+    pub fn all(&self, manager: &AddrSpaceManager) -> UnlaceResult<Vec<ConstructTpl>> {
         (0..self.slots.len())
             .map(|handle| self.get(handle, manager).cloned())
             .collect()
@@ -131,7 +131,7 @@ impl LazyTemplates {
 
 /// The `section` and `delay` attributes of one encoded `<construct_tpl>`, read
 /// as `ConstructTpl::decode` reads them (section -1 and delay 0 when absent).
-fn header(bytes: &[u8], manager: &AddrSpaceManager) -> KunaResult<(i32, u32)> {
+fn header(bytes: &[u8], manager: &AddrSpaceManager) -> UnlaceResult<(i32, u32)> {
     let mut decoder = PackedDecode::new(manager);
     decoder.ingest_stream(bytes)?;
     decoder.open_element_id(&sla::ELEM_CONSTRUCT_TPL)?;

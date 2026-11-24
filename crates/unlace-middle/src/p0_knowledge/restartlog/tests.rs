@@ -45,32 +45,32 @@ fn build_fd(name: &str, off: u64) -> Funcdata {
     Funcdata::new(name, name, glb, addr, 0x10000000, 0x40).unwrap()
 }
 
-// --- reason names (kunaRestartReasonName) ------------------------------------
+// --- reason names (unlaceRestartReasonName) ------------------------------------
 
 #[test]
 fn reason_names() {
     assert_eq!(
-        KunaRestartReason::DeadcodeBump.name(),
+        UnlaceRestartReason::DeadcodeBump.name(),
         "deadcode-delay bump (S3 dead-definition gate, edge 3)"
     );
     assert_eq!(
-        KunaRestartReason::DeadcodeSuppressed.name(),
+        UnlaceRestartReason::DeadcodeSuppressed.name(),
         "deadcode-delay bump SUPPRESSED (delay already installed)"
     );
     assert_eq!(
-        KunaRestartReason::MultistageJump.name(),
+        UnlaceRestartReason::MultistageJump.name(),
         "multistage jump-table hint (S2 switch model, edge 2)"
     );
     assert_eq!(
-        KunaRestartReason::ProtoDeindirect.name(),
+        UnlaceRestartReason::ProtoDeindirect.name(),
         "prototype discovered late at indirect call (S4, edge 5)"
     );
     assert_eq!(
-        KunaRestartReason::ProtoForced.name(),
+        UnlaceRestartReason::ProtoForced.name(),
         "prototype forced late at call site (S4, edge 5)"
     );
     assert_eq!(
-        KunaRestartReason::LoweredSwitch.name(),
+        UnlaceRestartReason::LoweredSwitch.name(),
         "lowered comparison-cascade switch (S2 switch model, kuna angr-port)"
     );
 }
@@ -91,8 +91,8 @@ fn empty_dump_message() {
 fn record_then_dump() {
     let fd = build_fd("bar", 0x2000);
     let mut log = RestartLog::new();
-    log.record(&fd, KunaRestartReason::DeadcodeBump, "ram:detail");
-    log.record(&fd, KunaRestartReason::MultistageJump, "");
+    log.record(&fd, UnlaceRestartReason::DeadcodeBump, "ram:detail");
+    log.record(&fd, UnlaceRestartReason::MultistageJump, "");
     assert!(!log.is_empty_for(&fd));
     let out = log.render(&fd);
     assert!(out.starts_with(
@@ -114,7 +114,7 @@ fn distinct_functions_keyed_separately() {
     let fd_a = build_fd("a", 0x1000);
     let fd_b = build_fd("b", 0x2000);
     let mut log = RestartLog::new();
-    log.record(&fd_a, KunaRestartReason::ProtoForced, "site-a");
+    log.record(&fd_a, UnlaceRestartReason::ProtoForced, "site-a");
     // fd_b has nothing recorded.
     assert!(!log.is_empty_for(&fd_a));
     assert!(log.is_empty_for(&fd_b));
@@ -129,7 +129,7 @@ fn per_function_cap_at_32() {
     let mut log = RestartLog::new();
     // Push 40; only the first 32 are retained (C++ early-returns at the cap).
     for _ in 0..40 {
-        log.record(&fd, KunaRestartReason::DeadcodeSuppressed, "");
+        log.record(&fd, UnlaceRestartReason::DeadcodeSuppressed, "");
     }
     let out = log.render(&fd);
     // Lines are numbered 0..=31; index 31 present, index 32 absent.
@@ -145,7 +145,7 @@ fn record_at_uses_printed_address() {
     let mut log = RestartLog::new();
     let ram = Rc::clone(fd.get_arch().manage().get_space_by_name("ram").unwrap());
     let site = Address::new(ram, 0x4abc);
-    log.record_at(&fd, KunaRestartReason::ProtoDeindirect, &site);
+    log.record_at(&fd, UnlaceRestartReason::ProtoDeindirect, &site);
     let out = log.render(&fd);
     // The detail is whatever AddrSpace::print_raw produces for this offset;
     // assert it is present in a [..] bracket (the exact rendering is the

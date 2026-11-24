@@ -8,7 +8,7 @@
 //!   unlace unpack <binary> --raw-lzma START:END [--lzma-props P] [--raw-offsets]
 //! ```
 //!
-//! A packed binary is the one input on which every other kuna surface is
+//! A packed binary is the one input on which every other unlace surface is
 //! honestly useless: `unlace functions` finds nothing because there is nothing
 //! there yet -- the file holds a loader stub and a compressed blob. This
 //! subcommand is the missing first step, and it runs entirely in-process
@@ -517,7 +517,7 @@ fn neolite_json(binary: &str, out_path: &str, u: &neolite::Unpacked, packed_size
 fn run_raw(args: &Args, raw: &RawLzma) -> i32 {
     // The loader's reader, not `std::fs::read`: a Mach-O fat wrapper has to be
     // peeled before a virtual address means anything, and the addresses the
-    // caller is quoting came out of a kuna surface that had already peeled it.
+    // caller is quoting came out of a unlace surface that had already peeled it.
     let image = match unlace_analysis::loader::elf_shdr::read_image(&args.binary) {
         Ok(bytes) => bytes,
         Err(e) => {

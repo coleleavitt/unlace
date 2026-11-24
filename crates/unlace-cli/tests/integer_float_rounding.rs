@@ -36,7 +36,7 @@ fn printed_integer_conversions_match_native_rounding() {
     );
     process::required_output(&mut Command::new(&native));
     let specs = common::repo_root().join("specs");
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         native.to_str().unwrap(),
         "--functions",

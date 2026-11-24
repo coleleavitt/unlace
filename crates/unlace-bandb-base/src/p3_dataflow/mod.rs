@@ -4,7 +4,7 @@
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
 pub mod addcarrychain;
-pub mod alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
+pub mod alloca; // (unlace) a dynamic stack allocation becomes alloca(size)
 pub mod arraystride;
 pub mod bitidioms;
 pub mod booleanmask;
@@ -20,29 +20,29 @@ pub mod constspaceload;
 pub mod copyrun;
 pub mod deadcascade;
 pub mod devectorize;
-pub mod egraph; // (kuna `egraph`) equality saturation over MBA trees
+pub mod egraph; // (unlace `egraph`) equality saturation over MBA trees
 pub mod flagcompare;
 pub mod floatnegation;
 pub mod floatnegpiece;
 pub mod floatquiet;
 pub mod globalstorekeep;
 pub mod haltloopguard;
-pub mod indirectanchor; // (kuna) an op inserted after a guard INDIRECT anchors to the op it speaks for
+pub mod indirectanchor; // (unlace) an op inserted after a guard INDIRECT anchors to the op it speaks for
 pub mod inputrefinement;
 pub mod inputtile;
 pub mod intfloatround;
 pub mod latecse;
 pub mod loopcounterstore;
 pub mod maskjoin;
-pub mod mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
+pub mod mba; // (unlace `mba`) linear mixed boolean-arithmetic simplification
 pub mod memoryguard;
-pub mod mulblob; // (kuna) keep a widened multiply operand a value, not an aggregate
+pub mod mulblob; // (unlace) keep a widened multiply operand a value, not an aggregate
 pub mod multiregargs;
 pub mod octeoneffects;
 pub mod opaquearms;
 pub mod opaqueimplied;
 pub mod ovlesssimplify;
-pub mod pairphi; // (kuna `pairlocal`) a 64-bit local held in a register pair joins at its phis
+pub mod pairphi; // (unlace `pairlocal`) a 64-bit local held in a register pair joins at its phis
 pub mod partialglobalload;
 pub mod persistcalls;
 pub mod phithread;

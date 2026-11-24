@@ -1197,7 +1197,7 @@ fn w9_con_grammar_v7_pointer_array_modifier_order() {
 }
 
 // ===========================================================================
-// (kuna) Standard C scalar type specifiers
+// (unlace) Standard C scalar type specifiers
 // ===========================================================================
 
 /// The [`factory`] core types plus a declared data organization, so the scalar
@@ -1281,7 +1281,7 @@ fn scalar_long_follows_the_targets_declared_width() {
 
 #[test]
 fn plain_char_stays_the_text_type_and_signed_char_does_not() {
-    // `char` is kuna's ASCII core type; `signed char` is an ordinary 1-byte
+    // `char` is unlace's ASCII core type; `signed char` is an ordinary 1-byte
     // integer, which is what `getBaseNoChar` distinguishes.
     let f = factory_sized(8);
     let (plain, _) = parse_type("char c", &f, org()).unwrap();
@@ -1610,7 +1610,7 @@ fn an_unregistered_function_pointer_convention_falls_back_to_the_default() {
 }
 
 // ===========================================================================
-// (kuna) A declarator named after a type
+// (unlace) A declarator named after a type
 // ===========================================================================
 
 /// [`factory_sized`] plus `code`, the core type every compiler spec registers

@@ -9,7 +9,7 @@
 //! by name (`exit(`/`dcgettext(`/`__printf_chk(`/`fputs_unlocked(` instead of
 //! `sub_<addr>`) and (b) — via the existing `NoReturnKnownPass` — flags `exit`
 //! no-return, collapsing the spurious `do{}while(true)`/`goto` fall-through loop
-//! kuna otherwise manufactures (the whole structural failure cascades from the
+//! unlace otherwise manufactures (the whole structural failure cascades from the
 //! missing no-return).  This drives the full `load function usage` → `decompile`
 //! → `print C` path against the **real, linked i386-PIE `nl`** fixture and
 //! asserts both effects.

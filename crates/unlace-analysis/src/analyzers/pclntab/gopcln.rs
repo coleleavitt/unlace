@@ -1,4 +1,4 @@
-//! (kuna `gopcln`) Source positions and the inline tree from a Go pclntab.
+//! (unlace `gopcln`) Source positions and the inline tree from a Go pclntab.
 //!
 //! The pclntab the [`super::GoPclntabPass`] reads names from also carries, per
 //! function, the tables the runtime builds stack traces with: `pcfile` and
@@ -113,7 +113,7 @@ impl AnalysisPass for GoPclnPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let gate = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::GoPcln>();
         if !gate.on {
             return AnalysisOutput::default();
@@ -134,7 +134,7 @@ impl AnalysisPass for GoPclnLinesPass {
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let gate = ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::GoPcln>();
         if !gate.lines {
             return AnalysisOutput::default();

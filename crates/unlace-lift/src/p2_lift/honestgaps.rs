@@ -1,8 +1,8 @@
-//! (kuna `honestgaps`) Say in the output where the decompile lost something it
+//! (unlace `honestgaps`) Say in the output where the decompile lost something it
 //! did not report before.
 //!
 //! Most losses already print: a decode failure names its halt
-//! (`kuna_decodehalt`), a truncated flow (`funcboundflow`, the instruction
+//! (`unlace_decodehalt`), a truncated flow (`funcboundflow`, the instruction
 //! budget, out-of-bounds flow) and an unrecovered jump table leave a warning at
 //! the site, and `--json` lists every warning with its kind. Two losses stayed
 //! silent, and this option names them, each as a warning comment with a
@@ -34,8 +34,8 @@ use std::collections::BTreeMap;
 use crate::architecture::Architecture;
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna `honestgaps`) Report the losses the decompile otherwise drops
+crate::unlace_flag!(
+    /// (unlace `honestgaps`) Report the losses the decompile otherwise drops
     /// silently, as warning comments at the site.
     HonestGaps,
     "honestgaps",
@@ -92,7 +92,7 @@ pub enum WithheldCause {
 }
 
 /// The prototypes the load withheld, by entry address and by name; an
-/// architecture table (`Architecture::kuna_tables`).
+/// architecture table (`Architecture::unlace_tables`).
 #[derive(Default)]
 pub struct WithheldPrototypes {
     pub at: BTreeMap<u64, (String, WithheldCause)>,
@@ -141,14 +141,14 @@ pub fn withheld_prototype_text(name: &str, cause: WithheldCause) -> String {
     }
 }
 
-/// (kuna `honestgaps`) Name the withheld prototypes `fd` meets: its own, in
+/// (unlace `honestgaps`) Name the withheld prototypes `fd` meets: its own, in
 /// the header, and each call's callee, at the call. Inert with the option off
 /// or nothing withheld.
 pub fn seed(arch: &Architecture, fd: &mut Funcdata) {
-    if !arch.kuna_options.get::<HonestGaps>().0 {
+    if !arch.unlace_options.get::<HonestGaps>().0 {
         return;
     }
-    let table = arch.kuna_tables.get::<WithheldPrototypes>();
+    let table = arch.unlace_tables.get::<WithheldPrototypes>();
     if table.is_empty() {
         return;
     }

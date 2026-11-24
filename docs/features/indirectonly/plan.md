@@ -46,7 +46,7 @@ than a porting error.
 
 ## 5. Tests
 
-* `tests/stages/kuna-indirectonly.toml` — two functions in one bytechunk:
+* `tests/stages/indirectonly.toml` — two functions in one bytechunk:
   `take` (the escaped slot's entry value reaches only call INDIRECTs) and `keep`
   (identical, except the same slot is read straight into a global first). Pass 1
   `off`, pass 2 `on`. `take` changes; `keep` must not.
@@ -54,7 +54,7 @@ than a porting error.
   direct-read counterexample, MULTIEQUAL transparency, the STORE-INDIRECT
   continuation, a plain INDIRECT's output *not* being followed, no-reads-at-all,
   the directwrite skip, and a MULTIEQUAL cycle terminating.
-* `tests/stages/kuna-indirectonly-escape.toml` — the unsound direction as a
+* `tests/stages/indirectonly-escape.toml` — the unsound direction as a
   bytechunk. Pass 1 runs the **default** and pass 2 asks for the option, so a
   future default flip turns the test red.
 * `docs/features/indirectonly/corpus-escape-classification.txt` — the 34-slice

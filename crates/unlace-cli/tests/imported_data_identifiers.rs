@@ -51,7 +51,7 @@ end function sample
             "{}",
             String::from_utf8_lossy(&built.stderr)
         );
-        let (body, err, status) = common::run_kuna(&[
+        let (body, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             "sample",
@@ -81,7 +81,7 @@ end function sample
         let normalized = names.first().unwrap();
         if compiler == "gcc" {
             assert_eq!(*normalized, "counter_3_1_1");
-            let (default_body, error, status) = common::run_kuna(&[
+            let (default_body, error, status) = common::run_unlace(&[
                 "decompile",
                 binary.to_str().unwrap(),
                 "sample",
@@ -107,7 +107,7 @@ end function sample
             for lookup_binary in [&binary, &debug_binary] {
                 for mode in ["safe", "ident"] {
                     for spelling in ["counter.3.1", "counter_3_1"] {
-                        let (_, error, status) = common::run_kuna(&[
+                        let (_, error, status) = common::run_unlace(&[
                             "xrefs",
                             lookup_binary.to_str().unwrap(),
                             "--to",
@@ -123,7 +123,7 @@ end function sample
                     for (spelling, expected) in
                         [("counter.3.1", "05000000"), ("counter_3_1", "0b000000")]
                     {
-                        let (text, error, status) = common::run_kuna(&[
+                        let (text, error, status) = common::run_unlace(&[
                             "read",
                             lookup_binary.to_str().unwrap(),
                             spelling,
@@ -255,7 +255,7 @@ fn shared_data_spelling_resolves_to_its_lowest_address_in_both_modes() {
         .min()
         .unwrap();
     for mode in ["safe", "ident"] {
-        let (text, error, status) = common::run_kuna(&[
+        let (text, error, status) = common::run_unlace(&[
             "read",
             binary.to_str().unwrap(),
             "ctr.0",
@@ -269,7 +269,7 @@ fn shared_data_spelling_resolves_to_its_lowest_address_in_both_modes() {
         assert_eq!(status, 0, "{mode}: {error}");
         let document: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(document["start"].as_u64(), Some(lowest), "{mode}: {text}");
-        let (text, error, status) = common::run_kuna(&[
+        let (text, error, status) = common::run_unlace(&[
             "xrefs",
             binary.to_str().unwrap(),
             "--to",

@@ -79,7 +79,7 @@ impl CompilerHost for TestHost {
     fn report_warning(&mut self, _loc: Option<&Location>, _msg: &str) {}
 }
 
-// ---- dump helpers (byte-identical format to /tmp/kunacpp/macrodump.cc) ------
+// ---- dump helpers (byte-identical format to /tmp/unlacecpp/macrodump.cc) ------
 
 fn consttype_name(t: ConstType) -> &'static str {
     match t {

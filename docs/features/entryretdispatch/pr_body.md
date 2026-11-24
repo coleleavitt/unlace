@@ -40,7 +40,7 @@ behavior.
 - `make test`: **675/675 PARITY OK**; `docs/baseline.json` unchanged.
 - `make test-stages`: **803/803 PARITY OK**.
 - `make test-cli`: **147/147 passed**.
-- `cargo test -p kuna-console`: green, including 7 focused chain tests and the
+- `cargo test -p console`: green, including 7 focused chain tests and the
   architecture-generic provenance controls.
 - `make check-spec` and strict spec validation: green.
 - `kuna catalog --check`: catalog OK; counters have no drift.

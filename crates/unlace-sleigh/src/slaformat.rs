@@ -7,7 +7,7 @@
 use std::io::Write;
 use std::rc::Rc;
 use unlace_base::compression::{CompressBuffer, Decompress};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     AttributeId, Decoder, ElementId, IdRegistry, PackedDecode, PackedEncode,
 };
@@ -52,18 +52,18 @@ pub fn is_sla_format(s: &[u8]) -> (bool, &[u8]) {
     (true, rest)
 }
 
-/// (kuna) Verify the header of a compressed `.sla` image and inflate its whole stream, checking
+/// (unlace) Verify the header of a compressed `.sla` image and inflate its whole stream, checking
 /// the zlib checksum.
-pub fn inflate_sla(s: &[u8]) -> KunaResult<Vec<u8>> {
+pub fn inflate_sla(s: &[u8]) -> UnlaceResult<Vec<u8>> {
     let (ok, compressed) = is_sla_format(s);
     if !ok {
-        return Err(KunaError::lowlevel("Missing SLA format header"));
+        return Err(UnlaceError::lowlevel("Missing SLA format header"));
     }
     let mut decompressor = Decompress::new();
     let mut out: Vec<u8> = Vec::with_capacity(compressed.len().saturating_mul(8));
     // The C++ `Decompress` keeps a `z_stream next_in` pointer INTO the
     // caller's buffer, so unconsumed input survives across `inflate`
-    // calls.  The kuna `Decompress::input` instead REPLACES its internal
+    // calls.  The unlace `Decompress::input` instead REPLACES its internal
     // buffer (dropping any unconsumed tail), so feeding the compressed
     // stream in IN_BUFFER_SIZE chunks like the C++ would discard the
     // bytes inflate had not yet consumed when an output buffer filled.
@@ -81,7 +81,7 @@ pub fn inflate_sla(s: &[u8]) -> KunaResult<Vec<u8>> {
         out.extend_from_slice(&buf[..produced]);
         // No progress and not finished => truncated/corrupt stream.
         if produced == 0 && !decompressor.is_finished() {
-            return Err(KunaError::lowlevel("Truncated SLA compressed stream"));
+            return Err(UnlaceError::lowlevel("Truncated SLA compressed stream"));
         }
     }
     Ok(out)
@@ -132,17 +132,17 @@ impl<W: Write> FormatEncode<W> {
 
     /// Flush any buffered bytes in the encoder to the backing stream
     /// (C++ `FormatEncode::flush` -> `compStream.flush()`).
-    pub fn flush(&mut self) -> KunaResult<()> {
+    pub fn flush(&mut self) -> UnlaceResult<()> {
         if !self.header_written {
             write_sla_header(&mut self.out)
-                .map_err(|e| KunaError::lowlevel(format!("Could not write sla header: {e}")))?;
+                .map_err(|e| UnlaceError::lowlevel(format!("Could not write sla header: {e}")))?;
             self.header_written = true;
         }
         let mut comp = CompressBuffer::new(&mut self.out, self.level)?;
         comp.write_all(&self.buffer)
-            .map_err(|e| KunaError::lowlevel(format!("Error compressing sla stream: {e}")))?;
+            .map_err(|e| UnlaceError::lowlevel(format!("Error compressing sla stream: {e}")))?;
         comp.flush()
-            .map_err(|e| KunaError::lowlevel(format!("Error flushing sla stream: {e}")))?;
+            .map_err(|e| UnlaceError::lowlevel(format!("Error flushing sla stream: {e}")))?;
         self.buffer.clear();
         Ok(())
     }
@@ -172,7 +172,7 @@ impl<'a> FormatDecode<'a> {
     /// and transfers it with `ingest_owned`, which copies only the trailing
     /// partial chunk so `endIngest` has one to pad — every packed byte has its
     /// high bit set, so the NUL-terminator scan never trips.
-    pub fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()> {
+    pub fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
         let out = inflate_sla(s)?;
         self.inner.ingest_owned(out)
     }
@@ -192,53 +192,53 @@ impl Decoder for FormatDecode<'_> {
     fn get_addr_space_manager(&self) -> &AddrSpaceManager {
         self.inner.get_addr_space_manager()
     }
-    fn ingest_stream(&mut self, s: &[u8]) -> KunaResult<()> {
+    fn ingest_stream(&mut self, s: &[u8]) -> UnlaceResult<()> {
         FormatDecode::ingest_stream(self, s)
     }
-    fn peek_element(&mut self) -> KunaResult<u32> {
+    fn peek_element(&mut self) -> UnlaceResult<u32> {
         self.inner.peek_element()
     }
-    fn open_element(&mut self) -> KunaResult<u32> {
+    fn open_element(&mut self) -> UnlaceResult<u32> {
         self.inner.open_element()
     }
-    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> KunaResult<bool> {
+    fn skip_element_raw(&mut self, out: &mut Vec<u8>) -> UnlaceResult<bool> {
         self.inner.skip_element_raw(out)
     }
-    fn open_element_id(&mut self, elem_id: &ElementId) -> KunaResult<u32> {
+    fn open_element_id(&mut self, elem_id: &ElementId) -> UnlaceResult<u32> {
         self.inner.open_element_id(elem_id)
     }
-    fn close_element(&mut self, id: u32) -> KunaResult<()> {
+    fn close_element(&mut self, id: u32) -> UnlaceResult<()> {
         self.inner.close_element(id)
     }
-    fn close_element_skipping(&mut self, id: u32) -> KunaResult<()> {
+    fn close_element_skipping(&mut self, id: u32) -> UnlaceResult<()> {
         self.inner.close_element_skipping(id)
     }
-    fn get_next_attribute_id(&mut self) -> KunaResult<u32> {
+    fn get_next_attribute_id(&mut self) -> UnlaceResult<u32> {
         self.inner.get_next_attribute_id()
     }
-    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u32> {
+    fn get_indexed_attribute_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u32> {
         self.inner.get_indexed_attribute_id(attrib_id)
     }
     fn rewind_attributes(&mut self) {
         self.inner.rewind_attributes()
     }
-    fn read_bool(&mut self) -> KunaResult<bool> {
+    fn read_bool(&mut self) -> UnlaceResult<bool> {
         self.inner.read_bool()
     }
-    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> KunaResult<bool> {
+    fn read_bool_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<bool> {
         self.inner.read_bool_id(attrib_id)
     }
-    fn read_signed_integer(&mut self) -> KunaResult<i64> {
+    fn read_signed_integer(&mut self) -> UnlaceResult<i64> {
         self.inner.read_signed_integer()
     }
-    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<i64> {
+    fn read_signed_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<i64> {
         self.inner.read_signed_integer_id(attrib_id)
     }
     fn read_signed_integer_expect_string(
         &mut self,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         self.inner
             .read_signed_integer_expect_string(expect, expectval)
     }
@@ -247,29 +247,29 @@ impl Decoder for FormatDecode<'_> {
         attrib_id: &AttributeId,
         expect: &[u8],
         expectval: i64,
-    ) -> KunaResult<i64> {
+    ) -> UnlaceResult<i64> {
         self.inner
             .read_signed_integer_expect_string_id(attrib_id, expect, expectval)
     }
-    fn read_unsigned_integer(&mut self) -> KunaResult<u64> {
+    fn read_unsigned_integer(&mut self) -> UnlaceResult<u64> {
         self.inner.read_unsigned_integer()
     }
-    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> KunaResult<u64> {
+    fn read_unsigned_integer_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<u64> {
         self.inner.read_unsigned_integer_id(attrib_id)
     }
-    fn read_string(&mut self) -> KunaResult<Vec<u8>> {
+    fn read_string(&mut self) -> UnlaceResult<Vec<u8>> {
         self.inner.read_string()
     }
-    fn read_string_id(&mut self, attrib_id: &AttributeId) -> KunaResult<Vec<u8>> {
+    fn read_string_id(&mut self, attrib_id: &AttributeId) -> UnlaceResult<Vec<u8>> {
         self.inner.read_string_id(attrib_id)
     }
-    fn read_space(&mut self) -> KunaResult<Rc<unlace_base::space::AddrSpace>> {
+    fn read_space(&mut self) -> UnlaceResult<Rc<unlace_base::space::AddrSpace>> {
         self.inner.read_space()
     }
     fn read_space_id(
         &mut self,
         attrib_id: &AttributeId,
-    ) -> KunaResult<Rc<unlace_base::space::AddrSpace>> {
+    ) -> UnlaceResult<Rc<unlace_base::space::AddrSpace>> {
         self.inner.read_space_id(attrib_id)
     }
 }
@@ -354,13 +354,13 @@ mod tests {
 // OpTpl decode through the OpcodeDecoder surface; forward to the inner
 // PackedDecode (C++ inheritance).
 impl unlace_num::opcodes::OpcodeDecoder for FormatDecode<'_> {
-    fn read_opcode(&mut self) -> KunaResult<unlace_num::opcodes::OpCode> {
+    fn read_opcode(&mut self) -> UnlaceResult<unlace_num::opcodes::OpCode> {
         self.inner.read_opcode()
     }
     fn read_opcode_id(
         &mut self,
         attrib_id: &AttributeId,
-    ) -> KunaResult<unlace_num::opcodes::OpCode> {
+    ) -> UnlaceResult<unlace_num::opcodes::OpCode> {
         self.inner.read_opcode_id(attrib_id)
     }
 }

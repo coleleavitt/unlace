@@ -1,4 +1,4 @@
-//! (kuna) A call through a PLT stub the image binds to its own definition is a
+//! (unlace) A call through a PLT stub the image binds to its own definition is a
 //! call to that definition.
 //!
 //! A shared library calls its own default-visibility functions through

@@ -3,7 +3,7 @@
 //! entry address and jumps there; two boot-code revisions bias that address.
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{Bytes, RetroImage, RetroSection, invalid};
 
@@ -53,7 +53,7 @@ fn entry_bias(boot_code: &[u8]) -> u64 {
     }
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let order = order(bytes).ok_or_else(|| bad("missing PI configuration word"))?;
     let stored = (bytes.len() as u64).min(BOOT_OFFSET + BOOT_SIZE) & !3;

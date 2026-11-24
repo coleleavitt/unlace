@@ -50,5 +50,5 @@ evaluation is `default-on-evaluation.md`.
 A `tests/stages/` XML cannot show the change: the park is written only by the
 whole-program drivers (`decompile_callee_first`), and the console path the stage
 harness runs passes `park_recovered_proto: false`. `protoorder` itself shipped with
-CLI probes for the same reason, and `tests/stages/kuna-argclobber.toml` documents
+CLI probes for the same reason, and `tests/stages/argclobber.toml` documents
 the limit.

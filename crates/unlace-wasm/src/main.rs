@@ -139,7 +139,7 @@ mod tests {
         assert!(parse_tail(&argv(&["0x10", "16", "third"])).is_err());
     }
 
-    /// (kuna outlang) The language rides beside the mode, in any order, and an
+    /// (unlace outlang) The language rides beside the mode, in any order, and an
     /// omitted one stays `None` so the engine's auto policy applies.
     #[test]
     fn language_parses_beside_the_mode_in_either_order() {

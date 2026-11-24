@@ -1,4 +1,4 @@
-//! (kuna `structsynth`) The ledger as data: what a whole-program run split
+//! (unlace `structsynth`) The ledger as data: what a whole-program run split
 //! across worker processes (`--jobs N`) needs to name every synthesized
 //! structure exactly as one process would.
 //!
@@ -1177,7 +1177,7 @@ pub fn decode_table(bytes: &[u8]) -> Option<Vec<(String, SynthRequest)>> {
     (r.pos == bytes.len()).then_some(out)
 }
 
-crate::kuna_arch_state!(RefCell<ShardHook>);
+crate::unlace_arch_state!(RefCell<ShardHook>);
 
 #[cfg(test)]
 mod tests;

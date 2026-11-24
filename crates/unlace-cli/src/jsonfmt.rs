@@ -50,7 +50,7 @@ pub fn write_indent2_streamed(
 }
 
 /// As [`dumps_indent2`] but with `sort_keys=True` (object keys emitted in
-/// ascending byte order) — matches `kuna/run_tests.py`'s
+/// ascending byte order) — matches `unlace/run_tests.py`'s
 /// `json.dumps(..., indent=2, sort_keys=True)`.
 pub fn dumps_indent2_sorted(v: &Json) -> String {
     writer::render(v, Format::Sorted)
@@ -66,7 +66,7 @@ pub fn dumps_compact(v: &Json) -> String {
 
 /// Extract the JSON array/object span out of a `decomp_dbg` console transcript.
 ///
-/// Port of `kuna/catalog.py::_extract_json`: drop the fixed `[decomp]>` prompt
+/// Port of `unlace/catalog.py::_extract_json`: drop the fixed `[decomp]>` prompt
 /// (whose `[`/`]` are not JSON), scan to the first `[`/`{`, then balance
 /// brackets ignoring those inside string literals, and return the spanned text.
 pub fn extract_json_span(transcript: &str) -> Option<&str> {

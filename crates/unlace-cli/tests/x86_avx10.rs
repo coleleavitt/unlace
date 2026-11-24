@@ -4,7 +4,7 @@
 //! the EVEX VNNI-INT8/INT16 dot products, VMOVRS, SM4 and the AMX-AVX512 row
 //! moves. Before, each was a bad instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -31,7 +31,7 @@ fn rows(stdout: &str) -> Vec<String> {
 #[test]
 fn avx10_probe_matches_llvm() {
     let elf = fixture("avx10.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe"]);
     assert_eq!(code, 0, "{stderr}");
     let want = std::fs::read_to_string(fixture("probe.txt")).unwrap();
     let want: Vec<&str> = want.lines().collect();
@@ -44,7 +44,7 @@ fn avx10_probe_matches_llvm() {
 
 fn decompile(func: &str) -> String {
     let elf = fixture("avx10.elf");
-    let (stdout, stderr, code) = run_kuna(&["decompile", &elf, func]);
+    let (stdout, stderr, code) = run_unlace(&["decompile", &elf, func]);
     assert_eq!(code, 0, "{func}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{func}:\n{stdout}");
@@ -86,7 +86,7 @@ const BASE_FIXES: [&str; 11] = [
 #[test]
 fn avx512_base_fixes_match_llvm() {
     let elf = fixture("base_fixes.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "base_fixes"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "base_fixes"]);
     assert_eq!(code, 0, "{stderr}");
     assert_eq!(rows(&stdout), BASE_FIXES, "{stdout}");
 }

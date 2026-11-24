@@ -22,9 +22,9 @@
 //!
 //! The copy (`fc.proto_mut().copy(callee_proto)` + `setModel(evalfp)`) is the
 //! RELOCATED home of the C++ `ActionDefaultParams::apply` copy arm
-//! (coreaction.cc:2385): kuna performs it where `queryCall` already associates the
+//! (coreaction.cc:2385): unlace performs it where `queryCall` already associates the
 //! callee (flow.cc:678-688) rather than in the reserved `coreaction_protos.rs`.
-//! The postpone is a documented no-op on the kuna path (the declared callee
+//! The postpone is a documented no-op on the unlace path (the declared callee
 //! signature is locked by `parse line extern` before flow runs — see the STUB
 //! comment in flow.rs).
 //!

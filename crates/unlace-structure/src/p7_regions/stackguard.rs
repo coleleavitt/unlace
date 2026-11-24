@@ -1,6 +1,6 @@
 //! Port of `decompiler/cpp/kuna_stackguard.{cc,hh}` — strip the glibc
 //! `-fstack-protector` canary epilogue (port of angr's StackCanarySimplifier),
-//! kuna option-gated, default on since DIV-14 (per-test opt-outs keep the corpus byte-identical).
+//! unlace option-gated, default on since DIV-14 (per-test opt-outs keep the corpus byte-identical).
 //!
 //! ## What it strips
 //!
@@ -22,7 +22,7 @@
 //!
 //! The ENTRY-side canary init (`slot = *(fs:0x28)`) goes with the check
 //! (GH-183): angr pops exactly that statement
-//! (`first_block_copy.statements.pop(stmt_idx)`).  kuna realizes the pop as a
+//! (`first_block_copy.statements.pop(stmt_idx)`).  unlace realizes the pop as a
 //! liveness release ([`collect_canary_slots`]/[`release_canary_slots`]) — the
 //! init writes an addrtied stack varnode whose directwrite-preserved
 //! `addrforce` is what kept `ActionDeadCode` from collecting it; clearing it
@@ -171,12 +171,12 @@ fn ptr_is_fs_canary(ptr: VarnodeId, data: &Funcdata) -> bool {
 /// and MSVC's `__security_cookie`.
 const GUARD_GLOBALS: &[&str] = &["stack_chk_guard", "security_cookie"];
 
-/// (kuna `canaryglobal`) Is `vn` the unwritten value of a canary global (the
+/// (unlace `canaryglobal`) Is `vn` the unwritten value of a canary global (the
 /// AArch64, ARM, PowerPC and i386-PIC shape, where no TLS slot is involved)?
 fn is_named_guard(vn: VarnodeId, data: &Funcdata) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::stackguard::CanaryGlobal>()
         .0
     {
@@ -458,12 +458,12 @@ pub fn collect_value_slots(inits: &[OpId], data: &Funcdata, slots: &mut Vec<(Add
 }
 
 /// Release the address-forced liveness on every version of the resolved
-/// canary slot(s) — the kuna realization of angr `StackCanarySimplifier`'s
+/// canary slot(s) — the unlace realization of angr `StackCanarySimplifier`'s
 /// `first_block_copy.statements.pop(stmt_idx)`, which pops the entry-side
 /// `canary_slot = *(fs:0x28)` init store (GH-183).
 ///
 /// Shared with the MSVC `/GS` sibling
-/// [`kuna_msvcstackguard`](crate::msvcstackguard), which resolves its own
+/// [`unlace_msvcstackguard`](crate::msvcstackguard), which resolves its own
 /// cookie slot and releases it here: the step is about the slot's liveness, not
 /// about which protector wrote it.
 ///
@@ -555,7 +555,7 @@ fn block_has_call(bb: BlockId, data: &Funcdata) -> bool {
     false
 }
 
-/// (kuna) Strip a glibc `-fstack-protector` canary epilogue
+/// (unlace) Strip a glibc `-fstack-protector` canary epilogue
 /// (C++ `ActionStripStackGuard`, `kuna_stackguard.hh:59`).
 ///
 /// When `option stackguard on`, finds a `__stack_chk_fail` call guarded by a
@@ -606,7 +606,7 @@ impl Action for ActionStripStackGuard {
         if !self.enabled
             && !data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::stackguard::StripStackGuard>()
                 .0
         {
@@ -733,7 +733,7 @@ impl Action for ActionStripStackGuard {
     }
 }
 
-/// (kuna) Toggle glibc stack-protector epilogue stripping
+/// (unlace) Toggle glibc stack-protector epilogue stripping
 /// (C++ `OptionStackGuard`, `kuna_stackguard.hh:74`).
 ///
 /// `off` retains the upstream rendering (the Action is inert). `on`
@@ -769,8 +769,8 @@ impl StackGuardOption {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Strip the glibc -fstack-protector canary epilogue
+crate::unlace_flag!(
+    /// (unlace) Strip the glibc -fstack-protector canary epilogue
     /// (C++ `strip_stack_guard`).
     StripStackGuard,
     "stackguard",
@@ -779,8 +779,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `canaryglobal`) The stack-guard strip also recognises a canary read
+crate::unlace_flag!(
+    /// (unlace `canaryglobal`) The stack-guard strip also recognises a canary read
     /// from a global named `__stack_chk_guard` / `__security_cookie`.
     CanaryGlobal,
     "canaryglobal",

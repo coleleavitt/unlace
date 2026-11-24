@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::spacetype;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -41,7 +41,7 @@ fn repo_root() -> PathBuf {
 }
 
 /// goldenOpName: the canonical enum names (kuna_goldengen.cc's ZPULL/SPULL
-/// fix is already the kuna `get_opname` behavior).
+/// fix is already the unlace `get_opname` behavior).
 fn golden_op_name(opc: OpCode) -> &'static str {
     get_opname(opc)
 }
@@ -91,11 +91,11 @@ impl LiftEmit<'_> {
 }
 
 /// Map a lift error to its fixture class (kuna_goldengen.cc's catch ladder).
-fn lifterror_class(e: &KunaError) -> &'static str {
+fn lifterror_class(e: &UnlaceError) -> &'static str {
     match e {
-        KunaError::DataUnavail { .. } => "dataunavail",
-        KunaError::Unimpl { .. } => "unimpl",
-        KunaError::BadData { .. } => "baddata",
+        UnlaceError::DataUnavail { .. } => "dataunavail",
+        UnlaceError::Unimpl { .. } => "unimpl",
+        UnlaceError::BadData { .. } => "baddata",
         // SleighError / LowlevelError and everything else in the Lowlevel
         // hierarchy.
         _ => "lowlevel",
@@ -196,8 +196,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

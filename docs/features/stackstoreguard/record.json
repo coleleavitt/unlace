@@ -4,8 +4,8 @@
   "change_kind": "correctness-fix",
   "source_decompiler": "ghidra",
   "inspiration": "Heritage store-alias INDIRECT facts",
-  "test_name": "kuna-stackstoreguard",
-  "opportunity": "kuna-stackstoreguard::inspect_bytes",
+  "test_name": "stackstoreguard",
+  "opportunity": "stackstoreguard::inspect_bytes",
   "binary": "tmp/stack-store/scan.bin",
   "selector": "0x1000",
   "func_addr": "0x1000",
@@ -65,10 +65,10 @@
     "stages": {
       "compared": 287,
       "changed": [
-        "kuna-catalog.xml"
+        "catalog.xml"
       ],
       "new": [
-        "kuna-stackstoreguard.xml"
+        "stackstoreguard.xml"
       ]
     }
   },

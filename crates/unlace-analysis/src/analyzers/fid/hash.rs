@@ -5,7 +5,7 @@
 //! with no crash). The constants and the per-instruction loop order are therefore
 //! reproduced verbatim — see the cited upstream sources.
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Framework/Generic/src/main/java/generic/hash/FNV1a64MessageDigest.java`
 //!   — the FNV-1a64 digest ([`Fnv1a64`]).

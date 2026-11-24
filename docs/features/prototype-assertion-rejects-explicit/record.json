@@ -18,7 +18,7 @@
     },
     {
       "what": "the declaration is the SELECTION's, not an amnesty for the resolver",
-      "detail": "The guard the fix must not break: `prototype 0x999999 ...` on a genuinely bogus address stays `rejected` (kuna-cli/tests/decompile_cli.rs, kuna-console/tests/verify_assertplane.rs). Nothing in `resolve_proto_target` was touched -- it still reads the symbol table and still errors. Only the CLI's by-address selection now declares its own entry, so an operand naming any OTHER unregistered address is rejected exactly as before; `an_unselected_address_that_starts_no_function_is_still_rejected` pins that on a by-address run."
+      "detail": "The guard the fix must not break: `prototype 0x999999 ...` on a genuinely bogus address stays `rejected` (kuna-cli/tests/decompile_cli.rs, console/tests/verify_assertplane.rs). Nothing in `resolve_proto_target` was touched -- it still reads the symbol table and still errors. Only the CLI's by-address selection now declares its own entry, so an operand naming any OTHER unregistered address is rejected exactly as before; `an_unselected_address_that_starts_no_function_is_still_rejected` pins that on a by-address run."
     },
     {
       "what": "an existing `--define-function` for the same start wins",

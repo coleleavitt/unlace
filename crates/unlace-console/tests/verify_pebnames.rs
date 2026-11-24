@@ -1,6 +1,6 @@
 //! End-to-end gate for `pebnames` through a real object load.
 //!
-//! The stage tests (`tests/stages/kuna-pebnames*.xml`) cover the rendering under
+//! The stage tests (`tests/stages/unlace-pebnames*.xml`) cover the rendering under
 //! `option pebnames on`. What an XML bytechunk cannot reach is the shipped default,
 //! `auto`, whose gate is a fact the object loader records from the PE optional
 //! header. This file builds minimal import-less PE images in-test and asserts:

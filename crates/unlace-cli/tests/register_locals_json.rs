@@ -1,4 +1,4 @@
-//! (kuna) A local the C declares outside the stack frame is a
+//! (unlace) A local the C declares outside the stack frame is a
 //! `kind: "register"` row of `decompile-all --json`'s `variables`, under its
 //! printed name and type and with the instructions that use it; the emitted C
 //! does not move.

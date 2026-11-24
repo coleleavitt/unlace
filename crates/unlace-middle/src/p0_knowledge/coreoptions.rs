@@ -1,9 +1,9 @@
-//! Kuna options that the core reads itself (`Architecture` resolves them against image facts
+//! Unlace options that the core reads itself (`Architecture` resolves them against image facts
 //! when it builds a function's `ArchContext`, or acts on them while loading), so their types
 //! live in the knowledge plane instead of the pass that consumes them.
 
-crate::kuna_flag!(
-    /// (kuna `guardedloop`) A guarded do-while prints as a while loop.  See
+crate::unlace_flag!(
+    /// (unlace `guardedloop`) A guarded do-while prints as a while loop.  See
     /// [`crate::p8_structure::guardedloop`].
     GuardedLoop,
     "guardedloop",
@@ -12,8 +12,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `option ptrauthtrap`: cut the branch into each arm64e
+crate::unlace_flag!(
+    /// (unlace) `option ptrauthtrap`: cut the branch into each arm64e
     /// pointer-auth failure trap whose guard is the return-address bit test.
     /// Default on.
     PtrauthTrap,
@@ -23,10 +23,10 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `mzdgroup`) `option mzdgroup`: state the data segment an MS-DOS
+crate::unlace_flag!(
+    /// (unlace `mzdgroup`) `option mzdgroup`: state the data segment an MS-DOS
     /// executable's startup code loads into DS as DS's value at every function
-    /// entry.  Default on.  See [`kuna_mzdgroup`](crate::mzdgroup).
+    /// entry.  Default on.  See [`unlace_mzdgroup`](crate::mzdgroup).
     MzDgroupOn,
     "mzdgroup",
     "MS-DOS data segment in DS",
@@ -34,8 +34,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `chkstkdarwin`) Remove the calls to the Darwin stack probe
+crate::unlace_flag!(
+    /// (unlace `chkstkdarwin`) Remove the calls to the Darwin stack probe
     /// `___chkstk_darwin` from a Darwin AArch64 image before SSA
     /// (`p2_lift/chkstkdarwin.rs`), so the argument registers it preserves
     /// keep their values across it. Default on.
@@ -46,8 +46,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `spsolve`) In an x86-32 ELF under a compiler spec whose default model
+crate::unlace_flag!(
+    /// (unlace `spsolve`) In an x86-32 ELF under a compiler spec whose default model
     /// states its extrapop, solve each function's stack-pointer deltas for the
     /// calls that pop arguments or do not return
     /// (`p4_calls/spsolve.rs`). Default on.
@@ -58,11 +58,11 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `noretfirst`) Guard clauses that end in a no-return call print first: P8's
+crate::unlace_flag!(
+    /// (unlace `noretfirst`) Guard clauses that end in a no-return call print first: P8's
     /// `ruleBlockIfNoExit` breaks a tie between two terminal arms toward the arm that ends in a
     /// no-return call, and the C syntax tree prints the arm of an `if`/`else` that never falls
-    /// through first (`kuna_ctree`).
+    /// through first (`unlace_ctree`).
     Noretfirst,
     "noretfirst",
     "non-returning arm first",
@@ -70,8 +70,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `postinc`) A pointer step after its dereference prints as `*p++`.
+crate::unlace_flag!(
+    /// (unlace `postinc`) A pointer step after its dereference prints as `*p++`.
     PostIncrement,
     "postinc",
     "Pointer steps folded into *p++",
@@ -79,8 +79,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Hand [`Self::dex`] to the engine (option `dexmodel`).
+crate::unlace_flag!(
+    /// (unlace) Hand [`Self::dex`] to the engine (option `dexmodel`).
     DexModel,
     "dexmodel",
     "DEX constant pool and register payloads",
@@ -88,8 +88,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Recover switches from a jump-assist user-op (option `jumpassist`).
+crate::unlace_flag!(
+    /// (unlace) Recover switches from a jump-assist user-op (option `jumpassist`).
     JumpAssist,
     "jumpassist",
     "jump-assist switch recovery",
@@ -97,8 +97,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Recover a DEX method's try/catch blocks from its `try_item`s
+crate::unlace_flag!(
+    /// (unlace) Recover a DEX method's try/catch blocks from its `try_item`s
     /// (option `javatry`).
     JavaTry,
     "javatry",
@@ -107,9 +107,9 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `calltargettype`) Give an indirect call's target the
-    /// function-pointer type the call states (`kuna_calltargettype`).
+crate::unlace_flag!(
+    /// (unlace `calltargettype`) Give an indirect call's target the
+    /// function-pointer type the call states (`unlace_calltargettype`).
     CallTargetType,
     "calltargettype",
     "indirect-call target types",
@@ -117,9 +117,9 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `vexzeroupper`) Split each VEX zero-upper ZMM write at the result's
-    /// width (`kuna_vexzeroupper`).
+crate::unlace_flag!(
+    /// (unlace `vexzeroupper`) Split each VEX zero-upper ZMM write at the result's
+    /// width (`unlace_vexzeroupper`).
     VexZeroUpper,
     "vexzeroupper",
     "VEX zero-upper writes split at the result width",
@@ -127,9 +127,9 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `vectorabi`) Widen the SysV x86-64 default model with the
-    /// xmm/ymm/zmm vector entries (`kuna_vectorabi`).
+crate::unlace_flag!(
+    /// (unlace `vectorabi`) Widen the SysV x86-64 default model with the
+    /// xmm/ymm/zmm vector entries (`unlace_vectorabi`).
     VectorAbi,
     "vectorabi",
     "SysV x86-64 vector arguments and returns",
@@ -137,8 +137,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) `ud2` or `int3 int3` after an x86 call marks the call no-return
+crate::unlace_flag!(
+    /// (unlace) `ud2` or `int3 int3` after an x86 call marks the call no-return
     /// (option `trapaftercall`).
     TrapAfterCall,
     "trapaftercall",
@@ -147,10 +147,10 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `castarith`) Print a pointer plus a whole number of `T`s, used as a
+crate::unlace_flag!(
+    /// (unlace `castarith`) Print a pointer plus a whole number of `T`s, used as a
     /// `T *`, as pointer arithmetic on `(T *)p` instead of an integer round
-    /// trip.  Implementation: [`kuna_castarith`](crate::p9_emit::castarith).
+    /// trip.  Implementation: [`unlace_castarith`](crate::p9_emit::castarith).
     CastArith,
     "castarith",
     "pointer arithmetic in pointer terms",
@@ -158,11 +158,11 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `castindex`) Print a pointer plus a variable index of whole `T`s as
+crate::unlace_flag!(
+    /// (unlace `castindex`) Print a pointer plus a variable index of whole `T`s as
     /// a subscript on `(T *)p`, and the difference of two `char`-width pointers
     /// as `p - q`, instead of an integer round trip.  Implementation:
-    /// [`kuna_castarith`](crate::p9_emit::castarith).
+    /// [`unlace_castarith`](crate::p9_emit::castarith).
     CastIndex,
     "castindex",
     "variable indexes and pointer differences in pointer terms",
@@ -170,8 +170,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `vtabletypes`) Type each recovered Itanium or MSVC vtable as a
+crate::unlace_flag!(
+    /// (unlace `vtabletypes`) Type each recovered Itanium or MSVC vtable as a
     /// `C_vtbl` structure of named method pointers, give the class structure a
     /// `vptr` (`__vftable` for MSVC) field of that type, and fold a load of a
     /// vtable slot to the method it holds; see [`crate::vtabletypes`].
@@ -183,8 +183,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Name library functions from FLIRT `.sig` files listed in `UNLACE_FLIRT_SIGS` (`flirt`). Default off.
+crate::unlace_flag!(
+    /// (unlace) Name library functions from FLIRT `.sig` files listed in `UNLACE_FLIRT_SIGS` (`flirt`). Default off.
     Flirt,
     "flirt",
     "FLIRT signature matching",
@@ -192,8 +192,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna) Merge load-time prototypes slot by slot (`protomerge`). Default on.
+crate::unlace_flag!(
+    /// (unlace) Merge load-time prototypes slot by slot (`protomerge`). Default on.
     Protomerge,
     "protomerge",
     "Slot-by-slot merge of load-time prototypes",
@@ -201,7 +201,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna `deadcascade`) After this many passes of one run of a rule pool
+/// (unlace `deadcascade`) After this many passes of one run of a rule pool
 /// (`None` = never), dead-op removal also removes the dead chain behind the
 /// removed op.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,9 +211,9 @@ pub struct DeadCascade(pub Option<u32>);
 /// gone this long is almost always taking dead chains apart one link a pass.
 pub const DEAD_CASCADE_PASSES: u32 = 32;
 
-impl crate::optionset::KunaOption for DeadCascade {
+impl crate::optionset::UnlaceOption for DeadCascade {
     const NAME: &'static str = "deadcascade";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         DeadCascade(Some(DEAD_CASCADE_PASSES))
@@ -223,7 +223,7 @@ impl crate::optionset::KunaOption for DeadCascade {
         DeadCascade(Some(DEAD_CASCADE_PASSES))
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let field = value.trim();
         Ok(match field {
             "off" => (
@@ -240,7 +240,7 @@ impl crate::optionset::KunaOption for DeadCascade {
                     .ok()
                     .filter(|_| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit()))
                     .ok_or_else(|| {
-                        unlace_base::error::KunaError::parse(
+                        unlace_base::error::UnlaceError::parse(
                             "Must specify off, on or a decimal pass count",
                         )
                     })?;
@@ -255,7 +255,7 @@ impl crate::optionset::KunaOption for DeadCascade {
     }
 }
 
-/// (kuna `lanefuse`) Re-fuse per-lane vector p-code (`on`), and legacy-SSE
+/// (unlace `lanefuse`) Re-fuse per-lane vector p-code (`on`), and legacy-SSE
 /// integer and two-lane double runs too (`all`).  A function's context holds
 /// `on` already resolved against the image (x86-64 only).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -264,9 +264,9 @@ pub struct LaneFuse {
     pub all: bool,
 }
 
-impl crate::optionset::KunaOption for LaneFuse {
+impl crate::optionset::UnlaceOption for LaneFuse {
     const NAME: &'static str = "lanefuse";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         LaneFuse {
@@ -282,7 +282,7 @@ impl crate::optionset::KunaOption for LaneFuse {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, all) = match value.trim().to_ascii_lowercase().as_str() {
             "all" => (true, true),
             _ => (crate::options::on_or_off(value)?, false),
@@ -301,7 +301,7 @@ impl crate::optionset::KunaOption for LaneFuse {
     }
 }
 
-/// (kuna `opaquepredicate`) Fold comparisons proven constant (`on`), reading
+/// (unlace `opaquepredicate`) Fold comparisons proven constant (`on`), reading
 /// a global the program never writes as its initial value too (`globals`,
 /// [`crate::opaqueglobals`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -310,9 +310,9 @@ pub struct OpaquePredicate {
     pub globals: bool,
 }
 
-impl crate::optionset::KunaOption for OpaquePredicate {
+impl crate::optionset::UnlaceOption for OpaquePredicate {
     const NAME: &'static str = "opaquepredicate";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         OpaquePredicate {
@@ -328,13 +328,13 @@ impl crate::optionset::KunaOption for OpaquePredicate {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, globals) = match value {
             "off" => (false, false),
             "on" => (true, false),
             "globals" => (true, true),
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "opaquepredicate: expected off, on or globals, got {other}"
                 )));
             }
@@ -346,8 +346,8 @@ impl crate::optionset::KunaOption for OpaquePredicate {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `stackviews`) Operation-specific typed views over shared physical frame storage.
+crate::unlace_flag!(
+    /// (unlace `stackviews`) Operation-specific typed views over shared physical frame storage.
     StackViews,
     "stackviews",
     "Shared stack-object views",
@@ -355,14 +355,14 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna `namestyle`) angr-style default names (`angr`) instead of upstream's
+/// (unlace `namestyle`) angr-style default names (`angr`) instead of upstream's
 /// (`ghidra`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NameStyleAngr(pub bool);
 
-impl crate::optionset::KunaOption for NameStyleAngr {
+impl crate::optionset::UnlaceOption for NameStyleAngr {
     const NAME: &'static str = "namestyle";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         NameStyleAngr(false)
@@ -372,12 +372,12 @@ impl crate::optionset::KunaOption for NameStyleAngr {
         NameStyleAngr(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let val = match value {
             "angr" => true,
             "ghidra" => false,
             _ => {
-                return Err(unlace_base::error::KunaError::parse(
+                return Err(unlace_base::error::UnlaceError::parse(
                     "namestyle must be \"angr\" or \"ghidra\"",
                 ));
             }
@@ -386,8 +386,8 @@ impl crate::optionset::KunaOption for NameStyleAngr {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `rettriangle`) Decline a `returndup` split whose shared RETURN block is the join of a one-block `if`.
+crate::unlace_flag!(
+    /// (unlace `rettriangle`) Decline a `returndup` split whose shared RETURN block is the join of a one-block `if`.
     RetTriangle,
     "rettriangle",
     "One-block-if return duplication decline",
@@ -395,8 +395,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `retsplitglobal`) Refuse to split a shared RETURN block that stores to globals.
+crate::unlace_flag!(
+    /// (unlace `retsplitglobal`) Refuse to split a shared RETURN block that stores to globals.
     RetSplitGlobal,
     "retsplitglobal",
     "Global-writing shared-epilogue split refusal",
@@ -404,8 +404,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `fieldtype`) Type a pointer by the field it is read through.
+crate::unlace_flag!(
+    /// (unlace `fieldtype`) Type a pointer by the field it is read through.
     FieldType,
     "fieldtype",
     "Pointer field typing",
@@ -413,8 +413,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `ctypes`) Spell the named core types as the target's own C types.
+crate::unlace_flag!(
+    /// (unlace `ctypes`) Spell the named core types as the target's own C types.
     CTypes,
     "ctypes",
     "valid-C core type spelling",
@@ -422,8 +422,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `floatglobals`) Type globals moved only through float registers as floats.
+crate::unlace_flag!(
+    /// (unlace `floatglobals`) Type globals moved only through float registers as floats.
     FloatGlobalsOn,
     "floatglobals",
     "float typing of globals moved only through float registers",
@@ -431,7 +431,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna) When the system call gets its register effects: `syscallregs
+/// (unlace) When the system call gets its register effects: `syscallregs
 /// off|auto|on`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SyscallRegsMode {
@@ -465,7 +465,7 @@ impl SyscallRegsMode {
     }
 }
 
-/// (kuna) Parse `option syscallregs off|auto|on`; the caller writes the live
+/// (unlace) Parse `option syscallregs off|auto|on`; the caller writes the live
 /// field.
 pub struct OptionSyscallRegs;
 
@@ -474,13 +474,13 @@ impl OptionSyscallRegs {
     pub const NAME: &'static str = "syscallregs";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(SyscallRegsMode, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(SyscallRegsMode, String)> {
         let mode = match p1 {
             "off" => SyscallRegsMode::Off,
             "auto" => SyscallRegsMode::Auto,
             "on" => SyscallRegsMode::On,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown syscallregs value: {other} (expected off|auto|on)"
                 )));
             }
@@ -489,9 +489,9 @@ impl OptionSyscallRegs {
     }
 }
 
-impl crate::optionset::KunaOption for SyscallRegsMode {
+impl crate::optionset::UnlaceOption for SyscallRegsMode {
     const NAME: &'static str = "syscallregs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SyscallRegsMode::Off
@@ -501,7 +501,7 @@ impl crate::optionset::KunaOption for SyscallRegsMode {
         SyscallRegsMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionSyscallRegs.apply(value)
     }
 }
@@ -524,9 +524,9 @@ pub const LEVEL_FULL: unlace_base::types::int4 = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IndexAliasGuard(pub unlace_base::types::int4);
 
-impl crate::optionset::KunaOption for IndexAliasGuard {
+impl crate::optionset::UnlaceOption for IndexAliasGuard {
     const NAME: &'static str = "indexaliasguard";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         IndexAliasGuard(LEVEL_GLOBAL)
@@ -536,7 +536,7 @@ impl crate::optionset::KunaOption for IndexAliasGuard {
         IndexAliasGuard(LEVEL_GLOBAL)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionIndexAliasGuard
             .apply(value)
             .map(|(v, msg)| (IndexAliasGuard(v), msg))
@@ -556,7 +556,7 @@ impl OptionIndexAliasGuard {
     pub fn apply(
         &self,
         p1: &str,
-    ) -> unlace_base::error::KunaResult<(unlace_base::types::int4, String)> {
+    ) -> unlace_base::error::UnlaceResult<(unlace_base::types::int4, String)> {
         match p1 {
             "off" => Ok((LEVEL_OFF, "Index-alias heritage guards turned off".to_string())),
             "load" => Ok((
@@ -575,15 +575,15 @@ impl OptionIndexAliasGuard {
                  (guardLoads + guardStores)"
                     .to_string(),
             )),
-            _ => Err(unlace_base::error::KunaError::parse(
+            _ => Err(unlace_base::error::UnlaceError::parse(
                 "Must specify one of off, load, global, full",
             )),
         }
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna DIV-6) Render residual `TYPE_UNKNOWN` (`xunknownN`) values as real C
+crate::unlace_flag!(
+    /// (unlace DIV-6) Render residual `TYPE_UNKNOWN` (`xunknownN`) values as real C
     /// types by size — 1→`char`, 2/4/8→unsigned ints, pointer-to-unknown→`void *` —
     /// instead of the `xunknownN`/`undefined<N>` placeholder.  Default-on; read by
     /// the printc declarator chokepoints (`RealTypeCtx`).
@@ -594,7 +594,7 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// (kuna `itaniumeh`) Give calls covered by a call-site record an exceptional
+/// (unlace `itaniumeh`) Give calls covered by a call-site record an exceptional
 /// edge to their landing pad (`on`), only for pads with a catch clause under
 /// `itaniumeh catch` (`catch_only`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -603,9 +603,9 @@ pub struct ItaniumEh {
     pub catch_only: bool,
 }
 
-impl crate::optionset::KunaOption for ItaniumEh {
+impl crate::optionset::UnlaceOption for ItaniumEh {
     const NAME: &'static str = "itaniumeh";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ItaniumEh {
@@ -621,7 +621,7 @@ impl crate::optionset::KunaOption for ItaniumEh {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let catch_only = value.trim().eq_ignore_ascii_case("catch");
         let on = catch_only || crate::options::on_or_off(value)?;
         let state = if catch_only {

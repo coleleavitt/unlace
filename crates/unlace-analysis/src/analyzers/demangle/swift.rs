@@ -1,4 +1,4 @@
-//! (kuna) Swift symbol demangling — a pure-Rust demangler for the stable
+//! (unlace) Swift symbol demangling — a pure-Rust demangler for the stable
 //! `$s` mangling and the Objective-C runtime's `_Tt` type names
 //! (`docs/multilang.md`, the Swift pack's first prerequisite).
 //!
@@ -34,7 +34,7 @@
 //!
 //! - [`demangle_swift_full`]: the `swift-demangle` form, types included
 //!   (`Swift.String.count.getter : Swift.Int`), for display.
-//! - [`demangle_swift_name`]: the name-only path kuna installs as the
+//! - [`demangle_swift_name`]: the name-only path unlace installs as the
 //!   symbol name — space-free, Swift reference syntax for members
 //!   (`Sample.Foo.init(x:y:)`, `Sample.Foo.bar(_:)`, `Sample.Foo.baz()`),
 //!   dotted tags for runtime artifacts (`Sample.Foo.type_metadata`,
@@ -110,7 +110,7 @@ pub fn demangle_swift_full(raw: &str) -> Option<String> {
     print::print_full(&tree)
 }
 
-/// kuna's name-only form (`Module.Type.member(labels:)`), or `None` for a
+/// unlace's name-only form (`Module.Type.member(labels:)`), or `None` for a
 /// name outside the coverage — never a guess.
 pub fn demangle_swift_name(raw: &str) -> Option<String> {
     let tree = demangle_swift_tree(raw)?;

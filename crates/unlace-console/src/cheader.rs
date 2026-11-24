@@ -8,7 +8,7 @@
 //! its `file:line` in [`Directive::raw`] behind [`ORIGIN`], which is how a
 //! declaration the C grammar refuses is reported without stopping the others.
 //!
-//! The text is expected to be preprocessed C. Without `--types-cpp` kuna runs
+//! The text is expected to be preprocessed C. Without `--types-cpp` unlace runs
 //! no preprocessor: `#` lines are skipped (a `# <line> "<file>"` marker
 //! re-anchors the reported position) and a macro left in a declaration is a
 //! rejected declaration. Compiler decorations the grammar has no reading for

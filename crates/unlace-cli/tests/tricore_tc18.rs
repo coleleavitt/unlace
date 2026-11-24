@@ -1,7 +1,7 @@
 //! TriCore TC1.6.2/TC1.8 (AURIX TC3xx/TC4x) instructions decode in the
 //! `tricore:LE:32:tc18` language and lift; before, each was a bad instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -26,7 +26,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile_raw(bin: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(bin),
         "0x1000",
@@ -45,7 +45,7 @@ fn decompile_raw(bin: &str) -> String {
 
 #[test]
 fn every_tc18_encoding_decodes_as_the_manual_names_it() {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "disassemble",
         &fixture("tricore_tc18.elf"),
         "probe",

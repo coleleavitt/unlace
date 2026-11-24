@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{
     Bytes, MAX_MODULE, RetroImage, RetroSection, RetroSymbol, add_word, invalid, symbol_name, word,
@@ -411,7 +411,7 @@ fn glue_names(
     }
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let file = Bytes {
         data: bytes,

@@ -5,9 +5,9 @@ use crate::context::VarnodeId;
 use crate::database::SymbolEntry;
 use crate::funcdata::Funcdata;
 use crate::varnode::varnode_flags;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
-pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> KunaResult<bool> {
+pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> UnlaceResult<bool> {
     let (name, unnamed, locked, dtype, flags) = {
         let Some(scope) = fd.get_scope_local() else {
             return Ok(false);
@@ -28,14 +28,14 @@ pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> KunaResult
     if v.get_size() != entry.get_size() || dtype.get_size() != v.get_size() {
         return Ok(false);
     }
-    let old = v.kuna_symbol_entry();
+    let old = v.unlace_symbol_entry();
     if old.is_some_and(|symbol| symbol != entry.symbol) {
         return Ok(false);
     }
     let high = v.get_high();
     let binding = high
         .and_then(|id| fd.high_bank().get(id))
-        .and_then(|h| h.kuna_dynamic_symbol());
+        .and_then(|h| h.unlace_dynamic_symbol());
     if binding.is_some_and(|symbol| symbol != entry.symbol) {
         return Ok(false);
     }
@@ -45,14 +45,14 @@ pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> KunaResult
     }
     let changed = locked && fd.vn_update_type_locked(vn, Rc::clone(&dtype), true, true);
     if let Some(v) = fd.vbank_mut().get_mut(vn) {
-        v.set_kuna_symbol_entry(entry.symbol);
+        v.set_unlace_symbol_entry(entry.symbol);
         v.set_flags_pub(flags & varnode_flags::namelock);
     }
     if let Some(h) = high.and_then(|id| fd.high_bank_mut().get_mut(id)) {
         if !unnamed {
-            h.set_kuna_name(name);
+            h.set_unlace_name(name);
         }
-        h.set_kuna_dynamic_symbol(entry.symbol);
+        h.set_unlace_dynamic_symbol(entry.symbol);
         if locked {
             h.set_symbol_type(dtype);
         }
@@ -61,6 +61,6 @@ pub fn bind(fd: &mut Funcdata, vn: VarnodeId, entry: &SymbolEntry) -> KunaResult
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.dynamiclocals_bind = Some(bind);
 }

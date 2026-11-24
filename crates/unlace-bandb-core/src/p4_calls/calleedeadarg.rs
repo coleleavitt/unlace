@@ -1,13 +1,13 @@
-//! (kuna) Drop a recovered call argument the callee's own body proves it never
+//! (unlace) Drop a recovered call argument the callee's own body proves it never
 //! reads.
 //!
 //! # The symptom
 //!
-//! One Mach-O arm64 crackme, decompiled by kuna, contradicts itself inside a
+//! One Mach-O arm64 crackme, decompiled by unlace, contradicts itself inside a
 //! single file:
 //!
 //! ```text
-//! int _secret_function(void);          // the header kuna itself emits
+//! int _secret_function(void);          // the header unlace itself emits
 //! ...
 //!   v3 = scanf("%d",&v2);
 //!   if (v2 == 0x539)
@@ -31,7 +31,7 @@
 //! decision is on the caller's side of the call, and on the caller's side the
 //! evidence really is ambiguous: a live argument register at a call to an
 //! unprototyped callee is exactly what a real argument looks like. The
-//! `entrymainproto` record already names this as kuna's standing behaviour
+//! `entrymainproto` record already names this as unlace's standing behaviour
 //! ("at any unprototyped callee reached with a live argument register").
 //!
 //! `calleearity`/`calleearityfwd` cannot help: they reconcile a call against a
@@ -128,7 +128,7 @@ use unlace_num::pcoderaw::VarnodeData;
 use crate::context::VarnodeId;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleedeadarg>` (kuna 4000+ range; 4139 was the previous
+/// Marshaling element `<calleedeadarg>` (unlace 4000+ range; 4139 was the previous
 /// high-water mark).
 pub const ELEM_CALLEEDEADARG: ElementId = ElementId::new("calleedeadarg", 4140);
 
@@ -936,7 +936,7 @@ type RegRead = (int4, u64, int4);
 /// each remaining depth, is shown to take.
 type ThroughMemo = HashMap<(int4, u64, u32), Rc<Vec<RegRead>>>;
 
-/// (kuna `passthrough`) The probe of `entry`'s body, with what each of its
+/// (unlace `passthrough`) The probe of `entry`'s body, with what each of its
 /// direct calls hands a target shown to take it.
 ///
 /// A forwarder that calls its target (`call f; ret`, or a tail call the spec
@@ -987,7 +987,7 @@ fn taken_reads(
         return Some(Rc::clone(r));
     }
     let taken = match arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::protoorder::CalleeTypes>()
         .get(&key)
         .cloned()
@@ -1030,7 +1030,7 @@ pub fn probe_cached(
     let sp = entry.get_space()?;
     let key = (sp.get_index(), entry.get_offset());
     if !arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleedeadarg::CalleeDeadCache>()
         .contains_key(&key)
     {
@@ -1047,11 +1047,11 @@ pub fn probe_cached(
             &traps,
             &arch.format_stack_args,
         );
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::calleedeadarg::CalleeDeadCache>()
             .insert(key, Rc::new(probed));
     }
-    arch.kuna_tables
+    arch.unlace_tables
         .get::<crate::calleedeadarg::CalleeDeadCache>()
         .get(&key)
         .cloned()
@@ -1938,20 +1938,23 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
             .then(|| probe_cached(arch, &own, reg_idx))
             .flatten()
         {
-            data.kuna_set_own_entry_dead(d);
+            data.unlace_set_own_entry_dead(d);
         }
     }
     // `argclobber` reads this probe only as a veto on a drop its recovered-
     // prototype clause already admitted, so with nothing parked it can never
     // consult it and the decode is pure cost.
-    let clobber_veto = arch.kuna_options.get::<crate::argclobber::ArgClobber>().0
+    let clobber_veto = arch.unlace_options.get::<crate::argclobber::ArgClobber>().0
         && !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::protoorder::CalleeTypes>()
             .is_empty();
-    let pass_through = arch.kuna_options.get::<crate::passthrough::PassThrough>().0
+    let pass_through = arch
+        .unlace_options
+        .get::<crate::passthrough::PassThrough>()
+        .0
         && !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::protoorder::CalleeTypes>()
             .is_empty();
     let reg_idx = arch
@@ -1985,17 +1988,17 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
         let Some(sp) = e.get_space() else { continue };
         let key = (sp.get_index(), e.get_offset());
         if let Some(d) = probe_cached(arch, &e, reg_idx) {
-            data.kuna_set_callee_entry_dead(&e, d);
+            data.unlace_set_callee_entry_dead(&e, d);
         }
         if pass_through
             && arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::protoorder::CalleeTypes>()
                 .get(&key)
                 .is_some_and(|s| !s.inputs.is_empty())
         {
             if let Some(t) = reads_through_calls(arch, &e, reg_idx, &mut through_memo) {
-                data.kuna_set_callee_entry_through(&e, t);
+                data.unlace_set_callee_entry_through(&e, t);
             }
         }
         // `argclobber` also needs what this callee can FORWARD, which is a walk
@@ -2003,21 +2006,21 @@ pub fn seed_callee_entry_dead(arch: &mut crate::architecture::Architecture, data
         // seam either.
         if clobber_veto {
             if !arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::calleedeadarg::CalleeForwardCache>()
                 .contains_key(&key)
             {
                 let fwd = resolve_forward_transfer(arch, &e, reg_idx);
-                arch.kuna_tables
+                arch.unlace_tables
                     .get_mut::<crate::calleedeadarg::CalleeForwardCache>()
                     .insert(key, Rc::new(fwd));
             }
             if let Some(f) = arch
-                .kuna_tables
+                .unlace_tables
                 .get::<crate::calleedeadarg::CalleeForwardCache>()
                 .get(&key)
             {
-                data.kuna_set_callee_forward(&e, Rc::clone(f));
+                data.unlace_set_callee_forward(&e, Rc::clone(f));
             }
         }
     }
@@ -2105,7 +2108,7 @@ pub fn trial_is_dead_in_callee(
         return false;
     }
     let call = data.get_call_specs(call_idx);
-    let dead = match data.kuna_callee_entry_dead(entry) {
+    let dead = match data.unlace_callee_entry_dead(entry) {
         Some(d) if crate::armfloatargs::vfp_slot(data, call, trial_addr, trial_size) => {
             d.proves_dead_firmly(trial_addr, trial_size)
         }
@@ -2122,7 +2125,7 @@ pub fn trial_is_dead_in_callee(
     }
 }
 
-/// (kuna `calleedeadarg`) The per-function copies of the callee body probes, keyed by
+/// (unlace `calleedeadarg`) The per-function copies of the callee body probes, keyed by
 /// `(space index, entry offset)`: what each direct callee never reads before writing
 /// (`entry_dead`), the same probe of this function's own body (`own`, read by `armfloatargs`),
 /// the probes with what each callee's direct calls take added (`through`, read by
@@ -2145,174 +2148,177 @@ struct ProbeSlot {
         std::rc::Rc<crate::calleedeadarg::ForwardTransfer>,
     >,
 }
-crate::kuna_func_state!(ProbeSlot, keep_across_clear: true);
+crate::unlace_func_state!(ProbeSlot, keep_across_clear: true);
 
-/// The `kuna_calleedeadarg` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_calleedeadarg` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCalleedeadargExt {
-    /// (kuna `calleedeadarg`) Record what a probe of `entry`'s body proved about
+    /// (unlace `calleedeadarg`) Record what a probe of `entry`'s body proved about
     /// the registers it never reads before writing.
-    fn kuna_set_callee_entry_dead(
+    fn unlace_set_callee_entry_dead(
         &mut self,
         entry: &unlace_base::address::Address,
         dead: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
     );
-    /// (kuna `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
+    /// (unlace `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
     /// body, if one was taken.
-    fn kuna_callee_entry_dead(
+    fn unlace_callee_entry_dead(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::CalleeEntryDead>;
-    /// (kuna `calleefilledarg`) The same probe, shared, for a `ParamActive` to
+    /// (unlace `calleefilledarg`) The same probe, shared, for a `ParamActive` to
     /// hold through `fillinMap`.
-    fn kuna_callee_entry_dead_shared(
+    fn unlace_callee_entry_dead_shared(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>>;
-    /// (kuna `armfloatargs`) Record the entry-liveness probe of this function's
+    /// (unlace `armfloatargs`) Record the entry-liveness probe of this function's
     /// own body.
-    fn kuna_set_own_entry_dead(&mut self, dead: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>);
-    /// (kuna `armfloatargs`) The entry-liveness probe of this function's own
+    fn unlace_set_own_entry_dead(
+        &mut self,
+        dead: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
+    );
+    /// (unlace `armfloatargs`) The entry-liveness probe of this function's own
     /// body, if one was taken.
-    fn kuna_own_entry_dead(&self) -> Option<&crate::calleedeadarg::CalleeEntryDead>;
-    /// (kuna `passthrough`) Record the probe of `entry`'s body with what its
+    fn unlace_own_entry_dead(&self) -> Option<&crate::calleedeadarg::CalleeEntryDead>;
+    /// (unlace `passthrough`) Record the probe of `entry`'s body with what its
     /// direct calls' targets take added.
-    fn kuna_set_callee_entry_through(
+    fn unlace_set_callee_entry_through(
         &mut self,
         entry: &unlace_base::address::Address,
         facts: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
     );
-    /// (kuna `passthrough`) The probe of `entry`'s body with what its direct
+    /// (unlace `passthrough`) The probe of `entry`'s body with what its direct
     /// calls' targets take added, if one was taken.
-    fn kuna_callee_entry_through(
+    fn unlace_callee_entry_through(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::CalleeEntryDead>;
-    /// (kuna `argclobber`) Record what a caller's value in a register can reach
+    /// (unlace `argclobber`) Record what a caller's value in a register can reach
     /// once the callee entered at `entry` has it.
-    fn kuna_set_callee_forward(
+    fn unlace_set_callee_forward(
         &mut self,
         entry: &unlace_base::address::Address,
         fwd: std::rc::Rc<crate::calleedeadarg::ForwardTransfer>,
     );
-    /// (kuna `argclobber`) The forwarding resolution recorded for `entry`, if
+    /// (unlace `argclobber`) The forwarding resolution recorded for `entry`, if
     /// one was taken.
-    fn kuna_callee_forward(
+    fn unlace_callee_forward(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::ForwardTransfer>;
 }
 
 impl FuncdataCalleedeadargExt for crate::funcdata::Funcdata {
-    /// (kuna `calleedeadarg`) Record what a probe of `entry`'s body proved about
+    /// (unlace `calleedeadarg`) Record what a probe of `entry`'s body proved about
     /// the registers it never reads before writing.
-    fn kuna_set_callee_entry_dead(
+    fn unlace_set_callee_entry_dead(
         &mut self,
         entry: &unlace_base::address::Address,
         dead: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_state_mut::<ProbeSlot>()
+            self.unlace_state_mut::<ProbeSlot>()
                 .entry_dead
                 .insert((sp.get_index(), entry.get_offset()), dead);
         }
     }
-    /// (kuna `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
+    /// (unlace `calleedeadarg`) The recorded entry-liveness probe of `entry`'s
     /// body, if one was taken.
-    fn kuna_callee_entry_dead(
+    fn unlace_callee_entry_dead(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::CalleeEntryDead> {
         let sp = entry.get_space()?;
-        self.kuna_state::<ProbeSlot>()
+        self.unlace_state::<ProbeSlot>()
             .entry_dead
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
     }
-    /// (kuna `calleefilledarg`) The same probe, shared, for a `ParamActive` to
+    /// (unlace `calleefilledarg`) The same probe, shared, for a `ParamActive` to
     /// hold through `fillinMap`.
-    fn kuna_callee_entry_dead_shared(
+    fn unlace_callee_entry_dead_shared(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>> {
         let sp = entry.get_space()?;
-        self.kuna_state::<ProbeSlot>()
+        self.unlace_state::<ProbeSlot>()
             .entry_dead
             .get(&(sp.get_index(), entry.get_offset()))
             .cloned()
     }
-    /// (kuna `armfloatargs`) Record the entry-liveness probe of this function's
+    /// (unlace `armfloatargs`) Record the entry-liveness probe of this function's
     /// own body.
-    fn kuna_set_own_entry_dead(
+    fn unlace_set_own_entry_dead(
         &mut self,
         dead: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
     ) {
-        self.kuna_state_mut::<ProbeSlot>().own = Some(dead);
+        self.unlace_state_mut::<ProbeSlot>().own = Some(dead);
     }
-    /// (kuna `armfloatargs`) The entry-liveness probe of this function's own
+    /// (unlace `armfloatargs`) The entry-liveness probe of this function's own
     /// body, if one was taken.
-    fn kuna_own_entry_dead(&self) -> Option<&crate::calleedeadarg::CalleeEntryDead> {
-        self.kuna_state::<ProbeSlot>().own.as_deref()
+    fn unlace_own_entry_dead(&self) -> Option<&crate::calleedeadarg::CalleeEntryDead> {
+        self.unlace_state::<ProbeSlot>().own.as_deref()
     }
-    /// (kuna `passthrough`) Record the probe of `entry`'s body with what its
+    /// (unlace `passthrough`) Record the probe of `entry`'s body with what its
     /// direct calls' targets take added.
-    fn kuna_set_callee_entry_through(
+    fn unlace_set_callee_entry_through(
         &mut self,
         entry: &unlace_base::address::Address,
         facts: std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_state_mut::<ProbeSlot>()
+            self.unlace_state_mut::<ProbeSlot>()
                 .through
                 .insert((sp.get_index(), entry.get_offset()), facts);
         }
     }
-    /// (kuna `passthrough`) The probe of `entry`'s body with what its direct
+    /// (unlace `passthrough`) The probe of `entry`'s body with what its direct
     /// calls' targets take added, if one was taken.
-    fn kuna_callee_entry_through(
+    fn unlace_callee_entry_through(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::CalleeEntryDead> {
         let sp = entry.get_space()?;
-        self.kuna_state::<ProbeSlot>()
+        self.unlace_state::<ProbeSlot>()
             .through
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
     }
-    /// (kuna `argclobber`) Record what a caller's value in a register can reach
+    /// (unlace `argclobber`) Record what a caller's value in a register can reach
     /// once the callee entered at `entry` has it.
-    fn kuna_set_callee_forward(
+    fn unlace_set_callee_forward(
         &mut self,
         entry: &unlace_base::address::Address,
         fwd: std::rc::Rc<crate::calleedeadarg::ForwardTransfer>,
     ) {
         if let Some(sp) = entry.get_space() {
-            self.kuna_state_mut::<ProbeSlot>()
+            self.unlace_state_mut::<ProbeSlot>()
                 .forward
                 .insert((sp.get_index(), entry.get_offset()), fwd);
         }
     }
-    /// (kuna `argclobber`) The forwarding resolution recorded for `entry`, if
+    /// (unlace `argclobber`) The forwarding resolution recorded for `entry`, if
     /// one was taken.
-    fn kuna_callee_forward(
+    fn unlace_callee_forward(
         &self,
         entry: &unlace_base::address::Address,
     ) -> Option<&crate::calleedeadarg::ForwardTransfer> {
         let sp = entry.get_space()?;
-        self.kuna_state::<ProbeSlot>()
+        self.unlace_state::<ProbeSlot>()
             .forward
             .get(&(sp.get_index(), entry.get_offset()))
             .map(|r| r.as_ref())
     }
 }
 
-/// (kuna `calleedeadarg`) The run-wide cache of callee entry-liveness probes, by callee
+/// (unlace `calleedeadarg`) The run-wide cache of callee entry-liveness probes, by callee
 /// `(space index, entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeDeadCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
     std::rc::Rc<crate::calleedeadarg::CalleeEntryDead>,
 >;
-crate::kuna_arch_table!(CalleeDeadCache);
+crate::unlace_arch_table!(CalleeDeadCache);
 
 impl crate::fspec::EntryLiveness for CalleeEntryDead {
     fn proves_dead(&self, addr: &Address, size: int4) -> bool {
@@ -2320,13 +2326,13 @@ impl crate::fspec::EntryLiveness for CalleeEntryDead {
     }
 }
 
-/// (kuna `argclobber`) The run-wide cache of forwarding resolutions, by callee
+/// (unlace `argclobber`) The run-wide cache of forwarding resolutions, by callee
 /// `(space index, entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeForwardCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
     std::rc::Rc<crate::calleedeadarg::ForwardTransfer>,
 >;
-crate::kuna_arch_table!(CalleeForwardCache);
+crate::unlace_arch_table!(CalleeForwardCache);
 
 #[cfg(test)]
 #[path = "calleedeadarg/tests.rs"]

@@ -60,7 +60,7 @@ fn verify_scheduler_edges(image: &Path, specs: &[String]) {
         "noreturn_propagate",
         "noreturn_reach",
     ] {
-        prog.arch_mut().set_kuna_option(option, "on").unwrap();
+        prog.arch_mut().set_unlace_option(option, "on").unwrap();
     }
     prog.commit_pending_analysis().expect("commit Go analysis");
     let is_no_return = |name| {

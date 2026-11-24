@@ -17,7 +17,7 @@
 
 use std::sync::OnceLock;
 use unlace_base::address::{Address, sign_extend, zero_extend};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
@@ -39,12 +39,12 @@ pub trait PatternExpressionContext {
     /// `point->offset` plumbing lives in the implementor).  The C++
     /// `ParserContext::getInstructionBytes` throws `BadDataError` when the
     /// read runs past `MAX_INSTRUCTION_LEN`; implementors surface that as
-    /// `Err(KunaError::BadData)`.
-    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32>;
+    /// `Err(UnlaceError::BadData)`.
+    fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32>;
 
     /// C++ `ParserWalker::getContextBytes(int4 byteoff,int4 numbytes)`:
     /// packed bytes from the local context-word array.
-    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32>;
+    fn get_context_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32>;
 
     /// C++ `ParserWalker::getAddr()`: starting address of the instruction.
     fn get_addr(&self) -> Address;
@@ -56,10 +56,10 @@ pub trait PatternExpressionContext {
     /// next.  `ParserContext::getN2addr` throws `LowlevelError` ("inst_next2
     /// not available in this context") when it cannot be computed, hence the
     /// `Result`.
-    fn get_n2addr(&self) -> KunaResult<Address>;
+    fn get_n2addr(&self) -> UnlaceResult<Address>;
 
     /// Evaluate a constructor operand using this context's symbol and walker state.
-    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> KunaResult<i64>;
+    fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> UnlaceResult<i64>;
 }
 
 /// Decode-time hook standing in for the `Translate*` (really `SleighBase*`)
@@ -68,7 +68,7 @@ pub trait OperandValueResolver {
     /// C++ `OperandValue::decode`: look up the subtable by id and return its
     /// `getNumConstructors()`.  A failed lookup/downcast is a null
     /// dereference (UB) in C++; implementors may error or panic.
-    fn num_constructors(&self, table_id: u32) -> KunaResult<i32>;
+    fn num_constructors(&self, table_id: u32) -> UnlaceResult<i32>;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ fn instruction_bytes(
     bytestart: i32,
     byteend: i32,
     bigendian: bool,
-) -> KunaResult<i64> {
+) -> UnlaceResult<i64> {
     let mut res: i64 = 0;
     let mut bytestart = bytestart;
     let size = byteend - bytestart + 1;
@@ -116,7 +116,7 @@ fn context_bytes(
     walker: &(impl PatternExpressionContext + ?Sized),
     bytestart: i32,
     byteend: i32,
-) -> KunaResult<i64> {
+) -> UnlaceResult<i64> {
     let mut res: i64 = 0;
     let mut bytestart = bytestart;
     let mut size = byteend - bytestart + 1;
@@ -231,7 +231,10 @@ impl TokenField {
 
     /// C++ `TokenField::getValue`: construct value given specific
     /// instruction stream.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         let mut res = instruction_bytes(walker, self.bytestart, self.byteend, self.bigendian)?;
         // intb >> int4: shift is bitstart%8 from the constructor, but comes
         // raw from decode; out-of-range counts resolve x86-masked (ADR 0003)
@@ -270,7 +273,7 @@ impl TokenField {
 
     /// C++ `TokenField::decode` (sets `tok = (Token*)0`, which the port
     /// drops entirely).
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<TokenField> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<TokenField> {
         let el = decoder.open_element_id(&sla::ELEM_TOKENFIELD)?;
         let bigendian = decoder.read_bool_id(&sla::ATTRIB_BIGENDIAN)?;
         let signbit = decoder.read_bool_id(&sla::ATTRIB_SIGNBIT)?;
@@ -346,7 +349,10 @@ impl ContextField {
     }
 
     /// C++ `ContextField::getValue`.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         let mut res = context_bytes(walker, self.startbyte, self.endbyte)?;
         // intb >> int4: same x86-masked transcription as TokenField (ADR 0003)
         res = res.wshr(self.shift as u32); // count masked mod 64 anyway
@@ -382,7 +388,7 @@ impl ContextField {
     }
 
     /// C++ `ContextField::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<ContextField> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<ContextField> {
         let el = decoder.open_element_id(&sla::ELEM_CONTEXTFIELD)?;
         let signbit = decoder.read_bool_id(&sla::ATTRIB_SIGNBIT)?;
         let startbit = decoder.read_signed_integer_id(&sla::ATTRIB_STARTBIT)? as i32; // C++ implicit intb -> int4
@@ -437,7 +443,7 @@ impl ConstantValue {
     }
 
     /// C++ `ConstantValue::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<ConstantValue> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<ConstantValue> {
         let el = decoder.open_element_id(&sla::ELEM_INTB)?;
         let val = decoder.read_signed_integer_id(&sla::ATTRIB_VAL)?;
         decoder.close_element(el)?;
@@ -462,7 +468,10 @@ pub struct StartInstructionValue;
 
 impl StartInstructionValue {
     /// C++ `StartInstructionValue::getValue`.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         Ok(address_value(&walker.get_addr()))
     }
 
@@ -483,7 +492,7 @@ impl StartInstructionValue {
     }
 
     /// C++ `StartInstructionValue::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<StartInstructionValue> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<StartInstructionValue> {
         let el = decoder.open_element_id(&sla::ELEM_START_EXP)?;
         decoder.close_element(el)?;
         Ok(StartInstructionValue)
@@ -496,7 +505,10 @@ pub struct EndInstructionValue;
 
 impl EndInstructionValue {
     /// C++ `EndInstructionValue::getValue`.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         Ok(address_value(&walker.get_naddr()))
     }
 
@@ -517,7 +529,7 @@ impl EndInstructionValue {
     }
 
     /// C++ `EndInstructionValue::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<EndInstructionValue> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<EndInstructionValue> {
         let el = decoder.open_element_id(&sla::ELEM_END_EXP)?;
         decoder.close_element(el)?;
         Ok(EndInstructionValue)
@@ -534,7 +546,10 @@ pub struct Next2InstructionValue;
 
 impl Next2InstructionValue {
     /// C++ `Next2InstructionValue::getValue`.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         Ok(address_value(&walker.get_n2addr()?))
     }
 
@@ -555,7 +570,7 @@ impl Next2InstructionValue {
     }
 
     /// C++ `Next2InstructionValue::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<Next2InstructionValue> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<Next2InstructionValue> {
         let el = decoder.open_element_id(&sla::ELEM_NEXT2_EXP)?;
         decoder.close_element(el)?;
         Ok(Next2InstructionValue)
@@ -616,24 +631,27 @@ impl OperandValue {
     /// C++ `OperandValue::getValue` — the body lives behind the
     /// [`PatternExpressionContext::operand_value`] hook (see its docs for
     /// the exact C++ code the implementor transcribes).
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         walker.operand_value(self.index, self.table_id, self.ct_id)
     }
 
     /// C++ `OperandValue::minValue`: `throw SleighError(...)`.
-    pub fn min_value(&self) -> KunaResult<i64> {
-        Err(KunaError::sleigh("Operand used in pattern expression"))
+    pub fn min_value(&self) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh("Operand used in pattern expression"))
     }
 
     /// C++ `OperandValue::maxValue`: `throw SleighError(...)`.
-    pub fn max_value(&self) -> KunaResult<i64> {
-        Err(KunaError::sleigh("Operand used in pattern expression"))
+    pub fn max_value(&self) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh("Operand used in pattern expression"))
     }
 
     /// This entry point lacks the symbol state needed to evaluate the operand's
     /// defining expression and reports an error.
-    pub fn get_sub_value(&self, _replace: &[i64], _listpos: &mut i32) -> KunaResult<i64> {
-        Err(KunaError::sleigh(
+    pub fn get_sub_value(&self, _replace: &[i64], _listpos: &mut i32) -> UnlaceResult<i64> {
+        Err(UnlaceError::sleigh(
             "OperandValue::getSubValue requires the SLEIGH compiler symbol table (not ported)",
         ))
     }
@@ -652,7 +670,7 @@ impl OperandValue {
     pub fn decode(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<OperandValue> {
+    ) -> UnlaceResult<OperandValue> {
         let el = decoder.open_element_id(&sla::ELEM_OPERAND_EXP)?;
         let index = decoder.read_signed_integer_id(&sla::ATTRIB_INDEX)? as i32; // C++ implicit intb -> int4
         let tabid = decoder.read_unsigned_integer_id(&sla::ATTRIB_TABLE)? as u32; // C++ implicit uintb -> uintm
@@ -661,7 +679,7 @@ impl OperandValue {
         // C++ `ctid >= tab->getNumConstructors()` compares uintm against
         // int4: the int4 converts to uintm (usual arithmetic conversions)
         if ctid >= numct as u32 {
-            return Err(KunaError::decoder("Invalid constructor id"));
+            return Err(UnlaceError::decoder("Invalid constructor id"));
         }
         decoder.close_element(el)?;
         Ok(OperandValue {
@@ -690,7 +708,10 @@ pub enum PatternValue {
 
 impl PatternValue {
     /// C++ virtual `getValue` dispatch over the `PatternValue` subclasses.
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         match self {
             PatternValue::TokenField(v) => v.get_value(walker),
             PatternValue::ContextField(v) => v.get_value(walker),
@@ -704,7 +725,7 @@ impl PatternValue {
 
     /// C++ virtual `minValue` (Result because `OperandValue::minValue`
     /// throws `SleighError`).
-    pub fn min_value(&self) -> KunaResult<i64> {
+    pub fn min_value(&self) -> UnlaceResult<i64> {
         match self {
             PatternValue::TokenField(v) => Ok(v.min_value()),
             PatternValue::ContextField(v) => Ok(v.min_value()),
@@ -718,7 +739,7 @@ impl PatternValue {
 
     /// C++ virtual `maxValue` (Result because `OperandValue::maxValue`
     /// throws `SleighError`).
-    pub fn max_value(&self) -> KunaResult<i64> {
+    pub fn max_value(&self) -> UnlaceResult<i64> {
         match self {
             PatternValue::TokenField(v) => Ok(v.max_value()),
             PatternValue::ContextField(v) => Ok(v.max_value()),
@@ -733,14 +754,14 @@ impl PatternValue {
     /// C++ virtual `PatternValue::genPattern(intb val)`: the pattern forcing
     /// this value to `val`.  `OperandValue::genPattern` throws (operands
     /// cannot appear in a pattern expression).
-    pub fn gen_pattern(&self, val: i64) -> KunaResult<TokenPattern> {
+    pub fn gen_pattern(&self, val: i64) -> UnlaceResult<TokenPattern> {
         match self {
             PatternValue::TokenField(v) => Ok(v.gen_pattern(val)),
             PatternValue::ContextField(v) => Ok(v.gen_pattern(val)),
             // C++ `ConstantValue::genPattern`: `TokenPattern(val==v)`
             PatternValue::ConstantValue(v) => Ok(TokenPattern::new_bool(v.get_value() == val)),
             PatternValue::OperandValue(_) => {
-                Err(KunaError::sleigh("Operand used in pattern expression"))
+                Err(UnlaceError::sleigh("Operand used in pattern expression"))
             }
             // Start/End/Next2 `genPattern` all return `TokenPattern()` (TRUE)
             PatternValue::StartInstructionValue(_)
@@ -767,7 +788,7 @@ impl PatternValue {
 
     /// C++ `PatternValue::getSubValue`: `return replace[listpos++]`
     /// (overridden by `OperandValue`).
-    pub fn get_sub_value(&self, replace: &[i64], listpos: &mut i32) -> KunaResult<i64> {
+    pub fn get_sub_value(&self, replace: &[i64], listpos: &mut i32) -> UnlaceResult<i64> {
         match self {
             PatternValue::OperandValue(v) => v.get_sub_value(replace, listpos),
             _ => {
@@ -850,7 +871,7 @@ impl BinaryExpression {
     pub fn decode(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<BinaryExpression> {
+    ) -> UnlaceResult<BinaryExpression> {
         let el = decoder.open_element()?;
         let left = PatternExpression::decode_tree(decoder, trans)?;
         let right = PatternExpression::decode_tree(decoder, trans)?;
@@ -900,7 +921,7 @@ impl UnaryExpression {
     pub fn decode(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<UnaryExpression> {
+    ) -> UnlaceResult<UnaryExpression> {
         let el = decoder.open_element()?;
         let unary = PatternExpression::decode_tree(decoder, trans)?;
         decoder.close_element(el)?;
@@ -942,7 +963,10 @@ impl PatternExpression {
     /// values and resolve x86-masked; `Div` panics on a zero divisor (C++
     /// SIGFPE/UB, an internal invariant violation per ADR 0004).
     #[inline]
-    pub fn get_value(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<i64> {
+    pub fn get_value(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<i64> {
         if let Self::Value(value) = self {
             return value.get_value(walker);
         }
@@ -987,7 +1011,10 @@ impl PatternExpression {
     }
 
     /// Evaluate leaves left to right with wrapping arithmetic in both modes.
-    fn evaluate(&self, leaf: &mut impl FnMut(&PatternValue) -> KunaResult<i64>) -> KunaResult<i64> {
+    fn evaluate(
+        &self,
+        leaf: &mut impl FnMut(&PatternValue) -> UnlaceResult<i64>,
+    ) -> UnlaceResult<i64> {
         match self {
             PatternExpression::Value(v) => leaf(v),
             PatternExpression::Plus(b) => {
@@ -1125,7 +1152,7 @@ impl PatternExpression {
 
     /// C++ virtual `getMinMax`: push min/max for every leaf in `listValues`
     /// order.
-    pub fn get_min_max(&self, minlist: &mut Vec<i64>, maxlist: &mut Vec<i64>) -> KunaResult<()> {
+    pub fn get_min_max(&self, minlist: &mut Vec<i64>, maxlist: &mut Vec<i64>) -> UnlaceResult<()> {
         match self {
             PatternExpression::Value(v) => {
                 minlist.push(v.min_value()?);
@@ -1155,13 +1182,13 @@ impl PatternExpression {
     /// C++ virtual `getSubValue(const vector<intb>&,int4&)`: re-evaluate the
     /// expression substituting `replace[..]` for the leaves in `listValues`
     /// order.  Arithmetic transcription matches [`Self::get_value`].
-    pub fn get_sub_value(&self, replace: &[i64], listpos: &mut i32) -> KunaResult<i64> {
+    pub fn get_sub_value(&self, replace: &[i64], listpos: &mut i32) -> UnlaceResult<i64> {
         self.evaluate(&mut |value| value.get_sub_value(replace, listpos))
     }
 
     /// C++ non-virtual `getSubValue(const vector<intb>&)`: start the leaf
     /// cursor at 0.
-    pub fn get_sub_value_root(&self, replace: &[i64]) -> KunaResult<i64> {
+    pub fn get_sub_value_root(&self, replace: &[i64]) -> UnlaceResult<i64> {
         let mut listpos: i32 = 0;
         self.get_sub_value(replace, &mut listpos)
     }
@@ -1236,7 +1263,7 @@ impl PatternExpression {
     pub fn decode_expression(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<PatternExpression> {
+    ) -> UnlaceResult<PatternExpression> {
         let mut expression = Self::decode_tree(decoder, trans)?;
         expression.prepare_runtime();
         Ok(expression)
@@ -1245,7 +1272,7 @@ impl PatternExpression {
     fn decode_tree(
         decoder: &mut dyn Decoder,
         trans: &dyn OperandValueResolver,
-    ) -> KunaResult<PatternExpression> {
+    ) -> UnlaceResult<PatternExpression> {
         let el = decoder.peek_element()?;
         if el == sla::ELEM_TOKENFIELD {
             Ok(PatternExpression::Value(PatternValue::TokenField(
@@ -1316,7 +1343,7 @@ impl PatternExpression {
                 decoder, trans,
             )?))
         } else {
-            Err(KunaError::decoder("Invalid pattern expression element"))
+            Err(UnlaceError::decoder("Invalid pattern expression element"))
         }
     }
 }
@@ -1468,7 +1495,7 @@ impl TokenPattern {
     /// C++ `TokenPattern::resolveTokens`: decide how `tok1`/`tok2` align,
     /// returning the shift `tok2` needs and storing the resulting token list
     /// and ellipses into `self`.
-    fn resolve_tokens(&mut self, tok1: &TokenPattern, tok2: &TokenPattern) -> KunaResult<i32> {
+    fn resolve_tokens(&mut self, tok1: &TokenPattern, tok2: &TokenPattern) -> UnlaceResult<i32> {
         let mut reversedirection = false;
         self.leftellipsis = false;
         self.rightellipsis = false;
@@ -1496,59 +1523,59 @@ impl TokenPattern {
         if tok1.leftellipsis {
             reversedirection = true;
             if tok2.rightellipsis {
-                return Err(KunaError::sleigh("Right/left ellipsis"));
+                return Err(UnlaceError::sleigh("Right/left ellipsis"));
             } else if tok2.leftellipsis {
                 self.leftellipsis = true;
             } else if l1 != minsize {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "Mismatched pattern sizes -- {} != {}",
                     l1, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Pattern size cannot vary (missing '...'?)",
                 ));
             }
         } else if tok1.rightellipsis {
             if tok2.leftellipsis {
-                return Err(KunaError::sleigh("Left/right ellipsis"));
+                return Err(UnlaceError::sleigh("Left/right ellipsis"));
             } else if tok2.rightellipsis {
                 self.rightellipsis = true;
             } else if l1 != minsize {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "Mismatched pattern sizes -- {} != {}",
                     l1, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Pattern size cannot vary (missing '...'?)",
                 ));
             }
         } else if tok2.leftellipsis {
             reversedirection = true;
             if l2 != minsize {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "Mismatched pattern sizes -- {} != {}",
                     l2, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Pattern size cannot vary (missing '...'?)",
                 ));
             }
         } else if tok2.rightellipsis {
             if l2 != minsize {
-                return Err(KunaError::sleigh(format!(
+                return Err(UnlaceError::sleigh(format!(
                     "Mismatched pattern sizes -- {} != {}",
                     l2, minsize
                 )));
             } else if l1 == l2 {
-                return Err(KunaError::sleigh(
+                return Err(UnlaceError::sleigh(
                     "Pattern size cannot vary (missing '...'?)",
                 ));
             }
         } else if l2 != l1 {
-            return Err(KunaError::sleigh(format!(
+            return Err(UnlaceError::sleigh(format!(
                 "Mismatched pattern sizes -- {} != {}",
                 l2, l1
             )));
@@ -1566,7 +1593,7 @@ impl TokenPattern {
             pairs.find(|(a, b)| a != b)
         };
         if let Some((a, b)) = mismatch {
-            return Err(KunaError::sleigh(format!(
+            return Err(UnlaceError::sleigh(format!(
                 "Mismatched tokens when combining patterns -- {} != {}",
                 a.index, b.index
             )));
@@ -1591,7 +1618,7 @@ impl TokenPattern {
     }
 
     /// C++ `TokenPattern::doAnd`.
-    pub fn do_and(&self, tokpat: &TokenPattern) -> KunaResult<TokenPattern> {
+    pub fn do_and(&self, tokpat: &TokenPattern) -> UnlaceResult<TokenPattern> {
         let mut res = TokenPattern::new_true();
         let sa = res.resolve_tokens(self, tokpat)?;
         // C++ returns `res` by value; the caller's TokenPattern copy/assign
@@ -1602,7 +1629,7 @@ impl TokenPattern {
     }
 
     /// C++ `TokenPattern::doOr`.
-    pub fn do_or(&self, tokpat: &TokenPattern) -> KunaResult<TokenPattern> {
+    pub fn do_or(&self, tokpat: &TokenPattern) -> UnlaceResult<TokenPattern> {
         let mut res = TokenPattern::new_true();
         let sa = res.resolve_tokens(self, tokpat)?;
         // do_or takes &mut on both operands (the upstream const-cast quirk);
@@ -1614,7 +1641,7 @@ impl TokenPattern {
     }
 
     /// C++ `TokenPattern::doCat`: concatenation of `self` and `tokpat`.
-    pub fn do_cat(&self, tokpat: &TokenPattern) -> KunaResult<TokenPattern> {
+    pub fn do_cat(&self, tokpat: &TokenPattern) -> UnlaceResult<TokenPattern> {
         let mut res = TokenPattern::new_true();
         res.leftellipsis = self.leftellipsis;
         res.rightellipsis = self.rightellipsis;
@@ -1623,11 +1650,11 @@ impl TokenPattern {
         if self.rightellipsis || tokpat.leftellipsis {
             // Check for interior ellipsis
             if self.rightellipsis && !tokpat.always_instruction_true() {
-                return Err(KunaError::sleigh("Interior ellipsis in pattern"));
+                return Err(UnlaceError::sleigh("Interior ellipsis in pattern"));
             }
             if tokpat.leftellipsis {
                 if !self.always_instruction_true() {
-                    return Err(KunaError::sleigh("Interior ellipsis in pattern"));
+                    return Err(UnlaceError::sleigh("Interior ellipsis in pattern"));
                 }
                 res.leftellipsis = true;
             }
@@ -1640,7 +1667,7 @@ impl TokenPattern {
             res.rightellipsis = tokpat.rightellipsis;
         }
         if res.rightellipsis && res.leftellipsis {
-            return Err(KunaError::sleigh("Double ellipsis in pattern"));
+            return Err(UnlaceError::sleigh("Double ellipsis in pattern"));
         }
         res.pattern = self
             .pattern
@@ -1650,13 +1677,15 @@ impl TokenPattern {
     }
 
     /// C++ `TokenPattern::commonSubPattern`.
-    pub fn common_sub_pattern(&self, tokpat: &TokenPattern) -> KunaResult<TokenPattern> {
+    pub fn common_sub_pattern(&self, tokpat: &TokenPattern) -> UnlaceResult<TokenPattern> {
         let mut patres = TokenPattern::new_true();
         let mut reversedirection = false;
 
         if self.leftellipsis || tokpat.leftellipsis {
             if self.rightellipsis || tokpat.rightellipsis {
-                return Err(KunaError::sleigh("Right/left ellipsis in commonSubPattern"));
+                return Err(UnlaceError::sleigh(
+                    "Right/left ellipsis in commonSubPattern",
+                ));
             }
             reversedirection = true;
         }
@@ -1804,7 +1833,7 @@ fn build_equation_pattern(
     lhsval: i64,
     semval: &[&PatternValue],
     val: &[i64],
-) -> KunaResult<TokenPattern> {
+) -> UnlaceResult<TokenPattern> {
     let mut respattern = lhs.gen_pattern(lhsval)?;
     for (i, sv) in semval.iter().enumerate() {
         respattern = respattern.do_and(&sv.gen_pattern(val[i])?)?;
@@ -1950,14 +1979,14 @@ impl EquationArena {
 
     /// C++ `PatternEquation::genPattern(const vector<TokenPattern> &ops)`:
     /// build the [`TokenPattern`] for equation `id` (returned, not cached).
-    pub fn gen_pattern(&self, id: EqId, ops: &[TokenPattern]) -> KunaResult<TokenPattern> {
+    pub fn gen_pattern(&self, id: EqId, ops: &[TokenPattern]) -> UnlaceResult<TokenPattern> {
         match self.get(id) {
             // OperandEquation::genPattern: resultpattern = ops[index]
             PatternEquation::Operand { index } => Ok(ops[*index as usize].clone()),
             // UnconstrainedEquation::genPattern: patex->genMinPattern(ops)
             PatternEquation::Unconstrained { patex } => patex
                 .gen_min_pattern(ops)
-                .ok_or_else(|| KunaError::sleigh("Operand used before its pattern is known")),
+                .ok_or_else(|| UnlaceError::sleigh("Operand used before its pattern is known")),
             PatternEquation::Equal { lhs, rhs } => gen_comparison(lhs, rhs, ops, Comparison::Equal),
             PatternEquation::NotEqual { lhs, rhs } => {
                 gen_comparison(lhs, rhs, ops, Comparison::NotEqual)
@@ -2015,7 +2044,7 @@ impl EquationArena {
         state: &mut OperandResolve,
         ops: &[TokenPattern],
         sink: &mut dyn OperandResolveSink,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         match self.get(id) {
             PatternEquation::Operand { index } => {
                 let index = *index;
@@ -2171,7 +2200,7 @@ fn gen_comparison(
     rhs: &PatternExpression,
     _ops: &[TokenPattern],
     cmp: Comparison,
-) -> KunaResult<TokenPattern> {
+) -> UnlaceResult<TokenPattern> {
     let lhsmin = lhs.min_value()?;
     let lhsmax = lhs.max_value()?;
     let mut semval: Vec<&PatternValue> = Vec::new();
@@ -2222,7 +2251,7 @@ fn gen_comparison(
     }
     match result {
         Some(p) => Ok(p),
-        None => Err(KunaError::sleigh(match cmp {
+        None => Err(UnlaceError::sleigh(match cmp {
             Comparison::Equal => "Equal constraint is impossible to match",
             Comparison::NotEqual => "Notequal constraint is impossible to match",
             Comparison::Less => "Less than constraint is impossible to match",
@@ -2281,11 +2310,11 @@ mod tests {
     }
 
     impl PatternExpressionContext for TestWalker {
-        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
             // mirror ParserContext::getInstructionBytes with point->offset=0:
             // big-endian packing, error past the buffer (BadDataError analog)
             if byteoff < 0 || (byteoff + numbytes) as usize > self.instr.len() {
-                return Err(KunaError::bad_data(
+                return Err(UnlaceError::bad_data(
                     "Instruction is using more than 16 bytes",
                 ));
             }
@@ -2297,7 +2326,7 @@ mod tests {
             Ok(res)
         }
 
-        fn get_context_bytes(&self, bytestart: i32, size: i32) -> KunaResult<u32> {
+        fn get_context_bytes(&self, bytestart: i32, size: i32) -> UnlaceResult<u32> {
             // mirror ParserContext::getContextBytes over the ctx word array
             let intstart = (bytestart / 4) as usize;
             let mut res: u32 = *self.ctx.get(intstart).unwrap_or(&0);
@@ -2323,22 +2352,22 @@ mod tests {
             self.naddr.clone().expect("test walker naddr unset")
         }
 
-        fn get_n2addr(&self) -> KunaResult<Address> {
+        fn get_n2addr(&self) -> UnlaceResult<Address> {
             match &self.n2addr {
                 Some(a) => Ok(a.clone()),
-                None => Err(KunaError::lowlevel(
+                None => Err(UnlaceError::lowlevel(
                     "inst_next2 not available in this context",
                 )),
             }
         }
 
-        fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> KunaResult<i64> {
+        fn operand_value(&self, index: i32, table_id: u32, ct_id: u32) -> UnlaceResult<i64> {
             for ((i, t, c), v) in &self.operands {
                 if *i == index && *t == table_id && *c == ct_id {
                     return Ok(*v);
                 }
             }
-            Err(KunaError::sleigh("unknown operand in test walker"))
+            Err(UnlaceError::sleigh("unknown operand in test walker"))
         }
     }
 
@@ -2346,7 +2375,7 @@ mod tests {
     struct FixedResolver(i32);
 
     impl OperandValueResolver for FixedResolver {
-        fn num_constructors(&self, _table_id: u32) -> KunaResult<i32> {
+        fn num_constructors(&self, _table_id: u32) -> UnlaceResult<i32> {
             Ok(self.0)
         }
     }

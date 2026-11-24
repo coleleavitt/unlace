@@ -1,4 +1,4 @@
-//! (kuna) The Octeon language IDs in one place: the loader builds them from ELF
+//! (unlace) The Octeon language IDs in one place: the loader builds them from ELF
 //! evidence, and call recovery reads the compiler model back out of them.
 //!
 //! An Octeon language is `MIPS:BE:64:<variant>[-32addr]:<compiler>`. Every

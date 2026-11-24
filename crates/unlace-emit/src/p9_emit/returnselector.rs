@@ -36,7 +36,7 @@ impl Action for ActionReturnSelector {
                     .get(id)
                     .is_some_and(|op| !op.is_dead() && op.get_parent().is_some())
             });
-            if !live || !table.is_labelled() || table.kuna_return_default().is_none() {
+            if !live || !table.is_labelled() || table.unlace_return_default().is_none() {
                 continue;
             }
             let placeholder = crate::jumptable::JumpTable::new(data.get_address().clone());

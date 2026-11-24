@@ -24,7 +24,7 @@
 //! Realized as precedence-climbing for both `pexpression` (pattern values) and
 //! `expr` (p-code).
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use crate::slgh_compile::SleighCompile;
 use crate::slghscan::{ScannerHost, SleighScanner, SymbolTokenKind, Token, TokenKind, TokenValue};
@@ -365,12 +365,12 @@ impl SleighParser {
     /// Entry point corresponding to bison's `sleighparse()`
     /// (slgh_compile.cc:3786).  Returns `Ok(0)` on success (matching the C++
     /// `parseres == 0` convention).
-    pub fn parse(&mut self, compiler: &mut SleighCompile) -> KunaResult<i32> {
+    pub fn parse(&mut self, compiler: &mut SleighCompile) -> UnlaceResult<i32> {
         self.parse_driver(compiler)
     }
 
     /// Parse against any [`ParseDriver`] (the real driver or the test mock).
-    pub fn parse_driver(&mut self, d: &mut dyn ParseDriver) -> KunaResult<i32> {
+    pub fn parse_driver(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<i32> {
         // `spec: endiandef | spec aligndef | spec definition | spec constructorlike`
         // (slghparse.y:163-167).
         self.spec(d)?;
@@ -382,7 +382,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// Peek the current lookahead token, fetching one if needed.
-    fn peek(&mut self, d: &mut dyn ParseDriver) -> KunaResult<TokenKind> {
+    fn peek(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<TokenKind> {
         if self.lookahead.is_none() {
             let tok = self.scanner.next_token(d.as_host())?;
             self.lookahead = Some(tok);
@@ -391,7 +391,7 @@ impl SleighParser {
     }
 
     /// Consume and return the current token.
-    fn next(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Token> {
+    fn next(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Token> {
         if let Some(tok) = self.lookahead.take() {
             return Ok(tok);
         }
@@ -399,10 +399,10 @@ impl SleighParser {
     }
 
     /// Consume a token, asserting it is `kind`.
-    fn expect(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> KunaResult<Token> {
+    fn expect(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> UnlaceResult<Token> {
         let tok = self.next(d)?;
         if tok.kind != kind {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "SLEIGH parse error: expected {kind:?}, got {:?}",
                 tok.kind
             )));
@@ -412,7 +412,7 @@ impl SleighParser {
 
     /// Consume the next token and return it if its kind matches `kind`, else
     /// leave it in the lookahead and return `None`.
-    fn accept(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> KunaResult<Option<Token>> {
+    fn accept(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> UnlaceResult<Option<Token>> {
         if self.peek(d)? == kind {
             Ok(Some(self.next(d)?))
         } else {
@@ -424,7 +424,7 @@ impl SleighParser {
     // spec / definition / constructorlike (slghparse.y:163-182)
     // -----------------------------------------------------------------------
 
-    fn spec(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn spec(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         // `endiandef` first (slghparse.y:163).
         self.endiandef(d)?;
         loop {
@@ -446,7 +446,7 @@ impl SleighParser {
     }
 
     /// `endiandef: DEFINE_KEY ENDIAN_KEY '=' (BIG|LITTLE) ';'` (slghparse.y:184).
-    fn endiandef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn endiandef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::DefineKey)?;
         self.expect(d, TokenKind::EndianKey)?;
         self.expect(d, TokenKind::Char1(b'='))?;
@@ -454,7 +454,7 @@ impl SleighParser {
     }
 
     /// The `(BIG|LITTLE) ';'` tail shared by `endiandef` (the `=` already consumed).
-    fn endian_tail(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn endian_tail(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         match self.next(d)?.kind {
             TokenKind::BigKey => {
                 d.trace("setEndian(1)");
@@ -465,7 +465,7 @@ impl SleighParser {
                 d.set_endian(0);
             }
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "SLEIGH: expected big/little endian, got {other:?}"
                 )));
             }
@@ -477,7 +477,7 @@ impl SleighParser {
     /// Dispatch the productions that start with `DEFINE_KEY` (after the leading
     /// `define`): aligndef, endiandef, tokendef, contextdef, spacedef,
     /// varnodedef, bitrangedef, pcodeopdef (slghparse.y:184-238).
-    fn after_define(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn after_define(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::DefineKey)?;
         match self.peek(d)? {
             TokenKind::EndianKey => {
@@ -492,14 +492,14 @@ impl SleighParser {
             TokenKind::SpaceSym => self.varnodedef(d),
             TokenKind::BitrangeKey => self.bitrangedef(d),
             TokenKind::PcodeopKey => self.pcodeopdef(d),
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token after `define`: {other:?}"
             ))),
         }
     }
 
     /// `aligndef: DEFINE_KEY ALIGN_KEY '=' INTEGER ';'` (slghparse.y:187).
-    fn aligndef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn aligndef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::AlignKey)?;
         self.expect(d, TokenKind::Char1(b'='))?;
         let v = self.expect_integer(d)?;
@@ -514,7 +514,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `tokendef: tokenprop ';'` (slghparse.y:189).  At `TOKEN_KEY`.
-    fn tokendef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn tokendef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::TokenKey)?;
         let name = self.expect_string(d)?;
         self.expect(d, TokenKind::Char1(b'('))?;
@@ -527,7 +527,7 @@ impl SleighParser {
                 TokenKind::LittleKey => -1,
                 TokenKind::BigKey => 1,
                 other => {
-                    return Err(KunaError::parse(format!(
+                    return Err(UnlaceError::parse(format!(
                         "SLEIGH: bad token endian {other:?}"
                     )));
                 }
@@ -552,7 +552,7 @@ impl SleighParser {
     }
 
     /// `contextdef: contextprop ';'` (slghparse.y:197).  At `CONTEXT_KEY`.
-    fn contextdef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn contextdef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::ContextKey)?;
         // `DEFINE_KEY CONTEXT_KEY VARSYM` (slghparse.y:199).
         let var = self.expect_symbol(d, TokenKind::VarSym)?;
@@ -564,7 +564,7 @@ impl SleighParser {
             d.trace("addContextField");
             if !d.add_context_field(sym, qual) {
                 d.report_error("All context definitions must come before constructors");
-                return Err(KunaError::parse("context after constructors".to_string()));
+                return Err(UnlaceError::parse("context after constructors".to_string()));
             }
         }
         self.expect(d, TokenKind::Char1(b';'))?;
@@ -573,7 +573,7 @@ impl SleighParser {
 
     /// `fielddef` / `contextfielddef` (slghparse.y:203-214): the base
     /// `STRING '=' '(' INTEGER ',' INTEGER ')'` plus a run of quality keywords.
-    fn fielddef(&mut self, d: &mut dyn ParseDriver, context: bool) -> KunaResult<FieldQual> {
+    fn fielddef(&mut self, d: &mut dyn ParseDriver, context: bool) -> UnlaceResult<FieldQual> {
         let name = self.expect_string(d)?;
         self.expect(d, TokenKind::Char1(b'='))?;
         self.expect(d, TokenKind::Char1(b'('))?;
@@ -620,7 +620,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `spacedef: spaceprop ';'` (slghparse.y:216).  At `SPACE_KEY`.
-    fn spacedef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn spacedef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::SpaceKey)?;
         let name = self.expect_string(d)?;
         d.trace("SpaceQuality");
@@ -640,7 +640,7 @@ impl SleighParser {
                             qual.is_register = true;
                         }
                         other => {
-                            return Err(KunaError::parse(format!(
+                            return Err(UnlaceError::parse(format!(
                                 "SLEIGH: bad space type {other:?}"
                             )));
                         }
@@ -676,14 +676,14 @@ impl SleighParser {
 
     /// `varnodedef: DEFINE_KEY SPACESYM OFFSET_KEY '=' INTEGER SIZE_KEY '=' INTEGER
     /// stringlist ';'` (slghparse.y:226).  At `SPACESYM`.
-    fn varnodedef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn varnodedef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         let space = self.expect_symbol(d, TokenKind::SpaceSym)?;
         self.expect(d, TokenKind::OffsetKey)?;
         self.expect(d, TokenKind::Char1(b'='))?;
         if self.peek(d)? == TokenKind::BadInteger {
             self.next(d)?;
             d.report_error("Parsed integer is too big (overflow)");
-            return Err(KunaError::parse("varnode offset overflow".to_string()));
+            return Err(UnlaceError::parse("varnode offset overflow".to_string()));
         }
         let off = self.expect_integer(d)?;
         self.expect(d, TokenKind::SizeKey)?;
@@ -697,7 +697,7 @@ impl SleighParser {
     }
 
     /// `bitrangedef: DEFINE_KEY BITRANGE_KEY bitrangelist ';'` (slghparse.y:230).
-    fn bitrangedef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn bitrangedef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::BitrangeKey)?;
         loop {
             if self.peek(d)? == TokenKind::Char1(b';') {
@@ -719,7 +719,7 @@ impl SleighParser {
     }
 
     /// `pcodeopdef: DEFINE_KEY PCODEOP_KEY stringlist ';'` (slghparse.y:238).
-    fn pcodeopdef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn pcodeopdef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::PcodeopKey)?;
         let names = self.stringlist(d)?;
         self.expect(d, TokenKind::Char1(b';'))?;
@@ -733,7 +733,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `valueattach | nameattach | varattach` (slghparse.y:240-244).
-    fn attach(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn attach(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::AttachKey)?;
         match self.next(d)?.kind {
             TokenKind::ValuesKey => {
@@ -757,7 +757,7 @@ impl SleighParser {
                 d.trace("attachVarnodes");
                 d.attach_varnodes(symlist, varlist);
             }
-            other => return Err(KunaError::parse(format!("SLEIGH: bad attach {other:?}"))),
+            other => return Err(UnlaceError::parse(format!("SLEIGH: bad attach {other:?}"))),
         }
         Ok(())
     }
@@ -768,7 +768,7 @@ impl SleighParser {
 
     /// `macrodef: macrostart '{' rtl '}'`; `macrostart: MACRO_KEY STRING '('
     /// oplist ')'` (slghparse.y:246,266).
-    fn macrodef(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn macrodef(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::MacroKey)?;
         let name = self.expect_string(d)?;
         self.expect(d, TokenKind::Char1(b'('))?;
@@ -790,7 +790,7 @@ impl SleighParser {
 
     /// `withblock: withblockmid '}'`; `withblockstart: WITH_KEY id_or_nil ':'
     /// bitpat_or_nil contextblock '{'` (slghparse.y:249-255).
-    fn withblock(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn withblock(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         self.expect(d, TokenKind::WithKey)?;
         let ss = self.id_or_nil(d)?;
         self.expect(d, TokenKind::Char1(b':'))?;
@@ -810,7 +810,7 @@ impl SleighParser {
                 TokenKind::MacroKey => self.macrodef(d)?,
                 TokenKind::WithKey => self.withblock(d)?,
                 TokenKind::Eof => {
-                    return Err(KunaError::parse(
+                    return Err(UnlaceError::parse(
                         "SLEIGH: EOF inside with-block".to_string(),
                     ));
                 }
@@ -823,7 +823,7 @@ impl SleighParser {
     }
 
     /// `id_or_nil: /*empty*/ | SUBTABLESYM | STRING` (slghparse.y:257-260).
-    fn id_or_nil(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Option<SymId>> {
+    fn id_or_nil(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Option<SymId>> {
         match self.peek(d)? {
             TokenKind::SubtableSym => {
                 let sym = self.expect_symbol(d, TokenKind::SubtableSym)?;
@@ -843,7 +843,7 @@ impl SleighParser {
     }
 
     /// `bitpat_or_nil: /*empty*/ | pequation` (slghparse.y:262-264).
-    fn bitpat_or_nil(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Option<u32>> {
+    fn bitpat_or_nil(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Option<u32>> {
         match self.peek(d)? {
             TokenKind::Char1(b'[') | TokenKind::Char1(b'{') => {
                 d.trace("bitpat_or_nil/nil");
@@ -859,7 +859,7 @@ impl SleighParser {
 
     /// `constructor: (constructprint|subtablestart) IS_KEY pequation contextblock
     /// rtlbody` (slghparse.y:272-273).
-    fn constructor(&mut self, d: &mut dyn ParseDriver) -> KunaResult<()> {
+    fn constructor(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<()> {
         let ct = self.subtablestart(d)?;
         let ct = self.constructprint(d, ct)?;
         self.expect(d, TokenKind::IsKey)?;
@@ -877,7 +877,7 @@ impl SleighParser {
     /// display piece" status -- the following piece is still the first
     /// `constructprint` piece (verified against the golden: `Rel8:  addr` yields
     /// `subtablestart/space` then `constructprint/SYMBOLSTRING`).
-    fn subtablestart(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn subtablestart(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         let ct = match self.peek(d)? {
             TokenKind::SubtableSym => {
                 let sym = self.expect_symbol(d, TokenKind::SubtableSym)?;
@@ -898,7 +898,7 @@ impl SleighParser {
                 d.create_constructor(None)
             }
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "SLEIGH: expected subtable start, got {other:?}"
                 )));
             }
@@ -914,7 +914,7 @@ impl SleighParser {
 
     /// `constructprint` (slghparse.y:275-284): the rest of the display section --
     /// STRING / charstring / SYMBOLSTRING / '^' / ' ' pieces, until `is`.
-    fn constructprint(&mut self, d: &mut dyn ParseDriver, ct: u32) -> KunaResult<u32> {
+    fn constructprint(&mut self, d: &mut dyn ParseDriver, ct: u32) -> UnlaceResult<u32> {
         let mut first = true;
         loop {
             match self.peek(d)? {
@@ -957,7 +957,7 @@ impl SleighParser {
                     }
                 }
                 TokenKind::Char1(b'^') => {
-                    // (kuna) A leading '^' is an empty concatenation in every table, as
+                    // (unlace) A leading '^' is an empty concatenation in every table, as
                     // Ghidra's Java SleighCompiler reads it (`printpiece: OP_CONCATENATE`);
                     // the C++ parser accepted it only in the root table.
                     self.next(d)?;
@@ -973,7 +973,7 @@ impl SleighParser {
                     d.add_syntax(ct, b" ");
                 }
                 other => {
-                    return Err(KunaError::parse(format!(
+                    return Err(UnlaceError::parse(format!(
                         "SLEIGH: unexpected token in display section: {other:?}"
                     )));
                 }
@@ -989,7 +989,7 @@ impl SleighParser {
 
     /// `rtlbody: '{' rtl '}' | '{' rtlcontinue rtlmid '}' | OP_UNIMPL`
     /// (slghparse.y:268-271).
-    fn rtlbody(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn rtlbody(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         if self.peek(d)? == TokenKind::OpUnimpl {
             self.next(d)?;
             d.trace("rtlbody/unimpl");
@@ -1034,12 +1034,12 @@ impl SleighParser {
 
     /// True if the lookahead begins a `section_def` (`<` rendered as OP_LEFT in
     /// the sem state).
-    fn at_section_def(&mut self, d: &mut dyn ParseDriver) -> KunaResult<bool> {
+    fn at_section_def(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<bool> {
         Ok(self.peek(d)? == TokenKind::OpLeft)
     }
 
     /// `section_def: OP_LEFT (STRING|SECTIONSYM) OP_RIGHT` (slghparse.y:347-348).
-    fn section_def(&mut self, d: &mut dyn ParseDriver) -> KunaResult<SymId> {
+    fn section_def(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<SymId> {
         self.expect(d, TokenKind::OpLeft)?;
         let sym = match self.peek(d)? {
             TokenKind::SectionSym => {
@@ -1058,14 +1058,14 @@ impl SleighParser {
     }
 
     /// `rtl: rtlmid` plus the optional EXPORT tail (slghparse.y:355-359).
-    fn rtl(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn rtl(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         let mid = self.rtlmid(d)?;
         self.finish_rtl_tail(d, mid)
     }
 
     /// Finish an `rtl`: handle an optional `EXPORT ...;` tail, else finalize the
     /// main section (recording a NOP if empty) (slghparse.y:355-359).
-    fn finish_rtl_tail(&mut self, d: &mut dyn ParseDriver, mid: u32) -> KunaResult<u32> {
+    fn finish_rtl_tail(&mut self, d: &mut dyn ParseDriver, mid: u32) -> UnlaceResult<u32> {
         if self.accept(d, TokenKind::ExportKey)?.is_some() {
             let ct = if self.peek(d)? == TokenKind::Char1(b'*') {
                 let star = self.sizedstar(d)?;
@@ -1079,7 +1079,7 @@ impl SleighParser {
                 d.trace("setResultVarnode");
                 d.set_result_varnode(mid, vn)
             };
-            // (kuna) Statements may follow the export, as Ghidra's Java SleighCompiler
+            // (unlace) Statements may follow the export, as Ghidra's Java SleighCompiler
             // accepts (its "No statements allowed after export" check never fires);
             // their ops run after the ops before it. The C++ grammar ended the section.
             self.rtl_statements(d, ct)?;
@@ -1092,7 +1092,7 @@ impl SleighParser {
 
     /// `rtlmid` (slghparse.y:361-365): the empty section, then a run of statements
     /// / local declarations.  Returns the (in-progress) section id.
-    fn rtlmid(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn rtlmid(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         d.trace("enterSection");
         let sec = d.enter_section();
         self.rtl_statements(d, sec)?;
@@ -1102,7 +1102,7 @@ impl SleighParser {
     /// The run of statements and local declarations in section `sec`, up to its
     /// closing brace, an export or a section label (`rtlmid statement`,
     /// slghparse.y:362-364).
-    fn rtl_statements(&mut self, d: &mut dyn ParseDriver, sec: u32) -> KunaResult<()> {
+    fn rtl_statements(&mut self, d: &mut dyn ParseDriver, sec: u32) -> UnlaceResult<()> {
         loop {
             match self.peek(d)? {
                 TokenKind::Char1(b'}') | TokenKind::ExportKey | TokenKind::OpLeft => break,
@@ -1114,7 +1114,7 @@ impl SleighParser {
                     d.trace("rtlmid/addOpList");
                     if !d.rtl_add_oplist(sec, stmt) {
                         d.report_error("Multiple delayslot declarations");
-                        return Err(KunaError::parse("multiple delayslot".to_string()));
+                        return Err(UnlaceError::parse("multiple delayslot".to_string()));
                     }
                 }
             }
@@ -1124,13 +1124,13 @@ impl SleighParser {
 
     /// Handle a `local ...` form (slghparse.y:363-364 declarations, plus the
     /// `LOCAL_KEY ...` statement forms slghparse.y:367,369,371).
-    fn local_form(&mut self, d: &mut dyn ParseDriver, sec: u32) -> KunaResult<()> {
+    fn local_form(&mut self, d: &mut dyn ParseDriver, sec: u32) -> UnlaceResult<()> {
         debug_assert_eq!(self.peek(d)?, TokenKind::LocalKey);
         self.next(d)?; // LOCAL_KEY
         if self.peek(d)? != TokenKind::String {
             // `LOCAL_KEY specificsymbol '='` -> redefinition error (slghparse.y:371).
             d.report_error("Redefinition of symbol");
-            return Err(KunaError::parse("redefinition of symbol".to_string()));
+            return Err(UnlaceError::parse("redefinition of symbol".to_string()));
         }
         let tok = self.next(d)?; // STRING
         let name = token_str(&tok)?;
@@ -1172,7 +1172,7 @@ impl SleighParser {
                 d.rtl_add_oplist(sec, stmt);
                 Ok(())
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token after `local {}`: {other:?}",
                 String::from_utf8_lossy(&name)
             ))),
@@ -1184,7 +1184,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// One `statement` (slghparse.y:366-391).  Returns the op-list id.
-    fn statement(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn statement(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             TokenKind::VarSym | TokenKind::SpecSym | TokenKind::OperandSym | TokenKind::JumpSym => {
                 self.assign_or_bitrange_statement(d)
@@ -1320,7 +1320,7 @@ impl SleighParser {
                     Ok(d.pcode_create_op_noout(PcodeOpc::Return, e, None))
                 } else {
                     d.report_error("Must specify an indirect parameter for return");
-                    Err(KunaError::parse("bare return".to_string()))
+                    Err(UnlaceError::parse("bare return".to_string()))
                 }
             }
             TokenKind::MacroSym => {
@@ -1337,7 +1337,7 @@ impl SleighParser {
                 d.trace("pcode.placeLabel");
                 Ok(d.pcode_place_label(label))
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token starting statement: {other:?}"
             ))),
         }
@@ -1345,7 +1345,7 @@ impl SleighParser {
 
     /// `lhsvarnode '=' expr ';'` plus the bitrange/subpiece-LHS variants
     /// (slghparse.y:366,374,376,377).
-    fn assign_or_bitrange_statement(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn assign_or_bitrange_statement(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         let spec = self.specificsymbol(d)?;
         // The `:`/`(` LHS error forms (slghparse.y:376,377) reduce `varnode`, not
         // `lhsvarnode`, before erroring -- but they always fail, so the exact trace
@@ -1357,14 +1357,14 @@ impl SleighParser {
                 let _ = self.expect_integer(d)?;
                 self.expect(d, TokenKind::Char1(b'='))?;
                 d.report_error("Illegal truncation on left-hand side of assignment");
-                return Err(KunaError::parse("illegal truncation lhs".to_string()));
+                return Err(UnlaceError::parse("illegal truncation lhs".to_string()));
             }
             TokenKind::Char1(b'(') => {
                 self.next(d)?;
                 let _ = self.expect_integer(d)?;
                 self.expect(d, TokenKind::Char1(b')'))?;
                 d.report_error("Illegal subpiece on left-hand side of assignment");
-                return Err(KunaError::parse("illegal subpiece lhs".to_string()));
+                return Err(UnlaceError::parse("illegal subpiece lhs".to_string()));
             }
             _ => {}
         }
@@ -1402,11 +1402,11 @@ impl SleighParser {
 
     /// `pequation` with the `& | ;` operators (slghparse.y:309-312).  Binding
     /// powers from the %left table (slghparse.y:82-93): `|`=1, `;`=2, `&`=3.
-    fn pequation(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn pequation(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         self.pequation_bp(d, 0)
     }
 
-    fn pequation_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> KunaResult<u32> {
+    fn pequation_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> UnlaceResult<u32> {
         let mut lhs = self.pequation_atom(d)?;
         loop {
             let (lbp, op): (u8, fn(&mut dyn ParserActions, u32, u32) -> u32) = match self.peek(d)? {
@@ -1436,7 +1436,7 @@ impl SleighParser {
 
     /// `elleq`/`ellrt`/`atomic`/`constraint` (slghparse.y:314-336): the ellipsis
     /// wrappers around an atomic constraint.
-    fn pequation_atom(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn pequation_atom(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         if self.peek(d)? == TokenKind::EllipsisKey {
             self.next(d)?;
             let inner = self.ellrt(d)?;
@@ -1447,7 +1447,7 @@ impl SleighParser {
     }
 
     /// `ellrt: atomic ELLIPSIS_KEY | atomic` (slghparse.y:317-319).
-    fn ellrt(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn ellrt(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         let a = self.atomic(d)?;
         if self.peek(d)? == TokenKind::EllipsisKey {
             self.next(d)?;
@@ -1459,7 +1459,7 @@ impl SleighParser {
     }
 
     /// `atomic: constraint | '(' pequation ')'` (slghparse.y:320-322).
-    fn atomic(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn atomic(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         if self.peek(d)? == TokenKind::Char1(b'(') {
             self.next(d)?;
             let e = self.pequation(d)?;
@@ -1471,7 +1471,7 @@ impl SleighParser {
     }
 
     /// `constraint` (slghparse.y:323-336).
-    fn constraint(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn constraint(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             k if is_familysymbol(k) => {
                 let fam = self.familysymbol(d)?;
@@ -1516,7 +1516,7 @@ impl SleighParser {
                         d.trace("defineInvisibleOperand/fam");
                         match d.define_invisible_operand(fam) {
                             Some(id) => Ok(id),
-                            None => Err(KunaError::parse("invisible operand failed".to_string())),
+                            None => Err(UnlaceError::parse("invisible operand failed".to_string())),
                         }
                     }
                 }
@@ -1531,7 +1531,9 @@ impl SleighParser {
                         Some(id) => Ok(id),
                         None => {
                             d.report_error("Constraining currently undefined operand");
-                            Err(KunaError::parse("constrain undefined operand".to_string()))
+                            Err(UnlaceError::parse(
+                                "constrain undefined operand".to_string(),
+                            ))
                         }
                     }
                 } else {
@@ -1551,23 +1553,23 @@ impl SleighParser {
                 d.trace("defineInvisibleOperand/sub");
                 match d.define_invisible_operand(sym) {
                     Some(id) => Ok(id),
-                    None => Err(KunaError::parse(
+                    None => Err(UnlaceError::parse(
                         "invisible operand (subtable) failed".to_string(),
                     )),
                 }
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in pattern constraint: {other:?}"
             ))),
         }
     }
 
     /// `pexpression` with full operator precedence (slghparse.y:290-308).
-    fn pexpression(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn pexpression(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         self.pexpression_bp(d, 0)
     }
 
-    fn pexpression_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> KunaResult<u32> {
+    fn pexpression_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> UnlaceResult<u32> {
         let mut lhs = self.pexpression_atom(d)?;
         loop {
             // %left table (slghparse.y:82-93): `|`=1, `^`=2, `&`=3, shifts=4,
@@ -1623,7 +1625,7 @@ impl SleighParser {
 
     /// `pexpression` atoms: literals, symbols, parens, and the unary `- ~`
     /// (slghparse.y:290-307).
-    fn pexpression_atom(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn pexpression_atom(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             TokenKind::Intb => {
                 let v = self.expect_intb(d)?;
@@ -1661,7 +1663,7 @@ impl SleighParser {
                 d.trace("pexp/specsym.getPatternExpression");
                 Ok(d.pexp_spec_expression(spec))
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in pattern expression: {other:?}"
             ))),
         }
@@ -1672,7 +1674,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `contextblock: /*empty*/ | '[' contextlist ']'` (slghparse.y:337-339).
-    fn contextblock(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Option<Vec<u32>>> {
+    fn contextblock(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Option<Vec<u32>>> {
         if self.peek(d)? != TokenKind::Char1(b'[') {
             d.trace("contextblock/empty");
             return Ok(None);
@@ -1696,7 +1698,7 @@ impl SleighParser {
                         d.report_error(
                             "Cannot use 'inst_next' or 'inst_next2' to set context variable",
                         );
-                        return Err(KunaError::parse("bad context mod".to_string()));
+                        return Err(UnlaceError::parse("bad context mod".to_string()));
                     }
                 }
                 TokenKind::GlobalsetKey => {
@@ -1729,7 +1731,7 @@ impl SleighParser {
                 }
                 other => {
                     d.report_error("Expecting context symbol");
-                    return Err(KunaError::parse(format!(
+                    return Err(UnlaceError::parse(format!(
                         "SLEIGH: bad context list entry {other:?}"
                     )));
                 }
@@ -1744,11 +1746,11 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `expr` with full p-code operator precedence (slghparse.y:392-459).
-    fn expr(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn expr(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         self.expr_bp(d, 0)
     }
 
-    fn expr_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> KunaResult<u32> {
+    fn expr_bp(&mut self, d: &mut dyn ParseDriver, min_bp: u8) -> UnlaceResult<u32> {
         let mut lhs = self.expr_atom(d)?;
         loop {
             // Binding powers from the %left table (slghparse.y:82-93): OP_BOOL_OR=1;
@@ -1833,7 +1835,7 @@ impl SleighParser {
     }
 
     /// `expr` atoms (slghparse.y:392-458).
-    fn expr_atom(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn expr_atom(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             // `sizedstar expr %prec '!'` -> load (slghparse.y:393).
             TokenKind::Char1(b'*') => {
@@ -1957,7 +1959,7 @@ impl SleighParser {
                 self.expect(d, TokenKind::Char1(b')'))?;
                 if params.len() < 2 {
                     d.report_error("Must be at least two inputs to cpool");
-                    return Err(KunaError::parse("cpool < 2 inputs".to_string()));
+                    return Err(UnlaceError::parse("cpool < 2 inputs".to_string()));
                 }
                 d.trace("pcode.createVariadic/CPOOLREF");
                 Ok(d.pcode_create_variadic_cpoolref(params))
@@ -2018,7 +2020,7 @@ impl SleighParser {
                 d.trace("expr/varnode");
                 Ok(d.expr_from_varnode(vn))
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in expression: {other:?}"
             ))),
         }
@@ -2029,7 +2031,7 @@ impl SleighParser {
         d: &mut dyn ParseDriver,
         opc: PcodeOpc,
         trace: &str,
-    ) -> KunaResult<u32> {
+    ) -> UnlaceResult<u32> {
         self.next(d)?; // the OP_* keyword
         self.expect(d, TokenKind::Char1(b'('))?;
         let a = self.expr(d)?;
@@ -2043,7 +2045,7 @@ impl SleighParser {
         d: &mut dyn ParseDriver,
         opc: PcodeOpc,
         trace: &str,
-    ) -> KunaResult<u32> {
+    ) -> UnlaceResult<u32> {
         self.next(d)?;
         self.expect(d, TokenKind::Char1(b'('))?;
         let a = self.expr(d)?;
@@ -2059,7 +2061,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `sizedstar` (slghparse.y:460-464).
-    fn sizedstar(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn sizedstar(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         self.expect(d, TokenKind::Char1(b'*'))?;
         match self.peek(d)? {
             TokenKind::Char1(b'[') => {
@@ -2090,7 +2092,7 @@ impl SleighParser {
     }
 
     /// `jumpdest` (slghparse.y:465-472).
-    fn jumpdest(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn jumpdest(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             TokenKind::JumpSym => {
                 let sym = self.expect_symbol(d, TokenKind::JumpSym)?;
@@ -2126,14 +2128,14 @@ impl SleighParser {
                 d.trace("jumpdest/label");
                 Ok(d.jumpdest_label(label))
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in jump destination: {other:?}"
             ))),
         }
     }
 
     /// `varnode: specificsymbol | integervarnode` (slghparse.y:473-477).
-    fn varnode(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn varnode(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             k if is_specificsymbol(k) => {
                 let spec = self.specificsymbol(d)?;
@@ -2149,7 +2151,7 @@ impl SleighParser {
     }
 
     /// `integervarnode` (slghparse.y:478-483).
-    fn integervarnode(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn integervarnode(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             TokenKind::Integer => {
                 let v = self.expect_integer(d)?;
@@ -2183,21 +2185,21 @@ impl SleighParser {
                     Ok(d.pcode_address_of(vn, 0))
                 }
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in integer varnode: {other:?}"
             ))),
         }
     }
 
     /// `lhsvarnode: specificsymbol` (slghparse.y:484-487).
-    fn lhsvarnode(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn lhsvarnode(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         let spec = self.specificsymbol(d)?;
         d.trace("lhsvarnode/spec");
         Ok(d.lhsvarnode_spec(spec))
     }
 
     /// `exportvarnode` (slghparse.y:491-497).
-    fn exportvarnode(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn exportvarnode(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         match self.peek(d)? {
             k if is_specificsymbol(k) => {
                 let spec = self.specificsymbol(d)?;
@@ -2225,14 +2227,14 @@ impl SleighParser {
                 d.trace("exportvn/INTEGER:INTEGER");
                 Ok(d.exportvarnode_integer_colon(v, sz))
             }
-            other => Err(KunaError::parse(format!(
+            other => Err(UnlaceError::parse(format!(
                 "SLEIGH: unexpected token in export varnode: {other:?}"
             ))),
         }
     }
 
     /// `label: '<' LABELSYM '>' | '<' STRING '>'` (slghparse.y:488-490).
-    fn label(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u32> {
+    fn label(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u32> {
         self.expect(d, TokenKind::Char1(b'<'))?;
         let id = match self.peek(d)? {
             TokenKind::LabelSym => {
@@ -2256,10 +2258,10 @@ impl SleighParser {
 
     /// `familysymbol: VALUESYM | VALUEMAPSYM | CONTEXTSYM | NAMESYM | VARLISTSYM`
     /// (slghparse.y:498-503).
-    fn familysymbol(&mut self, d: &mut dyn ParseDriver) -> KunaResult<SymId> {
+    fn familysymbol(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<SymId> {
         let tok = self.next(d)?;
         if !is_familysymbol(tok.kind) {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "SLEIGH: expected family symbol, got {:?}",
                 tok.kind
             )));
@@ -2268,10 +2270,10 @@ impl SleighParser {
     }
 
     /// `specificsymbol: VARSYM | SPECSYM | OPERANDSYM | JUMPSYM` (slghparse.y:504-508).
-    fn specificsymbol(&mut self, d: &mut dyn ParseDriver) -> KunaResult<SymId> {
+    fn specificsymbol(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<SymId> {
         let tok = self.next(d)?;
         if !is_specificsymbol(tok.kind) {
-            return Err(KunaError::parse(format!(
+            return Err(UnlaceError::parse(format!(
                 "SLEIGH: expected specific symbol, got {:?}",
                 tok.kind
             )));
@@ -2284,7 +2286,7 @@ impl SleighParser {
     // -----------------------------------------------------------------------
 
     /// `charstring: CHAR | charstring CHAR` (slghparse.y:509-511).
-    fn charstring(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<u8>> {
+    fn charstring(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<u8>> {
         let mut s = Vec::new();
         while self.peek(d)? == TokenKind::Char {
             let tok = self.next(d)?;
@@ -2296,7 +2298,7 @@ impl SleighParser {
     }
 
     /// `intblist: '[' intbpart ']' | INTEGER | '-' INTEGER` (slghparse.y:512-524).
-    fn intblist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<i64>> {
+    fn intblist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<i64>> {
         if self.peek(d)? == TokenKind::Char1(b'[') {
             self.next(d)?;
             let mut v = Vec::new();
@@ -2320,12 +2322,14 @@ impl SleighParser {
                         let s = self.expect_string(d)?;
                         if s != b"_" {
                             d.report_error("Expecting integer");
-                            return Err(KunaError::parse("intbpart non-_".to_string()));
+                            return Err(UnlaceError::parse("intbpart non-_".to_string()));
                         }
                         v.push(0xBADBEEF);
                     }
                     other => {
-                        return Err(KunaError::parse(format!("SLEIGH: bad intblist {other:?}")));
+                        return Err(UnlaceError::parse(format!(
+                            "SLEIGH: bad intblist {other:?}"
+                        )));
                     }
                 }
             }
@@ -2341,7 +2345,7 @@ impl SleighParser {
     }
 
     /// `stringlist: '[' stringpart ']' | STRING` (slghparse.y:525-531).
-    fn stringlist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<Vec<u8>>> {
+    fn stringlist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<Vec<u8>>> {
         if self.peek(d)? == TokenKind::Char1(b'[') {
             self.next(d)?;
             let mut v = Vec::new();
@@ -2360,9 +2364,9 @@ impl SleighParser {
                                 "{}: redefined",
                                 String::from_utf8_lossy(&name)
                             ));
-                            return Err(KunaError::parse("stringpart redefined".to_string()));
+                            return Err(UnlaceError::parse("stringpart redefined".to_string()));
                         }
-                        return Err(KunaError::parse(format!(
+                        return Err(UnlaceError::parse(format!(
                             "SLEIGH: bad stringlist {other:?}"
                         )));
                     }
@@ -2375,7 +2379,7 @@ impl SleighParser {
     }
 
     /// `anystringlist: '[' anystringpart ']'` (slghparse.y:532-538).
-    fn anystringlist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<Vec<u8>>> {
+    fn anystringlist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<Vec<u8>>> {
         self.expect(d, TokenKind::Char1(b'['))?;
         let mut v = Vec::new();
         loop {
@@ -2390,7 +2394,7 @@ impl SleighParser {
                     v.push(self.sym_name(&tok));
                 }
                 other => {
-                    return Err(KunaError::parse(format!(
+                    return Err(UnlaceError::parse(format!(
                         "SLEIGH: bad anystringlist {other:?}"
                     )));
                 }
@@ -2400,7 +2404,7 @@ impl SleighParser {
     }
 
     /// `valuelist: '[' valuepart ']' | VALUESYM | CONTEXTSYM` (slghparse.y:539-548).
-    fn valuelist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<SymId>> {
+    fn valuelist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<SymId>> {
         if self.peek(d)? == TokenKind::Char1(b'[') {
             self.next(d)?;
             let mut v = Vec::new();
@@ -2418,10 +2422,12 @@ impl SleighParser {
                             "{}: is not a value pattern",
                             String::from_utf8_lossy(&s)
                         ));
-                        return Err(KunaError::parse("valuepart non-value".to_string()));
+                        return Err(UnlaceError::parse("valuepart non-value".to_string()));
                     }
                     other => {
-                        return Err(KunaError::parse(format!("SLEIGH: bad valuelist {other:?}")));
+                        return Err(UnlaceError::parse(format!(
+                            "SLEIGH: bad valuelist {other:?}"
+                        )));
                     }
                 }
             }
@@ -2430,7 +2436,7 @@ impl SleighParser {
             match self.peek(d)? {
                 TokenKind::ValueSym => Ok(vec![self.expect_symbol(d, TokenKind::ValueSym)?]),
                 TokenKind::ContextSym => Ok(vec![self.expect_symbol(d, TokenKind::ContextSym)?]),
-                other => Err(KunaError::parse(format!(
+                other => Err(UnlaceError::parse(format!(
                     "SLEIGH: bad valuelist head {other:?}"
                 ))),
             }
@@ -2438,7 +2444,7 @@ impl SleighParser {
     }
 
     /// `varlist: '[' varpart ']' | VARSYM` (slghparse.y:549-558).
-    fn varlist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<SymId>> {
+    fn varlist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<SymId>> {
         if self.peek(d)? == TokenKind::Char1(b'[') {
             self.next(d)?;
             let mut v = Vec::new();
@@ -2456,13 +2462,13 @@ impl SleighParser {
                                 "{}: is not a varnode symbol",
                                 String::from_utf8_lossy(&s)
                             ));
-                            return Err(KunaError::parse("varpart non-_".to_string()));
+                            return Err(UnlaceError::parse("varpart non-_".to_string()));
                         }
                         // `_` -> the null-varnode sentinel (slghparse.y:553).
                         v.push(SymId::MAX);
                     }
                     other => {
-                        return Err(KunaError::parse(format!("SLEIGH: bad varlist {other:?}")));
+                        return Err(UnlaceError::parse(format!("SLEIGH: bad varlist {other:?}")));
                     }
                 }
             }
@@ -2473,7 +2479,7 @@ impl SleighParser {
     }
 
     /// `paramlist: /*EMPTY*/ | expr | paramlist ',' expr` (slghparse.y:559-562).
-    fn paramlist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<u32>> {
+    fn paramlist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<u32>> {
         if self.peek(d)? == TokenKind::Char1(b')') {
             return Ok(Vec::new());
         }
@@ -2486,7 +2492,7 @@ impl SleighParser {
     }
 
     /// `oplist: /*EMPTY*/ | STRING | oplist ',' STRING` (slghparse.y:563-566).
-    fn oplist(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<Vec<u8>>> {
+    fn oplist(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<Vec<u8>>> {
         if self.peek(d)? == TokenKind::Char1(b')') {
             return Ok(Vec::new());
         }
@@ -2502,11 +2508,11 @@ impl SleighParser {
     // token-value extraction helpers
     // -----------------------------------------------------------------------
 
-    fn expect_integer(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u64> {
+    fn expect_integer(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u64> {
         let tok = self.expect(d, TokenKind::Integer)?;
         match tok.value {
             TokenValue::Integer(i) => Ok(i),
-            _ => Err(KunaError::parse(
+            _ => Err(UnlaceError::parse(
                 "SLEIGH: INTEGER without value".to_string(),
             )),
         }
@@ -2514,19 +2520,19 @@ impl SleighParser {
 
     /// An INTEGER value (the SUBPIECE arg comes through `integervarnode`'s INTEGER,
     /// slghparse.y:453).
-    fn expect_integer_value(&mut self, d: &mut dyn ParseDriver) -> KunaResult<u64> {
+    fn expect_integer_value(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<u64> {
         self.expect_integer(d)
     }
 
-    fn expect_intb(&mut self, d: &mut dyn ParseDriver) -> KunaResult<i64> {
+    fn expect_intb(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<i64> {
         let tok = self.expect(d, TokenKind::Intb)?;
         match tok.value {
             TokenValue::Intb(b) => Ok(b),
-            _ => Err(KunaError::parse("SLEIGH: INTB without value".to_string())),
+            _ => Err(UnlaceError::parse("SLEIGH: INTB without value".to_string())),
         }
     }
 
-    fn expect_string(&mut self, d: &mut dyn ParseDriver) -> KunaResult<Vec<u8>> {
+    fn expect_string(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<Vec<u8>> {
         let tok = self.expect(d, TokenKind::String)?;
         token_str(&tok)
     }
@@ -2535,7 +2541,7 @@ impl SleighParser {
     /// A SPACESYM, or a semantic keyword naming a space (`*[local]` where the spec
     /// defines `space local`): Ghidra's Java grammar reads a keyword as an
     /// identifier there (`identifier: strict_id | key_as_id`).
-    fn space_symbol(&mut self, d: &mut dyn ParseDriver) -> KunaResult<SymId> {
+    fn space_symbol(&mut self, d: &mut dyn ParseDriver) -> UnlaceResult<SymId> {
         if let Some(name) = keyword_text(self.peek(d)?) {
             if d.as_host().find_symbol_kind(name) == Some(SymbolTokenKind::Space) {
                 self.next(d)?;
@@ -2545,7 +2551,7 @@ impl SleighParser {
         self.expect_symbol(d, TokenKind::SpaceSym)
     }
 
-    fn expect_symbol(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> KunaResult<SymId> {
+    fn expect_symbol(&mut self, d: &mut dyn ParseDriver, kind: TokenKind) -> UnlaceResult<SymId> {
         let tok = self.expect(d, kind)?;
         Ok(self.sym_from_token(d, &tok))
     }
@@ -2588,11 +2594,11 @@ fn keyword_text(kind: TokenKind) -> Option<&'static [u8]> {
 }
 
 /// Extract a `STRING`/`SYMBOLSTRING` token's bytes.
-fn token_str(tok: &Token) -> KunaResult<Vec<u8>> {
+fn token_str(tok: &Token) -> UnlaceResult<Vec<u8>> {
     match &tok.value {
         TokenValue::Str(s) => Ok(s.clone()),
         TokenValue::SymbolName(s) => Ok(s.clone()),
-        _ => Err(KunaError::parse(
+        _ => Err(UnlaceError::parse(
             "SLEIGH: string token without value".to_string(),
         )),
     }

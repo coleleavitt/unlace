@@ -1,4 +1,4 @@
-//! (kuna `blobs`) The image containers: each walk returns the file's exact
+//! (unlace `blobs`) The image containers: each walk returns the file's exact
 //! length when `d` starts with a whole, well-formed file.
 
 use super::{Work, be32, crc32, le16, le32};

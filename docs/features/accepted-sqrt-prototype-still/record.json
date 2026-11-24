@@ -30,7 +30,7 @@
     },
     {
       "what": "no option, no stages XML, no catalog counter, no DIV row",
-      "detail": "Tooling track by mechanism even though the need was filed `quality`: the change is entirely in kuna-console's assertion plane. A directive an agent did not write cannot move emitted C -- `make test` 675/675 and `make test-stages` PARITY OK confirm it -- and `--assert` is not a decision the pipeline takes on its own, so there is no judgement call to gate. Matches the CLI-tier repipe PRs merged this round (#448/#452/#454/#457)."
+      "detail": "Tooling track by mechanism even though the need was filed `quality`: the change is entirely in console's assertion plane. A directive an agent did not write cannot move emitted C -- `make test` 675/675 and `make test-stages` PARITY OK confirm it -- and `--assert` is not a decision the pipeline takes on its own, so there is no judgement call to gate. Matches the CLI-tier repipe PRs merged this round (#448/#452/#454/#457)."
     }
   ],
   "inertness": {

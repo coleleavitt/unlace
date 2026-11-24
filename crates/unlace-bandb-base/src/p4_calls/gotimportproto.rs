@@ -1,4 +1,4 @@
-//! (kuna) Bind a declared prototype that states no storage to
+//! (unlace) Bind a declared prototype that states no storage to
 //! a call through a MIPS external-symbol GOT entry.
 //!
 //! A declaration that names only types (a libc type database entry, a

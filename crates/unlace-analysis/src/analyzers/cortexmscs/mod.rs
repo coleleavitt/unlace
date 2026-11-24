@@ -1,4 +1,4 @@
-//! (kuna `cortexmscs`) The Cortex-M System Control Space as typed volatile
+//! (unlace `cortexmscs`) The Cortex-M System Control Space as typed volatile
 //! globals.
 //!
 //! Every ARMv7-M and ARMv8-M core maps the same registers at fixed addresses

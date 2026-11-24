@@ -65,7 +65,7 @@ fn cpp_oracle() -> PathBuf {
 }
 
 /// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the sliced bulk
-/// `print C` body (between `===KUNA_DUMP_BEGIN===` and `===KUNA_DUMP_MID===`),
+/// `print C` body (between `===UNLACE_DUMP_BEGIN===` and `===UNLACE_DUMP_MID===`),
 /// or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
     if !bin.exists() {
@@ -190,7 +190,7 @@ fn t2_switch_cluster_recovers_and_gains_no_spurious_pointer() {
 // =============================================================================
 // (T3) SINGLE-BIT-CONSTANT-NOT-POINTER guard: a constant that looks like a single
 //      bit or mask (`bit_transitions < 3`) must NOT be turned into a pointer
-//      (unless it is an exact function entry, the kuna GH-6930 escape).  The
+//      (unless it is an exact function entry, the unlace GH-6930 escape).  The
 //      switch datatests carry single-bit jump-table index/mask constants; if the
 //      guard failed, those would become spurious `PTRSUB`/`&DAT_` references.  The
 //      `&DAT_` / `&dat_` global-data-reference form is the most direct tell of a

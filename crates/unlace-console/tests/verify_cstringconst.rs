@@ -82,7 +82,7 @@ fn render(bin: &str, vma: u64, on: bool) -> String {
     let mut prog = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("cstringconst", if on { "on" } else { "off" })
+        .set_unlace_option("cstringconst", if on { "on" } else { "off" })
         .expect("cstringconst flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

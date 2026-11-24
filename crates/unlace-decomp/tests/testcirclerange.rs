@@ -13,7 +13,7 @@
 //!     behaviors, so the `NoFormats` float provider is sufficient.
 //!   - `catch(EvaluationError &err)` (the "output is not in range" skip in
 //!     `pullbackUnary`/`pullbackBinary`) becomes matching on
-//!     `KunaError::Evaluation`; any other `Err` would be a genuine porting bug
+//!     `UnlaceError::Evaluation`; any other `Err` would be a genuine porting bug
 //!     and is re-surfaced via `panic`.
 //!   - mixed-sign / wrapping arithmetic in `getStartStopStep` is replicated with
 //!     the `Wrap` helpers (ADR 0003); the `& mask` truncations are verbatim.
@@ -22,7 +22,7 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use unlace_base::address::calc_mask;
-use unlace_base::error::KunaError;
+use unlace_base::error::UnlaceError;
 use unlace_base::types::{Wrap, int4, uintb};
 use unlace_decomp::rangeutil::CircleRange;
 use unlace_num::float::FloatFormat;
@@ -176,7 +176,7 @@ impl CircleRangeTest {
         for &el in self.elements.iter() {
             match behave.recover_input_unary(self.bytes, el, insize) {
                 Ok(v) => res.push(v),
-                Err(KunaError::Evaluation { .. }) => {
+                Err(UnlaceError::Evaluation { .. }) => {
                     // output is not in range
                 }
                 Err(e) => panic!("unexpected error in recover_input_unary: {e:?}"),
@@ -202,7 +202,7 @@ impl CircleRangeTest {
         for &el in self.elements.iter() {
             match behave.recover_input_binary(slot, self.bytes, el, self.bytes, val) {
                 Ok(v) => res.push(v),
-                Err(KunaError::Evaluation { .. }) => {
+                Err(UnlaceError::Evaluation { .. }) => {
                     // output is not in range
                 }
                 Err(e) => panic!("unexpected error in recover_input_binary: {e:?}"),

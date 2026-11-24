@@ -2,7 +2,7 @@
 //! `tests/golden/vectors/opbehavior.csv` (emitted by the C++ oracle's
 //! `golden opbehavior` command, `decompiler/cpp/kuna_goldengen.cc`).
 //!
-//! The test transcribes the generator loop itself (`IfcKunaGoldenOpbehavior::
+//! The test transcribes the generator loop itself (`IfcUnlaceGoldenOpbehavior::
 //! execute`: behavior-table iteration in opcode enum order, the fixed
 //! size/input matrices, the ERR mapping, the UB-2 TRAP pre-detection) and
 //! requires the regenerated text to match the pinned vector file
@@ -73,7 +73,7 @@ fn golden_inputs(size: i32) -> Vec<u64> {
 
 /// goldenEvalUnary: evaluate one unary cell, mapping any evaluation failure
 /// to "ERR" (the C++ catches LowlevelError, which covers EvaluationError and
-/// the base-class throw — every KunaError our behaviors return).
+/// the base-class throw — every UnlaceError our behaviors return).
 fn golden_eval_unary(beh: &dyn OpBehavior, sizeout: i32, sizein: i32, in0: u64) -> String {
     match beh.evaluate_unary(sizeout, sizein, in0) {
         Ok(val) => golden_hex(val),
@@ -121,7 +121,7 @@ fn golden_eval_binary(
     }
 }
 
-/// Transcription of IfcKunaGoldenOpbehavior::execute, producing the CSV
+/// Transcription of IfcUnlaceGoldenOpbehavior::execute, producing the CSV
 /// lines (including the three header comments).
 fn generate_lines() -> Vec<String> {
     let trans: Rc<dyn FloatFormatProvider> = Rc::new(DefaultFloatFormats {

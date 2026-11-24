@@ -345,7 +345,7 @@ fn console_load_raw_preserves_whitespace_in_final_filename() {
     assert!(stdout.contains("successfully loaded"), "{stdout}\n{stderr}");
 }
 
-/// (kuna #1288) A raw x86 real-mode image states its code segment when one
+/// (unlace #1288) A raw x86 real-mode image states its code segment when one
 /// segment holds it: CS 0 in the first 64 KiB, else its base paragraph. A near
 /// CALL wraps IP inside that segment and pushes IP; a larger image states none
 /// and takes the linear sum above 64 KiB.
@@ -487,13 +487,13 @@ fn ret_transfer_probes_do_not_change_another_functions_return_ip() {
         emit.pushed
     };
     assert_eq!(pushed(), Some(0x8893));
-    unlace_console::retcallchain::kuna_entry_chain_sites(arch.translate(), &probe, 8, 16);
+    unlace_console::retcallchain::unlace_entry_chain_sites(arch.translate(), &probe, 8, 16);
     assert_eq!(
         pushed(),
         Some(0x8893),
         "an advisory chain walk changed the caller's IP"
     );
-    unlace_console::retcallchain::kuna_push_immediate_ret(arch.translate(), &probe, 16);
+    unlace_console::retcallchain::unlace_push_immediate_ret(arch.translate(), &probe, 16);
     assert_eq!(
         pushed(),
         Some(0x8893),
@@ -637,7 +637,7 @@ fn raw_image_takes_pattern_starts_when_the_option_is_on() {
         .expect("bootstrap raw x86-64 fixture with built specs");
         program
             .arch_mut()
-            .set_kuna_option("funcstart_patterns", on)
+            .set_unlace_option("funcstart_patterns", on)
             .unwrap();
         program.commit_pending_analysis().unwrap();
         counts.push((
@@ -652,7 +652,7 @@ fn raw_image_takes_pattern_starts_when_the_option_is_on() {
         .expect("a raw image needs no --entry");
     program
         .arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .unwrap();
     program.commit_pending_analysis().unwrap();
     for start in [0x401015, 0x401043, 0x401055] {

@@ -1,4 +1,4 @@
-//! (kuna) `regcarry` — carry a register's constant to the instructions that
+//! (unlace) `regcarry` — carry a register's constant to the instructions that
 //! fall after it, so an address a fixed-width ISA builds in two instructions is
 //! a reference.
 //!
@@ -185,13 +185,13 @@ pub(super) struct Machine<'a> {
     /// AArch64's code, whose `adrp` forms a page the instruction completing
     /// it supersedes; ARM's too when [`Machine::halves`] reads its `movw`.
     code: Option<PoolImage<'a>>,
-    /// (kuna `movwpairs`) How a `movw`/`movt` or `movz`/`movk` pair is read.
+    /// (unlace `movwpairs`) How a `movw`/`movt` or `movz`/`movk` pair is read.
     halves: HalfPairs,
     /// The image is AArch64 (its `adrp`, its `movz`/`movk`).
     a64: bool,
 }
 
-/// (kuna `movwpairs`) What a register pair that builds a 32-bit (or wider) value in
+/// (unlace `movwpairs`) What a register pair that builds a 32-bit (or wider) value in
 /// 16-bit halves contributes: `movw r0,#lo; movt r0,#hi` (A32/T32) or `movz
 /// x0,#lo; movk x0,#hi,lsl #16` (AArch64). The low half is usually below the
 /// `checkOperands` floor, so it starts no carry on its own and the pair named

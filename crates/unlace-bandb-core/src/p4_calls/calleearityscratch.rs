@@ -1,4 +1,4 @@
-//! (kuna) Let a boundary register the caller only used as SCRATCH end a
+//! (unlace) Let a boundary register the caller only used as SCRATCH end a
 //! [`calleearitycut`](crate::calleearitycut) run.
 //!
 //! # The gap
@@ -66,7 +66,7 @@ use unlace_base::marshal::ElementId;
 
 use crate::calleearitybody::BodyTrial;
 
-/// Marshaling element `<calleearityscratch>` (kuna 4000+ range; 4155 = indirectanchor).
+/// Marshaling element `<calleearityscratch>` (unlace 4000+ range; 4155 = indirectanchor).
 pub const ELEM_CALLEEARITYSCRATCH: ElementId = ElementId::new("calleearityscratch", 4156);
 
 /// Is the register this run stops at one the caller only used as scratch?

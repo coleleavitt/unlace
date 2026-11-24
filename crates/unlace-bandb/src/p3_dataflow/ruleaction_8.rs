@@ -76,7 +76,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{calc_mask, leastsigbit_set, mostsigbit_set, popcount};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -122,7 +122,7 @@ pub fn rule_set_opcode(data: &mut Funcdata, op: OpId, opc: OpCode) {
 /// `Funcdata::op_set_output` is itself gated behind a not-yet-ported `banks_mut`
 /// split-borrow accessor and returns `Err`; this surface propagates that error so
 /// the dependent rule aborts its transformation cleanly.  Recorded as a loss.
-fn new_unique_out(data: &mut Funcdata, s: int4, op: OpId) -> KunaResult<VarnodeId> {
+fn new_unique_out(data: &mut Funcdata, s: int4, op: OpId) -> UnlaceResult<VarnodeId> {
     let outvn = data.new_unique(s, None);
     data.op_set_output(op, outvn)?;
     Ok(outvn)
@@ -2087,7 +2087,7 @@ impl Rule for RuleOrCompare {
 /// \brief Convert LOAD size to match pointer data-type (C++ `RuleExpandLoad`,
 /// name `"expandload"`).
 ///
-/// (kuna) Only the AND form is taken, and only into a field a declared record
+/// (unlace) Only the AND form is taken, and only into a field a declared record
 /// lays out, reached through a pointer whose type is locked; the truncation
 /// form is never taken.  Both read bytes the program never reads (see
 /// [`crate::narrowload`]).
@@ -2453,7 +2453,7 @@ mod tests {
 
     use crate::op::pcodeop_flags;
     use unlace_base::address::Address;
-    use unlace_base::error::KunaResult;
+    use unlace_base::error::UnlaceResult;
     use unlace_base::space::{
         AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace,
         addrspace_flags, spacetype,
@@ -2521,8 +2521,8 @@ mod tests {
         Rc::new(Datatype::new(size, type_metatype::TYPE_FLOAT))
     }
 
-    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
-        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> KunaResult<()> { Ok(()) }
+    fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
+        |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| -> UnlaceResult<()> { Ok(()) }
     }
 
     /// A fresh basic block under the bblocks root.

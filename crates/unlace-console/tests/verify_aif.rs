@@ -102,10 +102,10 @@ fn bootstrap(mode: Mode) -> unlace_console::engine::ConsoleProgram {
     // Listing build + AIF gap-walk see them on.
     if let Mode::On = mode {
         prog.arch_mut()
-            .set_kuna_option("listing", "on")
+            .set_unlace_option("listing", "on")
             .expect("listing flips on");
         prog.arch_mut()
-            .set_kuna_option("aif", "on")
+            .set_unlace_option("aif", "on")
             .expect("aif flips on");
     }
     // `read symbols`: build the Listing (deferred) and run the consumers, gated.

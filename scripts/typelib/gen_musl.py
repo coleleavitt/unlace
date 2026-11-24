@@ -365,7 +365,7 @@ def write_library(model: Model, layouts, differs, arch, out: pathlib.Path):
             return "*"
         return f"m={differs[key]}" if differs[key] else "m"
 
-    lines = [f"kuna-typelib {FORMAT}", f"target linux {arch}", f"source musl {MUSL[0]}"]
+    lines = [f"typelib {FORMAT}", f"target linux {arch}", f"source musl {MUSL[0]}"]
     for name in sorted(model.typedefs):
         text = model.typedefs[name].replace(VA_LIST, "void *")
         lines.append(f"T {name} {flag('T ' + name)}\t{text}")

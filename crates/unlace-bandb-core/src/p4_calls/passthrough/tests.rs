@@ -76,7 +76,8 @@ fn late_linking_preserves_existing_forwarded_register_claims() {
     manage.insert_space(Rc::clone(&ram)).unwrap();
     manage.insert_space(Rc::clone(&reg)).unwrap();
     let mut arch = ArchContext::new(manage);
-    arch.kuna_options.set(crate::passthrough::PassThrough(true));
+    arch.unlace_options
+        .set(crate::passthrough::PassThrough(true));
     let mut data = Funcdata::new(
         "f",
         "f",
@@ -86,13 +87,13 @@ fn late_linking_preserves_existing_forwarded_register_claims() {
         0,
     )
     .unwrap();
-    data.kuna_set_passthrough_claims(vec![claim(&reg, RDI, 8, &[1], &[])]);
+    data.unlace_set_passthrough_claims(vec![claim(&reg, RDI, 8, &[1], &[])]);
     claim_untouched_registers_late(&mut data);
-    let claims = data.kuna_passthrough_claims();
+    let claims = data.unlace_passthrough_claims();
     assert_eq!(claims.len(), 1);
     assert_eq!(claims[0].arg_owners, vec![op(1)]);
     claim_untouched_registers_late(&mut data);
-    assert_eq!(data.kuna_passthrough_claims().len(), 1);
+    assert_eq!(data.unlace_passthrough_claims().len(), 1);
 }
 
 #[test]

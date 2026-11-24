@@ -1,6 +1,6 @@
-//! Tests of `kuna_globalarrayanchor` that read modules of unlace-bandb, the crate above it, so they live here.
+//! Tests of `unlace_globalarrayanchor` that read modules of unlace-bandb, the crate above it, so they live here.
 
-/// The imports of `kuna_globalarrayanchor` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_globalarrayanchor` itself, as a glob so the tests' own imports win.
 #[allow(unused_imports)]
 mod module_scope {
     pub(super) use crate::{
@@ -115,7 +115,7 @@ fn fixture_with(
     ));
     manager.insert_space(ram.clone()).unwrap();
     let mut arch = ArchContext::new(manager);
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::globalarrayanchor::GlobalArrayAnchor(true));
     arch.infer_pointers = true;
     arch.opbehaviors
@@ -142,7 +142,7 @@ fn fixture_with(
     )
     .unwrap();
     data.set_type_recovery(true);
-    data.kuna_global_array_anchor_passes = Some(0);
+    data.unlace_global_array_anchor_passes = Some(0);
     let index = data.new_varnode(8, &Address::new(ram, 0x100), None);
     let two = data.new_constant(8, 2);
     let (_, scaled) = operation(&mut data, OpCode::CPUI_INT_MULT, &[index, two]);
@@ -162,7 +162,7 @@ fn constant_inner_bias_survives_copies_then_folds_after_recovery_budget() {
     let (mut data, bias, _) = address_fixture();
     assert!(preserve_array_base(&data, bias));
     assert_eq!(RuleCollapseConstants.apply_op(bias, &mut data), 0);
-    data.kuna_global_array_anchor_passes = Some(4);
+    data.unlace_global_array_anchor_passes = Some(4);
     assert_eq!(RuleCollapseConstants.apply_op(bias, &mut data), 1);
     let op = data.obank().get(bias).unwrap();
     assert_eq!(op.code(), OpCode::CPUI_COPY);
@@ -245,6 +245,6 @@ fn shared_literal_temporary_is_not_held_for_pointer_recovery() {
 #[test]
 fn a_filtered_out_pointer_action_does_not_hold_the_bias() {
     let (mut data, bias, _) = address_fixture();
-    data.kuna_global_array_anchor_passes = None;
+    data.unlace_global_array_anchor_passes = None;
     assert_eq!(RuleCollapseConstants.apply_op(bias, &mut data), 1);
 }

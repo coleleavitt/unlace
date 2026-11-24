@@ -1,4 +1,4 @@
-//! (kuna `comcfg`) A `clsid.cfg` file of extra COM ids for the `com` pass.
+//! (unlace `comcfg`) A `clsid.cfg` file of extra COM ids for the `com` pass.
 //!
 //! The file is the format of IDA's `cfg/clsid.cfg`: one id per line,
 //! `guid {00000000-0000-0000-C000-000000000046} IUnknown`, `;` starting a
@@ -37,9 +37,9 @@ impl ComCfg {
     }
 }
 
-impl crate::optionset::KunaOption for ComCfg {
+impl crate::optionset::UnlaceOption for ComCfg {
     const NAME: &'static str = "comcfg";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ComCfg(None)
@@ -49,8 +49,8 @@ impl crate::optionset::KunaOption for ComCfg {
         ComCfg(None)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let choice = ComCfg::parse(value).map_err(unlace_base::error::KunaError::parse)?;
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        let choice = ComCfg::parse(value).map_err(unlace_base::error::UnlaceError::parse)?;
         let msg = match &choice.0 {
             Some(p) => format!("COM ids also read from {}", p.display()),
             None => "COM id file off".to_string(),

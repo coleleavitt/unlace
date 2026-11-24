@@ -96,7 +96,7 @@ fn run(on: bool) -> Vec<String> {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("swiftmetadata", if on { "on" } else { "off" })
+        .set_unlace_option("swiftmetadata", if on { "on" } else { "off" })
         .expect("swiftmetadata flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

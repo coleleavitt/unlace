@@ -13,7 +13,7 @@
   "depends_on": "almostregion (shares kuna_check_region and build_scratch)",
 
   "witness": {
-    "stage_test": "tests/stages/kuna-outline.xml",
+    "stage_test": "tests/stages/outline.xml",
     "assertions": 7,
     "before": "if (a1) { v1 = a0 + 7; if (0x33 <= v1) v1 = a0 + 4; a0 = v1 * 3; } return a0 + 100;",
     "after": "if (a1) a0 = outlined_0x40100a(a0); return a0 + 100;",

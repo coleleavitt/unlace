@@ -21,7 +21,7 @@ mod module_scope {
     pub(super) use std::rc::Rc;
     pub(super) use std::sync::Arc;
     pub(super) use unlace_base::address::Address;
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::{AddrSpace, AddrSpaceManager};
     pub(super) use unlace_base::types::{int4, uint4, uintb};
     pub(super) use unlace_sleigh::sleigh::Sleigh;
@@ -33,7 +33,7 @@ use crate::options::split_datatype;
 use module_scope::*;
 use std::rc::Rc;
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
@@ -44,7 +44,7 @@ use unlace_sleigh::translate::{Translate, UniqueLayout};
 // Two strands:
 //   1. **Defaults + flags + naming**: a minimal `Architecture` over a fresh
 //      (uninitialized) Sleigh — exercises the verbatim `resetDefaultsInternal`
-//      transcription, the kuna anchor flags, `nameFunction`, and the warning
+//      transcription, the unlace anchor flags, `nameFunction`, and the warning
 //      sink without needing a built `.sla`.
 //   2. **Real-`.sla` bootstrap**: builds an `Architecture` over a Sleigh with a
 //      decoded `.sla` (skips gracefully when specs are unbuilt), then lifts a
@@ -58,8 +58,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -133,7 +133,7 @@ fn decode_recipe_requires_both_bootstrap_inputs() {
 #[test]
 fn reset_defaults_internal_matches_cpp() {
     let arch = Architecture::new("test:LE:32", bare_sleigh());
-    // Verbatim from architecture.cc:1420 (kuna DIV-2/DIV-3 defaults).
+    // Verbatim from architecture.cc:1420 (unlace DIV-2/DIV-3 defaults).
     assert_eq!(arch.trim_recurse_max, 5);
     assert_eq!(arch.max_implied_ref, 2);
     assert_eq!(arch.max_term_duplication, 2);
@@ -194,9 +194,9 @@ fn name_function_angr_vs_upstream() {
     );
     let addr = Address::new(Rc::new(ram), 0x401000);
 
-    // angr-style on by default: sub_<addr> (kuna_function_name).
+    // angr-style on by default: sub_<addr> (unlace_function_name).
     assert!(
-        arch.kuna_options
+        arch.unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0
     );
@@ -206,7 +206,7 @@ fn name_function_angr_vs_upstream() {
     // upstream style: func_<raw-addr>, where raw-addr is C++ Address::printRaw
     // (AddrSpace::printRaw): zero-padded to the address width (4 bytes -> 8 hex
     // digits), no space-name prefix, word-size division (wordsize 1 here).
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::coreoptions::NameStyleAngr(false));
     let n_up = arch.name_function(&addr);
     assert_eq!(n_up, "func_0x00401000", "upstream name was {n_up}");
@@ -317,14 +317,14 @@ fn arch_option_context_proto_model_registry() {
     assert!(format!("{err}").contains("Unknown function name"));
 }
 
-/// (kuna) `jumptablemax`: ships at upstream's 1024, takes a positive decimal
+/// (unlace) `jumptablemax`: ships at upstream's 1024, takes a positive decimal
 /// count, and refuses anything else rather than reading a prefix of it.
 #[test]
 fn jumptablemax_defaults_to_1024_and_parses_strictly() {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.reset_defaults_internal();
     assert_eq!(arch.max_jumptable_size, 1024);
-    arch.set_kuna_option("jumptablemax", "100000").unwrap();
+    arch.set_unlace_option("jumptablemax", "100000").unwrap();
     assert_eq!(arch.max_jumptable_size, 100000);
     for bad in [
         "",
@@ -338,7 +338,7 @@ fn jumptablemax_defaults_to_1024_and_parses_strictly() {
         "4294967296",
     ] {
         assert!(
-            arch.set_kuna_option("jumptablemax", bad).is_err(),
+            arch.set_unlace_option("jumptablemax", bad).is_err(),
             "{bad:?} was accepted"
         );
     }

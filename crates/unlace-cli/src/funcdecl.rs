@@ -1,8 +1,8 @@
-//! `--define-function` — telling kuna where a function starts and ends.
+//! `--define-function` — telling unlace where a function starts and ends.
 //!
 //! # Why this exists
 //!
-//! Every function boundary kuna knows is one it *derived*: discovery finds the
+//! Every function boundary unlace knows is one it *derived*: discovery finds the
 //! entries, and the extent is reconstructed as the address-contiguous clip
 //! `[entry, next_entry)` ([`unlace_console::funcextent`]) over an unbounded flow
 //! follow.  That is the right default and it is wrong exactly where reverse
@@ -30,7 +30,7 @@
 //!
 //! The `@file` form is the durable half: an agent that has worked out the real
 //! boundaries of a packed image keeps them in a file and passes the same
-//! `@bounds.txt` to every later invocation.  kuna does not write the declarations
+//! `@bounds.txt` to every later invocation.  unlace does not write the declarations
 //! back into the image, so durability is caller-carried by design — the file is
 //! the artifact, and it is plain text an agent can generate and diff.
 //!
@@ -53,7 +53,7 @@ pub(crate) struct FuncDecl {
     pub(crate) start: u64,
     /// Exclusive end VMA; `None` leaves the extent unbounded.
     pub(crate) end: Option<u64>,
-    /// The name to give the entry; `None` takes kuna's generated `sub_<addr>`.
+    /// The name to give the entry; `None` takes unlace's generated `sub_<addr>`.
     pub(crate) name: Option<String>,
 }
 
@@ -299,7 +299,7 @@ mod tests {
     }
 
     /// An inverted or empty range is a caller error, not a silently-unbounded
-    /// function: a declaration kuna cannot honor must say so.
+    /// function: a declaration unlace cannot honor must say so.
     #[test]
     fn an_end_at_or_below_the_start_is_rejected() {
         assert!(parse_flag("0x1480-0x1400").is_err());

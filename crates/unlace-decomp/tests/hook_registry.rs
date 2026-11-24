@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -23,7 +23,7 @@ use unlace_decomp::decompile_drive::{decompile_func, print_c};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::hooks::HookRegistry;
 use unlace_decomp::options::register_option_elements;
-use unlace_decomp::phases::KunaPhase;
+use unlace_decomp::phases::UnlacePhase;
 use unlace_decomp::sleigh_arch::{LanguageDatabase, register_sleigh_arch_ids};
 use unlace_decomp::universalaction::{ActionListFilter, universal_sched, universal_sched_hooked};
 use unlace_decomp::varnode::varnode_flags;
@@ -75,8 +75,8 @@ impl LoadImage for NullLoad {
     fn get_file_name(&self) -> &str {
         "null"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("null"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("null"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -220,12 +220,12 @@ fn added_rule_and_phase_callback_reach_the_printed_c() {
         Box::new(RuleOrAndSum),
     )
     .expect("add_rule");
-    for phase in [KunaPhase::P8, KunaPhase::P2, KunaPhase::P6] {
+    for phase in [UnlacePhase::P8, UnlacePhase::P2, UnlacePhase::P6] {
         let order = Rc::clone(&order);
         arch.on_phase(phase, move |_| order.borrow_mut().push(phase))
             .expect("on_phase");
     }
-    arch.on_phase(KunaPhase::P5, |data| rename_stack_local(data, "seed"))
+    arch.on_phase(UnlacePhase::P5, |data| rename_stack_local(data, "seed"))
         .expect("on_phase P5");
 
     let hooked = decompile(arch, &entry);
@@ -240,7 +240,7 @@ fn added_rule_and_phase_callback_reach_the_printed_c() {
     );
     assert_eq!(
         *order.borrow(),
-        [KunaPhase::P2, KunaPhase::P6, KunaPhase::P8]
+        [UnlacePhase::P2, UnlacePhase::P6, UnlacePhase::P8]
     );
 }
 
@@ -264,10 +264,10 @@ fn registration_errors_name_the_missing_anchor() {
         .unwrap_err();
     assert!(format!("{err}").contains("does not clone"), "{err}");
     for phase in [
-        KunaPhase::Infra,
-        KunaPhase::P0,
-        KunaPhase::P1,
-        KunaPhase::P9,
+        UnlacePhase::Infra,
+        UnlacePhase::P0,
+        UnlacePhase::P1,
+        UnlacePhase::P9,
     ] {
         assert!(
             hooks.on_phase(phase, Box::new(|_| ())).is_err(),
@@ -309,13 +309,13 @@ fn hooks_appear_in_the_listing_at_their_schedule_points() {
         )
         .unwrap();
     for phase in [
-        KunaPhase::P2,
-        KunaPhase::P3,
-        KunaPhase::P4,
-        KunaPhase::P5,
-        KunaPhase::P6,
-        KunaPhase::P7,
-        KunaPhase::P8,
+        UnlacePhase::P2,
+        UnlacePhase::P3,
+        UnlacePhase::P4,
+        UnlacePhase::P5,
+        UnlacePhase::P6,
+        UnlacePhase::P7,
+        UnlacePhase::P8,
     ] {
         hooks.on_phase(phase, Box::new(|_| ())).unwrap();
     }
@@ -355,7 +355,7 @@ fn empty_registry_changes_neither_tree_nor_output() {
 
     let (mut xarch, entry) = fixture();
     let arch = xarch.sleigh_mut().base_mut().expect("Architecture base");
-    assert!(arch.kuna_tables.get::<HookRegistry>().is_empty());
+    assert!(arch.unlace_tables.get::<HookRegistry>().is_empty());
     let first = decompile(arch, &entry);
     let second = decompile(arch, &entry);
     assert_eq!(first, second);

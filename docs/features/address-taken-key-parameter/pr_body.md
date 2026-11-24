@@ -55,7 +55,7 @@ void derive_key(unsigned int a0,unsigned int a1)
 
 ## The tests
 
-`tests/stages/kuna-paramrefdecl.toml` (two-pass: off reproduces the duplicate
+`tests/stages/paramrefdecl.toml` (two-pass: off reproduces the duplicate
 declaration, on removes it, both passes keep `consume(&a0,a1)` and the signature),
 unit tests for the symbol-identity predicate, and `tests/cli/address-taken-key-parameter.json`
 carrying the need's acceptance regex verbatim against a newly vendored 4,532-byte i386

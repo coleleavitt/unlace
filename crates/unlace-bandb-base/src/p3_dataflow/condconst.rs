@@ -655,7 +655,7 @@ fn handle_phi_nodes(
             .get_parent()
             .unwrap();
         let bl = data.bblocks_ref().block(parent).get_in(slot);
-        // (kuna) GH-9203: decline placing a const COPY in a loop block.
+        // (unlace) GH-9203: decline placing a const COPY in a loop block.
         if data.bblocks_ref().block(bl).has_loop_in() {
             results[i] = 0;
             continue;
@@ -953,7 +953,7 @@ fn propagate_constant(
                         .expect("propagateConstant: stale copy")
                         .get_out()
                         .unwrap();
-                    // (kuna) Upstream writes slot 1, the return value once return
+                    // (unlace) Upstream writes slot 1, the return value once return
                     // recovery has trimmed the RETURN; while its output trials are
                     // still open the RETURN reads every trial register, so replace
                     // the slot that actually reads `var_vn`.

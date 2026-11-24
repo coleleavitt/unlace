@@ -69,7 +69,7 @@ fn assert_discovered_main_decompiles_arm(fixture_name: &str, main_vma: u64, elfm
         .expect("bootstrap fixture with built processor specs");
 
     prog.arch_mut()
-        .set_kuna_option("elfmain", if elfmain { "on" } else { "off" })
+        .set_unlace_option("elfmain", if elfmain { "on" } else { "off" })
         .expect("elfmain flips");
     // The analysis facts (entries + ARM TMode paints) are committed at the
     // `read symbols` seam, not eagerly at bootstrap.

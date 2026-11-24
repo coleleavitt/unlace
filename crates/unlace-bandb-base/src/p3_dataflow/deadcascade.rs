@@ -1,4 +1,4 @@
-//! (kuna `deadcascade`) Dead-op removal takes out a dead chain of joins and
+//! (unlace `deadcascade`) Dead-op removal takes out a dead chain of joins and
 //! guards at once.
 //!
 //! `RuleEarlyRemoval` removes an op nothing reads when the pool's cursor

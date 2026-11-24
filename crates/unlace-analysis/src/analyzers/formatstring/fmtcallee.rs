@@ -1,4 +1,4 @@
-//! (kuna `formatcallees`) Format-string typing for callees no table knows.
+//! (unlace `formatcallees`) Format-string typing for callees no table knows.
 //!
 //! [`super::fmtstatic`] types a call whose callee the built-in libc tables
 //! declare variadic with a format parameter. A program's own format functions
@@ -345,7 +345,7 @@ fn slot_keys(inp: &Inputs) -> Option<Vec<(Key, Rc<Datatype>)>> {
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     };
     let assigned = fmtstatic::assign(inp.model, &probe, inp.ctx.arch)?;
     let keys: Option<Vec<Key>> = assigned

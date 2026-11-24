@@ -1,4 +1,4 @@
-//! (kuna `javatry`) Printing a DEX method's `java_try` dispatches as Java
+//! (unlace `javatry`) Printing a DEX method's `java_try` dispatches as Java
 //! `try { } catch (T e) { }`.
 //!
 //! Flow enters each catch handler from a dispatch at the start of its first

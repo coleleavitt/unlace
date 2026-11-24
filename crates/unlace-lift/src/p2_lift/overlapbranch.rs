@@ -1,4 +1,4 @@
-//! (kuna) `kuna_overlapbranch` — a conditional branch whose target lies *inside*
+//! (unlace) `unlace_overlapbranch` — a conditional branch whose target lies *inside*
 //! its own fall-through instruction (S2 flow classification).  The x86
 //! anti-disassembly idiom: a junk lead byte placed at the fall-through so a
 //! linear/recursive follower decodes one long bogus instruction that swallows
@@ -6,7 +6,7 @@
 //!
 //! ## The structural gap
 //!
-//! kuna's flow follower ([`FlowInfo`](crate::flow)) pushes both successors of a
+//! unlace's flow follower ([`FlowInfo`](crate::flow)) pushes both successors of a
 //! conditional branch and pops the fall-through first, so the fall-through
 //! instruction is decoded before the branch target is ever looked at.  When the
 //! two encodings overlap, the fall-through wins by arrival order and the target
@@ -45,7 +45,7 @@
 //! against `0x8048838 + 3 = 0x804883b`.  So the reconvergence test is the first
 //! thing this module asks, it is architecture-neutral (no prefix-byte table), and
 //! it costs one extra instruction decode on a trigger that never fires in ordinary
-//! code — see [`kuna_streams_reconverge`].
+//! code — see [`unlace_streams_reconverge`].
 //!
 //! ## The ownership policy
 //!
@@ -68,7 +68,7 @@
 //!   policy already does.  The conditional stays a conditional and its
 //!   fall-through edge stays in the CFG — the edge simply ends there.  The halt
 //!   is marked `badinstruction`, not `noreturn`: a `noreturn` halt is folded away
-//!   by `kuna_ifnoexit` into an empty `if (cond) { }`, which reads as "the
+//!   by `unlace_ifnoexit` into an empty `if (cond) { }`, which reads as "the
 //!   fall-through does nothing and carries on" — the one rendering that is
 //!   actually wrong about where control goes.
 //! * The check runs on the instruction *currently being decoded*, against a
@@ -78,20 +78,20 @@
 //!
 //! ## What this module owns
 //!
-//! [`kuna_overlaps_pending_branch`] is the *decision* only.  The truncation
+//! [`unlace_overlaps_pending_branch`] is the *decision* only.  The truncation
 //! (`delete_remaining_ops` + `artificial_halt` + `step = 1`) is driven by
 //! `flow.rs` inside `process_instruction`, the same hook class as
-//! [`kuna_funcboundflow`](crate::funcboundflow).  The gate
+//! [`unlace_funcboundflow`](crate::funcboundflow).  The gate
 //! `glb->overlap_branch` (`option overlapbranch`) is resolved by the caller.
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<overlapbranch>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<overlapbranch>` (unlace).  ElementIds live in the 4000+
 /// range.  Do not read the high-water mark by hand — `scripts.repipe.counters
 /// --check` derives the next free id and fails on a duplicate.
 pub const ELEM_OVERLAPBRANCH: ElementId = ElementId::new("overlapbranch", 4138);
 
-/// (kuna) Does the instruction just decoded at the fall-through of a conditional
+/// (unlace) Does the instruction just decoded at the fall-through of a conditional
 /// branch swallow that branch's own target?
 ///
 /// `watch` is the `(fall-through address, branch target)` pair recorded when the
@@ -110,8 +110,8 @@ pub const ELEM_OVERLAPBRANCH: ElementId = ElementId::new("overlapbranch", 4138);
 /// target that splits the fall-through encoding is pathological.
 ///
 /// This is the CHEAP half of the decision and is not sufficient on its own: the
-/// caller must also clear [`kuna_streams_reconverge`] before truncating anything.
-pub fn kuna_overlaps_pending_branch(
+/// caller must also clear [`unlace_streams_reconverge`] before truncating anything.
+pub fn unlace_overlaps_pending_branch(
     gate: bool,
     curaddr: u64,
     step: i32,
@@ -136,7 +136,7 @@ pub fn kuna_overlaps_pending_branch(
     target > curaddr && target < curaddr.wrapping_add(step as u64)
 }
 
-/// (kuna) Do the two competing decodes end at the same address?
+/// (unlace) Do the two competing decodes end at the same address?
 ///
 /// `curaddr`/`step` are the fall-through instruction; `target`/`target_len` the
 /// branch target's own decode (`target_len` is `None` when it could not be
@@ -146,7 +146,7 @@ pub fn kuna_overlaps_pending_branch(
 ///
 /// A target that cannot be decoded also answers true: following it would gain
 /// nothing, so there is no reason to discard the one decode that did work.
-pub fn kuna_streams_reconverge(
+pub fn unlace_streams_reconverge(
     curaddr: u64,
     step: i32,
     target: u64,
@@ -159,8 +159,8 @@ pub fn kuna_streams_reconverge(
     target.wrapping_add(len as u64) == curaddr.wrapping_add(step as u64)
 }
 
-crate::kuna_flag!(
-    /// (kuna `overlapbranch`) Truncate a conditional branch's fall-through when the
+crate::unlace_flag!(
+    /// (unlace `overlapbranch`) Truncate a conditional branch's fall-through when the
     /// branch's own target lies strictly inside that fall-through instruction's
     /// encoding — the anti-disassembly junk-lead-byte idiom, where the fall-through
     /// decode swallows the real instruction boundary and desynchronises the stream

@@ -1,4 +1,4 @@
-//! (kuna `--assert callee`, console `override indirect`) State where an
+//! (unlace `--assert callee`, console `override indirect`) State where an
 //! indirect call goes.
 //!
 //! A reader who knows the destination of `call *(%rax)` states it as
@@ -99,7 +99,7 @@ pub fn plant(
     check_site(prog.arch().translate(), site)?;
     let target = callee_entry(prog, callee)?;
     prog.arch_mut()
-        .kuna_callee_overrides
+        .unlace_callee_overrides
         .entry(entry.clone())
         .or_default()
         .insert(site.clone(), target);

@@ -15,8 +15,8 @@ fn fixture(name: &str) -> String {
         .to_owned()
 }
 
-fn kuna(args: &[&str]) -> String {
-    let (stdout, stderr, code) = common::run_kuna(args);
+fn unlace(args: &[&str]) -> String {
+    let (stdout, stderr, code) = common::run_unlace(args);
     assert_eq!(code, 0, "kuna {args:?}: {stderr}");
     stdout
 }
@@ -24,7 +24,7 @@ fn kuna(args: &[&str]) -> String {
 /// The `functions` inventory as `(address, name)` rows; an entry's aliases,
 /// which follow its name on the same line, are dropped.
 fn functions(name: &str) -> Vec<(u64, String)> {
-    kuna(&["functions", &fixture(name)])
+    unlace(&["functions", &fixture(name)])
         .lines()
         .map(|line| {
             let (address, rest) = line.split_once('\t').expect("address<TAB>name");
@@ -56,13 +56,13 @@ fn a_psx_exe_loads_at_t_addr_with_gp_set() {
         "pc0 and the two functions it reaches by direct calls: {found:?}"
     );
     let main = format!("{:#x}", found.last().unwrap().0);
-    let code = kuna(&["decompile", &fixture("hello.psx"), &main, "--addr"]);
+    let code = unlace(&["decompile", &fixture("hello.psx"), &main, "--addr"]);
     assert!(
         code.contains(",5)"),
         "main passes the string length to its checksum call:\n{code}"
     );
     let sum = format!("{:#x}", found[1].0);
-    let code = kuna(&["decompile", &fixture("hello.psx"), &sum, "--addr"]);
+    let code = unlace(&["decompile", &fixture("hello.psx"), &sum, "--addr"]);
     assert!(
         !code.contains("gp"),
         "gp-relative data resolves to addresses:\n{code}"
@@ -74,9 +74,9 @@ fn a_psx_exe_loads_at_t_addr_with_gp_set() {
 fn an_n64_rom_maps_its_boot_segment_at_the_header_entry() {
     let found = functions("hello.z64");
     assert_eq!(found[0].0, 0x8000_0400, "{found:?}");
-    let code = kuna(&["decompile", &fixture("hello.z64"), "0x80000400", "--addr"]);
+    let code = unlace(&["decompile", &fixture("hello.z64"), "0x80000400", "--addr"]);
     assert!(code.contains("sub_8000") && code.contains(",5)"), "{code}");
-    let listing = kuna(&[
+    let listing = unlace(&[
         "disassemble",
         &fixture("hello.z64"),
         "0x80000400",
@@ -93,7 +93,7 @@ fn an_aout_executable_loads_with_its_symbols() {
         names("hello-m68k.aout"),
         ["checksum", "main", "scale", "sum"]
     );
-    let code = kuna(&["decompile", &fixture("hello-m68k.aout"), "sum"]);
+    let code = unlace(&["decompile", &fixture("hello-m68k.aout"), "sum"]);
     assert!(code.contains("scratch = a0;"), "{code}");
     assert!(code.contains("(*handler)(a0)"), "{code}");
     assert!(code.contains("table"), "{code}");
@@ -105,7 +105,7 @@ fn an_aout_object_resolves_its_external_calls() {
         names("hello-i386.aout"),
         ["scale", "checksum", "sum", "main", "puts"]
     );
-    let code = kuna(&["decompile", &fixture("hello-i386.aout"), "main"]);
+    let code = unlace(&["decompile", &fixture("hello-i386.aout"), "main"]);
     assert!(code.contains("puts("), "{code}");
     assert!(
         code.contains("sum(") && code.contains("checksum("),
@@ -126,7 +126,7 @@ fn an_amiga_hunk_file_is_relocated_across_its_hunks() {
         "the first hunk's first byte is the entry"
     );
     assert_eq!(names("hello.hunk"), ["main", "checksum", "scale", "sum"]);
-    let code = kuna(&["decompile", &fixture("hello.hunk"), "sum"]);
+    let code = unlace(&["decompile", &fixture("hello.hunk"), "sum"]);
     assert!(
         code.contains("scratch = a0;"),
         "a code-to-bss reference is an address:\n{code}"
@@ -140,10 +140,10 @@ fn a_pef_fragment_loads_with_its_toc_exports_and_imports() {
         names("hello.pef"),
         ["scale", "checksum", "sum", "main", "puts"]
     );
-    let code = kuna(&["decompile", &fixture("hello.pef"), "scale"]);
+    let code = unlace(&["decompile", &fixture("hello.pef"), "scale"]);
     assert!(!code.contains("r2"), "the TOC is known at entry:\n{code}");
     assert!(code.contains("a0 * 3"), "{code}");
-    let code = kuna(&["decompile", &fixture("hello.pef"), "main"]);
+    let code = unlace(&["decompile", &fixture("hello.pef"), "main"]);
     assert!(
         code.contains("puts(") && code.contains("checksum("),
         "{code}"
@@ -152,7 +152,7 @@ fn a_pef_fragment_loads_with_its_toc_exports_and_imports() {
 
 #[test]
 fn an_explicit_target_overrides_the_container_language() {
-    let code = kuna(&[
+    let code = unlace(&[
         "decompile",
         &fixture("hello.hunk"),
         "scale",
@@ -171,7 +171,7 @@ fn object_view_commands_refuse_with_the_capability_error() {
         "hello.hunk",
         "hello.pef",
     ] {
-        let (_, stderr, code) = common::run_kuna(&["strings", &fixture(name)]);
+        let (_, stderr, code) = common::run_unlace(&["strings", &fixture(name)]);
         assert_ne!(code, 0, "{name}");
         assert!(stderr.contains("no object-file view"), "{name}: {stderr}");
     }
@@ -183,7 +183,7 @@ fn a_malformed_container_is_named_in_its_error() {
     bytes[0x10..0x14].copy_from_slice(&0u32.to_le_bytes());
     let path = common::scratch_file("bad-pc0", "psx");
     std::fs::write(&path, bytes).unwrap();
-    let (_, stderr, code) = common::run_kuna(&["functions", path.to_str().unwrap()]);
+    let (_, stderr, code) = common::run_unlace(&["functions", path.to_str().unwrap()]);
     assert_ne!(code, 0);
     assert!(
         stderr.contains("invalid PS-X EXE image: pc0 is outside the text"),
@@ -204,11 +204,11 @@ fn win16(name: &str) -> String {
 /// its exports and imports are named functions and every far call reaches one.
 #[test]
 fn a_win16_ne_executable_names_its_exports_and_imports() {
-    let listed = kuna(&["functions", &win16("hello.exe")]);
+    let listed = unlace(&["functions", &win16("hello.exe")]);
     for name in ["START", "HELPER", "KERNEL_91", "MESSAGEBOX"] {
         assert!(listed.contains(name), "{name}:\n{listed}");
     }
-    let code = kuna(&["decompile", &win16("hello.exe"), "0x10000", "--addr"]);
+    let code = unlace(&["decompile", &win16("hello.exe"), "0x10000", "--addr"]);
     for call in ["KERNEL_91(", "MESSAGEBOX(", "HELPER("] {
         assert!(code.contains(call), "{call}:\n{code}");
     }
@@ -218,13 +218,13 @@ fn a_win16_ne_executable_names_its_exports_and_imports() {
 /// named slots, and a library's modules call each other.
 #[test]
 fn omf_objects_and_libraries_load_with_their_names() {
-    let code = kuna(&["decompile", &win16("hello16.obj"), "0x1000b", "--addr"]);
+    let code = unlace(&["decompile", &win16("hello16.obj"), "0x1000b", "--addr"]);
     for call in ["_sum(", "_puts(", "far_helper("] {
         assert!(code.contains(call), "{call}:\n{code}");
     }
-    let listed = kuna(&["functions", &win16("hello.lib")]);
+    let listed = unlace(&["functions", &win16("hello.lib")]);
     assert!(listed.contains("0x10040\tfar_helper"), "{listed}");
-    let code = kuna(&["decompile", &win16("hello32.obj"), "0x40000d", "--addr"]);
+    let code = unlace(&["decompile", &win16("hello32.obj"), "0x40000d", "--addr"]);
     for call in ["_add3(", "_printf("] {
         assert!(code.contains(call), "{call}:\n{code}");
     }

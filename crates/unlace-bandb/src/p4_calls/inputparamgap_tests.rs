@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_inputparamgap` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_inputparamgap` because they reach pass hooks a higher crate
 //! provides (unlace-bandb, the crate above). They live in that crate.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_inputparamgap` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_inputparamgap` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::fspec::{ParamActive, ParamEntry, ParamTrial};
 }

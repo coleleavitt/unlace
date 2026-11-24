@@ -1,4 +1,4 @@
-//! (kuna `calltable`) Tables of code addresses the Listing reaches through a
+//! (unlace `calltable`) Tables of code addresses the Listing reaches through a
 //! computed jump or call.
 //!
 //! A table a computed transfer indexes is either a switch or a table of
@@ -123,7 +123,7 @@ pub fn scan(
         settled: true,
         named: Some(&named),
         next_table: arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::jumptable::SwitchExtent>()
             .0
             .then_some(&next_table),

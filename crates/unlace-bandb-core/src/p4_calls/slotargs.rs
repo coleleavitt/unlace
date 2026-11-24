@@ -1,4 +1,4 @@
-//! (kuna) The declaration a call through an import slot takes before heritage.
+//! (unlace) The declaration a call through an import slot takes before heritage.
 //!
 //! x86's `call [slot]` reads its target into a temporary its own instruction
 //! fills from the slot, so `ActionDefaultParams` finds the slot through that

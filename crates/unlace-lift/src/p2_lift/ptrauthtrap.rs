@@ -300,7 +300,7 @@ fn trap_edges(data: &Funcdata, userop: uint4) -> Vec<(BlockId, int4)> {
     out
 }
 
-/// (kuna) `ActionPtrAuthTrap` — cut the branch into every pointer-auth
+/// (unlace) `ActionPtrAuthTrap` — cut the branch into every pointer-auth
 /// failure trap (option `ptrauthtrap`, default on).
 pub struct ActionPtrAuthTrap {
     base: ActionBase,

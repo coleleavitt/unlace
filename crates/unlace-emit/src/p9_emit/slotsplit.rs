@@ -1,4 +1,4 @@
-//! (kuna `slotsplit`) A frame row a narrower printed declaration lives inside
+//! (unlace `slotsplit`) A frame row a narrower printed declaration lives inside
 //! is split at the declaration's bounds on the `variables` rows (P6).
 //!
 //! `framelayout` reports a frame slot at the width an early pass saw it, and a

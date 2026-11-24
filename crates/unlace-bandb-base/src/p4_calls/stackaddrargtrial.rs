@@ -8,7 +8,7 @@ use crate::{context::VarnodeId, funcdata::Funcdata};
 pub fn carries_stack_address(data: &Funcdata, vn: VarnodeId) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::stackaddrargtrial::StackAddrArgTrial>()
         .0
     {
@@ -40,7 +40,7 @@ pub fn trial_is_protected(
         && trial.get_entry().is_some_and(|i| entries[i].is_exclusion())
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Opt-in stack-address evidence for call input trials.
     StackAddrArgTrial,
     "stackaddrargtrial",
@@ -50,7 +50,7 @@ crate::kuna_flag!(
 );
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackaddrargtrial_trial_is_protected = Some(trial_is_protected);
 }
 

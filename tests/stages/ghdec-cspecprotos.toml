@@ -63,7 +63,7 @@ commands = [
     # the historical <default_proto>-only evaluation here so both passes keep
     # testing what they were written for: that the NAMED models are in the
     # registry and one can be selected. The automatic path is
-    # tests/stages/kuna-evalcurrentproto.xml.
+    # tests/stages/evalcurrentproto.xml.
     'lo fu getfield',
     'decompile',
     'print C',

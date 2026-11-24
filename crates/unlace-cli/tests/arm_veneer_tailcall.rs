@@ -41,7 +41,7 @@ fn decompile(code: &[u8], isa: &str, asserts: &[&str], extra: &[&str]) -> String
         args.extend(["--assert", assertion]);
     }
     args.extend_from_slice(extra);
-    let (stdout, stderr, code) = common::run_kuna(&args);
+    let (stdout, stderr, code) = common::run_unlace(&args);
     assert_eq!(code, 0, "{stdout}\n{stderr}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     let function = &doc["functions"][0];
@@ -249,7 +249,7 @@ fn demangled_veneers() -> String {
     let path = common::scratch_file("arm-veneer-demangled", "elf");
     std::fs::write(&path, image).unwrap();
     let specs = common::repo_root().join("specs");
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "decompile-all",
         path.to_str().unwrap(),
         "--sleighpath",

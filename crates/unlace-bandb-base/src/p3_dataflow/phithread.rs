@@ -410,7 +410,7 @@ fn thread_one(
     data: &mut Funcdata,
     j: BlockId,
     ranges: bool,
-) -> unlace_base::error::KunaResult<bool> {
+) -> unlace_base::error::UnlaceResult<bool> {
     let Some(join) = join_shape(data, j) else {
         return Ok(false);
     };
@@ -469,7 +469,7 @@ fn thread_one(
 
 /// Split arm `a` along one in edge whose MULTIEQUAL input decides its join;
 /// `true` when a split happened.
-fn split_one(data: &mut Funcdata, a: BlockId) -> unlace_base::error::KunaResult<bool> {
+fn split_one(data: &mut Funcdata, a: BlockId) -> unlace_base::error::UnlaceResult<bool> {
     let blk = data.bblocks_ref().block(a);
     let nin = blk.size_in();
     if blk.size_out() != 1 || !(2..=MAX_ARM_PREDS).contains(&nin) {
@@ -567,7 +567,7 @@ impl Action for ActionPhiThread {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        let opt = data.get_arch().kuna_options.get::<PhiThread>();
+        let opt = data.get_arch().unlace_options.get::<PhiThread>();
         if !opt.on {
             return 0;
         }
@@ -594,7 +594,7 @@ impl Action for ActionPhiThread {
     }
 }
 
-/// (kuna) Parse `option phithread on|off|ranges`.
+/// (unlace) Parse `option phithread on|off|ranges`.
 pub struct OptionPhiThread;
 
 impl OptionPhiThread {
@@ -602,7 +602,7 @@ impl OptionPhiThread {
     pub const NAME: &'static str = "phithread";
 
     /// Parse and validate the value: `(on, ranges)`.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, bool, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, bool, String)> {
         if p1 == "ranges" {
             return Ok((
                 true,
@@ -620,7 +620,7 @@ impl OptionPhiThread {
     }
 }
 
-/// (kuna) Run [`ActionPhiThread`] (option `phithread`, default off); `ranges`
+/// (unlace) Run [`ActionPhiThread`] (option `phithread`, default off); `ranges`
 /// also threads on value ranges.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhiThread {
@@ -628,9 +628,9 @@ pub struct PhiThread {
     pub ranges: bool,
 }
 
-impl crate::optionset::KunaOption for PhiThread {
+impl crate::optionset::UnlaceOption for PhiThread {
     const NAME: &'static str = "phithread";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PhiThread {
@@ -643,7 +643,7 @@ impl crate::optionset::KunaOption for PhiThread {
         Self::unset()
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, ranges, msg) = OptionPhiThread.apply(value)?;
         Ok((PhiThread { on, ranges }, msg))
     }
@@ -652,7 +652,7 @@ impl crate::optionset::KunaOption for PhiThread {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optionset::KunaOption;
+    use crate::optionset::UnlaceOption;
 
     #[test]
     fn option_parses_and_ships_off() {

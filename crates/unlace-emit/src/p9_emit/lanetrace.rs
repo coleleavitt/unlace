@@ -1,4 +1,4 @@
-//! (kuna) The lane traces `ActionLaneDivide` may skip when it rescans a
+//! (unlace) The lane traces `ActionLaneDivide` may skip when it rescans a
 //! storage location after a split.
 //!
 //! Upstream restarts the scan of a laned storage location from its first

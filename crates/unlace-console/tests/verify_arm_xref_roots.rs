@@ -9,9 +9,9 @@ fn bootstrap_frames(
     target: &str,
     specs: &[String],
     isa: Option<unlace_console::engine::ArmIsa>,
-) -> unlace_base::error::KunaResult<unlace_console::engine::ConsoleProgram> {
+) -> unlace_base::error::UnlaceResult<unlace_console::engine::ConsoleProgram> {
     let mut prog = bootstrap_from_object_with_isa(path, target, specs, isa)?;
-    prog.arch_mut().set_kuna_option("armframes", "on")?;
+    prog.arch_mut().set_unlace_option("armframes", "on")?;
     Ok(prog)
 }
 
@@ -58,9 +58,9 @@ fn frame_roots_preserve_owners_without_interior_or_invalid_entries() {
             .expect("bootstrap synthetic ELF");
             prog.commit_pending_analysis().unwrap();
             prog.arch_mut()
-                .set_kuna_option("funcstart_patterns", "on")
+                .set_unlace_option("funcstart_patterns", "on")
                 .unwrap();
-            prog.arch_mut().set_kuna_option("aif", "off").unwrap();
+            prog.arch_mut().set_unlace_option("aif", "off").unwrap();
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
             let index =
@@ -118,7 +118,7 @@ fn listing_inventory_recovers_the_same_arm_entries() {
         ("funcstart_patterns", "on"),
         ("aif", "off"),
     ] {
-        prog.arch_mut().set_kuna_option(name, value).unwrap();
+        prog.arch_mut().set_unlace_option(name, value).unwrap();
     }
     prog.commit_pending_analysis().unwrap();
     let entries: Vec<_> = prog
@@ -150,7 +150,7 @@ fn be8_frames_use_little_endian_instructions_in_a_big_endian_elf() {
             ("funcstart_patterns", "on"),
             ("aif", "off"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries: Vec<_> = prog
@@ -193,7 +193,7 @@ fn listing_preserves_an_aif_supported_prefix_before_a_frame() {
         ("funcstart_patterns", "on"),
         ("aif", "on"),
     ] {
-        prog.arch_mut().set_kuna_option(name, value).unwrap();
+        prog.arch_mut().set_unlace_option(name, value).unwrap();
     }
     prog.commit_pending_analysis().unwrap();
     let entries: Vec<_> = prog
@@ -226,7 +226,7 @@ fn listing_reconciles_frames_inside_a_validated_prefix_instruction() {
             ("funcstart_patterns", "on"),
             ("aif", "on"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries: Vec<_> = prog
@@ -255,9 +255,9 @@ fn distant_body_ownership_agrees_for_direct_indirect_and_branch_queries() {
     )
     .unwrap();
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .unwrap();
-    prog.arch_mut().set_kuna_option("aif", "off").unwrap();
+    prog.arch_mut().set_unlace_option("aif", "off").unwrap();
     let bytes = std::fs::read(&path).unwrap();
     let file = object::File::parse(&*bytes).unwrap();
     let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
@@ -298,9 +298,9 @@ fn a_late_discovered_callee_owns_its_previously_decoded_body() {
     )
     .unwrap();
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .unwrap();
-    prog.arch_mut().set_kuna_option("aif", "off").unwrap();
+    prog.arch_mut().set_unlace_option("aif", "off").unwrap();
     let file = object::File::parse(&*bytes).unwrap();
     let index = xrefs::build(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
     assert!(index.is_function_entry(0x1750));
@@ -340,7 +340,7 @@ fn a_predicated_return_keeps_the_nonreturning_path_in_the_same_frame() {
             ("funcstart_patterns", "on"),
             ("aif", aif),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries = prog.function_entries_canonical();
@@ -387,7 +387,7 @@ fn a_call_that_never_returns_ends_the_frame_without_absorbing_the_next_one() {
             ("funcstart_patterns", "on"),
             ("aif", aif),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries: Vec<u64> = prog
@@ -444,7 +444,7 @@ fn gap_validators_still_stop_at_a_conditional_return() {
         ("funcstart_patterns", "off"),
         ("aif", "on"),
     ] {
-        prog.arch_mut().set_kuna_option(name, value).unwrap();
+        prog.arch_mut().set_unlace_option(name, value).unwrap();
     }
     prog.commit_pending_analysis().unwrap();
     let entries: Vec<u64> = prog
@@ -479,7 +479,7 @@ fn inventory_rechecks_prefixes_after_frames_expand_the_corpus() {
             ("funcstart_patterns", "on"),
             ("aif", "on"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries = prog.function_entries_canonical();
@@ -509,7 +509,7 @@ fn a_conditional_return_does_not_hide_an_invalid_successor() {
         ("funcstart_patterns", "on"),
         ("aif", "off"),
     ] {
-        prog.arch_mut().set_kuna_option(name, value).unwrap();
+        prog.arch_mut().set_unlace_option(name, value).unwrap();
     }
     prog.commit_pending_analysis().unwrap();
     assert!(
@@ -553,9 +553,9 @@ fn explicit_focus_contributes_to_the_prefix_fingerprint_corpus() {
     )
     .unwrap();
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .unwrap();
-    prog.arch_mut().set_kuna_option("aif", "on").unwrap();
+    prog.arch_mut().set_unlace_option("aif", "on").unwrap();
     let file = object::File::parse(&*bytes).unwrap();
     let unfocused = xrefs::build(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
     assert_eq!(unfocused.function_containing(0x1508), Some(0x1500));
@@ -585,7 +585,7 @@ fn replaced_frames_leave_no_decoded_body_or_discovered_callees() {
         )
         .unwrap();
         for (name, value) in [("funcstart_patterns", "on"), ("aif", "on")] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         let bytes = std::fs::read(&path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
@@ -687,7 +687,7 @@ fn accepted_frames_keep_it_successors_and_real_blx_mode_changes() {
         )
         .unwrap();
         for (name, value) in [("funcstart_patterns", "on"), ("aif", "on")] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         let file = object::File::parse(&*bytes).unwrap();
         let index = xrefs::build_measured(&file, prog.arch(), prog.arch().translate(), &[0x1000]);
@@ -755,7 +755,7 @@ fn listing_rebuild_restores_context_from_discarded_blx_frames() {
             ("funcstart_patterns", "on"),
             ("aif", "on"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let space = prog
@@ -817,7 +817,7 @@ fn repeated_reconciliation_cleans_inventory_and_bodies() {
                     ("funcstart_patterns", "on"),
                     ("aif", "on"),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 let prefixes: &[u64] = match variant {
                     "chainprefix" => &[0x1500, 0x1600],
@@ -934,7 +934,7 @@ fn cyclic_frame_support_requires_a_reachable_independent_caller() {
                     ("funcstart_patterns", "on"),
                     ("aif", "on"),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 if inventory {
                     prog.commit_pending_analysis().unwrap();
@@ -1020,7 +1020,7 @@ fn provisional_prefix_callees_do_not_leave_inventory_entries_or_bodies() {
                     ("funcstart_patterns", "on"),
                     ("aif", "on"),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 if inventory {
                     prog.commit_pending_analysis().unwrap();
@@ -1086,7 +1086,7 @@ fn fingerprint_rendering_retains_live_interworking_and_body_records() {
             )
             .unwrap();
             for (name, value) in [("funcstart_patterns", "on"), ("aif", "on")] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -1142,7 +1142,7 @@ fn later_interworking_replaces_provisional_frames_in_the_wrong_mode() {
                 )
                 .unwrap();
                 for (name, value) in [("funcstart_patterns", patterns), ("aif", aif)] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 let bytes = std::fs::read(&path).unwrap();
                 let file = object::File::parse(&*bytes).unwrap();
@@ -1203,7 +1203,7 @@ fn gap_discovered_interworking_rebuilds_obsolete_frame_bodies() {
             )
             .unwrap();
             for (name, value) in [("funcstart_patterns", patterns), ("aif", "on")] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -1254,7 +1254,7 @@ fn interior_interworking_replaces_overlapping_provisional_instructions() {
                 )
                 .unwrap();
                 for (name, value) in [("funcstart_patterns", patterns), ("aif", aif)] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 let bytes = std::fs::read(&path).unwrap();
                 let file = object::File::parse(&*bytes).unwrap();
@@ -1324,7 +1324,7 @@ fn recovered_frames_preserve_inventory_aif_gap_bounds() {
                     ("funcstart_patterns", patterns),
                     ("aif", "on"),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let entries: Vec<_> = prog
@@ -1370,7 +1370,7 @@ fn gap_interworking_reconciles_inventory_before_publishing_callees() {
                 ("funcstart_patterns", patterns),
                 ("aif", "on"),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let entries: Vec<_> = prog
@@ -1410,7 +1410,7 @@ fn interworking_invalidates_a_caller_after_its_prefix_was_extended() {
             )
             .unwrap();
             for (name, value) in [("funcstart_patterns", patterns), ("aif", "on")] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -1459,7 +1459,7 @@ fn an_unfocused_frame_can_invalidate_a_prior_decode_through_an_interior_call() {
             )
             .unwrap();
             for (name, value) in [("funcstart_patterns", "on"), ("aif", aif)] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -1504,7 +1504,7 @@ fn an_extended_prefix_recomputes_the_bodys_pc_relative_references() {
             )
             .unwrap();
             for name in ["funcstart_patterns", "aif"] {
-                prog.arch_mut().set_kuna_option(name, "on").unwrap();
+                prog.arch_mut().set_unlace_option(name, "on").unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -1567,7 +1567,7 @@ fn pointer_discovery_refreshes_the_frame_corpus_before_aif() {
             ("funcstart_patterns", "on"),
             ("aif", aif),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let entries: Vec<_> = prog
@@ -1609,7 +1609,7 @@ fn recovered_interworking_preserves_interior_focus_modes() {
                 )
                 .unwrap();
                 for (name, value) in [("funcstart_patterns", patterns), ("aif", aif)] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 let index = xrefs::build_with_focus(
                     &file,
@@ -1674,7 +1674,7 @@ fn repeated_xrefs_preserve_recovered_body_modes() {
             ("funcstart_patterns", "on"),
             ("aif", "off"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let bytes = std::fs::read(&path).unwrap();
@@ -1749,7 +1749,7 @@ fn recovered_xref_publication_preserves_later_decompilation() {
                 ("funcstart_patterns", patterns),
                 ("aif", "off"),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let bytes = std::fs::read(&path).unwrap();
@@ -1819,7 +1819,7 @@ fn xref_publication_preserves_established_blocks_and_thumb_callees() {
             ("funcstart_patterns", "on"),
             ("aif", "off"),
         ] {
-            prog.arch_mut().set_kuna_option(name, value).unwrap();
+            prog.arch_mut().set_unlace_option(name, value).unwrap();
         }
         let bytes = std::fs::read(&path).unwrap();
         let file = object::File::parse(&*bytes).unwrap();
@@ -1874,7 +1874,7 @@ fn inventory_preserves_aif_seed_modes_through_backward_interworking() {
         )
         .unwrap();
         for name in ["listing", "funcstart_patterns", "aif"] {
-            prog.arch_mut().set_kuna_option(name, "on").unwrap();
+            prog.arch_mut().set_unlace_option(name, "on").unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         assert!(
@@ -1935,7 +1935,7 @@ fn frame_publication_restores_gaps_and_preserves_thumb_instruction_spans() {
                 ("funcstart_patterns", "on"),
                 ("aif", aif),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let entries: Vec<_> = prog
@@ -2001,7 +2001,7 @@ fn an_unframed_focus_preserves_its_blocks_and_an_interior_callee_focus() {
                 ("funcstart_patterns", "on"),
                 ("aif", aif),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();
@@ -2051,7 +2051,7 @@ fn inventory_retains_discontiguous_frame_and_intervening_callee_modes() {
                     ("aif", aif),
                     ("tailcallentry", "off"),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let space = prog
@@ -2126,7 +2126,7 @@ fn inventory_admits_frames_with_independent_or_directly_called_modes() {
                     ("funcstart_patterns", "on"),
                     ("aif", aif),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let space = prog
@@ -2211,7 +2211,7 @@ fn inventory_publishes_frame_modes_for_seeded_xrefs() {
                     ("funcstart_patterns", "on"),
                     ("aif", aif),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let space = prog
@@ -2280,7 +2280,7 @@ fn inventory_frame_rebuild_preserves_established_isa_modes() {
                         ("funcstart_patterns", patterns),
                         ("aif", aif),
                     ] {
-                        prog.arch_mut().set_kuna_option(name, value).unwrap();
+                        prog.arch_mut().set_unlace_option(name, value).unwrap();
                     }
                     prog.commit_pending_analysis().unwrap();
                     let entries: Vec<_> = prog
@@ -2339,9 +2339,9 @@ fn replacement_prefix_roots_retain_original_isa_modes() {
                 Some(ArmIsa::Arm),
             )
             .unwrap();
-            prog.arch_mut().set_kuna_option("aif", "on").unwrap();
+            prog.arch_mut().set_unlace_option("aif", "on").unwrap();
             prog.arch_mut()
-                .set_kuna_option("funcstart_patterns", "on")
+                .set_unlace_option("funcstart_patterns", "on")
                 .unwrap();
             let bytes = std::fs::read(&path).unwrap();
             let file = object::File::parse(&*bytes).unwrap();

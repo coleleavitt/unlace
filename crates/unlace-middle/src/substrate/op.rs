@@ -145,8 +145,8 @@ pub mod pcodeop_flags {
 /// Additional boolean attributes (`addlflags`) of a [`PcodeOp`].
 ///
 /// Verbatim transcription of the C++ second anonymous `enum` in
-/// `class PcodeOp` (`op.hh:108-122`).  The kuna addition `canonical_lessequal`
-/// lives at `0x1000`, the start of the kuna `addlflags` range (CLAUDE.md).
+/// `class PcodeOp` (`op.hh:108-122`).  The unlace addition `canonical_lessequal`
+/// lives at `0x1000`, the start of the unlace `addlflags` range (CLAUDE.md).
 pub mod pcodeop_addlflags {
     #![allow(non_upper_case_globals)]
     use unlace_base::types::uint4;
@@ -175,71 +175,71 @@ pub mod pcodeop_addlflags {
     pub const store_unmapped: uint4 = 0x400;
     /// Copy has propagated into input of \b this op
     pub const immed_copy: uint4 = 0x800;
-    /// (kuna) INT_LESS/INT_SLESS produced by canonicalizing a LESSEQUAL
+    /// (unlace) INT_LESS/INT_SLESS produced by canonicalizing a LESSEQUAL
     /// (RuleIntLessEqual)
     pub const canonical_lessequal: uint4 = 0x1000;
-    /// (kuna) This `CBRANCH` heads an if/else assignment *diamond* that the
+    /// (unlace) This `CBRANCH` heads an if/else assignment *diamond* that the
     /// `iteregion` S8 pass selected for `?:` ternary rendering (angr
     /// `ITERegionConverter`).  Set by
-    /// [`crate::p8_structure::kuna_iteregion`]'s `ActionIteRegion`; read by
+    /// [`crate::p8_structure::unlace_iteregion`]'s `ActionIteRegion`; read by
     /// `PrintC::emit_block_if`, which emits `dest = cond ? A : B;` for the marked
     /// `if`.  Print-only: never affects the p-code, so with the option off (the
     /// pass never runs) the bit is never set and output is byte-identical.
-    pub const kuna_iteregion: uint4 = 0x2000;
-    /// (kuna) This `CBRANCH` terminates the condition of a `0`/`1` select diamond
+    pub const unlace_iteregion: uint4 = 0x2000;
+    /// (unlace) This `CBRANCH` terminates the condition of a `0`/`1` select diamond
     /// that the `iteboolean` S8 pass selected for boolean-assignment rendering.
-    /// Set by [`crate::p8_structure::kuna_iteboolean`]'s `ActionIteBoolean`; read by
+    /// Set by [`crate::p8_structure::unlace_iteboolean`]'s `ActionIteBoolean`; read by
     /// `PrintC::emit_block_if`, which emits `dest = ( cond );` (or `dest = !( cond );`)
     /// for the marked `if`.  Print-only: never affects the p-code, so with the
     /// option off (the pass never runs) the bit is never set and output is
     /// byte-identical.
-    pub const kuna_iteboolean: uint4 = 0x4000;
-    /// (kuna) This extension is the one `narrowext` states for a narrow
+    pub const unlace_iteboolean: uint4 = 0x4000;
+    /// (unlace) This extension is the one `narrowext` states for a narrow
     /// argument or return value: the bits it adds carry no information, so an
     /// unprototyped call or a return reading it consumes only the value it
-    /// widens.  Set and read by [`crate::p4_calls::kuna_narrowext`].
-    pub const kuna_narrowext: uint4 = 0x8000;
-    /// (kuna) This RETURN's value was trimmed from a zero-extension that the
+    /// widens.  Set and read by [`crate::p4_calls::unlace_narrowext`].
+    pub const unlace_narrowext: uint4 = 0x8000;
+    /// (unlace) This RETURN's value was trimmed from a zero-extension that the
     /// calling convention would only perform for an unsigned type.  Set and read
-    /// by [`crate::p5_types::kuna_zextreturn`].
-    pub const kuna_zextreturn: uint4 = 0x10000;
+    /// by [`crate::p5_types::unlace_zextreturn`].
+    pub const unlace_zextreturn: uint4 = 0x10000;
     /// The x86-64 syscall ABI rewrite ran; survives removal of unused RAX output.
-    pub const kuna_x64syscall: uint4 = 0x20000;
-    /// (kuna) This COPY of zero is the fill a narrow write leaves in the upper
+    pub const unlace_x64syscall: uint4 = 0x20000;
+    /// (unlace) This COPY of zero is the fill a narrow write leaves in the upper
     /// half of a vector register, as decoded.  Set and read by
     /// [`crate::p4_calls::zerofillreturn`].
-    pub const kuna_zerofill: uint4 = 0x40000;
-    /// (kuna) This float comparison is the exact complement of a NaN-guarded
+    pub const unlace_zerofill: uint4 = 0x40000;
+    /// (unlace) This float comparison is the exact complement of a NaN-guarded
     /// flag, so no separate NaN test may be dropped against it.  Set by
     /// [`crate::p3_dataflow::floatnegation`]; read by `RuleIgnoreNan`.
-    pub const kuna_exactfloat: uint4 = 0x80000;
+    pub const unlace_exactfloat: uint4 = 0x80000;
     /// A COPY lowered from a physical stack LOAD, retaining its read provenance.
-    pub const kuna_stack_read: uint4 = 0x100000;
+    pub const unlace_stack_read: uint4 = 0x100000;
     /// A floating storage-view COPY retaining a separate numerical integer result.
-    pub const kuna_fpu_view_copy: uint4 = 0x200000;
-    /// (kuna) Every trim of this RETURN's value, from the whole return register
+    pub const unlace_fpu_view_copy: uint4 = 0x200000;
+    /// (unlace) Every trim of this RETURN's value, from the whole return register
     /// on, dropped only known-zero bits; on an INT_ZEXT, the extension that
     /// writes a narrowed call result back into its register.  Set and read by
-    /// [`crate::p4_calls::kuna_narrowret`].
-    pub const kuna_narrowret: uint4 = 0x400000;
-    /// (kuna) Heritage left this op's read of its own output storage empty
+    /// [`crate::p4_calls::unlace_narrowret`].
+    pub const unlace_narrowret: uint4 = 0x400000;
+    /// (unlace) Heritage left this op's read of its own output storage empty
     /// for renaming to fill, instead of linking a placeholder Varnode. Set and
     /// cleared within one heritage pass by
     /// [`crate::p3_dataflow::renamereads`].
-    pub const kuna_rename_read: uint4 = 0x800000;
+    pub const unlace_rename_read: uint4 = 0x800000;
     /// Transient saved RBP in a summarized Rust callee, not a caller-reserved slot.
-    pub const kuna_rustprobe_spill: uint4 = 0x1000000;
-    /// (kuna `persistcalls`) This call guard of a persistent global is the one
+    pub const unlace_rustprobe_spill: uint4 = 0x1000000;
+    /// (unlace `persistcalls`) This call guard of a persistent global is the one
     /// a following read sees, on a range some earlier call was left unguarded
     /// over. Set by `Heritage::guard_calls`; read by `RuleIndirectCollapse`.
-    pub const kuna_persist_guard: uint4 = 0x2000000;
-    /// (kuna `persistcalls`) This call guard of a persistent global reads the
+    pub const unlace_persist_guard: uint4 = 0x2000000;
+    /// (unlace `persistcalls`) This call guard of a persistent global reads the
     /// value from before a call left unguarded. Set by `Heritage::guard_calls`;
     /// a merge copy of its input or its collapse restarts the function.
-    pub const kuna_persist_stale: uint4 = 0x4000000;
-    /// (kuna `postinc`) This LOAD or STORE prints its pointer as `p++` and the
-    /// increment after it prints nothing. Set by [`crate::p9_emit::kuna_postinc`].
-    pub const kuna_postinc: uint4 = 0x8000000;
+    pub const unlace_persist_stale: uint4 = 0x4000000;
+    /// (unlace `postinc`) This LOAD or STORE prints its pointer as `p++` and the
+    /// increment after it prints nothing. Set by [`crate::p9_emit::unlace_postinc`].
+    pub const unlace_postinc: uint4 = 0x8000000;
 }
 
 // ---------------------------------------------------------------------------
@@ -862,18 +862,18 @@ impl PcodeOp {
     pub fn clear_stop_type_propagation(&mut self) {
         self.addlflags &= !pcodeop_addlflags::stop_type_propagation;
     }
-    /// (kuna) Was this comparison canonicalized from a LESSEQUAL
+    /// (unlace) Was this comparison canonicalized from a LESSEQUAL
     /// (C++ `isCanonicalLessequal`).
     #[inline]
     pub fn is_canonical_lessequal(&self) -> bool {
         (self.addlflags & pcodeop_addlflags::canonical_lessequal) != 0
     }
-    /// (kuna) Mark this comparison as canonicalized from a LESSEQUAL
+    /// (unlace) Mark this comparison as canonicalized from a LESSEQUAL
     /// (C++ `setCanonicalLessequal`).
     pub fn set_canonical_lessequal(&mut self) {
         self.addlflags |= pcodeop_addlflags::canonical_lessequal;
     }
-    /// (kuna) Clear the canonicalized-LESSEQUAL mark (C++ `clearCanonicalLessequal`).
+    /// (unlace) Clear the canonicalized-LESSEQUAL mark (C++ `clearCanonicalLessequal`).
     pub fn clear_canonical_lessequal(&mut self) {
         self.addlflags &= !pcodeop_addlflags::canonical_lessequal;
     }
@@ -1034,8 +1034,8 @@ impl PcodeOp {
     /// STUB(W6): TypeOp printing depends on the W6 `TypeOp` print dispatch and
     /// per-op formatting; until W6 supplies it this returns the boundary-deferred
     /// error rather than guessing a rendering.
-    pub fn print_raw(&self, _s: &mut String) -> unlace_base::error::KunaResult<()> {
-        Err(unlace_base::error::KunaError::lowlevel(
+    pub fn print_raw(&self, _s: &mut String) -> unlace_base::error::UnlaceResult<()> {
+        Err(unlace_base::error::UnlaceError::lowlevel(
             "kuna rust port: PcodeOp::printRaw requires TypeOp printing (W6)",
         ))
     }
@@ -1445,7 +1445,7 @@ pub fn iop_space_print_raw(
     op: &PcodeOp,
     s: &mut String,
     block_info: &dyn Fn(&PcodeOp) -> (char, Address),
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     if !op.is_branch() {
         // op parameter for CPUI_INDIRECT
         return op.get_seq_num().print_raw(s);
@@ -1548,7 +1548,7 @@ pub fn piece_is_leaf(
     piece_is_leaf_inner(obank, vbank, root_vn, vn, rel_offset, None)
 }
 
-/// Container-entry-aware identity for a Varnode (kuna analog of
+/// Container-entry-aware identity for a Varnode (unlace analog of
 /// `Varnode::getSymbolEntry()`); see [`piece_is_leaf_inner`].
 pub type SymbolEntryKey = (crate::database::SymbolId, uintb, int4);
 
@@ -1712,7 +1712,7 @@ pub struct PcodeOpBank {
     arena: OpArena,
     /// The main sequence-number sort (C++ `PcodeOpTree optree`)
     optree: BTreeMap<SeqNum, OpId>,
-    /// (kuna) Bumped by every [`Self::optree`] insertion and removal, so a
+    /// (unlace) Bumped by every [`Self::optree`] insertion and removal, so a
     /// holder of a cached run of successors can tell in O(1) whether the tree
     /// still orders the way it did — see [`Self::optree_epoch`].
     optree_epoch: u64,
@@ -2038,7 +2038,7 @@ impl PcodeOpBank {
         self.first_after_seq(sq).map(|(_, id)| id)
     }
 
-    /// (kuna) A counter that changes whenever the optree gains or loses an
+    /// (unlace) A counter that changes whenever the optree gains or loses an
     /// entry.  Equal values across two observations mean the tree holds exactly
     /// the same keys in the same order, so a run of successors read at the first
     /// observation is still the run [`Self::first_after_seq_id`] would return
@@ -2047,7 +2047,7 @@ impl PcodeOpBank {
         self.optree_epoch
     }
 
-    /// (kuna) Up to `n` optree entries strictly after `sq`, in order — one tree
+    /// (unlace) Up to `n` optree entries strictly after `sq`, in order — one tree
     /// descent instead of `n` of them.  The ActionPool cursor reads its
     /// successors this way: the C++ advances a `PcodeOpTree::const_iterator` in
     /// O(1), where re-deriving each position from a [`SeqNum`] costs a range

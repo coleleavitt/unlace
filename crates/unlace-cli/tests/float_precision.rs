@@ -41,7 +41,7 @@ fn widened_scalar_and_simd_arithmetic_matches_native_bits() {
     process::required_output(&mut Command::new(&native));
 
     let specs = common::repo_root().join("specs");
-    let (printed, stderr, rc) = common::run_kuna(&[
+    let (printed, stderr, rc) = common::run_unlace(&[
         "decompile-all",
         native.to_str().unwrap(),
         "--functions",

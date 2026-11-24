@@ -3,7 +3,7 @@ use crate::common;
 fn targets(bytes: &[u8]) -> Vec<u64> {
     let path = common::scratch_file("thumbswitch-guard", "elf");
     std::fs::write(&path, bytes).unwrap();
-    let (stdout, stderr, code) = common::run_kuna(&[
+    let (stdout, stderr, code) = common::run_unlace(&[
         "xrefs",
         path.to_str().unwrap(),
         "--from",

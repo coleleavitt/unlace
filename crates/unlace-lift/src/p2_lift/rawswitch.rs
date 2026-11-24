@@ -1,4 +1,4 @@
-//! (kuna `rawswitch`) Recover an x86-64 jump table from its instructions, as
+//! (unlace `rawswitch`) Recover an x86-64 jump table from its instructions, as
 //! IDA's switch matcher does, when the value-range models cannot.
 //!
 //! gcc and clang emit a PIC switch as
@@ -29,7 +29,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4, uintb};
 
 use crate::context::{OpId, VarnodeId};
@@ -231,7 +231,7 @@ impl JumpModel for JumpModelRaw {
         indop: OpId,
         _matchsize: uint4,
         _maxtablesize: uint4,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         self.dests.clear();
         Ok(raw_destinations(fd, indop).is_some_and(|d| {
             self.dests = d;
@@ -246,7 +246,7 @@ impl JumpModel for JumpModelRaw {
         addresstable: &mut Vec<Address>,
         _loadpoints: Option<&mut Vec<LoadTable>>,
         _loadcounts: Option<&mut Vec<int4>>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         addresstable.clear();
         let Some(spc) = fd
             .obank()
@@ -267,7 +267,7 @@ impl JumpModel for JumpModelRaw {
         _maxaddsub: uint4,
         _maxleftright: uint4,
         _maxext: uint4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         Ok(())
     }
 
@@ -277,7 +277,7 @@ impl JumpModel for JumpModelRaw {
         addresstable: &mut [Address],
         label: &mut Vec<uintb>,
         _orig: &dyn JumpModel,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for i in 0..addresstable.len() {
             label.push(i as uintb);
         }
@@ -288,11 +288,11 @@ impl JumpModel for JumpModelRaw {
         &mut self,
         _fd: &mut Funcdata,
         _indop: OpId,
-    ) -> KunaResult<Option<VarnodeId>> {
+    ) -> UnlaceResult<Option<VarnodeId>> {
         Ok(None)
     }
 
-    fn fold_in_guards(&mut self, _fd: &mut Funcdata, _jump: &mut JumpTable) -> KunaResult<bool> {
+    fn fold_in_guards(&mut self, _fd: &mut Funcdata, _jump: &mut JumpTable) -> UnlaceResult<bool> {
         Ok(false)
     }
 
@@ -303,7 +303,7 @@ impl JumpModel for JumpModelRaw {
         addresstable: &mut Vec<Address>,
         _loadpoints: &mut Vec<LoadTable>,
         _loadcounts: Option<&Vec<int4>>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         Ok(!addresstable.is_empty()
             && addresstable
                 .iter()
@@ -365,8 +365,8 @@ pub fn recover(
     indirect: OpId,
     matchsize: uint4,
     maxtablesize: uint4,
-) -> KunaResult<Option<Box<dyn JumpModel>>> {
-    if !fd.get_arch().kuna_options.get::<RawSwitch>().0 {
+) -> UnlaceResult<Option<Box<dyn JumpModel>>> {
+    if !fd.get_arch().unlace_options.get::<RawSwitch>().0 {
         return Ok(None);
     }
     let mut model = JumpModelRaw::default();
@@ -377,11 +377,11 @@ pub fn recover(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.rawswitch_recover = Some(recover);
 }
 
-/// (kuna) Parse `option rawswitch on|off`.
+/// (unlace) Parse `option rawswitch on|off`.
 pub struct OptionRawSwitch;
 
 impl OptionRawSwitch {
@@ -389,7 +389,7 @@ impl OptionRawSwitch {
     pub const NAME: &'static str = "rawswitch";
 
     /// Parse and validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let on = crate::options::on_or_off(p1)?;
         let state = if on { "on" } else { "off" };
         Ok((
@@ -399,14 +399,14 @@ impl OptionRawSwitch {
     }
 }
 
-/// (kuna) Recover a jump table from its x86-64 instructions when the models
+/// (unlace) Recover a jump table from its x86-64 instructions when the models
 /// fail (option `rawswitch`, default off).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RawSwitch(pub bool);
 
-impl crate::optionset::KunaOption for RawSwitch {
+impl crate::optionset::UnlaceOption for RawSwitch {
     const NAME: &'static str = "rawswitch";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RawSwitch(false)
@@ -416,7 +416,7 @@ impl crate::optionset::KunaOption for RawSwitch {
         RawSwitch(false)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         let (on, msg) = OptionRawSwitch.apply(value)?;
         Ok((RawSwitch(on), msg))
     }

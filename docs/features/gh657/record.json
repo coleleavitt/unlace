@@ -1,7 +1,7 @@
 {
   "opportunity": "foldcallret (default-on) moves a single-use call's evaluation to where its result is printed. Its order-safety predicate stated the barrier set in opcodes (CALL/LOAD/STORE/CALLOTHER), but heritage promotes a write to a fixed address into a plain CPUI_COPY, so a call sank past a write to a global it reads and the emitted C computed a different value than the binary.",
   "issue": "Noelo-Lab/kuna#657",
-  "test_name": "tests/stages/kuna-foldcallret-barrier.xml (single pass, defaults: target = the issue verbatim, target2 = the write after the use so the expression travels to the return) + tests/cli/foldcallret-sinks-call-past.json",
+  "test_name": "tests/stages/foldcallret-barrier.xml (single pass, defaults: target = the issue verbatim, target2 = the write after the use so the expression travels to the return) + tests/cli/foldcallret-sinks-call-past.json",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/gh657_x86_64 (hand-assembled, 5000 bytes) and a synthetic bytechunk of the same bytes in the stage test",
   "selector": "target",
   "func_addr": "0x4000b0",
@@ -20,7 +20,7 @@
     "clause_2_is_narrower": "that second span asks only about WRITES (op_is_write_barrier: a call, CPUI_STORE, CPUI_CALLOTHER, or a write to persistent/address-tied storage). CPUI_LOAD is not in it. Up to the use a LOAD is a hazard this pass can decide -- the call may STORE what it reads, and the use is where the folded text lands. Past the use the reads left in the span are the ones the folded expression is printed BESIDE, inside the one statement the implied chain collapses into, so de-folding over them repositions nothing. Measured: counting them costs 117 further changed functions on the 37-binary sweep (243 instead of 126), dominated by __ctype_b_loc() inlined into the same conditional as the loads it sits next to (bash O0 0xfa64d). All 10 functions that the narrowed set still de-folds for an opcode reason were read by hand and each has a STORE emitted as its own statement in the span.",
     "exemption_self_copy": "op_is_self_copy: a CPUI_COPY back into the storage its input already occupies (what RuleIndirectCollapse leaves behind) writes the value already there. Volatile excluded. Without it gh275-spillargtrial #3 and LIBCTYPES #9 each lose a fold to an artifact. Eight unit tests in callretfold/tests.rs pin the predicate directly on hand-built IR (constant-into-global and arithmetic-into-global are barriers; glob = COPY glob is not; a copy between two globals, at a different width, or of a volatile location is; an untied temporary is not; LOAD is a barrier on the first span only).",
     "exemption_chain": "the ops the expression travels through are exempt from the second span test: each consumes the previous one's value, so the call is evaluated before them in the folded text exactly as in the binary. With the narrowed (writes-only) set this is no longer load-bearing: dropping it changes 0 of the 23,851 functions on the sweep. Kept for the shape it is written for -- a chain op that is itself a call with an implied output, where the folded expression is that call's own argument.",
-    "not_widened": "the INDIRECT test keeps the call-to-use span for the DEFAULT fold. Asking it past the use changes 31 functions across grep O0, tar O0 and ssh O2 and de-folds 27 of them, correcting none; the dominant shape is `dat_33798 = *__errno_location()` (grep O0 sub_6c53), whose binary is call/mov/mov in exactly that order. Exempting the self-copy from it as well makes kuna-elfmain's sub_1357(a1[1]) fold where it did not before -- a NEW fold, which this fix has no business adding.",
+    "not_widened": "the INDIRECT test keeps the call-to-use span for the DEFAULT fold. Asking it past the use changes 31 functions across grep O0, tar O0 and ssh O2 and de-folds 27 of them, correcting none; the dominant shape is `dat_33798 = *__errno_location()` (grep O0 sub_6c53), whose binary is call/mov/mov in exactly that order. Exempting the self-copy from it as well makes elfmain's sub_1357(a1[1]) fold where it did not before -- a NEW fold, which this fix has no business adding.",
     "phi_left_alone": "the span past the use is also foldcallretphi's, and an earlier revision of this branch moved that option's guard into callretfold.rs and shared it, which silently RELAXED it (the implied-chain exemption and op_is_self_copy, neither of which #654 had): with `--option foldcallretphi on`, ssh O2 0xcdd0 and dpkg O2 0x2e170 each GAINED a fold origin/main declines. foldcallretphi.rs now composes its guard exactly as it shipped -- every opcode, the storage test unsoftened, no chain exemption, the INDIRECT question over the whole distance including the landing statement -- and only print_point and the raw storage test delegate to kuna_callretfold. That guard is strictly wider than the second foldcallret span, so a phi-discounted fold is decided exactly as on origin/main. See phi_arm for the per-function content comparison that replaces the set metric."
   },
   "witnesses": {
@@ -101,7 +101,7 @@
     "kuna catalog --check": "catalog OK",
     "counters --check": "no drift; docs/options.md byte-fresh",
     "make rust-test": "RUST_TEST_RC=0 -- 415 test binaries, 7130 passed / 0 failed",
-    "stage_test_two_arm": "tests/stages/kuna-foldcallret-barrier.xml run against a build of origin/main via KUNA_DECOMP_TEST: 1/6 assertions pass (#1, #3, #4, #5, #6 fail). Against this branch: 6/6."
+    "stage_test_two_arm": "tests/stages/foldcallret-barrier.xml run against a build of origin/main via KUNA_DECOMP_TEST: 1/6 assertions pass (#1, #3, #4, #5, #6 fail). Against this branch: 6/6."
   },
   "stage_assertions_examined": {
     "note": "four stage assertions moved on the first version of the fix and NONE was absorbed: each pointed at a real over-decline, and the final version leaves all 1059 pre-existing assertions untouched (the baseline gains only the six new GH657 rows).",
@@ -114,7 +114,7 @@
     "kuna-base/src/xml.rs corpus file count 305 -> 306 after the #661 and #663 rebases (one new tests/stages file on top of theirs)",
     "docs/baseline-stages.json re-recorded on the rebased tree (1072 -> 1078 keys, all six new)",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json recaptured (215 settables) -- the foldcallret/foldcallretphi row text moved, which only the workspace suite's catalog_bytecompat sees",
-    "no option added, so no settable/tier/kuna-catalog.xml count moves (counters --check green)"
+    "no option added, so no settable/tier/catalog.xml count moves (counters --check green)"
   ],
   "files": [
     "decompiler/crates/kuna-decomp/src/p6_variables/callretfold.rs",
@@ -124,7 +124,7 @@
     "decompiler/crates/kuna-base/src/xml.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
-    "tests/stages/kuna-foldcallret-barrier.xml (new)",
+    "tests/stages/foldcallret-barrier.xml (new)",
     "tests/cli/foldcallret-sinks-call-past.json (new)",
     "decompiler/crates/kuna-analysis/tests/fixtures/gh657_x86_64{,.s} (new) + fixtures/README.md",
     "docs/spec/06-variables-and-merge.md",

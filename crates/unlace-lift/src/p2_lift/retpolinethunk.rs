@@ -1,4 +1,4 @@
-//! (kuna) `retpolinethunk` — a retpoline thunk recognized by its body.
+//! (unlace) `retpolinethunk` — a retpoline thunk recognized by its body.
 //!
 //! `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) turn every indirect
 //! call into a direct call to a per-register thunk:
@@ -70,7 +70,7 @@ pub fn thunk_register(read: impl Fn(u64) -> Option<u8>) -> Option<&'static str> 
 /// thunk at `entry`, or -1.
 pub fn inject_id(arch: &Architecture, entry: &Address) -> int4 {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::retpolinethunk::RetpolineThunk>()
         .0
         || !arch.get_description().starts_with("x86:")
@@ -91,8 +91,8 @@ pub fn inject_id(arch: &Architecture, entry: &Address) -> int4 {
         .get_payload_id(crate::pcodeinject::CALLFIXUP_TYPE, name.as_bytes())
 }
 
-crate::kuna_flag!(
-    /// (kuna) A retpoline thunk recognized by its body gets the cspec's
+crate::unlace_flag!(
+    /// (unlace) A retpoline thunk recognized by its body gets the cspec's
     /// `x86_indirect_thunk_<reg>` fixup (option `retpolinethunk`).
     RetpolineThunk,
     "retpolinethunk",

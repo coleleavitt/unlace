@@ -14,7 +14,7 @@ fn run(args: &[&str]) -> String {
     let bin = common::fixture("tailcallee_fwd_aarch64");
     let mut argv = vec![args[0], bin.as_str()];
     argv.extend_from_slice(&args[1..]);
-    let (stdout, stderr, rc) = common::run_kuna(&argv);
+    let (stdout, stderr, rc) = common::run_unlace(&argv);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     stdout
 }

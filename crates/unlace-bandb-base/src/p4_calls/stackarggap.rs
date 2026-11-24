@@ -1,11 +1,11 @@
-//! (kuna) A stack argument cannot sit behind an argument register the caller
+//! (unlace) A stack argument cannot sit behind an argument register the caller
 //! never wrote.
 //!
 //! # The symptom
 //!
 //! A Windows PE that hashes a buffer with OpenSSL calls `EVP_DigestFinal_ex`,
 //! whose signature is `int EVP_DigestFinal_ex(EVP_MD_CTX *, unsigned char *,
-//! unsigned int *)`. kuna renders the call with five arguments:
+//! unsigned int *)`. unlace renders the call with five arguments:
 //!
 //! ```text
 //! v2 = EVP_DigestInit_ex(v3,EVP_sha256(),0,a3,v10);
@@ -124,7 +124,7 @@ use unlace_base::types::int4;
 
 use crate::fspec::ParamActive;
 
-/// Marshaling element `<stackarggap>` (kuna 4000+ range; 4156 was the previous
+/// Marshaling element `<stackarggap>` (unlace 4000+ range; 4156 was the previous
 /// high-water mark).
 pub const ELEM_STACKARGGAP: ElementId = ElementId::new("stackarggap", 4157);
 
@@ -169,7 +169,7 @@ pub fn address_is_spacebase(addr: &unlace_base::address::Address) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.stackarggap_ends_argument_list = Some(ends_argument_list);
     hooks.stackarggap_address_is_spacebase = Some(address_is_spacebase);
 }

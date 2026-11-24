@@ -2,7 +2,7 @@
 //! into values, `PUSH`+`JUMPI` becomes a branch, and a `PUSH32` decodes across its
 //! `PUSHDATA` continuations.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn decompile(addr: &str) -> String {
     let bin = repo_root()
@@ -10,7 +10,7 @@ fn decompile(addr: &str) -> String {
         .to_str()
         .unwrap()
         .to_owned();
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         addr,

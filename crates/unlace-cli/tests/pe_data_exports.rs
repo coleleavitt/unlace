@@ -52,7 +52,7 @@ __declspec(dllexport) void write_byte(void) { exported_bytes[0] = 7; }
     let data = address(b"exported_bytes");
     let code = address(b"write_byte");
     let (inventory, stderr, status) =
-        common::run_kuna(&["functions", binary.to_str().unwrap(), "--json"]);
+        common::run_unlace(&["functions", binary.to_str().unwrap(), "--json"]);
     assert_eq!(status, 0, "{stderr}");
     let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
     let functions = inventory["functions"].as_array().unwrap();
@@ -69,7 +69,7 @@ __declspec(dllexport) void write_byte(void) { exported_bytes[0] = 7; }
         .as_str()
         .unwrap();
     let (xrefs, stderr, status) =
-        common::run_kuna(&["xrefs", binary.to_str().unwrap(), "--to", "exported_bytes"]);
+        common::run_unlace(&["xrefs", binary.to_str().unwrap(), "--to", "exported_bytes"]);
     assert_eq!(status, 0, "{stderr}");
     assert!(
         xrefs.contains(&format!("exported_bytes @ 0x{data:x}")),
@@ -77,7 +77,7 @@ __declspec(dllexport) void write_byte(void) { exported_bytes[0] = 7; }
     );
     let project = root.join("project");
     let declaration = format!("data 0x{data:x} unsigned char exported_bytes[16]");
-    let (_, stderr, status) = common::run_kuna(&[
+    let (_, stderr, status) = common::run_unlace(&[
         "decompile-project",
         binary.to_str().unwrap(),
         "--addr",

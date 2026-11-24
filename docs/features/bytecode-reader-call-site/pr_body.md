@@ -48,7 +48,7 @@ where the bytecode reader `sub_875e0(ctx, buf, len, flags)` was reduced to
 
 ## The tests
 
-`tests/stages/kuna-calleearitycut.toml` is two-pass over a vendored x86-64
+`tests/stages/calleearitycut.toml` is two-pass over a vendored x86-64
 fixture, with both negative controls: a callee that reads *every* argument
 register (no boundary) and a caller that writes the boundary register (not
 quiet); both are declined in both passes. `tests/cli/bytecode-reader-call-site.json`

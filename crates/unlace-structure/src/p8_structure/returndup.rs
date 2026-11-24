@@ -12,14 +12,14 @@
 //! ```
 //!
 //! — compiles to a single **shared** RETURN block reached from several
-//! predecessors (each `return` becomes `mov eax,..; jmp .Lepilogue`).  kuna, like
+//! predecessors (each `return` becomes `mov eax,..; jmp .Lepilogue`).  unlace, like
 //! upstream Ghidra, keeps the merged form:
 //! [`CollapseStructure::rule_block_or`](crate::blockaction) merges the guards into
 //! one condition with comma-expression side effects
 //! (`if ((A||B) && (v3=a0, v2=f(..), C||D)) { rest }`), because the two conditionals
 //! *share an out-target* (the epilogue).  On `coreutils::factor` this collapses two
 //! source early-return guards **and the intervening call** into one giant
-//! short-circuit condition with a single trailing return — kuna 3 ifs / 0 early
+//! short-circuit condition with a single trailing return — unlace 3 ifs / 0 early
 //! returns vs the source's 4 ifs / early returns (GED 12).
 //!
 //! The existing [`ActionReturnSplit`](crate::blockaction::ActionReturnSplit)
@@ -27,7 +27,7 @@
 //! shared RETURN block when [`Funcdata::gather_return_gotos`] finds **goto**-in
 //! edges — i.e. it is the analog of angr's *goto-driven* `ReturnDuplicatorLow`.  On
 //! the factor shape structuring is goto-free (the guards collapse cleanly into the
-//! comma condition), so `gotoblocks.is_empty()` and the split never fires.  kuna has
+//! comma condition), so `gotoblocks.is_empty()` and the split never fires.  unlace has
 //! had no analog of the **gotoless** `ReturnDuplicatorHigh`.
 //!
 //! # What this pass does
@@ -68,7 +68,7 @@
 //! with a shared const bare epilogue gains early returns, so nine datatests pin the
 //! merged upstream rendering with an explicit `option returndup off`.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
@@ -76,7 +76,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<returndup>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<returndup>` (unlace).  ElementIds live in the 4000+ range
 /// (4100 gotoreduce, 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch, 4105 crossjumprevert, 4106 switchsharedcase,
 /// 4107 ifelseflatten, 4108 taildup, 4109 dedupitetail are taken; this is 4110).
@@ -93,7 +93,7 @@ pub const MAX_RETURNDUP_INEDGES: int4 = 16;
 
 /// \brief Duplicate a shared **bare-epilogue** RETURN block into each predecessor but
 /// one, so the classic `if (c) { body; return X; } return Y;` guard shape structures
-/// as per-predecessor early returns instead of one merged, comma-folded exit (kuna's
+/// as per-predecessor early returns instead of one merged, comma-folded exit (unlace's
 /// analog of angr's SAILR gotoless `ReturnDuplicatorHigh`).  Option-gated
 /// (`duplicate_shared_returns`).  Reuses the existing `return_split_is_splittable`
 /// filter + `node_split` machinery that `ActionReturnSplit` drives.
@@ -129,7 +129,7 @@ impl Action for ActionReturnDup {
         // P0 assertion `option returndup on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::returndup::ReturnDup>()
             .shared
         {
@@ -165,7 +165,7 @@ impl OptionReturnDup {
 
     /// Parse `on`/`off`/`calls`, returning whether bare epilogues are
     /// duplicated, whether call tails are too, and a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, bool, String)> {
         if p1 == "calls" {
             return Ok((
                 true,
@@ -183,7 +183,7 @@ impl OptionReturnDup {
     }
 }
 
-/// (kuna `returndup`) Duplicate shared bare epilogues (`shared`), and call
+/// (unlace `returndup`) Duplicate shared bare epilogues (`shared`), and call
 /// tails too (`calls`, [`crate::returndupcalls`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReturnDup {
@@ -191,9 +191,9 @@ pub struct ReturnDup {
     pub calls: bool,
 }
 
-impl crate::optionset::KunaOption for ReturnDup {
+impl crate::optionset::UnlaceOption for ReturnDup {
     const NAME: &'static str = "returndup";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ReturnDup {
@@ -209,7 +209,7 @@ impl crate::optionset::KunaOption for ReturnDup {
         }
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         let (shared, calls, msg) = OptionReturnDup.apply(value)?;
         Ok((ReturnDup { shared, calls }, msg))
     }

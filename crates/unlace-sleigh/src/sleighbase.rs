@@ -15,7 +15,7 @@ use std::cell::OnceCell;
 use std::collections::btree_map::Entry;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder, IdRegistry};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, OtherSpace, RegisterLookup, UniqueSpace,
@@ -86,7 +86,7 @@ impl SourceFileIndexer {
 
     /// C++ `SourceFileIndexer::decode`.
     /// Decode names and extend the index range used for encoding.
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let el = decoder.open_element_id(&sla::ELEM_SOURCEFILES)?;
         while decoder.peek_element()? == sla::ELEM_SOURCEFILE {
             let subel = decoder.open_element()?;
@@ -155,7 +155,7 @@ pub struct SleighBase {
     pub(crate) symtab: SymbolTable,
     /// Backing store for `ConstructTpl` (the `ConstructTplHandle` index space).
     pub(crate) templates: Vec<ConstructTpl>,
-    /// (kuna) The template store of a lazily decoded `.sla`; when it is not
+    /// (unlace) The template store of a lazily decoded `.sla`; when it is not
     /// empty it holds the handle space instead of `templates`.
     lazy_templates: LazyTemplates,
     /// C++ `maxdelayslotbytes`.
@@ -216,17 +216,17 @@ impl SleighBase {
     pub(crate) fn build_xrefs(
         &mut self,
         error_pairs: &mut Vec<Vec<u8>>,
-        mut register_context: impl FnMut(&[u8], i32, i32) -> KunaResult<()>,
-    ) -> KunaResult<()> {
+        mut register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
+    ) -> UnlaceResult<()> {
         let glb = self
             .symtab
             .get_global_scope()
-            .ok_or_else(|| KunaError::sleigh("symbol table has no global scope"))?;
+            .ok_or_else(|| UnlaceError::sleigh("symbol table has no global scope"))?;
         for sym_id in glb.symbol_ids() {
             let sym = self
                 .symtab
                 .find_symbol_by_id(sym_id)
-                .ok_or_else(|| KunaError::sleigh("undefined global symbol"))?;
+                .ok_or_else(|| UnlaceError::sleigh("undefined global symbol"))?;
             let name = sym.get_name();
             match sym.kind() {
                 SymbolKind::Varnode(v) => {
@@ -261,17 +261,17 @@ impl SleighBase {
     /// C++ `SleighBase::reregisterContext`.
     pub(crate) fn reregister_context(
         &self,
-        mut register_context: impl FnMut(&[u8], i32, i32) -> KunaResult<()>,
-    ) -> KunaResult<()> {
+        mut register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
+    ) -> UnlaceResult<()> {
         let glb = self
             .symtab
             .get_global_scope()
-            .ok_or_else(|| KunaError::sleigh("symbol table has no global scope"))?;
+            .ok_or_else(|| UnlaceError::sleigh("symbol table has no global scope"))?;
         for sym_id in glb.symbol_ids() {
             let sym = self
                 .symtab
                 .find_symbol_by_id(sym_id)
-                .ok_or_else(|| KunaError::sleigh("undefined global symbol"))?;
+                .ok_or_else(|| UnlaceError::sleigh("undefined global symbol"))?;
             if sym.get_type() == SymbolType::Context {
                 let (sb, eb) = context_field_bits(sym)?;
                 register_context(sym.get_name(), sb, eb)?;
@@ -281,14 +281,14 @@ impl SleighBase {
     }
 
     /// C++ `SleighBase::getRegister(const string&)`.
-    pub fn get_register(&self, nm: &[u8]) -> KunaResult<VarnodeData> {
+    pub fn get_register(&self, nm: &[u8]) -> UnlaceResult<VarnodeData> {
         let sym = self
             .symtab
             .find_symbol(nm)
-            .ok_or_else(|| KunaError::sleigh(format!("Unknown register name: {}", lossy(nm))))?;
+            .ok_or_else(|| UnlaceError::sleigh(format!("Unknown register name: {}", lossy(nm))))?;
         match sym.kind() {
             SymbolKind::Varnode(v) => Ok(v.get_fixed_varnode().clone()),
-            _ => Err(KunaError::sleigh(format!(
+            _ => Err(UnlaceError::sleigh(format!(
                 "Symbol is not a register: {}",
                 lossy(nm)
             ))),
@@ -327,7 +327,7 @@ impl SleighBase {
         &mut self,
         decoder: &mut dyn Decoder,
         big_end_default: bool,
-    ) -> KunaResult<Rc<AddrSpace>> {
+    ) -> UnlaceResult<Rc<AddrSpace>> {
         let elem_id = decoder.open_element()?;
         let mut index: i32 = 0;
         let mut address_size: i32 = 0;
@@ -364,7 +364,7 @@ impl SleighBase {
         // carries it, the `if (deadcodedelay == -1)` always sets it to delay.
         let deadcodedelay = delay;
         if index == 0 {
-            return Err(KunaError::lowlevel("Expecting index attribute"));
+            return Err(UnlaceError::lowlevel("Expecting index attribute"));
         }
         let res = if elem_id == sla::ELEM_SPACE_UNIQUE {
             // C++ new UniqueSpace(this,trans,index,flags): endianness from
@@ -374,7 +374,9 @@ impl SleighBase {
             OtherSpace::new(index)
         } else {
             if address_size == 0 || delay == -1 || name.is_empty() {
-                return Err(KunaError::lowlevel("Expecting size/delay/name attributes"));
+                return Err(UnlaceError::lowlevel(
+                    "Expecting size/delay/name attributes",
+                ));
             }
             AddrSpace::new(
                 spacetype::IPTR_PROCESSOR,
@@ -393,7 +395,7 @@ impl SleighBase {
 
     /// C++ `SleighBase::decodeSlaSpaces`.  `big_end` is the processor
     /// endianness (already set on `self.base` before this call).
-    fn decode_sla_spaces(&mut self, decoder: &mut dyn Decoder, big_end: bool) -> KunaResult<()> {
+    fn decode_sla_spaces(&mut self, decoder: &mut dyn Decoder, big_end: bool) -> UnlaceResult<()> {
         // The shared manager is mutated only during this initialization phase,
         // while the engine is still the sole `Rc` owner (no `glb` has cloned it
         // yet).  `Rc::get_mut` therefore always succeeds; a `None` would mean an
@@ -414,7 +416,7 @@ impl SleighBase {
         let spc_index = match self.manager.get_space_by_name(&lossy(&defname)) {
             Some(spc) => spc.get_index(),
             None => {
-                return Err(KunaError::lowlevel(format!(
+                return Err(UnlaceError::lowlevel(format!(
                     "Bad 'defaultspace' attribute: {}",
                     lossy(&defname)
                 )));
@@ -430,8 +432,8 @@ impl SleighBase {
     pub fn decode(
         &mut self,
         decoder: &mut dyn OpcodeDecoder,
-        register_context: impl FnMut(&[u8], i32, i32) -> KunaResult<()>,
-    ) -> KunaResult<()> {
+        register_context: impl FnMut(&[u8], i32, i32) -> UnlaceResult<()>,
+    ) -> UnlaceResult<()> {
         self.maxdelayslotbytes = 0;
         self.unique_allocatemask = 0;
         self.num_sections = 0;
@@ -459,7 +461,7 @@ impl SleighBase {
             attrib = decoder.get_next_attribute_id()?;
         }
         if version != sla::FORMAT_VERSION {
-            return Err(KunaError::lowlevel(".sla file has wrong format"));
+            return Err(UnlaceError::lowlevel(".sla file has wrong format"));
         }
         let big_end = self.base.is_big_endian();
         self.indexer.decode(decoder)?;
@@ -472,7 +474,7 @@ impl SleighBase {
             .manager
             .get_constant_space()
             .cloned()
-            .ok_or_else(|| KunaError::sleigh("constant space not registered"))?;
+            .ok_or_else(|| UnlaceError::sleigh("constant space not registered"))?;
         let mut symtab = std::mem::take(&mut self.symtab);
         let mut templates = std::mem::take(&mut self.templates);
         let mut lazy = LazyTemplates::new();
@@ -502,7 +504,7 @@ impl SleighBase {
         let mut error_pairs: Vec<Vec<u8>> = Vec::new();
         self.build_xrefs(&mut error_pairs, register_context)?;
         if !error_pairs.is_empty() {
-            return Err(KunaError::sleigh("Duplicate register pairs"));
+            return Err(UnlaceError::sleigh("Duplicate register pairs"));
         }
         Ok(())
     }
@@ -543,7 +545,7 @@ impl SleighBase {
     /// `SymbolTable::encode`, and the per-symbol/pattern/semantics `encode`
     /// methods underneath) was already ported for the decoder round-trip and is
     /// reused verbatim.
-    pub fn encode(&self, encoder: &mut dyn OpcodeEncoder) -> KunaResult<()> {
+    pub fn encode(&self, encoder: &mut dyn OpcodeEncoder) -> UnlaceResult<()> {
         encoder.open_element(&sla::ELEM_SLEIGH);
         encoder.write_signed_integer(&sla::ATTRIB_VERSION, i64::from(sla::FORMAT_VERSION));
         encoder.write_bool(&sla::ATTRIB_BIGENDIAN, self.base.is_big_endian());
@@ -569,7 +571,7 @@ impl SleighBase {
         let defaultspace = self
             .manager
             .get_default_code_space()
-            .ok_or_else(|| KunaError::sleigh("no default code space to encode"))?
+            .ok_or_else(|| UnlaceError::sleigh("no default code space to encode"))?
             .get_name()
             .as_bytes()
             .to_vec();
@@ -593,7 +595,7 @@ impl SleighBase {
 
         self.manager
             .get_constant_space()
-            .ok_or_else(|| KunaError::sleigh("constant space not registered"))?;
+            .ok_or_else(|| UnlaceError::sleigh("constant space not registered"))?;
         if self.lazy_templates.is_empty() {
             self.symtab.encode(encoder, &self.templates)?;
         } else {
@@ -628,10 +630,10 @@ fn manager_get_mut(manager: &mut Rc<AddrSpaceManager>) -> &mut AddrSpaceManager 
 /// C++ `ContextSymbol::getPatternValue()` -> `ContextField`'s start/end bits
 /// (`buildXrefs`/`reregisterContext`).  The cast is unchecked in C++; the
 /// Rust errors if the pattern value is not the expected `ContextField`.
-fn context_field_bits(sym: &SleighSymbol) -> KunaResult<(i32, i32)> {
+fn context_field_bits(sym: &SleighSymbol) -> UnlaceResult<(i32, i32)> {
     match sym.get_pattern_value() {
         Some(PatternValue::ContextField(field)) => Ok((field.get_start_bit(), field.get_end_bit())),
-        _ => Err(KunaError::sleigh("context symbol has no context field")),
+        _ => Err(UnlaceError::sleigh("context symbol has no context field")),
     }
 }
 
@@ -704,7 +706,7 @@ pub(crate) fn exact_register_name_from_xref<'a>(
 
 /// A standalone [`RegisterLookup`] snapshot built from the engine's register
 /// cross-reference (the `varnode_xref` location->name map).  This is installed
-/// on the engine's [`AddrSpaceManager`] (the kuna stand-in for the C++
+/// on the engine's [`AddrSpaceManager`] (the unlace stand-in for the C++
 /// `AddrSpace::trans` back-pointer) so the `<context_data>`/`<tracked_set>`
 /// spec decode — and any later `Translate::getRegister`-by-name path — resolves
 /// register names without an `Rc` cycle back into the owning [`crate::sleigh::Sleigh`].
@@ -734,12 +736,12 @@ impl SnapshotRegisterLookup {
 }
 
 impl RegisterLookup for SnapshotRegisterLookup {
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
         // C++ `SleighBase::getRegister` throws SleighError on an unknown name.
         self.by_name
             .get(nm.as_bytes())
             .cloned()
-            .ok_or_else(|| KunaError::sleigh(format!("Unknown register name: {nm}")))
+            .ok_or_else(|| UnlaceError::sleigh(format!("Unknown register name: {nm}")))
     }
 
     fn get_register_name(&self, base: &Rc<AddrSpace>, off: u64, size: i32) -> String {
@@ -766,7 +768,7 @@ impl SleighBaseTrans for TemplateDecoder<'_> {
     fn decode_construct_tpl(
         &mut self,
         decoder: &mut dyn OpcodeDecoder,
-    ) -> KunaResult<(i32, ConstructTplHandle)> {
+    ) -> UnlaceResult<(i32, ConstructTplHandle)> {
         let mut tpl = ConstructTpl::new();
         let sectionid = tpl.decode(decoder)?;
         let handle = self.templates.len();
@@ -775,8 +777,8 @@ impl SleighBaseTrans for TemplateDecoder<'_> {
     }
 }
 
-/// (kuna) [`TemplateDecoder`] for a lazily decoded `.sla`
-/// (`kuna_lazytemplates`): keeps each template's bytes for its first use.
+/// (unlace) [`TemplateDecoder`] for a lazily decoded `.sla`
+/// (`unlace_lazytemplates`): keeps each template's bytes for its first use.
 struct LazyTemplateDecoder<'a> {
     const_space: Rc<AddrSpace>,
     templates: &'a mut LazyTemplates,
@@ -790,7 +792,7 @@ impl SleighBaseTrans for LazyTemplateDecoder<'_> {
     fn decode_construct_tpl(
         &mut self,
         decoder: &mut dyn OpcodeDecoder,
-    ) -> KunaResult<(i32, ConstructTplHandle)> {
+    ) -> UnlaceResult<(i32, ConstructTplHandle)> {
         self.templates.take(decoder)
     }
 }
@@ -860,21 +862,21 @@ impl SleighBase {
         &self.templates
     }
 
-    /// (kuna) The template behind `handle`, from either store; a lazily decoded
-    /// one is decoded on its first use (`kuna_lazytemplates`).
-    pub fn template(&self, handle: ConstructTplHandle) -> KunaResult<&ConstructTpl> {
+    /// (unlace) The template behind `handle`, from either store; a lazily decoded
+    /// one is decoded on its first use (`unlace_lazytemplates`).
+    pub fn template(&self, handle: ConstructTplHandle) -> UnlaceResult<&ConstructTpl> {
         if self.lazy_templates.is_empty() {
             return self
                 .templates
                 .get(handle)
-                .ok_or_else(|| KunaError::sleigh("bad ConstructTpl handle"));
+                .ok_or_else(|| UnlaceError::sleigh("bad ConstructTpl handle"));
         }
         self.lazy_templates.get(handle, &self.manager)
     }
 
-    /// (kuna) The delay-slot count of the template behind `handle`, without
+    /// (unlace) The delay-slot count of the template behind `handle`, without
     /// decoding a lazy one.
-    pub fn template_delay_slot(&self, handle: ConstructTplHandle) -> KunaResult<u32> {
+    pub fn template_delay_slot(&self, handle: ConstructTplHandle) -> UnlaceResult<u32> {
         if self.lazy_templates.is_empty() {
             return self.template(handle).map(ConstructTpl::delay_slot);
         }
@@ -887,7 +889,7 @@ impl SleighBase {
     }
 
     /// Push a parsed `ConstructTpl` into the arena, returning its handle
-    /// (C++ stores the `ConstructTpl *` directly; the kuna boundary keys by index).
+    /// (C++ stores the `ConstructTpl *` directly; the unlace boundary keys by index).
     pub fn add_template(&mut self, tpl: ConstructTpl) -> ConstructTplHandle {
         let handle = self.templates.len();
         self.templates.push(tpl);
@@ -914,7 +916,7 @@ impl SleighBase {
         self.maxdelayslotbytes
     }
 
-    /// (kuna) Does the loaded language contain a SLEIGH `globalset`?
+    /// (unlace) Does the loaded language contain a SLEIGH `globalset`?
     ///
     /// A `globalset` compiles to a [`ContextChange::Commit`] on the constructor
     /// that carries it, and `Sleigh::apply_commits` turns it into a WRITE of the
@@ -1010,7 +1012,7 @@ impl SleighBase {
     }
 
     /// C++ `AddrSpaceManager::insertSpace`.
-    pub fn insert_space(&mut self, spc: Rc<AddrSpace>) -> KunaResult<()> {
+    pub fn insert_space(&mut self, spc: Rc<AddrSpace>) -> UnlaceResult<()> {
         manager_get_mut(&mut self.manager).insert_space(spc)
     }
 
@@ -1035,7 +1037,7 @@ impl SleighBase {
     }
 
     /// C++ `setDefaultCodeSpace(index)`.
-    pub fn set_default_code_space(&mut self, index: i32) -> KunaResult<()> {
+    pub fn set_default_code_space(&mut self, index: i32) -> UnlaceResult<()> {
         manager_get_mut(&mut self.manager).set_default_code_space(index)
     }
 
@@ -1050,7 +1052,7 @@ impl SleighBase {
     /// owns symbol-add error reporting.  Returns the three spaces.
     pub fn create_predefined_spaces(
         &mut self,
-    ) -> KunaResult<(Rc<AddrSpace>, Rc<AddrSpace>, Rc<AddrSpace>)> {
+    ) -> UnlaceResult<(Rc<AddrSpace>, Rc<AddrSpace>, Rc<AddrSpace>)> {
         let big = self.is_big_endian();
         let constant = Rc::new(ConstantSpace::new());
         self.insert_space(Rc::clone(&constant))?;
@@ -1071,7 +1073,7 @@ impl SleighBase {
         size: u32,
         wordsize: u32,
         is_register: bool,
-    ) -> KunaResult<Rc<AddrSpace>> {
+    ) -> UnlaceResult<Rc<AddrSpace>> {
         let big = self.is_big_endian();
         let index = self.num_spaces();
         let delay = if is_register { 0 } else { 1 };

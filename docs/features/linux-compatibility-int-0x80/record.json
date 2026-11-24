@@ -25,7 +25,7 @@
   },
   "tests": {
     "unit": "4 linuxsyscall unit tests, including exact/malformed/out-of-range width cases and low-32-bit compatibility truncation",
-    "stage": "tests/stages/kuna-linuxsyscall-x64-compat.xml: option-off raw swi, option-on standalone sys_exit(0), negative native-write/extra-arity guards, and a native SYSCALL control unchanged across both passes",
+    "stage": "tests/stages/linuxsyscall-x64-compat.xml: option-off raw swi, option-on standalone sys_exit(0), negative native-write/extra-arity guards, and a native SYSCALL control unchanged across both passes",
     "cli": "tests/cli/linux-compatibility-int-0x80.json: standalone sys_exit(0) and absence of swi, generic syscall(), sys_write, and extra exit arguments"
   },
   "baselines": {

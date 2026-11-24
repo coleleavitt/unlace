@@ -82,7 +82,7 @@ fn decompile(image: &Path, extra: &[&str]) -> Vec<String> {
         specs.to_str().unwrap(),
     ];
     args.extend_from_slice(extra);
-    let (stdout, stderr, rc) = common::run_kuna(&args);
+    let (stdout, stderr, rc) = common::run_unlace(&args);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     FUNCTIONS

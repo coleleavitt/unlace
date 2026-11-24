@@ -1,4 +1,4 @@
-//! (kuna `esprom`) Espressif mask-ROM symbols and chip memory maps.
+//! (unlace `esprom`) Espressif mask-ROM symbols and chip memory maps.
 //!
 //! An ESP application calls the routines in the chip's mask ROM at fixed
 //! addresses the image does not carry. The per-chip tables under `esprom/`

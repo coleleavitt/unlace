@@ -1,4 +1,4 @@
-//! (kuna `stackstruct`) Lay out an address-taken frame object that the function
+//! (unlace `stackstruct`) Lay out an address-taken frame object that the function
 //! accesses at several offsets with different widths as one synthesized record.
 //!
 //! A local record whose address is handed to a callee (`read(fd, &hdr, 8)`)
@@ -524,7 +524,7 @@ fn measure(
 pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::stackstruct::StackStruct>()
         .0
         || space.get_word_size() != 1
@@ -561,7 +561,7 @@ pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let known = fd.stack_records();
     let settled = fd.has_type_recovery_started()
         && !fd.is_type_recovery_exceeded()
-        && fd.kuna_infertypes_settled();
+        && fd.unlace_infertypes_settled();
     if known.is_empty() && !settled {
         return;
     }
@@ -620,8 +620,8 @@ fn mint(
     })
 }
 
-crate::kuna_flag!(
-    /// (kuna `stackstruct`) Lay out an address-taken frame record as one
+crate::unlace_flag!(
+    /// (unlace `stackstruct`) Lay out an address-taken frame record as one
     /// structure. See [`crate::stackstruct`].
     StackStruct,
     "stackstruct",
@@ -630,29 +630,29 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna `stackstruct`) Every frame record a `restructure_varnode` pass laid out; later passes
+/// (unlace `stackstruct`) Every frame record a `restructure_varnode` pass laid out; later passes
 /// keep it while no access contradicts its bounds. Kept across `Funcdata::clear`.
 #[derive(Default)]
 struct RecordsSlot(std::cell::RefCell<Vec<crate::stackstruct::StackRecord>>);
-crate::kuna_func_state!(RecordsSlot, keep_across_clear: true);
+crate::unlace_func_state!(RecordsSlot, keep_across_clear: true);
 
-/// The `kuna_stackstruct` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stackstruct` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackstructExt {
-    /// (kuna `stackstruct`) The frame records earlier passes laid out.
+    /// (unlace `stackstruct`) The frame records earlier passes laid out.
     fn stack_records(&self) -> Vec<crate::stackstruct::StackRecord>;
-    /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
+    /// (unlace `stackstruct`) Remember a frame record, replacing one at the same start.
     fn record_stack_record(&self, r: crate::stackstruct::StackRecord);
 }
 
 impl FuncdataStackstructExt for crate::funcdata::Funcdata {
-    /// (kuna `stackstruct`) The frame records earlier passes laid out.
+    /// (unlace `stackstruct`) The frame records earlier passes laid out.
     fn stack_records(&self) -> Vec<crate::stackstruct::StackRecord> {
-        self.kuna_state::<RecordsSlot>().0.borrow().clone()
+        self.unlace_state::<RecordsSlot>().0.borrow().clone()
     }
-    /// (kuna `stackstruct`) Remember a frame record, replacing one at the same start.
+    /// (unlace `stackstruct`) Remember a frame record, replacing one at the same start.
     fn record_stack_record(&self, r: crate::stackstruct::StackRecord) {
-        let mut all = self.kuna_state::<RecordsSlot>().0.borrow_mut();
+        let mut all = self.unlace_state::<RecordsSlot>().0.borrow_mut();
         all.retain(|o| o.start != r.start);
         all.push(r);
     }

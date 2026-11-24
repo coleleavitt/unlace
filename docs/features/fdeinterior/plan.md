@@ -33,7 +33,7 @@ widening any API.
 * `analyzers/entry/mod.rs`: `pub mod kuna_fdeinterior;`.
 * `pass.rs`: new `AnalysisOutput::fde_bodies` field + its `merge` arm.
 * `passes.rs`: register `FdeInteriorPass` after the other entry passes.
-* `kuna-console/src/engine.rs`: the `"fdeinterior" => arch.analysis_fdeinterior`
+* `console/src/engine.rs`: the `"fdeinterior" => arch.analysis_fdeinterior`
   gate arm, and ONE call to `suppress_interior_entries` on the fully merged output
   immediately before `commit_analysis_output`. The placement is load-bearing: the
   deferred Listing consumers (`aif`) merge after the load-time passes, and one of
@@ -47,7 +47,7 @@ suppression a literal no-op.
 
 ## 3. Tests
 
-`decompiler/crates/kuna-console/tests/verify_fdeinterior.rs`, two-pass over the
+`decompiler/crates/console/tests/verify_fdeinterior.rs`, two-pass over the
 vendored `eh_lsda_x86_64` fixture (`guarded` = FDE `[0x4012d6, 0x40137a)`, catch
 dispatch at `0x4012e2`), with `eh_frame_full` on in both arms:
 

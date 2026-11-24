@@ -46,6 +46,6 @@ fn proof(fd: &Funcdata, first: OpId, second: OpId) -> Option<()> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.highslice_guard_matches = Some(matches);
 }

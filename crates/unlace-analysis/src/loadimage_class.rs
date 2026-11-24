@@ -1,4 +1,4 @@
-//! (kuna `jvmmodel`) The Java class-file `LoadImage`: each method's code mapped
+//! (unlace `jvmmodel`) The Java class-file `LoadImage`: each method's code mapped
 //! read-only, as Ghidra's `JavaLoader` copies it.
 //!
 //! A `.class` file's methods map one after another from
@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_decomp::jvm::{CODE_BASE, JvmModel, is_class};
 use unlace_sleigh::loadimage::{LoadImage, LoadImageSection, section_flags};
@@ -19,7 +19,7 @@ use crate::loader::firmware::bundles::{Bundle, Kind};
 /// The language a class file decodes with.
 pub const JVM_LANGUAGE: &str = "JVM:BE:32:default";
 
-/// Largest number of classes kuna maps out of one JAR.
+/// Largest number of classes unlace maps out of one JAR.
 const MAX_CLASSES: usize = 1 << 16;
 
 /// Is `bytes` a zip with at least one `.class` member and no `classes.dex`?
@@ -39,19 +39,19 @@ pub fn is_class_image(bytes: &[u8]) -> bool {
 
 /// Parse a class file, or every `.class` member of a JAR, mapping their
 /// methods in order from [`CODE_BASE`].
-pub fn load_class_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<JvmModel>>> {
+pub fn load_class_models(bytes: Vec<u8>) -> UnlaceResult<Vec<Rc<JvmModel>>> {
     let files = if is_class(&bytes) {
         vec![bytes]
     } else {
         let bundle = Bundle::parse(&bytes)
-            .map_err(KunaError::lowlevel)?
-            .ok_or_else(|| KunaError::lowlevel("not a JAR"))?;
+            .map_err(UnlaceError::lowlevel)?
+            .ok_or_else(|| UnlaceError::lowlevel("not a JAR"))?;
         let mut files = Vec::new();
         for entry in bundle.entries.iter().filter(|e| e.name.ends_with(".class")) {
             if files.len() >= MAX_CLASSES {
                 break;
             }
-            let data = bundle.unpack(entry).map_err(KunaError::lowlevel)?;
+            let data = bundle.unpack(entry).map_err(UnlaceError::lowlevel)?;
             if is_class(&data) {
                 files.push(data.into_owned());
             }
@@ -59,7 +59,7 @@ pub fn load_class_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<JvmModel>>> {
         files
     };
     if files.is_empty() {
-        return Err(KunaError::lowlevel("no class files"));
+        return Err(UnlaceError::lowlevel("no class files"));
     }
     let mut models = Vec::with_capacity(files.len());
     let mut base = CODE_BASE;
@@ -67,7 +67,7 @@ pub fn load_class_models(bytes: Vec<u8>) -> KunaResult<Vec<Rc<JvmModel>>> {
         let model = JvmModel::parse(file, base)?;
         base = model.end.div_ceil(4) * 4;
         if base > u64::from(u32::MAX) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "classes do not fit in the 32-bit address space",
             ));
         }
@@ -109,7 +109,7 @@ impl LoadImage for ClassLoadImage {
         &self.filename
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let start = addr.get_offset();
         let attached = match (addr.get_space(), self.space.as_ref()) {
             (Some(space), Some(own)) => Rc::ptr_eq(space, own),
@@ -121,7 +121,7 @@ impl LoadImage for ClassLoadImage {
             .find_map(|m| m.code_from(start))
             .filter(|_| attached);
         let Some(code) = code else {
-            return Err(KunaError::data_unavail(format!(
+            return Err(UnlaceError::data_unavail(format!(
                 "Unable to load {} bytes at {}:0x{start:x}",
                 ptr.len(),
                 addr.get_shortcut()

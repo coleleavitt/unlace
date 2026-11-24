@@ -1,8 +1,8 @@
-//! (kuna) One callee, one argument list.
+//! (unlace) One callee, one argument list.
 //!
 //! # The gap
 //!
-//! When a callee's prototype is unlocked, kuna recovers the argument list
+//! When a callee's prototype is unlocked, unlace recovers the argument list
 //! **independently at every call site** (`ActionActiveParam` ->
 //! `checkInputTrialUse` -> `ParamListStandard::fillinMap`).  Nothing reconciles
 //! the results, so one function can be called four times in one caller and
@@ -81,7 +81,7 @@
 //! rescues it.  Deferring every finalization until every spec is checked would
 //! make the direction symmetric and is the wrong way to get it — it changes what
 //! `checkCallDoubleUse` sees while scoring, on every binary.  The other direction
-//! is [`kuna_calleearityfwd`](crate::calleearityfwd), which retries
+//! is [`unlace_calleearityfwd`](crate::calleearityfwd), which retries
 //! this same plan at the end of the pass instead of moving anything.
 
 use unlace_base::address::Address;
@@ -95,7 +95,7 @@ use crate::context::OpId;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleearity>` (kuna 4000+ range; 4132 = varargstackargs).
+/// Marshaling element `<calleearity>` (unlace 4000+ range; 4132 = varargstackargs).
 pub const ELEM_CALLEEARITY: ElementId = ElementId::new("calleearity", 4133);
 
 /// The register argument storage of an already-final direct call, in prototype
@@ -115,7 +115,7 @@ pub fn witness_storage(data: &Funcdata, fc: &FuncCallSpecs) -> Option<Vec<(Addre
     if o.is_dead() || o.code() != OpCode::CPUI_CALL {
         return None;
     }
-    // (kuna `swiftcall`) A sibling's `swiftself` says nothing about this
+    // (unlace `swiftcall`) A sibling's `swiftself` says nothing about this
     // call's: the register is a section of its own, decided per call.
     let storage: Vec<(Address, int4)> = fc
         .final_input_storage()
@@ -144,7 +144,7 @@ fn best_witness(fc: &FuncCallSpecs, data: &Funcdata) -> Vec<(Address, int4)> {
 
 /// [`best_witness`] addressed by callee entry and calling op rather than by the
 /// spec itself, so the deferred retry in
-/// [`kuna_calleearityfwd`](crate::calleearityfwd) — which has no
+/// [`unlace_calleearityfwd`](crate::calleearityfwd) — which has no
 /// `FuncCallSpecs` left to ask — runs the same search.
 pub fn best_witness_for(entry: &Address, op: OpId, data: &Funcdata) -> Vec<(Address, int4)> {
     let mut best: Vec<(Address, int4)> = Vec::new();
@@ -250,7 +250,7 @@ pub fn unify_with_sibling_call(fc: &mut FuncCallSpecs, data: &Funcdata) -> int4 
             TrialView {
                 addr: t.get_address().clone(),
                 size: t.get_size(),
-                // (kuna `swiftcall`) A Swift `self` alone is no recovered list.
+                // (unlace `swiftcall`) A Swift `self` alone is no recovered list.
                 used: t.is_used()
                     && !crate::swiftcall::is_self_storage(data, t.get_address(), t.get_size()),
                 definitely_not_used: t.is_definitely_not_used(),

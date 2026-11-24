@@ -1,4 +1,4 @@
-//! (kuna `libctypes`) A libc aggregate is not the type of a pointer the caller
+//! (unlace `libctypes`) A libc aggregate is not the type of a pointer the caller
 //! reaches past the end of.
 //!
 //! `libctypes` declares `void _obstack_newchunk(obstack *, size_t)`, and

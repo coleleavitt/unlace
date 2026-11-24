@@ -1,4 +1,4 @@
-//! (kuna `flownames`) Name locals from the fields and types they meet.
+//! (unlace `flownames`) Name locals from the fields and types they meet.
 //!
 //! Two kinds of evidence for a numbered local that are read from the code
 //! rather than from a library table, added to the [`crate::libcnames`]
@@ -261,8 +261,8 @@ fn field_uses(fd: &Funcdata) -> Vec<(VarnodeId, bool, OpId, String)> {
     out
 }
 
-crate::kuna_flag!(
-    /// (kuna `flownames`) Name locals from the fields and types they meet.
+crate::unlace_flag!(
+    /// (unlace `flownames`) Name locals from the fields and types they meet.
     /// See [`crate::flownames`].
     FlowNames,
     "flownames",

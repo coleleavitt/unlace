@@ -36,7 +36,7 @@ fn load(image: &str, lazy: bool) -> ConsoleProgram {
         .expect("bootstrap fixture with built processor specs");
     if lazy {
         prog.arch_mut()
-            .set_kuna_option("lazyfuncs", "on")
+            .set_unlace_option("lazyfuncs", "on")
             .expect("settable");
     }
     prog.commit_pending_analysis()
@@ -184,7 +184,7 @@ fn lazyfuncs_is_off_by_default() {
     assert!(
         !load("fauxware", false)
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Lazyfuncs>()
             .0,
         "the option must default off"

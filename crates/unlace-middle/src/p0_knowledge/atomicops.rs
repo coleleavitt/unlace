@@ -1,7 +1,7 @@
-//! (kuna `atomics`, `llscfold`) The user operations an atomic instruction of a
+//! (unlace `atomics`, `llscfold`) The user operations an atomic instruction of a
 //! language carries, resolved once per program, and the two options that turn
 //! atomic instructions and load/store-exclusive retry loops into `__sync_*`
-//! builtins (`kuna_atomics`, `docs/spec/02-lift-and-flow.md`).
+//! builtins (`unlace_atomics`, `docs/spec/02-lift-and-flow.md`).
 
 use crate::userop::UserOpManage;
 
@@ -72,7 +72,7 @@ impl AtomicUserops {
         AtomicUserops::default()
     }
 
-    /// Whether this language has atomic instructions `kuna_atomics` recognizes.
+    /// Whether this language has atomic instructions `unlace_atomics` recognizes.
     pub fn enabled(&self) -> bool {
         self.lock.is_some() || self.unmarked
     }
@@ -139,9 +139,9 @@ impl Atomics {
     }
 }
 
-impl crate::optionset::KunaOption for Atomics {
+impl crate::optionset::UnlaceOption for Atomics {
     const NAME: &'static str = "atomics";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         Atomics::Off
@@ -151,7 +151,7 @@ impl crate::optionset::KunaOption for Atomics {
         Atomics::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let mode = match value {
             "off" => Atomics::Off,
             "auto" => Atomics::Auto,
@@ -159,7 +159,7 @@ impl crate::optionset::KunaOption for Atomics {
             "gcc" => Atomics::Gcc,
             "c11" => Atomics::C11,
             other => {
-                return Err(unlace_base::error::KunaError::parse(format!(
+                return Err(unlace_base::error::UnlaceError::parse(format!(
                     "Unknown atomics value: {other} (expected auto|msvc|gcc|c11|off)"
                 )));
             }
@@ -168,8 +168,8 @@ impl crate::optionset::KunaOption for Atomics {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) Fold an AArch64 load-exclusive/store-exclusive retry loop into
+crate::unlace_flag!(
+    /// (unlace) Fold an AArch64 load-exclusive/store-exclusive retry loop into
     /// the `__sync_*` builtin its successful iteration performs (option
     /// `llscfold`).
     LlscFold,
@@ -182,7 +182,7 @@ crate::kuna_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optionset::KunaOption;
+    use crate::optionset::UnlaceOption;
 
     #[test]
     fn options_parse_and_ship_on() {

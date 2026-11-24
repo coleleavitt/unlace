@@ -1,4 +1,4 @@
-//! (kuna `swifttypes`) Swift type layouts from static type metadata.
+//! (unlace `swifttypes`) Swift type layouts from static type metadata.
 //!
 //! A non-generic type whose metadata needs no runtime initialization has it
 //! laid out statically, and its accessor is the one-line function that
@@ -11,7 +11,7 @@
 //! offset vector (pointer-sized entries). From the reflection field
 //! descriptor: each stored property's name and mangled type, whose
 //! symbolic references the descriptor table resolves. Together they give a
-//! kuna struct per type — `Module.Point { long x; long y; }`, a class as the
+//! unlace struct per type — `Module.Point { long x; long y; }`, a class as the
 //! object layout with a local superclass embedded as `super` — interned in
 //! the type factory under the type's dotted name.
 //!
@@ -386,7 +386,7 @@ impl<'a> Types<'a> {
         Some(out)
     }
 
-    /// The kuna struct of the nominal type at `addr` (built on first use),
+    /// The unlace struct of the nominal type at `addr` (built on first use),
     /// `None` when its layout is not static, or it is reached through
     /// [`MAX_NESTING`] layouts still being built.
     pub fn struct_type(&self, addr: u64) -> Option<Rc<Datatype>> {
@@ -665,13 +665,13 @@ impl<'a> Types<'a> {
         }
         let resolver = |kind: u8, pos: usize, value: u64| self.resolve(at, kind, pos, value);
         let node = demangle_swift_type(mangled, &resolver)?;
-        self.kuna_type(&node, hint, 0)
+        self.unlace_type(&node, hint, 0)
     }
 
-    /// The kuna type of a demangled Swift type, sized `hint` bytes in its
+    /// The unlace type of a demangled Swift type, sized `hint` bytes in its
     /// container, or `None` for one outside the mapping (or wrapped in more
     /// than [`MAX_NESTING`] optionals).
-    pub(super) fn kuna_type(
+    pub(super) fn unlace_type(
         &self,
         node: &NodeRef,
         hint: u32,
@@ -729,7 +729,7 @@ impl<'a> Types<'a> {
                     return None;
                 }
                 let arg = inner.child(1)?.first()?;
-                let t = self.kuna_type(arg, hint, depth + 1)?;
+                let t = self.unlace_type(arg, hint, depth + 1)?;
                 let nil_is_zero = t.get_metatype() == type_metatype::TYPE_PTR
                     || matches!(t.get_name(), "Swift.String" | "swift.closure")
                     || t.get_name().starts_with("Swift.Array<")
@@ -794,7 +794,7 @@ impl<'a> Types<'a> {
             }
             // An `inout` argument is the address of the value.
             Kind::InOut => {
-                let t = self.kuna_type(inner.first()?, u32::MAX, depth + 1)?;
+                let t = self.unlace_type(inner.first()?, u32::MAX, depth + 1)?;
                 (hint >= 8)
                     .then(|| tf.get_type_pointer(self.ptr_size, t, 1).ok())
                     .flatten()
@@ -815,7 +815,7 @@ impl<'a> Types<'a> {
                 let mut align = 1u32;
                 for (i, e) in inner.children.iter().enumerate() {
                     let ty = e.children.iter().find(|c| c.kind == Kind::Type)?;
-                    let t = self.kuna_type(ty, hint, depth + 1)?;
+                    let t = self.unlace_type(ty, hint, depth + 1)?;
                     let size = t.get_size() as u32;
                     let a = match t.get_metatype() {
                         type_metatype::TYPE_STRUCT => 8.min(size.max(1)),
@@ -1125,7 +1125,7 @@ impl<'a> Types<'a> {
                     first_var_arg_slot: -1,
                     output_storage: None,
                     input_storage: Vec::new(),
-                    kuna_library_names: None,
+                    unlace_library_names: None,
                 });
             }
         }
@@ -1278,7 +1278,7 @@ impl<'a> Types<'a> {
             return None;
         }
         let ty = entity.child_of_kind(Kind::Type)?;
-        let t = self.kuna_type(ty, u32::MAX, 0)?;
+        let t = self.unlace_type(ty, u32::MAX, 0)?;
         let name = crate::demangle::swift::name::print_name(&tree)?;
         Some((name, t))
     }

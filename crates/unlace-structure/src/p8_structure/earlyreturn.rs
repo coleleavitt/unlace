@@ -8,7 +8,7 @@
 //! guard whose false arm just returns a default, merged with the body's own return:
 //!
 //! ```c
-//!   // source / angr                       // kuna today (the merged diamond)
+//!   // source / angr                       // unlace today (the merged diamond)
 //!   if (!cur) return 0;                     if (cur != 0) { ...body... }
 //!   ...body de-indented...                  else { v = 0; }
 //!   return <var>;                           return v;
@@ -16,7 +16,7 @@
 //!
 //! The shared RETURN block is `v = MULTIEQUAL(#0 /*guard-false arm*/, <var> /*body*/);
 //! return v` — a **mixed** phi: one input a constant (the guard's `return 0`), the
-//! other a variable (the body's computed return).  kuna keeps the merged diamond and
+//! other a variable (the body's computed return).  unlace keeps the merged diamond and
 //! `return v` (one return, extra CFG merge nodes that inflate GED).
 //!
 //! # Why the existing `returndup` cannot reach it
@@ -54,7 +54,7 @@
 //! (`early_return`, default-ON per DIV-23); when off, [`ActionEarlyReturn::apply`] early-returns and
 //! output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
@@ -62,7 +62,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<earlyreturn>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<earlyreturn>` (unlace).  ElementIds live in the 4000+ range
 /// (…4109 dedupitetail, 4110 returndup taken; this is 4111).
 pub const ELEM_EARLYRETURN: ElementId = ElementId::new("earlyreturn", 4111);
 
@@ -74,7 +74,7 @@ pub const MAX_EARLYRETURN_INEDGES: int4 = 16;
 
 /// \brief Peel the constant guard arms out of a shared RETURN block into per-predecessor
 /// `return K`, so a leading `if (!cur) return 0;` guard recovers as an early return with a
-/// de-indented body (kuna's per-edge analog of angr's SAILR `ReturnDuplicatorHigh`).
+/// de-indented body (unlace's per-edge analog of angr's SAILR `ReturnDuplicatorHigh`).
 /// Option-gated (`early_return`).  Reuses the existing `return_split_is_splittable` filter
 /// + `node_split` machinery; leaves the variable body return merged.
 pub struct ActionEarlyReturn {
@@ -109,7 +109,7 @@ impl Action for ActionEarlyReturn {
         // P0 assertion `option earlyreturn on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::earlyreturn::EarlyReturn>()
             .0
         {
@@ -140,7 +140,7 @@ impl OptionEarlyReturn {
     pub const NAME: &'static str = "earlyreturn";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -150,16 +150,16 @@ impl OptionEarlyReturn {
     }
 }
 
-/// (kuna) Hoist a leading const-guard into an early return (`if (c) return K;`) by
+/// (unlace) Hoist a leading const-guard into an early return (`if (c) return K;`) by
 /// peeling only the CONSTANT arm of a mixed return phi — the per-edge narrowing of
 /// angr SAILR `ReturnDuplicatorHigh` that `duplicate_shared_returns`' whole-block
 /// const gate cannot reach (`early_return`, opt-in default-off).
 #[derive(Clone, Debug, PartialEq)]
 pub struct EarlyReturn(pub bool);
 
-impl crate::optionset::KunaOption for EarlyReturn {
+impl crate::optionset::UnlaceOption for EarlyReturn {
     const NAME: &'static str = "earlyreturn";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         EarlyReturn(false)
@@ -169,7 +169,7 @@ impl crate::optionset::KunaOption for EarlyReturn {
         EarlyReturn(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::earlyreturn::OptionEarlyReturn.apply(value)?;
         Ok((EarlyReturn(v), msg))
     }

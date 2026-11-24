@@ -1,4 +1,4 @@
-//! (kuna `flirt make`) FLIRT patterns from relocatable objects.
+//! (unlace `flirt make`) FLIRT patterns from relocatable objects.
 //!
 //! A pattern describes one function of an object file the way a `.pat` line
 //! does: its bytes with every byte a relocation rewrites left variable, the

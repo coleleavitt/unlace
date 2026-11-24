@@ -51,7 +51,7 @@ nothing when `nocastprinting` is on. Default per `default-on-evaluation.md`.
 
 ## Tests
 
-- `tests/stages/kuna-castimplied.toml`: two passes over gcc -O0 code for a declared
+- `tests/stages/castimplied.toml`: two passes over gcc -O0 code for a declared
   callee, a trial callee, a varargs callee, an assignment, a return, a stacked chain
   and a sign change under a widening.
 - `kuna-cli/tests/decompile_all_cli.rs`

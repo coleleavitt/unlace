@@ -3,11 +3,11 @@
 //! "opt-in-tool" }, plus = 1 }`), so catalog totals never need hand-bumping. The format and
 //! parser live in unlace-stagefile; `tests/stages/README.md` describes it.
 
-use unlace_decomp::phases::{KunaSettable, kuna_num_settables, kuna_settable_by_index};
+use unlace_decomp::phases::{UnlaceSettable, unlace_num_settables, unlace_settable_by_index};
 pub use unlace_stagefile::{PatternLine, StageMatch, StageTest, Table, escape_literal};
 
 /// A string-valued catalog field by its `phases.toml` key.
-fn settable_field(st: &KunaSettable, key: &str) -> Option<&'static str> {
+fn settable_field(st: &UnlaceSettable, key: &str) -> Option<&'static str> {
     Some(match key {
         "option" => st.option,
         "values" => st.values,
@@ -25,8 +25,8 @@ fn settable_field(st: &KunaSettable, key: &str) -> Option<&'static str> {
 /// How many catalog rows match every `field = value` of `filter`.
 pub fn count_settables(filter: &Table, ctx: &str) -> Result<i32, String> {
     let mut n = 0i32;
-    for i in 0..kuna_num_settables() {
-        let st = kuna_settable_by_index(i);
+    for i in 0..unlace_num_settables() {
+        let st = unlace_settable_by_index(i);
         let mut hit = true;
         for (key, want) in filter {
             let ok = if key == "destructive" {

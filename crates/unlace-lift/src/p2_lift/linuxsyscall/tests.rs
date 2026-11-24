@@ -1,6 +1,6 @@
 //! Table tests for [`super`].
 //!
-//! The pass itself is exercised end to end by `tests/stages/kuna-linuxsyscall.toml`
+//! The pass itself is exercised end to end by `tests/stages/unlace-linuxsyscall.toml`
 //! (option off = the `swi` indirect call, on = the named syscall); what is worth
 //! pinning here is the table the rewrite trusts, since a wrong arity is the one
 //! way this feature can state something false.

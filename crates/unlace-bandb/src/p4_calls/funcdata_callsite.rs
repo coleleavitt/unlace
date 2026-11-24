@@ -38,7 +38,7 @@ use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::AncestorRealistic;
 use crate::varmap::AliasChecker;
 
-/// (kuna) The deferred argument-list retry one finalized call leaves behind.
+/// (unlace) The deferred argument-list retry one finalized call leaves behind.
 ///
 /// At most one of the two is ever set: a call whose list came out EMPTY is
 /// [`crate::calleearityfwd`]'s, one whose list came out SHORT is
@@ -65,7 +65,7 @@ pub struct PendingCallFixup {
 /// definitely-unused trial has its dataflow freed (`opSetInput` with a zero
 /// constant).  The `aliascheck` is the deferred-gather local alias checker
 /// (`AliasChecker::gather(..., defer=true)`), supplied by the caller, and
-/// `held` the (kuna `calleeargs`) bound guard's index for this pass.
+/// `held` the (unlace `calleeargs`) bound guard's index for this pass.
 pub fn check_input_trial_use(
     idx: int4,
     data: &mut Funcdata,
@@ -103,7 +103,7 @@ pub fn check_input_trial_use(
         }
     }
 
-    // (kuna `calleeargs`) What the callee reads bounds its stack arguments.
+    // (unlace `calleeargs`) What the callee reads bounds its stack arguments.
     // See [`crate::calleestackargs`].
     let stack_args = data.get_call_specs(idx).callee_stack_arg_bytes();
     let stack_args = stack_args
@@ -112,7 +112,7 @@ pub fn check_input_trial_use(
         stack_args.map(|a| (4 + a.bound as i64).max(if callee_pop { expop as i64 } else { 0 }));
     let read_end = stack_args.map(|a| 4 + a.read as i64);
 
-    // (kuna) The registers a variadic call's caller counts as filled (`al`, CR6).
+    // (unlace) The registers a variadic call's caller counts as filled (`al`, CR6).
     let counted = crate::varargretreg::counted_float_arguments(data, data.get_call_specs(idx));
     let format_arguments = crate::varargformat::arguments(data, data.get_call_specs(idx));
     let num_trials = data
@@ -187,7 +187,7 @@ pub fn check_input_trial_use(
             // (fspec.cc:5616-5619): a stack alias, OR a stack location outside the
             // CALLER's local range, both mean "not a parameter".  The range test is
             // on the argument Varnode's caller-relative address, not the trial's
-            // callee-relative one (kuna, [`crate::callsitestackargs`]).
+            // callee-relative one (unlace, [`crate::callsitestackargs`]).
             #[allow(clippy::if_same_then_else)]
             if has_alias {
                 data.get_call_specs_mut(idx)
@@ -271,7 +271,7 @@ pub fn check_input_trial_use(
                 }
             }
         } else if {
-            // (kuna `calleereginputs`) The callee's own code reads it.
+            // (unlace `calleereginputs`) The callee's own code reads it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             crate::calleereginputs::reads_register(
                 data.get_call_specs(idx),
@@ -317,7 +317,7 @@ pub fn check_input_trial_use(
                 .get_trial_mut(i)
                 .mark_inactive();
         } else if {
-            // (kuna) `passthrough`: a trial on a range the pass claimed is left
+            // (unlace) `passthrough`: a trial on a range the pass claimed is left
             // where the option-off run's hole-filling trial would start.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             crate::passthrough::claimed_range(data, t.get_address(), t.get_size())
@@ -329,7 +329,7 @@ pub fn check_input_trial_use(
             trial.mark_inactive();
             trial.set_untouched();
         } else if {
-            // (kuna `swiftcall`) A `swiftself` value set for an earlier call is
+            // (unlace `swiftcall`) A `swiftself` value set for an earlier call is
             // not an argument of a struct member that may not take it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             crate::swiftcall::stale_self(data, idx, slot, t.get_address(), t.get_size())
@@ -339,7 +339,7 @@ pub fn check_input_trial_use(
                 .get_trial_mut(i)
                 .mark_no_use();
         } else if let Some(dispatch) = {
-            // (kuna `swiftcall`) An indirect call passes `swiftself` exactly
+            // (unlace `swiftcall`) An indirect call passes `swiftself` exactly
             // when it dispatches on the value the register holds.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             crate::swiftcall::indirect_self(data, idx, slot, t.get_address(), t.get_size())
@@ -356,7 +356,7 @@ pub fn check_input_trial_use(
                 trial.mark_no_use();
             }
         } else if {
-            // (kuna `swiftcall`) The caller's own `self`, handed on untouched.
+            // (unlace `swiftcall`) The caller's own `self`, handed on untouched.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             crate::swiftcall::passes_own_self(data, idx, slot, t.get_address(), t.get_size())
         } {
@@ -368,7 +368,7 @@ pub fn check_input_trial_use(
             trial.set_ancestor_solid();
             trial.mark_active();
         } else if {
-            // (kuna) `calleedeadarg`: the callee's OWN body can settle a register
+            // (unlace) `calleedeadarg`: the callee's OWN body can settle a register
             // trial the caller's data flow cannot.  A register the callee
             // overwrites (or returns without touching) on every path from its
             // entry is dead there and cannot be carrying an argument, however
@@ -465,13 +465,13 @@ pub fn check_input_trial_use(
                 }
             } else if crate::varargformat::activate_trial(data, idx, i, &format_arguments) {
             } else if vn_is_input || {
-                // (kuna) `passthrough`: the incoming register carried past calls
+                // (unlace) `passthrough`: the incoming register carried past calls
                 // that leave it alone, to a callee whose recovered prototype
                 // reads it.
                 let t = data.get_call_specs(idx).active_input().get_trial(i);
                 let (addr, size) = (t.get_address().clone(), t.get_size());
                 data.get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::passthrough::PassThrough>()
                     .0
                     && crate::passthrough::forwarded_own_input(data, vn, &addr, size)
@@ -492,7 +492,7 @@ pub fn check_input_trial_use(
             }
         }
 
-        // (kuna) `passthrough`: an inactive trial that is the function's own
+        // (unlace) `passthrough`: an inactive trial that is the function's own
         // incoming register, untouched, is no evidence against a later one;
         // an active stack trial holding one, an active trial not set up for
         // the call, and a constant stored to a stack slot are no evidence for
@@ -517,7 +517,7 @@ pub fn check_input_trial_use(
             } else if active
                 && data
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::passthrough::PassThrough>()
                     .0
                 && (crate::passthrough::survives_call(data, op, vn)
@@ -531,7 +531,7 @@ pub fn check_input_trial_use(
             if active
                 && data
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::passthrough::PassThrough>()
                     .0
                 && crate::stackarggap::address_is_spacebase(&addr)
@@ -544,7 +544,7 @@ pub fn check_input_trial_use(
             }
         }
 
-        // (kuna) `hiddenretarg`: an active hidden-return register is no argument
+        // (unlace) `hiddenretarg`: an active hidden-return register is no argument
         // when no callee could be returning through it.
         crate::hiddenretarg::rescore_active_trial(data, idx, i);
 
@@ -603,7 +603,7 @@ pub fn final_input_check(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
 /// trial whose Varnode is bigger than its recovered type is truncated with a
 /// `SUBPIECE`.  Spacebase parameters mark their stack range as unmapped.
 ///
-/// (kuna) Returns the deferred-retry candidate this call leaves behind — the
+/// (unlace) Returns the deferred-retry candidate this call leaves behind — the
 /// `calleearityfwd` rescue when its argument list comes out EMPTY, the
 /// `calleearitylive` extension when it comes out SHORT. In both cases the
 /// sibling that could speak for it may not be final yet, and the Varnodes its
@@ -611,7 +611,7 @@ pub fn final_input_check(fc: &mut FuncCallSpecs, data: &mut Funcdata) {
 /// drops them.
 pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> PendingCallFixup {
     let op = fc.get_op();
-    // (kuna) `passthrough`: capture the forwarded registers the call may still
+    // (unlace) `passthrough`: capture the forwarded registers the call may still
     // take, and retire the trials the pass registered, before any other rule
     // reads the trials.  Inert with the option off.
     let pass_through = crate::passthrough::capture(fc, data);
@@ -636,12 +636,12 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
         .get_default_code_space()
         .map(|s| s.is_big_endian())
         .unwrap_or(false);
-    // (kuna) `calleearity`: before the argument list is written, reconcile it
+    // (unlace) `calleearity`: before the argument list is written, reconcile it
     // with a sibling call to the same callee whose list is already final, so one
     // callee does not render with two arities in one function.  See
     // [`crate::calleearity`].
     crate::calleearity::unify_with_sibling_call(fc, data);
-    // (kuna) `argclobber`: and after it, the subtractive direction -- a trailing
+    // (unlace) `argclobber`: and after it, the subtractive direction -- a trailing
     // register argument a previous call's clobber put there is dropped, unless a
     // sibling the additive rule above could read really passed one at that
     // storage.  Inert with the option off.  See [`crate::argclobber`].
@@ -722,10 +722,10 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
             data.scope_local_mark_not_mapped(&spc, off, sz, true);
         }
     }
-    // (kuna) `calleearityfwd` / `calleearitylive`: capture the retry candidate
+    // (unlace) `calleearityfwd` / `calleearitylive`: capture the retry candidate
     // while the trials and the CALL's pre-rewrite inputs are both still there.
     let read_arg = crate::calleereadarg::capture(fc, data);
-    // (kuna `swiftcall`) A call passing only a Swift `self` is, for the
+    // (unlace `swiftcall`) A call passing only a Swift `self` is, for the
     // callee-body rule, one that recovered nothing.
     let only_self = newparam.len() == 2 && {
         let t = (0..fc.active_input().get_num_trials())
@@ -759,7 +759,7 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
         }
     };
     let _ = data.op_set_all_input(op, &newparam);
-    // (kuna) `calleearity`: remember WHERE each recovered argument lived before
+    // (unlace) `calleearity`: remember WHERE each recovered argument lived before
     // the trials are dropped -- `newparam` holds values, not locations.
     let storage: Vec<(Address, int4)> = (0..fc.get_active_input().get_num_trials())
         .filter_map(|i| {
@@ -890,7 +890,7 @@ pub fn build_output_from_trials(
         }
         let _ = data.op_set_output(op, finaloutvn);
     } else {
-        // (kuna `rustabi`) The two-piece concat (fspec.cc:5813-5853). The blocker
+        // (unlace `rustabi`) The two-piece concat (fspec.cc:5813-5853). The blocker
         // the stub below records is stale -- `constructJoinAddress` IS reachable
         // off the merged handle, and the sibling
         // `ActionReturnRecovery::build_return_output` calls it -- but completing

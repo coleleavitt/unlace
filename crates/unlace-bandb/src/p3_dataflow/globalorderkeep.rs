@@ -9,7 +9,7 @@ use unlace_num::opcodes::OpCode;
 pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, input: VarnodeId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL

@@ -52,12 +52,12 @@ pub(crate) fn prior_inventory(
     let walked: BTreeSet<u64> = base.functions().map(|(&entry, _)| entry).collect();
     let mut entries = walked.clone();
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::aif::AifMode>()
         .enabled()
     {
         let pointers = if arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Ptrentry>()
             .0
         {

@@ -1,4 +1,4 @@
-//! Tests for `RuleConstSpaceLoad` (kuna `constspaceload`): the
+//! Tests for `RuleConstSpaceLoad` (unlace `constspaceload`): the
 //! `LOAD(const, p)` -> value-of-`p` rewrite at each output width, and every
 //! clause that declines it.
 
@@ -61,7 +61,7 @@ fn unk(size: int4) -> Rc<Datatype> {
 }
 
 fn no_replace()
--> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::KunaResult<()> {
+-> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> unlace_base::error::UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 

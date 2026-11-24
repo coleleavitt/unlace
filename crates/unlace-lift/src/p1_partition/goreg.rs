@@ -1,4 +1,4 @@
-//! (kuna) Name the goroutine register (`docs/multilang.md`
+//! (unlace) Name the goroutine register (`docs/multilang.md`
 //! W4, the Go pack's dedicated-register item).
 //!
 //! ## The gap it closes
@@ -9,13 +9,13 @@
 //! — and the runtime reads through it constantly (`stackguard0` checks the
 //! `gomorestack` fold leaves in runtime internals, `g.m`, deferred-panic
 //! chains). The cspec lists the register as `unaffected` and no `<pentry>`
-//! names it, so kuna sees a value that is never a parameter and never written:
+//! names it, so unlace sees a value that is never a parameter and never written:
 //! every access rendered as a phantom local (`v3; // r14`) read through
 //! unexplained arithmetic.
 //!
 //! With the golang cspec active, the register
 //! becomes a NAMED, TYPED global: its storage joins the global scope (the
-//! cspec `<global><register/>` mechanism, applied kuna-side so the vendored
+//! cspec `<global><register/>` mechanism, applied unlace-side so the vendored
 //! spec stays pristine) and a `g` symbol typed `runtime.g *` is mapped over
 //! it, type- and name-locked. A `stackguard0` load then renders
 //! `g->stackguard0`, and `g->m`, `g->_defer`, … read like the runtime source.
@@ -39,7 +39,7 @@
 //! Go-detected image composes.
 
 pub use crate::architecture::{GOVERSION_ENV, GoLayout};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 
 use crate::dtype::{TypeFactory, TypeField, type_metatype};
@@ -209,7 +209,7 @@ fn push_fields(
     fields: &mut Vec<TypeField>,
     spec: &[ShellField],
     mut offset: int4,
-) -> KunaResult<int4> {
+) -> UnlaceResult<int4> {
     for (name, size, is_ptr) in spec {
         let ct = if *is_ptr {
             let void = types.get_base(1, type_metatype::TYPE_VOID)?;
@@ -235,7 +235,7 @@ fn m_pointer_type(
     types: &dyn TypeFactory,
     gobuf: std::rc::Rc<crate::dtype::Datatype>,
     layout: GoLayout,
-) -> KunaResult<std::rc::Rc<crate::dtype::Datatype>> {
+) -> UnlaceResult<std::rc::Rc<crate::dtype::Datatype>> {
     let gobuf_size = layout.gobuf_size();
     let sig_shell = types.get_type_struct("runtime.gsignalStack")?;
     let mut sf = Vec::new();
@@ -301,7 +301,7 @@ fn m_pointer_type(
 pub fn g_pointer_type(
     types: &dyn TypeFactory,
     layout: GoLayout,
-) -> KunaResult<std::rc::Rc<crate::dtype::Datatype>> {
+) -> UnlaceResult<std::rc::Rc<crate::dtype::Datatype>> {
     let gobuf_shell = types.get_type_struct("runtime.gobuf")?;
     let mut gb = Vec::new();
     let table = if layout.gobuf_words == 6 {
@@ -356,7 +356,7 @@ pub fn g_symbol_flags() -> uint4 {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.goreg_g_pointer_type = Some(g_pointer_type);
     hooks.goreg_g_symbol_flags = Some(g_symbol_flags);
     hooks.goreg_goroutine_register = Some(goroutine_register);

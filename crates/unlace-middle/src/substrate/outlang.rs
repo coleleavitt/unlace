@@ -19,7 +19,7 @@ pub enum OutLang {
 
 impl OutLang {
     /// Resolve from an `option setlanguage` name, or `None` when the name names
-    /// no back-end kuna can emit.
+    /// no back-end unlace can emit.
     pub fn from_print_name(name: &str) -> Option<OutLang> {
         match name {
             "c-language" | "c" => Some(OutLang::C),
@@ -30,7 +30,7 @@ impl OutLang {
         }
     }
 
-    /// Every language kuna can emit, by `option setlanguage` name.
+    /// Every language unlace can emit, by `option setlanguage` name.
     pub fn names() -> Vec<&'static str> {
         [OutLang::C, OutLang::Rust, OutLang::Go, OutLang::Java]
             .iter()

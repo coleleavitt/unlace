@@ -15,7 +15,7 @@
 )]
 use std::collections::HashSet;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::VarnodeId;
@@ -115,7 +115,7 @@ impl OptionIndirectOnly {
 
     /// Parse `on|off` and return the resolved flag + confirmation message.  The
     /// caller writes the flag into the registered option `MarkIndirectOnly`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -125,7 +125,7 @@ impl OptionIndirectOnly {
     }
 }
 
-/// (kuna) Run `Funcdata::markIndirectOnly` in `ActionMarkIndirectOnly`
+/// (unlace) Run `Funcdata::markIndirectOnly` in `ActionMarkIndirectOnly`
 /// instead of the inert stub, so an illegal input read only through
 /// INDIRECTs is flagged `indirectonly` (`mark_indirect_only`, option
 /// `indirectonly`, opt-in default-off: the merge it unlocks can fabricate
@@ -133,9 +133,9 @@ impl OptionIndirectOnly {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarkIndirectOnly(pub bool);
 
-impl crate::optionset::KunaOption for MarkIndirectOnly {
+impl crate::optionset::UnlaceOption for MarkIndirectOnly {
     const NAME: &'static str = "indirectonly";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         MarkIndirectOnly(false)
@@ -145,7 +145,7 @@ impl crate::optionset::KunaOption for MarkIndirectOnly {
         MarkIndirectOnly(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::indirectonly::OptionIndirectOnly.apply(value)?;
         Ok((MarkIndirectOnly(v), msg))
     }

@@ -1,4 +1,4 @@
-//! (kuna) `coldentry` — the extra entry points of a multi-entry `.cold` fragment
+//! (unlace) `coldentry` — the extra entry points of a multi-entry `.cold` fragment
 //! (P1 code/data partition).
 //!
 //! GCC's hot/cold splitting moves a function's unlikely blocks into a separate
@@ -16,7 +16,7 @@
 //! inlines it through the jump. Ghidra makes it a function of its own (its jump
 //! target is reached from outside every body that contains it), and on Ubuntu
 //! 22.04's stripped `/bin/bash` that is 18 functions in `[0x30c3d, 0x312b3]`
-//! that kuna's inventory lacked.
+//! that unlace's inventory lacked.
 //!
 //! ## What counts as one
 //!
@@ -69,7 +69,7 @@ use super::{executable_sections, existing_function_addrs};
 /// The longest FDE body this pass will linearly decode.
 const MAX_BODY: u64 = 0x4000;
 
-/// (kuna) The multi-entry cold-fragment pass (`coldentry`).
+/// (unlace) The multi-entry cold-fragment pass (`coldentry`).
 pub struct ColdEntryPass;
 
 impl AnalysisPass for ColdEntryPass {

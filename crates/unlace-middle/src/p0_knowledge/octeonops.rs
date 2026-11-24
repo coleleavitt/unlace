@@ -1,10 +1,10 @@
-//! (kuna `octeoneffects`) The option's mode and the table of Octeon user operations the core reads:
+//! (unlace `octeoneffects`) The option's mode and the table of Octeon user operations the core reads:
 //! each operation's memory effect, upstream's fixups for the ones `off` lifts as upstream does,
 //! and the user-op ids an `ArchContext` carries. The passes that act on them are in
 //! [`crate::p3_dataflow::octeoneffects`].
 
 use unlace_base::{
-    error::{KunaError, KunaResult},
+    error::{UnlaceError, UnlaceResult},
     types::int4,
 };
 
@@ -33,13 +33,13 @@ impl OcteonEffectsMode {
     }
 
     /// Parse an `option octeoneffects` value.
-    pub fn parse(p1: &str) -> KunaResult<(OcteonEffectsMode, String)> {
+    pub fn parse(p1: &str) -> UnlaceResult<(OcteonEffectsMode, String)> {
         let mode = match p1 {
             "off" => OcteonEffectsMode::Off,
             "atomic" => OcteonEffectsMode::Atomic,
             "ordered" => OcteonEffectsMode::Ordered,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown octeoneffects value: {other} (expected off|atomic|ordered)"
                 )));
             }
@@ -239,9 +239,9 @@ pub fn userop_ids(
         .collect()
 }
 
-impl crate::optionset::KunaOption for OcteonEffectsMode {
+impl crate::optionset::UnlaceOption for OcteonEffectsMode {
     const NAME: &'static str = "octeoneffects";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         OcteonEffectsMode::Off
@@ -251,7 +251,7 @@ impl crate::optionset::KunaOption for OcteonEffectsMode {
         OcteonEffectsMode::Atomic
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(OcteonEffectsMode::parse(value)?)
     }
 }

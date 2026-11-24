@@ -3,13 +3,13 @@
 //!
 //! # What this is
 //!
-//! kuna's default structuring engine is Ghidra's
+//! unlace's default structuring engine is Ghidra's
 //! [`CollapseStructure`](crate::blockaction::CollapseStructure) (the verbatim
 //! `CollapseStructure`/`TraceDAG` port), which emits an unstructured `goto` for
 //! every control-flow edge it cannot fold with one of its schemas.  angr's
 //! Phoenix/SAILR structurer recovers far more structure (sequences, if/else,
 //! loops, switches) and emits dramatically fewer gotos.  This module is the
-//! **foundation** of porting that structurer to kuna, wired behind the master
+//! **foundation** of porting that structurer to unlace, wired behind the master
 //! `--option regionstructure` (default **OFF**, parity-safe).
 //!
 //! # Increment 1 scope (this file)
@@ -17,9 +17,9 @@
 //! A correctness-over-completeness PoC that proves the whole boundary end-to-end:
 //!
 //! 1. **Region post-order walk + replace** (angr `recursive_structurer._analyze`):
-//!    the [`KunaRegionIdentifier`](crate::regionid) (the ported
+//!    the [`UnlaceRegionIdentifier`](crate::regionid) (the ported
 //!    angr `RegionIdentifier`) runs over the real CFG via
-//!    [`build_from_block_graph`](crate::regionid::KunaRegionIdentifier::build_from_block_graph),
+//!    [`build_from_block_graph`](crate::regionid::UnlaceRegionIdentifier::build_from_block_graph),
 //!    proving the W7 adapter on a live function.  The structuring itself then runs
 //!    on the seeded `sblocks` graph (a `BlockCopy` mirror of `bblocks`, same
 //!    topology) with the region tree as guidance.
@@ -41,7 +41,7 @@
 //!
 //! [`match_acyclic_switch_cases`](RegionStructurer::match_acyclic_switch_cases)
 //! recovers resolved jump-table switches natively: it matches the `f_switch_out`
-//! head (the kuna analog of angr
+//! head (the unlace analog of angr
 //! `phoenix._match_acyclic_switch_cases_address_computed` →
 //! `_switch_build_cases` → `_make_switch_cases_core`), resolves the recovered
 //! [`JumpTable`](crate::jumptable::JumpTable) via the precomputed
@@ -70,7 +70,7 @@
 //! instead returns to the drive without attempting that fallback. Default-OFF the whole
 //! module is dead code and output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uintb};
 
 use crate::block::BlockGraph;
@@ -80,12 +80,12 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<regionstructure>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<regionstructure>` (unlace).  ElementIds live in the 4000+
 /// range (the next free id after `tailcalljump` = 4101).
 pub const ELEM_REGIONSTRUCTURE: ElementId = ElementId::new("regionstructure", 4102);
 
 /// Guard cap on structuring rounds: `2*n^2 + 64`, computed in 64-bit (mirrors the
-/// [`kuna_guard_cap`](crate::regionid) caps).  The virtualize
+/// [`unlace_guard_cap`](crate::regionid) caps).  The virtualize
 /// fallback removes one edge per round so the real bound is `O(edges)`; the cap is
 /// only a hang-guard turning a mis-port into a clean failure instead of a loop.
 fn round_cap(num_nodes: int4) -> i64 {
@@ -105,7 +105,7 @@ const POSTDOM_MAX_EDGES: int4 = 10;
 /// is super-linear, so it is only run on small graphs.
 const POSTDOM_MAX_GRAPH_SIZE: int4 = 50;
 
-/// The `--option regionstructure on|off` parser (kuna control surface).
+/// The `--option regionstructure on|off` parser (unlace control surface).
 ///
 /// Mirrors [`OptionGotoReduce`](crate::gotoreduce::OptionGotoReduce):
 /// parse `on`/`off`, returning the bool + a confirmation message.  The flag is
@@ -118,7 +118,7 @@ impl OptionRegionStructure {
     pub const NAME: &'static str = "regionstructure";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -134,7 +134,7 @@ impl OptionRegionStructure {
 /// `data.install_switch_defaults()` and `data.seed_sblocks_copy()` have run, so
 /// `sblocks` is a `BlockCopy` mirror of `bblocks` with the same edges.
 ///
-/// 1. Runs the [`KunaRegionIdentifier`](crate::regionid) over the
+/// 1. Runs the [`UnlaceRegionIdentifier`](crate::regionid) over the
 ///    real CFG (proves the W7 adapter; its node order guides the virtualize
 ///    fallback).
 /// 2. Collapses the `sblocks` graph to a single structured root using the acyclic
@@ -151,14 +151,14 @@ impl OptionRegionStructure {
 pub fn run_region_structurer(
     data: &mut Funcdata,
     deadline: Option<std::time::Instant>,
-) -> KunaResult<(bool, Vec<BlockId>)> {
+) -> UnlaceResult<(bool, Vec<BlockId>)> {
     // ---- 1. Region identification over the real CFG (W7 adapter proof) --------
     // recursive_structurer._analyze runs the RegionIdentifier first; here it both
     // proves build_from_block_graph().compute() on a live function and supplies a
     // deterministic node order (by block start address) the virtualize fallback
     // uses for tie-breaking.  A failure to identify regions is non-fatal: the
     // structurer still runs on the sblocks topology (honest-partial).
-    let mut ri = crate::regionid::KunaRegionIdentifier::new();
+    let mut ri = crate::regionid::UnlaceRegionIdentifier::new();
     let _ = ri
         .build_from_block_graph(data)
         .and_then(|()| ri.compute().map(|_| ()));
@@ -183,7 +183,7 @@ pub fn run_region_structurer(
     // `sblocks` `BlockCopy`'s `copy` references.
     let complex_blocks = compute_complex_blocks(data);
 
-    // (kuna, `option condfold`, default-OFF) the condfold-admissible subset of the
+    // (unlace, `option condfold`, default-OFF) the condfold-admissible subset of the
     // complex blocks under either admission rule — a bounded, branch-free,
     // comment-free printed-statement prefix in front of the trailing CBRANCH
     // (Rule A) or the statement-shape allowlist (Rule B) — may still be folded into
@@ -194,11 +194,11 @@ pub fn run_region_structurer(
         data,
         crate::condstmts::condfold_budget(
             data.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::condfold::CondFold>()
                 .0,
             data.get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::condstmts::CondStmts>()
                 .0,
         ),
@@ -213,14 +213,14 @@ pub fn run_region_structurer(
     // borrow so we still hold `&Funcdata`.
     let loop_refine = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::region_structurer::RegionLoopRefine>()
         .0;
     // SAILR P2 last-resort edge-virtualization ordering gate (`regionedgeorder`,
     // default-OFF opt-in).  Read while we still hold `&Funcdata`.
     let edge_order = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::region_structurer::RegionEdgeOrder>()
         .0;
 
@@ -330,7 +330,7 @@ fn compute_switch_maps(
 /// `BlockBasic::isComplex` is read here against the live `bblocks` op lists
 /// (`Funcdata::bb_is_complex`) and keyed by the bblocks id each `BlockCopy`'s
 /// `copy` pointer references.  The short-circuit/condition-fold schema reads it
-/// through [`RegionStructurer::is_complex`] (the kuna analog of
+/// through [`RegionStructurer::is_complex`] (the unlace analog of
 /// `CollapseStructure::is_complex`, gating `ruleBlockOr`).
 fn compute_complex_blocks(data: &Funcdata) -> std::collections::BTreeSet<BlockId> {
     let mut complex_blocks = crate::condstmts::complex_blocks(data);
@@ -364,11 +364,11 @@ struct RegionStructurer<'a> {
     /// `BlockBasic::isComplex` — more than one non-trivial statement), keyed by the
     /// bblocks id each structuring `BlockCopy`'s `copy` references (Inc 5).  Read
     /// through [`RegionStructurer::is_complex`] by the short-circuit/condition-fold
-    /// schema (the kuna analog of `CollapseStructure::is_complex`, which gates
+    /// schema (the unlace analog of `CollapseStructure::is_complex`, which gates
     /// `ruleBlockOr`).  Empty ⇒ every block is treated as complex (conservative,
     /// never folds), so an unset map is honest-partial-safe.
     complex_blocks: std::collections::BTreeSet<BlockId>,
-    /// (kuna, `option condfold`) the two admission-rule verdicts: bblocks
+    /// (unlace, `option condfold`) the two admission-rule verdicts: bblocks
     /// `BlockBasic` ids that may be folded into a short-circuit condition operand
     /// *despite* being complex, because they are a bounded, branch-free,
     /// comment-free printed-statement prefix in front of the trailing CBRANCH
@@ -376,7 +376,7 @@ struct RegionStructurer<'a> {
     /// `MultiStatementExpression` relaxation; see
     /// [`crate::condfold`].  Empty (and dead) when off.
     condfold_sets: crate::condfold::CondFoldSets,
-    /// (kuna, `option condfold`) structuring nodes produced by a condfold-relaxed
+    /// (unlace, `option condfold`) structuring nodes produced by a condfold-relaxed
     /// [`try_block_or`](Self::try_block_or) fold — reported complex unconditionally
     /// by [`is_complex`](Self::is_complex) so the loop schemas never lift a comma
     /// chain into a `while(...)` header.
@@ -398,13 +398,13 @@ struct RegionStructurer<'a> {
     /// by `refine_loop_edges` to pick the loop body / single normal exit grounded
     /// in the region identifier's analysis rather than the narrower structural
     /// natural-loop walk.
-    cyclic_loops: std::collections::BTreeMap<uintb, crate::regionid::KunaCyclicLoop>,
+    cyclic_loops: std::collections::BTreeMap<uintb, crate::regionid::UnlaceCyclicLoop>,
     /// bblocks `BlockBasic` id → start offset, so a live `sblocks` component's
     /// front-leaf `BlockCopy` (whose `copy` is a bblocks id) resolves to its
     /// address — the key the `cyclic_loops` body/exit sets use.  Populated only
     /// when `loop_refine` is on.
     bb_addr: std::collections::BTreeMap<BlockId, uintb>,
-    /// (kuna SAILR P2) Last-resort edge-virtualization ORDERING gate
+    /// (unlace SAILR P2) Last-resort edge-virtualization ORDERING gate
     /// (the registered option `RegionEdgeOrder`, option `regionedgeorder`, default-OFF).
     /// When set, [`virtualize_one_edge`](Self::virtualize_one_edge) orders the edges
     /// it virtualizes to gotos via the dominance-tiered bucketing
@@ -417,7 +417,7 @@ struct RegionStructurer<'a> {
     /// boundary edges `try_fold_switch_loop` has virtualized to gotos (so the body
     /// is no longer detected as cyclic).  Once such a body collapses to a single
     /// goto-only/sizeout-0 component covering the head address,
-    /// `match_pending_inf_loop` wraps it as a `BlockInfLoop` — the kuna analog of
+    /// `match_pending_inf_loop` wraps it as a `BlockInfLoop` — the unlace analog of
     /// angr's `LoopNode("while", true, seq)` from
     /// `phoenix._match_cyclic_natural_loop`.
     pending_inf_loops: std::collections::BTreeSet<uintb>,
@@ -461,7 +461,7 @@ impl<'a> RegionStructurer<'a> {
     fn with_loop_refine(
         mut self,
         loop_refine: bool,
-        cyclic_loops: Vec<crate::regionid::KunaCyclicLoop>,
+        cyclic_loops: Vec<crate::regionid::UnlaceCyclicLoop>,
         bb_addr: std::collections::BTreeMap<BlockId, uintb>,
     ) -> Self {
         self.loop_refine = loop_refine;
@@ -499,14 +499,14 @@ impl<'a> RegionStructurer<'a> {
         self
     }
 
-    /// (kuna, `option condfold`) attach the precomputed admission-rule verdicts.
+    /// (unlace, `option condfold`) attach the precomputed admission-rule verdicts.
     /// Mirrors [`CollapseStructure::with_condfold_sets`](crate::blockaction::CollapseStructure).
     fn with_condfold_sets(mut self, condfold_sets: crate::condfold::CondFoldSets) -> Self {
         self.condfold_sets = condfold_sets;
         self
     }
 
-    /// (kuna, `option condfold`) may the fold of `bl` with the *complex* sibling
+    /// (unlace, `option condfold`) may the fold of `bl` with the *complex* sibling
     /// `orblock` proceed anyway?  Identical to
     /// [`CollapseStructure::condfold_ok`](crate::blockaction::CollapseStructure): the
     /// union of Rule A (a `BlockCopy` of one bounded-prefix `BlockBasic`, so a
@@ -531,11 +531,11 @@ impl<'a> RegionStructurer<'a> {
         self.shape_admits(bl, orblock)
     }
 
-    /// (kuna, `option condfold`, Rule B) Is `bl` safe to absorb into a short-circuit
+    /// (unlace, `option condfold`, Rule B) Is `bl` safe to absorb into a short-circuit
     /// condition as a **comma-separated multi-statement operand** under the
     /// statement-shape allowlist?  Identical to
     /// [`CollapseStructure::is_shape_foldable`](crate::blockaction::CollapseStructure);
-    /// see [`kuna_condfold`](crate::condfold) for the preconditions
+    /// see [`unlace_condfold`](crate::condfold) for the preconditions
     /// and for why a Rule-A-only leaf is deliberately not admitted here.
     fn is_shape_foldable(&self, bl: BlockId) -> bool {
         use crate::block::BlockType;
@@ -556,7 +556,7 @@ impl<'a> RegionStructurer<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) Number of condition leaves under `bl`.
+    /// (unlace, `option condfold`, Rule B) Number of condition leaves under `bl`.
     fn cond_leaf_count(&self, bl: BlockId) -> int4 {
         use crate::block::BlockType;
         match self.graph.block(bl).get_type() {
@@ -569,7 +569,7 @@ impl<'a> RegionStructurer<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) Conservatively-scored printed statements `bl`
+    /// (unlace, `option condfold`, Rule B) Conservatively-scored printed statements `bl`
     /// contributes to a comma-separated condition (unscored leaves are charged the
     /// per-block maximum, so the sum is an upper bound).
     fn cond_stmt_count(&self, bl: BlockId) -> int4 {
@@ -594,7 +594,7 @@ impl<'a> RegionStructurer<'a> {
         }
     }
 
-    /// (kuna, `option condfold`, Rule B) May the fold of `bl` with the complex
+    /// (unlace, `option condfold`, Rule B) May the fold of `bl` with the complex
     /// `orblock` proceed under the statement-shape rule?  The expression-size caps;
     /// the per-block allowlist was resolved when `condfold_sets` was precomputed.
     fn shape_admits(&self, bl: BlockId, orblock: BlockId) -> bool {
@@ -721,7 +721,7 @@ impl<'a> RegionStructurer<'a> {
 
     /// Drive the structuring to a single root.  Returns `Ok(true)` on success
     /// (one component remains), `Ok(false)` if it could not converge.
-    fn structure(&mut self, deadline: Option<std::time::Instant>) -> KunaResult<bool> {
+    fn structure(&mut self, deadline: Option<std::time::Instant>) -> UnlaceResult<bool> {
         // angr phoenix._analyze: iterate until one node remains.
         self.graph.clear_visit_count(self.graph_id);
 
@@ -787,7 +787,7 @@ impl<'a> RegionStructurer<'a> {
             }
             // (a2) structural ITE schema (phoenix._match_acyclic_ite): fold a
             //      2-out condition whose true/false clauses reconverge into a
-            //      BlockIf.  kuna's structural form (the condition lives on the
+            //      BlockIf.  unlace's structural form (the condition lives on the
             //      block's terminal CBRANCH) needs no claripy — only the
             //      true-edge orientation Ghidra's `negateCondition` would supply,
             //      so the false-clause-only if-then case is left to virtualize
@@ -807,7 +807,7 @@ impl<'a> RegionStructurer<'a> {
             //      _match_cyclic_{while,dowhile,natural_loop}): fold a natural loop
             //      (head with an incoming back-edge) into a
             //      BlockWhileDo/BlockDoWhile/BlockInfLoop, with secondary exits and
-            //      secondary latches realized as break/continue gotos (kuna goto
+            //      secondary latches realized as break/continue gotos (unlace goto
             //      flags).  Lean on the back-edges + dominators already marked on
             //      the seeded sblocks `BlockCopy`s (copied verbatim from `bblocks`
             //      by `build_copy_from`).  Honest-partial: a loop that doesn't match
@@ -858,7 +858,7 @@ impl<'a> RegionStructurer<'a> {
     /// successor `end`, where `end` has a single predecessor and the edge is not a
     /// back-edge, merges into a sequence.  The chain-extension mirrors Ghidra's
     /// `ruleBlockCat` (extend while the tail stays single-in/single-out).
-    fn match_acyclic_sequence(&mut self) -> KunaResult<bool> {
+    fn match_acyclic_sequence(&mut self) -> UnlaceResult<bool> {
         let n = self.size();
         for i in 0..n {
             let bl = self.component(i);
@@ -926,7 +926,7 @@ impl<'a> RegionStructurer<'a> {
     }
 
     // -----------------------------------------------------------------------
-    // (a2) structural ITE schema — phoenix._match_acyclic_ite (kuna structural
+    // (a2) structural ITE schema — phoenix._match_acyclic_ite (unlace structural
     //      form: the condition is the block's terminal CBRANCH; no claripy)
     // -----------------------------------------------------------------------
 
@@ -935,13 +935,13 @@ impl<'a> RegionStructurer<'a> {
     ///
     /// Mirrors the structural detection of Ghidra `CollapseStructure::ruleBlockIfElse`
     /// (the full if/else, both clauses present) and `ruleBlockIf` (if-then, one
-    /// clause).  This is the kuna analog of angr `phoenix._match_acyclic_ite`,
-    /// realized over kuna's `BlockIf` builders — the edge condition lives on the
+    /// clause).  This is the unlace analog of angr `phoenix._match_acyclic_ite`,
+    /// realized over unlace's `BlockIf` builders — the edge condition lives on the
     /// block's terminal CBRANCH so no claripy/condition-processor is needed.  The
     /// if-then case is only taken when the clause is on the **true** edge (the
     /// false-clause if-then needs Ghidra's `negateCondition` data-flow flip — a
     /// later increment); otherwise the node is left to virtualize (honest-partial).
-    fn match_acyclic_ite(&mut self) -> KunaResult<bool> {
+    fn match_acyclic_ite(&mut self) -> UnlaceResult<bool> {
         let n = self.size();
         for i in 0..n {
             let bl = self.component(i);
@@ -960,7 +960,7 @@ impl<'a> RegionStructurer<'a> {
     /// goto/switch on any edge.  Mirrors Ghidra `ruleBlockIfElse`.  No condition
     /// negation needed — the true/false clauses go to `new_block_if_else` in
     /// edge-true/edge-false order, exactly as Ghidra passes them.
-    fn try_if_else(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn try_if_else(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         let b = self.graph.block(bl);
         if b.size_out() != 2 || b.is_switch_out() {
             return Ok(false);
@@ -1002,7 +1002,7 @@ impl<'a> RegionStructurer<'a> {
     /// is the after-if path).  Mirrors Ghidra `ruleBlockIf`'s `i == 1` (true-edge)
     /// arm, which needs no `negateCondition`.  The false-clause arm (`i == 0`,
     /// needing the data-flow condition flip) is deferred to a later increment.
-    fn try_if_then_true_clause(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn try_if_then_true_clause(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         let b = self.graph.block(bl);
         if b.size_out() != 2 || b.is_switch_out() {
             return Ok(false);
@@ -1035,7 +1035,7 @@ impl<'a> RegionStructurer<'a> {
     // -----------------------------------------------------------------------
     // (a1) short-circuit / condition-fold schema — phoenix
     //      ._match_acyclic_short_circuit_conditions (types a–d), realized over
-    //      kuna's `BlockCondition` builder exactly as Ghidra
+    //      unlace's `BlockCondition` builder exactly as Ghidra
     //      `CollapseStructure::ruleBlockOr` (`blockaction.cc:1321`) does.
     // -----------------------------------------------------------------------
 
@@ -1054,7 +1054,7 @@ impl<'a> RegionStructurer<'a> {
         use crate::block::BlockType;
         let mut bl = bl;
         loop {
-            // (kuna, `option condfold`) a condfold-relaxed fold's right operand
+            // (unlace, `option condfold`) a condfold-relaxed fold's right operand
             // carries a comma chain the `BlockCondition` delegation to sub-block 0
             // cannot see; report it complex so no loop schema hoists it into a
             // `while(...)` header.  Empty set (dead) when the option is off.
@@ -1083,9 +1083,9 @@ impl<'a> RegionStructurer<'a> {
     /// single [`BlockCondition`](crate::block::BlockKind::Condition) carrying a
     /// compound `A && B` / `A || B` condition.
     ///
-    /// This is the kuna analog of angr `phoenix._match_acyclic_short_circuit_conditions`
+    /// This is the unlace analog of angr `phoenix._match_acyclic_short_circuit_conditions`
     /// (types a–d), realized as a faithful port of Ghidra
-    /// `CollapseStructure::ruleBlockOr` (`blockaction.cc:1321`) over kuna's
+    /// `CollapseStructure::ruleBlockOr` (`blockaction.cc:1321`) over unlace's
     /// `BlockCondition` builder — so the folded condition is byte-identical to the
     /// `CollapseStructure` (default-OFF) form.  `new_block_condition` picks
     /// `CPUI_INT_OR`/`CPUI_INT_AND` from the edge orientation (the false-out of `b1`
@@ -1100,7 +1100,7 @@ impl<'a> RegionStructurer<'a> {
     /// Honest-partial: a 2-out node whose successor is not a single-in, non-complex,
     /// 2-out condition reconverging through the shared clause is left untouched and
     /// flows to the sequence/ITE schemas (and ultimately the virtualize fallback).
-    fn match_acyclic_short_circuit_conditions(&mut self) -> KunaResult<bool> {
+    fn match_acyclic_short_circuit_conditions(&mut self) -> UnlaceResult<bool> {
         let n = self.size();
         for i in 0..n {
             let bl = self.component(i);
@@ -1121,7 +1121,7 @@ impl<'a> RegionStructurer<'a> {
     /// (and `clauseblock` onto `orblock`'s true out) via `negate_condition_rec`
     /// (recording the deferred data-flow flips), then fold the pair into a
     /// `BlockCondition`.
-    fn try_block_or(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn try_block_or(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if self.graph.block(bl).size_out() != 2 {
             return Ok(false);
         }
@@ -1154,7 +1154,7 @@ impl<'a> RegionStructurer<'a> {
             if self.graph.block(bl).is_back_edge_out(i) {
                 continue; // Don't use loop branch to get to orblock
             }
-            // (kuna, `option condfold`) accept a complex sibling when EITHER
+            // (unlace, `option condfold`) accept a complex sibling when EITHER
             // admission rule takes it — a bounded, branch-free, comment-free
             // BlockBasic prefix, or the statement-shape allowlist (angr Phoenix's
             // MultiStatementExpression relaxation).  Byte-identical to upstream when
@@ -1209,15 +1209,15 @@ impl<'a> RegionStructurer<'a> {
 
     // -----------------------------------------------------------------------
     // (a0) acyclic switch-case schema — phoenix._match_acyclic_switch_cases*
-    //      (Inc 4).  kuna structural form: the switch is a node flagged
+    //      (Inc 4).  unlace structural form: the switch is a node flagged
     //      `f_switch_out` whose out-edges (case + default + exit) carry the jump
     //      table's edge labels (built by `seed_sblocks_copy`); the recovered
     //      `JumpTable` lives in `Funcdata::jumpvec`, resolved via the precomputed
     //      `switch_blocks`/`switch_case_edges` maps.  No claripy / AIL
     //      condition-processor is needed — the case topology *is* the edge set.
-    //      This is the kuna analog of angr
+    //      This is the unlace analog of angr
     //      `phoenix._match_acyclic_switch_cases_address_computed` →
-    //      `_switch_build_cases` → `_make_switch_cases_core`, realized over kuna's
+    //      `_switch_build_cases` → `_make_switch_cases_core`, realized over unlace's
     //      `BlockSwitch` builder (the same path Ghidra's `ruleBlockSwitch` drives).
     // -----------------------------------------------------------------------
 
@@ -1225,14 +1225,14 @@ impl<'a> RegionStructurer<'a> {
     /// [`BlockSwitch`](crate::block::BlockKind::Switch).
     ///
     /// Port of angr `phoenix._match_acyclic_switch_cases` (the
-    /// `*_address_computed` resolved-jump-table arm kuna already has the data for).
+    /// `*_address_computed` resolved-jump-table arm unlace already has the data for).
     /// The topological match mirrors Ghidra `CollapseStructure::ruleBlockSwitch`:
     /// a `f_switch_out` head whose cases each have a single in-edge from the head
     /// and at most one out-edge to a common exit block.  Returns `Ok(true)` once a
     /// switch is folded (or a skip-edge is virtualized to a goto, which makes
     /// progress); honest-partial: a switch we cannot match falls through to the
     /// virtualize fallback (never a panic, never a whole-function abort).
-    fn match_acyclic_switch_cases(&mut self) -> KunaResult<bool> {
+    fn match_acyclic_switch_cases(&mut self) -> UnlaceResult<bool> {
         if self.switch_blocks.is_empty() {
             return Ok(false); // no recovered jump table ⇒ no switch schema
         }
@@ -1250,7 +1250,7 @@ impl<'a> RegionStructurer<'a> {
     /// `CollapseStructure::ruleBlockSwitch`, `blockaction.cc:1649`, realized in the
     /// region structurer).  Mirrors the exact case/exit/skip topology checks; on a
     /// clean match emits `BlockSwitch` via [`BlockGraph::new_block_switch`].
-    fn try_switch_cases(&mut self, bl: BlockId) -> KunaResult<bool> {
+    fn try_switch_cases(&mut self, bl: BlockId) -> UnlaceResult<bool> {
         if !self.graph.block(bl).is_switch_out() {
             return Ok(false);
         }
@@ -1270,7 +1270,7 @@ impl<'a> RegionStructurer<'a> {
         // `ruleBlockSwitch` demands a single common fall-through exit, but a continue
         // case has no fall-through: it leaves the switch by looping back, like
         // `case X: …; continue;`.  We treat such a case as TERMINAL — it neither
-        // becomes nor constrains the exit — the kuna analog of angr hiding the
+        // becomes nor constrains the exit — the unlace analog of angr hiding the
         // `cyclic_refinement_outgoing`-marked case→head edge from the switch schema
         // (`_f()`).  The resulting `BlockSwitch` keeps the back-edge (self_identify
         // externalizes it to the loop head), so the enclosing loop still folds.
@@ -1447,7 +1447,7 @@ impl<'a> RegionStructurer<'a> {
         &mut self,
         switchbl: BlockId,
         exitblock: Option<BlockId>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let exitblock = match exitblock {
             Some(e) => e,
             None => return Ok(true),
@@ -1494,7 +1494,7 @@ impl<'a> RegionStructurer<'a> {
     // -----------------------------------------------------------------------
     // (a3) cyclic loop schemas — Inc 3 (phoenix._analyze_cyclic +
     //      _match_cyclic_{while,dowhile,natural_loop} + the break/continue
-    //      rewriters, realized over kuna goto flags)
+    //      rewriters, realized over unlace goto flags)
     // -----------------------------------------------------------------------
 
     /// Find a natural loop in the live component set and either fold it into a
@@ -1509,9 +1509,9 @@ impl<'a> RegionStructurer<'a> {
     /// schema uses the loop's *body and exit* identification (the angr
     /// `RegionIdentifier._refine_loop` view) to pick exactly one normal exit and
     /// one continue target, turning the remaining edges into `break;`/`continue;`
-    /// (kuna `f_break_goto` / `f_continue_goto` / `f_goto_edge`).  Returns `true`
+    /// (unlace `f_break_goto` / `f_continue_goto` / `f_goto_edge`).  Returns `true`
     /// if it folded or refined a loop (made progress).
-    fn match_cyclic_schemas(&mut self) -> KunaResult<bool> {
+    fn match_cyclic_schemas(&mut self) -> UnlaceResult<bool> {
         // Locate the innermost natural-loop head: a live component reached by a
         // back-edge whose own loop body contains no *other* (still-live) loop head
         // (so we structure inside-out, matching CollapseStructure's depth order).
@@ -1610,7 +1610,7 @@ impl<'a> RegionStructurer<'a> {
         // WITH `regionlooprefine` ON, refine the loops the base schemas could not
         // fold: virtualize their SECONDARY exits and latches to gotos so the body
         // collapses to the clean single-exit / single-latch shape `try_fold_loop`
-        // accepts — the kuna analog of angr's
+        // accepts — the unlace analog of angr's
         // `RegionIdentifier._refine_loop_successors_to_guarded_successors`
         // (`force_loop_single_exit`).  The virtualized loop-exit gotos are then
         // lowered to `break;` by the existing `scopeBreak` pass and the back-edge
@@ -1759,7 +1759,7 @@ impl<'a> RegionStructurer<'a> {
     }
 
     /// Try to fold a loop whose body has already collapsed so the loop is a clean
-    /// structural shape the kuna loop builders accept.  Three cases, in
+    /// structural shape the unlace loop builders accept.  Three cases, in
     /// `CollapseStructure` precedence:
     ///
     ///   * **while-do** — `head` is a 2-out condition, one out-edge is a *clause*
@@ -1773,7 +1773,7 @@ impl<'a> RegionStructurer<'a> {
     /// These mirror `CollapseStructure::ruleBlockWhileDo/DoWhile/InfLoop` exactly,
     /// but are only attempted on a confirmed loop head; the difference vs. Ghidra
     /// is purely *which edges have been virtualized to gotos first* (`refine_loop_edges`).
-    fn try_fold_loop(&mut self, head: BlockId) -> KunaResult<bool> {
+    fn try_fold_loop(&mut self, head: BlockId) -> UnlaceResult<bool> {
         let b = self.graph.block(head);
         let sizeout = b.size_out();
 
@@ -1828,7 +1828,7 @@ impl<'a> RegionStructurer<'a> {
         if self.graph.block(head).is_interior_goto_target() {
             return Ok(false);
         }
-        // (kuna) Companion malformed-while-head guard for the `regionlooprefine`
+        // (unlace) Companion malformed-while-head guard for the `regionlooprefine`
         // path.  A refined multi-latch loop can present a head that has absorbed an
         // inner loop / if / switch — i.e. the head is a `BlockList` (or another
         // non-condition graph subtype) rather than a bare condition block.  Folding
@@ -1897,7 +1897,7 @@ impl<'a> RegionStructurer<'a> {
 
     /// SAILR P1 — the cyclic *natural loop over a structured switch body*
     /// (`while ((c = getopt_long(...)) != -1) switch (c) { … }`, the coreutils
-    /// `main` pattern).  This is the kuna analog of angr
+    /// `main` pattern).  This is the unlace analog of angr
     /// `phoenix._match_cyclic_natural_loop` + the switch-in-loop edge marking of
     /// `_refine_cyclic_core` (lines ~911-915: a case→head edge is marked
     /// `cyclic_refinement_outgoing` — foldable as `continue` — instead of being
@@ -1923,20 +1923,20 @@ impl<'a> RegionStructurer<'a> {
     ///    `head; …; BlockSwitch` reduces to ONE goto-only component.  The head's
     ///    address is recorded in `pending_inf_loops`.
     /// 2. **Re-wrap** ([`Self::match_pending_inf_loop`]).  Once that component has
-    ///    fully collapsed, wrap it into a `BlockInfLoop` (the kuna analog of angr's
+    ///    fully collapsed, wrap it into a `BlockInfLoop` (the unlace analog of angr's
     ///    `LoopNode("while", true, seq)`).  The `scopeBreak` pass lowers the
     ///    goto-to-head edges to `continue;` and the goto-to-outside edges to
     ///    `break;`, exactly as for the `CollapseStructure` path.
     ///
     /// This mirrors angr's filtered-view trick (`_f()` hides the
     /// `cyclic_refinement_outgoing`-marked edges so the acyclic schemas collapse the
-    /// switch, then `_match_cyclic_natural_loop` folds the body) using kuna's
+    /// switch, then `_match_cyclic_natural_loop` folds the body) using unlace's
     /// structural `set_goto_branch` marks instead.
     ///
     /// Returns `true` (made progress) iff it virtualized the boundary edges of a
     /// genuine switch-bodied natural loop.  Honest-partial: a loop that is not this
     /// shape is left untouched for `refine_loop_edges` / the virtualize fallback.
-    fn try_fold_switch_loop(&mut self, head: BlockId) -> KunaResult<bool> {
+    fn try_fold_switch_loop(&mut self, head: BlockId) -> UnlaceResult<bool> {
         // The head must be a 2-out decision (the loop test), not already a goto/
         // switch, and not an interior-goto target (a continue-goto already aimed at
         // it would make a head-tested loop malformed; an inf-loop is fine, but we
@@ -2074,7 +2074,7 @@ impl<'a> RegionStructurer<'a> {
         //
         // This mirrors angr's filtered-view trick (`_f()` hides the marked
         // `cyclic_refinement_outgoing` edges so the acyclic schemas collapse the
-        // switch, then `_match_cyclic_natural_loop` folds the body) using kuna's
+        // switch, then `_match_cyclic_natural_loop` folds the body) using unlace's
         // structural `set_goto_branch` marks.  `scopeBreak` lowers a goto-to-head to
         // `continue;` (set explicitly at the inf-loop wrap) and a goto-to-outside to
         // `break;`.
@@ -2174,7 +2174,7 @@ impl<'a> RegionStructurer<'a> {
 
     /// SAILR P1 — absorb the live loop body (the components whose front-leaf address
     /// is in `body_addrs`, rooted at `head_addr`) into one `BlockInfLoop` via
-    /// [`BlockGraph::new_block_inf_loop_region`].  The kuna analog of angr
+    /// [`BlockGraph::new_block_inf_loop_region`].  The unlace analog of angr
     /// `phoenix._match_cyclic_natural_loop`: collect the whole cycle into one loop
     /// node rather than requiring it to pre-collapse to a single block.
     ///
@@ -2188,7 +2188,7 @@ impl<'a> RegionStructurer<'a> {
         &mut self,
         head_addr: Option<uintb>,
         body_addrs: &std::collections::BTreeSet<uintb>,
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         let head = match self.resolve_head(head_addr) {
             Some(h) => h,
             None => return Ok(false),
@@ -2321,7 +2321,7 @@ impl<'a> RegionStructurer<'a> {
     /// `head; …; BlockSwitch` into a SINGLE component whose only out-edges (if any)
     /// are gotos — it is no longer cyclic, so `collect_loop_heads` cannot see it.
     /// This schema finds that component by its recorded front-leaf head address and
-    /// folds it into a `BlockInfLoop` (the kuna analog of angr's
+    /// folds it into a `BlockInfLoop` (the unlace analog of angr's
     /// `LoopNode("while", true, seq)`).  A goto inside the body whose target is the
     /// loop head is marked `f_continue_goto` here so `scopeBreak`/the printer render
     /// it as `continue;`; a goto whose target leaves the loop is lowered to `break;`
@@ -2334,7 +2334,7 @@ impl<'a> RegionStructurer<'a> {
     /// body must already be virtualized to gotos.  Anything else is left for a later
     /// round; if the body never converges the pending entry never fires and the loop
     /// falls back cleanly.
-    fn match_pending_inf_loop(&mut self) -> KunaResult<bool> {
+    fn match_pending_inf_loop(&mut self) -> UnlaceResult<bool> {
         if self.pending_inf_loops.is_empty() {
             return Ok(false);
         }
@@ -2359,9 +2359,9 @@ impl<'a> RegionStructurer<'a> {
 
     /// Mark every `BlockGoto`/`BlockIf`-goto inside the just-collapsed loop body
     /// `bl` whose goto target is the loop head (front-leaf address `head_addr`) as a
-    /// `continue;` (`f_continue_goto`).  kuna's `scopeBreak` only establishes
+    /// `continue;` (`f_continue_goto`).  unlace's `scopeBreak` only establishes
     /// `break;`; the `continue;` flag must be set at loop construction (per the note
-    /// in `kuna_loopbreak_recovery`), which is what this does — turning the getopt
+    /// in `unlace_loopbreak_recovery`), which is what this does — turning the getopt
     /// switch's `goto loop-head` cases into `continue;`.
     fn mark_continue_gotos(&mut self, bl: BlockId, head_addr: uintb) {
         use crate::block::{BlockKind, BlockType, block_flags};
@@ -2405,7 +2405,7 @@ impl<'a> RegionStructurer<'a> {
     /// Refine a not-yet-foldable loop by marking its *secondary* control edges as
     /// gotos, so the body collapses to a single self-loop the fold rules accept.
     ///
-    /// This is the kuna analog of angr `_refine_cyclic_core` + the
+    /// This is the unlace analog of angr `_refine_cyclic_core` + the
     /// break/continue rewriters: pick ONE normal exit and ONE continue target
     /// (the back-edge to `head`), and convert
     ///
@@ -2431,7 +2431,7 @@ impl<'a> RegionStructurer<'a> {
     /// Gated by `regionlooprefine` (the `self.loop_refine` flag), and only invoked
     /// on a loop the base cyclic schemas already declined to fold, so a reducible
     /// loop never reaches here and output is byte-identical with the flag off.
-    fn refine_loop_edges(&mut self, head: BlockId) -> KunaResult<LoopRefineOutcome> {
+    fn refine_loop_edges(&mut self, head: BlockId) -> UnlaceResult<LoopRefineOutcome> {
         // Resolve the loop using the region identifier's projection if we have it
         // (the angr refined loop body + successor frontier, which absorbs the
         // dominated switch-case successors a structural natural-loop walk misses).
@@ -2544,7 +2544,7 @@ impl<'a> RegionStructurer<'a> {
         // Irreducible at the head (multi-entry that is not a back-edge): when the
         // head is a real RI loop head, virtualize the *extra* head entries (the
         // abnormal-entry edges that make it multi-entry) to gotos so the loop
-        // becomes single-entry — the kuna analog of angr's abnormal-entries
+        // becomes single-entry — the unlace analog of angr's abnormal-entries
         // handling.  When it is NOT a real RI loop head (a structural false
         // positive, e.g. a high-in-degree continuation merge the natural-loop walk
         // mistakes for a loop), refinement must not touch it — bail so the merge is
@@ -2762,7 +2762,7 @@ impl<'a> RegionStructurer<'a> {
     /// single lowest-index (earliest) non-back-edge predecessor as the structural
     /// preheader and returning every other non-back-edge, non-goto in-edge as a
     /// `(src, out-edge-index)` pair.  Used when an RI loop head is multi-entry: the
-    /// kuna analog of angr's abnormal-entries → goto handling, making the loop
+    /// unlace analog of angr's abnormal-entries → goto handling, making the loop
     /// single-entry so it can fold.
     fn head_extra_entry_edges(
         &self,
@@ -2808,8 +2808,8 @@ impl<'a> RegionStructurer<'a> {
 
     // Note on break/continue: angr's structurer emits `BreakNode`/`ContinueNode`
     // directly (`_rewrite_conditional_jumps_to_breaks`/`_rewrite_jumps_to_continues`).
-    // kuna's renderer instead determines break/continue in a SEPARATE, opt-in pass
-    // (`loopbreak_recovery::kuna_scope_break`, gated by the `recover_loop_break`
+    // unlace's renderer instead determines break/continue in a SEPARATE, opt-in pass
+    // (`loopbreak_recovery::unlace_scope_break`, gated by the `recover_loop_break`
     // P0 assertion, default-OFF) that runs in `ActionFinalStructure` AFTER
     // structuring.  Setting `f_break_goto`/`f_continue_goto` on a block here (before
     // that pass, and before the loop scope is finalized) mis-renders the loop, so
@@ -2826,7 +2826,7 @@ impl<'a> RegionStructurer<'a> {
     /// If any component has an out-edge already flagged `f_goto_edge` (by a prior
     /// virtualization round), wrap it into the matching goto block.  Mirrors
     /// Ghidra `CollapseStructure::ruleBlockGoto`.
-    fn rule_block_goto(&mut self) -> KunaResult<bool> {
+    fn rule_block_goto(&mut self) -> UnlaceResult<bool> {
         let n = self.size();
         for i in 0..n {
             let bl = self.component(i);
@@ -2878,7 +2878,7 @@ impl<'a> RegionStructurer<'a> {
     /// `sailr._order_virtualizable_edges` (H1 sibling-count, H3 return-edge), with
     /// the base `_chick_order_edges` tie-break.  Returns `false` only if no
     /// structured (non-goto, non-self) out-edge exists at all.
-    fn virtualize_one_edge(&mut self) -> KunaResult<bool> {
+    fn virtualize_one_edge(&mut self) -> UnlaceResult<bool> {
         // SAILR P1: when a switch-bodied loop is mid-fold (its head still live and
         // `try_fold_switch_loop` owns it), protect every edge inside that loop body
         // from last-resort virtualization — otherwise the case/continue edges get
@@ -2968,11 +2968,14 @@ impl<'a> RegionStructurer<'a> {
     ///     here, exactly as angr drops `other_edges`).
     /// Virtualize from `crossing` if non-empty, else `secondary`.  Within the chosen
     /// bucket, order by the SAILR heuristic and return the first edge.
-    fn order_virtualizable_edges_sailr<'e>(&self, candidates: &'e [Edge]) -> KunaResult<&'e Edge> {
+    fn order_virtualizable_edges_sailr<'e>(
+        &self,
+        candidates: &'e [Edge],
+    ) -> UnlaceResult<&'e Edge> {
         // Build the snapshot region graph over the live components (angr's
         // `full_graph`): nodes = components, edges = every component out-edge
         // (structured, back, and already-virtualized goto edges alike — the
-        // dominator structure must see all live control flow).  `KunaIncrementalDominators`
+        // dominator structure must see all live control flow).  `UnlaceIncrementalDominators`
         // (the ported angr `IncrementalDominators`) computes forward and post
         // dominators over it.
         let (pool, graph, head, id_of) = self.build_component_graph();
@@ -2980,7 +2983,8 @@ impl<'a> RegionStructurer<'a> {
         // `networkx.immediate_dominators(full_graph, head)`).  Reuse the ported
         // Cooper-Harvey-Kennedy engine; a synthetic head guarantees every node is
         // reachable (matches angr adding a temporary head for multi-entry graphs).
-        let fdoms = crate::regiongraph::KunaIncrementalDominators::new(&pool, &graph, head, false)?;
+        let fdoms =
+            crate::regiongraph::UnlaceIncrementalDominators::new(&pool, &graph, head, false)?;
         let dominance = super::domindex::DominanceIndex::new(&fdoms, &graph);
 
         // Bucket the candidate edges by the dominance relationship.
@@ -3006,7 +3010,7 @@ impl<'a> RegionStructurer<'a> {
         } else {
             // angr returns False (no crossing/secondary edge); fall back to the flat
             // ordering over all candidates so the structurer still makes progress
-            // (kuna is honest-partial — it must always remove one edge to converge).
+            // (unlace is honest-partial — it must always remove one edge to converge).
             return Ok(self.order_virtualizable_edges(candidates));
         };
 
@@ -3018,9 +3022,9 @@ impl<'a> RegionStructurer<'a> {
     /// tiebreak.  Returns the single best edge (the first of the final ordering).
     fn sailr_order_within_bucket<'e>(
         &self,
-        pool: &crate::regiongraph::KunaNodePool,
-        graph: &crate::regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::KunaNodeId>,
+        pool: &crate::regiongraph::UnlaceNodePool,
+        graph: &crate::regiongraph::UnlaceRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::UnlaceNodeId>,
         edges: &[&'e Edge],
     ) -> &'e Edge {
         if edges.len() == 1 {
@@ -3113,21 +3117,21 @@ impl<'a> RegionStructurer<'a> {
     /// be built (then H2 is simply skipped).
     fn sailr_h2_postdom<'e>(
         &self,
-        pool: &crate::regiongraph::KunaNodePool,
-        graph: &crate::regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::KunaNodeId>,
+        pool: &crate::regiongraph::UnlaceNodePool,
+        graph: &crate::regiongraph::UnlaceRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::UnlaceNodeId>,
         edges: &[&'e Edge],
     ) -> Option<Vec<&'e Edge>> {
-        use crate::regiongraph::{KunaRegionGraph, kuna_immediate_dominators};
+        use crate::regiongraph::{UnlaceRegionGraph, unlace_immediate_dominators};
         // The reversed-graph synthetic tail (post-dom root): connect every original
         // sink (out_degree == 0) to it, then add edges dst->src for every original
         // edge, so forward idoms over this graph == post-dominators of the original.
-        let real_nodes: Vec<crate::regiongraph::KunaNodeId> = id_of.values().copied().collect();
+        let real_nodes: Vec<crate::regiongraph::UnlaceNodeId> = id_of.values().copied().collect();
         let mut counts: Vec<(usize, &Edge)> = Vec::with_capacity(edges.len());
         let mut max_count: usize = 0;
         for &e in edges {
             // Build the reversed graph of (snapshot minus edge src->dst).
-            let mut rev = KunaRegionGraph::new();
+            let mut rev = UnlaceRegionGraph::new();
             // A synthetic tail id past the real pool size; allocate from a local pool
             // mirror so `pool.key` stays valid (we extend the borrowed pool's view by
             // cloning it).  To avoid mutating the shared pool we route the synthetic
@@ -3159,10 +3163,10 @@ impl<'a> RegionStructurer<'a> {
                 }
             }
             let mut idom: std::collections::BTreeMap<
-                crate::regiongraph::KunaNodeId,
-                crate::regiongraph::KunaNodeId,
+                crate::regiongraph::UnlaceNodeId,
+                crate::regiongraph::UnlaceNodeId,
             > = std::collections::BTreeMap::new();
-            if kuna_immediate_dominators(&lpool, &rev, tail, &mut idom).is_err() {
+            if unlace_immediate_dominators(&lpool, &rev, tail, &mut idom).is_err() {
                 return None;
             }
             // Count strict post-dom (node -> immediate post-dom) relationships,
@@ -3247,7 +3251,7 @@ impl<'a> RegionStructurer<'a> {
     }
 
     /// Build the snapshot region graph over the live top-level components (the
-    /// angr `full_graph`): a [`KunaRegionGraph`] whose nodes are the live components
+    /// angr `full_graph`): a [`UnlaceRegionGraph`] whose nodes are the live components
     /// and whose edges are every component out-edge (structured, back, and
     /// already-virtualized goto edges alike — the dominator structure must see all
     /// live control flow).  A synthetic head node (the angr `postorder_head` /
@@ -3256,22 +3260,22 @@ impl<'a> RegionStructurer<'a> {
     /// forward-dominator computation.
     ///
     /// Returns `(pool, graph, head, id_of)` where `id_of` maps each component
-    /// `BlockId` to its [`KunaNodeId`].  Node `addr` is the component's front-leaf
+    /// `BlockId` to its [`UnlaceNodeId`].  Node `addr` is the component's front-leaf
     /// bblocks start address (matching [`block_addr`](Self::block_addr)) and `ident`
     /// is the component's top-level index, so `(addr, ident)` is a unique,
-    /// deterministic `KunaNodeOrder` key.
+    /// deterministic `UnlaceNodeOrder` key.
     #[allow(clippy::type_complexity)]
     fn build_component_graph(
         &self,
     ) -> (
-        crate::regiongraph::KunaNodePool,
-        crate::regiongraph::KunaRegionGraph,
-        crate::regiongraph::KunaNodeId,
-        std::collections::BTreeMap<BlockId, crate::regiongraph::KunaNodeId>,
+        crate::regiongraph::UnlaceNodePool,
+        crate::regiongraph::UnlaceRegionGraph,
+        crate::regiongraph::UnlaceNodeId,
+        std::collections::BTreeMap<BlockId, crate::regiongraph::UnlaceNodeId>,
     ) {
-        use crate::regiongraph::{KunaNodePool, KunaRegionGraph, NodeKind};
-        let mut pool = KunaNodePool::new();
-        let mut graph = KunaRegionGraph::new();
+        use crate::regiongraph::{NodeKind, UnlaceNodePool, UnlaceRegionGraph};
+        let mut pool = UnlaceNodePool::new();
+        let mut graph = UnlaceRegionGraph::new();
         let mut id_of: std::collections::BTreeMap<BlockId, _> = std::collections::BTreeMap::new();
         let n = self.size();
         // Allocate a node per live component.
@@ -3315,18 +3319,18 @@ impl<'a> RegionStructurer<'a> {
     /// synthetic head, mapped from component `BlockId` to its sequence value.
     fn compute_node_seq(
         &self,
-        pool: &crate::regiongraph::KunaNodePool,
-        graph: &crate::regiongraph::KunaRegionGraph,
-        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::KunaNodeId>,
+        pool: &crate::regiongraph::UnlaceNodePool,
+        graph: &crate::regiongraph::UnlaceRegionGraph,
+        id_of: &std::collections::BTreeMap<BlockId, crate::regiongraph::UnlaceNodeId>,
     ) -> std::collections::BTreeMap<BlockId, int4> {
-        use crate::regiongraph::kuna_dfs_postorder_deterministic;
+        use crate::regiongraph::unlace_dfs_postorder_deterministic;
         // The head is the unique zero-in-degree node (built by build_component_graph);
         // recover it as the node id not present in id_of's value set with in-degree 0.
         // Simpler: re-derive from the graph — the synthetic head has the largest
         // ident (u32::MAX) and addr 0; but we do not have it here.  Instead, find the
         // single node with in_degree 0 over the whole snapshot (the synthetic head).
         let mut head = None;
-        let mut all: Vec<crate::regiongraph::KunaNodeId> = Vec::new();
+        let mut all: Vec<crate::regiongraph::UnlaceNodeId> = Vec::new();
         graph.get_nodes(&mut all);
         for nid in all {
             if graph.size_in(nid).unwrap_or(0) == 0 {
@@ -3339,8 +3343,8 @@ impl<'a> RegionStructurer<'a> {
             Some(h) => h,
             None => return seq, // no acyclic source; node_seq stays empty (all 0)
         };
-        let mut postorder: Vec<crate::regiongraph::KunaNodeId> = Vec::new();
-        if kuna_dfs_postorder_deterministic(pool, graph, head, &mut postorder).is_err() {
+        let mut postorder: Vec<crate::regiongraph::UnlaceNodeId> = Vec::new();
+        if unlace_dfs_postorder_deterministic(pool, graph, head, &mut postorder).is_err() {
             return seq;
         }
         // angr: `ordered_nodes = reversed(post_order)` (reverse post-order, RPO),
@@ -3350,7 +3354,7 @@ impl<'a> RegionStructurer<'a> {
         // value `len`, and a node finishing first (pi = 0) gets 1 — exactly angr's
         // "destinations closer to the head are virtualized first" (key `-node_seq`).
         // Invert id_of for the lookup.
-        let mut block_of: std::collections::BTreeMap<crate::regiongraph::KunaNodeId, BlockId> =
+        let mut block_of: std::collections::BTreeMap<crate::regiongraph::UnlaceNodeId, BlockId> =
             std::collections::BTreeMap::new();
         for (&bl, &nid) in id_of {
             block_of.insert(nid, bl);
@@ -3402,8 +3406,8 @@ enum LoopRefineOutcome {
     NoChange,
 }
 
-crate::kuna_flag!(
-    /// (kuna) Region structurer cyclic loop-successor refinement: when
+crate::unlace_flag!(
+    /// (unlace) Region structurer cyclic loop-successor refinement: when
     /// `region_structure` is on, refine a multi-exit / multi-latch (or
     /// irreducible mid-entry) loop by virtualizing its *secondary* exits and
     /// latches to gotos (lowered to `break;`/`continue;` by the existing
@@ -3422,8 +3426,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna) Region structurer last-resort edge-virtualization ORDERING (SAILR P2):
+crate::unlace_flag!(
+    /// (unlace) Region structurer last-resort edge-virtualization ORDERING (SAILR P2):
     /// when the structurer must virtualize an edge to a `goto` (no schema applies),
     /// pick the order that minimizes the resulting goto count.  Replaces the flat
     /// H1/H3 + block-index tiebreak with angr's `_last_resort_refinement` dominance-
@@ -3443,17 +3447,17 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// (kuna) Region-based (Phoenix/SAILR) structurer: structure the CFG by
-/// walking the [`KunaRegionIdentifier`](crate::regionid)
+/// (unlace) Region-based (Phoenix/SAILR) structurer: structure the CFG by
+/// walking the [`UnlaceRegionIdentifier`](crate::regionid)
 /// region tree and matching Phoenix acyclic schemas instead of running
 /// Ghidra's `CollapseStructure` (option `regionstructure`, DIV-12 default-on:
 /// the primary structuring path; falls back to `CollapseStructure` on irreducible code).
 #[derive(Clone, Debug, PartialEq)]
 pub struct RegionStructure(pub bool);
 
-impl crate::optionset::KunaOption for RegionStructure {
+impl crate::optionset::UnlaceOption for RegionStructure {
     const NAME: &'static str = "regionstructure";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RegionStructure(false)
@@ -3463,7 +3467,7 @@ impl crate::optionset::KunaOption for RegionStructure {
         RegionStructure(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::region_structurer::OptionRegionStructure.apply(value)?;
         Ok((RegionStructure(v), msg))
     }

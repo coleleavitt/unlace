@@ -186,13 +186,13 @@ fn addition(
 pub fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
     if !arch.source_lang().is_go()
         || !arch.archid.starts_with("x86:LE:64:")
-        || fd.kuna_atomic_xadds().len() != 1
+        || fd.unlace_atomic_xadds().len() != 1
         || fd.num_calls() != 0
         || fd.sblocks_get_size() == 0
-        || fd.kuna_pipeline_failure().is_some()
+        || fd.unlace_pipeline_failure().is_some()
         || fd.get_override().has_flow_override()
-        || !fd.kuna_rejected_flow_overrides().is_empty()
-        || !fd.kuna_rejected_callee_overrides().is_empty()
+        || !fd.unlace_rejected_flow_overrides().is_empty()
+        || !fd.unlace_rejected_callee_overrides().is_empty()
     {
         return None;
     }
@@ -200,7 +200,7 @@ pub fn plan(fd: &Funcdata, arch: &Architecture) -> Option<Plan> {
     if !proto.has_store() || !proto.get_output().is_type_locked() {
         return None;
     }
-    let proof = &fd.kuna_atomic_xadds()[0];
+    let proof = &fd.unlace_atomic_xadds()[0];
     if !signed(proto.get_output_type()?, proof.width)
         || !userop(fd, arch, proof.lock, b"LOCK")
         || !userop(fd, arch, proof.unlock, b"UNLOCK")

@@ -36,7 +36,7 @@
 //! providers issue the getPcode/getBytes/… queries nested in the still-open
 //! decompileAt response), and emits the `<doc>` response — `Funcdata::encode`'s
 //! `<function>`/`<ast>` plus the Clang-markup `<function>` — the first real C
-//! from kuna in ghidra mode.  A decompile failure degrades to the C++
+//! from unlace in ghidra mode.  A decompile failure degrades to the C++
 //! `!fd->isProcComplete()` incomplete-function shape (empty 14/15 payload +
 //! warning) so it never desyncs the GUI.  `flushNative` has no engine
 //! caches to clear yet.  `structureGraph` and the four signature commands are
@@ -50,7 +50,7 @@ use std::io::{Read, Write};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{Decoder, Encoder, PackedDecode, PackedEncode};
 use unlace_base::space::AddrSpaceManager;
 
@@ -71,7 +71,7 @@ use crate::provider::SharedClient;
 use crate::translate::{GhidraTranslate, build_registry};
 use unlace_decomp::printc::ArchPrintExt;
 
-/// One registered program: the kuna analog of an `ArchitectureGhidra` slot
+/// One registered program: the unlace analog of an `ArchitectureGhidra` slot
 /// in the global `archlist` (ghidra_process.cc:76,176-201).
 ///
 /// Phase-2 step 3 makes this a *live engine*: registerProgram builds a real
@@ -248,26 +248,26 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
         }
     }
 
-    /// Apply a kuna-owned option to a live session for integration tests.
+    /// Apply a unlace-owned option to a live session for integration tests.
     ///
-    /// Kuna options do not have upstream wire element ids, so the stock Java
+    /// Unlace options do not have upstream wire element ids, so the stock Java
     /// client cannot place one in its `<optionslist>`.  Tests use this seam to
     /// exercise option-gated engine paths through the real ghidra-mode process
     /// without changing the production wire protocol.
     #[doc(hidden)]
-    pub fn set_kuna_option_for_test(
+    pub fn set_unlace_option_for_test(
         &mut self,
         archid: usize,
         name: &str,
         value: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         let arch = self
             .archlist
             .get_mut(archid)
             .and_then(Option::as_mut)
             .and_then(|session| session.architecture.as_mut())
-            .ok_or_else(|| KunaError::lowlevel(format!("no live architecture {archid}")))?;
-        arch.set_kuna_option(name, value)
+            .ok_or_else(|| UnlaceError::lowlevel(format!("no live architecture {archid}")))?;
+        arch.set_unlace_option(name, value)
     }
 
     /// Run the process loop until a command terminates it (C++ `main`'s
@@ -345,7 +345,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             // Pipe/IO failures propagate to the process loop (C++ exit(1))
             Err(e @ (WireError::PipeClosed | WireError::Io(_))) => return Err(e),
             // catch(JavaError): pass the exception, abort sending results
-            Err(WireError::Kuna(KunaError::Java { type_name, explain })) => {
+            Err(WireError::Unlace(UnlaceError::Java { type_name, explain })) => {
                 pass_java_exception(self.client.borrow_mut().sout_mut(), &type_name, &explain)?;
                 // C++ relies on cin.tie(&cout) flushing before the next
                 // blocking read; Rust must flush explicitly.
@@ -357,13 +357,13 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                 return Ok(cmd.status);
             }
             // catch(DecoderError) / catch(RecovError) / catch(LowlevelError):
-            // classify into a warning (KunaError::Decoder is the standalone
+            // classify into a warning (UnlaceError::Decoder is the standalone
             // C++ DecoderError; Recov its subclass family; every other
             // variant derives LowlevelError — see unlace-base error.rs docs)
-            Err(WireError::Kuna(err)) => {
+            Err(WireError::Unlace(err)) => {
                 let errmsg = match &err {
-                    KunaError::Decoder { .. } => format!("Marshaling error: {}", err.explain()),
-                    KunaError::Recov { .. } => format!("Recoverable Error: {}", err.explain()),
+                    UnlaceError::Decoder { .. } => format!("Marshaling error: {}", err.explain()),
+                    UnlaceError::Recov { .. } => format!("Recoverable Error: {}", err.explain()),
                     _ => format!("Low-level Error: {}", err.explain()),
                 };
                 self.print_message(cmd.slot, &errmsg);
@@ -385,7 +385,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
         self.load_parameters(cmd)?;
         let t = read_to_any_burst(self.client.borrow_mut().sin_mut())?;
         if t != BURST_COMMAND_CLOSE {
-            return Err(WireError::Kuna(KunaError::java(
+            return Err(WireError::Unlace(UnlaceError::java(
                 "alignment",
                 "Missing end of command",
             )));
@@ -401,11 +401,11 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
     fn bind_session(&mut self, start_msg: &str, end_msg: &str) -> WireResult<usize> {
         let t = read_to_any_burst(self.client.borrow_mut().sin_mut())?;
         if t != BURST_STRING_OPEN {
-            return Err(WireError::Kuna(KunaError::java("alignment", start_msg)));
+            return Err(WireError::Unlace(UnlaceError::java("alignment", start_msg)));
         }
         let (payload, code) = crate::protocol::read_id_payload(self.client.borrow_mut().sin_mut())?;
         if code != BURST_STRING_CLOSE {
-            return Err(WireError::Kuna(KunaError::java("alignment", end_msg)));
+            return Err(WireError::Unlace(UnlaceError::java("alignment", end_msg)));
         }
         let id = parse_arch_id(&payload);
         if id >= 0 && (id as usize) < self.archlist.len() && self.archlist[id as usize].is_some() {
@@ -416,7 +416,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             }
             return Ok(slot);
         }
-        Err(WireError::Kuna(KunaError::java(
+        Err(WireError::Unlace(UnlaceError::java(
             "decompiler",
             "No architecture registered with decompiler",
         )))
@@ -458,8 +458,8 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                 match (session.manager(), raw) {
                     (Some(manager), Some(bytes)) => {
                         let mut decoder = PackedDecode::new(manager);
-                        decoder.ingest_stream(&bytes).map_err(WireError::Kuna)?;
-                        let addr = Address::decode(&mut decoder).map_err(WireError::Kuna)?;
+                        decoder.ingest_stream(&bytes).map_err(WireError::Unlace)?;
+                        let addr = Address::decode(&mut decoder).map_err(WireError::Unlace)?;
                         cmd.addr_text = Some(render_address(&addr));
                         cmd.addr = Some(addr);
                     }
@@ -473,7 +473,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                     (_, None) => {
                         // Missing payload: C++ Address::decode on the empty
                         // decoder raises DecoderError -> "Marshaling error"
-                        return Err(WireError::Kuna(KunaError::decoder(
+                        return Err(WireError::Unlace(UnlaceError::decoder(
                             "Expecting <addr> element",
                         )));
                     }
@@ -664,10 +664,10 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
 
                 // (2b) The ghidra-mode banner (user-requested): a plate
                 // comment at the top of EVERY decompiled function so it is
-                // visible inside Ghidra that kuna is the active core.
+                // visible inside Ghidra that unlace is the active core.
                 // Cache-only (never written back to the host, never on the
                 // 16/17 frame); the version is baked at build time exactly
-                // like the kuna CLI's (`KUNA_VERSION` from the release build
+                // like the unlace CLI's (`UNLACE_VERSION` from the release build
                 // matrix, the workspace version on dev builds).  Then fill the
                 // per-function comment cache from the host
                 // (CommentDatabaseGhidra::fillCache semantics: once per flush
@@ -680,7 +680,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                             unlace_decomp::comment::comment_type::HEADER,
                             &addr,
                             &addr,
-                            &kuna_banner_text(),
+                            &unlace_banner_text(),
                         );
                         if let Some(remote) = &remote {
                             let filter = arch.printer_comment_filter();
@@ -702,7 +702,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         // epoch merged here (the revert case: the host STOPPED
                         // reporting a value, so the pristine layer must be
                         // written back — upstream stores nothing and rebuilds
-                        // per call; kuna's trackbase persists, hence the
+                        // per call; unlace's trackbase persists, hence the
                         // explicit pristine base).
                         if !wire_set.is_empty() || remote.has_pristine_tracked(&addr) {
                             let session = self.archlist[slot].as_mut().expect("bound session");
@@ -757,7 +757,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                 // entry, let flow-following via the getPcode/getBytes providers
                 // discover the body).  Assemble the response document while the
                 // `&mut Architecture` is in hand (the markup needs `&Architecture`).
-                let doc: KunaResult<Vec<u8>> = {
+                let doc: UnlaceResult<Vec<u8>> = {
                     let session = self.archlist[slot].as_mut().expect("bound session");
                     let arch = session
                         .architecture
@@ -778,7 +778,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                     // locked-void input) seeds the fresh Funcdata's prototype —
                     // the C++ queryFunction handing DecompileAt the decoded
                     // `<prototype>`+`<localdb>`.  An unlocked signature stays
-                    // None and kuna recovers parameters itself (the CLI-path
+                    // None and unlace recovers parameters itself (the CLI-path
                     // behavior for undeclared functions).
                     //
                     // Phase 4: the host-committed LOCALS from the function's
@@ -866,13 +866,13 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                             ));
                         }
                     }
-                    arch.kuna_pending_name_recs = name_recs;
-                    arch.kuna_pending_dyn_recs = dyn_recs;
+                    arch.unlace_pending_name_recs = name_recs;
+                    arch.unlace_pending_dyn_recs = dyn_recs;
                     // The host's declared convention: parameter storage must be
                     // assigned under the SAME model the database committed, or
                     // Java's checkFullCommit rewrites the user's signature on
                     // the first rename.
-                    arch.kuna_pending_proto_model = host_model
+                    arch.unlace_pending_proto_model = host_model
                         .as_deref()
                         .and_then(|m| arch.get_model(m).cloned());
                     match unlace_decomp::decompile_drive::decompile_func_full_with_override_dyn(
@@ -887,7 +887,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         &[],
                         &[],
                         // The host's EXACT committed parameter storage (empty
-                        // for an unlocked signature — kuna recovers those).
+                        // for an unlocked signature — unlace recovers those).
                         &host_param_storage,
                         unlace_decomp::decompile_drive::DrivePurpose::Batch,
                     ) {
@@ -975,7 +975,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                             // throws "Action group does not exist: <name>" for an
                             // unregistered root (action.cc:1005-1013,1145-1158); match
                             // its wording so the 16/17 warning the GUI shows is faithful.
-                            return Err(WireError::Kuna(KunaError::lowlevel(format!(
+                            return Err(WireError::Unlace(UnlaceError::lowlevel(format!(
                                 "Action group does not exist: {actionstring}"
                             ))));
                         }
@@ -992,7 +992,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
                         "jumpload" => session.record_jumploads = true,
                         "nojumpload" => session.record_jumploads = false,
                         _ => {
-                            return Err(WireError::Kuna(KunaError::lowlevel(format!(
+                            return Err(WireError::Unlace(UnlaceError::lowlevel(format!(
                                 "Unknown print action: {printstring}"
                             ))));
                         }
@@ -1008,7 +1008,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
             // unknown option element (-> response 'f' -> Java "Did not accept
             // decompiler options", killing the whole program open), so one
             // option from a newer Java vocabulary (12.2's `baddatacount`)
-            // bricks the decompiler view.  kuna applies every option it knows,
+            // bricks the decompiler view.  unlace applies every option it knows,
             // skips the rest per-element, and always answers 't'.  Skipped
             // elements are reported on the 16/17 frame with messages beginning
             // "Warning" — DecompInterface.isErrorMessage treats text containing
@@ -1058,7 +1058,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
     /// `Architecture::init`/`restoreFromSpec`).
     ///
     /// - `buildTranslator` → a [`GhidraTranslate`] over a *clone* of the shared
-    ///   client (the kuna analog of the C++ `glb` back-pointer every ghidra-mode
+    ///   client (the unlace analog of the C++ `glb` back-pointer every ghidra-mode
     ///   component holds).  The engine, mid-init and mid-decompile, issues
     ///   queries through this clone on the same streams the command loop frames.
     /// - `Architecture::from_engine_translate` builds the subsystems over the
@@ -1081,7 +1081,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
         cspec: &[u8],
         tspec: &[u8],
         corespec: &[u8],
-    ) -> KunaResult<Architecture> {
+    ) -> UnlaceResult<Architecture> {
         let registry = build_registry();
         let translate = GhidraTranslate::new(tspec, &registry, Rc::clone(&self.client))?;
         let mut arch =
@@ -1089,7 +1089,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
         arch.set_cspec_xml(cspec.to_vec());
         arch.set_pspec_xml(pspec.to_vec());
         // Phase 3: decode the wire <coretypes> inside buildCoreTypes (the C++
-        // `store.getTag("coretypes")` branch) so kuna's core-type IDS match the
+        // `store.getTag("coretypes")` branch) so unlace's core-type IDS match the
         // host's and every later <typeref>/getDataType exchange resolves.
         arch.set_coretypes_xml(corespec.to_vec());
         arch.init_post_engine()?;
@@ -1099,12 +1099,12 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
         // CLI `aggressive` ENGINE-TIER preset, applied BEFORE Java's setOptions
         // replay lands on top.  The GUI has no --mode surface, and the CLI
         // resolves `auto` to `aggressive` for every binary under 500 KiB —
-        // without the preset the GUI would show the one rendering no other kuna
+        // without the preset the GUI would show the one rendering no other unlace
         // surface defaults to.  `name_style_angr` stays ON (the shipped
-        // default): it also gates kuna's LOCAL variable naming (`v2`/`a0` +
+        // default): it also gates unlace's LOCAL variable naming (`v2`/`a0` +
         // storage comments), the only ported local-naming pass — turning it off
         // leaves unnamed register highs rendering as raw `EAX`/`RBX`.
-        // `kuna_name_style()` gives `Ghidra` precedence exactly at the
+        // `unlace_name_style()` gives `Ghidra` precedence exactly at the
         // fallback-name sites.  Analysis/loader-tier preset members (listing,
         // fid, aif, ...) run over a real file in unlace-analysis and have no seam
         // here: their PRODUCTS are what the Phase-3 providers pull over the
@@ -1174,7 +1174,7 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
     /// `ArchitectureGhidra` *before* `init`, so an `init` that throws on bad
     /// specs still ships its error on the 16/17 channel — and Java's
     /// registerProgram treats a non-empty nativeMessage as registration failure
-    /// (`DecompInterface.java:291-294`).  kuna mirrors this: the slot is bound
+    /// (`DecompInterface.java:291-294`).  unlace mirrors this: the slot is bound
     /// before the fallible `build_architecture`, so a construction failure
     /// routes here and ships on the 16/17 frame.
     fn print_message(&mut self, slot: Option<usize>, message: &str) {
@@ -1187,12 +1187,12 @@ impl<R: Read + 'static, W: Write + 'static> GhidraProcess<R, W> {
 }
 
 /// The ghidra-mode banner comment (user-requested): rendered as the first
-/// plate line of every decompiled function so the GUI makes it obvious kuna
-/// is the active core.  The version bakes exactly like the kuna CLI's
-/// (`unlace-cli/src/main.rs`): `KUNA_VERSION` from the release build matrix
+/// plate line of every decompiled function so the GUI makes it obvious unlace
+/// is the active core.  The version bakes exactly like the unlace CLI's
+/// (`unlace-cli/src/main.rs`): `UNLACE_VERSION` from the release build matrix
 /// (release.yml exports it job-wide), the workspace Cargo version on dev
 /// builds.
-pub fn kuna_banner_text() -> String {
+pub fn unlace_banner_text() -> String {
     format!(
         "Kuna v{}",
         option_env!("KUNA_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
@@ -1211,14 +1211,14 @@ fn apply_ghidra_mode_defaults(arch: &mut Architecture) {
     arch.name_style_ghidra = true;
     if let Some(overrides) = unlace_decomp::modes::mode_overrides("aggressive") {
         for (name, value) in overrides {
-            if unlace_decomp::option_dispatch::KUNA_OPTION_NAMES.contains(name) {
+            if unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES.contains(name) {
                 // Engine-tier knob: apply.  Unknown/analysis-tier names have
                 // no engine seam in ghidra mode and are skipped.
-                let _ = arch.set_kuna_option(name, value);
+                let _ = arch.set_unlace_option(name, value);
             }
         }
     }
-    let _ = arch.set_kuna_option("calltargettype", "off");
+    let _ = arch.set_unlace_option("calltargettype", "off");
 }
 
 /// Parse the ASCII-decimal architecture id (C++ `sin >> dec >> id`,
@@ -1226,7 +1226,7 @@ fn apply_ghidra_mode_defaults(arch: &mut Architecture) {
 /// stopping at the first non-digit.
 ///
 /// DELIBERATE DIVERGENCE: on extraction failure C++11 stores 0 AND sets
-/// failbit, after which every read fails and the process exits.  kuna
+/// failbit, after which every read fails and the process exits.  unlace
 /// returns -1, which the caller turns into the "No architecture registered
 /// with decompiler" JavaError — the client sees a clean exception and the
 /// process stays alive (docs/ghidra-integration.md).
@@ -1283,7 +1283,7 @@ fn parse_arch_id(payload: &[u8]) -> i32 {
 /// appending the markup bytes then writing `</doc>` from a fresh encoder is
 /// byte-identical to C++ writing both to one `sout` — exactly the same splice.
 ///
-/// The Phase-4 symbol-link pass (`kuna_link_high_symbols`) runs FIRST — before
+/// The Phase-4 symbol-link pass (`unlace_link_high_symbols`) runs FIRST — before
 /// the markup is printed — because the markup's `<vardecl symref>` must carry
 /// the same LocalSymbolMap ids `<localdb>` encodes: Java resolves the
 /// declaration line's HighSymbol exclusively through that attribute, so a
@@ -1291,13 +1291,13 @@ fn parse_arch_id(payload: &[u8]) -> i32 {
 /// declaration tokens (and logs "Invalid symbol reference" once per
 /// declaration per decompile).  The pass is idempotent and does not change the
 /// printed C — it only attaches Symbols to highs the naming pass already
-/// named, writing a field (`kuna_link_symbol`) nothing in the printer's text
+/// named, writing a field (`unlace_link_symbol`) nothing in the printer's text
 /// path reads; the harness asserts the C text is byte-identical across the
 /// reorder.  Both documents are then spliced in the upstream order
 /// (`<function>` #1 first).
 ///
-/// kuna divergence (documented): under action `paramid` the C++ ran the reduced
-/// `paramid` action set; kuna's `decompile_func_full` runs the full decompile,
+/// unlace divergence (documented): under action `paramid` the C++ ran the reduced
+/// `paramid` action set; unlace's `decompile_func_full` runs the full decompile,
 /// so the measured prototype is the fully-recovered one — a superset of what
 /// the reduced pipeline exposes.
 fn build_decompile_at_doc(
@@ -1307,12 +1307,12 @@ fn build_decompile_at_doc(
     send_c_code: bool,
     send_param_measures: bool,
     current_action: &str,
-) -> KunaResult<Vec<u8>> {
+) -> UnlaceResult<Vec<u8>> {
     let mut buf: Vec<u8> = Vec::new();
     // The symbol-link pass, ahead of everything that reads its results (the
     // markup's `<vardecl symref>` and the `<localdb>`/`<highlist>` encode).
     if send_syntax_tree {
-        fd.kuna_link_high_symbols();
+        fd.unlace_link_high_symbols();
     }
     {
         let mut enc = PackedEncode::new(&mut buf);
@@ -1334,7 +1334,7 @@ fn build_decompile_at_doc(
         // (see above), spliced after the syntax tree.  `doc_function_markup`
         // needs `&mut PrintC` + `&Architecture`, the split `with_print` lends.
         let markup: Option<Vec<u8>> = if send_c_code && current_action == "decompile" {
-            // (kuna outlang) This document is consumed by Ghidra's Clang token
+            // (unlace outlang) This document is consumed by Ghidra's Clang token
             // model, whose token classes are C's. A non-C output language here
             // would put Rust text into C token slots -- a GUI regression, not a
             // feature -- so the markup path is pinned to C regardless of any
@@ -1389,7 +1389,7 @@ mod tests {
         assert_eq!(parse_arch_id(b" 3"), 3);
         assert_eq!(parse_arch_id(b"5xyz"), 5); // stops at first non-digit
         assert_eq!(parse_arch_id(b"-2"), -2);
-        assert_eq!(parse_arch_id(b""), -1); // kuna divergence: -1, not 0
+        assert_eq!(parse_arch_id(b""), -1); // unlace divergence: -1, not 0
         assert_eq!(parse_arch_id(b"abc"), -1);
     }
 }

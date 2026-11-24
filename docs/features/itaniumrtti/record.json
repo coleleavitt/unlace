@@ -1,6 +1,6 @@
 {
   "opportunity": "Ghidra has NO Itanium RTTI analyzer at all -- its RttiAnalyzer is a Microsoft-PE analyzer and its GCC class recovery is script-tier (RecoverClassesFromRTTIScript / RTTIGccClassRecoverer), never auto-analysis -- so on a stripped g++ binary it leaves the Shape vtable as DAT_00107a80. IDA Pro reconstructs _ZTV6Widget / _ZTI6Widget / _ZTS8Drawable from .rodata + .data.rel.ro alone. kuna had ZERO _ZTV / _ZTI / __class_type_info / __cxxabiv1 hits anywhere in decompiler/crates: the Itanium side was entirely absent while the MSVC side had been ported.",
-  "test_name": "kuna-console verify_itaniumrtti (7 two-pass e2e assertions over a new stripped hidden-visibility fixture) + 9 hermetic unit tests + whole-binary decompile-all sweeps",
+  "test_name": "console verify_itaniumrtti (7 two-pass e2e assertions over a new stripped hidden-visibility fixture) + 9 hermetic unit tests + whole-binary decompile-all sweeps",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/itaniumrtti_x86_64.so",
   "selector": "shapes::Shape::vtable_2",
   "func_addr": "0x14b8",
@@ -64,8 +64,8 @@
     "decompiler/crates/kuna-analysis/src/passes.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/itaniumrtti_x86_64.cpp",
     "decompiler/crates/kuna-analysis/tests/fixtures/itaniumrtti_x86_64.so",
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_itaniumrtti.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_itaniumrtti.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",

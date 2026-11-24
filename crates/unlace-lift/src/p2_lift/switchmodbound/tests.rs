@@ -1,6 +1,6 @@
 //! Logic-level tests for the `switchmodbound` ArchOption gate (GH-9191).
 //!
-//! The recovery walk `JumpBasic::kunaTryModuloBoundTable` lives in
+//! The recovery walk `JumpBasic::unlaceTryModuloBoundTable` lives in
 //! `jumptable.cc` and ports with the W4 jumptable wave (see the module docs);
 //! this file covers the gate this module owns.
 

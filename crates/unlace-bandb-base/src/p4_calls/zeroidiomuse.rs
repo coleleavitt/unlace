@@ -133,7 +133,7 @@ fn is_pure_reshape(code: OpCode) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.zeroidiomuse_op_discards_operand = Some(op_discards_operand);
 }
 

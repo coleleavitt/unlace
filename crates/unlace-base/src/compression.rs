@@ -16,7 +16,7 @@
 //!   cursor instead (invisible to callers, avoids a self-referential
 //!   lifetime).
 //! - zlib return codes become `Result`: the codes C++ converts to
-//!   `LowlevelError` map to `Err(KunaError::Lowlevel)` with the same explain
+//!   `LowlevelError` map to `Err(UnlaceError::Lowlevel)` with the same explain
 //!   strings; `Z_STREAM_END` on inflate sets the `streamFinished` flag
 //!   queried via [`Decompress::is_finished`].
 //!
@@ -28,7 +28,7 @@ use std::io::Write;
 
 use flate2::{FlushCompress, FlushDecompress, Status};
 
-use crate::error::{KunaError, KunaResult};
+use crate::error::{UnlaceError, UnlaceResult};
 
 /// Wrapper for the deflate algorithm (C++ `Compress`).
 ///
@@ -56,7 +56,7 @@ impl Compress {
     /// `LowlevelError` if it does not return `Z_OK`; `deflateInit` rejects
     /// levels outside -1..=9 with `Z_STREAM_ERROR`, which is the only failure
     /// mode reachable here.
-    pub fn new(level: i32) -> KunaResult<Self> {
+    pub fn new(level: i32) -> UnlaceResult<Self> {
         let compression = match level {
             // Z_DEFAULT_COMPRESSION == -1, internally level 6
             -1 => flate2::Compression::default(),
@@ -64,7 +64,7 @@ impl Compress {
             // nonnegative levels fit u32 exactly
             0..=9 => flate2::Compression::new(level as u32),
             _ => {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Could not initialize deflate stream state",
                 ));
             }
@@ -101,7 +101,7 @@ impl Compress {
     /// C++ throws `LowlevelError` only on `Z_STREAM_ERROR`; `Z_BUF_ERROR`
     /// (no progress possible) is not an error there and maps to
     /// `Status::BufError` here, also not an error.
-    pub fn deflate(&mut self, buffer: &mut [u8], finish: bool) -> KunaResult<i32> {
+    pub fn deflate(&mut self, buffer: &mut [u8], finish: bool) -> UnlaceResult<i32> {
         let flush = if finish {
             FlushCompress::Finish
         } else {
@@ -114,7 +114,7 @@ impl Compress {
             .compress(&self.in_buf[self.in_pos..], buffer, flush)
             .is_err()
         {
-            return Err(KunaError::lowlevel("Error compressing stream"));
+            return Err(UnlaceError::lowlevel("Error compressing stream"));
         }
         self.in_pos += (self.comp_stream.total_in() - before_in) as usize;
         let produced = (self.comp_stream.total_out() - before_out) as usize;
@@ -183,7 +183,7 @@ impl Decompress {
     /// C++ throws `LowlevelError` on `Z_NEED_DICT`, `Z_DATA_ERROR`,
     /// `Z_MEM_ERROR` and `Z_STREAM_ERROR` — exactly the conditions flate2
     /// reports as `Err` — and sets `streamFinished` on `Z_STREAM_END`.
-    pub fn inflate(&mut self, buffer: &mut [u8]) -> KunaResult<i32> {
+    pub fn inflate(&mut self, buffer: &mut [u8]) -> UnlaceResult<i32> {
         let before_in = self.comp_stream.total_in();
         let before_out = self.comp_stream.total_out();
         // C++ passes Z_NO_FLUSH
@@ -192,7 +192,7 @@ impl Decompress {
             buffer,
             FlushDecompress::None,
         ) {
-            Err(_) => Err(KunaError::lowlevel("Error decompressing stream")),
+            Err(_) => Err(UnlaceError::lowlevel("Error decompressing stream")),
             Ok(status) => {
                 self.in_pos += (self.comp_stream.total_in() - before_in) as usize;
                 if matches!(status, Status::StreamEnd) {
@@ -242,7 +242,7 @@ impl<W: Write> CompressBuffer<W> {
     ///
     /// * `s` is the backing output stream
     /// * `level` is the level of compression (see [`Compress::new`])
-    pub fn new(s: W, level: i32) -> KunaResult<Self> {
+    pub fn new(s: W, level: i32) -> UnlaceResult<Self> {
         Ok(CompressBuffer {
             out_stream: s,
             in_buffer: Vec::with_capacity(IN_BUFFER_SIZE),
@@ -440,7 +440,7 @@ mod tests {
     fn test_compression_invalid_level_rejected() {
         for level in [-2, 10, 100] {
             match Compress::new(level) {
-                Err(KunaError::Lowlevel { explain }) => {
+                Err(UnlaceError::Lowlevel { explain }) => {
                     assert_eq!(explain, "Could not initialize deflate stream state");
                 }
                 _ => panic!("level {} should be rejected", level),
@@ -460,7 +460,7 @@ mod tests {
         decompressor.input(&[0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0x03]);
         let mut buf = [0u8; 64];
         match decompressor.inflate(&mut buf) {
-            Err(KunaError::Lowlevel { explain }) => {
+            Err(UnlaceError::Lowlevel { explain }) => {
                 assert_eq!(explain, "Error decompressing stream");
             }
             other => panic!("expected decompression error, got {:?}", other.map(|_| ())),

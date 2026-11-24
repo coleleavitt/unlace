@@ -1,9 +1,9 @@
-//! (kuna) Read a declared callee's stack contract off its prototype instead of
+//! (unlace) Read a declared callee's stack contract off its prototype instead of
 //! guessing it from the caller's push run.
 //!
 //! # The gap
 //!
-//! A prototype that is locked says two things about the stack, and kuna acted on
+//! A prototype that is locked says two things about the stack, and unlace acted on
 //! neither.
 //!
 //! **How much the callee pops.** `FuncProto::resolveExtraPop` (`fspec.cc`) turns
@@ -295,7 +295,7 @@ pub fn above_callee_frame(offset: uintb, size: int4, addr_size: int4, floor: int
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleeprotostack_resolve_declared_extra_pop = Some(resolve_declared_extra_pop);
     hooks.calleeprotostack_above_callee_frame = Some(above_callee_frame);
     hooks.calleeprotostack_declared_caller_frame_floor = Some(declared_caller_frame_floor);

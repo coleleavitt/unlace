@@ -133,7 +133,7 @@ driver; the bands are listed in the script). Invert the dependency instead of ad
 To run only some files, set `UNLACE_PARITY_FILES` to a comma-separated list of paths or globs
 (`*` matches any run of characters, `/` included; `?` one character). Each is matched against a
 file's repository-relative path, its file name and its name without the extension, so
-`UNLACE_PARITY_FILES=kuna-wideslice,tests/stages/gh558-* cargo test -p unlace-harness --test
+`UNLACE_PARITY_FILES=wideslice,tests/stages/gh558-* cargo test -p unlace-harness --test
 parity stage_tests` runs three stage files. A selected run compares its assertions with the
 baseline by name and skips the check for baseline keys of files it did not run; every selected
 assertion must pass, and a corpus none of whose files match is skipped. `UNLACE_BLESS=1` refuses

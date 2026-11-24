@@ -1,4 +1,4 @@
-//! (kuna) `picpool` — compose a literal-pool word with the PC that adds it, so a
+//! (unlace) `picpool` — compose a literal-pool word with the PC that adds it, so a
 //! position-independent string reference has an owning function.
 //!
 //! # The gap
@@ -177,7 +177,7 @@ pub(super) struct Image<'a> {
     pub got: Option<&'a GotImage<'a>>,
     /// The callee-saved register spans, which a value survives a call in.
     pub preserved: &'a [(u64, u64)],
-    /// (kuna) Track the addresses the walk composes as pointers and
+    /// (unlace) Track the addresses the walk composes as pointers and
     /// file each access through one.
     pub deref: bool,
 }
@@ -214,7 +214,7 @@ struct Pending {
     hops: u8,
     /// The pool load the word came from; 0 for a GOT base.
     origin: u64,
-    /// (kuna) A pointer, not a GOT base: an address in the image the
+    /// (unlace) A pointer, not a GOT base: an address in the image the
     /// register holds, travelling every edge as a base does.
     ptr: bool,
 }
@@ -931,7 +931,7 @@ fn seed(vma: u64, ops: &[FullOp], img: &Image) -> Option<Pending> {
     None
 }
 
-/// (kuna) Could a pool word be a pointer to data? A mapped, even
+/// (unlace) Could a pool word be a pointer to data? A mapped, even
 /// address outside the GOT, whose slots are read as slots.
 fn is_pointer(word: u64, img: &Image) -> bool {
     word & 1 == 0
@@ -995,7 +995,7 @@ struct Known {
     pc: bool,
     /// A GOT base contributed to this value.
     got: bool,
-    /// (kuna) A tracked pointer contributed to this value.
+    /// (unlace) A tracked pointer contributed to this value.
     ptr: bool,
     /// The pointer and the pool word are one register's one word, not two
     /// values added together.

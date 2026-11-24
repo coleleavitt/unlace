@@ -45,7 +45,7 @@ the program does.
 
 ## The tests
 
-`tests/stages/kuna-splitstorekeep.toml` is two-pass over a new vendored
+`tests/stages/splitstorekeep.toml` is two-pass over a new vendored
 reduction (`splitstorekeep_x86_64`): `copy31` is five assignments at the default
 and one with `splitstorekeep off` (the filed bug), and the sibling `copy32` — the
 same shape at 32 bytes, where nothing overlaps — is identical in both passes.

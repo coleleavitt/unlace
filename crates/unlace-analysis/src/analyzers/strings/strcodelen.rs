@@ -1,4 +1,4 @@
-//! (kuna `fatstr`) The instruction-level `&str` length finder.
+//! (unlace `fatstr`) The instruction-level `&str` length finder.
 //!
 //! A Rust string literal that only code references (`lea rdi, [s]; mov esi, 15;
 //! call f`) has no static `(ptr, len)` record, so the record pass cannot bound
@@ -204,7 +204,7 @@ pub fn scan(file: &object::File) -> Vec<StringFact> {
     out
 }
 
-/// (kuna `fatstr`) The code-side length pass, registered beside the record pass
+/// (unlace `fatstr`) The code-side length pass, registered beside the record pass
 /// for rustc images and committed under the same gate.
 pub struct StrCodeLenPass;
 

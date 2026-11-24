@@ -1,4 +1,4 @@
-//! (kuna) Keep the first register of a returned pair when upstream's scoring
+//! (unlace) Keep the first register of a returned pair when upstream's scoring
 //! refused it and the function computes the second.
 //!
 //! `u64 f(unsigned a) { return full(a) | 0xff00000000ULL; }` is, on 32-bit ARM,

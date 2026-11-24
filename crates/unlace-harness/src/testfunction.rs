@@ -19,7 +19,7 @@
 //!   list of files, accumulate `Total tests applied`/`Total passing tests`, and
 //!   print the capped `Failures:` summary, with the `Error parsing|executing
 //!   <f>.xml` / `No output for <f>.xml` / `Execution failed for <f>.xml` strings
-//!   the Python harness (`kuna/run_tests.py`) greps off **stdout**.
+//!   the Python harness (`unlace/run_tests.py`) greps off **stdout**.
 //!
 //! ## The console wiring (the merged-tree reality)
 //!
@@ -52,7 +52,7 @@ use crate::stagetoml::{PatternLine, StageMatch, StageTest, escape_literal};
 use unlace_base::types::{int4, uint4};
 use unlace_base::xml::{DocumentStorage, Element};
 
-use unlace_console::console::register_kuna_commands;
+use unlace_console::console::register_unlace_commands;
 use unlace_console::engine::bootstrap_program;
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, mainloop, register_console_commands,
@@ -467,7 +467,7 @@ impl FunctionTestCollection {
     /// from the `<binaryimage>` tag.
     ///
     /// The C++ path is `ArchitectureCapability::getCapability("xml")` →
-    /// `buildArchitecture` → `conf->init(store)` → `readLoaderSymbols`.  The kuna
+    /// `buildArchitecture` → `conf->init(store)` → `readLoaderSymbols`.  The unlace
     /// Rust equivalent ([`bootstrap_from_root`]) builds the same engine assembly
     /// (the `w9x-arch-engine-glue` `Architecture::init_post_engine` chain) and
     /// installs it on the console's shared data (`dcp->conf`), so the script's
@@ -749,7 +749,7 @@ impl FunctionTestCollection {
             bulkout.push_str(&file.contents);
         }
 
-        // UNLACE_DUMP triage hook (the C++ (kuna) addition), even on error.
+        // UNLACE_DUMP triage hook (the C++ (unlace) addition), even on error.
         let mut results = String::new();
         if unlace_base::env::var_os("UNLACE_DUMP").is_some() {
             results.push_str(&format!("===KUNA_DUMP_BEGIN {}===\n", self.file_name));
@@ -815,7 +815,7 @@ impl Default for FunctionTestCollection {
     }
 }
 
-/// Build a fresh datatest console (empty feed): register the decompiler + kuna
+/// Build a fresh datatest console (empty feed): register the decompiler + unlace
 /// command modules and set `errorisdone` (C++ `ConsoleCommands` ctor +
 /// `setErrorIsDone(true)`).
 fn build_console() -> IfaceStatus {
@@ -827,7 +827,7 @@ fn build_console() -> IfaceStatus {
 fn build_console_with(commands: Vec<String>) -> IfaceStatus {
     let mut console = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut console);
-    register_kuna_commands(&mut console);
+    register_unlace_commands(&mut console);
     register_console_commands(&mut console);
     console.set_error_is_done(true);
     console

@@ -205,7 +205,7 @@ pub fn parse(bytes: &[u8]) -> Result<Device, String> {
 }
 
 /// `bytes` past a leading `<?xml ...?>` declaration (and byte-order mark). The
-/// kuna XML reader takes `version` and `encoding` only, and the vendors' SVD
+/// unlace XML reader takes `version` and `encoding` only, and the vendors' SVD
 /// files declare `standalone="no"` as well.
 fn without_declaration(bytes: &[u8]) -> &[u8] {
     let b = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);

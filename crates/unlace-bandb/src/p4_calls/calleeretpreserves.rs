@@ -1,4 +1,4 @@
-//! (kuna) `calleeretpreserves` — a decoded helper's own body also answers for
+//! (unlace) `calleeretpreserves` — a decoded helper's own body also answers for
 //! the call's RETURN register, so a value the caller placed there before the
 //! call is not replaced by an invented result.
 //!
@@ -130,8 +130,8 @@ use unlace_num::pcoderaw::VarnodeData;
 use crate::fspec::{Containment, FuncCallSpecs, effect_type};
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleeretpreserves>` (kuna 4000+ range; 4152 = the
-/// previous kuna element).
+/// Marshaling element `<calleeretpreserves>` (unlace 4000+ range; 4152 = the
+/// previous unlace element).
 pub const ELEM_CALLEERETPRESERVES: ElementId = ElementId::new("calleeretpreserves", 4153);
 
 /// Does the decoded body of `fc`'s callee prove it never writes the return
@@ -250,7 +250,7 @@ fn exact_cookie_evidence(data: &Funcdata, fc: &FuncCallSpecs, addr: &Address) ->
     if entry.is_invalid() {
         return false;
     }
-    data.kuna_callee_ret_writes(entry)
+    data.unlace_callee_ret_writes(entry)
         .map(|w| !writes_some_return_storage(data, fc, w))
         .unwrap_or(true)
 }
@@ -351,7 +351,7 @@ fn untouched_summary<'a>(
     if entry.is_invalid() || fc.plt_stub().is_some() {
         return None;
     }
-    let w = data.kuna_callee_ret_writes(entry)?;
+    let w = data.unlace_callee_ret_writes(entry)?;
     w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size)
         .then_some(w)
 }
@@ -485,7 +485,7 @@ fn body_is_a_body(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleeretpreserves_callee_preserved_output_within = Some(callee_preserved_output_within);
     hooks.calleeretpreserves_callee_preserves_return_storage =
         Some(callee_preserves_return_storage);

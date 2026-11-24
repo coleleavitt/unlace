@@ -1,4 +1,4 @@
-//! (kuna) Extend a PARTIALLY recovered argument list with callee-body or
+//! (unlace) Extend a PARTIALLY recovered argument list with callee-body or
 //! matching-format evidence.
 //!
 //! # The gap
@@ -49,7 +49,7 @@
 //!   argument registers its prototype names and no more.
 //!
 //! A stripped printf-like body is variadic and cannot pass that test. For that
-//! case [`kuna_formatwitness`](crate::formatwitness) accepts the
+//! case [`unlace_formatwitness`](crate::formatwitness) accepts the
 //! sibling only when both calls carry the same constant first argument, its
 //! bytes parse as a conservative printf format, and the sibling's final arity
 //! exactly matches the format.
@@ -84,7 +84,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::fspec::{FuncCallSpecs, ParamEntry};
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<calleearitylive>` (kuna 4000+ range; 4145 = arraycoverwidth).
+/// Marshaling element `<calleearitylive>` (unlace 4000+ range; 4145 = arraycoverwidth).
 pub const ELEM_CALLEEARITYLIVE: ElementId = ElementId::new("calleearitylive", 4146);
 
 /// A call site that finalized with a SHORT but non-empty argument list, held
@@ -257,7 +257,7 @@ fn callee_body_agrees(
     witness: &[(Address, int4)],
     tail: &[(Address, int4)],
 ) -> bool {
-    let Some(live) = data.kuna_callee_entry_dead(entry) else {
+    let Some(live) = data.unlace_callee_entry_dead(entry) else {
         return false;
     };
     if !live.is_complete() {

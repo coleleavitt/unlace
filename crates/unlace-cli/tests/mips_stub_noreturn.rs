@@ -42,7 +42,7 @@ fn lazy_stub_imports_keep_their_own_no_return() {
         let path = common::fixture(image);
         let mut args = vec!["decompile-all", path.as_str(), "--json"];
         args.extend_from_slice(extra);
-        let (out, err, rc) = common::run_kuna(&args);
+        let (out, err, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{image}: {err}");
         let doc: Value = serde_json::from_str(&out).unwrap();
         for (name, tail) in RETURNING {

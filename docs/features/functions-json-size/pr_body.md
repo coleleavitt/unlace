@@ -36,7 +36,7 @@ kuna had no function-extent value on *any* surface.
 
 kuna's model of a function is its **entry** — the Listing is keyed by entry VMA
 and nothing in it records a body. New module
-`decompiler/crates/kuna-console/src/funcextent.rs` reconstructs the extent as the
+`decompiler/crates/console/src/funcextent.rs` reconstructs the extent as the
 **address-contiguous clip** `[entry, min(next_entry, end_of_containing_CODE_section))`.
 
 That is not invented here: it is the same reconstruction kuna already applies

@@ -33,7 +33,7 @@ fn read_in(binary: &str, start: &str, bytes: &str, extra: &[&str]) -> (serde_jso
 fn read_path(path: &str, start: &str, bytes: &str, extra: &[&str]) -> (serde_json::Value, String) {
     let mut argv = vec!["read", &path, start, "--addr", "--bytes", bytes, "--json"];
     argv.extend_from_slice(extra);
-    let (stdout, stderr, rc) = common::run_kuna(&argv);
+    let (stdout, stderr, rc) = common::run_unlace(&argv);
     assert_eq!(rc, 0, "{stderr}\n{stdout}");
     let doc: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_tiles_and_matches_the_file(&doc, path);
@@ -454,7 +454,7 @@ fn a_fat_slices_offsets_count_from_the_start_of_the_file() {
     assert_eq!(arm["provenance"][0]["file_offset"], 0xc000);
 }
 
-/// A relocatable object's bytes are kuna's own layout of its sections, which
+/// A relocatable object's bytes are unlace's own layout of its sections, which
 /// no segment of the file describes: one `unknown` range, and no note.
 #[test]
 fn a_relocatable_objects_layout_is_unknown() {
@@ -473,7 +473,8 @@ fn a_relocatable_objects_layout_is_unknown() {
 #[test]
 fn the_text_view_keeps_its_rows_and_says_it_on_stderr() {
     let path = common::fixture("readprov_macho_arm64");
-    let (stdout, stderr, rc) = common::run_kuna(&["read", &path, "0x0", "--addr", "--bytes", "16"]);
+    let (stdout, stderr, rc) =
+        common::run_unlace(&["read", &path, "0x0", "--addr", "--bytes", "16"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(
         stdout.contains(
@@ -608,7 +609,7 @@ fn two_loads_of_one_address_list_the_one_not_read() {
         );
 
         let (stdout, _, rc) =
-            common::run_kuna(&["read", &path, "0x401000", "--addr", "--bytes", "16"]);
+            common::run_unlace(&["read", &path, "0x401000", "--addr", "--bytes", "16"]);
         assert_eq!(rc, 0);
         let spaced: Vec<String> = hex_bytes(hex).iter().map(|b| format!("{b:02x}")).collect();
         assert!(

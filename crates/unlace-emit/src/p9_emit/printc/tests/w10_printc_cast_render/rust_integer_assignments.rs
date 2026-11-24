@@ -21,7 +21,7 @@ fn copy_expression(source: Rc<Datatype>, target: Rc<Datatype>, nocasts: bool) ->
     fd.high_bank_mut()
         .get_mut(high)
         .unwrap()
-        .set_kuna_name("value");
+        .set_unlace_name("value");
     let mut printer = PrintC::new();
     printer.set_name("rust");
     printer.rt_ctx.lang = printer.out_lang;

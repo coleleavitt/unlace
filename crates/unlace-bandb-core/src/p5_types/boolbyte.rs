@@ -1,4 +1,4 @@
-//! A byte that is only ever a truth value is a `bool` (kuna `boolbyte`, P5).
+//! A byte that is only ever a truth value is a `bool` (unlace `boolbyte`, P5).
 //!
 //! `ActionInferTypes` seeds every live Varnode from local op semantics
 //! (`getLocalType`, `coreaction_infertypes.rs`) and `TYPE_BOOL` is only ever
@@ -92,7 +92,7 @@ pub fn truth_value_type(
 ) -> Option<Rc<Datatype>> {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::boolbyte::BoolByte>()
         .0
     {
@@ -111,7 +111,7 @@ pub fn truth_value_type(
         return None;
     }
     // Only a value that can carry a DECLARATION this function owns.  A temporary
-    // in the unique space is an expression kuna prints inline -- `x & 1` inside an
+    // in the unique space is an expression unlace prints inline -- `x & 1` inside an
     // `if` -- and typing it bool changes nothing a reader can see except the
     // `(bool)` cast `ActionSetCasts` then has to insert to reconcile the op's own
     // output type.  A persistent (global) Varnode has the same problem from the
@@ -127,7 +127,7 @@ pub fn truth_value_type(
     // is the common one -- is an input Varnode too, and the "this is what a
     // `_Bool` parameter looks like from the inside" argument this rule makes for
     // an input says nothing about it.  Ask the prototype model whether the
-    // storage could carry a parameter at all, as `kuna_ptrfromuse` does.
+    // storage could carry a parameter at all, as `unlace_ptrfromuse` does.
     if v.is_input()
         && !data
             .get_func_proto()
@@ -549,10 +549,10 @@ fn is_mask_proven(data: &Funcdata, vn: VarnodeId) -> bool {
         .unwrap_or(false)
 }
 
-crate::kuna_flag!(
-    /// (kuna `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
+crate::unlace_flag!(
+    /// (unlace `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
     /// whose every read is a truth test.  Implementation:
-    /// [`kuna_boolbyte`](crate::boolbyte).
+    /// [`unlace_boolbyte`](crate::boolbyte).
     BoolByte,
     "boolbyte",
     "truth-valued byte typing",

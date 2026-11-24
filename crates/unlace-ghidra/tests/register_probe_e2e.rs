@@ -177,7 +177,7 @@ fn arm32_asks_the_host_for_no_undefined_register() {
 /// `grep`'s `sub_17400` clears a `struct stat` with `rep stosq`, so if the
 /// direction-flag assertion stops landing the string-op stride survives as
 /// `&v7[(unsigned long)v9 * -2 + 1]` with `v9` a live `df` variable, instead of
-/// the `&v8[1]` kuna emits.  That assertion is the reason `probe_register_varnode`
+/// the `&v8[1]` unlace emits.  That assertion is the reason `probe_register_varnode`
 /// has to answer `DF` at all in ghidra mode.
 #[test]
 fn x86_64_folds_the_direction_flag_stride() {

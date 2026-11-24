@@ -1,4 +1,4 @@
-//! (kuna `dynrelocs`) The MIPS primary-GOT entries a linked image's dynamic
+//! (unlace `dynrelocs`) The MIPS primary-GOT entries a linked image's dynamic
 //! linker fills with an address the image itself defines, reported constant so
 //! a load from one folds: `lw $25,%call16(add64)($gp); jalr $25` becomes a call
 //! to `add64`, and `lw $2,%got(counter)($gp); lw $2,%lo(counter)($2)` a read of
@@ -12,7 +12,7 @@
 //! run time and stay variable. The global entries that follow map one-to-one
 //! onto `.dynsym` from `DT_MIPS_GOTSYM` to `DT_MIPS_SYMTABNO`; for a symbol the
 //! image defines, the loader stores the address its lookup binds the name to,
-//! which the linker wrote as the symbol's value. kuna maps the image at its
+//! which the linker wrote as the symbol's value. unlace maps the image at its
 //! link-time addresses, so each of these slots already holds its run-time
 //! value; none is written by program code.
 //!

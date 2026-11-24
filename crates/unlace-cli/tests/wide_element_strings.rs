@@ -31,7 +31,7 @@ fn character_code_arrays_round_trip_beside_one_character_literals() {
         .filter(|cc| process::optional_output(Command::new(cc).arg("--version")).is_some())
         .collect();
     for fixture in ["widecodes_gcc_O1_x86_64", "widecodes_clang_O2_x86_64"] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",
@@ -96,7 +96,7 @@ fn stripped_character_code_arrays_are_not_one_character_strings() {
         "widecodes_clang_O2_stripped_x86_64",
     ] {
         let (printed, stderr, code) =
-            common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
+            common::run_unlace(&["decompile-all", &common::fixture(fixture)]);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         assert!(
             !printed.contains("\"h\""),
@@ -134,7 +134,7 @@ fn literals_beside_a_lookup_table_or_an_int_table_keep_their_strings() {
             ["sink(\"A\")", "return t[a0];"],
         ),
     ] {
-        let (printed, stderr, code) = common::run_kuna(&[
+        let (printed, stderr, code) = common::run_unlace(&[
             "decompile-all",
             &common::fixture(fixture),
             "--functions",
@@ -166,7 +166,7 @@ fn ints_shaped_like_offsets_do_not_keep_a_wide_strings_first_character() {
         if let Some(funcs) = funcs {
             args.extend(["--functions", funcs]);
         }
-        let (printed, stderr, code) = common::run_kuna(&args);
+        let (printed, stderr, code) = common::run_unlace(&args);
         assert_eq!(code, 0, "{fixture}: {stderr}");
         for literal in ["(\"h\")", "(\"P\")", "(\"w\")"] {
             assert!(

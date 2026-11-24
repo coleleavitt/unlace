@@ -9,7 +9,7 @@ with the default on the same branch build.
 | | criterion | result |
 |---|---|---|
 | (a) | `make test` with the new default | 675/675 PARITY OK. No assertion moved; `docs/baseline.json` untouched. |
-| (b) | `make test-stages` | 1362/1362 PARITY OK. Against main's baseline the only new keys are the 9 `castsign #N` assertions of `kuna-castsign.xml`; `docs/baseline-stages.json` was re-recorded for them (1353 + 9), nothing else moved. |
+| (b) | `make test-stages` | 1362/1362 PARITY OK. Against main's baseline the only new keys are the 9 `castsign #N` assertions of `castsign.xml`; `docs/baseline-stages.json` was re-recorded for them (1353 + 9), nothing else moved. |
 | (c) | `make test-cli` | 237/237 with the new default; no probe moved. |
 | (d) | 444-slice typesweep (pinned metric, 8 projects x O0/O2/O2-noinline) | origin/main arm 1,615 perfect, mean .3697; branch 1,615, mean .3697. 0 moved on, 0 moved off, 0 improved, 0 worse; all 10,748 functions score identically. `typesweep-report.md`. |
 | (e) | speed, interleaved min-of-15, `decompile-all --json` | On the final build merged onto `52202840d`, loads 1 to 7: fmt -O2 -0.04% min / +2.32% median; ls -O2 +0.22% / +0.43%; sort -O2 +1.42% / +1.33%; bash -O2 +0.90% / +0.02%. Worst min +1.42% (within +5%). `speed-wideliteral.json`, `speed.py`. Earlier builds: `speed-final.json` (worst +0.35%), `speed-after-lock.json` (+1.68%), `speed.json` (+1.06%). |

@@ -33,9 +33,9 @@ fn surfaces(head: &[&str], directives: &[&str], extra: &[&str]) -> [(String, Str
         args.extend(["--assert", directive]);
     }
     args.extend_from_slice(extra);
-    let text = common::run_kuna(&args);
+    let text = common::run_unlace(&args);
     args.push("--json");
-    let (doc, _, code) = common::run_kuna(&args);
+    let (doc, _, code) = common::run_unlace(&args);
     let parsed: serde_json::Value = serde_json::from_str(&doc).expect("valid decompile JSON");
     let c = parsed
         .pointer("/functions/0/code")

@@ -1,4 +1,4 @@
-//! (kuna `dextrpc`) DriverKit IORPC dispatch types for a dext.
+//! (unlace `dextrpc`) DriverKit IORPC dispatch types for a dext.
 //!
 //! An iig-generated class `C` dispatches every remote call it implements
 //! through `static kern_return_t C::_Dispatch(C *self, const IORPC rpc)`: it
@@ -196,7 +196,7 @@ fn record(
     size: i32,
     align: i32,
 ) -> Option<Rc<Datatype>> {
-    let shell = t.kuna_declare_record(name, false).ok()?;
+    let shell = t.unlace_declare_record(name, false).ok()?;
     if shell.get_metatype() != type_metatype::TYPE_STRUCT {
         return None;
     }
@@ -210,7 +210,7 @@ fn record(
 /// A pointer to the struct `name` (declared without a body when new), or
 /// `void *` when the name belongs to something else.
 fn opaque_ptr(t: &dyn TypeFactory, name: &str, void_ptr: &Rc<Datatype>) -> Rc<Datatype> {
-    t.kuna_declare_record(name, false)
+    t.unlace_declare_record(name, false)
         .ok()
         .filter(|s| s.get_metatype() == type_metatype::TYPE_STRUCT)
         .and_then(|s| t.get_type_pointer(8, s, 1).ok())
@@ -341,7 +341,7 @@ impl<'a> Types<'a> {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         }
     }
 
@@ -356,7 +356,7 @@ impl<'a> Types<'a> {
             first_var_arg_slot: -1,
             output_storage: None,
             input_storage: Vec::new(),
-            kuna_library_names: None,
+            unlace_library_names: None,
         })
     }
 }

@@ -10,7 +10,7 @@
 //! including copies of the receiver. Delegation can select either operand as
 //! the receiver, so both arguments are mutable.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{Decoder, Encoder};
 use unlace_base::types::Wrap;
 
@@ -298,7 +298,7 @@ impl PatternBlock {
     pub fn is_instruction_match(
         &self,
         walker: &(impl PatternExpressionContext + ?Sized),
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if self.nonzerosize <= 0 {
             return Ok(self.nonzerosize == 0);
         }
@@ -317,7 +317,7 @@ impl PatternBlock {
     pub fn is_context_match(
         &self,
         walker: &(impl PatternExpressionContext + ?Sized),
-    ) -> KunaResult<bool> {
+    ) -> UnlaceResult<bool> {
         if self.nonzerosize <= 0 {
             return Ok(self.nonzerosize == 0);
         }
@@ -348,7 +348,7 @@ impl PatternBlock {
 
     /// C++ `PatternBlock::decode` (decode factory; the C++ default-construct
     /// + `decode()` protocol collapses into this).
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<PatternBlock> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<PatternBlock> {
         let el = decoder.open_element_id(&sla::ELEM_PAT_BLOCK)?;
         let offset = decoder.read_signed_integer_id(&sla::ATTRIB_OFF)? as i32; // C++ implicit intb -> int4
         let nonzerosize = decoder.read_signed_integer_id(&sla::ATTRIB_NONZERO)? as i32; // C++ implicit intb -> int4
@@ -416,7 +416,10 @@ impl InstructionPattern {
     }
 
     /// C++ `InstructionPattern::isMatch`.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         self.maskvalue.is_instruction_match(walker)
     }
 
@@ -443,7 +446,7 @@ impl InstructionPattern {
     }
 
     /// C++ `InstructionPattern::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<InstructionPattern> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<InstructionPattern> {
         let el = decoder.open_element_id(&sla::ELEM_INSTRUCT_PAT)?;
         let maskvalue = PatternBlock::decode(decoder)?;
         decoder.close_element(el)?;
@@ -479,7 +482,10 @@ impl ContextPattern {
     pub fn shift_instruction(&mut self, _sa: i32) {}
 
     /// C++ `ContextPattern::isMatch`.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         self.maskvalue.is_context_match(walker)
     }
 
@@ -506,7 +512,7 @@ impl ContextPattern {
     }
 
     /// C++ `ContextPattern::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<ContextPattern> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<ContextPattern> {
         let el = decoder.open_element_id(&sla::ELEM_CONTEXT_PAT)?;
         let maskvalue = PatternBlock::decode(decoder)?;
         decoder.close_element(el)?;
@@ -549,7 +555,10 @@ impl CombinePattern {
     }
 
     /// C++ `CombinePattern::isMatch`.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         if !self.instr.is_match(walker)? {
             return Ok(false);
         }
@@ -607,7 +616,7 @@ impl CombinePattern {
     }
 
     /// C++ `CombinePattern::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<CombinePattern> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<CombinePattern> {
         let el = decoder.open_element_id(&sla::ELEM_COMBINE_PAT)?;
         let context = ContextPattern::decode(decoder)?;
         let instr = InstructionPattern::decode(decoder)?;
@@ -742,7 +751,7 @@ impl DisjointPattern {
     /// C++ `DisjointPattern::decodeDisjoint`: DisjointPattern factory.
     /// Faithful to upstream, anything that is neither `instruct_pat` nor
     /// `context_pat` is decoded as a `combine_pat`.
-    pub fn decode_disjoint(decoder: &mut dyn Decoder) -> KunaResult<DisjointPattern> {
+    pub fn decode_disjoint(decoder: &mut dyn Decoder) -> UnlaceResult<DisjointPattern> {
         let el = decoder.peek_element()?;
         if el == sla::ELEM_INSTRUCT_PAT {
             Ok(DisjointPattern::Instruction(InstructionPattern::decode(
@@ -756,7 +765,10 @@ impl DisjointPattern {
     }
 
     /// C++ virtual `isMatch` dispatch.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         match self {
             DisjointPattern::Instruction(p) => p.is_match(walker),
             DisjointPattern::Context(p) => p.is_match(walker),
@@ -853,7 +865,10 @@ impl OrPattern {
     }
 
     /// C++ `OrPattern::isMatch`.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         for pat in &self.orlist {
             if pat.is_match(walker)? {
                 return Ok(true);
@@ -933,7 +948,7 @@ impl OrPattern {
     }
 
     /// C++ `OrPattern::decode`.
-    pub fn decode(decoder: &mut dyn Decoder) -> KunaResult<OrPattern> {
+    pub fn decode(decoder: &mut dyn Decoder) -> UnlaceResult<OrPattern> {
         let el = decoder.open_element_id(&sla::ELEM_OR_PAT)?;
         let mut orlist = Vec::new();
         while decoder.peek_element()? != 0 {
@@ -1367,7 +1382,10 @@ impl Pattern {
     }
 
     /// C++ virtual `isMatch`: does this pattern match context.
-    pub fn is_match(&self, walker: &(impl PatternExpressionContext + ?Sized)) -> KunaResult<bool> {
+    pub fn is_match(
+        &self,
+        walker: &(impl PatternExpressionContext + ?Sized),
+    ) -> UnlaceResult<bool> {
         match self {
             Pattern::Disjoint(d) => d.is_match(walker),
             Pattern::Or(o) => o.is_match(walker),
@@ -1427,7 +1445,7 @@ impl Pattern {
 mod tests {
     use std::rc::Rc;
     use unlace_base::address::Address;
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     use unlace_base::marshal::{Decoder, PackedDecode, PackedEncode};
     use unlace_base::space::{AddrSpaceManager, ConstantSpace};
 
@@ -1457,9 +1475,9 @@ mod tests {
     }
 
     impl PatternExpressionContext for ByteWalker {
-        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> KunaResult<u32> {
+        fn get_instruction_bytes(&self, byteoff: i32, numbytes: i32) -> UnlaceResult<u32> {
             if byteoff < 0 || (byteoff + numbytes) as usize > self.instr.len() {
-                return Err(KunaError::bad_data(
+                return Err(UnlaceError::bad_data(
                     "Instruction is using more than 16 bytes",
                 ));
             }
@@ -1471,7 +1489,7 @@ mod tests {
             Ok(res)
         }
 
-        fn get_context_bytes(&self, bytestart: i32, size: i32) -> KunaResult<u32> {
+        fn get_context_bytes(&self, bytestart: i32, size: i32) -> UnlaceResult<u32> {
             let intstart = (bytestart / 4) as usize;
             let mut res: u32 = *self.ctx.get(intstart).unwrap_or(&0);
             let byte_offset = bytestart % 4;
@@ -1496,11 +1514,11 @@ mod tests {
             unimplemented!("pattern tests never read addresses")
         }
 
-        fn get_n2addr(&self) -> KunaResult<Address> {
+        fn get_n2addr(&self) -> UnlaceResult<Address> {
             unimplemented!("pattern tests never read addresses")
         }
 
-        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> KunaResult<i64> {
+        fn operand_value(&self, _index: i32, _table_id: u32, _ct_id: u32) -> UnlaceResult<i64> {
             unimplemented!("pattern tests never evaluate operands")
         }
     }

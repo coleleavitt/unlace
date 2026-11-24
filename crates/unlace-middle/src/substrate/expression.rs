@@ -1031,7 +1031,7 @@ pub fn functional_equality_level(
     if obank.get(op2).expect("funcEqLevel").is_call() {
         return -1;
     }
-    // (kuna syscallregs) each system call's error flag is its own value, (kuna
+    // (unlace syscallregs) each system call's error flag is its own value, (unlace
     // swiftcall) as is each throwing call's error.
     if (crate::architecture::default_pass_hooks().syscallregs_is_error_flag_op)(obank, vbank, op1)
         || (crate::architecture::default_pass_hooks().swifterror_is_error_op)(obank, vbank, op1)

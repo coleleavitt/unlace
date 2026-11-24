@@ -4,7 +4,7 @@
 //! of one machine instruction, in emission order. An x86-64 `push %r8` is
 //! `RSP = RSP - 8` followed by `STORE(ram, RSP, R8)`; a `pop %rdx` is
 //! `RDX = LOAD(ram, RSP)` followed by `RSP = RSP + 8`. The end-to-end witness is
-//! `tests/stages/kuna-retpushedhalf.toml`.
+//! `tests/stages/unlace-retpushedhalf.toml`.
 
 use super::*;
 use crate::retpushedhalf::FuncdataRetpushedhalfExt;
@@ -129,7 +129,7 @@ fn pop(fd: &mut Funcdata, off: u64) {
 }
 
 fn is_push_only(fd: &Funcdata, off: u64) -> bool {
-    fd.kuna_pushed_registers().is_push_only(&reg(fd, off), 8)
+    fd.unlace_pushed_registers().is_push_only(&reg(fd, off), 8)
 }
 
 /// The defect's idiom: the pushed register is never written, the pop lands

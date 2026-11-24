@@ -43,7 +43,7 @@ fn function_on(lang: SourceLang, mode: Atomics, windows: bool) -> Funcdata {
         lock: Some((LOCK as u32, UNLOCK as u32)),
         ..AtomicUserops::default()
     };
-    arch.kuna_options.set(mode);
+    arch.unlace_options.set(mode);
     arch.windows_cspec = windows;
     let entry = Address::new(arch.manage().get_space(3).unwrap().clone(), 0x1000);
     Funcdata::new("probe", "probe", Rc::new(arch), entry, 0x1000_0000, 0x40).unwrap()

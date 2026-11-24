@@ -1,4 +1,4 @@
-//! (kuna `xnutables`) What a typed allocation returns, from its view.
+//! (unlace `xnutables`) What a typed allocation returns, from its view.
 //!
 //! XNU's typed allocators (`kalloc_type_impl`, `IOMallocTypeImpl`,
 //! `OSObject_typed_operator_new`, ...) take a `kalloc_type_view` whose
@@ -126,7 +126,7 @@ pub fn granule_fields(
 /// view the call passes allocates, when that view is known.
 pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
-    let kalloc = kalloc_types(&arch.kuna_states);
+    let kalloc = kalloc_types(&arch.unlace_states);
     if kalloc.is_empty() {
         return None;
     }
@@ -149,7 +149,7 @@ pub fn allocated_type(data: &Funcdata, op: OpId, fc: &FuncCallSpecs) -> Option<R
     types.get_type_pointer(ptr_size, target, word).ok()
 }
 
-crate::kuna_arch_state!(KallocTypes);
+crate::unlace_arch_state!(KallocTypes);
 
 /// The image's kalloc_type views, shared through the architecture's states; empty before the
 /// loader commits them.

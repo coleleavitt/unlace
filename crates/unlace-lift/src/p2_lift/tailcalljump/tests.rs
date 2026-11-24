@@ -1,4 +1,4 @@
-//! Logic-level tests for `kuna_is_tail_call_branch`, exercising the tail-call
+//! Logic-level tests for `unlace_is_tail_call_branch`, exercising the tail-call
 //! recognition decision on hand-built IR.
 
 use std::rc::Rc;
@@ -72,7 +72,7 @@ fn gate_off_returns_false() {
     let mut fd = build_fd();
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x18d0);
     // gate=false: default-pipeline byte-identical, never fires.
-    assert!(!kuna_is_tail_call_branch(&fd, op, false, true, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, false, true, false));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn direct_branch_to_known_function_fires() {
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x18d0);
     // The canonical `jmp setlocale@plt` tail-jump shape: a direct BRANCH whose
     // target is another known function's entry.
-    assert!(kuna_is_tail_call_branch(&fd, op, true, true, false));
+    assert!(unlace_is_tail_call_branch(&fd, op, true, true, false));
 }
 
 /// Without an applied `flow ... branch` override the selection order is
@@ -97,7 +97,7 @@ fn without_a_branch_override_tailcalljump_claims_first() {
         crate::flow::select_inferred_tail_call(
             false,
             false,
-            || kuna_is_tail_call_branch(&fd, op, true, true, false),
+            || unlace_is_tail_call_branch(&fd, op, true, true, false),
             || {
                 frame_consulted.set(true);
                 true
@@ -117,7 +117,7 @@ fn target_not_a_known_function_returns_false() {
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x1100);
     // An ordinary intraprocedural jump targets a mid-function address (no
     // function entry there) -> not a tail call.
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, false, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, false, false));
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn self_tail_recursion_excluded() {
     let mut fd = build_fd();
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x1000);
     // dest == the current function's own entry: left as an ordinary back-edge.
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, true, true));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, true, true));
 }
 
 #[test]
@@ -133,22 +133,22 @@ fn indirect_branch_returns_false() {
     let mut fd = build_fd();
     // A BRANCHIND (indirect jump) is not a direct tail-call jmp.
     let op = build_branch_op(&mut fd, OpCode::CPUI_BRANCHIND, 0x18d0);
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, true, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, true, false));
 }
 
 #[test]
 fn conditional_tail_requires_a_bound_and_another_known_entry() {
     let mut fd = build_fd();
     let op = build_branch_op(&mut fd, OpCode::CPUI_CBRANCH, 0x18d0);
-    assert!(kuna_is_tail_call_branch(&fd, op, true, true, false));
-    assert!(!kuna_is_tail_call_branch(&fd, op, false, true, false));
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, false, false));
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, true, true));
+    assert!(unlace_is_tail_call_branch(&fd, op, true, true, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, false, true, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, false, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, true, true));
     assert_eq!(
         crate::flow::select_inferred_tail_call(
             false,
             true,
-            || kuna_is_tail_call_branch(&fd, op, true, true, false),
+            || unlace_is_tail_call_branch(&fd, op, true, true, false),
             || panic!("an interior entry must never consult frame teardown"),
         ),
         None,
@@ -163,7 +163,9 @@ fn conditional_tail_requires_a_bound_and_another_known_entry() {
     )
     .unwrap();
     let op = build_branch_op(&mut unbounded, OpCode::CPUI_CBRANCH, 0x18d0);
-    assert!(!kuna_is_tail_call_branch(&unbounded, op, true, true, false));
+    assert!(!unlace_is_tail_call_branch(
+        &unbounded, op, true, true, false
+    ));
 }
 
 #[test]
@@ -187,36 +189,36 @@ fn indirect_branch_with_a_sole_foreign_destination_is_a_tail_call() {
     let yes = || true;
     let no = || false;
     assert!(
-        kuna_is_tail_call_table(&fd, op, true, true, false, false, yes),
+        unlace_is_tail_call_table(&fd, op, true, true, false, false, yes),
         "locked"
     );
     assert!(
-        kuna_is_tail_call_table(&fd, op, true, true, false, true, no),
+        unlace_is_tail_call_table(&fd, op, true, true, false, true, no),
         "out of extent"
     );
     assert!(
-        !kuna_is_tail_call_table(&fd, op, true, true, false, false, no),
+        !unlace_is_tail_call_table(&fd, op, true, true, false, false, no),
         "no prototype, inside the extent"
     );
     assert!(
-        !kuna_is_tail_call_table(&fd, op, false, true, false, true, yes),
+        !unlace_is_tail_call_table(&fd, op, false, true, false, true, yes),
         "gate off"
     );
     assert!(
-        !kuna_is_tail_call_table(&fd, op, true, false, false, true, yes),
+        !unlace_is_tail_call_table(&fd, op, true, false, false, true, yes),
         "not a function"
     );
     assert!(
-        !kuna_is_tail_call_table(&fd, op, true, true, true, true, yes),
+        !unlace_is_tail_call_table(&fd, op, true, true, true, true, yes),
         "its own entry"
     );
     let direct = build_branch_op(&mut fd, OpCode::CPUI_BRANCH, 0x18d0);
     assert!(
-        !kuna_is_tail_call_table(&fd, direct, true, true, false, true, yes),
+        !unlace_is_tail_call_table(&fd, direct, true, true, false, true, yes),
         "direct jump"
     );
     let asked = std::cell::Cell::new(false);
-    kuna_is_tail_call_table(&fd, op, false, true, false, false, || {
+    unlace_is_tail_call_table(&fd, op, false, true, false, false, || {
         asked.set(true);
         true
     });
@@ -331,15 +333,21 @@ fn tailcalljump_values_split_direct_from_computed_jumps() {
 fn a_table_has_a_sole_destination_only_when_every_entry_agrees() {
     let fd = build_fd();
     let at = |off| Address::new(proc_space(&fd), off);
-    assert_eq!(kuna_sole_destination(false, [at(0x18d0)]), Some(at(0x18d0)));
     assert_eq!(
-        kuna_sole_destination(false, [at(0x18d0), at(0x18d0)]),
+        unlace_sole_destination(false, [at(0x18d0)]),
         Some(at(0x18d0))
     );
-    assert_eq!(kuna_sole_destination(false, [at(0x18d0), at(0x18e0)]), None);
-    assert_eq!(kuna_sole_destination(false, []), None);
     assert_eq!(
-        kuna_sole_destination(true, [at(0x18d0)]),
+        unlace_sole_destination(false, [at(0x18d0), at(0x18d0)]),
+        Some(at(0x18d0))
+    );
+    assert_eq!(
+        unlace_sole_destination(false, [at(0x18d0), at(0x18e0)]),
+        None
+    );
+    assert_eq!(unlace_sole_destination(false, []), None);
+    assert_eq!(
+        unlace_sole_destination(true, [at(0x18d0)]),
         None,
         "an override stays a table"
     );
@@ -350,7 +358,7 @@ fn call_returns_false() {
     let mut fd = build_fd();
     // A real CALL is already a call, not a jump to recover.
     let op = build_branch_op(&mut fd, OpCode::CPUI_CALL, 0x18d0);
-    assert!(!kuna_is_tail_call_branch(&fd, op, true, true, false));
+    assert!(!unlace_is_tail_call_branch(&fd, op, true, true, false));
 }
 
 #[test]

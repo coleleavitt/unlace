@@ -29,7 +29,7 @@ pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -
 pub fn copy_moves_write(data: &Funcdata, global: HighVariableId, value: HighVariableId) -> bool {
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
@@ -207,7 +207,7 @@ fn observes(data: &Funcdata, op: OpId, global: &crate::varnode::Varnode) -> bool
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.globalorder_copy_moves_write = Some(copy_moves_write);
     hooks.globalorder_keeps_apart = Some(keeps_apart);
 }

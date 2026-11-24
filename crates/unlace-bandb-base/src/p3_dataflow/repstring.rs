@@ -1,4 +1,4 @@
-//! (kuna `repstring`) An x86 `rep movs`, `rep stos` or `repz cmpsb` becomes a
+//! (unlace `repstring`) An x86 `rep movs`, `rep stos` or `repz cmpsb` becomes a
 //! copy, fill or compare builtin.
 //!
 //! A compiler that inlines a copy, fill or compare (gcc and clang at `-Os`,
@@ -80,7 +80,7 @@
 //! count or pointers are read afterwards, or any other value, keeps its loop.
 
 use std::rc::Rc;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode::*;
@@ -97,7 +97,7 @@ use crate::userop::{
     BUILTIN_MEMSET64,
 };
 
-/// (kuna) `ActionRepString` — collapse an x86 `rep movs`/`rep stos`/`repz cmpsb`
+/// (unlace) `ActionRepString` — collapse an x86 `rep movs`/`rep stos`/`repz cmpsb`
 /// loop into a copy, fill or compare builtin (option `repstring`).
 pub struct ActionRepString {
     base: ActionBase,
@@ -128,7 +128,7 @@ impl Action for ActionRepString {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::repstring::RepString>()
             .0
         {
@@ -484,10 +484,10 @@ fn insert(
     inputs: &[VarnodeId],
     size: i32,
     before: OpId,
-) -> KunaResult<(OpId, Option<VarnodeId>)> {
+) -> UnlaceResult<(OpId, Option<VarnodeId>)> {
     let at = op(data, before)
         .map(|p| p.get_addr().clone())
-        .ok_or_else(|| KunaError::lowlevel("repstring: stale op"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("repstring: stale op"))?;
     let new = data.new_op(inputs.len() as i32, at);
     data.op_set_opcode_code(new, code);
     for (slot, &v) in inputs.iter().enumerate() {
@@ -509,7 +509,7 @@ fn redirect(
     from: VarnodeId,
     to: Option<VarnodeId>,
     inside: [BlockId; 2],
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let width = size(data, from).unwrap_or(8);
     let readers: Vec<OpId> = data
         .vbank()
@@ -535,10 +535,10 @@ fn redirect(
     Ok(())
 }
 
-fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
+fn rewrite(data: &mut Funcdata, rep: &Rep) -> UnlaceResult<()> {
     let tail = data
         .bb_op_tail(rep.head)
-        .ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("repstring: empty head"))?;
     let ptr_size = size(data, rep.dst_out).unwrap_or(8);
     let count_size = size(data, rep.count_in).unwrap_or(ptr_size);
     let bytes = if rep.width == 1 {
@@ -547,7 +547,7 @@ fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
         let w = data.new_constant(count_size, rep.width as uintb);
         insert(data, CPUI_INT_MULT, &[rep.count_in, w], count_size, tail)?
             .1
-            .ok_or_else(|| KunaError::lowlevel("repstring: no size"))?
+            .ok_or_else(|| UnlaceError::lowlevel("repstring: no size"))?
     };
     let (id, second, length, src) = match rep.element {
         Element::Copy { src_out, src_in } => (BUILTIN_MEMCPY, src_in, bytes, Some(src_out)),
@@ -586,7 +586,7 @@ fn rewrite(data: &mut Funcdata, rep: &Rep) -> KunaResult<()> {
         };
         let at = op(data, call)
             .map(|p| p.get_addr().clone())
-            .ok_or_else(|| KunaError::lowlevel("repstring: stale call"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("repstring: stale call"))?;
         let ind = data.new_op(2, at);
         data.op_set_opcode_code(ind, CPUI_INDIRECT);
         data.op_set_input(ind, location, 0)?;
@@ -943,10 +943,10 @@ fn match_compare(data: &Funcdata, head: BlockId) -> Option<Compare> {
     })
 }
 
-fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
+fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> UnlaceResult<()> {
     let tail = data
         .bb_op_tail(c.head)
-        .ok_or_else(|| KunaError::lowlevel("repstring: empty head"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("repstring: empty head"))?;
     let id = data.new_constant(4, BUILTIN_MEMCMP as uintb);
     let (_, result) = insert(
         data,
@@ -955,7 +955,7 @@ fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
         4,
         tail,
     )?;
-    let result = result.ok_or_else(|| KunaError::lowlevel("repstring: no result"))?;
+    let result = result.ok_or_else(|| UnlaceError::lowlevel("repstring: no result"))?;
     let int = data
         .get_arch()
         .types()
@@ -1007,7 +1007,7 @@ fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
             };
             data.op_set_input(
                 phi,
-                merged.ok_or_else(|| KunaError::lowlevel("repstring: no join"))?,
+                merged.ok_or_else(|| UnlaceError::lowlevel("repstring: no join"))?,
                 slot,
             )?;
         }
@@ -1022,7 +1022,7 @@ fn rewrite_compare(data: &mut Funcdata, c: &Compare) -> KunaResult<()> {
     let (_, same) = insert(data, code, &[result, zero], 1, tail)?;
     data.op_set_input(
         tail,
-        same.ok_or_else(|| KunaError::lowlevel("repstring: no test"))?,
+        same.ok_or_else(|| UnlaceError::lowlevel("repstring: no test"))?,
         1,
     )?;
     data.remove_branch(c.body, c.to_head)
@@ -1085,8 +1085,8 @@ pub fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> {
         .ok()
 }
 
-crate::kuna_flag!(
-    /// (kuna) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
+crate::unlace_flag!(
+    /// (unlace) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
     /// copy, fill or compare builtin (option `repstring`).  See
     /// [`crate::repstring`].
     RepString,

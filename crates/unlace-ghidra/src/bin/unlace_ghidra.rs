@@ -1,4 +1,4 @@
-//! The `unlace_ghidra` binary: kuna's ghidra-mode process (upstream's
+//! The `unlace_ghidra` binary: unlace's ghidra-mode process (upstream's
 //! `decompile` executable) — port of `main()` at
 //! `decompiler/cpp/ghidra_process.cc:518-537`.
 //!
@@ -10,7 +10,7 @@
 //! Departures from the C++ main, all deliberate:
 //! - `signal(SIGSEGV, segvHandler)` / `_Exit(1)` is not ported: safe Rust
 //!   has no expected SIGSEGV, and the OS default termination pops no
-//!   dialog on the platforms kuna targets.
+//!   dialog on the platforms unlace targets.
 //! - `_setmode(..., _O_BINARY)` (Windows) is unnecessary: Rust's std
 //!   performs no newline translation on any platform.
 //! - `AttributeId::initialize()` / `ElementId::initialize()` /

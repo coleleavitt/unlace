@@ -2,7 +2,7 @@
 //! as LLVM names them and lift to a compare-and-swap over the even/odd pair;
 //! before, both were bad instructions.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -27,7 +27,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile_raw(bin: &str, target: &str) -> String {
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &fixture(bin),
         "0x1000",
@@ -47,7 +47,7 @@ fn decompile_raw(bin: &str, target: &str) -> String {
 #[test]
 fn every_pair_form_decodes_as_llvm_names_it() {
     for (elf, width) in [("zacas32.elf", "d"), ("zacas64.elf", "q")] {
-        let (stdout, stderr, code) = run_kuna(&["disassemble", &fixture(elf), "probe"]);
+        let (stdout, stderr, code) = run_unlace(&["disassemble", &fixture(elf), "probe"]);
         assert_eq!(code, 0, "{elf}: {stderr}");
         let expected = [
             format!("amocas.{width} a0,a2,(a4)"),

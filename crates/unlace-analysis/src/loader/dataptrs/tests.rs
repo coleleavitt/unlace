@@ -253,7 +253,7 @@ fn relr_slots_are_data_pointers() {
     );
 }
 
-/// Metadata kuna does not read is `Unsupported`, never `None`: a MIPS image
+/// Metadata unlace does not read is `Unsupported`, never `None`: a MIPS image
 /// relocates its local GOT without relocations, and a relocatable object's
 /// relocations name sections.
 #[test]

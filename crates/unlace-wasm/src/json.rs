@@ -40,7 +40,7 @@ pub fn json_opt_num(v: Option<i64>) -> String {
     }
 }
 
-/// (kuna, issue #197) A JSON array of strings — the `aliases` field: every
+/// (unlace, issue #197) A JSON array of strings — the `aliases` field: every
 /// OTHER name the reported entry carries.  Always present (`[]` when the entry
 /// has exactly one name).
 pub fn json_str_array(items: &[String]) -> String {

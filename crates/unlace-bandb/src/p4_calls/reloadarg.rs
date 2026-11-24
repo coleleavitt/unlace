@@ -1,4 +1,4 @@
-//! (kuna) A register reloaded from the caller's frame is no argument when the
+//! (unlace) A register reloaded from the caller's frame is no argument when the
 //! slot only gave back a scratch register no prototype passes.
 //!
 //! clang -O2 keeps the stack aligned around a single call with `push %rax` and

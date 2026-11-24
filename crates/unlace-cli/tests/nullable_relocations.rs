@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::process::Command;
 
 fn decompile(root: &std::path::Path, file: &str, name: &str, prototype: &str) -> String {
-    let (code, error, rc) = common::run_kuna(&[
+    let (code, error, rc) = common::run_unlace(&[
         "decompile",
         root.join(file).to_str().unwrap(),
         name,
@@ -194,7 +194,7 @@ fn weak_imports_remain_nullable_across_non_pic_and_mixed_forms() {
 #[test]
 fn unmatched_weak_operands_report_the_missing_model() {
     let root = common::repo_root().join("tests/fixtures/nullable-relocations");
-    let (code, error, rc) = common::run_kuna(&[
+    let (code, error, rc) = common::run_unlace(&[
         "decompile",
         root.join("weak-x86-64-pic.elf").to_str().unwrap(),
         "guard",
@@ -204,7 +204,7 @@ fn unmatched_weak_operands_report_the_missing_model() {
         code.contains("Nullable weak relocation operand could not be modeled"),
         "{code}"
     );
-    let (json, error, rc) = common::run_kuna(&[
+    let (json, error, rc) = common::run_unlace(&[
         "decompile",
         root.join("weak-x86-64-pic.elf").to_str().unwrap(),
         "guard",
@@ -232,7 +232,7 @@ fn readonly_and_got_weak_references_share_identity() {
         let image = common::repo_root().join(format!(
             "tests/fixtures/mips-weak-imports/identity-{abi}-be-mixed.o"
         ));
-        let (code, error, rc) = common::run_kuna(&[
+        let (code, error, rc) = common::run_unlace(&[
             "decompile",
             image.to_str().unwrap(),
             "same",
@@ -297,7 +297,7 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
         let path = root.join(&file);
         let path = path.to_str().unwrap();
 
-        let (inventory, error, rc) = common::run_kuna(&["functions", path, "--json"]);
+        let (inventory, error, rc) = common::run_unlace(&["functions", path, "--json"]);
         assert_eq!(rc, 0, "{file}: {error}");
         let inventory: serde_json::Value = serde_json::from_str(&inventory).unwrap();
         let listed: Vec<_> = inventory
@@ -309,7 +309,8 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
             .collect();
         assert_eq!(listed.len(), 1, "{file}: {inventory}");
 
-        let (answer, error, rc) = common::run_kuna(&["xrefs", path, "--to", "optional", "--json"]);
+        let (answer, error, rc) =
+            common::run_unlace(&["xrefs", path, "--to", "optional", "--json"]);
         assert_eq!(rc, 0, "{file}: {error}");
         let answer: serde_json::Value = serde_json::from_str(&answer).unwrap();
         let entry = answer["target"]["address"].as_u64().unwrap();
@@ -330,7 +331,7 @@ fn weak_slots_leave_common_storage_and_direct_references_intact() {
         callers.sort();
         assert_eq!(callers, ["call_only", "guard"], "{file}: {answer}");
 
-        let (graph, error, rc) = common::run_kuna(&["decompile-graph", path]);
+        let (graph, error, rc) = common::run_unlace(&["decompile-graph", path]);
         assert_eq!(rc, 0, "{file}: {error}");
         let graph: serde_json::Value = serde_json::from_str(&graph).unwrap();
         let address = |name: &str| {

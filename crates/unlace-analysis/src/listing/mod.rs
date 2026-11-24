@@ -76,7 +76,7 @@ mod unmappedentry;
 pub mod walk;
 mod walkcontext;
 mod x86listingswitch;
-// (kuna) The read-only cross-reference query behind `unlace xrefs` -- a consumer of
+// (unlace) The read-only cross-reference query behind `unlace xrefs` -- a consumer of
 // the same decode this tier performs, not a pass; nothing commits its output.
 pub mod xrefs;
 
@@ -148,10 +148,10 @@ pub struct Listing {
     has_refs: bool,
     /// Bounded, deduplicated x86 `PUSH imm` candidates collected for fast discovery.
     stack_callback_refs: Vec<(u64, u64)>,
-    /// The `(start, end, mode)` ARM decode-mode runs [`kuna_flowmode`] proved
+    /// The `(start, end, mode)` ARM decode-mode runs [`unlace_flowmode`] proved
     /// and the context database disagrees with; empty when it has none.
     mode_runs: Vec<(u64, u64, u32)>,
-    /// (kuna `armfuncmode`) The extents painted A32 from function-symbol
+    /// (unlace `armfuncmode`) The extents painted A32 from function-symbol
     /// evidence (see [`crate::loader::armfuncmode`]); empty otherwise.
     a32_extents: Vec<(u64, u64)>,
     /// A resume must rebuild ordinary coverage after optional i386 expansion.
@@ -308,7 +308,7 @@ impl Listing {
     /// [`Listing::build_with_meta`] with the walk's thread plan.
     ///
     /// `plan` decides whether the recursive descent runs on one thread or on N
-    /// decode lanes (`kuna --jobs N`, see [`kuna_pdecode`]); the lanes produce
+    /// decode lanes (`unlace --jobs N`, see [`unlace_pdecode`]); the lanes produce
     /// the same Listing, so every caller that has no opinion keeps the serial
     /// signature above.
     #[allow(clippy::too_many_arguments)]
@@ -405,7 +405,7 @@ impl Listing {
         )
     }
 
-    /// (kuna `addrtakenentry`) Continue this Listing's walk with `seeds`, the old
+    /// (unlace `addrtakenentry`) Continue this Listing's walk with `seeds`, the old
     /// ones included. The instructions, functions and references already found
     /// are kept and moved, not copied, so the walk decodes only what the new
     /// seeds reach; the result is the Listing a fresh build from `seeds` makes,
@@ -426,7 +426,7 @@ impl Listing {
     ) -> Listing {
         if self.x86_switch_rebuild
             || (arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::X86listingswitch>()
                 .0
                 && file.architecture() == object::Architecture::I386
@@ -568,11 +568,11 @@ impl Listing {
         // The PPC64 ELFv2 local-entry fold (`ppclocalentry`): an intra-module `bl`
         // targets `st_value + <localentry>`, which is a point inside the callee,
         // not a function of its own. Empty on every other architecture (see
-        // `kuna_ppclocalentry`).
+        // `unlace_ppclocalentry`).
         let local_entries = ppclocalentry::fold_map(file, seeds);
         let tail_transfers: BTreeMap<u64, u64> = mips_transfers.iter().copied().collect();
         let want_stack_callbacks = arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FastFuncdisc>()
             .0
             && matches!(
@@ -598,7 +598,7 @@ impl Listing {
             .as_ref()
             .map(|pool| a64switch::A64Tables::new(arch, pool, seeds));
         let x86_tables = arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::X86listingswitch>()
             .0
             .then(|| x86listingswitch::X86Tables::new(file, arch))
@@ -649,7 +649,7 @@ impl Listing {
         }
     }
 
-    /// (kuna `rawdiscover`) Build a Listing for a **headerless** image, from
+    /// (unlace `rawdiscover`) Build a Listing for a **headerless** image, from
     /// explicit executable ranges and seeds rather than from an `object::File`.
     ///
     /// The three inputs [`Listing::build_with_meta_planned`] reads off the object
@@ -898,7 +898,7 @@ impl Listing {
 
     /// The ARM `TMode` paints over proven code whose mode the context database
     /// disagrees with, for the analysis commit to apply after every other
-    /// decode-mode paint (see [`kuna_flowmode`]).
+    /// decode-mode paint (see [`unlace_flowmode`]).
     pub fn decode_mode_paints(&self) -> Vec<crate::pass::ContextPaint> {
         self.mode_runs
             .iter()
@@ -911,7 +911,7 @@ impl Listing {
             .collect()
     }
 
-    /// (kuna `armfuncmode`) Whether `vma` lies in an extent the pass painted A32
+    /// (unlace `armfuncmode`) Whether `vma` lies in an extent the pass painted A32
     /// from function-symbol evidence.
     pub fn in_a32_symbol_extent(&self, vma: u64) -> bool {
         let at = self.a32_extents.partition_point(|&(start, _)| start <= vma);
@@ -1177,7 +1177,7 @@ mod tests {
                 ));
                 engine.set_loader(Box::new(loader));
                 let mut arch = Architecture::new("x86:LE:32:default:gcc", engine);
-                arch.kuna_options
+                arch.unlace_options
                     .set(unlace_decomp::analysisgates::X86listingswitch(true));
                 let mut seeds = vec![0x100000, 0x1004f0];
                 let expanded = Listing::build_with_meta_without_image(
@@ -1192,7 +1192,7 @@ mod tests {
                 assert!(expanded.is_instruction_start(0x100440));
                 assert!(expanded.function_at(0x100510).is_some());
                 if disable {
-                    arch.kuna_options
+                    arch.unlace_options
                         .set(unlace_decomp::analysisgates::X86listingswitch(false));
                 } else {
                     seeds.push(0x10040d);

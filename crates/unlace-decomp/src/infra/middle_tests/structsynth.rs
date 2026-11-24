@@ -1,4 +1,4 @@
-//! Tests moved out of `kuna_structsynth` because they read higher-band modules. They live in the
+//! Tests moved out of `unlace_structsynth` because they read higher-band modules. They live in the
 //! driver so the middle band can become its own crate (unlace-middle).
 
 #![allow(unused_imports, dead_code)]
@@ -18,8 +18,8 @@ use crate::funcdata::Funcdata;
 use crate::structsynth::*;
 use std::collections::BTreeMap;
 use std::rc::Rc;
-use unlace_base::error::KunaError;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceError;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_base::types::intb;
@@ -66,11 +66,11 @@ fn the_plateau_latches_when_the_first_pass_changes_nothing() {
     let mut fd = Funcdata::new("settled", "settled", glb, entry, 0x1000_0000, 0x40).unwrap();
     fd.set_type_recovery(true);
     assert!(fd.start_type_recovery());
-    assert!(!fd.kuna_infertypes_settled());
+    assert!(!fd.unlace_infertypes_settled());
 
     // A function with nothing to propagate: the first pass changes nothing.
     let mut infer = ActionInferTypes::boxed("typerecovery");
     let mut ctx = ActionContext::new();
     infer.apply(&mut fd, &mut ctx);
-    assert!(fd.kuna_infertypes_settled());
+    assert!(fd.unlace_infertypes_settled());
 }

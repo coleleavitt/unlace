@@ -1,4 +1,4 @@
-// Tests for `kuna_gowritebarrier` (included into `mod tests` in
+// Tests for `unlace_gowritebarrier` (included into `mod tests` in
 // gowritebarrier.rs).
 //
 // Covered:
@@ -9,7 +9,7 @@
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `ActionGoWriteBarrier::apply` and `match_guarded_cold_call` are inert on
 //     a function with no calls (the end-to-end fold is pinned by
-//     `tests/stages/kuna-gowritebarrier.toml` and the unlace-console
+//     `tests/stages/unlace-gowritebarrier.toml` and the unlace-console
 //     `verify_go_writebarrier` gate over a real Go build).
 
 use super::*;
@@ -43,7 +43,7 @@ fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     )))
     .unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = lang;
     let glb = Rc::new(ctx);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());

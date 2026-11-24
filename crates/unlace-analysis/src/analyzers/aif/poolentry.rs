@@ -1,4 +1,4 @@
-//! (kuna) `poolentry` — reference-driven ARM literal-pool inference, and the two
+//! (unlace) `poolentry` — reference-driven ARM literal-pool inference, and the two
 //! entry facts it supports (P1 code/data partition, ARM discovery).
 //!
 //! # The defect
@@ -16,7 +16,7 @@
 //!
 //! Upstream Ghidra does not have this: its reference analyzer defines pc-relative
 //! literal targets as DATA before AIF runs, so those bytes are not an undefined gap
-//! at all. kuna's Listing has no literal-pool data-definition step; the module LOSS
+//! at all. unlace's Listing has no literal-pool data-definition step; the module LOSS
 //! note in `mod.rs` ("context-mode ARM gap probing is NOT handled") is the same gap
 //! seen from the other side.
 //!

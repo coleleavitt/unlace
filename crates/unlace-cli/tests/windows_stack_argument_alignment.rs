@@ -27,7 +27,7 @@ fn wide_arguments_follow_an_integer_or_hidden_return_pointer_without_padding() {
     let specs = common::repo_root().join("specs");
     let mut code = String::from("typedef struct { double real,imag; } wide;\n");
     for name in ["copy_wide", "after_integer", "pair_after_integer"] {
-        let (json, err, status) = common::run_kuna(&[
+        let (json, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             name,

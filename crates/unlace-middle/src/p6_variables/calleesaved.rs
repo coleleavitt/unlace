@@ -56,7 +56,7 @@ pub fn joins(a: &Option<(Address, int4)>, b: &Option<(Address, int4)>) -> bool {
     !(a.is_some() && a == b)
 }
 
-/// (kuna) Parse `option calleesaved on|off`.
+/// (unlace) Parse `option calleesaved on|off`.
 pub struct OptionCalleeSaved;
 
 impl OptionCalleeSaved {
@@ -64,7 +64,7 @@ impl OptionCalleeSaved {
     pub const NAME: &'static str = "calleesaved";
 
     /// Parse and validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> unlace_base::error::UnlaceResult<(bool, String)> {
         let on = crate::options::on_or_off(p1)?;
         let state = if on { "on" } else { "off" };
         Ok((
@@ -74,14 +74,14 @@ impl OptionCalleeSaved {
     }
 }
 
-/// (kuna) Keep same-register variables live across different calls apart in
+/// (unlace) Keep same-register variables live across different calls apart in
 /// `ActionMergeType` (option `calleesaved`, default off).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CalleeSavedSplit(pub bool);
 
-impl crate::optionset::KunaOption for CalleeSavedSplit {
+impl crate::optionset::UnlaceOption for CalleeSavedSplit {
     const NAME: &'static str = "calleesaved";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CalleeSavedSplit(false)
@@ -91,7 +91,7 @@ impl crate::optionset::KunaOption for CalleeSavedSplit {
         CalleeSavedSplit(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, msg) = OptionCalleeSaved.apply(value)?;
         Ok((CalleeSavedSplit(on), msg))
     }
@@ -100,7 +100,7 @@ impl crate::optionset::KunaOption for CalleeSavedSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optionset::KunaOption;
+    use crate::optionset::UnlaceOption;
 
     #[test]
     fn option_parses_and_ships_off() {

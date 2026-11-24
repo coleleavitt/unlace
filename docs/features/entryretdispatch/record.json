@@ -36,7 +36,7 @@
     "make test-cli": "147/147 passed",
     "focused recognizer": "7/7 passed",
     "architecture-generic provenance units": "2/2 passed: cross-space mismatch and CALLOTHER barrier",
-    "kuna-console package": "all unit, integration and doc tests green after the final provenance hardening",
+    "console package": "all unit, integration and doc tests green after the final provenance hardening",
     "focused CLI": "6/6 passed",
     "make check-spec": "OK in lenient and strict modes",
     "kuna catalog --check": "catalog OK",

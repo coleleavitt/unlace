@@ -32,7 +32,7 @@
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-analysis/tests/fixtures/gscookie_x86_64",
-    "tests/stages/kuna-cookiescramble.xml",
+    "tests/stages/cookiescramble.xml",
     "tests/cli/variadic-prototype-still-drops.json",
     "docs/spec/06-variables-and-merge.md",
     "docs/history.md",

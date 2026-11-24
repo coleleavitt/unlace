@@ -1,5 +1,5 @@
 //! Regression gate for the `ParserContext::expandState` walker-cursor rebase
-//! (kuna port bug in `sleigh.rs::allocate_operand`).
+//! (unlace port bug in `sleigh.rs::allocate_operand`).
 //!
 //! Decoding the ARM Thumb-2 instruction `vldmia r0, {d16-d31}`
 //! (bytes `d0 ec 20 0b`, little-endian) resolves an operand tree deep enough to
@@ -7,7 +7,7 @@
 //! `ParserContext::expandState`.  In upstream C++ (`context.cc`/`context.hh`)
 //! `expandState` front-inserts nodes (`state.insert(state.begin(), amount, ...)`)
 //! and the walker's `point` is a raw pointer, so the reshuffle never invalidates
-//! it.  kuna models `point` as a `Vec` index; the front-insertion shifts every
+//! it.  unlace models `point` as a `Vec` index; the front-insertion shifts every
 //! stored index by `amount`, and the *live* walker cursor must be rebased too.
 //! Before the fix the stale cursor corrupted the walk and drove `depth` to `-1`,
 //! panicking in `ParserWalker::getOperand` (`breadcrumb[depth as usize]`, index
@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -50,7 +50,7 @@ impl LoadImage for MemImg {
     fn get_file_name(&self) -> &str {
         "mem"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let start = addr.get_offset();
         for (i, b) in ptr.iter_mut().enumerate() {
             let a = start.wrapping_add(i as u64);
@@ -99,8 +99,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

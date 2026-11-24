@@ -1,4 +1,4 @@
-//! (kuna) ELF section-table tolerance: keep an image whose section headers are
+//! (unlace) ELF section-table tolerance: keep an image whose section headers are
 //! unreadable, because its program headers already describe the loadable image.
 //!
 //! An ELF's section table is link-time metadata. Everything the decompiler needs
@@ -6,7 +6,7 @@
 //! ELF header and the program headers, which is why `readelf -l` still prints a
 //! full segment map for an image whose `e_shoff` is garbage. `object`, though,
 //! validates the section table eagerly in `File::parse`, so a single corrupt
-//! half-word rejects the whole file and every kuna surface (`functions`,
+//! half-word rejects the whole file and every unlace surface (`functions`,
 //! `decompile-all`, `strings`, `disassemble`) exits with
 //! "not in recognized object file format: Invalid ELF section header
 //! offset/size/alignment".

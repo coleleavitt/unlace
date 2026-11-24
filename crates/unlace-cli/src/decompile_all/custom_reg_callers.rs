@@ -1,10 +1,10 @@
-//! (kuna `calleereginputs custom`) The whole-image caller side of the custom
+//! (unlace `calleereginputs custom`) The whole-image caller side of the custom
 //! register-argument rule, and the decision that joins it with the callee side.
 //!
 //! A callee-saved register (EBX, ESI, EDI) is a custom argument of a direct call
 //! only when BOTH halves hold: the callee's own body genuinely reads the
 //! register's entry value (the post-heritage entry reads, filed per function in
-//! the first callee-first pass as [`Architecture::kuna_custom_reg_reads`]), AND
+//! the first callee-first pass as [`Architecture::unlace_custom_reg_reads`]), AND
 //! every direct call site in the whole image sets the register in the call's own
 //! basic block before the call (so the write dominates the call and a value
 //! merely left in the register by an earlier call does not count).
@@ -20,7 +20,7 @@
 //! reads ECX or EDX, and decodes just those callees' callers to see whether
 //! every site sets every register the callee reads. [`Decision::install`] primes
 //! the per-callee models the engine applies
-//! ([`Architecture::kuna_custom_reg_callers`]).
+//! ([`Architecture::unlace_custom_reg_callers`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -94,7 +94,7 @@ impl Decision {
         for (&callee, &key) in self.keys.iter().filter(|(c, _)| kept.contains(c)) {
             if let std::collections::btree_map::Entry::Vacant(slot) = models.entry(key) {
                 let (regs, thisptr) = key_registers(key);
-                let Some(model) = prog.arch().kuna_build_reginput_model(
+                let Some(model) = prog.arch().unlace_build_reginput_model(
                     &format!("__kuna_reg_{key:x}"),
                     &regs,
                     thisptr,
@@ -105,8 +105,8 @@ impl Decision {
             }
             map.insert(callee, key);
         }
-        prog.arch_mut().kuna_custom_reg_callers = std::rc::Rc::new(map.into_iter().collect());
-        prog.arch_mut().kuna_custom_reg_models = std::rc::Rc::new(models.into_iter().collect());
+        prog.arch_mut().unlace_custom_reg_callers = std::rc::Rc::new(map.into_iter().collect());
+        prog.arch_mut().unlace_custom_reg_models = std::rc::Rc::new(models.into_iter().collect());
     }
 }
 
@@ -187,7 +187,7 @@ pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
     let regs = custom_regs(prog);
     let mut reads: Vec<(u64, u8)> = prog
         .arch()
-        .kuna_custom_reg_reads
+        .unlace_custom_reg_reads
         .iter()
         .filter(|(e, m)| *m & READS_ECX_EDX == 0 && plan.sites.contains_key(e))
         .map(|(&e, &m)| (e, m))
@@ -196,7 +196,7 @@ pub(crate) fn decide(prog: &ConsoleProgram, plan: &CustomRegPlan) -> Decision {
     let mut scanned: BTreeMap<u64, BTreeMap<u64, u8>> = BTreeMap::new();
     for (entry, callee_mask) in reads {
         let sites = &plan.sites[&entry];
-        let printed = prog.arch().kuna_custom_reg_calls.get(&entry);
+        let printed = prog.arch().unlace_custom_reg_calls.get(&entry);
         if printed.is_some_and(|calls| {
             calls
                 .iter()

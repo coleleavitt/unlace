@@ -1,0 +1,89 @@
+# The limits of `passthrough`'s forwarded-register chain rule
+# (passthrough-fwdchain.xml) on the commonest gcc ARM prologue,
+# `push {r3, lr}`, where r3 is pushed only to keep the stack 8-byte aligned:
+#
+#     t1:  push {r3, lr}; movs r0, #6; bl g; pop.w {r3, lr}; b.w h
+#     t2:  cmp r0, #5; ble 1f; mov.w r0, #0x1000; bx lr
+#      1:  push {r3, lr}; bl 0x20004; movs r2, #22; mov r3, r0
+#          mov.w r0, #-1; str r2, [r3]; pop {r3, pc}
+#
+# from `void t1(void) { g(6); h(); }` and `unsigned t2(int x) { if (x > 5)
+# return 0x1000; *errp() = 0x16; return 0xffffffff; }` (gcc 12 -O2 -mthumb
+# -march=armv7-m).  Counting every untouched argument register as a
+# forwarded argument, the rule printed `h((int4)v2,(int4)(v2 >> 0x20),v1,a3)`
+# and `sub_20004(a0,a1,a2,a3,a3)` and gave both functions four parameters:
+# at `h`, r2 is what `g` left and r3 the reloaded alignment push; at the
+# call in `t2`, the pushed r3 sits at [sp] and reads as an active fifth
+# argument.  An unreferenced slot counts as forwarded only at a call no other
+# call can precede, and forwarded registers still count in front of a stack
+# slot.  Over 15 decbench ARM firmware binaries and 2 router binaries the
+# unguarded rule changed 345 of 5,067 functions, most of them this way.
+#
+# Stage / sub-stage: P4 "active-input-trial-scoring", option `passthrough`
+# (kuna_passthrough.rs, neutral_in_chain / anchors_neutral_run).  `g` is
+# `bx lr` and `h` is `bx ip`, a tail jump the callee probe cannot see
+# through, so nothing about `h` says it takes no arguments; 0x20004 is
+# outside the image.  Both passes print the empty calls.
+
+[image]
+arch = 'ARM:LE:32:Cortex'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 't1' },
+    { space = 'ram', offset = '0x10010', name = 't2' },
+    { space = 'ram', offset = '0x20000', name = 'g' },
+    { space = 'ram', offset = '0x20002', name = 'h' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+hex = '''
+08b506200ff0fcffbde808400ff0f9bf052802dd4ff48050704708b50ff0f2ff
+162203464ff0ff301a6008bd
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x20000'
+hex = '70476047'
+
+[script]
+commands = [
+    'set context TMode 1 [ram,0x10000] [ram,0x1002b]',
+    'set context TMode 1 [ram,0x20000] [ram,0x20003]',
+    'option passthrough off',
+    'lo fu t1',
+    'decompile',
+    'print C',
+    'lo fu t2',
+    'decompile',
+    'print C',
+    'option passthrough on',
+    'lo fu t1',
+    'decompile',
+    'print C',
+    'lo fu t2',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'passthrough-fwdchain-arm #1: the tail call after another call takes no arguments in either pass'
+count = 2
+literal = 'h(); // tail-call'
+
+[[match]]
+name = 'passthrough-fwdchain-arm #2: the call behind the alignment push takes no arguments in either pass'
+count = 2
+literal = '*(unsigned int *)sub_20004() = 0x16;'
+
+[[match]]
+name = 'passthrough-fwdchain-arm #3: t1 gains no parameter'
+count = 2
+literal = 'void t1(void)'
+
+[[match]]
+name = 'passthrough-fwdchain-arm #4: t2 keeps its one parameter'
+count = 2
+literal = 'unsigned int t2(int4 a0)'

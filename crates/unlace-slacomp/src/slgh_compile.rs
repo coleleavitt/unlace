@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 
 use unlace_num::opcodes::OpCode;
@@ -302,7 +302,7 @@ pub struct SleighCompile {
     noplist: Vec<Vec<u8>>,
     /// Number of fatal errors (`errors`).
     errors: i32,
-    /// (kuna) Suppress warnings on stderr (the `.sla` cache compiles behind the engine's back).
+    /// (unlace) Suppress warnings on stderr (the `.sla` cache compiles behind the engine's back).
     quiet: bool,
     constant_space: Option<Rc<AddrSpace>>,
     unique_space: Option<Rc<AddrSpace>>,
@@ -322,7 +322,7 @@ impl SleighCompile {
 
     /// Compile `filein` (a `.slaspec`) to `fileout` (a `.sla`)
     /// (`run_compilation`, slgh_compile.cc:3774).  Returns 0 = success, 2 = error.
-    pub fn run_compilation(&mut self, filein: &str, fileout: &str) -> KunaResult<i32> {
+    pub fn run_compilation(&mut self, filein: &str, fileout: &str) -> UnlaceResult<i32> {
         self.parse_from_new_file(filein.as_bytes());
         let src = match std::fs::read(filein) {
             Ok(b) => b,
@@ -362,7 +362,7 @@ impl SleighCompile {
     }
 
     /// Post-parse pipeline (`process`, slgh_compile.cc:2479).
-    pub fn process(&mut self) -> KunaResult<()> {
+    pub fn process(&mut self) -> UnlaceResult<()> {
         self.check_nops();
         self.check_case_sensitivity();
         if self.base.default_code_space().is_none() {
@@ -463,7 +463,7 @@ impl SleighCompile {
         }
     }
 
-    /// (kuna) Suppress warnings on stderr; errors are still reported.
+    /// (unlace) Suppress warnings on stderr; errors are still reported.
     pub fn set_quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
     }
@@ -531,7 +531,7 @@ impl SleighCompile {
     // --- lexer-facing hooks (slgh_compile.cc:2515-2638) ---
 
     /// `predefinedSymbols` (slgh_compile.cc:1982).
-    fn predefined_symbols(&mut self) -> KunaResult<()> {
+    fn predefined_symbols(&mut self) -> UnlaceResult<()> {
         self.base.symtab_mut().add_scope(); // global scope
         let root = self.add_sleigh_symbol(SleighSymbol::new_subtable(b"instruction"));
         self.base.set_root(root);
@@ -944,7 +944,7 @@ impl SleighCompile {
         symlist: Vec<SymbolId>,
         table_len: usize,
         kind: &str,
-        build: impl Fn(&[u8], PatternValue) -> KunaResult<SleighSymbol>,
+        build: impl Fn(&[u8], PatternValue) -> UnlaceResult<SleighSymbol>,
     ) {
         for sym in symlist {
             if sym == NO_SYMBOL {
@@ -1371,7 +1371,7 @@ impl SleighCompile {
     }
 
     /// `buildPatterns` (slgh_compile.cc:2122).
-    fn build_patterns(&mut self) -> KunaResult<()> {
+    fn build_patterns(&mut self) -> UnlaceResult<()> {
         let root = match self.base.get_root() {
             Some(r) => r,
             None => {
@@ -1456,7 +1456,7 @@ impl SleighCompile {
     }
 
     /// `buildDecisionTrees` (slgh_compile.cc:2086).
-    fn build_decision_trees(&mut self) -> KunaResult<()> {
+    fn build_decision_trees(&mut self) -> UnlaceResult<()> {
         let root = self.base.get_root().expect("root set");
         let mut ident = Vec::new();
         let mut conflicts = Vec::new();

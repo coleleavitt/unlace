@@ -135,7 +135,7 @@ _not yet refuted_
   CI has no dataset, so vendor the binary into the repo first"*. The witness is an arm64 Mach-O
   (`_main`, `s_100003f1d`) with no in-repo twin, the same wall that stopped
   void-callee-spurious-arg's promotion in wave 32. The permanent CI pin is therefore
-  `tests/stages/kuna-rodatastring.toml`, which shipped inside #404 and is green in `make test-stages`
+  `tests/stages/rodatastring.toml`, which shipped inside #404 and is green in `make test-stages`
   at 615/615 (wave 55's battery); `make test-cli` stays at 27/27 by design.
 - round 2 wave 56 B_DONE (captain): `attempts` 0 -> 1. Wave 40 deliberately held it at 0 while the
   salvage branch was in flight, to mark the resume as the SAME attempt rather than a second one.

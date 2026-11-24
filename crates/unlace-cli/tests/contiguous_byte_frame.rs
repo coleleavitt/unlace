@@ -48,7 +48,7 @@ fn emitted_frame(mutable: bool, options: &[&str]) -> String {
         &directive,
     ];
     args.extend_from_slice(options);
-    let (stdout, stderr, status) = common::run_kuna(&args);
+    let (stdout, stderr, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{stderr}\n{stdout}");
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(result["functions"][0]["error"].is_null(), "{stdout}");

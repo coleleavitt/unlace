@@ -1,4 +1,4 @@
-//! (kuna `relocrebase`, GH-289) The load-time analysis facts of a relocatable
+//! (unlace `relocrebase`, GH-289) The load-time analysis facts of a relocatable
 //! object live in the loaded image's address space.
 //!
 //! ## The defect this pins

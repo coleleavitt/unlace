@@ -52,13 +52,13 @@ fn bootstrap_path(bin: &std::path::Path) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("funcstart_patterns", "on")
+        .set_unlace_option("funcstart_patterns", "on")
         .expect("funcstart_patterns flips on");
     prog.arch_mut()
-        .set_kuna_option("aif", "on")
+        .set_unlace_option("aif", "on")
         .expect("aif flips on");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

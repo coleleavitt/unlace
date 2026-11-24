@@ -1,4 +1,4 @@
-//! (kuna `valuewitness`) Name and type the outlined value-witness helpers.
+//! (unlace `valuewitness`) Name and type the outlined value-witness helpers.
 //!
 //! swiftc copies, moves and destroys a value whose layout it only learns at
 //! run time through small outlined helpers: fetch the type's metadata, load
@@ -414,7 +414,7 @@ fn prototype(
                 first_var_arg_slot: -1,
                 output_storage: None,
                 input_storage: Vec::new(),
-                kuna_library_names: None,
+                unlace_library_names: None,
             };
             let code = tf.get_type_code_proto(&proto).ok()?;
             Some((a, tf.get_type_pointer(ptr_size, code, 1).ok()?))
@@ -456,7 +456,7 @@ fn prototype(
         first_var_arg_slot: -1,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: None,
+        unlace_library_names: None,
     })
 }
 

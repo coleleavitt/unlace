@@ -142,7 +142,7 @@ fn the_console_command_overlays_and_says_so() {
 /// Drive `commands` through a console wired like the datatest runner, with the fixture
 /// installed as the current program.
 fn drive_console(commands: &[&str]) -> String {
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
     };
@@ -153,8 +153,8 @@ fn drive_console(commands: &[&str]) -> String {
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
-    // `override bytes` is a kuna command, not an upstream one.
-    register_kuna_commands(&mut status);
+    // `override bytes` is a unlace command, not an upstream one.
+    register_unlace_commands(&mut status);
     {
         let data = status
             .get_data_mut(DECOMPILE_MODULE)

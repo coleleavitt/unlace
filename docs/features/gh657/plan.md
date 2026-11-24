@@ -27,7 +27,7 @@ escape hatch for the whole pass.
 
 **Held back deliberately:** exempting the self-copy from the INDIRECT test as
 well. It is sound (the op is inert on both sides) and it would let
-`kuna-elfmain`'s `sub_1357(a1[1])` fold, but a fix for a wrong-output defect
+`elfmain`'s `sub_1357(a1[1])` fold, but a fix for a wrong-output defect
 should not add folds. It belongs in its own PR with its own sweep.
 
 **The trap this hit, twice:** sharing a helper between two options is not free.

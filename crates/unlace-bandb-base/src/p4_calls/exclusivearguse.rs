@@ -32,7 +32,7 @@
 //! `rdx` and `r8` reach the call unmodified, so the Varnodes scored there are the
 //! same ones the fast path dereferences. The walk finds the `STORE` and the `LOAD`
 //! and both trials go inactive: `append_slow(container, n, p)` renders
-//! `append_slow(container)`. kuna's own recovery of the callee disagrees with
+//! `append_slow(container)`. unlace's own recovery of the callee disagrees with
 //! itself here — decompiled on its own it comes out
 //! `char *append_slow(long long *,long long,char *)`, and its prologue reads both
 //! dropped registers.
@@ -181,7 +181,7 @@ pub fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.exclusivearguse_access_cannot_reach_call = Some(access_cannot_reach_call);
 }
 

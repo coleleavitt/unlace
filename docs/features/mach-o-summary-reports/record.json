@@ -10,7 +10,7 @@
   "decisions": [
     "The filed hypothesis (LC_MAIN.entryoff not translated to a VMA) is exactly right; the refuter's byte-patch controls already proved it and its fix site.",
     "The rebase is stated once, as kuna_analysis::analyzers::entry::image_entry_vma, rather than inlined at each consumer. It rebases ONLY LC_MAIN (via the existing macho_main_entry_vma, which answers for nothing else) and falls through to the raw field otherwise -- adding __TEXT.vmaddr unconditionally for Mach-O would double-count an LC_UNIXTHREAD entry, whose thread-state PC is already a VMA.",
-    "A THIRD consumer beyond the two the need names: kuna-console/src/project.rs printed file.entry() as the decompile-project README's `Entry point` row, with the identical defect. Fixed in the same change, same helper, one call site.",
+    "A THIRD consumer beyond the two the need names: console/src/project.rs printed file.entry() as the decompile-project README's `Entry point` row, with the identical defect. Fixed in the same change, same helper, one call site.",
     "A 0 entry stays None rather than 0x0: a relocatable declares no entry and 0 is a real address there. Verified on macho_min.o / macho_dwarf.o, which would break if the rebase were applied by format instead of by load command.",
     "No option row: a tooling-track change that cannot move emitted C. No phases.toml, options.rs, catalog counter or DIV row touched.",
     "The acceptance probe's dataset target is not vendorable, so the promoted tests/cli probe is re-pointed onto the in-repo macho_stripped_main fixture, which reproduces the identical defect (entryoff 0x5b0 vs VMA 0x1000005b0).",
@@ -20,7 +20,7 @@
     "decompiler/crates/kuna-analysis/src/analyzers/entry/mod.rs",
     "decompiler/crates/kuna-cli/src/decompile_all.rs",
     "decompiler/crates/kuna-cli/src/decompile_graph.rs",
-    "decompiler/crates/kuna-console/src/project.rs",
+    "decompiler/crates/console/src/project.rs",
     "decompiler/crates/kuna-cli/tests/triage_cli.rs",
     "decompiler/crates/kuna-cli/tests/decompile_graph_cli.rs",
     "decompiler/crates/kuna-cli/tests/decompile_project_cli.rs",

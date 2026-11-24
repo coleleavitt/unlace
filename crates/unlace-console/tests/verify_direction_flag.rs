@@ -20,7 +20,7 @@
 //! alone, so SSA construction plants `DF = INDIRECT(DF, <call>)` at every call
 //! site and the constant never reaches the stride. Both x86 ABIs require the
 //! direction flag to be clear at every function boundary, and the Microsoft
-//! prototype in the same spec already says so; kuna now states it where the spec
+//! prototype in the same spec already says so; unlace now states it where the spec
 //! is silent.
 
 use std::path::PathBuf;

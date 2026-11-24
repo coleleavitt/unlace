@@ -1,4 +1,4 @@
-//! (kuna `dwarfvariants`) The recovered-layout side table the DWARF
+//! (unlace `dwarfvariants`) The recovered-layout side table the DWARF
 //! **discriminated-union** import fills.
 //!
 //! `dwarfstructs` (DIV-86) reads a `DW_TAG_structure_type`'s `DW_AT_byte_size`
@@ -42,8 +42,8 @@
 //!
 //! The recovered geometry is recorded in [`VariantLayout`], keyed by the interned
 //! type name, on the `TypeFactory`
-//! ([`crate::dtype::TypeFactory::kuna_record_variant_layout`]). It is the
-//! `kuna_wire_symbols` arrangement: a table that **never enters the analysis
+//! ([`crate::dtype::TypeFactory::unlace_record_variant_layout`]). It is the
+//! `unlace_wire_symbols` arrangement: a table that **never enters the analysis
 //! scope** and is read by nothing in this change, so it cannot perturb emitted C.
 //! It exists so a later pass can render `match` / `if let` / `Ok(v)` from the
 //! compiler's own answer instead of re-deriving it.
@@ -86,7 +86,7 @@ pub struct VariantFacet {
 /// the change that introduced it (see the module header).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VariantLayout {
-    /// The interned kuna type name the layout describes (the key).
+    /// The interned unlace type name the layout describes (the key).
     pub type_name: String,
     /// `DW_AT_byte_size` of the enum.
     pub size: i32,

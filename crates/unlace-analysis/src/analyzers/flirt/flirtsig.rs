@@ -1,4 +1,4 @@
-//! (kuna `flirt make`) Write a FLIRT `.sig` file from patterns.
+//! (unlace `flirt make`) Write a FLIRT `.sig` file from patterns.
 //!
 //! The file is format version 10, uncompressed: a header, then a prefix tree
 //! over the leading [`PATTERN_LEN`] bytes of every function. A leaf lists its

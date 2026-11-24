@@ -26,7 +26,7 @@ fn program(binary: &Path, dwarf: bool) -> ConsoleProgram {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", if dwarf { "on" } else { "off" })
+        .set_unlace_option("godwarfsig", if dwarf { "on" } else { "off" })
         .unwrap();
     program
 }
@@ -58,7 +58,7 @@ fn bodies_with_inferred_return(
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()
@@ -189,7 +189,7 @@ fn pair_metadata_never_overwrites_an_existing_type_or_stale_facet() {
         }
         if collision != 0 {
             types
-                .kuna_register_lang_facet(
+                .unlace_register_lang_facet(
                     name,
                     LangFacet::GoPairResults {
                         signed: [true, true],

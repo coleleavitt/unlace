@@ -13,7 +13,7 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use unlace_base::address::{AddrSpacePtr, Address, SeqNum};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{ATTRIB_NAME, ATTRIB_SPACE, AttributeId, Decoder, ELEM_VOID, ElementId};
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::types::Wrap;
@@ -145,7 +145,7 @@ impl VarnodeData {
     /// Build this VarnodeData from an \<addr\>, \<register\>, or \<varnode\>
     /// element.
     /// \param decoder is the stream decoder
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element()?;
         self.decode_from_attributes(decoder)?;
         decoder.close_element(elem_id)
@@ -156,7 +156,7 @@ impl VarnodeData {
     /// Collect attributes for the VarnodeData possibly from amidst other
     /// attributes
     /// \param decoder is the stream decoder
-    pub fn decode_from_attributes(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode_from_attributes(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         self.space = None;
         self.size = 0;
         loop {
@@ -401,7 +401,7 @@ impl PcodeOpRaw {
         isize: i32,
         invar: &mut [VarnodeData],
         outvar: &mut Option<VarnodeData>,
-    ) -> KunaResult<OpCode> {
+    ) -> UnlaceResult<OpCode> {
         let opcode = decoder.read_opcode_id(&ATTRIB_CODE)?;
         let mut sub_id = decoder.peek_element()?;
         if sub_id == ELEM_VOID.get_id() {
@@ -443,7 +443,7 @@ impl PcodeOpRaw {
 mod tests {
     use super::*;
     use unlace_base::address::ELEM_ADDR;
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     use unlace_base::marshal::{Encoder, IdRegistry, PackedDecode, PackedEncode, XmlDecode};
     use unlace_base::space::{ConstantSpace, addrspace_flags, spacetype};
 
@@ -647,7 +647,7 @@ mod tests {
         let mut v = VarnodeData::default();
         assert!(matches!(
             v.decode(&mut dec),
-            Err(KunaError::Lowlevel { .. })
+            Err(UnlaceError::Lowlevel { .. })
         ));
 
         let mut dec = XmlDecode::new(&manager, &registry);
@@ -658,7 +658,7 @@ mod tests {
         let mut outvar = Some(VarnodeData::default());
         assert!(matches!(
             PcodeOpRaw::decode(&mut dec, 0, &mut invar, &mut outvar),
-            Err(KunaError::Decoder { .. })
+            Err(UnlaceError::Decoder { .. })
         ));
     }
 }

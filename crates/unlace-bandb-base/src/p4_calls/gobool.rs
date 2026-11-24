@@ -44,9 +44,9 @@ pub enum GoBoolMode {
     Always,
 }
 
-impl crate::optionset::KunaOption for GoBoolMode {
+impl crate::optionset::UnlaceOption for GoBoolMode {
     const NAME: &'static str = "gobool";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GoBoolMode::Auto
@@ -56,8 +56,8 @@ impl crate::optionset::KunaOption for GoBoolMode {
         GoBoolMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_gobool_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_gobool_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 
@@ -115,7 +115,7 @@ fn produces_boolean(code: OpCode) -> bool {
     )
 }
 
-/// (kuna) `RuleGoBoolReturn` — rewrite `RETURN(PIECE(stale7, bool1))` into
+/// (unlace) `RuleGoBoolReturn` — rewrite `RETURN(PIECE(stale7, bool1))` into
 /// `RETURN(ZEXT(bool1))` (option `gobool`, default auto).
 pub struct RuleGoBoolReturn {
     /// Unit-test OR-override of the mode gate (the scheduled instance
@@ -137,7 +137,7 @@ impl RuleGoBoolReturn {
 
 /// Is the narrowing live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<GoBoolMode>() {
+    match data.get_arch().unlace_options.get::<GoBoolMode>() {
         GoBoolMode::Off => false,
         GoBoolMode::Auto => data.get_arch().source_lang.is_go(),
         GoBoolMode::Always => true,

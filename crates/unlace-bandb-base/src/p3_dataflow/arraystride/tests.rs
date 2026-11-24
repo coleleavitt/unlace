@@ -1,4 +1,4 @@
-//! Tests for `RuleArrayStride` (kuna GH-8724): rewrite a stride accumulator phi
+//! Tests for `RuleArrayStride` (unlace GH-8724): rewrite a stride accumulator phi
 //! `MULTIEQUAL(#0, acc+STRIDE)` as `INT_MULT(cnt, STRIDE)` from its sibling
 //! unit-step counter phi, plus the gate-off / decline paths.
 
@@ -54,7 +54,7 @@ fn no_replace() -> impl FnMut(
     &mut crate::varnode::VarnodeBank,
     VarnodeId,
     VarnodeId,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     |_, _, _| Ok(())
 }
 

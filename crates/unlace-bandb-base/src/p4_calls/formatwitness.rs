@@ -1,6 +1,6 @@
 //! P4 matching-format evidence for partial call argument recovery.
 //!
-//! [`kuna_calleearitylive`](crate::calleearitylive) normally
+//! [`unlace_calleearitylive`](crate::calleearitylive) normally
 //! requires the callee body to prove a sibling's longer argument list.  That
 //! proof deliberately declines variadic callees, whose register-save prologue
 //! reads every argument register.  A stripped `printf` therefore leaves this

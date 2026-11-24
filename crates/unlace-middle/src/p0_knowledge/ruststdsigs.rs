@@ -1,4 +1,4 @@
-//! (kuna `ruststdsigs`) The option gate for Rust standard-library signatures
+//! (unlace `ruststdsigs`) The option gate for Rust standard-library signatures
 //! built from an installed rustup toolchain.
 //!
 //! The FLIRT pass reads its signature files while the image loads, so the
@@ -51,15 +51,15 @@ pub fn ruststdsigs() -> RustStdSigs {
         .unwrap_or_default()
 }
 
-/// Bridge a `set_kuna_option("ruststdsigs", val)` choice to [`RUSTSTDSIGS_ENV`].
+/// Bridge a `set_unlace_option("ruststdsigs", val)` choice to [`RUSTSTDSIGS_ENV`].
 pub fn set_ruststdsigs_env(value: RustStdSigs) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(RUSTSTDSIGS_ENV, value.as_str()) };
 }
 
-impl crate::optionset::KunaOption for RustStdSigs {
+impl crate::optionset::UnlaceOption for RustStdSigs {
     const NAME: &'static str = "ruststdsigs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RustStdSigs::Off
@@ -69,9 +69,9 @@ impl crate::optionset::KunaOption for RustStdSigs {
         RustStdSigs::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let mode = RustStdSigs::parse(value).ok_or_else(|| {
-            unlace_base::error::KunaError::lowlevel(format!(
+            unlace_base::error::UnlaceError::lowlevel(format!(
                 "ruststdsigs must be off|exact|nearest, got `{value}`"
             ))
         })?;

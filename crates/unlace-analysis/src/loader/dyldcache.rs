@@ -1,4 +1,4 @@
-//! (kuna) The dyld shared cache: open a cache and its sub-caches, list its images,
+//! (unlace) The dyld shared cache: open a cache and its sub-caches, list its images,
 //! and rebuild one image, or several joined, as a standalone thin Mach-O at its
 //! cache addresses.
 //!

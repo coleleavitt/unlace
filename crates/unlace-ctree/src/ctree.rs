@@ -1,4 +1,4 @@
-//! (kuna `ctree`) The C syntax tree of one printed function (`docs/architecture/ctree.md`).
+//! (unlace `ctree`) The C syntax tree of one printed function (`docs/architecture/ctree.md`).
 //!
 //! Hex-Rays' ctree is the model: statements (`cinsn_t`) and expressions (`cexpr_t`) in one tree
 //! whose maturity (`ctree_maturity_t`) only rises. Here the nodes live in two arenas indexed by
@@ -15,8 +15,8 @@ use unlace_base::types::uint4;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 
-crate::kuna_flag!(
-    /// (kuna `boolreturn`) Print an `if` whose two arms only return `1` and `0` as
+crate::unlace_flag!(
+    /// (unlace `boolreturn`) Print an `if` whose two arms only return `1` and `0` as
     /// `return c;` (or `return !c;`), a rewrite of the C syntax tree.
     Boolreturn,
     "boolreturn",
@@ -27,8 +27,8 @@ crate::kuna_flag!(
 
 pub use crate::coreoptions::Noretfirst;
 
-crate::kuna_flag!(
-    /// (kuna `nestedand`) Print an `if` whose whole body is another `if` (neither with an
+crate::unlace_flag!(
+    /// (unlace `nestedand`) Print an `if` whose whole body is another `if` (neither with an
     /// else) as one `if` over `a && b`, a rewrite of the C syntax tree.
     Nestedand,
     "nestedand",
@@ -37,8 +37,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `retternary`) Print an `if` whose two arms only return a constant or a variable
+crate::unlace_flag!(
+    /// (unlace `retternary`) Print an `if` whose two arms only return a constant or a variable
     /// as one `return c ? A : B;` (or `c || x`-style for a `bool` variable against `0`/`1`),
     /// a rewrite of the C syntax tree.
     Retternary,
@@ -48,8 +48,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `orexit`) Fold adjacent `if`s without else that leave the same way into one
+crate::unlace_flag!(
+    /// (unlace `orexit`) Fold adjacent `if`s without else that leave the same way into one
     /// `if` over `a || b`, a rewrite of the C syntax tree.
     Orexit,
     "orexit",
@@ -58,8 +58,8 @@ crate::kuna_flag!(
     shipped: false
 );
 
-crate::kuna_flag!(
-    /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
+crate::unlace_flag!(
+    /// (unlace `ctree`) Print the function body through its C syntax tree. Off by default while
     /// the tree printer is proven to print exactly what the block printer prints.
     Ctree,
     "ctree",

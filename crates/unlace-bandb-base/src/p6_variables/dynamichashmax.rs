@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_dynamichashmax.{cc,hh}` — the dynamic-hash
-//! collision budget (kuna GH-8467, S6 alias-facets / dynamic-symbol
+//! collision budget (unlace GH-8467, S6 alias-facets / dynamic-symbol
 //! attachment).
 //!
 //! When a HighVariable needs a storage-independent identity (a \e dynamic
@@ -14,12 +14,12 @@
 //! `buildDynamicSymbol` then throws `RecovError("Unable to find unique hash for
 //! varnode")` and the function aborts (GH-8467).
 //!
-//! kuna's own analysis uses [`MAX_DUPLICATES`] (16) -- large enough to admit a
+//! unlace's own analysis uses [`MAX_DUPLICATES`] (16) -- large enough to admit a
 //! unique hash for these dense cases while still fitting the existing 3-bit
 //! total/position encoding (16 is the exact ceiling of that range).  The wire
 //! path (`funcdata_encode.rs`) keeps upstream's 8, because Java recomputes the
 //! same hash with that budget.
 
-/// (kuna GH-8467) The same-address collision budget `DynamicHash::unique_hash`
-/// is given for kuna's own analysis (upstream hard-codes 8).
+/// (unlace GH-8467) The same-address collision budget `DynamicHash::unique_hash`
+/// is given for unlace's own analysis (upstream hard-codes 8).
 pub const MAX_DUPLICATES: u32 = 16;

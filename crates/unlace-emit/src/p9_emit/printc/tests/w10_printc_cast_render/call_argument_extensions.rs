@@ -20,7 +20,7 @@ fn argument(
     fd.high_bank_mut()
         .get_mut(high)
         .unwrap()
-        .set_kuna_name("value");
+        .set_unlace_name("value");
     let storage = Address::new(ram(&fd), 0x400);
     let mut call = crate::fspec::FuncCallSpecs::new(operation, entry.clone());
     call.set_funcdata(entry.clone(), "consume").unwrap();
@@ -37,7 +37,7 @@ fn argument(
         passes: Vec::new(),
         callers_vote: false,
     };
-    fd.kuna_set_protoorder_types(&entry, Rc::new(recovered));
+    fd.unlace_set_protoorder_types(&entry, Rc::new(recovered));
     (fd, operation)
 }
 
@@ -290,8 +290,8 @@ fn indirect_and_recursive_calls_do_not_reuse_recovered_contracts() {
         } else {
             let entry = fd.get_address().clone();
             let previous = fd.get_call_specs(0).get_entry_address().clone();
-            let recovered = fd.kuna_protoorder_types(&previous).unwrap().clone();
-            fd.kuna_set_protoorder_types(&entry, Rc::new(recovered));
+            let recovered = fd.unlace_protoorder_types(&previous).unwrap().clone();
+            fd.unlace_set_protoorder_types(&entry, Rc::new(recovered));
             let storage = fd.get_call_specs(0).final_input_storage().to_vec();
             let mut call = crate::fspec::FuncCallSpecs::new(op, entry.clone());
             call.set_funcdata(entry, "consume").unwrap();
@@ -316,10 +316,10 @@ fn overflowing_recovered_storage_ranges_are_not_integer_contracts() {
         true,
     );
     let entry = fd.get_call_specs(0).get_entry_address().clone();
-    let mut recovered = fd.kuna_protoorder_types(&entry).unwrap().clone();
+    let mut recovered = fd.unlace_protoorder_types(&entry).unwrap().clone();
     let storage = Address::new(ram(&fd), u64::MAX - 3);
     recovered.inputs[0].0 = storage.clone();
-    fd.kuna_set_protoorder_types(&entry, Rc::new(recovered));
+    fd.unlace_set_protoorder_types(&entry, Rc::new(recovered));
     fd.get_call_specs_mut(0)
         .set_final_input_storage(vec![(storage, 8)]);
     for lang in ["go", "rust"] {

@@ -20,7 +20,7 @@ float numeric_component(uint64_t bits) { return (float)bits; }
 float loaded_pair(const unsigned char *buf) { uint64_t w; memcpy(&w,buf,8); float p[2]; memcpy(p,&w,8); return p[0] + p[1]; }
 "#).unwrap();
     // Pin the sample's codegen: a host gcc that vectorizes p[0]+p[1] (AVX shuffles)
-    // makes kuna emit vshufps_avx/SUB164 pseudo-ops, which cannot round-trip.
+    // makes unlace emit vshufps_avx/SUB164 pseudo-ops, which cannot round-trip.
     let output = Command::new("gcc")
         .args([
             "-O2",
@@ -49,9 +49,10 @@ float loaded_pair(const unsigned char *buf) { uint64_t w; memcpy(&w,buf,8); floa
         "numeric_component",
         "loaded_pair",
     ] {
-        let (body, err, status) = common::run_kuna(&["decompile", binary.to_str().unwrap(), name]);
+        let (body, err, status) =
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), name]);
         assert_eq!(status, 0, "{err}");
-        let (rust, err, status) = common::run_kuna(&[
+        let (rust, err, status) = common::run_unlace(&[
             "decompile",
             binary.to_str().unwrap(),
             name,

@@ -117,39 +117,41 @@ impl ArchOptionContext for RecordingContext {
     fn set_default_extra_pop(&mut self, expop: int4) {
         self.log.push(format!("default_extrapop={expop}"));
     }
-    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> KunaResult<()> {
+    fn set_function_extra_pop(&mut self, name: &str, expop: int4) -> UnlaceResult<()> {
         if self.unknown_function {
-            return Err(KunaError::recov(format!("Unknown function name: {name}")));
+            return Err(UnlaceError::recov(format!("Unknown function name: {name}")));
         }
         self.log.push(format!("fn_extrapop[{name}]={expop}"));
         Ok(())
     }
-    fn set_default_model(&mut self, name: &str) -> KunaResult<()> {
+    fn set_default_model(&mut self, name: &str) -> UnlaceResult<()> {
         if self.unknown_model {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "Unknown prototype model :{name}"
             )));
         }
         self.log.push(format!("default_model={name}"));
         Ok(())
     }
-    fn set_eval_current_model(&mut self, name: &str) -> KunaResult<()> {
+    fn set_eval_current_model(&mut self, name: &str) -> UnlaceResult<()> {
         if self.unknown_model {
-            return Err(KunaError::parse(format!("Unknown prototype model: {name}")));
+            return Err(UnlaceError::parse(format!(
+                "Unknown prototype model: {name}"
+            )));
         }
         self.log.push(format!("eval_model={name}"));
         Ok(())
     }
-    fn set_function_inline(&mut self, name: &str, val: bool) -> KunaResult<()> {
+    fn set_function_inline(&mut self, name: &str, val: bool) -> UnlaceResult<()> {
         if self.unknown_function {
-            return Err(KunaError::recov(format!("Unknown function name: {name}")));
+            return Err(UnlaceError::recov(format!("Unknown function name: {name}")));
         }
         self.log.push(format!("inline[{name}]={val}"));
         Ok(())
     }
-    fn set_function_no_return(&mut self, name: &str, val: bool) -> KunaResult<()> {
+    fn set_function_no_return(&mut self, name: &str, val: bool) -> UnlaceResult<()> {
         if self.unknown_function {
-            return Err(KunaError::recov(format!("Unknown function name: {name}")));
+            return Err(UnlaceError::recov(format!("Unknown function name: {name}")));
         }
         self.log.push(format!("noreturn[{name}]={val}"));
         Ok(())
@@ -172,14 +174,14 @@ impl ArchOptionContext for RecordingContext {
     fn set_hide_implied_exts(&mut self, val: bool) {
         self.log.push(format!("hide_exts={val}"));
     }
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()> {
         self.log.push(format!("max_line={val}"));
         Ok(())
     }
     fn set_indent_increment(&mut self, val: int4) {
         self.log.push(format!("indent={val}"));
     }
-    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()> {
+    fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()> {
         self.log.push(format!("comment_indent={val}"));
         Ok(())
     }
@@ -253,7 +255,7 @@ fn apply_named(
     p1: &str,
     p2: &str,
     p3: &str,
-) -> KunaResult<String> {
+) -> UnlaceResult<String> {
     // Build name->id from the upstream + framing elements, then dispatch.
     let id = lookup_upstream_id(name).unwrap_or_else(|| panic!("no element id for {name}"));
     let db = OptionDatabase::new();
@@ -284,7 +286,7 @@ fn test_on_or_off_matrix() {
     assert!(!on_or_off("off").unwrap());
     let e = on_or_off("yes").unwrap_err();
     assert_eq!(e.explain(), "Must specify toggle value, on/off");
-    assert!(matches!(e, KunaError::Parse { .. }));
+    assert!(matches!(e, UnlaceError::Parse { .. }));
     // case-sensitive: "On" is not "on".
     assert_eq!(
         on_or_off("On").unwrap_err().explain(),
@@ -382,7 +384,7 @@ fn test_extrapop() {
     };
     let e = apply_named(&mut g, "extrapop", "4", "missing", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown function name: missing");
-    assert!(matches!(e, KunaError::Recov { .. }));
+    assert!(matches!(e, UnlaceError::Recov { .. }));
 }
 
 // ---------------------------------------------------------------------------
@@ -696,7 +698,7 @@ fn test_commentheader_and_instruction() {
     // unknown comment type => LowlevelError.
     let e = apply_named(&mut g, "commentheader", "bogus", "on", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown comment type: bogus");
-    assert!(matches!(e, KunaError::Lowlevel { .. }));
+    assert!(matches!(e, UnlaceError::Lowlevel { .. }));
     // instruction variant.
     let mut g = RecordingContext::c_lang();
     assert_eq!(
@@ -1125,17 +1127,17 @@ fn test_set_unknown_option() {
     // an id never registered.
     let e = db.set(&mut g, 9_999_999, "", "", "").unwrap_err();
     assert_eq!(e.explain(), "Unknown option");
-    assert!(matches!(e, KunaError::Parse { .. }));
+    assert!(matches!(e, UnlaceError::Parse { .. }));
 }
 
 // ---------------------------------------------------------------------------
-// register_option (kuna-option plug-in door)
+// register_option (unlace-option plug-in door)
 // ---------------------------------------------------------------------------
 
-/// A stand-in kuna ArchOption to verify the registration door routes a custom
-/// element id to a custom apply().  (Mirrors how kuna_*.rs modules will plug in.)
-struct DummyKunaOption;
-impl ArchOption for DummyKunaOption {
+/// A stand-in unlace ArchOption to verify the registration door routes a custom
+/// element id to a custom apply().  (Mirrors how unlace_*.rs modules will plug in.)
+struct DummyUnlaceOption;
+impl ArchOption for DummyUnlaceOption {
     fn get_name(&self) -> &str {
         "dummykuna"
     }
@@ -1145,7 +1147,7 @@ impl ArchOption for DummyKunaOption {
         p1: &str,
         _p2: &str,
         _p3: &str,
-    ) -> KunaResult<String> {
+    ) -> UnlaceResult<String> {
         Ok(format!("dummy got {p1}"))
     }
 }
@@ -1154,7 +1156,7 @@ impl ArchOption for DummyKunaOption {
 fn test_register_custom_option() {
     let mut db = OptionDatabase::new();
     let elem = ElementId::new("dummykuna", 4099);
-    db.register_option(elem, Box::new(DummyKunaOption));
+    db.register_option(elem, Box::new(DummyUnlaceOption));
     let mut g = RecordingContext::default();
     assert_eq!(
         db.set(&mut g, elem.get_id(), "hello", "", "").unwrap(),
@@ -1215,7 +1217,7 @@ fn test_decode_unknown_option_in_list() {
 
 #[test]
 fn test_decode_lenient_skips_unknown_and_applies_known() {
-    // (kuna, ghidra-mode) The lenient <optionslist> decode: unknown elements are
+    // (unlace, ghidra-mode) The lenient <optionslist> decode: unknown elements are
     // skipped with a returned "Warning" line while every known option still
     // applies — the documented setOptions divergence (docs/ghidra-integration.md
     // paragraph 8; upstream fails the whole list and Java then fails the program

@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) Go interface method calls by name: the option, and the
+//! (unlace `goitabcalls`) Go interface method calls by name: the option, and the
 //! record vocabulary the `gotypes` harvest, the Go DWARF signatures and the
 //! printer share.
 //!
@@ -28,8 +28,8 @@ pub fn itab_record_name(interface: &str) -> String {
     format!("{ITAB_RECORD_PREFIX}{interface}")
 }
 
-crate::kuna_flag!(
-    /// (kuna) `option goitabcalls`: type a Go interface formal's table word by
+crate::unlace_flag!(
+    /// (unlace) `option goitabcalls`: type a Go interface formal's table word by
     /// its interface's itab record and print a call through one of its method
     /// slots as `Interface.Method(receiver, ...)`. Shipped on.
     GoItabCalls,
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn the_option_ships_on() {
-        use crate::optionset::KunaOption;
+        use crate::optionset::UnlaceOption;
         assert!(!GoItabCalls::unset().0);
         assert!(GoItabCalls::shipped().0);
         assert!(GoItabCalls::parse("on").unwrap().0.0);

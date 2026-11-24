@@ -34,7 +34,7 @@ pub(super) fn decompile_entries_callee_first(
     decompile_callee_first(prog, args, targets, explicit, base, &mut |_| {})
 }
 
-/// (kuna `protoorder`) [`decompile_entries_callee_first`] for a driver that
+/// (unlace `protoorder`) [`decompile_entries_callee_first`] for a driver that
 /// renders something other than `decompile-all`'s own payload: the order, the
 /// park and the convergence sweep are the same, only the per-function
 /// [`unlace_console::project::DecompileOptions`] differ.
@@ -56,7 +56,7 @@ pub(crate) fn decompile_callee_first(
     super::arm_fn_budgets(prog, args);
     let cycles = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::protoorder::ProtoOrderMode>()
         .states_in_cycles();
     let graph = CallGraph::build(prog, &args.binary, args.slice_pref());
@@ -72,17 +72,17 @@ pub(crate) fn decompile_callee_first(
             (0..targets.len()).map(|i| (i, false)).collect()
         }
     };
-    // (kuna `calleevote`, `callbacktype`) Both ask the image the same question
+    // (unlace `calleevote`, `callbacktype`) Both ask the image the same question
     // -- whose address does it put somewhere nobody can list? -- so the walk is
     // done once for whichever of them is on.
     let wants_open = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::calleevote::CalleeVoteMode>()
         .is_on()
         || prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .is_on();
     let open = match &graph {
@@ -93,7 +93,7 @@ pub(crate) fn decompile_callee_first(
         (Ok(graph), Some(open))
             if prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::calleevote::CalleeVoteMode>()
                 .is_on() =>
         {
@@ -103,21 +103,21 @@ pub(crate) fn decompile_callee_first(
     };
     if prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
         .is_on()
         && open.is_some()
     {
         let ledger = prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::callbacktype::Ledger>();
         *ledger = unlace_decomp::callbacktype::Ledger::default();
         ledger.recording = true;
     }
     *prog
         .arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::gottailcall::Ledger>() = unlace_decomp::gottailcall::Ledger {
         recording: true,
         planned: plan
@@ -130,7 +130,7 @@ pub(crate) fn decompile_callee_first(
         Ok(graph)
             if prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::narrowargs::NarrowArgs>()
                 .callers =>
         {
@@ -142,7 +142,7 @@ pub(crate) fn decompile_callee_first(
         (Ok(graph), Some(_))
             if prog
                 .arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
                 .is_on() =>
         {
@@ -150,7 +150,7 @@ pub(crate) fn decompile_callee_first(
         }
         _ => None,
     };
-    // (kuna `calleereginputs custom`) Each eligible callee's call sites, listed
+    // (unlace `calleereginputs custom`) Each eligible callee's call sites, listed
     // while the graph is alive; decided after the first pass.
     let custom_plan = match &graph {
         Ok(graph) => {
@@ -158,14 +158,16 @@ pub(crate) fn decompile_callee_first(
         }
         _ => super::custom_reg_callers::CustomRegPlan::empty(),
     };
-    let previous_settling =
-        std::mem::replace(&mut prog.arch_mut().kuna_settle_caller_reads, graph.is_ok());
+    let previous_settling = std::mem::replace(
+        &mut prog.arch_mut().unlace_settle_caller_reads,
+        graph.is_ok(),
+    );
     drop(graph);
     crate::allocrelease::after_analysis();
     {
         let ledger = prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::callerargs::Ledger>();
         *ledger = Default::default();
         if let Some(expected) = callers {
@@ -177,15 +179,15 @@ pub(crate) fn decompile_callee_first(
     unlace_decomp::elemptr::start(prog.arch_mut(), true);
     let storetype = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::storetype::StoreTypeMode>();
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::storetype::Ledger>()
         .start(storetype);
     *prog
         .arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::voidret::Ledger>() = Default::default();
     let mut reads = VoidReads::default();
     for &(index, park) in &plan {
@@ -195,7 +197,7 @@ pub(crate) fn decompile_callee_first(
         if let Some(k) = vote_key(&targets[index]) {
             reads.decompiled(k);
             prog.arch_mut()
-                .kuna_tables
+                .unlace_tables
                 .get_mut::<unlace_decomp::gottailcall::Ledger>()
                 .seen
                 .insert(k);
@@ -207,7 +209,7 @@ pub(crate) fn decompile_callee_first(
     }
     if prog
         .arch()
-        .kuna_tables
+        .unlace_tables
         .get::<unlace_decomp::callerargs::Ledger>()
         .recording
     {
@@ -218,13 +220,13 @@ pub(crate) fn decompile_callee_first(
     }
     converge_callee_first(prog, &targets, &plan, &base, &mut slots);
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::callbacktype::Ledger>()
         .recording = false;
     if let (Some(refs), Some(open)) = (&callback_refs, &open)
         && prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .is_on()
     {
@@ -232,14 +234,14 @@ pub(crate) fn decompile_callee_first(
     }
     converge_element_globals_callee_first(prog, &targets, &plan, &base, &mut slots);
     converge_store_types_callee_first(prog, &targets, &plan, &base, &mut slots);
-    prog.arch_mut().kuna_settle_caller_reads = previous_settling;
+    prog.arch_mut().unlace_settle_caller_reads = previous_settling;
     *prog
         .arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::gottailcall::Ledger>() = Default::default();
     unlace_decomp::elemptr::stop(prog.arch_mut());
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::storetype::Ledger>()
         .stop();
     let mut results: Vec<FuncResult> = slots.into_results();
@@ -249,13 +251,13 @@ pub(crate) fn decompile_callee_first(
     results
 }
 
-/// (kuna `voidret`) How many rounds of redos one settling takes at most. A
+/// (unlace `voidret`) How many rounds of redos one settling takes at most. A
 /// redone wrapper reads its own callee's result, so each round reaches one
 /// function further down a chain of wrappers, and one caller further up it
 /// once the wrapper returns.
 const VOID_READ_ROUNDS: usize = 10;
 
-/// (kuna `voidret`) When each function was last decompiled, and when a redo
+/// (unlace `voidret`) When each function was last decompiled, and when a redo
 /// last changed each function's recovered return, in decompiles counted from
 /// the start of the run.
 #[derive(Default)]
@@ -359,7 +361,7 @@ impl VoidReads {
     }
 }
 
-/// (kuna `storetype`) [`unlace_console::project::converge_store_types`] in plan
+/// (unlace `storetype`) [`unlace_console::project::converge_store_types`] in plan
 /// order, each target with its own park decision.
 fn converge_store_types_callee_first(
     prog: &mut ConsoleProgram,
@@ -370,12 +372,12 @@ fn converge_store_types_callee_first(
 ) {
     let mode = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::storetype::Ledger>()
             .decide(mode);
         let typed: Vec<u64> = decided
@@ -388,7 +390,7 @@ fn converge_store_types_callee_first(
         }
         let redo = prog
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::storetype::Ledger>()
             .readers(&typed);
         for &(index, park) in plan {
@@ -404,7 +406,7 @@ fn converge_store_types_callee_first(
     }
 }
 
-/// (kuna `elemptr`) [`unlace_console::project::converge_element_globals`] in plan
+/// (unlace `elemptr`) [`unlace_console::project::converge_element_globals`] in plan
 /// order, each target with its own park decision.
 fn converge_element_globals_callee_first(
     prog: &mut ConsoleProgram,
@@ -439,12 +441,12 @@ fn converge_element_globals_callee_first(
     }
 }
 
-/// (kuna `narrowargs callers`) What the redo of the functions whose callers
+/// (unlace `narrowargs callers`) What the redo of the functions whose callers
 /// narrow a parameter may reprint, as a share of what the first pass printed;
 /// a function of at most [`CALLEE_VOTE_MAX_LINES`] lines is always redone.
 const CALLER_ARGS_BUDGET_PCT: usize = 5;
 
-/// (kuna `narrowargs callers`) Decide which parameters every caller passes
+/// (unlace `narrowargs callers`) Decide which parameters every caller passes
 /// narrow and decompile those functions again, in plan order, within
 /// [`CALLER_ARGS_BUDGET_PCT`]. A function the budget cannot reach, or whose redo
 /// fails or moves its arity, keeps its first body and loses the statement.
@@ -476,7 +478,7 @@ fn caller_args_round(
     let (admitted, declined) = admit_within_budget(queue, &mut budget, &mut spent);
     for (_, key) in declined {
         prog.arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::callerargs::Ledger>()
             .stated
             .remove(&key.1);
@@ -493,7 +495,7 @@ fn caller_args_round(
                     || !unlace_console::project::redo_replaces(&first, &again) =>
             {
                 prog.arch_mut()
-                    .kuna_tables
+                    .unlace_tables
                     .get_mut::<unlace_decomp::callerargs::Ledger>()
                     .stated
                     .remove(&key.1);
@@ -503,12 +505,12 @@ fn caller_args_round(
         }
     }
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::callerargs::Ledger>()
         .recording = false;
 }
 
-/// (kuna `calleereginputs custom`) Join the caller side listed before the pass
+/// (unlace `calleereginputs custom`) Join the caller side listed before the pass
 /// with the callee reads the first pass recorded, and decompile again every
 /// function the decision changes: each decided callee (now a parameter) together
 /// with all its callers (now an argument). A callee is admitted with its whole
@@ -569,12 +571,12 @@ fn custom_reg_round(
     }
 }
 
-/// (kuna `calleevote`) How many times the callers' statements are decided and
+/// (unlace `calleevote`) How many times the callers' statements are decided and
 /// the functions they name decompiled again: a forwarding wrapper passes on the
 /// type its own callers gave it only once it has been decompiled with it.
 const CALLEE_VOTE_ROUNDS: usize = 3;
 
-/// (kuna `calleevote`) The longest first decompile that is always done again.
+/// (unlace `calleevote`) The longest first decompile that is always done again.
 /// A redo costs what the first decompile of that function cost (measured 1.01x
 /// over `kmod -O2-noinline`'s 55 redos), and the redo pass is the option's whole
 /// cost, so a function's printed length is what it charges. The shapes the vote
@@ -582,7 +584,7 @@ const CALLEE_VOTE_ROUNDS: usize = 3;
 /// those are redone on any binary.
 const CALLEE_VOTE_MAX_LINES: usize = 32;
 
-/// (kuna `calleevote`) What the redo pass may reprint, as a share of what the
+/// (unlace `calleevote`) What the redo pass may reprint, as a share of what the
 /// first pass printed.
 ///
 /// A flat refusal above [`CALLEE_VOTE_MAX_LINES`] costs the same nine perfect
@@ -594,7 +596,7 @@ const CALLEE_VOTE_MAX_LINES: usize = 32;
 /// vote redoes every candidate it has.
 const CALLEE_VOTE_BUDGET_PCT: usize = 5;
 
-/// (kuna `structsynth`) What the callee-first convergence sweep may reprint, as a
+/// (unlace `structsynth`) What the callee-first convergence sweep may reprint, as a
 /// share of what the first pass printed. A redo costs what the first decompile
 /// of that function cost, and a binary whose superseded structures reach its
 /// longest bodies would otherwise pay for them twice: an AutoIt-compiled 1.2 MB
@@ -604,23 +606,23 @@ const CALLEE_VOTE_BUDGET_PCT: usize = 5;
 /// [`STRUCT_SWEEP_MIN_LINES`], so the budget only reaches such outliers.
 const STRUCT_SWEEP_BUDGET_PCT: usize = 5;
 
-/// (kuna `structsynth`) The convergence sweep's budget on a binary whose
+/// (unlace `structsynth`) The convergence sweep's budget on a binary whose
 /// [`STRUCT_SWEEP_BUDGET_PCT`] is less: a small binary's sweep costs
 /// milliseconds, and cutting it would only leave a record with two names.
 const STRUCT_SWEEP_MIN_LINES: usize = 2_000;
 
-/// (kuna `callerptr`) The share of the first pass's printed lines a statement
+/// (unlace `callerptr`) The share of the first pass's printed lines a statement
 /// made of pointer-class votes alone may spend on redos, apart from
 /// [`CALLEE_VOTE_BUDGET_PCT`], so it never takes a redo from a committed type.
 const CALLER_PTR_BUDGET_PCT: usize = 2;
 
-/// (kuna `calleevote`) What redoing this function is charged: the lines its
+/// (unlace `calleevote`) What redoing this function is charged: the lines its
 /// first decompile printed.
 pub(super) fn redo_charge(code: Option<&str>) -> usize {
     code.map_or(0, |c| c.lines().count())
 }
 
-/// (kuna `calleevote`) The key the ledger files a function under.
+/// (unlace `calleevote`) The key the ledger files a function under.
 fn vote_key(t: &FunctionEntry) -> Option<(i32, u64)> {
     Some((t.addr.get_space()?.get_index(), t.addr.get_offset()))
 }
@@ -640,7 +642,7 @@ fn callback_park_round(
     let trace = cb::trace();
     let decided = prog
         .arch()
-        .kuna_tables
+        .unlace_tables
         .get::<unlace_decomp::callbacktype::Ledger>()
         .decided();
     if decided.is_empty() {
@@ -733,7 +735,7 @@ fn callback_park_round(
     }
 }
 
-/// (kuna `calleevote`) Start recording, mark the functions whose callers are all
+/// (unlace `calleevote`) Start recording, mark the functions whose callers are all
 /// known direct calls, and return every target's expected call sites. An image
 /// that cannot be read again leaves every function open.
 fn open_callee_votes(
@@ -760,7 +762,7 @@ fn open_callee_votes(
     }
     let ledger = prog
         .arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::calleevote::Ledger>();
     *ledger = unlace_decomp::calleevote::Ledger::default();
     ledger.closed = closed;
@@ -768,7 +770,7 @@ fn open_callee_votes(
     expected
 }
 
-/// (kuna `calleevote`) Decide what every function's callers state about it and
+/// (unlace `calleevote`) Decide what every function's callers state about it and
 /// decompile the functions whose statement is new, in plan order so a redone
 /// callee states its types again before its redone callers read them; then
 /// decide again over what the redone functions pass, up to
@@ -827,14 +829,14 @@ fn callee_vote_rounds(
             .collect();
         let caller_ptr = prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callerptr::CallerPtr>()
             .0;
         let (pointers_only, queue): (Vec<_>, Vec<_>) = queue.into_iter().partition(|(_, key)| {
             caller_ptr
                 && prog
                     .arch()
-                    .kuna_tables
+                    .unlace_tables
                     .get::<unlace_decomp::calleevote::Ledger>()
                     .pointers_only(*key)
         });
@@ -850,7 +852,7 @@ fn callee_vote_rounds(
                 );
             }
             prog.arch_mut()
-                .kuna_tables
+                .unlace_tables
                 .get_mut::<unlace_decomp::calleevote::Ledger>()
                 .decline(key);
         }
@@ -865,7 +867,7 @@ fn callee_vote_rounds(
             match slots.get(index) {
                 Some(first) if !same_arity(&first, &again) => {
                     prog.arch_mut()
-                        .kuna_tables
+                        .unlace_tables
                         .get_mut::<unlace_decomp::calleevote::Ledger>()
                         .forget(key);
                     unlace_decomp::callrettype::restore(prog.arch_mut(), key, stated);
@@ -880,7 +882,7 @@ fn callee_vote_rounds(
                 }
                 _ => {
                     prog.arch_mut()
-                        .kuna_tables
+                        .unlace_tables
                         .get_mut::<unlace_decomp::calleevote::Ledger>()
                         .keep(key);
                     slots.put(index, again);
@@ -894,7 +896,7 @@ fn callee_vote_rounds(
         );
     }
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::calleevote::Ledger>()
         .recording = false;
 }
@@ -905,7 +907,7 @@ fn callee_vote_rounds(
 )]
 type BudgetAdmission<K> = (std::collections::HashSet<K>, Vec<(usize, K)>);
 
-/// (kuna `calleevote`) Split this round's candidates -- one `(charge, key)` pair
+/// (unlace `calleevote`) Split this round's candidates -- one `(charge, key)` pair
 /// per function the decision changed, charged the lines its first decompile
 /// printed -- into the ones the pass decompiles again and the ones it declines.
 ///
@@ -941,7 +943,7 @@ fn admit_within_budget<K: Ord + std::hash::Hash>(
     (admitted, declined)
 }
 
-/// (kuna `calleevote`) Does a redo keep the first decompile's parameters and
+/// (unlace `calleevote`) Does a redo keep the first decompile's parameters and
 /// frame variables (`register` rows aside), by count? A caller's vote moves
 /// types only, so a redo that moves either is not the vote's doing: decompiling
 /// a function a second time in one session can recover a stack parameter the
@@ -978,7 +980,7 @@ fn same_arity(first: &FuncResult, again: &FuncResult) -> bool {
         && declared(first) == declared(again)
 }
 
-/// (kuna `protoorder` + `structsynth`) The batch's convergence sweep
+/// (unlace `protoorder` + `structsynth`) The batch's convergence sweep
 /// (`converge_synthesized_structs`) for the callee-first order: decompile once
 /// more, in plan order and with each target's own park decision, exactly the
 /// results that name a superseded structure. A redone callee states its survivor
@@ -1003,7 +1005,7 @@ fn converge_callee_first(
 ) {
     if prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::protoorder::ProtoOrderMode>()
         == unlace_decomp::protoorder::ProtoOrderMode::Lock
     {
@@ -1053,7 +1055,7 @@ fn converge_callee_first(
     }
 }
 
-/// (kuna `narrowret`) Did the decompile just made of the function keyed `k`
+/// (unlace `narrowret`) Did the decompile just made of the function keyed `k`
 /// change the narrow value it states from `before`?  Outside the voidret
 /// settling no reader is decompiled again, and a reader that narrowed its call
 /// to the old statement reads a value the new one does not promise, so such a
@@ -1102,7 +1104,7 @@ mod calleevote_stored_tests {
         }
     }
 
-    /// (kuna `calleevote`) What a redo is charged: the lines it reprints, and a
+    /// (unlace `calleevote`) What a redo is charged: the lines it reprints, and a
     /// function that failed has no body to measure.
     #[test]
     fn a_redo_is_charged_the_lines_it_reprints() {
@@ -1115,7 +1117,7 @@ mod calleevote_stored_tests {
         assert_eq!(redo_charge(None), 0);
     }
 
-    /// (kuna `calleevote`) The budget is a share of what the binary printed:
+    /// (unlace `calleevote`) The budget is a share of what the binary printed:
     /// a long body is bought where the run has room for it and refused where it
     /// is not, while a short one is redone either way.
     #[test]
@@ -1160,7 +1162,7 @@ mod calleevote_stored_tests {
         assert_eq!(spend(1_000, &[40, 60]), budgeted);
     }
 
-    /// (kuna `structsynth`) The convergence sweep redoes what its share of the
+    /// (unlace `structsynth`) The convergence sweep redoes what its share of the
     /// first pass covers, shortest first, and declines the long bodies past it.
     #[test]
     fn the_struct_sweep_declines_long_bodies_past_its_share() {
@@ -1178,7 +1180,7 @@ mod calleevote_stored_tests {
         assert_eq!(declined, [(1_500, (1, 0x4000))]);
     }
 
-    /// (kuna `calleevote`) The budget is one pass-wide allowance: what an early
+    /// (unlace `calleevote`) The budget is one pass-wide allowance: what an early
     /// round spends a later one no longer has.
     #[test]
     fn the_budget_carries_across_rounds() {

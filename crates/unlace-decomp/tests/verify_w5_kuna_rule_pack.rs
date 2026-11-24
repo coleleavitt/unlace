@@ -1,6 +1,6 @@
-//! Independent verifier adversarial tests for item `w5-kuna-rule-pack`
-//! (the 7 kuna simplification rules:
-//! `kuna_{addcarrychain,booleanmask,ovlesssimplify,flagcompare,stackalias,
+//! Independent verifier adversarial tests for item `w5-unlace-rule-pack`
+//! (the 7 unlace simplification rules:
+//! `unlace_{addcarrychain,booleanmask,ovlesssimplify,flagcompare,stackalias,
 //! arraystride}`).
 //!
 //! Re-derived from the C++ oracle (NOT the Rust port).  These target the
@@ -25,7 +25,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, FspecSpace, IopSpace, UniqueSpace, addrspace_flags,
     spacetype,
@@ -81,7 +81,7 @@ fn unk(size: int4) -> Rc<Datatype> {
     Rc::new(Datatype::new(size, type_metatype::TYPE_UNKNOWN))
 }
 
-fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> KunaResult<()> {
+fn no_replace() -> impl FnMut(&mut VarnodeBank, VarnodeId, VarnodeId) -> UnlaceResult<()> {
     |_: &mut VarnodeBank, _: VarnodeId, _: VarnodeId| Ok(())
 }
 
@@ -281,7 +281,7 @@ fn build_piece_with_carry(
 #[test]
 fn w5_addcarrychain_commuted_int_carry_operands_fold() {
     // carry = INT_CARRY(b, a)  -- operands SWAPPED relative to lo = a + b.
-    // C++ kuna_addcarrychain.cc:56  `if (kunaSameValue(c0,b) && kunaSameValue(c1,a)) return true;`
+    // C++ kuna_addcarrychain.cc:56  `if (unlaceSameValue(c0,b) && unlaceSameValue(c1,a)) return true;`
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
     let a = mk_byte(&mut fd, 0x40);
@@ -313,7 +313,7 @@ fn w5_addcarrychain_commuted_int_carry_operands_fold() {
 
 #[test]
 fn w5_addcarrychain_carryelim_const_baselo_dedups_and_completes() {
-    // The const-folded carry form (`kunaIsCarryOf` INT_LESSEQUAL branch) is the
+    // The const-folded carry form (`unlaceIsCarryOf` INT_LESSEQUAL branch) is the
     // case where ONE low-add operand is a constant.  The rewrite re-wires
     // `indexvn = a` into the new ZEXT and `baselo = b` into the new base while a/b
     // are STILL read by the original low add — so the constant operand `a` would

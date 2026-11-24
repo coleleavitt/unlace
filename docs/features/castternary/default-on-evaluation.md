@@ -8,7 +8,7 @@ binaries, so the refactor of the printer's integer-literal path is inert.
 | | criterion | result |
 |---|---|---|
 | (a) | `make test` with the new default | 675/675, PARITY OK. No datatest assertion moved (the datatest harness applies no mode, so `iteexpr` is off and only `COPY`-arm conditionals print). |
-| (b) | `make test-stages` | 1,380/1,380. The only new passing keys are the 10 of `kuna-castternary.xml` (pass 1 sets `option castternary off`); no existing stage assertion moved. `docs/baseline-stages.json` re-recorded for those 10 keys only. |
+| (b) | `make test-stages` | 1,380/1,380. The only new passing keys are the 10 of `castternary.xml` (pass 1 sets `option castternary off`); no existing stage assertion moved. `docs/baseline-stages.json` re-recorded for those 10 keys only. |
 | (c) | `make test-cli` | 237/237; no probe pins an arm cast. |
 | (d) | 444-slice typesweep (pinned metric, 8 projects x O0/O2/O2-noinline) | off 1,615 perfect, mean .3697; on 1,615, mean .3697. All 10,748 functions score identically, and every function's tp/fp/fn/gt_vars/decomp_vars row is identical, so no variable or argument is added or removed (the option changes C text only; `variables[]` is untouched). |
 | (e) | speed, interleaved min-of-15, `decompile-all` fmt/ls/sort/bash O2 | min-of-15 deltas fmt -2.09%, ls -1.90%, sort +2.98%, bash +1.51% (medians -2.04%, +1.47%, -0.96%, -1.57%); worst +2.98%, within the +5% budget. The rule runs once per printed conditional. Measured under load from other runs (load average 12-36), both arms interleaved. `speed.json`. |

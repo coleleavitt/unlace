@@ -387,7 +387,7 @@ _Static_assert(sizeof zmix(0) == 8, "zmix");
 enum Names {
     /// As C does on a 32-bit target (`long long`): checked under `-m32`.
     Ilp32,
-    /// `long`: the MIPS and PowerPC specs declare no `long` size, so kuna's
+    /// `long`: the MIPS and PowerPC specs declare no `long` size, so unlace's
     /// `long` is eight bytes there. Each function must be declared like `zmix`,
     /// whose value needs all 64 bits.
     Long8,

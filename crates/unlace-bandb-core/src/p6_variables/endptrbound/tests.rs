@@ -66,7 +66,7 @@ impl Fx {
             .add_spacebase_pointer(&stack, &sp_data, 8, true)
             .unwrap();
         let mut glb = ArchContext::new(manage);
-        glb.kuna_options
+        glb.unlace_options
             .set(crate::endptrbound::EndPtrBound(option));
         let entry = Address::new(Rc::clone(&reg), 0x1000);
         let mut fd = Funcdata::new("walk", "walk", Rc::new(glb), entry, 0x1000_0000, 0x40).unwrap();

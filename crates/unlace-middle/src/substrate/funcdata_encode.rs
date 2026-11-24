@@ -35,7 +35,7 @@
 //!   * `<blockedge>`/`<edge>`    → `decompiler/cpp/block.cc:2489,35` (`FlowBlock::encodeEdges`/`BlockEdge::encode`)
 
 use unlace_base::address::ELEM_ADDR;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::{
     ATTRIB_ID, ATTRIB_INDEX, ATTRIB_NAME, ATTRIB_REF, ATTRIB_SIZE, ATTRIB_VALUE, AttributeId,
     ELEM_VOID, ElementId, Encoder,
@@ -54,7 +54,7 @@ use crate::funcdata::Funcdata;
 //
 // These live in a separate id namespace from the SLEIGH-compiler attributes
 // that reuse the same numbers (`unlace-sleigh/src/slaformat.rs` etc.) — exactly
-// the coexistence kuna already relies on for ATTRIB_NAME (sleigh=12 vs
+// the coexistence unlace already relies on for ATTRIB_NAME (sleigh=12 vs
 // decomp=14).  Encoding writes `id.get_id()` directly (no registry lookup), so
 // these are never registered on any `IdRegistry`; a duplicate numeric id on the
 // SLEIGH registry would panic, so if any of these are ever registered for a
@@ -103,10 +103,10 @@ impl Funcdata {
     /// `<prototype>`.  `<override>` (Java-skipped) stays deferred.
     ///
     /// Takes `&mut self` (the C++ method is const): the Phase-4 encode runs the
-    /// [`Funcdata::kuna_link_high_symbols`] linking pass — the encode-time
+    /// [`Funcdata::unlace_link_high_symbols`] linking pass — the encode-time
     /// stand-in for C++ `ActionNameVars::linkSymbols`, which upstream ran during
     /// analysis — and the HighVariable reads re-derive dirty state.
-    pub fn encode(&mut self, enc: &mut dyn Encoder, id: u64, savetree: bool) -> KunaResult<()> {
+    pub fn encode(&mut self, enc: &mut dyn Encoder, id: u64, savetree: bool) -> UnlaceResult<()> {
         enc.open_element(&ELEM_FUNCTION);
         if id != 0 {
             enc.write_unsigned_integer(&ATTRIB_ID, id);
@@ -123,17 +123,17 @@ impl Funcdata {
         // It is idempotent: the ghidra-mode driver runs it earlier still, so
         // the printed markup's `<vardecl symref>` can carry the same real ids.
         if savetree && self.is_high_on() {
-            self.kuna_link_high_symbols();
+            self.unlace_link_high_symbols();
         }
         // localmap->encodeRecursive(encoder,false): the <localdb> scope.  The
-        // kuna ScopeLocal owns a private single-scope database — no child
+        // unlace ScopeLocal owns a private single-scope database — no child
         // scopes to recurse into.
         let mut encodable: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
         if !self.has_no_code() {
             crate::p0_knowledge::wrappedstackmap::wire_storage(self);
-            let wire_symbols = std::mem::take(&mut self.kuna_wire_symbols);
+            let wire_symbols = std::mem::take(&mut self.unlace_wire_symbols);
             if let Some(lm) = self.get_scope_local() {
-                lm.encode_with_storage(&wire_symbols, &self.kuna_wrapped_wire_storage, enc)?;
+                lm.encode_with_storage(&wire_symbols, &self.unlace_wrapped_wire_storage, enc)?;
                 encodable = lm.encodable_symbol_ids();
                 // Only the wire symbols the encode above actually WROTE (the
                 // `is_encodable` filter): a reference to a skipped one is the
@@ -148,7 +148,7 @@ impl Funcdata {
                         .map(|w| w.id),
                 );
             }
-            self.kuna_wire_symbols = wire_symbols;
+            self.unlace_wire_symbols = wire_symbols;
         }
         if savetree {
             self.encode_tree(enc)?;
@@ -170,7 +170,7 @@ impl Funcdata {
     /// `<jumptablelist>` of recovered `JumpTable`s, omitted when there are none.
     /// Emitted independently of `savetree` — the switch analyzer requests
     /// `notree`+`noc`+`jumpload` and consumes ONLY this list.
-    fn encode_jump_table(&self, enc: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode_jump_table(&self, enc: &mut dyn Encoder) -> UnlaceResult<()> {
         let tables = self.jumpvec_slice();
         if tables.is_empty() {
             return Ok(());
@@ -179,7 +179,7 @@ impl Funcdata {
         for jt in tables {
             // C++ JumpTable::encode throws on an unrecovered table; a table
             // that survived to the encode without recovery must not kill the
-            // whole response (kuna divergence: skip it — Java drops empty
+            // whole response (unlace divergence: skip it — Java drops empty
             // tables anyway via isEmpty()).
             if !jt.is_recovered() {
                 continue;
@@ -194,13 +194,13 @@ impl Funcdata {
     /// `<high>` per distinct HighVariable of any non-annotation Varnode, in
     /// varnode-loc first-appearance order.  Emitted only when the high-level
     /// (HighVariable) analysis ran.  `offsets` is the per-high wire
-    /// `offset` attribute computed by [`Funcdata::kuna_link_high_symbols`]
+    /// `offset` attribute computed by [`Funcdata::unlace_link_high_symbols`]
     /// (C++ `HighVariable::symboloffset`; absent = -1 = whole symbol).
     fn encode_high(
         &mut self,
         enc: &mut dyn Encoder,
         encodable_symbols: &std::collections::BTreeSet<u64>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::variable::{ATTRIB_CLASS, ATTRIB_REPREF, ATTRIB_SYMREF, ELEM_HIGH};
         if !self.is_high_on() {
             return Ok(());
@@ -255,16 +255,16 @@ impl Funcdata {
             // snapshot (ghidra-mode: the host DB id delivered with the mapped
             // symbol; 0 = unknown ⇒ symref is omitted, never fabricated).
             let attached = self.high_bank().get(high).and_then(|h| {
-                h.kuna_link_symbol()
-                    .or_else(|| h.kuna_dynamic_symbol())
-                    .or_else(|| h.kuna_equate_symbol())
+                h.unlace_link_symbol()
+                    .or_else(|| h.unlace_dynamic_symbol())
+                    .or_else(|| h.unlace_equate_symbol())
             });
             // A wire-only symbol (the analysis left the high symbol-less) is
             // referenced by its reserved id and is never a parameter.
             let wire = self
-                .kuna_wire_symbol_for_high
+                .unlace_wire_symbol_for_high
                 .get(&high)
-                .and_then(|i| self.kuna_wire_symbols.get(*i))
+                .and_then(|i| self.unlace_wire_symbols.get(*i))
                 .map(|w| w.id);
             let (local_symref, category) = match (attached, wire, self.get_scope_local()) {
                 // The wire arm takes the SAME encodable gate as the attached
@@ -371,11 +371,11 @@ impl Funcdata {
         Ok(())
     }
 
-    /// The Phase-4 encode-time symbol-link pass: the kuna stand-in for C++
+    /// The Phase-4 encode-time symbol-link pass: the unlace stand-in for C++
     /// `ActionNameVars::linkSymbols` → `Funcdata::linkSymbol`
     /// (`funcdata_varnode.cc:1189-1216`), which upstream runs during analysis so
     /// every named HighVariable carries a localmap `Symbol` by encode time.
-    /// kuna's naming pass binds plain name strings (`kuna_name`) instead, so the
+    /// unlace's naming pass binds plain name strings (`unlace_name`) instead, so the
     /// `Symbol` objects the `<localdb>`/`<highlist>` wire contract needs are
     /// materialized here, on demand, just before encoding:
     ///
@@ -392,7 +392,7 @@ impl Funcdata {
     /// `HighVariable::symboloffset`; the map carries only offsets >= 0).  The
     /// pass never touches `HighVariable::symbol_offset` (a printer input) — the
     /// encode is not allowed to perturb the rendered C.
-    pub fn kuna_link_high_symbols(&mut self) {
+    pub fn unlace_link_high_symbols(&mut self) {
         use unlace_base::address::Address;
         if !self.is_high_on() || self.get_scope_local().is_none() {
             return;
@@ -417,22 +417,22 @@ impl Funcdata {
             }
             // Symbol already attached — during analysis (equate / dynamic) or
             // by the naming pass's recorded bind decision
-            // (`kuna_link_symbol`), which INCLUDES a previous run of this
+            // (`unlace_link_symbol`), which INCLUDES a previous run of this
             // idempotent pass.
             let (has_symbol, named) = match self.high_bank().get(high) {
                 Some(h) => (
-                    h.kuna_dynamic_symbol()
-                        .or_else(|| h.kuna_equate_symbol())
-                        .or_else(|| h.kuna_link_symbol())
+                    h.unlace_dynamic_symbol()
+                        .or_else(|| h.unlace_equate_symbol())
+                        .or_else(|| h.unlace_link_symbol())
                         .is_some(),
-                    h.kuna_name().is_some(),
+                    h.unlace_name().is_some(),
                 ),
                 None => continue,
             };
             // Idempotent: a previous run of this pass already gave the high a
             // wire symbol (the ghidra driver runs it before the markup, the
             // encode runs it again).
-            if has_symbol || !named || self.kuna_wire_symbol_for_high.contains_key(&high) {
+            if has_symbol || !named || self.unlace_wire_symbol_for_high.contains_key(&high) {
                 continue;
             }
             let (rep, spacebase, implied, persist, constant, dtype) =
@@ -495,7 +495,7 @@ impl Funcdata {
             let name = self
                 .high_bank()
                 .get(high)
-                .and_then(|h| h.kuna_name())
+                .and_then(|h| h.unlace_name())
                 .expect("named checked above")
                 .to_string();
             // A 0-sized (void/undefined-empty) data-type takes the hashed shape
@@ -509,7 +509,7 @@ impl Funcdata {
                 // path: Java computes its own hash for the same variable with a
                 // hardcoded `maxduplicates = 8` (`DynamicHash.java:440`), and a
                 // hash the two sides disagree on cannot round-trip a rename.
-                // Deliberately NOT kuna's own budget
+                // Deliberately NOT unlace's own budget
                 // (`dynamichashmax::MAX_DUPLICATES`): the wire value must
                 // match what Java recomputes.
                 match crate::dynamic::dynamic_unique_hash(rep, 8, self) {
@@ -525,8 +525,8 @@ impl Funcdata {
             else {
                 continue;
             };
-            let idx = self.kuna_wire_symbols.len();
-            self.kuna_wire_symbols.push(crate::database::WireSymbol {
+            let idx = self.unlace_wire_symbols.len();
+            self.unlace_wire_symbols.push(crate::database::WireSymbol {
                 id,
                 name,
                 dtype,
@@ -545,7 +545,7 @@ impl Funcdata {
                     usepoint
                 },
             });
-            self.kuna_wire_symbol_for_high.insert(high, idx);
+            self.unlace_wire_symbol_for_high.insert(high, idx);
         }
     }
 
@@ -553,7 +553,7 @@ impl Funcdata {
     ///
     /// `<ast>` = `<varnodes>` (every non-`IPTR_IOP` Varnode) + per basic block a
     /// `<block index>` (cover + ops) + per in-edged block a `<blockedge index>`.
-    fn encode_tree(&self, enc: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode_tree(&self, enc: &mut dyn Encoder) -> UnlaceResult<()> {
         enc.open_element(&ELEM_AST);
 
         // <varnodes>: all Varnodes except the iop space (funcdata.cc:695).  The
@@ -614,7 +614,7 @@ impl Funcdata {
     /// The **full** `<addr>` form under `<varnodes>` carries space, offset, size,
     /// ref, and the guarded flag attributes.  Do NOT use `Address::encode_sized`
     /// — it closes the element before ref/flags can be written.
-    fn encode_varnode(&self, enc: &mut dyn Encoder, vn: VarnodeId) -> KunaResult<()> {
+    fn encode_varnode(&self, enc: &mut dyn Encoder, vn: VarnodeId) -> UnlaceResult<()> {
         let v = self.vbank().get(vn).expect("encode_varnode: stale Varnode");
         enc.open_element(&ELEM_ADDR);
         v.get_space()
@@ -648,7 +648,7 @@ impl Funcdata {
     ///
     /// `<op code>` + `<seqnum>` + the output (`<addr ref>` or `<void>`) + each
     /// input by the four-way rule (op.cc:426-462).
-    fn encode_op(&self, enc: &mut dyn Encoder, op: OpId) -> KunaResult<()> {
+    fn encode_op(&self, enc: &mut dyn Encoder, op: OpId) -> UnlaceResult<()> {
         let o = self.obank().get(op).expect("encode_op: stale op");
         let code = o.code();
         enc.open_element(&ELEM_OP);
@@ -815,9 +815,9 @@ mod tests {
         op_count: usize,
     }
 
-    /// Structurally decode a `<function>` document with kuna's PackedDecode and
+    /// Structurally decode a `<function>` document with unlace's PackedDecode and
     /// collect the structure + the ref/uniq ids for the load-bearing invariant.
-    fn decode_function(manage: &AddrSpaceManager, bytes: &[u8]) -> KunaResult<Observed> {
+    fn decode_function(manage: &AddrSpaceManager, bytes: &[u8]) -> UnlaceResult<Observed> {
         let mut obs = Observed::default();
         let mut dec = PackedDecode::new(manage);
         dec.ingest_stream(bytes)?;
@@ -845,7 +845,7 @@ mod tests {
         Ok(obs)
     }
 
-    fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
+    fn decode_ast(dec: &mut PackedDecode, obs: &mut Observed) -> UnlaceResult<()> {
         loop {
             let c = dec.peek_element()?;
             if c == 0 {
@@ -878,7 +878,7 @@ mod tests {
         Ok(())
     }
 
-    fn decode_block(dec: &mut PackedDecode, obs: &mut Observed) -> KunaResult<()> {
+    fn decode_block(dec: &mut PackedDecode, obs: &mut Observed) -> UnlaceResult<()> {
         // ATTRIB_INDEX is present but not asserted here.
         loop {
             let c = dec.peek_element()?;

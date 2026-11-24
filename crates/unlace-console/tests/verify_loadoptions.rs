@@ -34,7 +34,7 @@ fn fauxware() -> PathBuf {
 }
 
 /// An x86-64 relocatable object whose `.go.buildinfo` names `version`, which
-/// is all Kuna needs to take it for a Go image of that release.
+/// is all Unlace needs to take it for a Go image of that release.
 fn go_object(version: &str) -> Vec<u8> {
     let mut obj = Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
     let text = obj.section_id(StandardSection::Text);
@@ -198,7 +198,7 @@ fn concurrent_loads_keep_their_own_options() {
 fn load_pass_facts(bootstrap: impl Fn(&str) -> ConsoleProgram) -> (bool, bool) {
     let fixtures = root().join("crates/unlace-analysis/tests/fixtures");
     let mut objc = bootstrap(fixtures.join("macho_objc_arm64").to_str().unwrap());
-    objc.arch_mut().set_kuna_option("objc", "on").unwrap();
+    objc.arch_mut().set_unlace_option("objc", "on").unwrap();
     objc.commit_pending_analysis().unwrap();
     let mut strings = bootstrap(fixtures.join("fauxware").to_str().unwrap());
     strings.commit_pending_analysis().unwrap();
@@ -358,16 +358,16 @@ fn an_explicit_program_never_reads_the_environment() {
     std::fs::remove_file(go).unwrap();
 }
 
-/// `set_kuna_option` changes the program's own load options, and the change
+/// `set_unlace_option` changes the program's own load options, and the change
 /// does not reach a later load with explicit options.
 #[test]
-fn set_kuna_option_changes_its_program_not_later_explicit_loads() {
+fn set_unlace_option_changes_its_program_not_later_explicit_loads() {
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     let go = go_image();
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("UNLACE_GOABI") };
     let mut prog = load(&go, &LoadOptions::default());
-    prog.arch_mut().set_kuna_option("goabi", "off").unwrap();
+    prog.arch_mut().set_unlace_option("goabi", "off").unwrap();
     assert!(!prog.arch().load_options().goabi);
     assert_eq!(compiler(&load(&go, &LoadOptions::default())), "golang");
     for name in ENV_VARS {
@@ -381,14 +381,14 @@ fn set_kuna_option_changes_its_program_not_later_explicit_loads() {
 /// choice after the environment changes.
 #[test]
 fn an_explicit_program_ignores_a_later_environment_change() {
-    use unlace_console::console::kuna_live_value;
+    use unlace_console::console::unlace_live_value;
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::remove_var("UNLACE_KERNELCACHE") };
     let explicit = load(&fauxware(), &LoadOptions::default());
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var("UNLACE_KERNELCACHE", "off") };
-    let explicit_value = kuna_live_value(explicit.arch(), "kernelcache")
+    let explicit_value = unlace_live_value(explicit.arch(), "kernelcache")
         .unwrap()
         .into_owned();
     // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -407,7 +407,7 @@ fn a_bootstrap_without_options_reads_the_environment() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
     use unlace_console::project::{DecompileOptions, decompile_entry};
 
-    fn first_function(load: unlace_base::error::KunaResult<ConsoleProgram>) -> String {
+    fn first_function(load: unlace_base::error::UnlaceResult<ConsoleProgram>) -> String {
         let mut prog = load.expect("bootstrap");
         prog.commit_pending_analysis().unwrap();
         let entry = prog.function_entries_executable()[0].clone();
@@ -461,7 +461,7 @@ fn a_bootstrap_without_options_reads_the_environment() {
 
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(ARM_ISA_ENV, "bogus") };
-    let refused = |load: unlace_base::error::KunaResult<ConsoleProgram>| match load {
+    let refused = |load: unlace_base::error::UnlaceResult<ConsoleProgram>| match load {
         Ok(_) => panic!("loaded with UNLACE_ARM_ISA=bogus"),
         Err(err) => err.to_string(),
     };
@@ -494,7 +494,7 @@ fn a_bootstrap_without_options_reads_the_environment() {
 fn a_load_without_options_ignores_options_held_on_the_thread() {
     use unlace_analysis::loadimage_te::synthetic::TeImage;
     use unlace_base::xml::DocumentStorage;
-    use unlace_console::console::kuna_live_value;
+    use unlace_console::console::unlace_live_value;
     use unlace_decomp::kernelcache::KernelcacheChoice;
 
     let _env = ENVIRONMENT.lock().unwrap_or_else(|e| e.into_inner());
@@ -548,7 +548,7 @@ fn a_load_without_options_ignores_options_held_on_the_thread() {
         );
         // FIXME: Audit that the environment access only happens in single-threaded code.
         unsafe { std::env::set_var("UNLACE_KERNELCACHE", "off") };
-        let live = kuna_live_value(prog.arch(), "kernelcache")
+        let live = unlace_live_value(prog.arch(), "kernelcache")
             .unwrap()
             .into_owned();
         // FIXME: Audit that the environment access only happens in single-threaded code.

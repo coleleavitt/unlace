@@ -1,7 +1,7 @@
-//! Tests for the truth-valued byte type (kuna `boolbyte`).
+//! Tests for the truth-valued byte type (unlace `boolbyte`).
 //!
 //! The walk itself needs a decompiled function and is covered end to end by
-//! `tests/stages/kuna-boolbyte.toml` (pass 1 off = `char v1`, pass 2 on =
+//! `tests/stages/unlace-boolbyte.toml` (pass 1 off = `char v1`, pass 2 on =
 //! `bool v1`).  What can be pinned here is the fold the whole design rests on:
 //! the candidate is offered to `getLocalType`'s fold, so `char` and `uint1` lose
 //! to it while a more specific vote is kept.

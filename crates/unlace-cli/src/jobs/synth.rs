@@ -277,7 +277,7 @@ pub(super) fn name_structs_serially(
 ///
 /// The substitution is textual, so a function, alias or variable literally
 /// called `struct_3` would be rewritten along with the structure of that name.
-/// Nothing kuna names spells one today; a binary whose symbols do takes the
+/// Nothing unlace names spells one today; a binary whose symbols do takes the
 /// second decompile rather than a wrong rename.
 fn only_types_are_renamed(r: &FuncResult, map: &[(String, String)]) -> bool {
     let covered = |name: &str| map.iter().any(|(own, _)| own == name);
@@ -594,7 +594,7 @@ fn install_on_idle_workers(
 
 /// The serial run a sharded one is replaying, spelled as a command line.
 ///
-/// (kuna `protoorder`) On `decompile-all` the serial default decompiles callees
+/// (unlace `protoorder`) On `decompile-all` the serial default decompiles callees
 /// first, which decides what a function mints as much as the ledger does; a pool
 /// cannot take that order ([`crate::decompile_all`] says so on its own line), so
 /// the run whose names these are is the one with the order turned off.

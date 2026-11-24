@@ -350,7 +350,7 @@ script, the precedent set by `returndup`, `truthycond`, `branchflip`, `foldcallr
 ## Not flipped, and why
 
 - `ptrdepthcap`: with it on, two stage tests lose a legitimate `int **` local and the
-  `&p->r[i]` rendering (kuna-stackviews, gh558-arraynotation), so the cap is not the
+  `&p->r[i]` rendering (stackviews, gh558-arraynotation), so the cap is not the
   pure improvement its row describes; it stays preset-only until that is understood.
 - `stackstruct`, `regionedgeorder`, `rettriangle`, `iteexpr`, `devectorize`,
   `globalarrayanchor`, `constselectjump`, `switchmodbound`, `switchguardbound`,

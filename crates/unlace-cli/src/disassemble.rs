@@ -12,7 +12,7 @@
 //! `unlace disassemble` **after** decompilation had already failed them — a
 //! function with no recovered body, a `switch(0)` dispatcher, an indirect call
 //! through a decrypted stack buffer — and got `unknown subcommand`. Every one of
-//! them then left kuna for `objdump -d`, which is also why the bundled
+//! them then left unlace for `objdump -d`, which is also why the bundled
 //! `outlining` skill tells agents to shell out for addresses.
 //!
 //! ## Expose, do not reinvent
@@ -76,7 +76,7 @@
 //! ## Two views, because a data address is not an instruction stream
 //!
 //! Listing a data blob as instructions is worse than useless: an RE agent that
-//! asked kuna for the encoded globals at `0x100003f30` got `ADD byte ptr
+//! asked unlace for the encoded globals at `0x100003f30` got `ADD byte ptr
 //! [RCX],AL` / `OR CL,byte ptr [RBX]` back — a decode of `00 01 02 03 ..` that is
 //! correct in the translator and a lie about the program. It went to `xxd`, which
 //! is the friction this view removes (`docs/re-needs/cli-mode-read-raw.md`).
@@ -184,7 +184,7 @@ struct Region {
     /// Did the target resolve to a discovered function entry? Such a target is
     /// code by definition, whatever section it was linked into.
     from_entry: bool,
-    /// (kuna, `disassembly-fabricates-zero-byte`) Exclusive end of the mapped
+    /// (unlace, `disassembly-fabricates-zero-byte`) Exclusive end of the mapped
     /// run holding [`Self::start`] ([`mapped_run_end`]) — a bound the image
     /// imposes rather than one the caller asked for. `None` where the loader
     /// publishes no segment map and there is nothing to bound the walk with.
@@ -536,7 +536,7 @@ fn windowed_answer_is_final(region: &Region, section: Option<u32>, want: ViewReq
 
 // --- which view ---------------------------------------------------------------
 
-/// (kuna) The loader `section_flags` bits of the section containing `vma`.
+/// (unlace) The loader `section_flags` bits of the section containing `vma`.
 ///
 /// `None` when no section covers it — which includes every loader that publishes
 /// no section table at all (the XML `<binaryimage>` corpus, a raw byte blob).
@@ -758,7 +758,7 @@ fn resolve_region(prog: &ConsoleProgram, args: &DisArgs) -> Result<Region, Strin
     Ok(bound_to_image(prog, region))
 }
 
-/// (kuna, `disassembly-fabricates-zero-byte`) Record the end of mapped memory
+/// (unlace, `disassembly-fabricates-zero-byte`) Record the end of mapped memory
 /// on a resolved region, so no walk over it can list a byte the image does not
 /// hold ([`mapped_run_end`]).
 fn bound_to_image(prog: &ConsoleProgram, region: Region) -> Region {
@@ -795,7 +795,7 @@ fn image_bound_note(prog: &ConsoleProgram, region: &Region) -> String {
     )
 }
 
-/// (kuna #1288) Say that the function's flow, not the next entry, ended a
+/// (unlace #1288) Say that the function's flow, not the next entry, ended a
 /// listing whose length came from the extent, and name the range that lists
 /// the bytes it left out (`ConsoleProgram::extent_cut_by_flow`). A listing
 /// from inside a function names the function.
@@ -896,7 +896,7 @@ fn result_json(
 /// Build the `--as data` (`unlace read`) document: the same envelope, then the
 /// span's bytes as one contiguous hex string plus the hexdump rows.
 ///
-/// `hex` is the whole span in one piece on purpose — an agent comparing kuna's
+/// `hex` is the whole span in one piece on purpose — an agent comparing unlace's
 /// answer with `xxd` or pasting a table into a decoder wants one token, not a
 /// re-join of N rows.
 fn data_result_json(
@@ -1072,7 +1072,7 @@ fn alignment_run(rows: &[Row], at: usize) -> Option<(usize, u64)> {
     (n > 0).then_some((n, align))
 }
 
-/// The human byte surface: `xxd -g1` with kuna's own address column — a `#`
+/// The human byte surface: `xxd -g1` with unlace's own address column — a `#`
 /// header naming the span, then address, sixteen space-separated bytes, and the
 /// printable-ASCII gutter. Space-separated because a 32-character run of hex is
 /// not readable; `--json` carries the contiguous spelling for the machine.
@@ -1184,7 +1184,7 @@ fn spelled(addrs: &[u64]) -> String {
     }
 }
 
-/// (kuna, `linear-disassembly-silently-skips`) Say that no row starts at an
+/// (unlace, `linear-disassembly-silently-skips`) Say that no row starts at an
 /// address this range's own branches name, and why — the one fact an agent
 /// reading a listing cannot infer, because a decode that is a byte out of phase
 /// is spelled exactly like one that is not.
@@ -1252,7 +1252,7 @@ fn skipped_note(skipped: &[u64], why: Skip, region: &Region, count: Option<usize
     }
 }
 
-/// (kuna, `linear-disassembly-silently-skips`) Say which addresses `--follow`
+/// (unlace, `linear-disassembly-silently-skips`) Say which addresses `--follow`
 /// re-anchored, so a caller comparing two runs of the same range knows which
 /// rows moved and why.
 fn follow_note(anchored: &[u64]) -> String {

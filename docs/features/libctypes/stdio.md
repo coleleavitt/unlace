@@ -113,7 +113,7 @@ to see which names came from the image's own tables, or because a hostile one
 plants misleading names — and a stream slot's name is a `.dynstr` string like any
 other. So naming a data object stays `datasyms`'s call and `libctypes` only
 decides what the named object is; there is no half of it to keep, because the
-type rides on the symbol. `kuna-console`'s own
+type rides on the symbol. `console`'s own
 `option_datasyms_off_restores_dat_addr` is the pin, and pass 10 of the stage test
 says the same thing on this feature's fixture.
 
@@ -227,7 +227,7 @@ to three names, at load.
 
 ## Tests
 
-`tests/stages/kuna-libctypes.toml` passes 6-9 — the executable and the shared
+`tests/stages/libctypes.toml` passes 6-9 — the executable and the shared
 object built from one source (`libctypes_streams_x86_64.c`), each once `off` and
 once `opaque` — with assertions #16-#25, plus pass 10 for the `datasyms off` interaction (#26):
 

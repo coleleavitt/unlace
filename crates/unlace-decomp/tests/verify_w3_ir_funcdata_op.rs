@@ -27,7 +27,7 @@ use unlace_base::space::{
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::funcdata::Funcdata;
@@ -308,7 +308,7 @@ fn wire_def_and_lone_read(fd: &mut Funcdata, def: OpId, vn: VarnodeId, reader: O
     let seqnum = fd.obank().get(def).unwrap().get_seq_num().clone();
     let info = DefOpInfo { id: def, seqnum };
     let mut noop =
-        |_b: &mut VarnodeBank, _o: VarnodeId, _n: VarnodeId| -> KunaResult<()> { Ok(()) };
+        |_b: &mut VarnodeBank, _o: VarnodeId, _n: VarnodeId| -> UnlaceResult<()> { Ok(()) };
     let new_vn = fd.vbank_mut().set_def(vn, info, &mut noop).unwrap();
     fd.obank_mut()
         .get_mut(def)

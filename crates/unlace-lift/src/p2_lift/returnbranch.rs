@@ -1,4 +1,4 @@
-//! (kuna `returnbranch`) Preserve a computed transfer that the instruction spec
+//! (unlace `returnbranch`) Preserve a computed transfer that the instruction spec
 //! classified as RETURN.
 //!
 //! A bounded straight-line entry prefix can prove the target is a constant,
@@ -262,7 +262,7 @@ pub fn computed_target(
     };
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::returnbranch::ReturnBranch>()
         .0
         || ret.code() != OpCode::CPUI_RETURN
@@ -349,8 +349,8 @@ pub fn target_on_edge(
     prefix.input(dispatch, 0)
 }
 
-crate::kuna_flag!(
-    /// (kuna `returnbranch`) Flow a RETURN with a proven constant target as an
+crate::unlace_flag!(
+    /// (unlace `returnbranch`) Flow a RETURN with a proven constant target as an
     /// indirect branch; see [`crate::context::ArchContext::return_branch`].
     ReturnBranch,
     "returnbranch",
@@ -424,7 +424,7 @@ mod tests {
             let code = behavior.get_opcode();
             arch.opbehaviors[code as usize] = Some(behavior);
         }
-        arch.kuna_options
+        arch.unlace_options
             .set(crate::returnbranch::ReturnBranch(!off));
         if tracked {
             let loc = unlace_num::pcoderaw::VarnodeData {

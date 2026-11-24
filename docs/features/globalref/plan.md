@@ -38,7 +38,7 @@ byte-identical to main, and the type sweep is identical in every slice.
 
 ## 5. Tests
 
-- `tests/stages/kuna-globalref.toml`: two passes over `globalref_x86_64` (off,
+- `tests/stages/globalref.toml`: two passes over `globalref_x86_64` (off,
   default), libc-typed witnesses so the pointer type does not depend on
   decompile order, plus a direct-access control and a numeric control.
 - `decompile_all_cli.rs::a_constant_address_named_as_a_global_round_trips_through_the_printed_c`:

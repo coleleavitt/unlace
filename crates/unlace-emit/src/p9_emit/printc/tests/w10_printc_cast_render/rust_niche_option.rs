@@ -21,7 +21,7 @@ fn setup(
 ) {
     let mut arch = bare_arch();
     arch.archid = "x86:LE:64:default:gcc".into();
-    arch.kuna_options
+    arch.unlace_options
         .set(crate::sourcelang::SourceLangForced(Some(SourceLang::Rust)));
     arch.types_impl().set_max_basetype_size(8);
     arch.types_impl().set_default_alignment_map();
@@ -59,7 +59,7 @@ fn setup(
     let owner = types
         .set_fields_union_raw(&owner, vec![TypeField::new(0, 0, "Some", payload)], 8, 8)
         .unwrap();
-    types.kuna_record_variant_layout(VariantLayout {
+    types.unlace_record_variant_layout(VariantLayout {
         type_name: OPTION.into(),
         size: 8,
         tag_offset: 0,
@@ -139,7 +139,7 @@ fn setup(
     fd.set_high_level();
     let high = fd.vbank().get(value).unwrap().get_high().unwrap();
     let high = fd.high_bank_mut().get_mut(high).unwrap();
-    high.set_kuna_name("value");
+    high.set_unlace_name("value");
     high.set_symbol_offset(0);
     high.set_symbol_type(owner);
     let mut printer = PrintC::new();
@@ -187,7 +187,7 @@ fn named_reference_niche_requires_the_complete_recorded_layout() {
                 0
             },
         );
-        let mut layout = (*arch.types().kuna_variant_layout(OPTION).unwrap()).clone();
+        let mut layout = (*arch.types().unlace_variant_layout(OPTION).unwrap()).clone();
         match case {
             0 => layout.size = 16,
             1 => layout.tag_offset = 1,
@@ -204,7 +204,7 @@ fn named_reference_niche_requires_the_complete_recorded_layout() {
             12 | 13 => {}
             _ => unreachable!(),
         }
-        arch.types().kuna_record_variant_layout(layout);
+        arch.types().unlace_record_variant_layout(layout);
         assert!(
             !printer.emit_rust_niche_option_condition(&fd, &arch, branch),
             "case {case}"
@@ -223,7 +223,7 @@ fn named_reference_niche_refuses_consumed_saved_partial_and_foreign_values() {
             0 => printer.set_name("c"),
             1 => printer.set_name("go"),
             2 => arch
-                .kuna_options
+                .unlace_options
                 .set(crate::sourcelang::SourceLangForced(Some(SourceLang::C))),
             3 => arch.archid = "AARCH64:LE:64:v8A:default".into(),
             4 => fd.vbank_mut().get_mut(condition).unwrap().clear_implied(),
@@ -246,7 +246,7 @@ fn named_reference_niche_refuses_consumed_saved_partial_and_foreign_values() {
                 .high_bank_mut()
                 .get_mut(high)
                 .unwrap()
-                .set_kuna_global(true),
+                .set_unlace_global(true),
             9 => {
                 let other = mk_op(&mut fd, 1, 0x40, OpCode::CPUI_COPY);
                 fd.op_set_input(other, value, 0).unwrap();

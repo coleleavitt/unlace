@@ -89,9 +89,9 @@ fn keeps_original_old_load_and_member_identity_at_both_widths() {
         assert_eq!(proof.members, ops);
         assert_eq!(proof.width, width);
         observe(&mut fd, &ops);
-        assert_eq!(fd.kuna_atomic_xadds().len(), 1);
+        assert_eq!(fd.unlace_atomic_xadds().len(), 1);
         fd.clear();
-        assert!(fd.kuna_atomic_xadds().is_empty());
+        assert!(fd.unlace_atomic_xadds().is_empty());
     }
 }
 
@@ -148,12 +148,12 @@ fn foreign_source_is_inert_and_multiple_candidates_are_bounded() {
         let mut fd = function(lang);
         let ops = xadd(&mut fd, 4);
         observe(&mut fd, &ops);
-        assert!(fd.kuna_atomic_xadds().is_empty());
+        assert!(fd.unlace_atomic_xadds().is_empty());
     }
     let mut fd = function(SourceLang::Go);
     for _ in 0..4 {
         let ops = xadd(&mut fd, 4);
         observe(&mut fd, &ops);
     }
-    assert_eq!(fd.kuna_atomic_xadds().len(), 2);
+    assert_eq!(fd.unlace_atomic_xadds().len(), 2);
 }

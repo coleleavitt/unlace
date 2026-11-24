@@ -23,7 +23,7 @@
 //! explicitly.  The C++ `value->getHigh()->getSymbol()` Symbol surface (used by
 //! [`InsertExpression`] and the no-LOAD [`PullExpression`] arm) is, in the merged
 //! tree, the angr/`ScopeLocal` stand-in carried on the [`HighVariable`]
-//! (`kuna_symbol_type`/`kuna_symbol_offset`); a recovery reads the symbol's type
+//! (`unlace_symbol_type`/`unlace_symbol_offset`); a recovery reads the symbol's type
 //! and in-symbol offset off the high exactly where the C++ reads them off the
 //! Symbol.  // STUB(W4 symbol) — mirrors `printc::push_vn_explicit_ir`.
 
@@ -212,15 +212,15 @@ impl InsertExpression {
             // symbol = value->getHigh()->getSymbol(); if null return.
             let high = v.get_high()?;
             let hb = data.high_bank().get(high)?;
-            let sym_type = hb.kuna_symbol_type()?;
-            symbol_offset = hb.kuna_symbol_offset();
+            let sym_type = hb.unlace_symbol_type()?;
+            symbol_offset = hb.unlace_symbol_offset();
             let spc = v.get_space();
             let least_bit_off = data.vbank().get(o.get_in(2)?)?.get_offset() as int4;
             let bit_size = data.vbank().get(o.get_in(3)?)?.get_offset() as int4;
             let sym_type = Rc::clone(sym_type);
             expr.get_structures(
                 &sym_type,
-                hb.kuna_symbol_offset(),
+                hb.unlace_symbol_offset(),
                 least_bit_off,
                 spc.is_big_endian(),
             );
@@ -411,11 +411,11 @@ impl PullExpression {
             // symbol = inVn->getHigh()->getSymbol(); if null return.
             let high = in_v.get_high()?;
             let hb = data.high_bank().get(high)?;
-            let sym_type = hb.kuna_symbol_type()?;
+            let sym_type = hb.unlace_symbol_type()?;
             self.has_symbol = true;
             spc = Rc::clone(in_v.get_space());
             dt = Rc::clone(sym_type);
-            offset = hb.kuna_symbol_offset();
+            offset = hb.unlace_symbol_offset();
         }
         let least_bit_off = data.vbank().get(po.get_in(1)?)?.get_offset() as int4;
         let bit_size = data.vbank().get(po.get_in(2)?)?.get_offset() as int4;

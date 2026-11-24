@@ -85,7 +85,8 @@ fn complex_values_and_imported_exponential_round_trip() {
         "exp_wide",
         "local_pair",
     ] {
-        let (body, err, status) = common::run_kuna(&["decompile", binary.to_str().unwrap(), name]);
+        let (body, err, status) =
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), name]);
         assert_eq!(status, 0, "{err}");
         code.push_str(&body.replace(&format!("{name}("), &format!("recovered_{name}(")));
     }
@@ -153,7 +154,7 @@ fn pe_complex_values_keep_their_complete_types() {
                 continue;
             }
             let (body, err, status) =
-                common::run_kuna(&["decompile", binary.to_str().unwrap(), name]);
+                common::run_unlace(&["decompile", binary.to_str().unwrap(), name]);
             assert_eq!(status, 0, "{err}");
             assert!(
                 body.lines().next().unwrap().contains(expected),
@@ -162,7 +163,7 @@ fn pe_complex_values_keep_their_complete_types() {
             assert!(!body.contains("unaff_"), "{compiler}: {body}");
         }
         let (body, err, status) =
-            common::run_kuna(&["decompile", binary.to_str().unwrap(), "local_pair"]);
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), "local_pair"]);
         assert_eq!(status, 0, "{err}");
         assert!(body.contains("kuna_complex_float z;"), "{compiler}: {body}");
         assert!(!body.contains("((float *)&z)[1]"), "{compiler}: {body}");

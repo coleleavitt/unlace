@@ -37,7 +37,7 @@ use unlace_console::project::{
 // section/segment walks the zero-discovery diagnosis reads.
 use object::{Object, ObjectSection, ObjectSegment};
 use unlace_decomp::decompile_drive::{LineMapping, TypeInfo, VarInfo, print_c_types};
-use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::UNLACE_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
 use unlace_decomp::structsynth::shard::{self, ShardHook};
 
@@ -148,7 +148,7 @@ pub(crate) struct Args {
     /// Internal: what this worker does with the synthesized-structure ledger
     /// (`--jobs-synth record|force|serial`, see [`jobs::SynthWorker`]).
     pub(crate) jobs_synth: Option<jobs::SynthWorker>,
-    /// Internal (kuna `elemptr`): the pool decompiles one function, which
+    /// Internal (unlace `elemptr`): the pool decompiles one function, which
     /// types globals and tables as a serial batch of one does
     /// (`--jobs-objects`); a worker of a larger pool types neither.
     pub(crate) jobs_objects: bool,
@@ -469,7 +469,7 @@ fn summarize(
     }
 }
 
-/// The image's declared entry point, named with kuna's best name for it.
+/// The image's declared entry point, named with unlace's best name for it.
 ///
 /// This is the FORMAT's entry (a PE `AddressOfEntryPoint` is the CRT startup,
 /// not `main`) — the one address every image agrees on, and the honest root for
@@ -763,7 +763,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
     unlace_console::callwide::prepare(&mut prog);
     faults.after_load(dir);
     arm_fn_budgets(&mut prog, args);
-    // (kuna `structsynth`) A recording worker reports every ledger lookup and
+    // (unlace `structsynth`) A recording worker reports every ledger lookup and
     // its own answer; a forcing one first mints the parent's replayed
     // structures, in the serial run's order, and then answers each lookup with
     // the name the chunk spec gives it. A serial one keeps its own ledger and
@@ -780,10 +780,10 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
         _ => None,
     };
     match synth_hook.clone() {
-        Some(hook) => prog.arch_mut().kuna_states.set(hook),
+        Some(hook) => prog.arch_mut().unlace_states.set(hook),
         None => prog
             .arch_mut()
-            .kuna_states
+            .unlace_states
             .remove::<std::cell::RefCell<unlace_decomp::structsynth::shard::ShardHook>>(),
     }
     let converge = args.jobs_synth == Some(jobs::SynthWorker::Serial);
@@ -914,7 +914,7 @@ fn run_jobs_worker(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
-/// (kuna `structsynth`) Make this worker a forcing one: forget the structures
+/// (unlace `structsynth`) Make this worker a forcing one: forget the structures
 /// it minted itself, mint the parent's replayed table in its order, and answer
 /// every later ledger lookup from the chunk specs.
 fn take_synth_table(
@@ -933,7 +933,7 @@ fn take_synth_table(
         .and_then(|()| shard::install_table(prog.arch().types(), &table))
         .map_err(|e| format!("cannot install the synthesized structures: {e}"))?;
     let hook = ShardHook::forcing(at_load.clone());
-    prog.arch_mut().kuna_states.set(hook.clone());
+    prog.arch_mut().unlace_states.set(hook.clone());
     Ok(hook)
 }
 
@@ -979,7 +979,7 @@ fn seed_worker_inventory(prog: &mut ConsoleProgram, path: &str) -> Result<(), St
     let inventory = jobs::read_spec(path)?;
     let callwide_inventory = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::callwide::CallWide>()
         .0
         .then(|| {
@@ -1057,12 +1057,12 @@ pub(crate) fn decompile_targets_pooled(
     Ok(pooled)
 }
 
-/// (kuna `armframes`) The parent's frame-recovery record, encoded for the pool.
+/// (unlace `armframes`) The parent's frame-recovery record, encoded for the pool.
 pub(crate) fn worker_arm_frames(prog: &ConsoleProgram) -> Option<String> {
     prog.arm_frames().map(|record| record.encode())
 }
 
-/// (kuna `armframes`) Replay the parent's frame recovery in a worker that skips
+/// (unlace `armframes`) Replay the parent's frame recovery in a worker that skips
 /// discovery, so its Listing is the parent's without the search.
 fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<(), String> {
     let Some(scratch) = args.jobs_worker.as_deref().filter(|_| !args.jobs_full_load) else {
@@ -1084,12 +1084,12 @@ fn replay_worker_arm_frames(prog: &mut ConsoleProgram, args: &Args) -> Result<()
     Ok(())
 }
 
-/// (kuna `structsynth`) The ledger a sharded run replays its workers' lookups
+/// (unlace `structsynth`) The ledger a sharded run replays its workers' lookups
 /// from, read off the parent's program before any decompile: `None` when this
 /// run does not synthesize structures.
 pub(crate) fn synth_base(prog: &ConsoleProgram) -> Option<shard::Replay> {
     prog.arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
         .then(|| shard::Replay::probe(prog.arch().types()))
@@ -1212,7 +1212,7 @@ pub(crate) fn any_refused_assertion(outcomes: &[unlace_console::assertions::Outc
     outcomes.iter().any(|o| o.fatal)
 }
 
-/// (kuna outlang) Report the Rust back-end's unrepresentable gotos on stderr.
+/// (unlace outlang) Report the Rust back-end's unrepresentable gotos on stderr.
 ///
 /// A `panic!` where the binary jumps is a FIDELITY warning, not a failed run:
 /// the rest of the body is a translation, the marker says where it stops being
@@ -1522,7 +1522,7 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
     if explicit
         && prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::protoorder::ProtoOrderMode>()
             .is_on()
         && !whole
@@ -1557,7 +1557,8 @@ fn decompile_all(args: &Args, filters: &Filters) -> Result<AllRun, String> {
 /// serial run and every `--jobs` worker alike.
 pub(crate) fn arm_fn_budgets(prog: &mut ConsoleProgram, args: &Args) {
     if args.max_fn_seconds > 0 {
-        prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(args.max_fn_seconds));
+        prog.arch_mut().unlace_fn_budget =
+            Some(std::time::Duration::from_secs(args.max_fn_seconds));
     }
     match args.max_fn_memory {
         Some(mib) => unlace_decomp::fnmemory::set_limit_mib(mib),
@@ -1625,13 +1626,13 @@ pub(crate) fn decompile_entries_with(
         want_pointer_arguments: pointer_arguments,
         ..DecompileOptions::default()
     };
-    prog.arch_mut().kuna_tail_callee_batch = tail_callees;
+    prog.arch_mut().unlace_tail_callee_batch = tail_callees;
     let funcs = unlace_console::project::decompile_targets_with(prog, targets, &opts);
-    prog.arch_mut().kuna_tail_callee_batch = false;
+    prog.arch_mut().unlace_tail_callee_batch = false;
     funcs
 }
 
-/// (kuna `protoorder`) Whether this run takes the callee-first order, and
+/// (unlace `protoorder`) Whether this run takes the callee-first order, and
 /// whether the option was named on the command line.
 ///
 /// A narrowed run, or a raw image, skips the order unless the option is named.  Every whole-program driver asks here, so the
@@ -1646,7 +1647,7 @@ pub(crate) fn callee_first_decision(
     let explicit = args.options.iter().any(|(name, _)| name == "protoorder");
     let on = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::protoorder::ProtoOrderMode>()
         .is_on()
         && selected > 1
@@ -1654,7 +1655,7 @@ pub(crate) fn callee_first_decision(
     (on, explicit)
 }
 
-/// (kuna `protoorder`, `callbacktype`) Say so on a surface the option does not
+/// (unlace `protoorder`, `callbacktype`) Say so on a surface the option does not
 /// reach.
 ///
 /// The callee-first order and the park live in a whole-program driver's own
@@ -1682,13 +1683,13 @@ pub fn warn_protoorder_inert(options: &[(String, String)], surface: &str) {
     }
 }
 
-/// (kuna `calleereginputs custom`) Does `value` name the whole-image `custom`
+/// (unlace `calleereginputs custom`) Does `value` name the whole-image `custom`
 /// extension?
 fn is_custom(value: &str) -> bool {
     value.trim().eq_ignore_ascii_case("custom")
 }
 
-/// (kuna `calleereginputs custom`) Say so when the run names `custom` but is not
+/// (unlace `calleereginputs custom`) Say so when the run names `custom` but is not
 /// the whole-binary callee-first run that decides it.
 pub(crate) fn note_custom_inert(prog: &ConsoleProgram, selected: usize) {
     if unlace_decomp::calleereginputs::custom_applies(prog.arch()) {
@@ -1714,14 +1715,14 @@ fn list_functions(args: &Args) -> Result<(ConsoleProgram, Vec<FunctionEntry>), S
     Ok((prog, entries))
 }
 
-/// (kuna `uefi`) The protocol and PPI interface instances the EFI module at
+/// (unlace `uefi`) The protocol and PPI interface instances the EFI module at
 /// `path` installs, read off one load of it (`unlace unpack --protocols`).
 pub(crate) fn uefi_installs(
     path: &std::path::Path,
 ) -> Result<Vec<unlace_decomp::uefiprotocols::InstalledInterface>, String> {
     let args = parse_args(&[path.to_string_lossy().into_owned()], "functions")?;
     let prog = load_program(&args, DriverDefaults::Functions)?;
-    Ok(prog.arch().kuna_uefi_installs.clone())
+    Ok(prog.arch().unlace_uefi_installs.clone())
 }
 
 /// Which bundle of driver defaults a surface takes in [`load_program`].
@@ -1772,12 +1773,12 @@ impl DriverDefaults {
 /// they must be applied.
 ///
 /// One function because the two surfaces that need them apply them differently:
-/// the in-process drivers ([`load_program`]) call `set_kuna_option`, while
+/// the in-process drivers ([`load_program`]) call `set_unlace_option`, while
 /// single-function `unlace decompile` emits `option` lines into the `decomp_dbg`
 /// script. When only the in-process driver had them, a non-x86-64 entry that
-/// exists solely because `funcstart_patterns` found it was listed by `kuna
+/// exists solely because `funcstart_patterns` found it was listed by `unlace
 /// functions` and decompiled by `unlace decompile-all`, yet `unlace decompile
-/// <that name>` answered `no function matches` — kuna printed a name it would
+/// <that name>` answered `no function matches` — unlace printed a name it would
 /// not then accept (RE-need `analysis-generated-function-name`).
 ///
 /// `decompiles` says whether the surface renders bodies, which is the one axis
@@ -1790,7 +1791,7 @@ impl DriverDefaults {
 /// Every injection yields to the caller: naming the option at all (directly or
 /// through a resolved `--mode` preset) skips it.
 ///
-/// (kuna, decbench F1) The program-wide Listing is ON unless the caller set it
+/// (unlace, decbench F1) The program-wide Listing is ON unless the caller set it
 /// explicitly (`--option listing on|off` still wins — the injection is skipped
 /// whenever the caller names `listing` at all).  Two independent reasons, one
 /// per surface:
@@ -1818,7 +1819,7 @@ impl DriverDefaults {
 /// interactive console / datatest harness are untouched, and a selected mode
 /// can still name Listing.
 ///
-/// (kuna, decbench ARM) Oracle 5 — the always-on prologue-pattern scan folded into
+/// (unlace, decbench ARM) Oracle 5 — the always-on prologue-pattern scan folded into
 /// function discovery — is x86-64-only, so on a STRIPPED **non-x86-64** binary the ELF
 /// entry point is the ONLY discovered function (ARM Cortex-M `betaflight`: 1 of ~469;
 /// it has no recursive-descent Listing sweep at the analyzer tier).  The
@@ -1829,13 +1830,13 @@ impl DriverDefaults {
 /// it OFF (oracle 5 + the entry oracles suffice, and the aggressive scan can
 /// over-produce there).  See DIV-20 (`docs/divergences.md`).
 ///
-/// (kuna, decbench ARM) `funcstart_patterns` only seeds a candidate when a matching
+/// (unlace, decbench ARM) `funcstart_patterns` only seeds a candidate when a matching
 /// EPILOGUE prepattern (Ghidra `<patternpairs>`) sits immediately before it, so ~70% of a
 /// stripped Cortex-M firmware's functions — those preceded by literal pools / data /
 /// padding and living in call-graph components reachable only through indirect calls /
 /// function-pointer tables — are never seeded, and the recursive-descent walk (direct
 /// CALL/BL only) structurally cannot reach them (crazyflie: 87% of the missed functions
-/// have NO direct-call edge from what kuna found).  The ported Aggressive Instruction
+/// have NO direct-call edge from what unlace found).  The ported Aggressive Instruction
 /// Finder (`aif`, Ghidra `ArmAggressiveInstructionFinderAnalyzer`) gap-walks the UNDEFINED
 /// regions the walk left uncovered, gating each candidate on a prologue-fingerprint
 /// histogram learned from the already-discovered functions + `check_valid_subroutine`, so
@@ -1886,7 +1887,7 @@ fn driver_default_options_for_arch(
     let named = |name: &str| options.iter().any(|(option, _)| option == name);
 
     let mut injected = Vec::new();
-    // (kuna DIV-120) A function past the instruction budget reports the body kuna
+    // (unlace DIV-120) A function past the instruction budget reports the body unlace
     // DID decode, not nothing.  Upstream's default makes the overrun fatal, so a
     // function larger than `maxinstruction` decompiled to `code: null` and an
     // error naming no remedy; clearing the flag truncates the flow at the budget
@@ -1957,7 +1958,7 @@ fn load_program_with_rust_profiles(
     // must be exported BEFORE it runs (the same gates `unlace decompile` threads to
     // the subprocess env). Keep the restoration guard alive through runtime
     // option recording too: the bridged options update their env again inside
-    // `set_kuna_option` and must not leak into a later load.
+    // `set_unlace_option` and must not leak into a later load.
     let _loadtime_env = apply_loadtime_env(
         &args.options,
         args.slice.as_deref(),
@@ -1978,7 +1979,7 @@ fn load_program_with_rust_profiles(
         None => (None, Vec::new()),
     };
     let mut prog = if args.raw_image {
-        // (kuna `--jobs`) A raw image's discovery (`rawdiscover`) is a serial
+        // (unlace `--jobs`) A raw image's discovery (`rawdiscover`) is a serial
         // sweep and descent, not the lane-parallel object walk, so the decode
         // lanes have nothing to run. Say so, rather than accept the flag and do
         // nothing with it -- every other surface prints one line saying which
@@ -2041,11 +2042,11 @@ fn load_program_with_rust_profiles(
     ) {
         // Through the same dispatch the caller's `--option`s take: a driver
         // default may name an upstream option (`errortoomanyinstructions`) as
-        // well as a kuna one, and `set_kuna_option` only knows the kuna table.
+        // well as a unlace one, and `set_unlace_option` only knows the unlace table.
         apply_one_option(&mut prog, name, value)?;
     }
 
-    // (kuna `--assert`) A `readonly` range is inert unless read-only propagation
+    // (unlace `--assert`) A `readonly` range is inert unless read-only propagation
     // is on, and that option is default-off; asserting the range turns it on.
     // Set BEFORE the caller's own `--option`s so an explicit `--option readonly
     // off` still wins -- the same order the script surface emits it in.
@@ -2056,7 +2057,7 @@ fn load_program_with_rust_profiles(
     // BEFORE the gated analysis commit (the `option` < `read symbols` ordering
     // the script path enforces), so a per-pass gate takes effect.
     apply_runtime_options(&mut prog, &args.options)?;
-    // (kuna `--assert bytes`) The IMAGE-scoped directives, before the commit and
+    // (unlace `--assert bytes`) The IMAGE-scoped directives, before the commit and
     // before any read of the addresses they name: a byte overlay states what the
     // running program put there, and every later decode has to see it. The
     // console script surface emits `override bytes` in the same slot, ahead of
@@ -2244,10 +2245,10 @@ fn resolve_targets_with_policy(
 
 // --- option / env-gate handling ---------------------------------------------
 
-/// (kuna outlang) The output language to use when the caller named none.
+/// (unlace outlang) The output language to use when the caller named none.
 ///
 /// A Rust binary rendered as C is strictly worse than the same binary rendered
-/// as Rust: the types are wrong in a way a reader has to undo by hand. kuna
+/// as Rust: the types are wrong in a way a reader has to undo by hand. unlace
 /// already knows which it is -- `sourcelang::detect_compiler` is the port of
 /// Ghidra's `SourceLanguageAnalyzer`, and it reports `Rustc` from the `.comment`
 /// `rustc version` record, a `.rodata` signature, or a Rust-mangled symbol -- so
@@ -2262,7 +2263,7 @@ pub fn detected_output_language(
     binary: &str,
     options: &[(String, String)],
 ) -> Option<&'static str> {
-    // (kuna `dexmodel`) Dalvik bytecode is Java's: `PrintJava`, as upstream
+    // (unlace `dexmodel`) Dalvik bytecode is Java's: `PrintJava`, as upstream
     // selects for the language.
     let head = std::fs::File::open(binary).and_then(|mut file| {
         let mut head = [0u8; 0x70];
@@ -2323,8 +2324,8 @@ pub fn parse_language_flag(v: &str) -> Result<Option<&'static str>, String> {
 }
 
 /// Apply each `--option NAME VALUE` to the live architecture, mirroring the
-/// console `option` command (`IfcOption`): kuna stage-model options route to
-/// `set_kuna_option`, upstream options to the `OptionDatabase`.  Load-time gates
+/// console `option` command (`IfcOption`): unlace stage-model options route to
+/// `set_unlace_option`, upstream options to the `OptionDatabase`.  Load-time gates
 /// are still applied here (so they are recorded) after their env export above.
 fn apply_runtime_options(
     prog: &mut ConsoleProgram,
@@ -2336,21 +2337,21 @@ fn apply_runtime_options(
     Ok(())
 }
 
-/// Apply one `NAME VALUE` pair to the live architecture: the kuna stage-model
+/// Apply one `NAME VALUE` pair to the live architecture: the unlace stage-model
 /// table first, then the upstream `OptionDatabase`, then the load-time gates the
 /// env bridge already handled.
 fn apply_one_option(prog: &mut ConsoleProgram, name: &str, value: &str) -> Result<(), String> {
-    if KUNA_OPTION_NAMES.contains(&name) {
+    if UNLACE_OPTION_NAMES.contains(&name) {
         return prog
             .arch_mut()
-            .set_kuna_option(name, value)
+            .set_unlace_option(name, value)
             .map(|_| ())
             .map_err(|e| format!("option {name}: {}", e.explain()));
     }
     let id = prog.registry().find_element(name, 0);
     if id == 0 {
         // A load-time gate may not be a registered upstream option but is a
-        // valid kuna gate already handled via env; don't fail on it.
+        // valid unlace gate already handled via env; don't fail on it.
         if is_loadtime_gate(name) {
             return Ok(());
         }
@@ -2754,7 +2755,7 @@ fn document_fields(
 ) -> (Fields, Fields) {
     let mut fields = vec![
         ("binary".to_string(), Json::Str(binary.to_string())),
-        // (kuna outlang) The auto language policy resolves inside the engine, so
+        // (unlace outlang) The auto language policy resolves inside the engine, so
         // the document has to say which language `code` is in -- otherwise a
         // consumer cannot tell a Rust body from a C one without guessing.
         ("language".to_string(), Json::Str(language.to_string())),
@@ -2777,7 +2778,7 @@ fn document_fields(
     )]);
     fields.extend(declared.notes_field());
     fields.extend(declared.fid_databases_field());
-    // (kuna `--assert`) One row per caller-supplied assertion, in the order the
+    // (unlace `--assert`) One row per caller-supplied assertion, in the order the
     // caller gave them: what it was, where in the phase model it wrote, and
     // whether it landed. Always present (`[]` when none were passed) so an agent
     // can read it unconditionally — an assertion whose fate is unreported is an
@@ -2789,7 +2790,7 @@ fn document_fields(
     (fields, tail)
 }
 
-/// (kuna `honestgaps`) How many warnings of each kind the document's records
+/// (unlace `honestgaps`) How many warnings of each kind the document's records
 /// list, by kind in byte order: the whole run's gaps in one place, so a
 /// harness can rank them without walking every record. `{}` when none.
 fn warning_kinds_json(funcs: &[FuncResult]) -> Json {
@@ -2837,7 +2838,7 @@ fn function_json(
             "error".into(),
             f.error.clone().map(Json::Str).unwrap_or(Json::Null),
         ),
-        // (kuna outlang) The fidelity counter for Rust output: how
+        // (unlace outlang) The fidelity counter for Rust output: how
         // many jumps in `code` are a diverging `panic!` instead of a
         // translation. Always present, `0` on every C render, so a
         // consumer can filter or re-run without inspecting the text.
@@ -2862,7 +2863,7 @@ fn function_json(
             Json::Array(f.variables.iter().map(var_json).collect()),
         ));
     }
-    // (kuna `structdefs`) The layout side: the definitions of the
+    // (unlace `structdefs`) The layout side: the definitions of the
     // composites this function's C names, as records. Present unless
     // omitted, `[]` unless the option is on.
     if !omit.types {
@@ -2971,7 +2972,7 @@ fn line_mapping_json(mapping: &LineMapping) -> Json {
     ])
 }
 
-/// (kuna, issue #197) The `aliases` array: every OTHER name the reported entry
+/// (unlace, issue #197) The `aliases` array: every OTHER name the reported entry
 /// carries.  Always present (`[]` when the entry has exactly one name) so a
 /// consumer can read the field unconditionally.  Additive — no existing field
 /// changes shape, and the names that used to appear as extra top-level records
@@ -3132,7 +3133,7 @@ mod provenance_json_tests {
         assert!(rendered.contains("\"line_number\": 3"));
         assert!(rendered.contains("\"line_numbers\": [\n            3"));
         assert!(rendered.contains("\"addresses\": [\n            4198404"));
-        // (kuna `structdefs`) The layout side of the record, additive to every
+        // (unlace `structdefs`) The layout side of the record, additive to every
         // key above it.
         assert!(rendered.contains("\"types\": ["));
         assert!(rendered.contains("\"definition\": \"struct mystruct {"));
@@ -3454,7 +3455,7 @@ fn mode_and_options_for_binary(
     Ok(resolved)
 }
 
-/// (kuna) Is `binary` a 32-bit x86 PE? On one, `fast` keeps the prologue-pattern
+/// (unlace) Is `binary` a 32-bit x86 PE? On one, `fast` keeps the prologue-pattern
 /// starts (`funcstart_patterns`). Its MSVC CRT and MFC code is packed function
 /// after function with no padding and no reference to many of them; measured on
 /// PEGRP32F.dll against IDA 9.5, the patterns cut the missing IDA starts from
@@ -3674,7 +3675,7 @@ pub(crate) fn parse_args_with_filters(
                 }
             }
             "--option" => options.push(crate::args::take_option(argv, &mut i)?),
-            // (kuna outlang) `--language` is the first-class surface for the
+            // (unlace outlang) `--language` is the first-class surface for the
             // output language; it lowers to the upstream `setlanguage` option, so
             // it reaches every downstream consumer (the console script here, the
             // in-process option applier in decompile-all) with no new plumbing.
@@ -3808,7 +3809,7 @@ pub(crate) fn parse_args_with_filters(
         }
     }
 
-    // (kuna outlang, DIV-80) The auto policy: with no `--language` and no
+    // (unlace outlang, DIV-80) The auto policy: with no `--language` and no
     // explicit `--option setlanguage`, follow the binary. `decompile-project` and
     // `decompile-graph` are excluded -- a `.c`/`.h`/`.asm` export and a `codeC`
     // field are C-shaped by construction and refuse any other language, so
@@ -3872,7 +3873,7 @@ pub(crate) fn parse_args_with_filters(
                     .into(),
             );
         }
-        // (kuna `protoorder`) A statement does not cross a worker process.
+        // (unlace `protoorder`) A statement does not cross a worker process.
         if options
             .iter()
             .any(|(name, value)| name == "protoorder" && value != "off")
@@ -3885,7 +3886,7 @@ pub(crate) fn parse_args_with_filters(
                     .into(),
             );
         }
-        // (kuna `callbacktype`) Neither does a parked declaration: it is read
+        // (unlace `callbacktype`) Neither does a parked declaration: it is read
         // back by a later decompile of the same load.
         if options
             .iter()
@@ -3899,7 +3900,7 @@ pub(crate) fn parse_args_with_filters(
                     .into(),
             );
         }
-        // (kuna `calleereginputs custom`) Nor does the whole-image decision.
+        // (unlace `calleereginputs custom`) Nor does the whole-image decision.
         if options
             .iter()
             .any(|(name, value)| name == "calleereginputs" && is_custom(value))

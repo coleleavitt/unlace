@@ -40,7 +40,7 @@ int main(void){return 0;}
         .address();
     let project = root.join("project");
     let mapping = format!("data 0x{address:x} sample_pair validation_samples[4]");
-    let (_, stderr, rc) = common::run_kuna(&[
+    let (_, stderr, rc) = common::run_unlace(&[
         "decompile-project",
         sample.to_str().unwrap(),
         "--functions",

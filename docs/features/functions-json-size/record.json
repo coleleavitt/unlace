@@ -15,7 +15,7 @@
   "tier": "driver",
   "change_kind": "capability-add",
   "default_on": true,
-  "owning_file": "decompiler/crates/kuna-console/src/funcextent.rs",
+  "owning_file": "decompiler/crates/console/src/funcextent.rs",
   "owning_function": "clip / assign_extents / extent_at",
   "spec_chapter": "docs/spec/01-program-prep.md",
   "upstream_anchor": null,
@@ -36,7 +36,7 @@
     "PIPELINE GAP FOUND, not closed here: nothing runs `tests/cli/*.json`. `scripts/repipe/verify.py::promote` writes the directory and `webui.py` displays it, but no Makefile target, CI workflow or cargo test executes a promoted probe -- so promotion alone leaves no CI guard. This need is the first promotion, so the directory did not exist before. The regression guard that actually runs in CI here is the pair of cargo integration tests in the owning crate, per the track-`tooling` contract. A generic tests/cli runner is pipeline infrastructure and is left for the captain."
   ],
 
-  "mechanism": "New module `kuna-console/src/funcextent.rs`: `clip(entry, next, code_spans)` returns the address-contiguous extent, `code_spans` filters the loader section table to sized CODE spans, `assign_extents` fills a whole ascending entry list in one pass and `extent_at` serves the single-address paths. `FunctionEntry` gains `size: u64`, filled by `ConsoleProgram::function_entries_canonical` (already ascending, from its BTreeMap) and by the new `ConsoleProgram::function_extent_at` for synthesized `--addr` entries. `FuncResult.size` now carries that number through instead of the dead `fd.get_size()`. `kuna functions --json` emits `size` after `aliases`; `decompile-all`/`decompile-project`/wasm-list report the same number.",
+  "mechanism": "New module `console/src/funcextent.rs`: `clip(entry, next, code_spans)` returns the address-contiguous extent, `code_spans` filters the loader section table to sized CODE spans, `assign_extents` fills a whole ascending entry list in one pass and `extent_at` serves the single-address paths. `FunctionEntry` gains `size: u64`, filled by `ConsoleProgram::function_entries_canonical` (already ascending, from its BTreeMap) and by the new `ConsoleProgram::function_extent_at` for synthesized `--addr` entries. `FuncResult.size` now carries that number through instead of the dead `fd.get_size()`. `kuna functions --json` emits `size` after `aliases`; `decompile-all`/`decompile-project`/wasm-list report the same number.",
 
   "accuracy": {
     "method": "clip vs ELF st_size over every symbolized fixture in decompiler/crates/kuna-analysis/tests/fixtures (STT_FUNC, defined, nonzero st_size, entry present in kuna's inventory)",
@@ -73,7 +73,7 @@
   "gates": {
     "make test": "PARITY OK, 675/675 assertions",
     "make test-stages": "PARITY OK, 574/574 assertions",
-    "make rust-test": "green (workspace suite; kuna-console 8 new funcextent unit tests, kuna-cli 22/22 in decompile_all_cli including the 2 new ones)",
+    "make rust-test": "green (workspace suite; console 8 new funcextent unit tests, kuna-cli 22/22 in decompile_all_cli including the 2 new ones)",
     "make check-spec": "check-spec OK",
     "kuna catalog --check": "catalog OK -- no option added (a JSON metadata field cannot change emitted C, so no phases.toml row, no options.rs registration, no catalog counters)"
   },
@@ -85,7 +85,7 @@
   },
 
   "tests_added": [
-    "decompiler/crates/kuna-console/src/funcextent.rs (8 unit tests: the clip rule, section selection, out-of-section entries, duplicate/backward neighbours, code_spans filtering, extent_at)",
+    "decompiler/crates/console/src/funcextent.rs (8 unit tests: the clip rule, section selection, out-of-section entries, duplicate/backward neighbours, code_spans filtering, extent_at)",
     "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs::functions_json_carries_a_ranking_extent (the field must exist on every record AND discriminate -- an all-zero or all-equal column fails, which is what would have shipped had the filed hypothesis been followed)",
     "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs::functions_and_decompile_all_agree_on_size (one field name, one meaning across the two surfaces)"
   ],

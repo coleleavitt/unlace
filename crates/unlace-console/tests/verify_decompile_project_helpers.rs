@@ -375,7 +375,7 @@ fn resumable_asm_sweep_matches_the_one_shot_sweep() {
     let variables = render_variables_section(&results);
     assert!(variables.starts_with("\n; --- variables ---\n"));
     for r in &results {
-        // (kuna `reglocals`) A local outside the frame has no `.asm` comment, so a
+        // (unlace `reglocals`) A local outside the frame has no `.asm` comment, so a
         // function with only those has no block either.
         if r.variables.iter().all(|v| v.kind() == "register") {
             continue;

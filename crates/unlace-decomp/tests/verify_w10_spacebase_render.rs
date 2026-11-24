@@ -102,7 +102,7 @@ fn cpp_oracle() -> PathBuf {
 }
 
 /// Drive `bin` on `stem`.xml with `UNLACE_DUMP=1`, returning the sliced bulk
-/// `print C` body (between `===KUNA_DUMP_BEGIN===` and `===KUNA_DUMP_MID===`),
+/// `print C` body (between `===UNLACE_DUMP_BEGIN===` and `===UNLACE_DUMP_MID===`),
 /// or `None` if the binary / `.sla` is unavailable (the test SKIPs).
 fn dump_print_c(bin: &PathBuf, stem: &str) -> Option<String> {
     if !bin.exists() {
@@ -319,7 +319,7 @@ fn a4_protected_files_byte_identical_rust_vs_cpp() {
 // The porter's `a4_protected_files_byte_identical_rust_vs_cpp` above keys on the
 // stems "readstruct" / "condconst_conn", which are NOT datatest *files* (they are
 // function names inside `nestedoffset.xml` / `condconst.xml`).  `dump_print_c`
-// finds no `===KUNA_DUMP_BEGIN` marker for them and returns None, so that test
+// finds no `===UNLACE_DUMP_BEGIN` marker for them and returns None, so that test
 // silently checks only `boolless`.  These tests re-pin the byte-identity claim on
 // REAL datatest stems that carry stack locals and exercise the new SPACEBASE
 // `opPtrsub` arm, plus pin the two stage facts the independent review confirmed:

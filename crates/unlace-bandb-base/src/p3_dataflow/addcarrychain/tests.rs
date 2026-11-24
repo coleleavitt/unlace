@@ -1,4 +1,4 @@
-//! Tests for `RuleAddCarryChain` (kuna GH-8913): the carry-chain wide-add fusion
+//! Tests for `RuleAddCarryChain` (unlace GH-8913): the carry-chain wide-add fusion
 //! `PIECE(hi, lo) -> INT_ADD(PIECE(hipart,b), zext(a))` and its decline paths.
 
 use std::rc::Rc;
@@ -53,7 +53,7 @@ fn no_replace() -> impl FnMut(
     &mut crate::varnode::VarnodeBank,
     VarnodeId,
     VarnodeId,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     |_, _, _| Ok(())
 }
 

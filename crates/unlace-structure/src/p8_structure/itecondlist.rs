@@ -12,7 +12,7 @@
 //! [`leaf_bblock`](crate::iteregion::leaf_bblock) descends a
 //! `BlockList` of **one** component but returns `None` for a list of two or more.
 //!
-//! That bail is what makes kuna re-roll only **every other** diamond in a run of
+//! That bail is what makes unlace re-roll only **every other** diamond in a run of
 //! structurally identical ones.  When a diamond's predecessor is itself a
 //! just-collapsed `if`, the block-concatenation rule folds the predecessor together
 //! with the following condition block into a two-component `BlockList`, and *that
@@ -58,7 +58,7 @@ use crate::funcdata::Funcdata;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<itecondlist>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<itecondlist>` (unlace).  ElementIds live in the 4000+ range
 /// (4120 paramcopyhoist was the previous high-water mark; this is 4121).
 pub const ELEM_ITECONDLIST: ElementId = ElementId::new("itecondlist", 4121);
 

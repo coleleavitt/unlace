@@ -1,4 +1,4 @@
-//! (kuna `blobs`) The archive and compressed-stream containers: each walk
+//! (unlace `blobs`) The archive and compressed-stream containers: each walk
 //! returns the file's exact length when `d` starts with a whole, well-formed
 //! file. Only gzip is decompressed (its length is not otherwise knowable), into
 //! a fixed buffer that is checksummed and discarded.

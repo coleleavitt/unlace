@@ -67,7 +67,7 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
   count 86 -> 87) and `catalog_bytecompat.rs` (87 -> 88 plus the recaptured
   `tests/fixtures/phase_catalog.json`). The live-value count stays at **29** —
   this row declares no codegen `live_field`, so it joins `PASS_GATES` instead.
-  `tests/stages/kuna-catalog.toml` needs no edit: its exact-count asserts key on
+  `tests/stages/catalog.toml` needs no edit: its exact-count asserts key on
   `source_decompiler = "angr"` and the `structure-recovery` / `opt-in-tool`
   change_kinds, none of which this row joins. No stages XML is added, so the
   `kuna-base/src/xml.rs` corpus count (verified by counting the files: 83
@@ -79,7 +79,7 @@ corroboration. It cannot separate switch tables (a switch table is a run) and co
   pointer found with its site list, the shared-target case, the non-candidate cases
   (even word, zero slot, target outside the executable ranges), and the ARM gate
   proven load-bearing (the scan itself is architecture-blind).
-* e2e (`kuna-console/tests/verify_ptrentry.rs`): four tests over
+* e2e (`console/tests/verify_ptrentry.rs`): four tests over
   `tests/fixtures/cortexm_ptrentry_le32` — option off, the pointer-only leaf is in
   no symbol table and its bytes produce no C; option on, it is registered and
   decompiles to its real constant; the switch-table case stays rejected **with the

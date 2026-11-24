@@ -12,7 +12,7 @@
 //!   if (cond) { ...; return X; } else { body }   ==>   if (cond) { ...; return X; } body
 //! ```
 //!
-//! Most of this work is already done in kuna by the region structurer
+//! Most of this work is already done in unlace by the region structurer
 //! (`p8_structure::region_structurer`, default-on since DIV-12): for a clean
 //! diamond it forms an if/then (not an if/else) and the printer's guard
 //! inversion already produces the flat early-return form.  What is left over —
@@ -42,7 +42,7 @@
 //! a 2-component if/then) and spliced into the parent's component list as the
 //! `BlockIf`'s immediate successor.  This is a pure *print-tree* edit (the
 //! `list`/`parent` of structured nodes), exactly as
-//! [`kuna_inline_return_tail`](crate::block::BlockGraph::kuna_inline_return_tail)
+//! [`unlace_inline_return_tail`](crate::block::BlockGraph::unlace_inline_return_tail)
 //! does — no p-code is cloned and SSA/def-use is untouched, because the `else`
 //! body deterministically executes immediately after the (non-returning) `if`.
 //!
@@ -53,7 +53,7 @@
 //! byte-identical.  It logs an `ifelseflatten:` warning per function flattened so
 //! the effect is observable.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
@@ -65,7 +65,7 @@ use crate::options::on_or_off;
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<ifelseflatten>` (kuna).  ElementIds live in the 4000+ range.
+/// Marshaling element `<ifelseflatten>` (unlace).  ElementIds live in the 4000+ range.
 /// Renumbered from 4103 at the merge into main: main now uses 4100 gotoreduce,
 /// 4101 tailcalljump, 4102 regionstructure, 4103 noreturn_extern,
 /// 4104 noreturn_externmatch, 4105 crossjumprevert, 4106 switchsharedcase, so the
@@ -107,7 +107,7 @@ impl Action for ActionIfElseFlatten {
         // P0 assertion `option ifelseflatten on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::ifelseflatten::FlattenIfelse>()
             .0
         {
@@ -138,7 +138,7 @@ impl Action for ActionIfElseFlatten {
             if !is_flattenable(data, if_id) {
                 continue;
             }
-            if data.sblocks_mut().kuna_flatten_ifelse(if_id) {
+            if data.sblocks_mut().unlace_flatten_ifelse(if_id) {
                 count += 1;
             }
         }
@@ -291,22 +291,22 @@ impl OptionIfElseFlatten {
     pub const NAME: &'static str = "ifelseflatten";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("If-else flattening turned {prop}")))
     }
 }
 
-/// (kuna) angr `IfElseFlattener`: drop the `else` arm of a 3-component `if`
+/// (unlace) angr `IfElseFlattener`: drop the `else` arm of a 3-component `if`
 /// whose true-clause is statement-terminating, re-parenting the else body as
 /// the `if`'s follower (`flatten_ifelse`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlattenIfelse(pub bool);
 
-impl crate::optionset::KunaOption for FlattenIfelse {
+impl crate::optionset::UnlaceOption for FlattenIfelse {
     const NAME: &'static str = "ifelseflatten";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         FlattenIfelse(false)
@@ -316,7 +316,7 @@ impl crate::optionset::KunaOption for FlattenIfelse {
         FlattenIfelse(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::ifelseflatten::OptionIfElseFlatten.apply(value)?;
         Ok((FlattenIfelse(v), msg))
     }

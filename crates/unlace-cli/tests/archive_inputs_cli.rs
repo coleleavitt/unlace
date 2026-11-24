@@ -25,14 +25,14 @@ fn fixture(name: &str) -> String {
 fn tar_and_zip_members_list_select_and_decompile() {
     for archive in ["objs.tar", "objs.tar.gz", "objs.zip"] {
         let path = fixture(archive);
-        let (out, err, code) = common::run_kuna(&["functions", &path, "--member"]);
+        let (out, err, code) = common::run_unlace(&["functions", &path, "--member"]);
         assert_eq!(code, 0, "{archive}: {err}");
         assert_eq!(
             out, "sq.o\t1064\nnotes.txt\t14\nlib/cube.o\t1064\n",
             "{archive}"
         );
 
-        let (out, err, code) = common::run_kuna(&["functions", &path]);
+        let (out, err, code) = common::run_unlace(&["functions", &path]);
         assert_eq!(code, 0, "{archive}: {err}");
         assert_eq!(
             out, "0x400000\tsq.o:sq\n0x400000\tlib/cube.o:cube\n",
@@ -40,20 +40,20 @@ fn tar_and_zip_members_list_select_and_decompile() {
         );
 
         let (out, err, code) =
-            common::run_kuna(&["decompile", &path, "--member", "lib/cube.o", "cube"]);
+            common::run_unlace(&["decompile", &path, "--member", "lib/cube.o", "cube"]);
         assert_eq!(code, 0, "{archive}: {err}");
         assert!(out.contains("return a0 * a0 * a0;"), "{archive}: {out}");
 
-        let (out, err, code) = common::run_kuna(&["decompile", &format!("{path}:sq.o"), "sq"]);
+        let (out, err, code) = common::run_unlace(&["decompile", &format!("{path}:sq.o"), "sq"]);
         assert_eq!(code, 0, "{archive}: {err}");
         assert!(out.contains("return a0 * a0;"), "{archive}: {out}");
 
-        let (out, err, code) = common::run_kuna(&["decompile", &path, "cube"]);
+        let (out, err, code) = common::run_unlace(&["decompile", &path, "cube"]);
         assert_eq!(code, 0, "{archive}: {err}");
         assert!(err.contains("using member lib/cube.o"), "{archive}: {err}");
         assert!(out.contains("int cube(int a0)"), "{archive}: {out}");
 
-        let (_, err, code) = common::run_kuna(&["decompile", &path, "nosuch"]);
+        let (_, err, code) = common::run_unlace(&["decompile", &path, "nosuch"]);
         assert_eq!(code, 2, "{archive}: {err}");
         assert!(
             err.contains("select one with --member NAME (sq.o, lib/cube.o)"),
@@ -65,7 +65,7 @@ fn tar_and_zip_members_list_select_and_decompile() {
 #[test]
 fn zip_listing_json_marks_the_object_members() {
     let (out, err, code) =
-        common::run_kuna(&["decompile", &fixture("objs.zip"), "--member", "--json"]);
+        common::run_unlace(&["decompile", &fixture("objs.zip"), "--member", "--json"]);
     assert_eq!(code, 0, "{err}");
     let doc: serde_json::Value = serde_json::from_str(&out).expect("one JSON document");
     let rows: Vec<_> = doc["members"]
@@ -97,11 +97,11 @@ fn an_archive_without_objects_passes_through_unless_a_member_is_named() {
     std::fs::write(&tar, bytes).unwrap();
     let tar = tar.to_str().unwrap();
 
-    let (_, err, code) = common::run_kuna(&["functions", tar]);
+    let (_, err, code) = common::run_unlace(&["functions", tar]);
     assert_eq!(code, 1, "{err}");
     assert!(err.contains("could not build an architecture"), "{err}");
 
-    let (out, err, code) = common::run_kuna(&["functions", tar, "--member"]);
+    let (out, err, code) = common::run_unlace(&["functions", tar, "--member"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(out, "notes.txt\t5\n");
 }
@@ -109,7 +109,7 @@ fn an_archive_without_objects_passes_through_unless_a_member_is_named() {
 #[test]
 fn fit_lists_its_images_and_loads_the_default_kernel_at_its_address() {
     let path = fixture("fit.itb");
-    let (out, err, code) = common::run_kuna(&["functions", &path, "--member"]);
+    let (out, err, code) = common::run_unlace(&["functions", &path, "--member"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(
         out,
@@ -117,13 +117,13 @@ fn fit_lists_its_images_and_loads_the_default_kernel_at_its_address() {
          fdt-1\t137\ttype=flat_dt\tarch=arm64\tcompression=none\n"
     );
 
-    let (out, err, code) = common::run_kuna(&["functions", &path, "--member", "--json"]);
+    let (out, err, code) = common::run_unlace(&["functions", &path, "--member", "--json"]);
     assert_eq!(code, 0, "{err}");
     let doc: serde_json::Value = serde_json::from_str(&out).expect("one JSON document");
     assert_eq!(doc["members"][0]["load"], "0x80080000");
     assert_eq!(doc["members"][1]["load"], serde_json::Value::Null);
 
-    let (out, err, code) = common::run_kuna(&["decompile-all", &path]);
+    let (out, err, code) = common::run_unlace(&["decompile-all", &path]);
     assert_eq!(code, 0, "{err}");
     assert!(
         err.contains("using member kernel-1 of the default configuration"),
@@ -140,7 +140,7 @@ fn fit_lists_its_images_and_loads_the_default_kernel_at_its_address() {
     );
     assert!(out.contains("return a0 * 3 + 7;"), "{out}");
 
-    let (out, err, code) = common::run_kuna(&[
+    let (out, err, code) = common::run_unlace(&[
         "decompile",
         &path,
         "--member",
@@ -162,7 +162,7 @@ fn a_device_tree_that_is_no_fit_is_not_an_archive() {
         .rposition(|w| w == [0xd0, 0x0d, 0xfe, 0xed])
         .unwrap();
     std::fs::write(&dtb, &fit[at..at + 137]).unwrap();
-    let (_, err, code) = common::run_kuna(&["functions", dtb.to_str().unwrap(), "--member"]);
+    let (_, err, code) = common::run_unlace(&["functions", dtb.to_str().unwrap(), "--member"]);
     assert_eq!(code, 2, "{err}");
     assert!(
         err.contains("--member applies to an archive input"),

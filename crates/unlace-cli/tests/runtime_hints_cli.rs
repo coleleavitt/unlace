@@ -20,7 +20,7 @@ fn fixture(name: &str) -> String {
         .to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, i32) {
+fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../specs");
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
@@ -39,7 +39,7 @@ const PYI_HINT: &str = "PyInstaller bundle (Python 3.12): extract with pyinstxtr
 #[test]
 fn summary_json_carries_the_runtime_array() {
     let bin = fixture("pyinstaller_cookie_x86_64");
-    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"runtime\": ["), "{out}");
     assert!(out.contains("\"id\": \"pyinstaller\""), "{out}");
@@ -47,7 +47,7 @@ fn summary_json_carries_the_runtime_array() {
     assert!(out.contains(PYI_HINT), "{out}");
     assert!(!err.contains("note:"), "the summary already says it: {err}");
 
-    let (text, _, _) = run_kuna(&["functions", &bin, "--summary"]);
+    let (text, _, _) = run_unlace(&["functions", &bin, "--summary"]);
     assert!(
         text.contains(&format!("runtime\tpyinstaller\t{PYI_HINT}")),
         "{text}"
@@ -57,17 +57,17 @@ fn summary_json_carries_the_runtime_array() {
 #[test]
 fn a_plain_image_has_an_empty_runtime_array_and_no_note() {
     let bin = fixture("arraycoverwidth_x86_64");
-    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"runtime\": []"), "{out}");
-    let (_, err, _) = run_kuna(&["decompile", &bin, "vm"]);
+    let (_, err, _) = run_unlace(&["decompile", &bin, "vm"]);
     assert!(!err.contains("note:"), "{err}");
 }
 
 #[test]
 fn other_subcommands_note_the_hint_on_stderr_only() {
     let bin = fixture("pyinstaller_cookie_x86_64");
-    let (out, err, code) = run_kuna(&["functions", &bin, "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--json"]);
     assert_eq!(code, 0, "{err}");
     assert_eq!(err.matches("note:").count(), 1, "{err}");
     assert!(err.contains(PYI_HINT), "{err}");
@@ -76,7 +76,7 @@ fn other_subcommands_note_the_hint_on_stderr_only() {
         "stdout stays the document: {out}"
     );
 
-    let (out, err, _) = run_kuna(&["decompile", &bin, "vm", "--json"]);
+    let (out, err, _) = run_unlace(&["decompile", &bin, "vm", "--json"]);
     assert!(err.contains(PYI_HINT), "{err}");
     assert!(!out.contains("pyinstxtractor"), "{out}");
 }
@@ -84,7 +84,7 @@ fn other_subcommands_note_the_hint_on_stderr_only() {
 #[test]
 fn a_rust_image_without_comment_reports_its_release_and_crates() {
     let bin = fixture("rust_crate_paths_x86_64");
-    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"id\": \"rust\""), "{out}");
     assert!(out.contains("\"version\": \"1.95.0\""), "{out}");
@@ -95,7 +95,7 @@ fn a_rust_image_without_comment_reports_its_release_and_crates() {
     assert!(out.contains("\"name\": \"arrayvec\""), "{out}");
     assert!(out.contains("\"version\": \"0.7.6\""), "{out}");
 
-    let (text, _, _) = run_kuna(&["functions", &bin, "--summary"]);
+    let (text, _, _) = run_unlace(&["functions", &bin, "--summary"]);
     assert!(
         text.contains("runtime\trust\tRust binary (rustc 1.95.0)"),
         "{text}"
@@ -106,7 +106,7 @@ fn a_rust_image_without_comment_reports_its_release_and_crates() {
 #[test]
 fn a_rust_image_with_comment_reports_the_recorded_version() {
     let bin = fixture("rust_fmt_args_real_x86_64");
-    let (out, err, code) = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let (out, err, code) = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("\"version\": \"1.93.1\""), "{out}");
     assert!(out.contains("\"crates\": []"), "{out}");

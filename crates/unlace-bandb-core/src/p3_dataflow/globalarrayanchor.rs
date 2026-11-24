@@ -20,13 +20,13 @@ use unlace_num::opcodes::OpCode;
 pub fn preserve_array_base(data: &Funcdata, root: OpId) -> bool {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::globalarrayanchor::GlobalArrayAnchor>()
         .0
         || !data.get_arch().infer_pointers
         || !data.is_type_recovery_on()
         || data
-            .kuna_global_array_anchor_passes
+            .unlace_global_array_anchor_passes
             .is_none_or(|passes| passes >= 4)
     {
         return false;
@@ -311,7 +311,7 @@ fn memory_address_root(data: &Funcdata, mut root: OpId) -> Option<(OpId, OpId)> 
     None
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Keep mapped global array bases separate from negative element offsets
     /// (option `globalarrayanchor`).
     GlobalArrayAnchor,

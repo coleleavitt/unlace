@@ -26,7 +26,7 @@ pub const outofbounds_present: uint4 = 0x100;
 pub const reinterpreted_present: uint4 = 0x200;
 /// Indicate the maximum instruction threshold was reached
 pub const toomanyinstructions_present: uint4 = 0x400;
-/// (kuna) Indicate flow reached a branch target with no mapped bytes
+/// (unlace) Indicate flow reached a branch target with no mapped bytes
 pub const unmappedtarget_present: uint4 = 0x800;
 /// Indicate a CALL was converted to a BRANCH and some code may be unreachable
 pub const possible_unreachable: uint4 = 0x1000;

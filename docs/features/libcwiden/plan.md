@@ -19,7 +19,7 @@ call-site placeholder strip that came with it is ungated and runs in both arms.
 3. Measure both arms of the same build: a 444-slice pinned typesweep, a 12-binary
    whole-corpus `decompile-all` hunk classification, an interleaved min-of-15
    speed run on fmt/ls/sort/bash -O2.
-4. Test: `tests/stages/kuna-libcwiden.toml` (two passes over one real ELF, with
+4. Test: `tests/stages/libcwiden.toml` (two passes over one real ELF, with
    `option libcsigs off` in pass 1) plus three table-invariant unit tests.
 5. Gates: `make test`, `make test-stages`, `make test-cli`, `make check-spec`
    (+ `--strict`), `kuna catalog --check`, `counters --check`, `make rust-test`.

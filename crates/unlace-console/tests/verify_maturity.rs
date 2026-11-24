@@ -30,7 +30,7 @@ fn drive(cmds: &[&str]) -> (String, Vec<Maturity>, Vec<Fact>, bool) {
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

@@ -1,4 +1,4 @@
-//! (kuna `relocrebase`) Rebase the LOAD-TIME analysis facts of a relocatable
+//! (unlace `relocrebase`) Rebase the LOAD-TIME analysis facts of a relocatable
 //! object into the loaded image's address space.
 //!
 //! ## The bug this closes (GH-289)

@@ -68,7 +68,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -111,13 +111,13 @@ impl Funcdata {
                     t_op.get_opcode(),
                     OpCode::CPUI_INT_ZEXT | OpCode::CPUI_INT_SEXT | OpCode::CPUI_PIECE
                 ) {
-                    self.kuna_call_transport_projection_size(output)
+                    self.unlace_call_transport_projection_size(output)
                 } else {
                     None
                 };
-                self.kuna_forget_call_transport(output);
+                self.unlace_forget_call_transport(output);
                 if let Some(size) = projection {
-                    self.kuna_mark_call_transport_projection(output, size);
+                    self.unlace_mark_call_transport_projection(output, size);
                 }
             }
         }
@@ -191,10 +191,10 @@ impl Funcdata {
     ///
     /// Returns an error if `op` is not a RETURN or the masked flag is zero
     /// (the C++ `throw LowlevelError`).
-    pub fn op_mark_halt(&mut self, op: OpId, mut flag: uint4) -> KunaResult<()> {
+    pub fn op_mark_halt(&mut self, op: OpId, mut flag: uint4) -> UnlaceResult<()> {
         let o = self.obank().get(op).expect("op_mark_halt: stale op");
         if o.code() != OpCode::CPUI_RETURN {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Only RETURN pcode ops can be marked as halt",
             ));
         }
@@ -204,7 +204,7 @@ impl Funcdata {
             | pcodeop_flags::noreturn
             | pcodeop_flags::missing;
         if flag == 0 {
-            return Err(KunaError::lowlevel("Bad halt flag"));
+            return Err(UnlaceError::lowlevel("Bad halt flag"));
         }
         self.obank_mut()
             .get_mut(op)
@@ -220,7 +220,11 @@ impl Funcdata {
     /// INDIRECT op that defines it.  `possible_output` is `true` when the INDIRECT
     /// should be marked as a possible call output (its in0 is then NOT flagged).
     /// Used by [`TransformManager::special_handling`](crate::transform).
-    pub fn mark_indirect_creation(&mut self, indop: OpId, possible_output: bool) -> KunaResult<()> {
+    pub fn mark_indirect_creation(
+        &mut self,
+        indop: OpId,
+        possible_output: bool,
+    ) -> UnlaceResult<()> {
         use crate::varnode::varnode_flags;
         let outvn = self
             .obank()
@@ -245,7 +249,9 @@ impl Funcdata {
             .expect("mark_indirect_creation: stale in0")
             .is_constant()
         {
-            return Err(KunaError::lowlevel("Indirect creation not properly formed"));
+            return Err(UnlaceError::lowlevel(
+                "Indirect creation not properly formed",
+            ));
         }
         if !possible_output {
             self.vbank_mut()
@@ -265,7 +271,7 @@ impl Funcdata {
     // -----------------------------------------------------------------------
 
     /// Extension preserves its input exactly in the low bytes of its output.
-    fn kuna_preserve_extension_storage(&mut self, op: OpId) {
+    fn unlace_preserve_extension_storage(&mut self, op: OpId) {
         if !self.get_arch().name_style_angr {
             return;
         }
@@ -292,7 +298,7 @@ impl Funcdata {
             .get(output)
             .is_some_and(|v| v.get_size() > size)
         {
-            self.kuna_inherit_storage_slice(input, output, 0, size);
+            self.unlace_inherit_storage_slice(input, output, 0, size);
         }
     }
 
@@ -303,7 +309,7 @@ impl Funcdata {
     /// Statement order is load-bearing: `op->setOutput(0)` MUST come before
     /// `vbank.makeFree(vn)`.
     pub fn op_unset_output(&mut self, op: OpId) {
-        self.kuna_preserve_extension_storage(op);
+        self.unlace_preserve_extension_storage(op);
         let vn = match self
             .obank()
             .get(op)
@@ -341,22 +347,22 @@ impl Funcdata {
     /// varnode id (`vn` after a possible xref-unification), which the C++ assigns
     /// back to `vn` before `op->setOutput(vn)`.
     #[inline]
-    pub fn op_set_output(&mut self, op: OpId, vn: VarnodeId) -> KunaResult<()> {
+    pub fn op_set_output(&mut self, op: OpId, vn: VarnodeId) -> UnlaceResult<()> {
         self.attach_output(op, vn, true)
     }
 
     /// [`op_set_output`](Funcdata::op_set_output) for a simplification rule that moves
     /// an existing output onto a rewritten op: `vn` keeps the scope properties it
     /// already carries instead of re-deriving them at `op`.
-    pub fn op_move_output(&mut self, op: OpId, vn: VarnodeId) -> KunaResult<()> {
+    pub fn op_move_output(&mut self, op: OpId, vn: VarnodeId) -> UnlaceResult<()> {
         self.attach_output(op, vn, false)
     }
 
-    /// (kuna) A constant, including a slice of an ABI join's padding piece, is
+    /// (unlace) A constant, including a slice of an ABI join's padding piece, is
     /// never written: attaching one is refused before `op` changes.
-    fn attach_output(&mut self, op: OpId, vn: VarnodeId, refresh: bool) -> KunaResult<()> {
+    fn attach_output(&mut self, op: OpId, vn: VarnodeId, refresh: bool) -> UnlaceResult<()> {
         if self.vbank().get(vn).is_some_and(|v| v.is_constant()) {
-            return Err(KunaError::lowlevel("a constant cannot be an op output"));
+            return Err(UnlaceError::lowlevel("a constant cannot be an op output"));
         }
         // Already set to this vn.
         if self
@@ -395,8 +401,8 @@ impl Funcdata {
             let mut replace = Funcdata::replace_reads_thunk(obank);
             vbank.set_def(vn, def, &mut replace)?
         };
-        self.kuna_rekey_storage_sources(original_vn, vn);
-        self.kuna_forget_call_transport(vn);
+        self.unlace_rekey_storage_sources(original_vn, vn);
+        self.unlace_forget_call_transport(vn);
         if refresh {
             self.set_varnode_properties(vn);
         } else {
@@ -435,7 +441,7 @@ impl Funcdata {
 
     /// C++ `Varnode::copySymbol` (varnode.cc:512): copy any bound dynamic
     /// SymbolEntry from `src` onto `dst`.  In the merged-tree stand-in the
-    /// SymbolEntry binding is the `kuna_symbol_entry` Symbol id parked on the
+    /// SymbolEntry binding is the `unlace_symbol_entry` Symbol id parked on the
     /// Varnode (and, for an equate, mirrored on its HighVariable so the printer's
     /// `vn_high_equate_symbol` lookup finds it).  The C++ also copies the type and
     /// the type/name locks; the equate's type is `getBase(1,TYPE_UNKNOWN)` and the
@@ -444,14 +450,14 @@ impl Funcdata {
     /// avoiding a spurious size-1 retype of the collapsed constant.
     #[doc(hidden)]
     pub fn copy_symbol(&mut self, dst: VarnodeId, src: VarnodeId) {
-        let sym = match self.vbank().get(src).and_then(|v| v.kuna_symbol_entry()) {
+        let sym = match self.vbank().get(src).and_then(|v| v.unlace_symbol_entry()) {
             Some(s) => s,
             None => return,
         };
         // dst->setSymbolEntry-equivalent: park the binding on the Varnode (this
         // marks it `Varnode::mapped`), then mirror onto its High for the printer.
         if let Some(v) = self.vbank_mut().get_mut(dst) {
-            v.set_kuna_symbol_entry(sym);
+            v.set_unlace_symbol_entry(sym);
         }
         let is_equate = self
             .get_scope_local()
@@ -462,7 +468,7 @@ impl Funcdata {
         if is_equate {
             if let Some(high) = self.vbank().get(dst).and_then(|v| v.get_high()) {
                 if let Some(h) = self.high_bank_mut().get_mut(high) {
-                    h.set_kuna_equate_symbol(sym);
+                    h.set_unlace_equate_symbol(sym);
                 }
             }
         }
@@ -476,7 +482,7 @@ impl Funcdata {
     /// database.cc:641).  Drives the convert `L'a'` force_char equate across the
     /// CALL-arg size-8 -> size-4 truncation.
     pub fn copy_symbol_if_valid(&mut self, dst: VarnodeId, src: VarnodeId) {
-        let sym = match self.vbank().get(src).and_then(|v| v.kuna_symbol_entry()) {
+        let sym = match self.vbank().get(src).and_then(|v| v.unlace_symbol_entry()) {
             Some(s) => s,
             None => return,
         };
@@ -517,7 +523,7 @@ impl Funcdata {
     /// base of its size (exactly what `newConstant` builds — and what the original
     /// `vn` itself carries in the W3 IR, where no symbol is attached yet), so the
     /// `copySymbol` is currently a structural no-op.  Recorded as a (latent) loss.
-    pub fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> KunaResult<()> {
+    pub fn op_set_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> UnlaceResult<()> {
         let mut vn = vn;
         // C++ `opSetInput` takes `Varnode *vn`, which may be `(Varnode *)0`
         // (e.g. `opInsertInput(op,(Varnode *)0,slot)` from `setInsertInputs`'s
@@ -597,7 +603,7 @@ impl Funcdata {
 
     /// Replace all input Varnodes from the given array
     /// (C++ `Funcdata::opSetAllInput`, `funcdata_op.cc:267`).
-    pub fn op_set_all_input(&mut self, op: OpId, vvec: &[VarnodeId]) -> KunaResult<()> {
+    pub fn op_set_all_input(&mut self, op: OpId, vvec: &[VarnodeId]) -> UnlaceResult<()> {
         let n = self
             .obank()
             .get(op)
@@ -637,7 +643,7 @@ impl Funcdata {
 
     /// Insert space for a new input Varnode before the given slot, then set it
     /// (C++ `Funcdata::opInsertInput`, `funcdata_op.cc:308`).
-    pub fn op_insert_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> KunaResult<()> {
+    pub fn op_insert_input(&mut self, op: OpId, vn: VarnodeId, slot: int4) -> UnlaceResult<()> {
         self.obank_mut()
             .get_mut(op)
             .expect("op_insert_input: stale op")
@@ -672,12 +678,12 @@ impl Funcdata {
     /// `Funcdata::newSpacebasePtr`, `funcdata.cc:273`).
     ///
     /// `id` must have a base register (otherwise `getSpacebase(0)` errors).
-    pub fn new_spacebase_ptr(&mut self, id: &Rc<AddrSpace>) -> KunaResult<VarnodeId> {
+    pub fn new_spacebase_ptr(&mut self, id: &Rc<AddrSpace>) -> UnlaceResult<VarnodeId> {
         let point = id.get_spacebase(0)?;
         let space = point
             .space
             .clone()
-            .ok_or_else(|| KunaError::lowlevel("newSpacebasePtr: spacebase has no space"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("newSpacebasePtr: spacebase has no space"))?;
         Ok(self.new_varnode(
             point.size as int4,
             &unlace_base::address::Address::new(space, point.offset),
@@ -700,7 +706,7 @@ impl Funcdata {
         op: OpId,
         stackptr: Option<VarnodeId>,
         insertafter: bool,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let stackptr = match stackptr {
             Some(v) => v,
             None => self.new_spacebase_ptr(spc)?,
@@ -708,12 +714,12 @@ impl Funcdata {
         let addrsize = self
             .vbank()
             .get(stackptr)
-            .ok_or_else(|| KunaError::lowlevel("createStackRef: stale stackptr"))?
+            .ok_or_else(|| UnlaceError::lowlevel("createStackRef: stale stackptr"))?
             .get_size();
         let op_addr = self
             .obank()
             .get(op)
-            .ok_or_else(|| KunaError::lowlevel("createStackRef: stale op"))?
+            .ok_or_else(|| UnlaceError::lowlevel("createStackRef: stale op"))?
             .get_addr()
             .clone();
         let addop = self.new_op(2, op_addr.clone());
@@ -765,12 +771,12 @@ impl Funcdata {
         op: OpId,
         stackref: Option<VarnodeId>,
         insertafter: bool,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let addout = self.create_stack_ref(spc, off, op, stackref, insertafter)?;
         let op_addr = self
             .obank()
             .get(op)
-            .ok_or_else(|| KunaError::lowlevel("opStackLoad: stale op"))?
+            .ok_or_else(|| UnlaceError::lowlevel("opStackLoad: stale op"))?
             .get_addr()
             .clone();
         let loadop = self.new_op(2, op_addr);
@@ -778,7 +784,7 @@ impl Funcdata {
         let contain = spc
             .get_contain()
             .cloned()
-            .ok_or_else(|| KunaError::lowlevel("opStackLoad: spacebase has no container"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("opStackLoad: spacebase has no container"))?;
         let spacevn = self.new_varnode_space(&contain);
         self.op_set_input(loadop, spacevn, 0)?;
         self.op_set_input(loadop, addout, 1)?;
@@ -788,7 +794,7 @@ impl Funcdata {
             .vbank()
             .get(addout)
             .and_then(|v| v.get_def())
-            .ok_or_else(|| KunaError::lowlevel("opStackLoad: stack ref has no def"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("opStackLoad: stack ref has no def"))?;
         self.op_insert_after(loadop, addout_def);
         Ok(res)
     }
@@ -1074,7 +1080,7 @@ impl Funcdata {
     /// Now closed (rport/w10-jts-chain): `cloneVarnode` is the funcdata_varnode
     /// factory and the opcode is resolved through the W6 `inst[]` boundary via
     /// [`op_set_opcode_code`](Funcdata::op_set_opcode_code).
-    pub fn clone_op(&mut self, op: OpId, seq: unlace_base::address::SeqNum) -> KunaResult<OpId> {
+    pub fn clone_op(&mut self, op: OpId, seq: unlace_base::address::SeqNum) -> UnlaceResult<OpId> {
         let numinput = self
             .obank()
             .get(op)
@@ -1090,8 +1096,8 @@ impl Funcdata {
             .expect("clone_op")
             .set_flag(fl);
         let exact = self.obank().get(op).expect("clone_op").get_addlflags()
-            & (crate::op::pcodeop_addlflags::kuna_exactfloat
-                | crate::op::pcodeop_addlflags::kuna_narrowret);
+            & (crate::op::pcodeop_addlflags::unlace_exactfloat
+                | crate::op::pcodeop_addlflags::unlace_narrowret);
         self.obank_mut()
             .get_mut(newop)
             .expect("clone_op")
@@ -1129,7 +1135,7 @@ impl Funcdata {
         src: &Funcdata,
         op: OpId,
         seq: unlace_base::address::SeqNum,
-    ) -> KunaResult<OpId> {
+    ) -> UnlaceResult<OpId> {
         let numinput = src
             .obank()
             .get(op)
@@ -1177,13 +1183,13 @@ impl Funcdata {
     /// `glb->inst[opc]` table — routed through [`w6_type_op`](Funcdata::w6_type_op)
     /// with the verbatim typeop.cc opflags.
     ///
-    /// (kuna) provenance: the rewritten op records `setCanonicalLessequal()` — the
+    /// (unlace) provenance: the rewritten op records `setCanonicalLessequal()` — the
     /// single primitive of the comparison-canonicalization sub-stage (UPSTREAM.md
     /// *Divergence*: "`replaceLessequal` records provenance on the rewritten op").
     /// `ActionPresentCompareForm` can invert it for presentation (GH-558).  The
-    /// restart-log side table (`kuna_restartlog`) records *restart* reasons, not
-    /// this op flag, so no `kuna_restartlog` event is emitted here.
-    pub fn replace_lessequal(&mut self, op: OpId) -> KunaResult<bool> {
+    /// restart-log side table (`unlace_restartlog`) records *restart* reasons, not
+    /// this op flag, so no `unlace_restartlog` event is emitted here.
+    pub fn replace_lessequal(&mut self, op: OpId) -> UnlaceResult<bool> {
         let in0 = self
             .obank()
             .get(op)
@@ -1244,7 +1250,7 @@ impl Funcdata {
         // newvn->copySymbol(vn);  -- STUB(W4): type/symbol propagation (see op_set_input).
         // opSetInput(op,newvn,i);
         self.op_set_input(op, newvn, i)?;
-        // (kuna) provenance recorder.
+        // (unlace) provenance recorder.
         self.obank_mut()
             .get_mut(op)
             .expect("replace_lessequal: stale op")
@@ -1269,7 +1275,7 @@ impl Funcdata {
     /// reversing operands when required, and folding the resulting `<=` constant
     /// through [`replace_lessequal`](Funcdata::replace_lessequal)).  Returns `true`
     /// if the ops were rewritten.
-    pub fn op_normalize_flip(&mut self, cbranch: OpId) -> KunaResult<bool> {
+    pub fn op_normalize_flip(&mut self, cbranch: OpId) -> UnlaceResult<bool> {
         let bool_vn = match self
             .obank()
             .get(cbranch)
@@ -1329,7 +1335,7 @@ impl Funcdata {
     ///
     /// STUB(W6): `opSetOpcode` for the new `INT_MULT`/`INT_ADD` ops is routed
     /// through [`w6_type_op`](Funcdata::w6_type_op) (verbatim typeop.cc opflags).
-    pub fn distribute_int_mult_add(&mut self, op: OpId) -> KunaResult<bool> {
+    pub fn distribute_int_mult_add(&mut self, op: OpId) -> UnlaceResult<bool> {
         let in0 = self
             .obank()
             .get(op)
@@ -1465,7 +1471,7 @@ impl Funcdata {
     ///
     /// STUB(W6): `opSetOpcode(replace, op1->code())` for the freshly built op is
     /// routed through [`w6_type_op`](Funcdata::w6_type_op).
-    pub fn cse_elimination(&mut self, op1: OpId, op2: OpId) -> KunaResult<OpId> {
+    pub fn cse_elimination(&mut self, op1: OpId, op2: OpId) -> UnlaceResult<OpId> {
         let par1 = self
             .obank()
             .get(op1)
@@ -1586,7 +1592,7 @@ impl Funcdata {
     /// If a usable COPY-to-unique already exists it may be reused (moved earlier
     /// in control flow if needed); otherwise a fresh COPY is inserted before
     /// `point`.  Used by `SplitDatatype::RootPointer::duplicateToTemp`.
-    pub fn build_copy_temp(&mut self, vn: VarnodeId, point: OpId) -> KunaResult<VarnodeId> {
+    pub fn build_copy_temp(&mut self, vn: VarnodeId, point: OpId) -> UnlaceResult<VarnodeId> {
         use unlace_base::space::spacetype;
         // Find a preexisting COPY of vn into the unique space (not type-locked).
         let mut other_op: Option<OpId> = None;
@@ -2264,7 +2270,7 @@ impl Funcdata {
         list: &mut [(unlace_base::types::uintm, OpId)],
         outlist: &mut Vec<VarnodeId>,
         mut is_heritaged: impl FnMut(&Funcdata, VarnodeId) -> bool,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         if list.is_empty() {
             return Ok(());
         }
@@ -2427,7 +2433,7 @@ impl Funcdata {
     /// later naming pass never derefs a freed member.  Then the input links are
     /// unset, the op is marked dead and removed from its block.
     pub fn op_destroy(&mut self, op: OpId) {
-        self.kuna_preserve_extension_storage(op);
+        self.unlace_preserve_extension_storage(op);
         if let Some(out) = self
             .obank()
             .get(op)
@@ -2516,7 +2522,7 @@ impl Funcdata {
     /// destroy every input Varnode, then the output if present, then the op
     /// (`obank.destroy(op)`; the op must be dead).  Statement order matches the
     /// C++ exactly (inputs first, then output, then the op).
-    pub fn op_destroy_raw(&mut self, op: OpId) -> KunaResult<()> {
+    pub fn op_destroy_raw(&mut self, op: OpId) -> UnlaceResult<()> {
         let n = self
             .obank()
             .get(op)
@@ -2620,7 +2626,7 @@ impl Funcdata {
     ///
     /// Asked to insert after an INDIRECT marker, upstream redirects to the CALL
     /// or STORE the marker's iop annotation names, which is what keeps a call's
-    /// guard INDIRECTs one unbroken run — (kuna) `kuna_indirectanchor` owns
+    /// guard INDIRECTs one unbroken run — (unlace) `unlace_indirectanchor` owns
     /// that redirect.
     pub fn op_insert_after(&mut self, op: OpId, prev: OpId) {
         let mut prev = prev;
@@ -2688,7 +2694,7 @@ impl Funcdata {
         vn: VarnodeId,
         op: OpId,
         insertafter: bool,
-    ) -> KunaResult<VarnodeId> {
+    ) -> UnlaceResult<VarnodeId> {
         let addr = self
             .obank()
             .get(op)
@@ -2906,7 +2912,7 @@ impl Funcdata {
     ///   * `CPUI_MAX` — swap `BOOL_AND`↔`BOOL_OR` in place.
     ///   * otherwise — set the flipped op-code; when `flipyes`, swap operands and
     ///     (for `<=`/`s<=`) fold the constant through [`replace_lessequal`].
-    pub fn op_flip_in_place_execute(&mut self, fliplist: &[OpId]) -> KunaResult<()> {
+    pub fn op_flip_in_place_execute(&mut self, fliplist: &[OpId]) -> UnlaceResult<()> {
         for &op in fliplist {
             let mut flipyes = false;
             let code = self
@@ -2947,7 +2953,7 @@ impl Funcdata {
                 } else if code == OpCode::CPUI_BOOL_OR {
                     self.op_set_opcode_code(op, OpCode::CPUI_BOOL_AND);
                 } else {
-                    return Err(KunaError::lowlevel("Bad flipInPlace op"));
+                    return Err(UnlaceError::lowlevel("Bad flipInPlace op"));
                 }
             } else {
                 self.op_set_opcode(op, crate::typeop::type_op_for(opc));
@@ -3049,7 +3055,7 @@ impl Funcdata {
         &mut self,
         addr: &unlace_base::address::Address,
         type_: uint4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         use crate::overrides::flow_type;
         let ops: Vec<OpId> = self.obank().iter_at(addr).map(|(_, id)| id).collect();
         let op = if type_ == flow_type::BRANCH {
@@ -3065,7 +3071,7 @@ impl Funcdata {
         };
         let op = match op {
             Some(op) if self.obank().get(op).map(|o| o.is_dead()).unwrap_or(false) => op,
-            _ => return Err(KunaError::lowlevel("Could not apply flowoverride")),
+            _ => return Err(UnlaceError::lowlevel("Could not apply flowoverride")),
         };
         let opc = self
             .obank()
@@ -3084,7 +3090,7 @@ impl Funcdata {
                 OpCode::CPUI_BRANCH => self.op_set_opcode_code(op, OpCode::CPUI_CALL),
                 OpCode::CPUI_BRANCHIND => self.op_set_opcode_code(op, OpCode::CPUI_CALLIND),
                 OpCode::CPUI_CBRANCH => {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Do not currently support CBRANCH overrides",
                     ));
                 }
@@ -3102,7 +3108,7 @@ impl Funcdata {
         } else if type_ == flow_type::RETURN {
             match opc {
                 OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH | OpCode::CPUI_CALL => {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "Do not currently support complex overrides",
                     ));
                 }

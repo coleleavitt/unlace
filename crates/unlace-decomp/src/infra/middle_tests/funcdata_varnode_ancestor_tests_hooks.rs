@@ -11,7 +11,7 @@ mod module_scope {
     pub(super) use crate::funcdata::Funcdata;
     pub(super) use crate::varnode::{DefOpInfo, varnode_flags};
     pub(super) use unlace_base::address::Address;
-    pub(super) use unlace_base::error::{KunaError, KunaResult};
+    pub(super) use unlace_base::error::{UnlaceError, UnlaceResult};
     pub(super) use unlace_base::space::{AddrSpace, spacetype};
     pub(super) use unlace_base::types::{Wrap, int4, uint1, uint4, uintb, uintm};
     pub(super) use unlace_num::opcodes::OpCode;

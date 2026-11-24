@@ -186,7 +186,7 @@ pub(crate) fn conflicts(
 pub(crate) fn reserve(
     arch: &Architecture,
     fd: &mut Funcdata,
-) -> unlace_base::error::KunaResult<()> {
+) -> unlace_base::error::UnlaceResult<()> {
     use std::collections::{BTreeMap, BTreeSet};
     let Some(global) = arch.symboltab.get_global_scope() else {
         return Ok(());
@@ -202,7 +202,7 @@ pub(crate) fn reserve(
     used.extend(
         fd.high_bank()
             .iter()
-            .filter_map(|(_, h)| h.kuna_name().map(str::to_string)),
+            .filter_map(|(_, h)| h.unlace_name().map(str::to_string)),
     );
     let mut replacements = BTreeMap::new();
     let mut seen = Vec::new();
@@ -263,7 +263,7 @@ pub(crate) fn reserve(
         .high_bank()
         .iter()
         .filter_map(|(id, high)| {
-            let replacement = replacements.get(high.kuna_name()?)?;
+            let replacement = replacements.get(high.unlace_name()?)?;
             let instances: Vec<_> = (0..high.num_instances())
                 .filter_map(|i| fd.vbank().get(high.get_instance(i)))
                 .collect();
@@ -278,7 +278,10 @@ pub(crate) fn reserve(
         })
         .collect();
     for (id, name) in high_names {
-        fd.high_bank_mut().get_mut(id).unwrap().set_kuna_name(name);
+        fd.high_bank_mut()
+            .get_mut(id)
+            .unwrap()
+            .set_unlace_name(name);
     }
     for (id, name, parameter) in plan {
         fd.get_scope_local_mut().unwrap().rename_symbol(id, &name)?;

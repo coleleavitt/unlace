@@ -1,4 +1,4 @@
-//! (kuna) Test-only render fault: `UNLACE_RENDER_FAULT=<addr>` (`0x` hex or
+//! (unlace) Test-only render fault: `UNLACE_RENDER_FAULT=<addr>` (`0x` hex or
 //! decimal) panics the printer partway through the document of the function
 //! whose entry is `<addr>`, after its opening brace. It exists so a test can
 //! check that one failed render leaves every later function of the batch

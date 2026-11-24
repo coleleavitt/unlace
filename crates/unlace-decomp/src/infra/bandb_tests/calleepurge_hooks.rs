@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_calleepurge` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_calleepurge` because they reach pass hooks a higher crate
 //! provides. They live in the driver, which links every hook.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_calleepurge` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_calleepurge` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::architecture::Architecture;
     pub(super) use crate::fspec::EXTRAPOP_UNKNOWN;
@@ -201,8 +201,8 @@ impl unlace_sleigh::loadimage::LoadImage for NoImage {
         &mut self,
         _ptr: &mut [u8],
         _addr: &Address,
-    ) -> unlace_base::error::KunaResult<()> {
-        Err(unlace_base::error::KunaError::data_unavail("none"))
+    ) -> unlace_base::error::UnlaceResult<()> {
+        Err(unlace_base::error::UnlaceError::data_unavail("none"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -219,7 +219,7 @@ fn a_host_flush_drops_the_walks_and_keeps_the_decoded_instructions() {
     let mut arch = Architecture::new("t", sleigh);
     {
         let mut cache = arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::calleepurge::CacheCell>()
             .borrow_mut();
         cache.whole.insert(0x1000, (UNKNOWN, 0));
@@ -228,7 +228,7 @@ fn a_host_flush_drops_the_walks_and_keeps_the_decoded_instructions() {
     }
     arch.flush_remote_caches();
     let cache = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::calleepurge::CacheCell>()
         .borrow();
     assert!(

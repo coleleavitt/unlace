@@ -73,7 +73,7 @@ use unlace_base::marshal::ElementId;
 use unlace_base::types::uintb;
 use unlace_num::opcodes::OpCode;
 
-/// Marshaling element `<fastfailnoreturn>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<fastfailnoreturn>` (unlace).  ElementIds live in the 4000+
 /// range; 4143 is the last one taken, so this is 4144.
 pub const ELEM_FASTFAILNORETURN: ElementId = ElementId::new("fastfailnoreturn", 4144);
 
@@ -103,7 +103,7 @@ pub fn archid_is_windows(archid: &str) -> bool {
 /// `None` for a null `UserPcodeOp *`).  Runs at flow-classification time, before
 /// basic blocks exist, so the `CALLOTHER` is located by the same positional
 /// backward walk over the raw dead list that
-/// [`kuna_sparcstructret`](crate::sparcstructret) uses — pre-SSA there is no
+/// [`unlace_sparcstructret`](crate::sparcstructret) uses — pre-SSA there is no
 /// def-use edge to follow, the `CALLIND`'s input being a free Varnode.
 pub fn is_fastfail_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> bool
 where
@@ -117,7 +117,7 @@ where
 ///
 /// The shape walk [`is_fastfail_callind`] is built on, read for the vector rather
 /// than tested against `0x29`, so a sibling pass over another vector
-/// ([`kuna_int3pad`](crate::int3pad)) shares one copy of the lowering's
+/// ([`unlace_int3pad`](crate::int3pad)) shares one copy of the lowering's
 /// structure.
 pub fn swi_vector_of_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> Option<uintb>
 where
@@ -178,7 +178,7 @@ where
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.fastfailnoreturn_archid_is_windows = Some(archid_is_windows);
 }
 

@@ -24,7 +24,7 @@
 //!     plus conservative pointer validation while retaining per-function transforms.
 //!
 //! Concrete presets are applied through `Architecture::apply_mode` (which fans
-//! out to `set_kuna_option`). File frontends resolve `auto` from binary
+//! out to `set_unlace_option`). File frontends resolve `auto` from binary
 //! metadata with [`resolve_overrides_for_size`], which also returns `auto`'s own
 //! overrides; the interactive console has no file-size policy and accepts only
 //! concrete presets.
@@ -39,7 +39,7 @@ pub struct Mode {
     /// preset using input metadata.
     pub automatic: bool,
     /// Ordered `(option, value)` overrides. Applied in order; a later
-    /// `set_kuna_option` (another override, or a user `--option`) wins. For an
+    /// `set_unlace_option` (another override, or a user `--option`) wins. For an
     /// automatic policy these are applied before the overrides of whichever
     /// preset it selects; an empty concrete list is the shipped defaults.
     pub overrides: &'static [(&'static str, &'static str)],
@@ -131,11 +131,11 @@ const RELIABLE_OVERRIDES: &[(&str, &str)] = &[];
 const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // transform-tier default-off recovery/structuring passes.
     ("switchmodbound", "on"),
-    // (kuna) Itanium try/catch for the landing pads with a catch clause: +0.5%
+    // (unlace) Itanium try/catch for the landing pads with a catch clause: +0.5%
     // instructions on a 252 KB g++ binary (`itaniumeh on`, every cleanup pad
     // too, costs +25%).
     ("itaniumeh", "catch"),
-    // (kuna) Recover a CMOV/predicated indirect dispatch over constant code
+    // (unlace) Recover a CMOV/predicated indirect dispatch over constant code
     // addresses. The default `reentry` recovers only re-entered dispatcher loops,
     // because a conditional tail call between two nearby function entries has the
     // same shape and recovering it splices both callee bodies into the caller;
@@ -151,7 +151,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("v850indirectbranch", "on"), // V850-gated (v850indbranch::applies); no-op off-V850
     ("regionedgeorder", "on"),
     ("returndup", "on"), // default-ON since DIV-54; kept so the preset owns it
-    // (kuna) Decline the returndup split at the join of a one-block `if`, so
+    // (unlace) Decline the returndup split at the join of a one-block `if`, so
     // `if (c) f(); return 0;` is not printed as `if (!c) return 0; f(); return 0;`.
     // Shipped OFF because the decbench O2 sample moved aggregate GED by +60 (it is
     // -163 and +56 GED-perfect at O0); preset membership delivers it to the page.
@@ -160,34 +160,34 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // Recover the scalar loop for readability. Kept in aggressive mode because
     // this hides the compiler's vector stride and duplicated loop body.
     ("devectorize", "on"),
-    // (kuna) Valid per-architecture C type spelling. The shipped catalog default
+    // (unlace) Valid per-architecture C type spelling. The shipped catalog default
     // is OFF because 42 XML datatest assertions pin the Ghidra spellings, and the
     // parity harness applies no mode -- so preset membership (with `fast` and
     // `AUTO_OVERRIDES`) is what makes valid C the default RENDERING for every
     // real binary without touching the corpus.
     ("ctypes", "on"),
-    // (kuna) Print a partial access no member names as a typed pointer access
+    // (unlace) Print a partial access no member names as a typed pointer access
     // instead of Ghidra's `name._<off>_<size>_`. A shipped default; kept so the
     // preset owns it.
     ("partialaccess", "on"),
-    // (kuna) Lay out an address-taken frame record read at several widths as
+    // (unlace) Lay out an address-taken frame record read at several widths as
     // one synthesized structure. Shipped OFF because the structure is a layout
     // hypothesis and its program-wide name renumbers later synthesized
     // structures; 0/675 datatest assertions move with it on.
     ("stackstruct", "on"),
-    // (kuna DIV-98) Elide a void function's trailing bare `return;`, the statement
+    // (unlace DIV-98) Elide a void function's trailing bare `return;`, the statement
     // the C source it came from does not have. A shipped default; kept so the
     // preset owns it.
     ("voidtailreturn", "on"),
     ("importdata", "on"), // a shipped default; kept so the preset owns it
-    // (kuna, DIV-99) Fold the Cortex-M `isCurrentModePrivileged()` guard the
+    // (unlace, DIV-99) Fold the Cortex-M `isCurrentModePrivileged()` guard the
     // vendored ARM SLEIGH wraps around every VERSION_7M MRS/MSR. A shipped
     // default, kept so the preset owns it. Structurally inert everywhere else --
     // the fixup is registered only on a language that declares the user-op, and
     // only 12 Thumb-2 constructors emit it.
     ("cortexmpriv", "on"),
     ("x64syscall", "on"),
-    // (kuna, DIV-108) Cap the pointer nesting `ActionInferTypes` will adopt. A
+    // (unlace, DIV-108) Cap the pointer nesting `ActionInferTypes` will adopt. A
     // small-string-optimized C++ object writes the unsatisfiable equation
     // `T == ptr(T)` into the type lattice, so the propagation adds one pointer
     // level per pass up to its seven-pass settle ceiling and declares the object
@@ -202,14 +202,14 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // -0.12% on a 1,027-function binary whose output is byte-identical on both
     // arms, +5.3% on the witness binary where 1 of 144 functions changes.
     ("ptrdepthcap", "on"),
-    // (kuna, GH-869) Give an indirect call's target the function-pointer type
+    // (unlace, GH-869) Give an indirect call's target the function-pointer type
     // the call states. A shipped default; kept so the preset owns it.
     ("calltargettype", "on"),
-    // (kuna) Name a local after the library call that returns it or takes it
+    // (unlace) Name a local after the library call that returns it or takes it
     // whole (`fd = open(...)`, `read(fd, ...)`). A shipped default; kept so the
     // preset owns it.
     ("libcnames", "on"),
-    // (kuna) ARM hard-float scalar VFP contracts: a double returned whole in d0
+    // (unlace) ARM hard-float scalar VFP contracts: a double returned whole in d0
     // and float/double parameters in their s/d registers on both sides of a
     // call. Shipped defaults, kept so the preset owns them; inert unless the ELF
     // container states the VFP procedure-call standard, so soft-float, softfp and raw
@@ -227,7 +227,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("funcstart_patterns", "on"),
     ("addrtable", "on"),
     ("operand_refs", "on"),
-    // (kuna) The 4-byte string width: an int table of character codes is
+    // (unlace) The 4-byte string width: an int table of character codes is
     // byte-for-byte a wide literal, so it ships off and plants only what the image
     // backs as a string (an operand or pointer at the start that no code indexes,
     // a 4-byte mergeable string section).
@@ -245,7 +245,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     // corroboration test (GH-313) costs more real functions than it removes
     // phantoms on every corpus measured.
     ("aif", "strict"),
-    // (kuna, DIV-93) The four-step ARM entry-discovery sequence (#248 / #255 /
+    // (unlace, DIV-93) The four-step ARM entry-discovery sequence (#248 / #255 /
     // #259 / #278). `cortexmvectors`, `ptrentry` and `tailcallentry` carry an
     // explicit `object::Architecture::Arm` early return; `poolentry` has no arch
     // gate but is ARM-only IN EFFECT, because it keys on PC-relative literal
@@ -273,7 +273,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("swiftmetadata", "on"), // Mach-O/ELF with swift5_* sections only; no-op elsewhere
     ("cfstrings", "on"),     // Mach-O-only; no-op off-Mach-O
     ("pdb", "on"),           // PE-only; no-op off-PE (a shipped default since DIV-129)
-    // (kuna `pdbtypes`) PE with a matching `.pdb` only: on Mozilla's MSVC-linked
+    // (unlace `pdbtypes`) PE with a matching `.pdb` only: on Mozilla's MSVC-linked
     // softokn3/firefox/mozglue it names 1,795/2,880/2,546 parameters where the
     // binary alone names 2/82/77, at no extra time; inert everywhere else.
     ("pdbtypes", "on"),
@@ -456,7 +456,7 @@ mod tests {
     /// test makes the omission a build failure instead of a silent no-feature.
     #[test]
     fn aggressive_carries_every_default_off_option() {
-        use crate::phases::{kuna_num_settables, kuna_settable_by_index};
+        use crate::phases::{unlace_num_settables, unlace_settable_by_index};
 
         /// The DELIBERATE exclusions, each with its reason recorded on
         /// `AGGRESSIVE_OVERRIDES`: `dwarf_lines` buries a `-g` binary's C under
@@ -709,7 +709,7 @@ mod tests {
             // hold back -- preset membership is a DIV-recorded default change,
             // and the DIV registry is not this change's to write.
             "switchselector",
-            // (kuna `charptr`) Commit a pointer the program only ever uses on
+            // (unlace `charptr`) Commit a pointer the program only ever uses on
             // characters to `char *`. The sweep says no: once a constant PTRADD
             // index counts as a field offset (as a literal INT_ADD always did), 444
             // slices / 10,748 functions move none onto perfect `type_match`, 2 up
@@ -719,7 +719,7 @@ mod tests {
             // that pin the pointer spelling `protoorder` and `ptrfromuse` produce.
             // Full evaluation: docs/features/charptr/default-on-evaluation.md.
             "charptr",
-            // (kuna `fieldtype`) Declare a synthesized field some access holds as
+            // (unlace `fieldtype`) Declare a synthesized field some access holds as
             // a pointer as that pointer. Every flip criterion passes (0/675,
             // stages, test-cli, the 444-slice typesweep unmoved, 191 casts fewer
             // on the shared set) except fields-only layout precision, .8713 ->
@@ -737,8 +737,8 @@ mod tests {
 
         let agg = mode_overrides("aggressive").unwrap();
         let mut missing: Vec<&str> = Vec::new();
-        for i in 0..kuna_num_settables() {
-            let st = kuna_settable_by_index(i);
+        for i in 0..unlace_num_settables() {
+            let st = unlace_settable_by_index(i);
             // Only ON/OFF options with a shipped default of `off` are in scope;
             // a multi-valued option (e.g. `cppsig = off|proven|inferred`) has no
             // single "on" the preset could pin.
@@ -773,7 +773,7 @@ mod tests {
         // or that names no option at all, is stale.
         for name in EXCLUDED_ON_PURPOSE.iter().chain(UNEVALUATED) {
             assert!(
-                (0..kuna_num_settables()).any(|i| kuna_settable_by_index(i).option == *name),
+                (0..unlace_num_settables()).any(|i| unlace_settable_by_index(i).option == *name),
                 "`{name}` is listed here but is not a registered option"
             );
         }

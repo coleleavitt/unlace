@@ -1,6 +1,6 @@
 {
  "opportunity": "A function reached only through a function pointer has no call site of its own, so neither `protoorder` (callee to callers) nor `calleevote` (callers to callee) reaches it and its own body is all it has. The program declares it anyway: `qsort`'s fourth parameter is `int (*)(const void *, const void *)` and `signal`'s second is `void (*)(int)`. Over the campaign's 444 slices, 294 callback arguments name 114 distinct functions, 50 of which decbench scores; all 50 DWARF declarations are exactly the slot's signature, and 67 ground-truth parameters would move, 16 of them parameters kuna recovers no trace of.",
- "test_name": "35 unit tests (slot table, run ledger, the direct-call refusal (direct_calls_disagree), body-agrees, the arity/width/return refusals, the caller-read ledger, the narrow-return walk) + tests/stages/kuna-callbacktype.xml (two-pass negative control) + fifteen tests/cli probes over five fixtures (callbacktype_x86_64, callbacktype_refused_x86_64, callbacktype_width_x86_64, callbacktype_narrow_x86_64, callbacktype_forward_x86_64): the parks, off, --jobs, eleven refusals, and direct callers of parked callbacks that print their off form; see docs/features/callbacktype/default-on-evaluation.md (c)",
+ "test_name": "35 unit tests (slot table, run ledger, the direct-call refusal (direct_calls_disagree), body-agrees, the arity/width/return refusals, the caller-read ledger, the narrow-return walk) + tests/stages/callbacktype.xml (two-pass negative control) + fifteen tests/cli probes over five fixtures (callbacktype_x86_64, callbacktype_refused_x86_64, callbacktype_width_x86_64, callbacktype_narrow_x86_64, callbacktype_forward_x86_64): the parks, off, --jobs, eleven refusals, and direct callers of parked callbacks that print their off form; see docs/features/callbacktype/default-on-evaluation.md (c)",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64",
  "selector": "by_key",
  "func_addr": null,
@@ -207,7 +207,7 @@
   "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_width_x86_64.c",
   "decompiler/crates/kuna-analysis/tests/fixtures/callbacktype_x86_64.c",
   "decompiler/crates/kuna-cli/src/decompile_all.rs",
-  "decompiler/crates/kuna-console/src/project.rs",
+  "decompiler/crates/console/src/project.rs",
   "decompiler/crates/kuna-decomp/src/p4_calls/callbacktype.rs",
   "decompiler/crates/kuna-decomp/src/p4_calls/callbacktype/tests.rs",
   "decompiler/crates/kuna-decomp/src/p4_calls/passthrough.rs",

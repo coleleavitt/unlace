@@ -1,8 +1,8 @@
-//! S8 print-time goto census (kuna `gotonext`).
+//! S8 print-time goto census (unlace `gotonext`).
 //!
 //! Upstream `PrintC::emitBlockGoto` prints a `BlockGoto`'s trailing jump only when
 //! `BlockGoto::gotoPrints` holds: the goto's target is not the block that runs
-//! next anyway (`nextFlowAfter` on the parent chain).  kuna's printer emitted
+//! next anyway (`nextFlowAfter` on the parent chain).  unlace's printer emitted
 //! every such jump, so a case arm falling into the next case and an `if` arm
 //! ending in a jump to the statement after the `if` printed `goto label_X;`
 //! directly above `label_X:`.  The structuring passes that run after

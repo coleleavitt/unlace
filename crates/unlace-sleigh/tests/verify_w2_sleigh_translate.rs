@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{ATTRIB_SPACE, Decoder, IdRegistry, XmlDecode};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, JoinRecord, JoinSpace, RegisterLookup,
@@ -30,8 +30,8 @@ use unlace_sleigh::translate::{PcodeEmit, register_translate_ids};
 struct NoRegisters;
 
 impl RegisterLookup for NoRegisters {
-    fn get_register(&self, nm: &str) -> KunaResult<VarnodeStorage> {
-        Err(KunaError::sleigh(format!("Unknown register name: {nm}")))
+    fn get_register(&self, nm: &str) -> UnlaceResult<VarnodeStorage> {
+        Err(UnlaceError::sleigh(format!("Unknown register name: {nm}")))
     }
     fn get_register_name(&self, _base: &Rc<AddrSpace>, _off: u64, _size: i32) -> String {
         String::new()

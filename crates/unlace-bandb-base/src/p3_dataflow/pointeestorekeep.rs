@@ -12,13 +12,13 @@
 //!
 //! [`declines`] keeps that `COPY` when the value reaches the address of a `LOAD`
 //! or `STORE`, or the base of a `PTRADD` or `PTRSUB`, directly or through the
-//! additions that offset it; chapter 06's `kuna_pointeevalue` then refuses the
+//! additions that offset it; chapter 06's `unlace_pointeevalue` then refuses the
 //! optional join, so the value keeps its own variable.  This runs before types
 //! exist, when `q + 1` is still an integer addition, so every `+` leading to an
 //! address counts.
 //!
 //! Any other reader of the `COPY` is a load of the global the binary makes.
-//! kuna's SSA gives a pointer `STORE` no effect on a global, so a load after
+//! unlace's SSA gives a pointer `STORE` no effect on a global, so a load after
 //! `gi = q; *pp = p;` still reads the `COPY`, and rewritten to read `q` it would
 //! print the register where the binary reads memory `*pp` may have changed.
 //! [`declines`] keeps such a load on the global ([`written_between`]), and keeps

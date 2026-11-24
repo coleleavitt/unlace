@@ -94,7 +94,7 @@ pub fn asm_labels_from_entries(prog: &ConsoleProgram, entries: &[FunctionEntry])
 pub struct AsmSweep {
     header: String,
     labels: BTreeMap<u64, Vec<AsmLabel>>,
-    /// (kuna #1288) Where a function's flow ends short of the next label, with
+    /// (unlace #1288) Where a function's flow ends short of the next label, with
     /// the line that says so ([`flow_ends`]).
     ends: BTreeMap<u64, String>,
     code_secs: Vec<(u64, u64)>,
@@ -302,7 +302,7 @@ pub fn render_data_tail(prog: &ConsoleProgram, dat_addrs: &BTreeSet<u64>) -> Str
     out
 }
 
-/// (kuna #1288) The end of each labeled function whose flow stops short of
+/// (unlace #1288) The end of each labeled function whose flow stops short of
 /// the bytes up to the next function (an MS-DOS program's data after its
 /// code, `ConsoleProgram::extent_cut_by_flow`), keyed by the byte address the
 /// sweep reaches it at, with the comment line the `.asm` prints there. Empty

@@ -377,7 +377,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
     let root = common::repo_root();
     let binary = root.join("tests/fixtures/fid/prog");
     let db = root.join("tests/fixtures/fid/lib.fid");
-    let kuna = |args: &[&str]| {
+    let unlace = |args: &[&str]| {
         let mut command = Command::new(env!("CARGO_BIN_EXE_unlace"));
         command
             .args(["fid", "query"])
@@ -387,7 +387,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
         command
     };
     let query = |address: &str| {
-        let out = kuna(&["--db", db.to_str().unwrap(), "--addr", address, "--json"])
+        let out = unlace(&["--db", db.to_str().unwrap(), "--addr", address, "--json"])
             .output()
             .unwrap();
         assert!(
@@ -407,7 +407,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
         &["--db", db.to_str().unwrap(), "--addr", "zz", "--json"],
         &["--addr", "0x4017c0", "--json", "--bogus"],
     ] {
-        let out = kuna(args).output().unwrap();
+        let out = unlace(args).output().unwrap();
         assert_eq!(
             out.status.code(),
             Some(2),
@@ -417,7 +417,7 @@ fn query_keeps_the_cli_contract_for_addresses_usage_errors_and_closed_pipes() {
         assert!(String::from_utf8_lossy(&out.stderr).contains("usage: unlace fid query"));
     }
 
-    let mut child = kuna(&[
+    let mut child = unlace(&[
         "--db",
         db.to_str().unwrap(),
         "--addr",

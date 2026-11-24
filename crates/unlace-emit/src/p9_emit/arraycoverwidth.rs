@@ -1,4 +1,4 @@
-//! (kuna) The array-cover width sub-stage — no upstream Ghidra equivalent.
+//! (unlace) The array-cover width sub-stage — no upstream Ghidra equivalent.
 //!
 //! A local whose storage is only ever indexed recovers as an array, and a
 //! symbol-mapped access into it renders `name[index]` with
@@ -9,7 +9,7 @@
 //!
 //! An access that spans more than one element has no subscript that describes
 //! it.  Ghidra's own `unnamedField` notation does: `v30._0_16_` names offset 0,
-//! size 16.  kuna already emits it for a *partial* multi-element access (the
+//! size 16.  unlace already emits it for a *partial* multi-element access (the
 //! `v30._0_4_` reads in the same function); this sub-stage extends it to the
 //! whole-array cover, which `PrintC::pushPartialSymbol`'s top-of-walk
 //! whole-symbol break (printc.cc:2033) exits before the array arm can see.
@@ -21,8 +21,8 @@ use unlace_base::marshal::ElementId;
 use crate::dtype::{Datatype, type_metatype};
 use unlace_base::types::int4;
 
-/// Marshaling element `<arraycoverwidth>` (kuna 4000+ range; 4144 = the previous
-/// highest kuna id).
+/// Marshaling element `<arraycoverwidth>` (unlace 4000+ range; 4144 = the previous
+/// highest unlace id).
 pub const ELEM_ARRAYCOVERWIDTH: ElementId = ElementId::new("arraycoverwidth", 4145);
 
 /// Does an `sz`-byte access of `ct` span more than one array element?

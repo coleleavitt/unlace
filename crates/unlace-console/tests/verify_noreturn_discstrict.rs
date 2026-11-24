@@ -21,7 +21,7 @@
 //! Every test runs with `--option listing on --option noreturn_disc on`, because
 //! the whole no-return-discovery family is a Listing consumer and the Listing is
 //! only built on the real-object bootstrap path — never on the XML datatest path.
-//! That is why the `tests/stages/kuna-noreturn-discstrict.toml` datatest can only
+//! That is why the `tests/stages/unlace-noreturn-discstrict.toml` datatest can only
 //! prove the parent option is wired, and the behavior lives here (the same split
 //! `verify_noreturn_error.rs` / `ghangr-noreturn-error.xml` use).
 
@@ -58,10 +58,10 @@ fn decompile(func: &str) -> String {
     // The live-CLI ordering: every `option` line precedes `read symbols` (the
     // deferred analysis commit), so the Listing build + the consumer see the flags.
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("noreturn_disc", "on")
+        .set_unlace_option("noreturn_disc", "on")
         .expect("noreturn_disc flips on");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
@@ -142,15 +142,15 @@ fn a_genuine_noreturn_wrapper_is_still_discovered() {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("listing", "on")
+        .set_unlace_option("listing", "on")
         .expect("listing flips on");
     prog.arch_mut()
-        .set_kuna_option("noreturn_disc", "on")
+        .set_unlace_option("noreturn_disc", "on")
         .expect("noreturn_disc flips on");
     // Isolate the discovered-no-return tally from the propagation consumer, so the
     // conclusion below can only have come from the evidence tally.
     prog.arch_mut()
-        .set_kuna_option("noreturn_propagate", "off")
+        .set_unlace_option("noreturn_propagate", "off")
         .expect("noreturn_propagate flips off");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

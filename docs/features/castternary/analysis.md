@@ -118,7 +118,7 @@ an integer stops the rule.
   build prints the binary's output. Dropping both casts in `arm_both`
   (`c ? a0 : a1` over `int` and `unsigned int`) is caught: it prints `4294967291`
   where the binary prints `-5`.
-- `tests/stages/kuna-castternary.toml`: 10 assertions; with the option off in both
+- `tests/stages/castternary.toml`: 10 assertions; with the option off in both
   passes 8 fail.
 - castbench, typesweep, speed and the corpus sweep: `record.json` and
   `default-on-evaluation.md`.

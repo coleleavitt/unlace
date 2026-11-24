@@ -1,7 +1,7 @@
 //! GATE for `rport/w10-heritage-apply`: `ActionHeritage` builds real SSA on the
 //! live `Funcdata` (the B3 / post-first-heritage boundary).
 //!
-//! The W0 golden harness (`kuna/goldens.py`) captured the C++ IR at the
+//! The W0 golden harness (`unlace/goldens.py`) captured the C++ IR at the
 //! post-first-heritage boundary ("B3" — `print raw` + `print tree varnode`,
 //! taken at the first `break start paramdouble`, the action immediately after
 //! `heritage` in the mainloop).  This gate bootstraps a corpus function through
@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};
 use unlace_base::xml::{DocumentStorage, Element};
@@ -130,8 +130,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()

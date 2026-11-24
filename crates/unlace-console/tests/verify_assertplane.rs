@@ -46,7 +46,7 @@ fn load() -> ConsoleProgram {
         bootstrap_from_object(bin.to_str().expect("UTF-8 fixture path"), "", &spec_roots)
             .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("foldcallret", "off")
+        .set_unlace_option("foldcallret", "off")
         .expect("foldcallret is a registered option");
     prog.commit_pending_analysis().expect("analysis commit");
     prog
@@ -352,7 +352,7 @@ fn return_locks_the_output_storage_and_type() {
 }
 
 /// `typedef` interns a type, and `type` can then name it — the pair is what lets
-/// an agent describe a structure kuna never saw.
+/// an agent describe a structure unlace never saw.
 #[test]
 fn a_typedef_is_nameable_by_a_later_type_directive() {
     let (code, report) = decompile_with(vec![
@@ -568,7 +568,7 @@ fn output_only_prototype_pieces_do_not_abort_the_drive() {
     );
 }
 
-/// The declarations kuna PRINTS are declarations kuna ACCEPTS
+/// The declarations unlace PRINTS are declarations unlace ACCEPTS
 /// (`docs/re-needs/prototype-assertions-reject-ordinary.md`).  Until the
 /// C-declaration grammar learned the standard scalar keywords, a base type was
 /// whatever `findByName` answered, so `int` / `unsigned int` / `long long` --
@@ -779,7 +779,7 @@ fn a_named_prototype_rejects_two_executable_candidates() {
         "unhelpful rejection: {detail}"
     );
     // A linked PE maps its candidates itself, so they are reported at their own
-    // addresses; `synthetic` belongs to a relocatable load (kuna, issue #667).
+    // addresses; `synthetic` belongs to a relocatable load (unlace, issue #667).
     assert!(
         detail.matches(" at 0x").count() >= 2,
         "the rejection must identify both executable candidates: {detail}"
@@ -950,7 +950,7 @@ fn a_name_on_a_register_local_reaches_the_body() {
 /// A Symbol covers `sizeof(type)` bytes from the storage address, so a type
 /// WIDER than the target describes the next register along: `char *` at EAX's
 /// address is RAX.  Reported as a rejection with both widths, because the one
-/// thing the caller cannot read off the C is how wide kuna thinks the variable
+/// thing the caller cannot read off the C is how wide unlace thinks the variable
 /// is -- and `applied` over an unchanged `v1` is the failure this plane exists
 /// to end.
 #[test]
@@ -1030,7 +1030,7 @@ fn a_renamed_stack_local_does_not_get_a_second_symbol() {
 #[test]
 fn a_one_formal_custom_input_carries_the_getter_result() {
     let root = repo_root();
-    let xml = stage_xml("kuna-custom-call-storage");
+    let xml = stage_xml("custom-call-storage");
     let mut prog = bootstrap_from_file(
         xml.to_str().unwrap(),
         "",

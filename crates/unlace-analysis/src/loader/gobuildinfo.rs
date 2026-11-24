@@ -1,4 +1,4 @@
-//! (kuna) The Go toolchain version off the `.go.buildinfo` blob.
+//! (unlace) The Go toolchain version off the `.go.buildinfo` blob.
 //!
 //! The runtime's own struct layouts drift release to release (go1.23 inserted
 //! `g.syscallbp`, go1.25 dropped `gobuf.ret`), so the `goreg` shells must know

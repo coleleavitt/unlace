@@ -22,7 +22,7 @@ fn decompile(binary: &Path, name: &str, enabled: bool) -> String {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", if enabled { "on" } else { "off" })
+        .set_unlace_option("godwarfsig", if enabled { "on" } else { "off" })
         .unwrap();
     program.commit_pending_analysis().unwrap();
     let commands = vec![
@@ -38,7 +38,7 @@ fn print(program: ConsoleProgram, commands: Vec<String>) -> String {
     let prefix = commands.len() - 1;
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

@@ -1,4 +1,4 @@
-//! (kuna) Unprototyped 64-bit parameters in an aligned register pair (option
+//! (unlace) Unprototyped 64-bit parameters in an aligned register pair (option
 //! `armpairparam`, P4).
 //!
 //! On 32-bit ARM (AAPCS) a `long long` argument takes an even-aligned pair of
@@ -24,8 +24,8 @@ use crate::dtype::type_class;
 use crate::fspec::{FuncProto, ParamEntry};
 use crate::funcdata::Funcdata;
 
-crate::kuna_flag!(
-    /// (kuna) Join an unprototyped 64-bit parameter in an aligned register
+crate::unlace_flag!(
+    /// (unlace) Join an unprototyped 64-bit parameter in an aligned register
     /// pair (option `armpairparam`). See [`crate::armpairparam`].
     ArmPairParams,
     "armpairparam",
@@ -78,7 +78,7 @@ pub fn pair_slots(proto: &FuncProto, addr: &Address, size: int4) -> bool {
 /// order is `bejoin`'s evidence to decide, which a joined input would
 /// preempt.
 pub fn joined_pair(data: &Funcdata, addr: &Address, size: int4) -> bool {
-    data.get_arch().kuna_options.get::<ArmPairParams>().0
+    data.get_arch().unlace_options.get::<ArmPairParams>().0
         && size == 8
         && arm32(data)
         && !data.get_func_proto().is_input_locked()

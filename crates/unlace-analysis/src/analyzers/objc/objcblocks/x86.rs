@@ -1,4 +1,4 @@
-//! (kuna) Block recovery on x86-64 Mach-O: the creator loads the isa from its
+//! (unlace) Block recovery on x86-64 Mach-O: the creator loads the isa from its
 //! GOT slot (`mov r, [rip + slot]`), takes the invoke and descriptor addresses
 //! with `lea r, [rip + addr]`, and stores them to its frame through `rbp`,
 //! `rsp` or a register holding a frame address. [`sites`] decodes only the

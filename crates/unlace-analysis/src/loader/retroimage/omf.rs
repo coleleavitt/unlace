@@ -19,7 +19,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{MAX_MODULE, RetroImage, RetroSection, RetroSymbol, invalid, symbol_name};
 
@@ -311,7 +311,7 @@ fn iterated(cursor: &mut Cursor, depth: u32, limit: u64) -> Option<Vec<u8>> {
     Some(content.repeat(repeat as usize))
 }
 
-fn read(filename: &str, bytes: &[u8]) -> KunaResult<Parsed> {
+fn read(filename: &str, bytes: &[u8]) -> UnlaceResult<Parsed> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let mut parsed = Parsed::default();
     let mut module = Module::default();
@@ -615,7 +615,7 @@ fn read(filename: &str, bytes: &[u8]) -> KunaResult<Parsed> {
     Ok(parsed)
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let mut parsed = read(filename, bytes)?;
     let mut notes = std::mem::take(&mut parsed.notes);

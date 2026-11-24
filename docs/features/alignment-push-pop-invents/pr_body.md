@@ -57,7 +57,7 @@ recovers five arguments for a function that takes one.
 
 ## The tests
 
-`tests/stages/kuna-retpushedhalf.toml` runs three functions in two passes: the
+`tests/stages/retpushedhalf.toml` runs three functions in two passes: the
 witness idiom, the same-register save/restore, and the stack-free register move.
 Assertion #2 is the one that fails without the fix. Five unit tests on the
 push-only record, and `tests/cli/alignment-push-pop-invents.json` on a new

@@ -6,7 +6,7 @@
 //! (which drives `parentheses`), the negate cross-links, the keyword constants,
 //! the byte-for-byte integer / float / char token strings, the generic
 //! name builders, and the opcode→token dispatch — plus the `resetDefaultsPrintC`
-//! defaults including the kuna `arraynotation` default-on.  The RPN/`Emit`
+//! defaults including the unlace `arraynotation` default-on.  The RPN/`Emit`
 //! driver bodies are the W9 stub (see the module docs) and are not testable
 //! until `prettyprint` lands.
 
@@ -67,7 +67,7 @@ fn ordinary_and_default_case_labels_are_unchanged() {
 }
 
 /// A case or default label is a label like any other: one that reaches a
-/// closing brace with nothing after it gets a statement (`kuna_labelstmt`).
+/// closing brace with nothing after it gets a statement (`unlace_labelstmt`).
 #[test]
 fn case_and_default_labels_before_a_closing_brace_get_a_statement() {
     let mut print = PrintC::new();
@@ -124,7 +124,7 @@ mod stack_pointer_high_leaf {
     use crate::funcdata::Funcdata;
     use std::rc::Rc;
     use unlace_base::address::Address;
-    use unlace_base::error::{KunaError, KunaResult};
+    use unlace_base::error::{UnlaceError, UnlaceResult};
     use unlace_base::space::{
         AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
@@ -137,8 +137,8 @@ mod stack_pointer_high_leaf {
         fn get_file_name(&self) -> &str {
             "dummy"
         }
-        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-            Err(KunaError::data_unavail("dummy"))
+        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+            Err(UnlaceError::data_unavail("dummy"))
         }
         fn get_arch_type(&self) -> Vec<u8> {
             Vec::new()
@@ -273,7 +273,7 @@ mod stack_pointer_high_leaf {
         let scratch_unique = fd.new_unique(8, Some(unknown8()));
         let unique_name = {
             let v = fd.vbank().get(scratch_unique).unwrap();
-            kuna_storage_location_name(v.get_addr()).unwrap()
+            unlace_storage_location_name(v.get_addr()).unwrap()
         };
         merge_highs(&mut fd, sp, &[scratch_unique]);
         assert_eq!(
@@ -311,7 +311,7 @@ mod stack_pointer_high_leaf {
             fd.set_high_level();
             let high = fd.vbank().get(vn).unwrap().get_high().unwrap();
             let h = fd.high_bank_mut().get_mut(high).unwrap();
-            h.set_kuna_name("local");
+            h.set_unlace_name("local");
             h.set_symbol_type(named_int(object_size));
             h.set_symbol_offset(0);
             let p = PrintC::new();
@@ -389,10 +389,10 @@ mod stack_pointer_high_leaf {
             fd.set_high_level();
             let high = fd.vbank().get(vn).unwrap().get_high().unwrap();
             let h = fd.high_bank_mut().get_mut(high).unwrap();
-            h.set_kuna_name("local");
+            h.set_unlace_name("local");
             h.set_symbol_type(named_int(4));
             h.set_symbol_offset(0);
-            h.set_kuna_ref_symbol(local);
+            h.set_unlace_ref_symbol(local);
             let p = PrintC::new();
             let (front, _, _, _, _) = p.rendered_local_decl(&fd, &bare_arch(), high);
             assert_eq!(front, want, "neighbour={neighbour:?}");
@@ -416,7 +416,7 @@ mod stack_pointer_high_leaf {
         let whole_high = fd.vbank().get(whole).unwrap().get_high().unwrap();
         for high in [partial_high, reference_high] {
             let h = fd.high_bank_mut().get_mut(high).unwrap();
-            h.set_kuna_name("local");
+            h.set_unlace_name("local");
             h.set_symbol_type(unknown8());
             h.set_symbol_offset(0);
         }
@@ -429,7 +429,7 @@ mod stack_pointer_high_leaf {
         ));
 
         let h = fd.high_bank_mut().get_mut(whole_high).unwrap();
-        h.set_kuna_name("local");
+        h.set_unlace_name("local");
         h.set_symbol_type(unknown8());
         h.set_symbol_offset(0);
         assert!(high_name_has_scalar_whole_sibling(
@@ -496,11 +496,11 @@ mod stack_pointer_high_leaf {
             fd.high_bank_mut()
                 .get_mut(high)
                 .unwrap()
-                .set_kuna_name("value");
+                .set_unlace_name("value");
             for (i, &out) in outputs.iter().enumerate() {
                 let high = fd.vbank().get(out).unwrap().get_high().unwrap();
                 let h = fd.high_bank_mut().get_mut(high).unwrap();
-                h.set_kuna_name(if mutation == 3 && i == 1 {
+                h.set_unlace_name(if mutation == 3 && i == 1 {
                     "other"
                 } else {
                     "array"
@@ -851,7 +851,7 @@ mod w10_input_prototype_declarator {
         );
     }
 
-    /// (kuna DIV-6) With the `realtypes` context ON, a residual TYPE_UNKNOWN base
+    /// (unlace DIV-6) With the `realtypes` context ON, a residual TYPE_UNKNOWN base
     /// is relabelled to a real C type by size, under a pointer as well as as a
     /// scalar, so the declared pointee keeps the width the index/cast expressions
     /// were built from.  Sizes with no natural single C type keep `undefined<N>`
@@ -916,7 +916,7 @@ mod w10_input_prototype_declarator {
         );
     }
 
-    /// (kuna DIV-6) A genuine `TYPE_VOID` pointee is not a residual unknown, so the
+    /// (unlace DIV-6) A genuine `TYPE_VOID` pointee is not a residual unknown, so the
     /// relabel never sees it: `free(void *)` / `memcpy(void *, ...)` keep their
     /// opaque `void *` with the gate ON exactly as with it OFF.
     #[test]
@@ -1583,9 +1583,9 @@ fn rpn_float_chain_parenthesizes_only_the_right_operand() {
 }
 
 #[test]
-fn parentheses_unary_adjacent_sign_kuna_fix() {
+fn parentheses_unary_adjacent_sign_unlace_fix() {
     use tokens::*;
-    // (kuna) GH-2786: a unary minus feeding a unary minus would merge into `--`;
+    // (unlace) GH-2786: a unary minus feeding a unary minus would merge into `--`;
     // parentheses must intervene.  Both tokens are UNARY_MINUS (print1 "-").
     let top = rpn(&UNARY_MINUS, 0);
     assert!(parentheses(&top, &UNARY_MINUS, None));
@@ -1624,27 +1624,27 @@ fn option_defaults_match_reset_defaults_printc() {
     let o = PrintCOptions::new();
     assert!(o.convention);
     assert!(o.hide_exts);
-    // (kuna) DIV-36: `out OP= y` compound assignments render by default
+    // (unlace) DIV-36: `out OP= y` compound assignments render by default
     // (upstream ships the flag off and never consumed it; `option inplaceops
     // off` restores the `out = out OP y` form).
     assert!(o.inplace_ops);
     assert!(!o.nocasts);
-    // (kuna) DIV-35: zero pointer constants render as NULL (upstream
+    // (unlace) DIV-35: zero pointer constants render as NULL (upstream
     // option_NULL default off; `option nullprinting off` restores).
     assert!(o.null);
     assert!(!o.unplaced);
-    // (kuna) DIV-2 default-on: &base[index] for standalone PTRADD (GH-558).
+    // (unlace) DIV-2 default-on: &base[index] for standalone PTRADD (GH-558).
     assert!(o.array_notation);
-    // (kuna) DIV-37: boolean-context zero comparisons render in truthy form
+    // (unlace) DIV-37: boolean-context zero comparisons render in truthy form
     // (`option truthycond off` restores the explicit comparisons).
     assert!(o.truthy_cond);
-    // (kuna) DIV-38: single-statement if bodies drop their braces
+    // (unlace) DIV-38: single-statement if bodies drop their braces
     // (`option braceelide off` restores the braced form).
     assert!(o.brace_elide);
-    // (kuna) DIV-39: warnings render as terse end-of-line slugs
+    // (unlace) DIV-39: warnings render as terse end-of-line slugs
     // (`option warnstyle banner` restores the WARNING banner lines).
     assert!(o.warn_inline);
-    // (kuna) DIV-34: no blank line between the prototype and `{` (upstream
+    // (unlace) DIV-34: no blank line between the prototype and `{` (upstream
     // skip_line; `option braceformat function skip` restores it).
     assert_eq!(o.brace_func, BraceStyle::NextLine);
     assert_eq!(o.brace_ifelse, BraceStyle::SameLine);
@@ -2075,7 +2075,7 @@ fn generic_type_name_cases() {
 
 #[test]
 fn generic_function_name_invalid_addr() {
-    // The non-kuna `func_<addr>` branch.  A null address renders the raw form
+    // The non-unlace `func_<addr>` branch.  A null address renders the raw form
     // as "invalid_addr".
     let addr = unlace_base::address::Address::new_invalid();
     assert_eq!(generic_function_name(&addr).unwrap(), "func_invalid_addr");
@@ -2803,7 +2803,7 @@ mod w10_printc_cast_render {
     use crate::funcdata_union::FuncdataUnionExt;
     use std::rc::Rc;
     use unlace_base::address::Address;
-    use unlace_base::error::{KunaError, KunaResult};
+    use unlace_base::error::{UnlaceError, UnlaceResult};
     use unlace_base::space::{
         AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
     };
@@ -2819,8 +2819,8 @@ mod w10_printc_cast_render {
         fn get_file_name(&self) -> &str {
             "dummy"
         }
-        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-            Err(KunaError::data_unavail("dummy"))
+        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+            Err(UnlaceError::data_unavail("dummy"))
         }
         fn get_arch_type(&self) -> Vec<u8> {
             Vec::new()
@@ -3015,7 +3015,7 @@ mod w10_printc_cast_render {
             fd.high_bank_mut()
                 .get_mut(high)
                 .unwrap()
-                .set_kuna_name("workspace");
+                .set_unlace_name("workspace");
             for offset in 0..=4 {
                 let shift = fd.new_constant(4, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
@@ -3137,7 +3137,7 @@ mod w10_printc_cast_render {
             fd.high_bank_mut()
                 .get_mut(high)
                 .unwrap()
-                .set_kuna_name("lanes");
+                .set_unlace_name("lanes");
             for offset in 0..=(from_size as u64 - 2) {
                 let shift = fd.new_constant(4, offset);
                 fd.op_set_input(op, shift, 1).unwrap();
@@ -3447,7 +3447,7 @@ mod w10_printc_cast_render {
             fd.high_bank_mut()
                 .get_mut(first)
                 .unwrap()
-                .set_kuna_name("workspace");
+                .set_unlace_name("workspace");
             assert_eq!(
                 fd.vn_type_read_facing(source, op).get_metatype(),
                 type_metatype::TYPE_UINT
@@ -3670,7 +3670,7 @@ mod w10_printc_cast_render {
     fn integer_storage_view_overrides_a_float_declaration() {
         let mut context = ContextArch::new(build_manager());
         context
-            .kuna_options
+            .unlace_options
             .set(crate::coreoptions::StackViews(true));
         let types = Rc::new(crate::dtype::TypeFactoryImpl::new());
         types.set_size_of_int(4);
@@ -3726,7 +3726,7 @@ mod w10_printc_cast_render {
         fd.set_high_level();
         let high = fd.vbank().get(source).unwrap().get_high().unwrap();
         let named = fd.high_bank_mut().get_mut(high).unwrap();
-        named.set_kuna_name("workspace");
+        named.set_unlace_name("workspace");
         named.set_symbol_type(Rc::clone(&backing));
         named.set_symbol_offset(0);
         let resolution =

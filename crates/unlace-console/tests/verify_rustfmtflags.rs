@@ -38,11 +38,11 @@ fn decompile(
     assert!(
         !program
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::rustfmtflags::IntegerFormatters>()
             .is_empty()
     );
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
@@ -140,7 +140,7 @@ fn version_identity_and_language_are_required() {
     }
     let no_identity = |enabled| {
         decompile(false, "hex_width", enabled, "rust", |arch| {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>()
                 .clear()
         })

@@ -45,7 +45,7 @@
   },
   "artifacts": {
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/splitstorekeep_x86_64",
-    "stage_test": "tests/stages/kuna-splitstorekeep.xml",
+    "stage_test": "tests/stages/splitstorekeep.xml",
     "cli_probe": "tests/cli/31-byte-buffer-copy.json",
     "spec": "docs/spec/03-ssa-and-simplification.md"
   }

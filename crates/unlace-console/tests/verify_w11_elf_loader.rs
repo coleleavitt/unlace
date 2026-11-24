@@ -1,12 +1,12 @@
 //! Gate for `w11-elf-loader`: the real-ELF [`ObjectLoadImage`] backend lets the
 //! console engine decompile a genuine ELF binary (not just the XML
-//! `<binaryimage>` corpus), the kuna analog of the C++ BFD console path.
+//! `<binaryimage>` corpus), the unlace analog of the C++ BFD console path.
 //!
 //! This builds a minimal but *real* little-endian x86-64 ELF in memory — one
 //! `PT_LOAD` segment holding the bytes for `add(int,int){ return a+b; }`
 //! (`lea eax,[rdi+rsi]; ret`) plus a FUNC symbol — writes it to a temp file,
 //! and drives the same `load file` → `load function add` → `decompile` →
-//! `print C` command path the Python `kuna.decompile --engine rust` tooling
+//! `print C` command path the Python `unlace.decompile --engine rust` tooling
 //! feeds.  It asserts the engine (1) detected the ELF, (2) picked the x86-64
 //! SLEIGH language, (3) lifted the function, and (4) printed a real C body
 //! mentioning `add` (not a crash/empty).

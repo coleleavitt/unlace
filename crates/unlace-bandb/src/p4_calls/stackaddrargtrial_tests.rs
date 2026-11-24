@@ -1,9 +1,9 @@
-//! Tests moved out of `kuna_stackaddrargtrial` because they reach pass hooks a higher crate
+//! Tests moved out of `unlace_stackaddrargtrial` because they reach pass hooks a higher crate
 //! provides (unlace-bandb, the crate above). They live in that crate.
 
 #![allow(unused_imports, dead_code)]
 
-/// The imports of `kuna_stackaddrargtrial` itself, as a glob so the tests' own imports win.
+/// The imports of `unlace_stackaddrargtrial` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::{context::VarnodeId, funcdata::Funcdata};
 }

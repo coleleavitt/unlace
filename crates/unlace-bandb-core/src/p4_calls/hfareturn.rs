@@ -1,4 +1,4 @@
-//! (kuna) A floating-point result returned in a higher vector register implies
+//! (unlace) A floating-point result returned in a higher vector register implies
 //! the lower ones.
 //!
 //! AAPCS64 returns a homogeneous floating-point aggregate in consecutive vector

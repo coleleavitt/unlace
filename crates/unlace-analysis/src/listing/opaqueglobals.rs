@@ -1,7 +1,7 @@
-//! (kuna `opaquepredicate globals`) Which writable data the program may
+//! (unlace `opaquepredicate globals`) Which writable data the program may
 //! write: the whole-program scan behind `unlace_decomp::opaqueglobals`.
 //!
-//! It is the walk `kuna_floatglobals` takes (every function from its entry,
+//! It is the walk `unlace_floatglobals` takes (every function from its entry,
 //! registers and stack slots followed as constants), filing three more
 //! things:
 //!
@@ -17,11 +17,11 @@
 //! A held address may be stored through later, at an offset the scan cannot
 //! see. It dirties the named object it lies in. Outside every named object
 //! it dirties the [`ESCAPE_REACH`] bytes after it that no named object
-//! claims, the reach `kuna_floatglobals` gives an escaped address. A named
+//! claims, the reach `unlace_floatglobals` gives an escaped address. A named
 //! object wider than a scalar that ends at the address, or starts within a
 //! pointer width after it, is dirty as well: an end pointer walks down into
 //! the first, and a biased base (`arr - 1`) indexes up into the second. The
-//! run-time loader's slots (`LoadImage::kuna_runtime_written`) are dirty too.
+//! run-time loader's slots (`LoadImage::unlace_runtime_written`) are dirty too.
 //!
 //! Read-only data counts as data nothing writes: its sections are listed
 //! with the writable ones.
@@ -76,7 +76,7 @@ pub fn scan(arch: &Architecture, input: &FloatScan) -> UnwrittenGlobals {
     let Some(external) = loader
         .try_borrow()
         .ok()
-        .and_then(|l| l.kuna_runtime_written())
+        .and_then(|l| l.unlace_runtime_written())
     else {
         return UnwrittenGlobals::default();
     };

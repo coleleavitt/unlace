@@ -1,4 +1,4 @@
-//! (kuna) A call's own return-address push is part of the call.
+//! (unlace) A call's own return-address push is part of the call.
 //!
 //! An x86 `call` lifts as three p-code ops at one instruction address: the stack
 //! pointer steps down one word, the fall-through address is STOREd at the new

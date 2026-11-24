@@ -234,7 +234,7 @@ fn decode_rule(
     xml: &str,
     resource: &ParamListStandard,
     mgr: &AddrSpaceManager,
-) -> unlace_base::error::KunaResult<ModelRule> {
+) -> unlace_base::error::UnlaceResult<ModelRule> {
     let registry = modelrules_registry();
     let mut decoder = XmlDecode::new(mgr, &registry);
     decoder.ingest_stream(xml.as_bytes())?;
@@ -245,7 +245,7 @@ fn decode_rule(
 fn decode_filter(
     xml: &str,
     mgr: &AddrSpaceManager,
-) -> unlace_base::error::KunaResult<DatatypeFilter> {
+) -> unlace_base::error::UnlaceResult<DatatypeFilter> {
     let registry = modelrules_registry();
     let mut decoder = XmlDecode::new(mgr, &registry);
     decoder.ingest_stream(xml.as_bytes())?;
@@ -276,23 +276,27 @@ impl TypeFactory for PanicFactory {
     fn get_size_of_alt_pointer(&self) -> int4 {
         panic!()
     }
-    fn get_alignment(&self, size: u32) -> unlace_base::error::KunaResult<int4> {
+    fn get_alignment(&self, size: u32) -> unlace_base::error::UnlaceResult<int4> {
         panic!()
     }
-    fn get_primitive_align_size(&self, size: u32) -> unlace_base::error::KunaResult<int4> {
+    fn get_primitive_align_size(&self, size: u32) -> unlace_base::error::UnlaceResult<int4> {
         panic!()
     }
-    fn get_type_void(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_void(&self) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_base_no_char(
         &self,
         s: int4,
         m: type_metatype,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_base(&self, s: int4, m: type_metatype) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_base(
+        &self,
+        s: int4,
+        m: type_metatype,
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_base_named(
@@ -300,13 +304,13 @@ impl TypeFactory for PanicFactory {
         s: int4,
         m: type_metatype,
         n: &str,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_type_char(&self, s: int4) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_char(&self, s: int4) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_type_code(&self) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_code(&self) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer_strip_array(
@@ -314,7 +318,7 @@ impl TypeFactory for PanicFactory {
         s: int4,
         pt: Rc<Datatype>,
         ws: u32,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer(
@@ -322,7 +326,7 @@ impl TypeFactory for PanicFactory {
         s: int4,
         pt: Rc<Datatype>,
         ws: u32,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer_named(
@@ -331,14 +335,14 @@ impl TypeFactory for PanicFactory {
         pt: Rc<Datatype>,
         ws: u32,
         n: &str,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn resize_pointer(
         &self,
         ptr: Rc<Datatype>,
         new_size: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer_rel(
@@ -346,7 +350,7 @@ impl TypeFactory for PanicFactory {
         parent_ptr: Rc<Datatype>,
         ptr_to: Rc<Datatype>,
         off: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer_rel_full(
@@ -357,7 +361,7 @@ impl TypeFactory for PanicFactory {
         ws: int4,
         off: int4,
         nm: &str,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_pointer_with_space(
@@ -365,17 +369,17 @@ impl TypeFactory for PanicFactory {
         ptr_to: Rc<Datatype>,
         spc: Rc<AddrSpace>,
         nm: &str,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_array(
         &self,
         as_: int4,
         ao: Rc<Datatype>,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_type_struct(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_struct(&self, n: &str) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_partial_struct(
@@ -383,10 +387,10 @@ impl TypeFactory for PanicFactory {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_type_union(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_union(&self, n: &str) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_partial_union(
@@ -394,7 +398,7 @@ impl TypeFactory for PanicFactory {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_partial_enum(
@@ -402,24 +406,24 @@ impl TypeFactory for PanicFactory {
         contain: Rc<Datatype>,
         off: int4,
         sz: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
-    fn get_type_enum(&self, n: &str) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn get_type_enum(&self, n: &str) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_type_spacebase(
         &self,
         id: Rc<AddrSpace>,
         addr: &unlace_base::address::Address,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn resize_integer(
         &self,
         ct: Rc<Datatype>,
         new_size: int4,
-    ) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    ) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
     fn get_exact_piece(
@@ -427,13 +431,13 @@ impl TypeFactory for PanicFactory {
         ct: Rc<Datatype>,
         offset: int4,
         size: int4,
-    ) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> {
+    ) -> unlace_base::error::UnlaceResult<Option<Rc<Datatype>>> {
         panic!()
     }
-    fn find_by_name(&self, n: &str) -> unlace_base::error::KunaResult<Option<Rc<Datatype>>> {
+    fn find_by_name(&self, n: &str) -> unlace_base::error::UnlaceResult<Option<Rc<Datatype>>> {
         panic!()
     }
-    fn concretize(&self, ct: Rc<Datatype>) -> unlace_base::error::KunaResult<Rc<Datatype>> {
+    fn concretize(&self, ct: Rc<Datatype>) -> unlace_base::error::UnlaceResult<Rc<Datatype>> {
         panic!()
     }
 }
@@ -624,7 +628,7 @@ fn v_w6_s4_modelrules_homogeneous_aggregate_ptr_identity() {
 
     // Struct {float@0, float@4} built from DISTINCT Rc allocations of the same
     // logical float: C++ would dedup these to one Datatype* (ptr-eq true); the
-    // kuna harness does NOT dedup, so Rc::ptr_eq is false on field 1 -> REJECT.
+    // unlace harness does NOT dedup, so Rc::ptr_eq is false on field 1 -> REJECT.
     // This documents the TypeFactory-cache dependency of the ptr-identity port.
     let s_distinct = dt_struct(8, 4, &[(0, dt_float(4)), (4, dt_float(4))]);
     assert!(

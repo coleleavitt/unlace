@@ -1,4 +1,4 @@
-//! (kuna `ppc64r12`) PPC64 ELFv2 global entries hold their own address in `r12`.
+//! (unlace `ppc64r12`) PPC64 ELFv2 global entries hold their own address in `r12`.
 //!
 //! The OpenPOWER ELFv2 ABI requires a caller that enters a function at its
 //! *global* entry (an indirect call, a PLT stub, a cross-module call) to pass the
@@ -11,7 +11,7 @@
 //! The pass seeds `r12 = entry` at each defined function whose symbol declares a
 //! distinct local entry (`st_other`). That annotation is what says the function
 //! begins with the `r12`-based TOC setup; a function without one keeps `r2` as
-//! received. The kuna analog of the MIPS `t9 = entry` seed in
+//! received. The unlace analog of the MIPS `t9 = entry` seed in
 //! [`super::mips_markers`].
 
 use object::read::{Object, ObjectSymbol};

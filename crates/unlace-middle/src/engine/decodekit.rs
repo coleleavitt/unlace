@@ -1,4 +1,4 @@
-//! (kuna) Rebuilding a decode-equivalent SLEIGH engine away from the
+//! (unlace) Rebuilding a decode-equivalent SLEIGH engine away from the
 //! `Architecture` that owns the original.
 //!
 //! A `Sleigh` cannot be shared or cloned: it holds `Rc`s throughout, and an
@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_sleigh::ctxsnapshot::{ContextValueSnapshot, restore_context};
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -57,8 +57,8 @@ impl LoadImage for UnattachedImage {
     fn get_file_name(&self) -> &str {
         ""
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail(format!(
+    fn load_fill(&mut self, _ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail(format!(
             "decode engine: no image attached (read at {:#x})",
             addr.get_offset()
         )))
@@ -80,7 +80,7 @@ pub fn build_decode_engine(
     recipe: &EngineRecipe,
     bytes: Arc<dyn ImageBytes>,
     ctx: &ContextValueSnapshot,
-) -> KunaResult<(Sleigh, Rc<AddrSpace>)> {
+) -> UnlaceResult<(Sleigh, Rc<AddrSpace>)> {
     let (sleigh, space, _) = build_decode_engine_traced(recipe, bytes, ctx)?;
     Ok((sleigh, space))
 }
@@ -95,11 +95,11 @@ pub fn build_decode_engine_traced(
     recipe: &EngineRecipe,
     bytes: Arc<dyn ImageBytes>,
     ctx: &ContextValueSnapshot,
-) -> KunaResult<(Sleigh, Rc<AddrSpace>, UnmappedTripwire)> {
+) -> UnlaceResult<(Sleigh, Rc<AddrSpace>, UnmappedTripwire)> {
     let mut sleigh = Sleigh::new(Box::new(UnattachedImage), Box::new(ContextInternal::new()));
     sleigh.initialize_from_sla(&recipe.sla)?;
     if sleigh.base().has_context_commits() {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "decode engine: the language commits context during decode",
         ));
     }
@@ -117,7 +117,7 @@ pub fn build_decode_engine_traced(
         .manager()
         .get_default_code_space()
         .map(Rc::clone)
-        .ok_or_else(|| KunaError::lowlevel("decode engine: the .sla declares no code space"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("decode engine: the .sla declares no code space"))?;
 
     let mut image = SharedBytesImage::new(&recipe.archid, bytes);
     image.attach_to_space(Rc::clone(&code_space));

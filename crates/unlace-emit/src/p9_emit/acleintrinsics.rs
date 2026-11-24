@@ -37,7 +37,7 @@ pub struct Intrinsic {
 /// The ACLE spelling of the CALLOTHER `op` whose user op is named `name`.
 #[doc(hidden)]
 pub fn intrinsic(fd: &Funcdata, arch: &Architecture, op: OpId, name: &[u8]) -> Option<Intrinsic> {
-    if !arch.kuna_options.get::<crate::memtag::AcleIntrinsics>().0
+    if !arch.unlace_options.get::<crate::memtag::AcleIntrinsics>().0
         || !arch.archid.starts_with("AARCH64:")
     {
         return None;

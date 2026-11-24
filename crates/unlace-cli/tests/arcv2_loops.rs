@@ -3,7 +3,7 @@
 //! `do .. while`. `fill`'s loop ends on a call, whose back-edge to the loop
 //! start must not be listed as a second callee.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -14,15 +14,15 @@ fn fixture(name: &str) -> String {
         .to_owned()
 }
 
-fn kuna(args: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(args);
+fn unlace(args: &[&str]) -> String {
+    let (stdout, stderr, code) = run_unlace(args);
     assert_eq!(code, 0, "kuna {args:?}: {stderr}");
     stdout
 }
 
 #[test]
 fn relocatable_object_decompiles_without_a_target() {
-    let stdout = kuna(&["decompile", &fixture("add2.o"), "add2"]);
+    let stdout = unlace(&["decompile", &fixture("add2.o"), "add2"]);
     assert!(stdout.contains("return a0 + a1;"), "{stdout}");
 }
 
@@ -30,17 +30,17 @@ fn relocatable_object_decompiles_without_a_target() {
 fn zero_overhead_loops_are_counted_do_while_loops_in_both_byte_orders() {
     for elf in ["loops.elf", "loops_be.elf"] {
         let elf = fixture(elf);
-        let names: Vec<String> = kuna(&["functions", &elf])
+        let names: Vec<String> = unlace(&["functions", &elf])
             .lines()
             .filter_map(|line| line.split('\t').nth(1).map(str::to_owned))
             .collect();
         assert_eq!(names, ["sum", "fill", "clamp", "sink"], "{elf}");
 
-        let sum = kuna(&["decompile", &elf, "sum"]);
+        let sum = unlace(&["decompile", &elf, "sum"]);
         for line in ["do {", "v1 += *v3;", "v2 -= 1;", "} while (v2);"] {
             assert!(sum.contains(line), "{elf}: {line} missing from\n{sum}");
         }
-        let fill = kuna(&["decompile", &elf, "fill"]);
+        let fill = unlace(&["decompile", &elf, "fill"]);
         for line in [
             "v5 = 8;",
             "} while (v5);",
@@ -49,7 +49,7 @@ fn zero_overhead_loops_are_counted_do_while_loops_in_both_byte_orders() {
         ] {
             assert!(fill.contains(line), "{elf}: {line} missing from\n{fill}");
         }
-        let clamp = kuna(&["decompile", &elf, "clamp"]);
+        let clamp = unlace(&["decompile", &elf, "clamp"]);
         for line in ["return a0 >> 2 | a1 & 0xff00ff;", "return a0 * 8 ^ a1;"] {
             assert!(clamp.contains(line), "{elf}: {line} missing from\n{clamp}");
         }
@@ -59,7 +59,7 @@ fn zero_overhead_loops_are_counted_do_while_loops_in_both_byte_orders() {
 #[test]
 fn loop_end_call_has_one_callee() {
     let elf = fixture("loops.elf");
-    let listing = kuna(&["disassemble", &elf, "fill"]);
+    let listing = unlace(&["disassemble", &elf, "fill"]);
     for row in [
         "lp 0x104c",
         "bl.d 0x1090",
@@ -68,7 +68,7 @@ fn loop_end_call_has_one_callee() {
     ] {
         assert!(listing.contains(row), "{row} missing from\n{listing}");
     }
-    let (stdout, _, _) = run_kuna(&["xrefs", &elf, "--to", "0x1046"]);
+    let (stdout, _, _) = run_unlace(&["xrefs", &elf, "--to", "0x1046"]);
     assert!(
         !stdout.contains("\tcall\t"),
         "the loop start is not a callee:\n{stdout}"

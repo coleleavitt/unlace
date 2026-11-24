@@ -1,4 +1,4 @@
-//! Tests for the `kuna_arraynotation` port: the `OptionArrayNotation::apply`
+//! Tests for the `unlace_arraynotation` port: the `OptionArrayNotation::apply`
 //! on/off parse + confirmation message, the invalid-toggle error, and the
 //! interaction with the `PrintCOptions` toggle the caller flips.
 

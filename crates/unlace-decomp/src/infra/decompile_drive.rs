@@ -15,7 +15,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 use unlace_num::opcodes::OpCode;
@@ -53,7 +53,7 @@ pub enum DrivePurpose {
 /// branch/call/coderef/marker property flags.
 struct ArchFlowEnv {
     mapped_image: Option<Arc<dyn ImageBytes>>,
-    /// (kuna `calltrampoline` / `callpopret`) Memo of both return-address-
+    /// (unlace `calltrampoline` / `callpopret`) Memo of both return-address-
     /// discarding probes, keyed by direct-call target.  Both inspect the same
     /// bounded raw decode, so sharing the verdict also keeps the second probe
     /// from doubling `getPcode` traffic in ghidra mode.
@@ -64,7 +64,7 @@ struct ArchFlowEnv {
     /// pipeline (`allacts`) concurrently: the env's reads (`translate`/`inst`/
     /// `symboltab`) never alias the `allacts` mutation, so the access is sound.
     arch: *const Architecture,
-    /// (kuna `evmcalls`) The image's EVM call classification, read once.
+    /// (unlace `evmcalls`) The image's EVM call classification, read once.
     evm_calls: std::cell::OnceCell<Option<Rc<crate::evmcalls::EvmCallMap>>>,
 }
 
@@ -85,7 +85,7 @@ impl FlowEnvironment for ArchFlowEnv {
             .get_or_init(|| {
                 let arch = self.arch();
                 let loader = arch.translate().loader_rc();
-                crate::evmcalls::image_map(&arch.kuna_options, arch.manage(), &loader)
+                crate::evmcalls::image_map(&arch.unlace_options, arch.manage(), &loader)
             })
             .clone()
     }
@@ -143,7 +143,7 @@ impl FlowEnvironment for ArchFlowEnv {
     fn resolve_typeop(&self, opc: OpCode) -> TypeOp {
         self.arch().resolve_typeop(opc)
     }
-    /// (kuna) One-byte probe through the load image — the same question
+    /// (unlace) One-byte probe through the load image — the same question
     /// `ConsoleProgram::entry_bytes_mapped` asks, answered here for a branch
     /// target the walk is about to queue.  A loader already borrowed elsewhere
     /// reports `true` (queue it), which is the behaviour that predates the probe.
@@ -157,7 +157,7 @@ impl FlowEnvironment for ArchFlowEnv {
     }
     fn query_call(&self, entry: &Address) -> Option<String> {
         let arch = self.arch();
-        // (kuna, Phase 3) ghidra-mode: the callee name comes from the host's
+        // (unlace, Phase 3) ghidra-mode: the callee name comes from the host's
         // getMappedSymbols answer through the lazy RemoteScope (query-through);
         // the live symboltab is empty in that mode.  Standalone: no provider
         // installed, fall through to the symbol table unchanged.
@@ -173,11 +173,11 @@ impl FlowEnvironment for ArchFlowEnv {
         // readLoaderSymbols + the analysis passes at load).  Resolved across scopes
         // so a namespaced (demangled) callee like `foo::Bar::baz` renders its
         // qualified name instead of `sub_<addr>` (C++ queryFunction spans the
-        // scope tree; kuna's per-scope maptable otherwise hides it).
+        // scope tree; unlace's per-scope maptable otherwise hides it).
         if let Some(name) = arch.symboltab.function_display_name_across_scopes(entry) {
             return Some(name);
         }
-        // (kuna `lazyfuncs`) A name-only entry has no `FunctionSymbol`; answering `None`
+        // (unlace `lazyfuncs`) A name-only entry has no `FunctionSymbol`; answering `None`
         // makes flow follow the branch INTO the callee, so the entry set stands in.
         arch.is_lazy_entry(entry.get_offset())
             .then(|| arch.name_function(entry))
@@ -226,13 +226,13 @@ impl FlowEnvironment for ArchFlowEnv {
     fn query_call_retarget(&self, callsite: &Address) -> Option<Address> {
         let imp = *self
             .arch()
-            .kuna_objc_retargets
+            .unlace_objc_retargets
             .get(&callsite.get_offset())?;
         Some(Address::new(Rc::clone(callsite.get_space()?), imp))
     }
     fn query_call_site_pieces(&self, callsite: &Address) -> Option<crate::fspec::PrototypePieces> {
         self.arch()
-            .kuna_objc_site_pieces
+            .unlace_objc_site_pieces
             .get(&callsite.get_offset())
             .cloned()
     }
@@ -246,11 +246,11 @@ impl FlowEnvironment for ArchFlowEnv {
     }
 
     fn funcbound_flow_enabled(&self) -> bool {
-        // (kuna funcboundflow) the Architecture-owned gate (`option funcboundflow`).
+        // (unlace funcboundflow) the Architecture-owned gate (`option funcboundflow`).
         // When on, `flow.rs` truncates a fall-through that reaches a known function
         // entry (via `query_call`) so the next function is not decoded into this one.
         self.arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::decompile_drive::FuncboundFlow>()
             .0
     }
@@ -264,7 +264,7 @@ impl FlowEnvironment for ArchFlowEnv {
         // code and consume a neighbouring function.
         decode_raw_run(self.arch(), entry, 1, usize::MAX)
             .map(|ops| {
-                crate::funcboundflow::kuna_is_unconditional_return(
+                crate::funcboundflow::unlace_is_unconditional_return(
                     ops.into_iter().map(|op| op.code),
                 )
             })
@@ -279,7 +279,7 @@ impl FlowEnvironment for ArchFlowEnv {
         if next.get_space().map(|s| s.get_index()) != Some(code.get_index()) {
             return None;
         }
-        crate::funcboundflow::kuna_pool_pad(
+        crate::funcboundflow::unlace_pool_pad(
             &arch.arm_pool_extents,
             |word| crate::litpoolconst::contains(&arch.litpool_const, word, 4),
             next.get_offset(),
@@ -334,7 +334,7 @@ impl FlowEnvironment for ArchFlowEnv {
                     )
                 })
                 .collect();
-            if !crate::funcboundflow::kuna_is_padding_run(
+            if !crate::funcboundflow::unlace_is_padding_run(
                 rows.iter()
                     .map(|(code, out, ins)| (*code, *out, ins.as_slice())),
             ) {
@@ -345,11 +345,11 @@ impl FlowEnvironment for ArchFlowEnv {
         true
     }
     fn overlap_branch_enabled(&self) -> bool {
-        // (kuna overlapbranch) the Architecture-owned gate (`option overlapbranch`).
+        // (unlace overlapbranch) the Architecture-owned gate (`option overlapbranch`).
         // When on, `flow.rs` truncates a conditional branch's fall-through whose
         // encoding swallows the branch's own target.
         self.arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::overlapbranch::OverlapBranch>()
             .0
     }
@@ -358,7 +358,7 @@ impl FlowEnvironment for ArchFlowEnv {
     }
     fn honest_gaps(&self) -> bool {
         self.arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::honestgaps::HonestGaps>()
             .0
     }
@@ -387,7 +387,7 @@ impl FlowEnvironment for ArchFlowEnv {
         }
         crate::retpolinethunk::inject_id(arch, entry)
     }
-    fn build_inline_funcdata(&self, entry: &Address) -> KunaResult<Option<Funcdata>> {
+    fn build_inline_funcdata(&self, entry: &Address) -> UnlaceResult<Option<Funcdata>> {
         // C++ `Funcdata::inlineFlow` builds a fresh FlowInfo over the queried
         // callee Funcdata (after clearAnalysis).  Resolve the callee symbol's
         // name (the C++ `queryFunction(entry)` -> Funcdata), then build a fresh
@@ -409,13 +409,13 @@ impl FlowEnvironment for ArchFlowEnv {
         Ok(Some(fd))
     }
 
-    /// (kuna `octeoneffects`) Upstream's ll/sc/sync fixups, registered at
+    /// (unlace `octeoneffects`) Upstream's ll/sc/sync fixups, registered at
     /// bootstrap like `cortexmpriv`'s, replace their Octeon operation only under
     /// `off`.
     fn is_injected_userop(&self, userop_index: unlace_base::types::uintb) -> bool {
         // C++ `glb->userops.getOp(in0)->getType() == UserPcodeOp::injected`.
         //
-        // (kuna `cortexmpriv`) The synthesized `isCurrentModePrivileged` fixup is
+        // (unlace `cortexmpriv`) The synthesized `isCurrentModePrivileged` fixup is
         // registered at architecture bootstrap, before any `option` line is
         // applied, so this — the only live per-CALLOTHER predicate that sees the
         // applied options — is where the flag gates it. Off, the CALLOTHER is left
@@ -434,12 +434,16 @@ impl FlowEnvironment for ArchFlowEnv {
         if let Some(id) = op.get_inject_id() {
             if arch.octeon_upstream_inject.contains(&(id as int4)) {
                 return arch
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::octeoneffects::OcteonEffectsMode>()
                     == crate::octeoneffects::OcteonEffectsMode::Off;
             }
         }
-        if !arch.kuna_options.get::<crate::cortexmpriv::Cortexmpriv>().0 {
+        if !arch
+            .unlace_options
+            .get::<crate::cortexmpriv::Cortexmpriv>()
+            .0
+        {
             if let Some(id) = op.get_inject_id() {
                 if crate::cortexmpriv::is_our_fixup(arch.cortexmpriv_inject, id as int4) {
                     return false;
@@ -471,14 +475,14 @@ impl FlowEnvironment for ArchFlowEnv {
         userop_index: unlace_base::types::uintb,
         context: &mut crate::pcodeinject::InjectContext,
         emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ `FlowInfo::injectUserOp`'s emit step.
         let arch = self.arch();
         let injectid = arch
             .userops
             .get_op(userop_index as unlace_base::types::uint4)
             .and_then(|op| op.get_inject_id())
-            .ok_or_else(|| KunaError::lowlevel("inject_userop: user-op is not injected"))?
+            .ok_or_else(|| UnlaceError::lowlevel("inject_userop: user-op is not injected"))?
             as int4;
         emit_inject(arch, injectid, context, emit)
     }
@@ -488,7 +492,7 @@ impl FlowEnvironment for ArchFlowEnv {
         inject_id: int4,
         context: &mut crate::pcodeinject::InjectContext,
         emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ `FlowInfo::injectSubFunction`'s emit step.
         let arch = self.arch();
         emit_inject(arch, inject_id, context, emit)
@@ -523,7 +527,7 @@ impl FlowEnvironment for ArchFlowEnv {
     fn build_override_proto(
         &self,
         pieces: &crate::fspec::PrototypePieces,
-    ) -> KunaResult<Option<crate::fspec::FuncProto>> {
+    ) -> UnlaceResult<Option<crate::fspec::FuncProto>> {
         // C++ `IfcProtooverride`: `new FuncProto; setInternal(pieces.model,
         // getTypeVoid()); setPieces(pieces)`.  The pieces carry no model
         // back-pointer in the merged tree (// STUB(w6-fspec-2)), so use the default
@@ -558,13 +562,13 @@ impl FlowEnvironment for ArchFlowEnv {
         if !arch.archid.starts_with("PowerPC:") {
             return false;
         }
-        crate::ppcpcread::is_pc_capture(fd, op, &arch.kuna_function_bodies, |dest| {
+        crate::ppcpcread::is_pc_capture(fd, op, &arch.unlace_function_bodies, |dest| {
             self.query_call(dest).is_some()
         })
     }
 
     fn is_v850_indirect_jmp(&self, fd: &Funcdata, op: crate::context::OpId) -> bool {
-        // (kuna) GH-8817: wire the ported `kunaIsV850IndirectJmp` predicate.  The
+        // (unlace) GH-8817: wire the ported `unlaceIsV850IndirectJmp` predicate.  The
         // gate is `v850indbranch::applies` (the `v850indirectbranch` flag on
         // a V850 language); the register name is
         // `glb->translate->getRegisterName(spc, off, size)` of op's input-0
@@ -586,7 +590,7 @@ impl FlowEnvironment for ArchFlowEnv {
             let name = arch.translate().get_register_name(space, off, size);
             if name.is_empty() { None } else { Some(name) }
         })();
-        crate::v850indbranch::kuna_is_v850_indirect_jmp(fd, op, true, regname.as_deref())
+        crate::v850indbranch::unlace_is_v850_indirect_jmp(fd, op, true, regname.as_deref())
     }
 
     fn sparc_struct_ret_trap_producer(
@@ -594,14 +598,14 @@ impl FlowEnvironment for ArchFlowEnv {
         fd: &Funcdata,
         op: crate::context::OpId,
     ) -> Option<crate::context::OpId> {
-        // (kuna) GH-6882: wire the ported `kunaIsSparcStructRetTrap` predicate.
+        // (unlace) GH-6882: wire the ported `unlaceIsSparcStructRetTrap` predicate.
         // The gate is the architecture-owned `sparc_struct_return` flag (`option
         // sparcstructret on|off`, default on; the user-op exists only on SPARC); the
         // user-op name resolution is `glb->userops.getOp(id)->getName()` (None ==
         // the C++ null `UserPcodeOp *`).
         let arch = self.arch();
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::sparcstructret::SparcStructReturn>()
             .0
         {
@@ -609,10 +613,10 @@ impl FlowEnvironment for ArchFlowEnv {
             // predicate's leading `if (!gate) return false`).
             return None;
         }
-        crate::sparcstructret::kuna_sparc_struct_ret_trap_producer(
+        crate::sparcstructret::unlace_sparc_struct_ret_trap_producer(
             fd,
             op,
-            arch.kuna_options
+            arch.unlace_options
                 .get::<crate::sparcstructret::SparcStructReturn>()
                 .0,
             |id| {
@@ -636,7 +640,7 @@ impl FlowEnvironment for ArchFlowEnv {
     fn relro_noreturn_call(&self, fd: &Funcdata, op: crate::context::OpId) -> Option<Address> {
         let arch = self.arch();
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::decompile_drive::RelroNoreturn>()
             .0
             || arch.dynreloc_const.is_empty()
@@ -681,7 +685,7 @@ impl FlowEnvironment for ArchFlowEnv {
     fn vcall_resolution(&self, site: &Address) -> (Option<Address>, Option<String>) {
         let arch = self.arch();
         let (Some(targets), Some(space)) = (
-            arch.kuna_vcall_targets
+            arch.unlace_vcall_targets
                 .get(&site.get_offset())
                 .map(|v| &v.targets),
             site.get_space(),
@@ -709,7 +713,7 @@ impl FlowEnvironment for ArchFlowEnv {
             named += 1;
         }
         if !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::inputhints::ThisHints>()
             .0
             .is_empty()
@@ -748,7 +752,7 @@ impl FlowEnvironment for ArchFlowEnv {
     ) -> Option<unlace_num::pcoderaw::VarnodeData> {
         let arch = self.arch();
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::guarddispatch::GuardDispatch>()
             .0
             || arch.guard_dispatch_slots.is_empty()
@@ -771,7 +775,7 @@ impl FlowEnvironment for ArchFlowEnv {
                 .is_some_and(|space| locked.contains(&(space.get_index(), entry.get_offset())))
     }
     fn is_fastfail_callind(&self, fd: &Funcdata, op: crate::context::OpId) -> bool {
-        // (kuna `fastfailnoreturn`) wire the `int 0x29` predicate.  The gate is
+        // (unlace `fastfailnoreturn`) wire the `int 0x29` predicate.  The gate is
         // the compiler-spec component of the resolved language id — `int 0x29` is
         // `__fastfail` by Windows convention alone.  The user-op name resolution
         // is `glb->userops.getOp(id)->getName()`.
@@ -800,13 +804,13 @@ impl FlowEnvironment for ArchFlowEnv {
         fd: &Funcdata,
         op: crate::context::OpId,
     ) -> Option<crate::int3pad::Int3PadSite> {
-        // (kuna `int3pad`) wire the decoded-`int3` predicate.  The gate is the
+        // (unlace `int3pad`) wire the decoded-`int3` predicate.  The gate is the
         // architecture-owned `int3_pad` mode (`option int3pad off|warn|halt`,
         // default `warn`); the shape and user-op name resolution are
         // `fastfailnoreturn`'s, read for vector 3.  No language gate: the shape
         // itself is x86's, so no other processor reaches the match.
         let arch = self.arch();
-        let int3_pad = arch.kuna_options.get::<crate::int3pad::Int3PadMode>();
+        let int3_pad = arch.unlace_options.get::<crate::int3pad::Int3PadMode>();
         if !int3_pad.warns() {
             // Fast-path the gate without touching the IR.
             return None;
@@ -825,7 +829,7 @@ impl FlowEnvironment for ArchFlowEnv {
         })
     }
 
-    /// (kuna `brktrap`) Only the AArch64 specs define the `SoftwareBreakpoint`
+    /// (unlace `brktrap`) Only the AArch64 specs define the `SoftwareBreakpoint`
     /// user-op, so every other language returns at the index lookup.
     fn brk_trap(&self, fd: &Funcdata, op: crate::context::OpId) -> Option<crate::brktrap::BrkTrap> {
         let arch = self.arch();
@@ -841,7 +845,7 @@ impl FlowEnvironment for ArchFlowEnv {
         Some(crate::brktrap::BrkTrap { callother, code })
     }
 
-    /// (kuna `kernelbug`) Empty on every image without a `__bug_table`, so the
+    /// (unlace `kernelbug`) Empty on every image without a `__bug_table`, so the
     /// address lookup is the only cost; the user-op indices are resolved by name
     /// (`invalidInstructionException` on x86, `SoftwareBreakpoint` on AArch64).
     fn kernel_bug_site(
@@ -851,16 +855,18 @@ impl FlowEnvironment for ArchFlowEnv {
     ) -> Option<(crate::context::OpId, crate::kernelbug::KernelBugSite)> {
         let arch = self.arch();
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::kernelbug::BugSites>()
             .is_empty()
         {
             return None;
         }
         let addr = fd.obank().get(op)?.get_addr().get_offset();
-        let site =
-            crate::kernelbug::site_at(arch.kuna_tables.get::<crate::kernelbug::BugSites>(), addr)?
-                .clone();
+        let site = crate::kernelbug::site_at(
+            arch.unlace_tables.get::<crate::kernelbug::BugSites>(),
+            addr,
+        )?
+        .clone();
         let index = |name| {
             arch.userops
                 .get_op_by_name(name)
@@ -874,14 +880,16 @@ impl FlowEnvironment for ArchFlowEnv {
 
     fn kernel_bug_trap_at(&self, addr: u64) -> bool {
         crate::kernelbug::site_at(
-            self.arch().kuna_tables.get::<crate::kernelbug::BugSites>(),
+            self.arch()
+                .unlace_tables
+                .get::<crate::kernelbug::BugSites>(),
             addr,
         )
         .is_some()
     }
 
     fn is_tail_call_branch(&self, fd: &Funcdata, op: crate::context::OpId, dest: &Address) -> bool {
-        // (kuna) tee-O2 tail-jump: wire the ported `kuna_is_tail_call_branch`
+        // (unlace) tee-O2 tail-jump: wire the ported `unlace_is_tail_call_branch`
         // predicate.  The gate is the architecture-owned `tail_call_jumps` flag
         // (`option tailcalljump on|off`, default-off opt-in / default-pipeline
         // byte-identical — default-on regresses 2 datatests, Long double #1/#2).
@@ -890,7 +898,7 @@ impl FlowEnvironment for ArchFlowEnv {
         // `dest == fd.getAddress()`.
         let arch = self.arch();
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::tailcalljump::TailCallJump>()
             .jumps
         {
@@ -899,10 +907,10 @@ impl FlowEnvironment for ArchFlowEnv {
         }
         let dest_is_known_function = self.query_call(dest).is_some();
         let dest_is_self = dest == fd.get_address();
-        crate::tailcalljump::kuna_is_tail_call_branch(
+        crate::tailcalljump::unlace_is_tail_call_branch(
             fd,
             op,
-            arch.kuna_options
+            arch.unlace_options
                 .get::<crate::tailcalljump::TailCallJump>()
                 .jumps,
             dest_is_known_function,
@@ -919,10 +927,10 @@ impl FlowEnvironment for ArchFlowEnv {
     ) -> bool {
         let glb = fd.get_arch();
         let arch = self.arch();
-        let tail_call = crate::tailcalljump::kuna_is_tail_call_table(
+        let tail_call = crate::tailcalljump::unlace_is_tail_call_table(
             fd,
             op,
-            arch.kuna_options
+            arch.unlace_options
                 .get::<crate::tailcalljump::TailCallJump>()
                 .tables,
             self.query_call(dest).is_some(),
@@ -971,14 +979,14 @@ impl FlowEnvironment for ArchFlowEnv {
         op: crate::context::OpId,
         dest: &Address,
     ) -> bool {
-        // (kuna `tailcallframe`) The gate is the architecture-owned
+        // (unlace `tailcallframe`) The gate is the architecture-owned
         // `tail_call_frame` flag; the predicate needs the stack-pointer register
         // location, which is the stack space's own base register
         // (`getStackSpace()->getSpacebaseFull(0)`).  A compiler spec with no
         // `<stackpointer>` has no stack space, and the rule declines.
         let arch = self.arch();
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::tailcallframe::TailCallFrame>()
             .0
         {
@@ -989,10 +997,10 @@ impl FlowEnvironment for ArchFlowEnv {
             .manage()
             .get_stack_space()
             .and_then(|spc| spc.get_spacebase_full(0).ok());
-        crate::tailcallframe::kuna_is_frame_teardown_tail_call(
+        crate::tailcallframe::unlace_is_frame_teardown_tail_call(
             fd,
             op,
-            arch.kuna_options
+            arch.unlace_options
                 .get::<crate::tailcallframe::TailCallFrame>()
                 .0,
             fd.get_address(),
@@ -1003,7 +1011,7 @@ impl FlowEnvironment for ArchFlowEnv {
 }
 
 impl ArchFlowEnv {
-    /// (kuna `calltrampoline` / `callpopret`) Classify both shapes from one
+    /// (unlace `calltrampoline` / `callpopret`) Classify both shapes from one
     /// bounded decode.  Tuple order is `(callpopret, calltrampoline)`.
     fn return_discard_verdicts(&self, dest: &Address) -> (bool, bool) {
         let key = dest
@@ -1025,13 +1033,13 @@ impl ArchFlowEnv {
         let Some(ops) = decode_raw_run(
             arch,
             dest,
-            crate::calltrampoline::KUNA_TRAMPOLINE_MAX_INSTRS,
-            crate::calltrampoline::KUNA_TRAMPOLINE_MAX_OPS,
+            crate::calltrampoline::UNLACE_TRAMPOLINE_MAX_INSTRS,
+            crate::calltrampoline::UNLACE_TRAMPOLINE_MAX_OPS,
         ) else {
             return (false, false);
         };
-        let popret = crate::callpopret::kuna_call_pops_return_address(&ops, &sp);
-        let trampoline = crate::calltrampoline::kuna_trampoline_branch_target(&ops, &sp)
+        let popret = crate::callpopret::unlace_call_pops_return_address(&ops, &sp);
+        let trampoline = crate::calltrampoline::unlace_trampoline_branch_target(&ops, &sp)
             .and_then(|target| {
                 let space = target.space.as_ref()?;
                 let re_entry = Address::new(std::rc::Rc::clone(space), target.offset);
@@ -1086,7 +1094,7 @@ impl unlace_sleigh::translate::PcodeEmit for RawOpCollector {
     }
 }
 
-/// (kuna `iokitclasses on`) The method every named candidate of a virtual
+/// (unlace `iokitclasses on`) The method every named candidate of a virtual
 /// call overrides: the one unqualified name all their `Class::method` names
 /// share. `None` when a named candidate is not a class member, two disagree,
 /// or none is named.
@@ -1109,7 +1117,7 @@ fn shared_method(names: impl Iterator<Item = Option<String>>) -> Option<String> 
     shared
 }
 
-/// (kuna `calltrampoline`) Decode the straight-line run starting at `entry`
+/// (unlace `calltrampoline`) Decode the straight-line run starting at `entry`
 /// into raw p-code, stopping at the first control-transfer op or at the module's
 /// instruction/op budget.
 ///
@@ -1158,7 +1166,7 @@ pub fn build_and_follow_flow(
     name: &str,
     entry: Address,
     size: int4,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     build_and_follow_flow_with_override(arch, name, entry, size, &[])
 }
 
@@ -1171,7 +1179,7 @@ pub fn build_and_follow_flow(
 ///
 /// `flow_overrides` are the `(address, flow_type)` facts the console stashed; they
 /// are re-inserted into the fresh Funcdata's `localoverride` (the C++ override is
-/// kept on the reused Funcdata, but the kuna console rebuilds the IR — see the
+/// kept on the reused Funcdata, but the unlace console rebuilds the IR — see the
 /// `pending_prototypes`/`mapped_symbols` re-seed precedent).
 ///
 /// Takes `&mut Architecture` because the jump-table recovery pipeline (below)
@@ -1184,7 +1192,7 @@ pub fn build_and_follow_flow_with_override(
     entry: Address,
     size: int4,
     flow_overrides: &[(Address, unlace_base::types::uint4)],
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     build_and_follow_flow_with_override_and_protos(arch, name, entry, size, flow_overrides, &[])
 }
 
@@ -1203,7 +1211,7 @@ pub fn build_and_follow_flow_within_budget(
     entry: Address,
     size: int4,
     flow_overrides: &[(Address, unlace_base::types::uint4)],
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     let started = std::time::Instant::now();
     let mut fd = within_flow_budget(arch, |arch| {
         build_and_follow_flow_with_override(arch, name, entry, size, flow_overrides)
@@ -1214,7 +1222,7 @@ pub fn build_and_follow_flow_within_budget(
 
 /// (unlace decompile-all watchdog) Did `error` stop a drive at its budget or
 /// memory limit ([`budget_error`])?
-pub fn is_budget_stop(error: &KunaError) -> bool {
+pub fn is_budget_stop(error: &UnlaceError) -> bool {
     let text = error.explain();
     text.starts_with(BUDGET_EXCEEDED) || text.starts_with(MEMORY_EXCEEDED)
 }
@@ -1228,7 +1236,7 @@ pub fn budget_stop_shell(
     name: &str,
     entry: Address,
     size: int4,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     let mut fd = arch.new_funcdata(name, entry, size)?;
     fd.set_flag_raw(funcdata_flags::processing_started);
     Ok(fd)
@@ -1242,7 +1250,7 @@ pub fn ppc32_pic_call_bindings(
     name: &str,
     entry: Address,
     size: int4,
-) -> KunaResult<Vec<crate::ppc32piccalls::CallBinding>> {
+) -> UnlaceResult<Vec<crate::ppc32piccalls::CallBinding>> {
     within_flow_budget(arch, |arch| {
         crate::armfloatreturn::park_float_library_prototypes(arch);
         let fd = arch.new_funcdata(name, entry, size)?;
@@ -1256,10 +1264,10 @@ pub fn ppc32_pic_call_bindings(
 /// Run `follow` under the budget and memory limit a drive of `arch` would arm.
 fn within_flow_budget<T>(
     arch: &mut Architecture,
-    follow: impl FnOnce(&mut Architecture) -> KunaResult<T>,
-) -> KunaResult<T> {
+    follow: impl FnOnce(&mut Architecture) -> UnlaceResult<T>,
+) -> UnlaceResult<T> {
     let memory = arch
-        .kuna_drive_publishes()
+        .unlace_drive_publishes()
         .then(crate::fnmemory::Armed::enter);
     let horizon = match fn_budget(arch) {
         Some(budget) => budget,
@@ -1267,15 +1275,15 @@ fn within_flow_budget<T>(
         None => return follow(arch),
     };
     let outer = arch
-        .kuna_fn_deadline
+        .unlace_fn_deadline
         .replace(std::time::Instant::now() + horizon);
     let result = {
-        let _deadline_scope = DeadlineScope::enter(arch.kuna_fn_deadline);
+        let _deadline_scope = DeadlineScope::enter(arch.unlace_fn_deadline);
         let followed = follow(arch);
         deadline_passed_in("flow following");
         budget_error(arch).map_or(followed, Err)
     };
-    arch.kuna_fn_deadline = outer;
+    arch.unlace_fn_deadline = outer;
     result
 }
 
@@ -1294,7 +1302,7 @@ pub fn build_and_follow_flow_with_override_and_protos(
     size: int4,
     flow_overrides: &[(Address, unlace_base::types::uint4)],
     proto_overrides: &[(Address, crate::fspec::PrototypePieces)],
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     crate::armfloatreturn::park_float_library_prototypes(arch);
     let mut fd = arch.new_funcdata(name, entry, size)?;
     for (addr, ty) in flow_overrides {
@@ -1335,7 +1343,7 @@ pub fn build_and_follow_flow_with_override_and_protos(
 /// — including the indirect override a prior `deindirect` installed — survives the
 /// clear, so the re-flow rebuilds the CALLIND straight as a direct CALL).
 #[allow(clippy::mutable_key_type)]
-fn follow_flow_on_fd(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcdata> {
+fn follow_flow_on_fd(arch: &mut Architecture, fd: Funcdata) -> UnlaceResult<Funcdata> {
     let comments = fd.pending_comment_count();
     let mut data = generate_flow(arch, fd)?;
     let bindings = crate::ppc32piccalls::prove(&data, arch);
@@ -1353,7 +1361,7 @@ fn follow_flow_on_fd(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcda
 /// C++ `Funcdata::followFlow` through `startProcessing`'s sorting, without
 /// publishing the flow's buffered comments.
 #[allow(clippy::mutable_key_type)]
-fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcdata> {
+fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> UnlaceResult<Funcdata> {
     let _load = arch.load_scope();
     crate::mipsunaligned::paint(arch);
     crate::memtag::paint(arch, fd.get_address());
@@ -1399,11 +1407,11 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcdata> 
     // drive; the tables after it are not attempted.
     {
         let arch_ptr: *mut Architecture = arch;
-        let mut panicked: Option<KunaError> = None;
+        let mut panicked: Option<UnlaceError> = None;
         let mut run_jt_pipeline =
-            |partial: &mut Funcdata, visited: &crate::flow::VisitedMap| -> KunaResult<()> {
+            |partial: &mut Funcdata, visited: &crate::flow::VisitedMap| -> UnlaceResult<()> {
                 if panicked.is_some() {
-                    return Err(KunaError::lowlevel(
+                    return Err(UnlaceError::lowlevel(
                         "jump-table recovery stopped by an earlier panic",
                     ));
                 }
@@ -1443,7 +1451,7 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcdata> 
 }
 
 /// Mark processing started and publish the flow's buffered comments.
-fn publish_flow(arch: &mut Architecture, mut data: Funcdata) -> KunaResult<Funcdata> {
+fn publish_flow(arch: &mut Architecture, mut data: Funcdata) -> UnlaceResult<Funcdata> {
     // startProcessing then sets the processing_started flag (so isProcStarted()
     // is true; the rest of startProcessing — sortCallSpecs / buildInfoList /
     // applyDeadCodeDelay — is a W4 stub or handled lazily in op_heritage).
@@ -1454,9 +1462,9 @@ fn publish_flow(arch: &mut Architecture, mut data: Funcdata) -> KunaResult<Funcd
     // private to the caller it types for, so its comments must not enter the
     // program-wide comment database.
     let func_addr = data.get_address().clone();
-    if arch.kuna_drive_publishes() {
+    if arch.unlace_drive_publishes() {
         if !arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::ppc32piccalls::PicImports>()
             .is_empty()
         {
@@ -1491,8 +1499,8 @@ fn run_jumptable_pipeline(
     arch: &mut Architecture,
     partial: &mut Funcdata,
     visited: &crate::flow::VisitedMap,
-    panicked: &mut Option<KunaError>,
-) -> KunaResult<()> {
+    panicked: &mut Option<UnlaceError>,
+) -> UnlaceResult<()> {
     // Build the partial's basic blocks (partialflow.generateBlocks).
     let env = ArchFlowEnv {
         mapped_image: None,
@@ -1512,12 +1520,12 @@ fn run_jumptable_pipeline(
     // (unlace decompile-all watchdog) The jumptable sub-pipeline runs inside the
     // budgeted per-function drive (flow-follow), so it shares the same deadline;
     // `None` on every unbudgeted path (console/parity — structurally unchanged).
-    ctx.deadline = arch.kuna_fn_deadline;
+    ctx.deadline = arch.unlace_fn_deadline;
     let result = {
         let root = arch
             .allacts
             .get_current_mut()
-            .ok_or_else(|| KunaError::lowlevel("no current jumptable action"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("no current jumptable action"))?;
         root.reset(partial);
         // catch_unwind so a panic in the sub-pipeline fails this function, never
         // the whole batch — same policy as the main `decompile_func_full` drive.
@@ -1534,7 +1542,7 @@ fn run_jumptable_pipeline(
                 return Err(error);
             }
             if r < 0 {
-                return Err(KunaError::lowlevel("jumptable pipeline hit a breakpoint"));
+                return Err(UnlaceError::lowlevel("jumptable pipeline hit a breakpoint"));
             }
             Ok(())
         }
@@ -1547,8 +1555,8 @@ fn run_jumptable_pipeline(
                 panic_message(payload)
             );
             *panicked =
-                Some(budget_error(arch).unwrap_or_else(|| KunaError::lowlevel(message.clone())));
-            Err(KunaError::lowlevel(message))
+                Some(budget_error(arch).unwrap_or_else(|| UnlaceError::lowlevel(message.clone())));
+            Err(UnlaceError::lowlevel(message))
         }
     }
 }
@@ -1561,7 +1569,7 @@ fn run_jumptable_pipeline(
 /// The action root owns the restart loop (C++ non-virtual `Action::perform`,
 /// already ported in `action.rs`); this drives it through the engine-side
 /// [`ActionContext`] so the warning-emission points are observable.
-fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> {
+fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<int4> {
     let _load = arch.load_scope();
     // C++ allacts.setCurrent("decompile") derives the filtered decompile root
     // (idempotent if already current).
@@ -1577,7 +1585,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
     const MAX_REFLOW: int4 = 8;
     let mut total: int4 = 0;
     let mut reflows: int4 = 0;
-    // (kuna callee-contract) `ActionActiveParam` pauses (`-1`) when a call site's
+    // (unlace callee-contract) `ActionActiveParam` pauses (`-1`) when a call site's
     // active trial storage is a preferred-split register and the drive has not
     // yet stated that callee.  The resumed `perform` continues at the same
     // action with its state intact, so this does not consume the reflow budget.
@@ -1588,11 +1596,11 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
     let mut contract_budget = MAX_CONTRACT_CALLEES;
     loop {
         let res = {
-            let deadline = arch.kuna_fn_deadline;
+            let deadline = arch.unlace_fn_deadline;
             let root = arch
                 .allacts
                 .get_current_mut()
-                .ok_or_else(|| unlace_base::error::KunaError::lowlevel("no current action"))?;
+                .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("no current action"))?;
             if !resume {
                 root.reset(fd);
             }
@@ -1610,11 +1618,11 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         };
         let (r, reflow_requested, abandoned) = res;
         if let Some(error) = fd
-            .kuna_state::<crate::callmechanisms::State>()
+            .unlace_state::<crate::callmechanisms::State>()
             .failure
             .as_ref()
         {
-            return Err(KunaError::lowlevel(error.clone()));
+            return Err(UnlaceError::lowlevel(error.clone()));
         }
         // (unlace decompile-all watchdog) A budgeted drive that ran past its
         // deadline unwound cooperatively (the action/heritage loops stop
@@ -1623,23 +1631,23 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         if let Some(err) = budget_error(arch) {
             return Err(err);
         }
-        // (kuna callee-contract) The paused pass queued direct callees whose trial
+        // (unlace callee-contract) The paused pass queued direct callees whose trial
         // storage is a preferred-split register.  State their types, hand the new
         // statements to the paused caller, and resume the same pass.
-        let pending = fd.kuna_take_callee_split_calls();
+        let pending = fd.unlace_take_callee_split_calls();
         if !pending.is_empty() {
             if contract_root.is_none() {
                 contract_root = Some(
                     arch.allacts
                         .derive_fresh("decompile")?
-                        .ok_or_else(|| KunaError::lowlevel("missing callee recovery action"))?,
+                        .ok_or_else(|| UnlaceError::lowlevel("missing callee recovery action"))?,
                 );
             }
             let fresh = contract_root.take().expect("contract root just installed");
             let paused = arch
                 .allacts
                 .swap_current_action(fresh)
-                .ok_or_else(|| KunaError::lowlevel("missing paused caller action"))?;
+                .ok_or_else(|| UnlaceError::lowlevel("missing paused caller action"))?;
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 bootstrap_split_callees(arch, fd, pending, &mut contract_budget);
             }));
@@ -1655,7 +1663,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         }
         resume = false;
         total += r;
-        // (kuna `stackstoreguard`) A function whose final layout spoils what the
+        // (unlace `stackstoreguard`) A function whose final layout spoils what the
         // guard needs is analyzed again from scratch without it by the drive.
         // The deadline is checked again after the layout checks: their walks
         // give up once it passes, which would otherwise keep the guard.
@@ -1667,7 +1675,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         if spoiled {
             return Ok(total);
         }
-        // (kuna `bejoin evidence`) A call resolved mid-pass to a proven
+        // (unlace `bejoin evidence`) A call resolved mid-pass to a proven
         // callee read it unproven: run the pass again with its verdict.
         if !(reflow_requested && fd.has_restart_pending())
             && !crate::bejoin::wide_callee_missed(arch, fd)
@@ -1685,7 +1693,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
             return Ok(total);
         }
         reflows += 1;
-        // (kuna `persistcalls`) The last pass cannot restart, so it guards
+        // (unlace `persistcalls`) The last pass cannot restart, so it guards
         // every persistent global at every call.
         if reflows >= MAX_REFLOW {
             fd.get_override_mut().set_persist_calls_off();
@@ -1694,26 +1702,26 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
         // deindirect's indirect override — survives `clear()`), then loop to
         // re-perform.  `clear()` resets the restart flag, so a fresh request must
         // come from the re-flowed pass to loop again.
-        let armed = fd.kuna_callee_contract_armed();
+        let armed = fd.unlace_callee_contract_armed();
         refollow_flow(arch, fd)?;
-        fd.kuna_set_callee_contract_armed(armed);
-        // (kuna `rustabi`) The re-flow hands back a FRESH Funcdata, so the
+        fd.unlace_set_callee_contract_armed(armed);
+        // (unlace `rustabi`) The re-flow hands back a FRESH Funcdata, so the
         // callee-body evidence has to be taken again or the call-output seam
         // silently loses its veto on every restarted function.  Cached, so this
         // is a map lookup per call.
         crate::rustabi::seed_callee_return_writes(arch, fd);
-        // (kuna `bejoin evidence`) And the wide-return verdicts.
+        // (unlace `bejoin evidence`) And the wide-return verdicts.
         crate::bejoin::seed_wide_returns(arch, fd);
         crate::callwide::seed(arch, fd);
-        // (kuna `calleedeadarg`) Same story for the entry-liveness probe the
+        // (unlace `calleedeadarg`) Same story for the entry-liveness probe the
         // input-trial scoring seam consults.
         crate::calleedeadarg::seed_callee_entry_dead(arch, fd);
         crate::darwinvarargs::seed(arch, fd);
         crate::swiftcall::seed_self_readers(arch, fd);
-        // (kuna `zerofillreturn`) And the zero fills, read off the fresh p-code.
+        // (unlace `zerofillreturn`) And the zero fills, read off the fresh p-code.
         crate::zerofillreturn::seed(fd);
         crate::importvote::seed(arch, fd);
-        // (kuna `protoorder types`) And for the parameter types earlier callees stated.
+        // (unlace `protoorder types`) And for the parameter types earlier callees stated.
         crate::protoorder::seed_protoorder_types(arch, fd);
         crate::callrettype::seed(arch, fd);
         crate::narrowret::seed(arch, fd);
@@ -1736,7 +1744,7 @@ fn run_pipeline(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<int4> 
 /// `follow_flow_on_fd` before the pipeline runs; warnings raised *inside* the
 /// pipeline land here.  No-op when nothing was buffered.
 fn drain_pipeline_comments(arch: &mut Architecture, fd: &mut Funcdata) {
-    if !arch.kuna_drive_publishes() {
+    if !arch.unlace_drive_publishes() {
         return;
     }
     let func_addr = fd.get_address().clone();
@@ -1758,8 +1766,8 @@ const ANALYSIS_WARNINGS: unlace_base::types::uint4 =
 /// while preserving the per-function `Override`, then re-runs the flow follow in
 /// place.
 #[allow(clippy::mutable_key_type)]
-fn refollow_flow(arch: &mut Architecture, fd: &mut Funcdata) -> KunaResult<()> {
-    if arch.kuna_drive_publishes() {
+fn refollow_flow(arch: &mut Architecture, fd: &mut Funcdata) -> UnlaceResult<()> {
+    if arch.unlace_drive_publishes() {
         let entry = fd.get_address().clone();
         arch.commentdb
             .retain_comments(|c| c.func_addr != entry || c.tp & ANALYSIS_WARNINGS == 0);
@@ -1791,12 +1799,12 @@ pub fn decompile_func(
     name: &str,
     funcaddr: Address,
     size: int4,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_with_symbols(arch, name, funcaddr, size, &[])
 }
 
 /// Like [`decompile_func`], but seeds the freshly-built `Funcdata`'s local scope
-/// with console-mapped Symbol specs (`map addr`).  The kuna console rebuilds the
+/// with console-mapped Symbol specs (`map addr`).  The unlace console rebuilds the
 /// IR on `decompile` (C++ reuses the same `fd`); this carries the `map addr`
 /// symbols across that rebuild so stack-variable promotion can name them.
 pub fn decompile_func_with_symbols(
@@ -1810,7 +1818,7 @@ pub fn decompile_func_with_symbols(
         Address,
         unlace_base::types::uint4,
     )],
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_full(arch, name, funcaddr, size, mapped_symbols, None)
 }
 
@@ -1850,7 +1858,7 @@ fn eligible_callees(
             continue;
         }
         if crate::protoorder::stated_key(&entry).is_some_and(|key| {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get::<crate::protoorder::CalleeTypes>()
                 .contains_key(&key)
         }) {
@@ -1890,7 +1898,7 @@ fn bootstrap_split_callees(
     budget: &mut usize,
 ) {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::protoorder::ProtoOrderMode>()
         .is_on()
         || root.num_calls() == 0
@@ -1906,7 +1914,10 @@ fn bootstrap_split_callees(
     if entries.is_empty() {
         return;
     }
-    let prior = std::mem::take(arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>());
+    let prior = std::mem::take(
+        arch.unlace_tables
+            .get_mut::<crate::protoorder::CalleeTypes>(),
+    );
     let mut recovered = Vec::new();
     for entry in entries {
         if *budget == 0 || deadline_passed() {
@@ -1917,7 +1928,9 @@ fn bootstrap_split_callees(
             recovered.push((entry, stated, calls));
         }
     }
-    *arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>() = prior;
+    *arch
+        .unlace_tables
+        .get_mut::<crate::protoorder::CalleeTypes>() = prior;
     let mut any_stated = false;
     let cyclic = contract_cycles(&root_entry, &recovered);
     for (entry, stated, _) in recovered {
@@ -1925,7 +1938,7 @@ fn bootstrap_split_callees(
             continue;
         };
         if !cyclic.contains(&key) {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get_mut::<crate::protoorder::CalleeTypes>()
                 .insert(key, stated);
             any_stated = true;
@@ -1968,7 +1981,7 @@ const MAX_TAIL_CALLEE_INSTRUCTIONS: u32 = 512;
 /// Inert under `protoorder off`.
 fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::protoorder::ProtoOrderMode>()
         .is_on()
         || root.num_calls() == 0
@@ -1998,7 +2011,10 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
     if entries.is_empty() {
         return;
     }
-    let prior = std::mem::take(arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>());
+    let prior = std::mem::take(
+        arch.unlace_tables
+            .get_mut::<crate::protoorder::CalleeTypes>(),
+    );
     let mut stated = Vec::new();
     for entry in entries.into_iter().take(MAX_TAIL_CONTRACTS) {
         if deadline_passed() {
@@ -2016,13 +2032,15 @@ fn bootstrap_tail_callees(arch: &mut Architecture, root: &Funcdata) {
             }
         }
     }
-    *arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>() = prior;
-    arch.kuna_tables
+    *arch
+        .unlace_tables
+        .get_mut::<crate::protoorder::CalleeTypes>() = prior;
+    arch.unlace_tables
         .get_mut::<crate::protoorder::CalleeTypes>()
         .extend(stated);
 }
 
-/// (kuna `gottailcall`, single-function drive) Decompile `entry`, a known
+/// (unlace `gottailcall`, single-function drive) Decompile `entry`, a known
 /// function a one-destination table of the root reached, as a tail-called
 /// callee is decompiled first, and say what a tail call to it rests on.  Its
 /// statement, when it makes one, stays for the root's next decompile.
@@ -2033,7 +2051,10 @@ fn recover_got_callee(
     if deadline_passed() {
         return None;
     }
-    let prior = std::mem::take(arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>());
+    let prior = std::mem::take(
+        arch.unlace_tables
+            .get_mut::<crate::protoorder::CalleeTypes>(),
+    );
     let got = recover_one_contract(
         arch,
         &prior,
@@ -2041,10 +2062,12 @@ fn recover_got_callee(
         Some(MAX_TAIL_CALLEE_INSTRUCTIONS),
         true,
     );
-    *arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>() = prior;
+    *arch
+        .unlace_tables
+        .get_mut::<crate::protoorder::CalleeTypes>() = prior;
     let (stated, _, callee) = got?;
     if let (Some(types), Some(key)) = (stated, crate::protoorder::stated_key(entry)) {
-        arch.kuna_tables
+        arch.unlace_tables
             .get_mut::<crate::protoorder::CalleeTypes>()
             .insert(key, types);
     }
@@ -2055,7 +2078,7 @@ fn recover_got_callee(
 /// restore the caller's drive state.  The restored state is the per-drive
 /// switches the callee drive rewrites; the statements are handed back explicitly
 /// by the caller.  Everything the Architecture publishes program-wide is already
-/// out of reach here: [`Architecture::kuna_drive_publishes`] is false for this
+/// out of reach here: [`Architecture::unlace_drive_publishes`] is false for this
 /// nested drive, so its flow/pipeline comments never enter the comment database,
 /// and the one-shot staged prototype list was consumed by the outer drive.  A
 /// panic or a declined recovery leaves the table untouched.  The callee sees only
@@ -2074,17 +2097,21 @@ fn recover_one_contract(
     Vec<Address>,
     Option<crate::gottailcall::Callee>,
 )> {
-    *arch.kuna_tables.get_mut::<crate::protoorder::CalleeTypes>() = prior.clone();
-    let saved_deadline = arch.kuna_fn_deadline;
+    *arch
+        .unlace_tables
+        .get_mut::<crate::protoorder::CalleeTypes>() = prior.clone();
+    let saved_deadline = arch.unlace_fn_deadline;
     let saved_action = arch.allacts.get_current_name().to_string();
     let saved_max_instructions = arch.max_instructions;
     let saved_flowoptions = arch.flowoptions;
-    let staged_names = std::mem::take(&mut arch.kuna_pending_name_recs);
-    let staged_dyn = std::mem::take(&mut arch.kuna_pending_dyn_recs);
-    let staged_model = arch.kuna_pending_proto_model.take();
-    let saved_record_names = arch.kuna_record_names;
-    let saved_prior_names =
-        std::mem::take(arch.kuna_tables.get_mut::<crate::stablenames::PriorNames>());
+    let staged_names = std::mem::take(&mut arch.unlace_pending_name_recs);
+    let staged_dyn = std::mem::take(&mut arch.unlace_pending_dyn_recs);
+    let staged_model = arch.unlace_pending_proto_model.take();
+    let saved_record_names = arch.unlace_record_names;
+    let saved_prior_names = std::mem::take(
+        arch.unlace_tables
+            .get_mut::<crate::stablenames::PriorNames>(),
+    );
     let saved_format_sites = std::mem::take(&mut arch.format_override_callpoints);
     let saved_readonly = arch.readonlypropagate;
     let name = format!("sub_{:x}", entry.get_offset());
@@ -2110,7 +2137,7 @@ fn recover_one_contract(
             crate::protoorder::ProtoOrderMode::Types,
         );
         let stated = crate::protoorder::stated_key(entry).and_then(|key| {
-            arch.kuna_tables
+            arch.unlace_tables
                 .get::<crate::protoorder::CalleeTypes>()
                 .get(&key)
                 .cloned()
@@ -2123,15 +2150,17 @@ fn recover_one_contract(
         Some((stated, calls, got))
     }));
     CONTRACT_DEPTH.with(|depth| depth.set(depth.get() - 1));
-    arch.kuna_fn_deadline = saved_deadline;
+    arch.unlace_fn_deadline = saved_deadline;
     let _ = arch.allacts.set_current(&saved_action);
     arch.max_instructions = saved_max_instructions;
     arch.flowoptions = saved_flowoptions;
-    arch.kuna_pending_name_recs = staged_names;
-    arch.kuna_pending_dyn_recs = staged_dyn;
-    arch.kuna_pending_proto_model = staged_model;
-    arch.kuna_record_names = saved_record_names;
-    *arch.kuna_tables.get_mut::<crate::stablenames::PriorNames>() = saved_prior_names;
+    arch.unlace_pending_name_recs = staged_names;
+    arch.unlace_pending_dyn_recs = staged_dyn;
+    arch.unlace_pending_proto_model = staged_model;
+    arch.unlace_record_names = saved_record_names;
+    *arch
+        .unlace_tables
+        .get_mut::<crate::stablenames::PriorNames>() = saved_prior_names;
     arch.format_override_callpoints = saved_format_sites;
     arch.readonlypropagate = saved_readonly;
     result.ok().flatten()
@@ -2229,7 +2258,7 @@ pub fn decompile_func_full(
         unlace_base::types::uint4,
     )],
     pending_proto: Option<&crate::fspec::PrototypePieces>,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_full_with_override(
         arch,
         name,
@@ -2258,7 +2287,7 @@ pub fn decompile_func_full_with_override(
     )],
     pending_proto: Option<&crate::fspec::PrototypePieces>,
     flow_overrides: &[(Address, unlace_base::types::uint4)],
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_full_with_override_dyn(
         arch,
         name,
@@ -2304,7 +2333,7 @@ pub fn decompile_func_full_with_override_dyn(
     proto_overrides: &[(Address, crate::fspec::PrototypePieces)],
     mapped_params: &[(int4, String, crate::fspec::ParameterPieces)],
     purpose: DrivePurpose,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_full_with_override_dyn_prefollowed(
         arch,
         name,
@@ -2326,7 +2355,7 @@ pub fn decompile_func_full_with_override_dyn(
 /// whose flow has **already been followed** instead of following it again.
 ///
 /// The console runs `load function <name>` and then `decompile`, and each of
-/// those followed the flow of the same function from scratch -- so a `kuna
+/// those followed the flow of the same function from scratch -- so a `unlace
 /// decompile` paid the whole lift, including the per-jump-table
 /// sub-decompilation, twice.  C++ has no such duplication: `IfcFuncload`
 /// follows flow once and `IfcDecompile` re-runs the actions on *that*
@@ -2366,7 +2395,7 @@ pub fn decompile_func_full_with_override_dyn_prefollowed(
     mapped_params: &[(int4, String, crate::fspec::ParameterPieces)],
     prefollowed: Option<Funcdata>,
     purpose: DrivePurpose,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     decompile_func_full_with_objects(
         arch,
         name,
@@ -2414,8 +2443,8 @@ pub fn decompile_func_full_with_objects(
     prefollowed: Option<Funcdata>,
     object_assertions: &[crate::stackobjectasserts::ObjectAssertion],
     purpose: DrivePurpose,
-) -> KunaResult<Funcdata> {
-    let _drive = arch.kuna_drive_scope();
+) -> UnlaceResult<Funcdata> {
+    let _drive = arch.unlace_drive_scope();
     decompile_func_full_with_objects_inner(
         arch,
         name,
@@ -2463,11 +2492,11 @@ fn decompile_func_full_with_objects_inner(
     prefollowed: Option<Funcdata>,
     object_assertions: &[crate::stackobjectasserts::ObjectAssertion],
     purpose: DrivePurpose,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     crate::armfloatreturn::park_float_library_prototypes(arch);
     // (unlace decompile-all watchdog) Arm the per-function deadline from the
     // driver-set budget (`unlace decompile-all --max-fn-seconds N` sets
-    // `kuna_fn_budget`, `decomp_dbg --max-fn-seconds N` the process default;
+    // `unlace_fn_budget`, `decomp_dbg --max-fn-seconds N` the process default;
     // every other path leaves both unset, so this is a `None` assignment and the
     // pipeline below is structurally unchanged).  The budget
     // covers the whole drive — flow-follow (incl. the jumptable sub-pipeline)
@@ -2476,9 +2505,9 @@ fn decompile_func_full_with_objects_inner(
     //
     // A memory limit (`--max-fn-memory`) arms too: with no wall-clock budget
     // its deadline is a year out, so the same probes run and ask about memory.
-    let outer_deadline = arch.kuna_fn_deadline;
+    let outer_deadline = arch.unlace_fn_deadline;
     let memory = arch
-        .kuna_drive_publishes()
+        .unlace_drive_publishes()
         .then(crate::fnmemory::Armed::enter);
     let now = std::time::Instant::now();
     let followed = prefollowed
@@ -2491,22 +2520,22 @@ fn decompile_func_full_with_objects_inner(
         }
         None => None,
     };
-    arch.kuna_fn_deadline = match (outer_deadline, requested_deadline) {
+    arch.unlace_fn_deadline = match (outer_deadline, requested_deadline) {
         (Some(outer), Some(requested)) => Some(outer.min(requested)),
         (outer, requested) => outer.or(requested),
     };
-    let _deadline_scope = DeadlineScope::enter(arch.kuna_fn_deadline);
+    let _deadline_scope = DeadlineScope::enter(arch.unlace_fn_deadline);
     // (ghidra-mode, Phase 4) Take the staged name recommendations UP FRONT so
     // an early flow failure can never leak them into a later drive.
-    let staged_name_recs = std::mem::take(&mut arch.kuna_pending_name_recs);
-    let staged_dyn_recs = std::mem::take(&mut arch.kuna_pending_dyn_recs);
-    let staged_proto_model = arch.kuna_pending_proto_model.take();
+    let staged_name_recs = std::mem::take(&mut arch.unlace_pending_name_recs);
+    let staged_dyn_recs = std::mem::take(&mut arch.unlace_pending_dyn_recs);
+    let staged_proto_model = arch.unlace_pending_proto_model.take();
     let prior_names = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::stablenames::PriorNames>()
         .clone();
-    let record_names = arch.kuna_record_names;
-    // (kuna `elfmain`) The C runtime's declaration for this function when it is
+    let record_names = arch.unlace_record_names;
+    // (unlace `elfmain`) The C runtime's declaration for this function when it is
     // an executable's own symbol-named `main` that no other stream declares.
     let elfmain_rt = match &arch.elfmain_main_decl {
         Some((at, pieces))
@@ -2523,7 +2552,7 @@ fn decompile_func_full_with_objects_inner(
         }
         _ => None,
     };
-    // (kuna `swifttypes`) The register-pinned parameters the analysis tier
+    // (unlace `swifttypes`) The register-pinned parameters the analysis tier
     // declared for this function, behind the console's own `map param`s.
     let mapped_params: Vec<(int4, String, crate::fspec::ParameterPieces)> =
         match arch.loader_param_locks.get(&funcaddr) {
@@ -2537,12 +2566,12 @@ fn decompile_func_full_with_objects_inner(
         };
     let mapped_params = mapped_params.as_slice();
     let input_hints = arch
-        .kuna_tables
+        .unlace_tables
         .get::<crate::inputhints::LoaderHints>()
         .0
         .get(&funcaddr)
         .cloned();
-    // (kuna `fid`) Is the prototype parked on this function a `.fid` record's?
+    // (unlace `fid`) Is the prototype parked on this function a `.fid` record's?
     let fid_declared =
         pending_proto.is_none() && arch.fid_prototypes.contains(&funcaddr.get_offset());
     let attempt = |arch: &mut Architecture,
@@ -2551,7 +2580,7 @@ fn decompile_func_full_with_objects_inner(
                    condstmts_seed: &std::collections::BTreeSet<Address>,
                    elfmain: Option<&crate::elfmaindecl::Runtime>,
                    fid_withdrawn: bool|
-     -> KunaResult<Funcdata> {
+     -> UnlaceResult<Funcdata> {
         // Kept for the parked-prototype lookup below (the flow build consumes the
         // address).
         let entry_addr = funcaddr.clone();
@@ -2568,7 +2597,7 @@ fn decompile_func_full_with_objects_inner(
         };
         crate::stackobjectasserts::seed(&mut fd, object_assertions);
         fd.seed_prior_names(prior_names.clone());
-        fd.set_kuna_record_names(record_names);
+        fd.set_unlace_record_names(record_names);
         if unguarded {
             fd.withdraw_stack_store_guard();
         }
@@ -2601,12 +2630,12 @@ fn decompile_func_full_with_objects_inner(
         // picking up an uninitialized stack slot. A known `int` return skips that
         // machinery entirely.
         //
-        // (kuna `cppproto`) Resolved across ALL scopes, not just the global one: a
+        // (unlace `cppproto`) Resolved across ALL scopes, not just the global one: a
         // demangled C++ function is filed under its namespace/class scope, so a
         // global-only lookup never finds the prototype the DWARF C++ arm parked on
         // `Account::deposit`. Inert for every prototype parked by NAME (that path
         // resolves through the global scope, so it can only reach global symbols).
-        // (kuna `swiftcall`) Which direct callees, and whether this function,
+        // (unlace `swiftcall`) Which direct callees, and whether this function,
         // read `swiftself` on entry.
         let (reads_swiftself, reads_swiftasync) = crate::swiftinfer::seed(arch, &mut fd);
         let recovered_proto = if pending_proto.is_none() && !fid_withdrawn {
@@ -2627,7 +2656,7 @@ fn decompile_func_full_with_objects_inner(
             // (ghidra-mode, Phase 4) A host-declared model rides with the
             // pieces so parameter storage is assigned under the SAME
             // convention the database committed (see
-            // `Architecture::kuna_pending_proto_model`); `None` everywhere
+            // `Architecture::unlace_pending_proto_model`); `None` everywhere
             // else keeps the architecture default.  Standalone, the same slot
             // carries a convention the declaration itself named
             // (`void * __stdcall f(...)`), so the function decompiles under the
@@ -2642,16 +2671,16 @@ fn decompile_func_full_with_objects_inner(
                 .or_else(|| crate::typedcallabi::undeclared_model(fd.get_arch(), pieces));
             fd.apply_locked_prototype_with_model(pieces, declared_model)?;
         } else if let Some(rt) = elfmain {
-            // (kuna `elfmain`) Lock the `int` return alone; the inputs stay
+            // (unlace `elfmain`) Lock the `int` return alone; the inputs stay
             // unlocked and take the runtime's names and types only as far as
-            // their own recovery goes (`kuna_elfmaindecl`).
+            // their own recovery goes (`unlace_elfmaindecl`).
             fd.apply_locked_prototype_with_model(&rt.output, None)?;
             fd.get_func_proto_mut().set_input_lock(false);
-            fd.kuna_set_elfmain(Some(rt.fresh()));
+            fd.unlace_set_elfmain(Some(rt.fresh()));
         } else {
             match fd
                 .get_arch()
-                .kuna_states
+                .unlace_states
                 .get_rc::<crate::swiftcall::SwiftAbi>()
                 .filter(|_| mapped_params.is_empty())
                 .filter(|_| {
@@ -2660,7 +2689,7 @@ fn decompile_func_full_with_objects_inner(
                         .is_none_or(|m| m.get_name().starts_with("__swift"))
                 }) {
                 Some(abi) => {
-                    // (kuna `swiftcall`) A Swift function's convention without a
+                    // (unlace `swiftcall`) A Swift function's convention without a
                     // signature: the one the metadata bound, upgraded by what the
                     // body calls — `swift_willThrow` makes it throw, the task
                     // runtime's suspension entry points make it `async` — so a
@@ -2697,28 +2726,28 @@ fn decompile_func_full_with_objects_inner(
                         if reads_swiftself && !hints.iter().any(|h| h.addr == abi.self_reg.0) {
                             hints.extend(crate::swiftinfer::self_hint(arch));
                         }
-                        fd.kuna_set_input_hints(
+                        fd.unlace_set_input_hints(
                             (!hints.is_empty()).then(|| std::rc::Rc::new(hints)),
                         );
                     }
                 }
                 _ => {
                     if let Some(model) = fd.get_arch().bound_proto_model(&entry_addr) {
-                        // (kuna) A convention bound without a signature: the parameters
+                        // (unlace) A convention bound without a signature: the parameters
                         // are recovered under it, and the hinted ones named and typed.
                         let proto = fd.get_func_proto_mut();
                         proto.set_model(Some(model));
                         proto.set_model_lock(true);
-                        fd.kuna_set_input_hints(input_hints.clone());
+                        fd.unlace_set_input_hints(input_hints.clone());
                     } else if input_hints.is_some() {
-                        // (kuna) Hints under the default convention: an Objective-C
+                        // (unlace) Hints under the default convention: an Objective-C
                         // direct method's `self`.
-                        fd.kuna_set_input_hints(input_hints.clone());
+                        fd.unlace_set_input_hints(input_hints.clone());
                     } else if mapped_params.is_empty() {
-                        // (kuna `iokitclasses on`) A class member's `this`, typed without
+                        // (unlace `iokitclasses on`) A class member's `this`, typed without
                         // locking the signature it is the only known part of.
-                        fd.kuna_set_input_hints(
-                            arch.kuna_tables
+                        fd.unlace_set_input_hints(
+                            arch.unlace_tables
                                 .get::<crate::inputhints::ThisHints>()
                                 .0
                                 .get(&entry_addr)
@@ -2732,7 +2761,7 @@ fn decompile_func_full_with_objects_inner(
             fd.get_func_proto_mut().set_extra_pop(expop);
         }
         let go_string_input = if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
             && arch.image_linux_elf
@@ -2761,11 +2790,11 @@ fn decompile_func_full_with_objects_inner(
             && mapped_params.is_empty()
             && staged_proto_model.is_none()
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::analysisgates::Godwarfsig>()
                 .0
         {
-            fd.kuna_go_receiver = arch
+            fd.unlace_go_receiver = arch
                 .symboltab
                 .go_pointer_receiver(&entry_addr)
                 .filter(|receiver| {
@@ -2780,11 +2809,11 @@ fn decompile_func_full_with_objects_inner(
         // `type varnode %REG(pc)` symbols, e.g. retstruct's `tmp`) WITH their use
         // address so `linkSymbol`'s usepoint query binds them at the scoped read.
         fd.seed_usepoint_symbols(usepoint_symbols);
-        // (kuna `dwarfscopes`) Name the register-held DWARF locals at the use
+        // (unlace `dwarfscopes`) Name the register-held DWARF locals at the use
         // point of the value each register holds where its range starts.
         if let Some(specs) = arch.dwarf_reg_locals.get(&entry_addr.get_offset()) {
             let unbound = fd.seed_dwarf_register_locals(specs);
-            if arch.kuna_options.get::<crate::honestgaps::HonestGaps>().0 {
+            if arch.unlace_options.get::<crate::honestgaps::HonestGaps>().0 {
                 for (name, start) in unbound {
                     fd.warning_header(&crate::honestgaps::unbound_debug_local_text(&name, start));
                 }
@@ -2801,31 +2830,31 @@ fn decompile_func_full_with_objects_inner(
         if !staged_dyn_recs.is_empty() {
             fd.seed_dynamic_recommendations(&staged_dyn_recs);
         }
-        // (kuna `rustabi`) Take the callee-body probe the call-output seam needs.
+        // (unlace `rustabi`) Take the callee-body probe the call-output seam needs.
         // The per-function handle the pipeline runs against carries no
         // translator, so this is the last point the callee's instructions can be
         // read at all; inert unless `option rustabi` is live for this image.
         crate::rustabi::seed_callee_return_writes(arch, &mut fd);
-        // (kuna `bejoin evidence`) Take the wide-return verdicts for the
+        // (unlace `bejoin evidence`) Take the wide-return verdicts for the
         // function and its direct callees, read off their instructions while
         // the translator is reachable; inert unless the model joins its pair
         // high word first.
         crate::bejoin::seed_wide_returns(arch, &mut fd);
         crate::callwide::seed(arch, &mut fd);
         crate::gochanrecv::seed(arch, &mut fd);
-        // (kuna `calleedeadarg`) Take the callee entry-liveness probe the
+        // (unlace `calleedeadarg`) Take the callee entry-liveness probe the
         // input-trial scoring seam consults, for the same reason and at the same
         // point.
         crate::calleedeadarg::seed_callee_entry_dead(arch, &mut fd);
         crate::darwinvarargs::seed(arch, &mut fd);
-        // (kuna `swiftcall`) Which direct callees do not read `swiftself`, for
+        // (unlace `swiftcall`) Which direct callees do not read `swiftself`, for
         // the stale-`self` test at the same seam.
         crate::swiftcall::seed_self_readers(arch, &mut fd);
-        // (kuna `zerofillreturn`) Mark the zero fills of narrow vector-register
+        // (unlace `zerofillreturn`) Mark the zero fills of narrow vector-register
         // writes while the p-code is still as lifted; heritage splits a 128-bit
         // write into the same lanes.
         crate::zerofillreturn::seed(&mut fd);
-        // (kuna `protoorder` single-function drive) A `unlace decompile` of one
+        // (unlace `protoorder` single-function drive) A `unlace decompile` of one
         // function has no callee-first run behind it, so it may state the
         // prototypes of the direct callees its own call sites pass preferred-split
         // storage to.  The FACT is the call's active-input trial storage, which
@@ -2833,45 +2862,45 @@ fn decompile_func_full_with_objects_inner(
         // pipeline pauses there and `run_pipeline` does the recovery.  Batch
         // surfaces own their schedule and never arm it; inert under `protoorder
         // off` and on a spec that states no `<prefersplit>`.
-        fd.kuna_set_callee_contract_armed(
+        fd.unlace_set_callee_contract_armed(
             purpose == DrivePurpose::SingleFunction
                 && CONTRACT_DEPTH.with(|d| d.get()) == 0
                 && arch
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::protoorder::ProtoOrderMode>()
                     .is_on()
                 && arch.has_split_records(),
         );
-        // (kuna `importvote`) An undeclared import a tail call reaches takes
+        // (unlace `importvote`) An undeclared import a tail call reaches takes
         // what its other call sites pass.
         crate::importvote::seed(arch, &fd);
-        // (kuna `protoorder`) A drive with no callee-first run behind it states
+        // (unlace `protoorder`) A drive with no callee-first run behind it states
         // the prototype of each callee the function tail-calls before its own
         // pipeline runs.
-        if (purpose == DrivePurpose::SingleFunction || arch.kuna_tail_callee_batch)
+        if (purpose == DrivePurpose::SingleFunction || arch.unlace_tail_callee_batch)
             && CONTRACT_DEPTH.with(|d| d.get()) == 0
         {
             bootstrap_tail_callees(arch, &fd);
         }
-        // (kuna `protoorder types`) The parameter types callees decompiled earlier stated.
+        // (unlace `protoorder types`) The parameter types callees decompiled earlier stated.
         crate::protoorder::seed_protoorder_types(arch, &mut fd);
-        // (kuna `callrettype`) And the return types they stated.
+        // (unlace `callrettype`) And the return types they stated.
         crate::callrettype::seed(arch, &mut fd);
         crate::narrowret::seed(arch, &mut fd);
-        // (kuna `voidret`) The return storage its callers read, when it is due.
+        // (unlace `voidret`) The return storage its callers read, when it is due.
         crate::voidret::seed(arch, &mut fd);
-        // (kuna `calleevote`) What every caller of this function passes.
+        // (unlace `calleevote`) What every caller of this function passes.
         crate::calleevote::seed(arch, &mut fd);
-        // (kuna `narrowargs callers`) The parameters every caller passes narrow.
+        // (unlace `narrowargs callers`) The parameters every caller passes narrow.
         crate::callerargs::seed(arch, &mut fd);
-        // (kuna `elemptr`) The globals another function of the batch disagrees about.
+        // (unlace `elemptr`) The globals another function of the batch disagrees about.
         crate::elemptr::seed(arch, &mut fd);
         // The call-guard seam's view of the same decode: the registers the
         // callee is proven NOT to write.
         crate::calleepreserves::seed_callee_preserves(arch, &mut fd);
         crate::calleeretpurge::seed(arch, &mut fd);
         crate::calleememory::seed(arch, &mut fd);
-        // (kuna `honestgaps`) The prototypes the load withheld that this function meets.
+        // (unlace `honestgaps`) The prototypes the load withheld that this function meets.
         crate::honestgaps::seed(arch, &mut fd);
         // Report a pass panic as a per-function failure at the driver boundary.
         let res =
@@ -2884,28 +2913,28 @@ fn decompile_func_full_with_objects_inner(
             Err(payload) => {
                 let msg = panic_message(payload);
                 Err(budget_error(arch).unwrap_or_else(|| {
-                    unlace_base::error::KunaError::lowlevel(format!(
+                    unlace_base::error::UnlaceError::lowlevel(format!(
                         "decompile pipeline reached an un-ported seam (LOSS-131): {msg}"
                     ))
                 }))
             }
         }
     };
-    // (kuna `elfmain`) A `main` whose finished declaration is not exactly what the
+    // (unlace `elfmain`) A `main` whose finished declaration is not exactly what the
     // runtime seed typed and named is decompiled again without the seed.
     let mut prefollowed = prefollowed;
     let mut elfmain = elfmain_rt.as_ref();
     let mut fid_withdrawn = false;
-    // (kuna `tailcalljump on`, the GOT-slot rule) A drive with no callee-first
+    // (unlace `tailcalljump on`, the GOT-slot rule) A drive with no callee-first
     // run behind it files the callees its one-destination tables reach itself.
-    let got_ledger = ((purpose == DrivePurpose::SingleFunction || arch.kuna_tail_callee_batch)
+    let got_ledger = ((purpose == DrivePurpose::SingleFunction || arch.unlace_tail_callee_batch)
         && CONTRACT_DEPTH.with(|d| d.get()) == 0
         && arch
-            .kuna_options
+            .unlace_options
             .get::<crate::tailcalljump::TailCallJump>()
             .tables
         && arch
-            .kuna_options
+            .unlace_options
             .get::<crate::protoorder::ProtoOrderMode>()
             .is_on())
     .then(|| crate::gottailcall::begin_single(arch))
@@ -2913,7 +2942,7 @@ fn decompile_func_full_with_objects_inner(
     let mut got_tried = std::collections::BTreeSet::new();
     let mut got_rounds = 0;
     let result = loop {
-        // (kuna `stackstoreguard`) A function whose final layout spoiled what the
+        // (unlace `stackstoreguard`) A function whose final layout spoiled what the
         // guard needs is analyzed again from scratch without it.
         let mut seed = std::collections::BTreeSet::new();
         let mut unguarded = false;
@@ -2931,7 +2960,7 @@ fn decompile_func_full_with_objects_inner(
             }
             other => other,
         };
-        // (kuna `condstmts`) A function whose final structure folded a block over the
+        // (unlace `condstmts`) A function whose final structure folded a block over the
         // cap is analyzed again with that block complex from the first structuring on.
         for _ in 0..crate::condstmts::MAX_REATTEMPTS {
             let Ok(fd) = &result else { break };
@@ -2948,7 +2977,7 @@ fn decompile_func_full_with_objects_inner(
             elfmain = None;
             continue;
         }
-        // (kuna `fid`) A `.fid` prototype the body reads past is withdrawn and
+        // (unlace `fid`) A `.fid` prototype the body reads past is withdrawn and
         // the function decompiled again as it is without one.
         if fid_declared
             && !fid_withdrawn
@@ -2986,18 +3015,18 @@ fn decompile_func_full_with_objects_inner(
     // no later, non-drive pipeline run (console sub-queries) consults a stale one;
     // what is left of it goes with the function to bound its rendering.
     let left = arch
-        .kuna_fn_deadline
+        .unlace_fn_deadline
         .map(|d| d.saturating_duration_since(std::time::Instant::now()));
-    arch.kuna_fn_deadline = outer_deadline;
+    arch.unlace_fn_deadline = outer_deadline;
     result.and_then(|mut fd| {
-        crate::stackobjectasserts::validate(&fd).map_err(KunaError::lowlevel)?;
+        crate::stackobjectasserts::validate(&fd).map_err(UnlaceError::lowlevel)?;
         fd.set_render_budget(left);
         Ok(fd)
     })
 }
 
-/// (kuna) Build the IR for `name` and run a **named reduced pipeline** variant
-/// over it as a sub-query (C++ `IfcKunaPipeline::execute`).
+/// (unlace) Build the IR for `name` and run a **named reduced pipeline** variant
+/// over it as a sub-query (C++ `IfcUnlacePipeline::execute`).
 ///
 /// Mirrors [`decompile_func_full_with_override_dyn`] but installs the named
 /// action group (`normalize`/`paramid`/`register`/`firstpass`/`jumptable`)
@@ -3013,7 +3042,7 @@ pub fn run_named_pipeline_variant(
     funcaddr: Address,
     size: int4,
     variant: &str,
-) -> KunaResult<Funcdata> {
+) -> UnlaceResult<Funcdata> {
     let mut fd = build_and_follow_flow(arch, name, funcaddr, size)?;
     let saved = arch.allacts.get_current_name().to_string();
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -3022,21 +3051,21 @@ pub fn run_named_pipeline_variant(
         let root = arch
             .allacts
             .get_current_mut()
-            .ok_or_else(|| KunaError::lowlevel(format!("no current {variant} action")))?;
+            .ok_or_else(|| UnlaceError::lowlevel(format!("no current {variant} action")))?;
         root.reset(&mut fd);
         let r = root.perform(&mut fd, &mut ctx);
         if let Some(error) = ctx.error {
             return Err(error);
         }
         if let Some(error) = fd
-            .kuna_state::<crate::callmechanisms::State>()
+            .unlace_state::<crate::callmechanisms::State>()
             .failure
             .as_ref()
         {
-            return Err(KunaError::lowlevel(error.clone()));
+            return Err(UnlaceError::lowlevel(error.clone()));
         }
         if r < 0 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "{variant} pipeline hit a breakpoint"
             )));
         }
@@ -3047,7 +3076,7 @@ pub fn run_named_pipeline_variant(
     match res {
         Ok(Ok(())) => Ok(fd),
         Ok(Err(e)) => Err(e),
-        Err(payload) => Err(KunaError::lowlevel(format!(
+        Err(payload) => Err(UnlaceError::lowlevel(format!(
             "{variant} pipeline reached an un-ported seam: {}",
             panic_message(payload)
         ))),
@@ -3055,7 +3084,7 @@ pub fn run_named_pipeline_variant(
 }
 
 /// Best-effort extraction of a panic payload's message (the `panic!` string),
-/// for surfacing an un-ported-stub abort as a recoverable [`KunaError`].
+/// for surfacing an un-ported-stub abort as a recoverable [`UnlaceError`].
 ///
 /// Takes the `catch_unwind` payload **by value**: a `&Box<dyn Any + Send>`
 /// unsize-coerces to the *box itself* as the `Any`, so every `downcast` against
@@ -3152,7 +3181,7 @@ fn exact_cookie_call_evidence(
         if !call.get_name().is_empty() {
             names.insert(call.get_name().to_string());
         }
-        let printed = call.fspec_printed_name(arch.kuna_name_style());
+        let printed = call.fspec_printed_name(arch.unlace_name_style());
         if !printed.is_empty() {
             names.insert(printed);
         }
@@ -3329,7 +3358,7 @@ pub fn print_c_with_srcmap(
     (out, resolve_markup_provenance(fd, &markup), tokens)
 }
 
-/// (kuna) Render every user-defined data-type in the architecture's type
+/// (unlace) Render every user-defined data-type in the architecture's type
 /// factory as C definitions (the `PrintC::docTypeDefinitions` port,
 /// [`crate::printc::PrintC::doc_type_definitions`]) — the type-definition
 /// block of the `unlace decompile-project` `.h` artifact.  Same
@@ -3338,7 +3367,7 @@ pub fn print_c_types(arch: &mut Architecture) -> String {
     arch.with_print(|printer, arch| printer.doc_type_definitions(arch))
 }
 
-/// (kuna) Render ONLY the decompiled function's prototype declaration —
+/// (unlace) Render ONLY the decompiled function's prototype declaration —
 /// `<ret> <name>(<params>);` — via
 /// [`crate::printc::PrintC::doc_prototype`]: the `.h`-prototype half of the
 /// `unlace decompile-project` prototype == definition-line contract (the emitted
@@ -3349,7 +3378,7 @@ pub fn print_c_prototype(arch: &mut Architecture, fd: &Funcdata) -> String {
     arch.with_print(|printer, arch| printer.doc_prototype(fd, arch))
 }
 
-/// (kuna) The generated recompile prelude for a `unlace decompile-project` `.h`:
+/// (unlace) The generated recompile prelude for a `unlace decompile-project` `.h`:
 /// C typedefs for the architecture's interned **core** scalar types (`uint4`,
 /// `int8`, `float8`, …, spelled per standard C — 8-byte integers always use
 /// `long long` so the text is data-model independent) plus the fixed Ghidra
@@ -3427,7 +3456,7 @@ pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
         out.push_str(l);
     }
 
-    // The fixed Ghidra/kuna `undefined` family (the anonymous-unknown
+    // The fixed Ghidra/unlace `undefined` family (the anonymous-unknown
     // rendering `undefined<N>`, printc.rs `declarator_parts`).
     out.push_str("\n/* the Ghidra/kuna `undefined` family */\n");
     out.push_str("typedef unsigned char undefined;\n");
@@ -3466,7 +3495,7 @@ pub fn extract_type_definitions(arch: &Architecture, fd: &Funcdata) -> Vec<TypeI
     if !arch.print().options.struct_defs() {
         return Vec::new();
     }
-    // (kuna outlang) The definition text is C, and the printed preamble
+    // (unlace outlang) The definition text is C, and the printed preamble
     // declines for a non-C output language for that reason; the array and the
     // preamble are one decision, so it declines here too.
     if arch.print().out_lang() != crate::lang::OutLang::C {
@@ -3484,7 +3513,7 @@ pub fn extract_type_definitions(arch: &Architecture, fd: &Funcdata) -> Vec<TypeI
         .collect()
 }
 
-/// (kuna `globalref`) A global the printed C names: by address (`&dat_2b080`),
+/// (unlace `globalref`) A global the printed C names: by address (`&dat_2b080`),
 /// or, for the header to check its declaration against, directly (`dat_2b080`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalInfo {
@@ -3507,7 +3536,7 @@ pub struct GlobalInfo {
     /// of the name does not compile against it. (An array decays to a pointer,
     /// so a scalar compare against one would compile to something else.)
     pub aggregate: bool,
-    /// (kuna `elemptr`) Direct storage the rule typed an element pointer
+    /// (unlace `elemptr`) Direct storage the rule typed an element pointer
     /// (`char *dat_5068`): declared although no function takes its address,
     /// since a subscript of it reads the element its declaration names.
     pub elem: bool,
@@ -3535,7 +3564,7 @@ pub fn extract_global_objects(arch: &Architecture) -> Vec<GlobalInfo> {
                 elem: bool| {
         let name = crate::printc::global_data_name(arch, address);
         use crate::dtype::type_metatype::{TYPE_STRUCT, TYPE_UNION};
-        // (kuna `elemptr`) An indexed global is declared as an array of unknown
+        // (unlace `elemptr`) An indexed global is declared as an array of unknown
         // length, `T dat_4020[]`, which the header recognises by its suffix.
         let declarator = if array {
             format!("{name}[]")
@@ -3676,7 +3705,7 @@ impl CodeProvenance {
         if !self.evidence_for_refs(&named_refs).line_numbers.is_empty() {
             return named_refs;
         }
-        // (kuna `paramrefdecl`) An ADDRESS-TAKEN parameter has no Varnode at its
+        // (unlace `paramrefdecl`) An ADDRESS-TAKEN parameter has no Varnode at its
         // own storage and no high carrying its `param_N` JSON name -- its only
         // appearance is the `&a0` reference, a PTRSUB offset constant bound to
         // the parameter's Symbol.  Both queries above miss it, so the surface
@@ -3728,7 +3757,7 @@ fn select_storage_varrefs(
             .filter(|high_id| {
                 fd.high_bank()
                     .get(*high_id)
-                    .and_then(|high| high.kuna_name())
+                    .and_then(|high| high.unlace_name())
                     == Some(variable_name)
             })
             .collect();
@@ -3760,8 +3789,8 @@ fn parameter_storage(fd: &Funcdata, arg_index: usize) -> Option<(Address, i64)> 
     None
 }
 
-crate::kuna_flag!(
-    /// (kuna `relronoreturn`) Make a call through a relocated read-only slot
+crate::unlace_flag!(
+    /// (unlace `relronoreturn`) Make a call through a relocated read-only slot
     /// direct while the flow is followed when the function the slot holds never
     /// returns, instead of after `ActionDeindirect` and a restart. Default off
     /// (`option relronoreturn`).
@@ -3772,8 +3801,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `funcboundflow`) Bound fall-through at a known function entry: when a
+crate::unlace_flag!(
+    /// (unlace `funcboundflow`) Bound fall-through at a known function entry: when a
     /// fall-through reaches the entry of another known function (the callee just
     /// executed being an unnamed static no-return the analysis could not prove
     /// no-return), truncate flow with a no-return halt instead of decoding the
@@ -3911,7 +3940,7 @@ fn named_high_varrefs(fd: &Funcdata, variable: &VarInfo) -> BTreeSet<u64> {
         .high_bank()
         .iter()
         .filter_map(|(high_id, high)| {
-            (high.kuna_name() == Some(variable.name.as_str())).then_some(high_id)
+            (high.unlace_name() == Some(variable.name.as_str())).then_some(high_id)
         })
         .collect();
     let selected: Vec<HighVariableId> = if named.len() <= 1 {
@@ -4001,7 +4030,7 @@ fn resolve_markup_provenance_with_addresses(
     }
 }
 
-/// (kuna) Extract the recovered parameters + stack locals of a decompiled
+/// (unlace) Extract the recovered parameters + stack locals of a decompiled
 /// [`Funcdata`] as a flat `Vec<VarInfo>` for the `unlace decompile-all --json`
 /// surface (→ decbench `type_match`).
 ///
@@ -4074,10 +4103,10 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
             if category != crate::database::symbol_category::NO_CATEGORY {
                 continue; // already emitted as a parameter above
             }
-            // (kuna `libcnames`) A local printed under its library name is
+            // (unlace `libcnames`) A local printed under its library name is
             // reported under it too; its Symbol keeps the number.
             let name = fd
-                .kuna_library_aliases()
+                .unlace_library_aliases()
                 .iter()
                 .find(|a| a.shown && a.number == name)
                 .map_or(name, |a| a.alias.clone());
@@ -4100,7 +4129,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
         }
     }
 
-    /// (kuna `framelayout`) How an exported stack slot's data type is spelled.
+    /// (unlace `framelayout`) How an exported stack slot's data type is spelled.
     ///
     /// A slot the type system never committed to is carried internally as
     /// `xunknown1[N]` (Ghidra's `undefined1[N]`) or a bare `TYPE_UNKNOWN`, and
@@ -4128,7 +4157,7 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
         crate::printc::type_to_c_string(arch, dt)
     }
 
-    // 3) (kuna framelayout) The frame slots an EARLIER restructure pass recovered
+    // 3) (unlace framelayout) The frame slots an EARLIER restructure pass recovered
     // and the final one no longer has, because the dataflow folded the spill away.
     // The emitted C is right to drop them; the recovered frame still contains them,
     // and `variables` reports the frame. Only offsets no parameter or surviving
@@ -4185,14 +4214,14 @@ pub fn extract_variables(arch: &Architecture, fd: &Funcdata) -> Vec<VarInfo> {
         crate::slotsplit::split_rows(slots, &mut out, &width_only);
     }
 
-    // 4) (kuna reglocals) The locals the C declares outside the frame, read off
+    // 4) (unlace reglocals) The locals the C declares outside the frame, read off
     // the printer, which has just printed `fd`.
     let locals = crate::reglocals::register_locals(arch, fd, &out);
     out.extend(locals);
     out
 }
 
-/// (kuna `slotptr`) Re-spell each `framelayout` filler slot (the rows from
+/// (unlace `slotptr`) Re-spell each `framelayout` filler slot (the rows from
 /// `first_slot` on) whose stores agree on one pointer type, as long as its byte
 /// range overlaps no other exported variable.
 fn type_filler_slots_from_stores(
@@ -4241,7 +4270,7 @@ fn emit_inject(
     injectid: int4,
     context: &mut crate::pcodeinject::InjectContext,
     emit: &mut dyn unlace_sleigh::translate::PcodeEmit,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let payload = arch.pcodeinjectlib.get_payload(injectid);
     match arch.pcodeinjectlib.get_tpl(injectid) {
         Some(tpl) => {
@@ -4297,7 +4326,7 @@ pub fn set_default_fn_budget_secs(secs: u64) {
 
 /// The per-function budget a drive of `arch` arms.
 fn fn_budget(arch: &Architecture) -> Option<std::time::Duration> {
-    arch.kuna_fn_budget.or_else(|| {
+    arch.unlace_fn_budget.or_else(|| {
         match DEFAULT_FN_BUDGET_SECS.load(std::sync::atomic::Ordering::Relaxed) {
             0 => None,
             secs => Some(std::time::Duration::from_secs(secs)),
@@ -4312,10 +4341,10 @@ const MEMORY_ONLY_HORIZON: std::time::Duration = std::time::Duration::from_secs(
 /// (unlace decompile-all watchdog) The per-function error for a budgeted drive
 /// whose memory limit tripped or whose deadline has passed: whatever the
 /// cut-off pipeline left behind is never printed.
-fn budget_error(arch: &Architecture) -> Option<KunaError> {
-    let deadline = arch.kuna_fn_deadline?;
+fn budget_error(arch: &Architecture) -> Option<UnlaceError> {
+    let deadline = arch.unlace_fn_deadline?;
     if let Some(mib) = crate::fnmemory::tripped_limit_mib() {
-        return Some(KunaError::lowlevel(format!(
+        return Some(UnlaceError::lowlevel(format!(
             "{MEMORY_EXCEEDED} ({mib} MiB)"
         )));
     }
@@ -4325,7 +4354,7 @@ fn budget_error(arch: &Architecture) -> Option<KunaError> {
     let secs = fn_budget(arch).map(|b| b.as_secs()).unwrap_or(0);
     let site = crate::budget::budget_site();
     let at = site.map(|s| format!(" in {s}")).unwrap_or_default();
-    Some(KunaError::lowlevel(format!(
+    Some(UnlaceError::lowlevel(format!(
         "{BUDGET_EXCEEDED} ({secs} s){at}"
     )))
 }
@@ -4361,12 +4390,12 @@ impl RenderBudget {
 
     /// The per-function error once rendering ran past the budget, naming
     /// where it ran out.
-    pub fn error(&self) -> Option<KunaError> {
+    pub fn error(&self) -> Option<UnlaceError> {
         if !self.spent_in("rendering C") {
             return None;
         }
         let site = crate::budget::budget_site().unwrap_or_default();
-        Some(KunaError::lowlevel(format!(
+        Some(UnlaceError::lowlevel(format!(
             "{BUDGET_EXCEEDED} ({} s) in {site}",
             self.secs
         )))

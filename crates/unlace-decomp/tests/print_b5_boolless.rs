@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -127,8 +127,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -288,13 +288,13 @@ fn run_full(stem: &str, which: usize) -> Result<(XmlArchitecture, Funcdata), Str
         .ok_or(format!("no space {space_name}"))?
         .clone();
     let entry = Address::new(space, off);
-    // (kuna) These tests pin boolless's upstream-parity shape; earlyreturn is default-on
+    // (unlace) These tests pin boolless's upstream-parity shape; earlyreturn is default-on
     // (DIV-23) and fires on boolless, so disable it here to match the datatest opt-out
     // (`option earlyreturn off` in tests/datatests/boolless.xml).
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::earlyreturn::EarlyReturn(false));
-    arch.kuna_options
-        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+    arch.unlace_options
+        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (unlace) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
     Ok((xarch, fd))
 }
@@ -336,7 +336,7 @@ fn zz_dump_boolless_cfg() {
         }
     }
     eprintln!("=== sblocks size: {} ===", fd.sblocks_get_size());
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -344,7 +344,7 @@ fn zz_dump_boolless_cfg() {
 }
 
 /// The committed C++ B5 oracle for boolless (tests/golden/snapshots/cpp/...).
-// (Header gap adjusted for the kuna DIV-34 brace-placement default.)
+// (Header gap adjusted for the unlace DIV-34 brace-placement default.)
 const CPP_B5_ORACLE: &str = "\nuint1 boolless(void)\n{\n  uint1 v1; // acc\n  \n  v1 = dat_52;\n  if (dat_52 <= 10) {\n    v1 = 1;\n  }\n  return v1;\n}\n";
 
 #[test]
@@ -368,7 +368,7 @@ fn boolless_print_c_emits_structured_body() {
     }
 
     eprintln!("=== boolless sblocks size: {} ===", fd.sblocks_get_size());
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -389,7 +389,7 @@ fn boolless_print_c_emits_structured_body() {
     );
 
     // (3) The global data location renders as the explicit `dat_52` name
-    //     (the faithful pushUnnamedLocation / kuna angr naming), inside the
+    //     (the faithful pushUnnamedLocation / unlace angr naming), inside the
     //     comparison condition.
     assert!(
         rust.contains("dat_52"),
@@ -472,7 +472,7 @@ fn w10_boolless_lessequal_comes_from_real_ir_not_printer() {
         "the degenerate INT_LESS path must be gone (ActionRedundBranch + opNormalizeFlip collapsed it)"
     );
 
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -499,7 +499,7 @@ fn w10_boolless_positive_datatest_assertion_now_real() {
         Err(e) => panic!("boolless run_full: {e}"),
     };
     let arch = xarch.sleigh_mut().base_mut().unwrap();
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -530,7 +530,7 @@ fn w10_boolless_full_byte_parity_modulo_type_inference() {
         Err(e) => panic!("boolless run_full: {e}"),
     };
     let arch = xarch.sleigh_mut().base_mut().unwrap();
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -597,7 +597,7 @@ fn w10_boolless_if_body_contains_assignment() {
         Err(e) => panic!("boolless run_full: {e}"),
     };
     let arch = xarch.sleigh_mut().base_mut().unwrap();
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -699,7 +699,7 @@ fn w10_merge_trim_copy_is_real_ir_artifact() {
 
     // And the printer renders exactly that op as `v1 = dat_52;` — the unique is
     // ACC's merged high (named v1), its COPY input is the global (dat_52).
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -731,7 +731,7 @@ fn w10_merged_high_has_multiple_instances_and_acc_storage() {
     let mut v1_high: Option<unlace_decomp::context::HighVariableId> = None;
     for vn in fd.vbank().iter_loc() {
         if let Some(h) = fd.vbank().get(vn).and_then(|v| v.get_high()) {
-            if fd.high_bank().get(h).and_then(|hh| hh.kuna_name()) == Some("v1") {
+            if fd.high_bank().get(h).and_then(|hh| hh.unlace_name()) == Some("v1") {
                 v1_high = Some(h);
                 break;
             }
@@ -773,7 +773,7 @@ fn w10_merged_high_has_multiple_instances_and_acc_storage() {
 
     // The decl + storage comment render from the ACC register (lowercased) — not
     // from the unique (which has no register name).
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -805,7 +805,7 @@ fn w10_naming_conditional_other_function_gets_no_vn_name() {
         Err(e) => panic!("condconst run_full: {e}"),
     };
     let arch = xarch.sleigh_mut().base_mut().unwrap();
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);
@@ -835,7 +835,7 @@ fn w10_naming_conditional_other_function_gets_no_vn_name() {
                 .get(vn)
                 .and_then(|v| v.get_high())
                 .and_then(|h| fd.high_bank().get(h))
-                .and_then(|hh| hh.kuna_name())
+                .and_then(|hh| hh.unlace_name())
                 .is_some()
         })
         .count();
@@ -1030,7 +1030,7 @@ fn verify_w10_infertypes_no_uint1_acc_leak_into_condconst() {
         Err(e) => panic!("condconst run_full: {e}"),
     };
     let arch = xarch.sleigh_mut().base_mut().unwrap();
-    // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
+    // (unlace DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.
     arch.print_mut().options.set_brace_elide(false);
     let rust = print_c(arch, &fd);

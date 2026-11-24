@@ -81,7 +81,7 @@ fn overlapping_debug_views_round_trip_call_writes() {
     );
     let project = source.with_extension("project");
     let specs = common::repo_root().join("specs");
-    let (_, error, status) = common::run_kuna(&[
+    let (_, error, status) = common::run_unlace(&[
         "decompile-project",
         original.to_str().unwrap(),
         "-o",

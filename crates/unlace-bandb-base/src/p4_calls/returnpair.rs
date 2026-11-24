@@ -1,5 +1,5 @@
 //! Port of `decompiler/cpp/kuna_returnpair.{cc,hh}` — return-register pairing
-//! sub-stage (kuna GH-6990, S4 trial finalization).
+//! sub-stage (unlace GH-6990, S4 trial finalization).
 //!
 //! On an ABI with an output `<join>` rule over a register pair (SPARC and
 //! friends), a void function whose second output register (o1) passively carries
@@ -49,9 +49,9 @@
 //! files**.  When that Action lands, its `newparam.resize(2)` branch should call
 //! [`keep_single_return`].  Noted in the structured losses.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
-/// (kuna GH-6990) How multi-register return values are joined
+/// (unlace GH-6990) How multi-register return values are joined
 /// (the two values of `option returnpair`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReturnPairForm {
@@ -82,16 +82,16 @@ impl ReturnPairForm {
 /// form plus the confirmation message (C++ `OptionReturnPair::apply`).
 ///
 /// The C++ returns the error text as a normal (non-throwing) `string`; the Rust
-/// port surfaces it as a `KunaError::parse` (the established option-parse error
+/// port surfaces it as a `UnlaceError::parse` (the established option-parse error
 /// idiom in `options.rs`).  The caller writes the resolved
 /// [`ReturnPairForm::return_single`] into [the registered option `ReturnSingle`].
-pub fn parse_return_pair_form(p1: &str) -> KunaResult<(ReturnPairForm, String)> {
+pub fn parse_return_pair_form(p1: &str) -> UnlaceResult<(ReturnPairForm, String)> {
     let form = if p1 == "single" {
         ReturnPairForm::Single
     } else if p1 == "pair" {
         ReturnPairForm::Pair
     } else {
-        return Err(KunaError::parse("Must specify pair or single"));
+        return Err(UnlaceError::parse("Must specify pair or single"));
     };
     // C++ writes glb->return_single here; Rust leaves it to the caller (Architecture::return_single).
     Ok((form, format!("Return-register pairing set to {p1} form")))
@@ -111,14 +111,14 @@ pub fn keep_single_return(return_single: bool, newparam_size: usize) -> bool {
     return_single && newparam_size > 2
 }
 
-/// (kuna GH-6990) Keep multi-register return values single, un-joined
+/// (unlace GH-6990) Keep multi-register return values single, un-joined
 /// (C++ `return_single`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReturnSingle(pub bool);
 
-impl crate::optionset::KunaOption for ReturnSingle {
+impl crate::optionset::UnlaceOption for ReturnSingle {
     const NAME: &'static str = "returnpair";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ReturnSingle(false)
@@ -128,7 +128,7 @@ impl crate::optionset::KunaOption for ReturnSingle {
         ReturnSingle(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::returnpair::parse_return_pair_form(value)
             .map(|(form, msg)| (form.return_single(), msg))?;
         Ok((ReturnSingle(v), msg))

@@ -1,4 +1,4 @@
-//! (kuna) A value left in the hidden-return register is not a call argument
+//! (unlace) A value left in the hidden-return register is not a call argument
 //! unless the callee could be returning through it.
 //!
 //! AAPCS64 passes the address of a large returned aggregate in `x8`, the
@@ -265,7 +265,7 @@ fn not_a_result_buffer(
 ) -> bool {
     let entry = call.get_entry_address();
     if let Some(d) = (!entry.is_invalid())
-        .then(|| data.kuna_callee_entry_dead(entry))
+        .then(|| data.unlace_callee_entry_dead(entry))
         .flatten()
     {
         if d.never_takes(addr, size) {
@@ -280,14 +280,14 @@ fn not_a_result_buffer(
             .get(*l)
             .is_some_and(|v| v.is_constant() && v.get_offset() < NULL_PAGE)
     };
-    leaves.iter().any(|&l| data.kuna_hiddenret_vetoed(l))
+    leaves.iter().any(|&l| data.unlace_hiddenret_vetoed(l))
         || (!leaves.is_empty()
             && (leaves.iter().all(null_page)
                 || leaves.iter().all(|&l| not_an_arm64e_address(data, l))))
         || branches_through(data, call, addr, size)
 }
 
-/// (kuna `arm64evcall`) Is `[addr, addr+size)` the register a resolved virtual
+/// (unlace `arm64evcall`) Is `[addr, addr+size)` the register a resolved virtual
 /// call branched through? It holds the callee's own address (`ldr x8, [x16];
 /// blraa x8, x17`), which no callee returns through.
 fn branches_through(data: &Funcdata, call: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
@@ -349,7 +349,7 @@ pub fn rescore_active_trial(data: &mut Funcdata, call_idx: int4, trial: int4) ->
             .filter(|&l| !frame_address(data, l))
             .collect::<Vec<_>>()
     };
-    data.kuna_note_hiddenret_vetoed(&leaves);
+    data.unlace_note_hiddenret_vetoed(&leaves);
     data.get_call_specs_mut(call_idx)
         .get_active_input()
         .get_trial_mut(trial)

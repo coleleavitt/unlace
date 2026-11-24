@@ -75,13 +75,13 @@ pub static WITH_WRITE: OpToken = OpToken {
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::rustfmt::RustFmtMode>()
         .writers()
         || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustfmtwrite::WriterMethods>()
             .is_empty()
     {
@@ -144,7 +144,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         (5, WriterMethod::WriteFmt),
     ] {
         if arch
-            .kuna_tables
+            .unlace_tables
             .get::<crate::rustfmtwrite::WriterMethods>()
             .get(&words[index])
             != Some(&method)
@@ -207,7 +207,7 @@ fn vtable_bytes(fd: &Funcdata, arch: &Architecture, pointer: u64) -> Option<Vec<
     Some(bytes)
 }
 
-/// (kuna `rustfmtwrite`) The image's `String` writer methods, by address; an
+/// (unlace `rustfmtwrite`) The image's `String` writer methods, by address; an
 /// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type WriterMethods = std::collections::BTreeMap<u64, WriterMethod>;
-crate::kuna_arch_table!(WriterMethods);
+crate::unlace_arch_table!(WriterMethods);

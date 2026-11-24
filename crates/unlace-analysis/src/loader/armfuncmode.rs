@@ -1,4 +1,4 @@
-//! (kuna `armfuncmode`) An even ARM function symbol starts A32 code.
+//! (unlace `armfuncmode`) An even ARM function symbol starts A32 code.
 //!
 //! Bit 0 of an ARM ELF `STT_FUNC` value is set for a Thumb function and clear
 //! for an A32 one (AAELF32 "Symbol Values"). `arm_markers` paints the Thumb

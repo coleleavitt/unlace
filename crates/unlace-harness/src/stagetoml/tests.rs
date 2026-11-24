@@ -17,7 +17,7 @@ literal = "P1 = 2;"
 fn a_computed_count_reads_the_compiled_catalog() {
     let all = SAMPLE.replace("count = 1", "count = { settables = {}, plus = 3 }");
     let t = parse(&all).unwrap();
-    let n = i32::try_from(kuna_num_settables()).unwrap() + 3;
+    let n = i32::try_from(unlace_num_settables()).unwrap() + 3;
     assert_eq!((t.matches[0].min, t.matches[0].max), (n, n));
     let core = SAMPLE.replace("count = 1", "count = { settables = { tier = \"core\" } }");
     let core = parse(&core).unwrap().matches[0].min;

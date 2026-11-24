@@ -1,4 +1,4 @@
-//! (kuna) The dyld shared cache options: which image of a cache to load
+//! (unlace) The dyld shared cache options: which image of a cache to load
 //! (`dyldimage`) and whether its references into other images are named
 //! (`dyldcrossrefs`).
 //!
@@ -10,7 +10,7 @@
 //! before `load file` sets the same variable, and is accepted before any image
 //! is loaded, since choosing the first image is its purpose.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 /// The install name, basename or stem of the cache image to load; several
 /// joined by `+` load as one program.
@@ -49,7 +49,7 @@ pub fn selected_image() -> Option<String> {
 
 /// Apply `option dyldimage|dyldcrossrefs VALUE`, or `None` for another option.
 /// Neither needs a loaded image: the next `load file` reads both.
-pub fn set_option(name: &str, value: &str) -> Option<KunaResult<String>> {
+pub fn set_option(name: &str, value: &str) -> Option<UnlaceResult<String>> {
     Some(match name {
         "dyldimage" => Ok(set_dyldimage(value)),
         "dyldcrossrefs" => set_dyldcrossrefs(value),
@@ -73,7 +73,7 @@ pub fn set_dyldimage(value: &str) -> String {
 }
 
 /// Apply `option dyldcrossrefs VALUE`.
-pub fn set_dyldcrossrefs(value: &str) -> KunaResult<String> {
+pub fn set_dyldcrossrefs(value: &str) -> UnlaceResult<String> {
     crate::options::on_or_off(value).map(|on| {
         set_dyldcrossrefs_env(on);
         format!(

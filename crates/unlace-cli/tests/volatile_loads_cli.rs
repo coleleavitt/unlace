@@ -207,7 +207,7 @@ fn a_volatile_data_assertion_keeps_each_read_in_decompile_all() {
         "data 0x601000 volatile int cursor",
         "data 0x601000 int volatile cursor",
     ] {
-        let (out, err, code) = common::run_kuna(&[
+        let (out, err, code) = common::run_unlace(&[
             "decompile-all",
             path.to_str().unwrap(),
             "--addr",
@@ -252,7 +252,7 @@ fn volatile_typedef_data_preserves_scalar_and_array_reads() {
         )
         .unwrap();
         for command in ["decompile", "decompile-all"] {
-            let (out, err, code) = common::run_kuna(&[
+            let (out, err, code) = common::run_unlace(&[
                 command,
                 path.to_str().unwrap(),
                 "--addr",
@@ -304,7 +304,7 @@ fn volatile_struct_data_reads_name_the_covered_field() {
             ],
         )
         .unwrap();
-        let (out, err, code) = common::run_kuna(&[
+        let (out, err, code) = common::run_unlace(&[
             "decompile",
             path.to_str().unwrap(),
             "--addr",
@@ -336,7 +336,7 @@ fn mapped_volatile_access(command: &str, hex: &str, declaration: &str) -> String
         .collect();
     let path = common::scratch_file("volatile-access-width", "bin");
     std::fs::write(&path, image).unwrap();
-    let (out, err, code) = common::run_kuna(&[
+    let (out, err, code) = common::run_unlace(&[
         command,
         path.to_str().unwrap(),
         "--addr",
@@ -460,7 +460,7 @@ fn inferred_simd_temporaries_have_scalar_declarations() {
             "data 0x601000 volatile char cursor[32]",
         ];
         args.extend_from_slice(extra);
-        let (out, err, code) = common::run_kuna(&args);
+        let (out, err, code) = common::run_unlace(&args);
         assert_eq!(code, 0, "{err}");
         assert!(out.contains("char v1 [16]"), "{out}");
     }
@@ -476,7 +476,7 @@ fn loaded_simd_temporaries_keep_array_declarations() {
         .collect();
     let path = common::scratch_file("simd-loaded-declaration", "bin");
     std::fs::write(&path, image).unwrap();
-    let (out, err, code) = common::run_kuna(&[
+    let (out, err, code) = common::run_unlace(&[
         "decompile",
         path.to_str().unwrap(),
         "--addr",

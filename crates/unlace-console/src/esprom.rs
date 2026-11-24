@@ -1,4 +1,4 @@
-//! (kuna `esprom`) Load an Espressif application image and apply its chip's
+//! (unlace `esprom`) Load an Espressif application image and apply its chip's
 //! mask-ROM names and memory map.
 //!
 //! The image loads as the raw image its segments are
@@ -15,7 +15,7 @@ use std::rc::Rc;
 use unlace_analysis::loader::firmware::esp::{self, EspImage};
 use unlace_analysis::loader::firmware::esprom::{self, RegionKind};
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN;
 use unlace_decomp::esprom::{EspChip, EspRom};
 use unlace_decomp::varnode::varnode_flags;
@@ -40,14 +40,14 @@ pub(crate) fn file_esp_image(path: &str) -> Option<EspImage> {
 pub(crate) fn raw_image(
     path: &str,
     image: &EspImage,
-) -> KunaResult<(RawLoadImage, u64, ProgramImageMetadata)> {
+) -> UnlaceResult<(RawLoadImage, u64, ProgramImageMetadata)> {
     let runs = image
         .segments
         .iter()
         .map(|s| (s.addr, s.bytes.clone(), s.flags))
         .collect();
     let (loader, base) = RawLoadImage::from_segments(path, runs)
-        .ok_or_else(|| KunaError::lowlevel("ESP application image: its segments overlap"))?;
+        .ok_or_else(|| UnlaceError::lowlevel("ESP application image: its segments overlap"))?;
     let sections = image
         .segments
         .iter()
@@ -84,12 +84,12 @@ fn section_kind(flags: u32) -> &'static str {
 fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
     match prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::esprom::EspRom>()
     {
         EspRom::Auto => prog
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::esprom::ImageChip>()
             .clone(),
         value => value.chip(),
@@ -98,7 +98,7 @@ fn chip_in_force(prog: &ConsoleProgram) -> Option<EspChip> {
 
 /// Apply the chip's ROM names and memory map once, before the commit maps
 /// any symbol over the ranges it paints.
-pub(crate) fn apply(prog: &mut ConsoleProgram) -> KunaResult<()> {
+pub(crate) fn apply(prog: &mut ConsoleProgram) -> UnlaceResult<()> {
     let Some(chip) = chip_in_force(prog) else {
         return Ok(());
     };
@@ -151,7 +151,7 @@ fn name_rom_data(
     addr: &Address,
     name: &str,
     size: i32,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let num_spaces = prog.arch().manage().num_spaces();
     let invalid = Address::new_invalid();
     let Some(global) = prog.arch().symboltab.get_global_scope() else {

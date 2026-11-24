@@ -83,10 +83,10 @@ fn decompile(func: &str, mode: Mode) -> String {
     // deferred Listing build + consumer run see them on.
     if let Mode::On = mode {
         prog.arch_mut()
-            .set_kuna_option("listing", "on")
+            .set_unlace_option("listing", "on")
             .expect("listing flips on");
         prog.arch_mut()
-            .set_kuna_option("noreturn_disc", "on")
+            .set_unlace_option("noreturn_disc", "on")
             .expect("noreturn_disc flips on");
     }
     // `read symbols`: build the Listing (deferred) and run the consumer, gated.

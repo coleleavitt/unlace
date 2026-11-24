@@ -1,4 +1,4 @@
-//! DWARF `.debug_line` source-line mapping — the kuna analog of Ghidra's
+//! DWARF `.debug_line` source-line mapping — the unlace analog of Ghidra's
 //! `DWARFLineInfoCommentScript` (the line-number side of the DWARF analyzer).
 //!
 //! The sibling [`DwarfPass`](super::DwarfPass) recovers names + typed signatures
@@ -7,13 +7,13 @@
 //! compiler emits under `-g` — and surfaces each instruction's source location
 //! as a comment on the decompiled output.
 //!
-//! ## Origin (upstream Ghidra, the tree kuna was ported from)
+//! ## Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `ghidra_scripts/DWARFLineInfoCommentScript.java` — `addSourceLineInfo()`:
 //!   for each compilation unit, walk `cu.getLine().getAllSourceFileAddrInfo(cu)`
 //!   (the line-table rows) and, per row, `appendComment(addr, EOL,
 //!   "%s:%d".formatted(fileName, lineNum))`. This pass is that script's commit,
-//!   adapted to kuna's analysis-tier→engine boundary: instead of writing the
+//!   adapted to unlace's analysis-tier→engine boundary: instead of writing the
 //!   program's CommentDB inline, it emits [`CommentFact`]s the console commit
 //!   seam installs into `Architecture::commentdb` (the same `Comment::user2`
 //!   instruction-comment type the C printer emits as a `/* … */` line).
@@ -30,10 +30,10 @@
 //! - **`end_sequence` rows are skipped.** A DWARF `end_sequence` row marks the
 //!   address ONE PAST the last instruction of a contiguous code range; its line
 //!   number is not a real statement (objdump renders it as `-`). The Ghidra
-//!   script keeps these rows (it emits a `file:line` for them too); kuna drops
+//!   script keeps these rows (it emits a `file:line` for them too); unlace drops
 //!   them so no spurious comment lands at a function's past-the-end address. This
 //!   is the only behavioral difference from the script's row set.
-//! - **Each row is attached to its OWNING function** by VMA. The kuna comment DB
+//! - **Each row is attached to its OWNING function** by VMA. The unlace comment DB
 //!   keys comments by `(funcaddr, instr_addr)` and the C printer only retrieves a
 //!   function's comments via `comments_for(funcaddr)` — so a row's `func_addr`
 //!   must be the entry VMA of the function whose body contains the row. We gather

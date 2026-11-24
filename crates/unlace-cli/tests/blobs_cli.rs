@@ -20,7 +20,7 @@ fn fixture() -> String {
         .to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, i32) {
+fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -41,7 +41,7 @@ fn rows(text: &str) -> Vec<Vec<String>> {
 
 #[test]
 fn every_whole_file_is_listed_with_its_length_and_the_truncated_one_is_not() {
-    let (out, err, code) = run_kuna(&["blobs", &fixture(), "--no-xrefs"]);
+    let (out, err, code) = run_unlace(&["blobs", &fixture(), "--no-xrefs"]);
     assert_eq!(code, 0, "{err}");
     let found: Vec<Vec<String>> = rows(&out).into_iter().map(|r| r[..4].to_vec()).collect();
     let want = [
@@ -57,7 +57,7 @@ fn every_whole_file_is_listed_with_its_length_and_the_truncated_one_is_not() {
 
 #[test]
 fn each_row_names_the_function_that_references_it() {
-    let (out, err, code) = run_kuna(&["blobs", &fixture()]);
+    let (out, err, code) = run_unlace(&["blobs", &fixture()]);
     assert_eq!(code, 0, "{err}");
     let owners: Vec<(String, String)> = rows(&out)
         .into_iter()
@@ -83,7 +83,7 @@ fn each_row_names_the_function_that_references_it() {
 #[test]
 fn extract_writes_each_file_byte_for_byte() {
     let dir = std::env::temp_dir().join(format!("kuna-blobs-{}", std::process::id()));
-    let (out, err, code) = run_kuna(&[
+    let (out, err, code) = run_unlace(&[
         "blobs",
         &fixture(),
         "--no-xrefs",
@@ -112,7 +112,7 @@ fn extract_writes_each_file_byte_for_byte() {
 #[test]
 fn the_json_document_and_the_filters() {
     let (out, err, code) =
-        run_kuna(&["blobs", &fixture(), "--json", "--no-xrefs", "--kind", "zip"]);
+        run_unlace(&["blobs", &fixture(), "--json", "--no-xrefs", "--kind", "zip"]);
     assert_eq!(code, 0, "{err}");
     for key in [
         "\"scanned\": \"sections\"",
@@ -125,28 +125,28 @@ fn the_json_document_and_the_filters() {
     ] {
         assert!(out.contains(key), "missing {key}:\n{out}");
     }
-    let (out, _, code) = run_kuna(&["blobs", &fixture(), "--no-xrefs", "--section", "text"]);
+    let (out, _, code) = run_unlace(&["blobs", &fixture(), "--no-xrefs", "--section", "text"]);
     assert_eq!(code, 0);
     assert!(out.starts_with("# 0 embedded blobs in "), "{out}");
-    let (_, err, code) = run_kuna(&["blobs", &fixture(), "--no-xrefs", "--section", ".nope"]);
+    let (_, err, code) = run_unlace(&["blobs", &fixture(), "--no-xrefs", "--section", ".nope"]);
     assert_eq!(code, 1);
     assert!(err.contains("no section named"), "{err}");
-    let (_, err, code) = run_kuna(&["blobs", &fixture(), "--kind", "tiff"]);
+    let (_, err, code) = run_unlace(&["blobs", &fixture(), "--kind", "tiff"]);
     assert_eq!(code, 2);
     assert!(err.contains("unknown --kind"), "{err}");
-    let (_, _, code) = run_kuna(&["blobs"]);
+    let (_, _, code) = run_unlace(&["blobs"]);
     assert_eq!(code, 2);
 }
 
 #[test]
 fn decompile_returns_each_file_by_name_unless_the_option_is_off() {
-    let (out, err, code) = run_kuna(&["decompile", &fixture(), "get_logo"]);
+    let (out, err, code) = run_unlace(&["decompile", &fixture(), "get_logo"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         out.contains("unsigned char * get_logo(") && out.contains("return png_3c0;"),
         "{out}"
     );
-    let (out, err, code) = run_kuna(&[
+    let (out, err, code) = run_unlace(&[
         "decompile",
         &fixture(),
         "get_logo",
@@ -156,7 +156,7 @@ fn decompile_returns_each_file_by_name_unless_the_option_is_off() {
     ]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("return 0x3c0;"), "{out}");
-    let (out, err, code) = run_kuna(&["decompile", &fixture(), "get_broken"]);
+    let (out, err, code) = run_unlace(&["decompile", &fixture(), "get_broken"]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("return 0x720;"), "{out}");
 }

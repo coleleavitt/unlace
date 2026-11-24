@@ -48,7 +48,7 @@ Root cause: [`analysis.md`](analysis.md) · design and rejected alternatives:
   same arity") changed 43 and two of the extra 18 were wrong — `Sleep(200,0)` and
   an internal variadic logger gaining two arguments — which is where the
   "only a call that recovered nothing" condition comes from.
-- **Stage test**: `tests/stages/kuna-calleearity.toml`, two passes over an
+- **Stage test**: `tests/stages/calleearity.toml`, two passes over an
   assembled SysV x86-64 fixture.
 - **Speed**: flat (+0.50% against a +0.45% null-control floor on the witness),
   measured on interleaved child CPU time because the box was loaded.

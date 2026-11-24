@@ -1,9 +1,9 @@
-//! (kuna) The C type speller: name a core data-type the way the target's own C
+//! (unlace) The C type speller: name a core data-type the way the target's own C
 //! compiler would, instead of with Ghidra's internal vocabulary.
 //!
 //! # The defect
 //!
-//! kuna's core types are literally *named* `uint1`/`int4`/`float8`/`float10`/
+//! unlace's core types are literally *named* `uint1`/`int4`/`float8`/`float10`/
 //! `code` (`Architecture::build_core_types`) — a verbatim port of upstream's
 //! no-`<coretypes>` fallback branch, which the real Ghidra application never
 //! takes because its Java side ships its own names over the wire. The printer
@@ -104,7 +104,7 @@ impl CDataModel {
     ///
     /// Declaration order, first hit wins. A 1-byte integer is spelled
     /// `signed char` / `unsigned char` rather than bare `char`, whose signedness
-    /// is implementation-defined — and kuna has a separate `char` core type for
+    /// is implementation-defined — and unlace has a separate `char` core type for
     /// text, which keeps its own spelling.
     pub fn integer_spelling(&self, size: int4, signed: bool) -> Option<&'static str> {
         let ranks: [(int4, &'static str, &'static str); 5] = [
@@ -147,7 +147,7 @@ impl CDataModel {
 
 /// The C spelling of one core data-type, or `None` to keep its existing name.
 ///
-/// `size` and `meta` are the type's own; `is_char` marks kuna's text types
+/// `size` and `meta` are the type's own; `is_char` marks unlace's text types
 /// (`char`, `wchar2`, `wchar4`), which are spelled as character types rather
 /// than as integers of the same width.
 ///

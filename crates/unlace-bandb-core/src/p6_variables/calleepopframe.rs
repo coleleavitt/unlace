@@ -1,4 +1,4 @@
-//! (kuna) Read a callee's pop off a fixed-frame caller that re-reserves the
+//! (unlace) Read a callee's pop off a fixed-frame caller that re-reserves the
 //! bytes the callee popped.
 //!
 //! # The gap

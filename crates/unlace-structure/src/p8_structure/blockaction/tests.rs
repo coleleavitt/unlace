@@ -1040,7 +1040,7 @@ fn is_complex_condition_delegates_to_component_zero() {
 }
 
 // ---------------------------------------------------------------------------
-// (kuna) `option condfold` -- the short-circuit fold across a COMPLEX sibling.
+// (unlace) `option condfold` -- the short-circuit fold across a COMPLEX sibling.
 // ---------------------------------------------------------------------------
 
 /// Build the canonical `ruleBlockOr` shape, oriented so neither

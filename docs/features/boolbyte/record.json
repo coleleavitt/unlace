@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna declares a byte whose every use is a truth test `char`, because `TYPE_BOOL` is only ever an op's OUTPUT type and `TypeOpEqual::get_input_local` votes `get_base(1, TYPE_INT)` -- the ASCII `char` -- for the value being compared. Over the 444-slice decbench type sweep, 3,228 ground-truth variables are `_Bool`; 2,057 of them are matchable (argument index or calibrated stack offset) and 1,129 of those are misses, 866 because kuna committed the byte to `char` (700) or `unsigned char` (166).",
- "test_name": "tests/stages/kuna-boolbyte.xml (10 two-pass assertions: one witness, five refusals incl. the two INDIRECT controls) + 4 unit tests on the fold order",
+ "test_name": "tests/stages/boolbyte.xml (10 two-pass assertions: one witness, five refusals incl. the two INDIRECT controls) + 4 unit tests on the fold order",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O0/coreutils/stripped/basename",
  "selector": "0x2b45",
  "func_addr": "0x2b45",
@@ -416,7 +416,7 @@
  "default_on_flip": {
   "base": "origin/main e1139df9 plus this branch, including the truncation fix; both arms are the same release build (new default vs `--option boolbyte off`). The fix is inert with the option off (truncation_form returns before asking for the operand mask), and the review build of the previous head found the off arm byte-identical to main e1139df9 on 12/12 disjoint binaries",
   "datatests": "675/675 PARITY OK with the default flipped, 0 assertions moved, no per-test opt-out needed",
-  "stages": "1144/1144 PARITY OK. docs/baseline-stages.json re-recorded only to add the three new truncflag assertions (#13-#15 in tests/stages/kuna-boolbyte.xml); no existing assertion moved. Pass 1 of the stage test sets `option boolbyte off` explicitly, so the bug arm still reproduces; #14 and #15 fail on a build without the fix",
+  "stages": "1144/1144 PARITY OK. docs/baseline-stages.json re-recorded only to add the three new truncflag assertions (#13-#15 in tests/stages/boolbyte.xml); no existing assertion moved. Pass 1 of the stage test sets `option boolbyte off` explicitly, so the bug arm still reproduces; #14 and #15 fail on a build without the fix",
   "test_cli": "185/185 passed; no probe pins a moved vN name",
   "typesweep": {
    "metric": "decbench type_match (main), DECBENCH_NO_CACHE=1, both arms the same pinned binary",
@@ -550,7 +550,7 @@
    "merge_shape_without_cast_lines": 5,
    "merge_shape_functions": 10,
    "cast_lines": 13,
-   "cast_lines_detail": "13 cast-changing lines in 7 functions: 7 replace a raw SUBnn(x,0) intrinsic, 4 turn (char)x into (bool)x, 2 wrap an x & 1 in (bool). Every input is provably 0 or 1, so each (bool) cast equals the low byte the machine keeps. No line prints (bool)(unsigned char)x in this corpus: the truncation fix does not fire here, it fires on the constructed m32/truncflag case (tests/stages/kuna-boolbyte.xml #13-#15)",
+   "cast_lines_detail": "13 cast-changing lines in 7 functions: 7 replace a raw SUBnn(x,0) intrinsic, 4 turn (char)x into (bool)x, 2 wrap an x & 1 in (bool). Every input is provably 0 or 1, so each (bool) cast equals the low byte the machine keeps. No line prints (bool)(unsigned char)x in this corpus: the truncation fix does not fire here, it fires on the constructed m32/truncflag case (tests/stages/boolbyte.xml #13-#15)",
    "signatures": {
     "functions_whose_signature_line_changed": 78,
     "parameter_char_to_bool": 78,
@@ -684,7 +684,7 @@
    "after": "v1 = (bool)(unsigned char)(a0 & 0x201);  -- round-trips through gcc against the source for x in {0,1,0x200,0x201,0x100000000,0x100000001,~0}, and the 64-bit twin (x & 0x100000001) likewise",
    "mechanism": "the literal 0 seeds d bool, propagation carries bool back through the copy to c (whose mask is 1), and the printer arm printed the truncation as (bool)x. It now prints (bool)x only when the operand mask, re-derived at print time by kuna_boolbyte::value_mask, has no bit above the byte, and (bool)(unsigned char)x otherwise",
    "corpus_effect": "none: no line in the 8-binary corpus prints (bool)(unsigned char), because all 13 cast lines have 0/1 inputs",
-   "stage_assertions": "tests/stages/kuna-boolbyte.xml #13-#15 (function truncflag)"
+   "stage_assertions": "tests/stages/boolbyte.xml #13-#15 (function truncflag)"
   }
  }
 }

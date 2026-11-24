@@ -9,7 +9,7 @@
 //! readonly`, which is default-off. Either way the expression comes out written
 //! in `dat_<addr>` operands.
 //!
-//! The `tests/stages/kuna-msvcfpconst.toml` datatest covers the emitted C. What
+//! The `tests/stages/unlace-msvcfpconst.toml` datatest covers the emitted C. What
 //! it *cannot* cover is the loader-level facts under the emitted C — that the
 //! undefined slots gain real bytes and that both halves are reported as
 //! constant-by-construction ranges, which is what makes the fold legal with

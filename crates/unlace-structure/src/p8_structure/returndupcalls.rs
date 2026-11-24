@@ -1,4 +1,4 @@
-//! (kuna `returndup calls`) Split a cross-jumped call tail per predecessor.
+//! (unlace `returndup calls`) Split a cross-jumped call tail per predecessor.
 //!
 //! An optimizing compiler shares the tail of two paths that end in the same
 //! call (gcc `-fcrossjumping`): each path sets the arguments and jumps to one
@@ -223,7 +223,7 @@ impl Action for ActionReturnDupCalls {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::returndup::ReturnDup>()
             .calls
         {

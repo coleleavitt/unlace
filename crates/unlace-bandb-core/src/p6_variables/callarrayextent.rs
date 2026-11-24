@@ -289,7 +289,7 @@ fn joined_parent_end(
 pub fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<super::arrayextent::ArrayExtent>()
         .0
         < super::arrayextent::LEVEL_ON
@@ -402,7 +402,7 @@ pub fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<
 pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::callarrayextent::CallArrayExtent>()
         .0
     {
@@ -539,7 +539,7 @@ pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     }
 }
 
-crate::kuna_flag!(
+crate::unlace_flag!(
     /// Opt-in frame-bounded arrays for call-escaped integer storage.
     CallArrayExtent,
     "callarrayextent",

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, SeqNum};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -119,8 +119,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -322,7 +322,7 @@ fn boolless_b4_deadcode_reduces_toward_oracle() {
     }
     eprintln!("by opcode: {by_code:?}");
 
-    // The C++ B4 snapshot is gitignored (produced by `make` + `kuna.goldens`),
+    // The C++ B4 snapshot is gitignored (produced by `make` + `unlace.goldens`),
     // so the multiset-overlap *report* runs only when it is present; the
     // reduction *assertions* below are independent of it (they are about the
     // Rust op count) and always bite.

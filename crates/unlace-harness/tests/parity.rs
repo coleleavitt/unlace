@@ -693,22 +693,22 @@ fn the_datatest_stream_parses() {
 
 #[test]
 fn the_file_selection_matches_paths_names_and_globs() {
-    assert!(glob_match("kuna-*.toml", "kuna-wideslice.toml"));
+    assert!(glob_match("kuna-*.toml", "wideslice.toml"));
     assert!(glob_match(
         "tests/stages/*wide*",
-        "tests/stages/kuna-wideslice.toml"
+        "tests/stages/wideslice.toml"
     ));
     assert!(glob_match("gh55?-*", "gh558-compareform"));
     assert!(glob_match("*", ""));
-    assert!(!glob_match("kuna-*.xml", "kuna-wideslice.toml"));
+    assert!(!glob_match("kuna-*.xml", "wideslice.toml"));
     assert!(!glob_match("a?c", "ac"));
     let root = Path::new("/repo");
-    let file = "/repo/tests/stages/kuna-wideslice.toml";
+    let file = "/repo/tests/stages/wideslice.toml";
     for p in [
-        "kuna-wideslice",
-        "kuna-wideslice.toml",
-        "tests/stages/kuna-wideslice.toml",
-        "/repo/tests/stages/kuna-wideslice.toml",
+        "wideslice",
+        "wideslice.toml",
+        "tests/stages/wideslice.toml",
+        "/repo/tests/stages/wideslice.toml",
         "tests/stages/kuna-wide*",
     ] {
         assert!(selected(root, file, &[p.to_string()]), "{p}");

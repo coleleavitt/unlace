@@ -1,8 +1,8 @@
-//! (kuna `calltargettype`, P5) An indirect call's target takes the type of the
+//! (unlace `calltargettype`, P5) An indirect call's target takes the type of the
 //! call.
 //!
 //! Type recovery types the target of an indirect call `code *`, a pointer to a
-//! function of unknown signature, and C has no spelling for that: kuna prints
+//! function of unknown signature, and C has no spelling for that: unlace prints
 //! it `void *`, so every call through one is a call of a `void *`, which no C
 //! compiler accepts.
 //!
@@ -111,7 +111,7 @@ pub fn dwarf_function_types() -> bool {
         .unwrap_or_else(crate::loadoptions::env::calltargettype)
 }
 
-/// (kuna) `ActionCallTargetType` -- type each indirect call's target from the
+/// (unlace) `ActionCallTargetType` -- type each indirect call's target from the
 /// call (option `calltargettype`).
 pub struct ActionCallTargetType {
     base: ActionBase,
@@ -143,10 +143,10 @@ impl Action for ActionCallTargetType {
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         unlace_middle::debug_assert_settled!(data, Prototype);
-        data.kuna_clear_call_target_types();
+        data.unlace_clear_call_target_types();
         if data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::CallTargetType>()
             .0
         {
@@ -156,7 +156,7 @@ impl Action for ActionCallTargetType {
     }
 }
 
-/// Is `ty` a pointer C cannot call and kuna does not cast at a call: a pointer
+/// Is `ty` a pointer C cannot call and unlace does not cast at a call: a pointer
 /// to the prototype-less `code` or to `void`.
 fn uncallable_pointer(ty: &Datatype) -> bool {
     if ty.get_metatype() != type_metatype::TYPE_PTR {
@@ -184,7 +184,7 @@ pub fn uncallable_target_cast(
     data.obank()
         .get(op)
         .filter(|o| o.code() == OpCode::CPUI_CALLIND)?;
-    data.kuna_call_target_type(op)
+    data.unlace_call_target_type(op)
 }
 
 /// Is `ty` a pointer to a function with a prototype.
@@ -553,7 +553,7 @@ pub fn retype_call_targets(data: &mut Funcdata) {
         }
     }
     for (op, ty) in casts {
-        data.kuna_set_call_target_type(op, ty);
+        data.unlace_set_call_target_type(op, ty);
     }
     let mut chosen: BTreeMap<HighVariableId, Rc<Datatype>> = BTreeMap::new();
     for (high, group) in &groups {
@@ -582,7 +582,7 @@ pub fn retype_call_targets(data: &mut Funcdata) {
         for (high, group) in &groups {
             for (op, ty) in group {
                 if !declare_field(data, *op, ty, chosen.contains_key(high)) {
-                    data.kuna_set_call_target_type(*op, Rc::clone(ty));
+                    data.unlace_set_call_target_type(*op, Rc::clone(ty));
                 }
             }
         }
@@ -668,7 +668,7 @@ fn declare_field(data: &mut Funcdata, op: OpId, ty: &Rc<Datatype>, agreed: bool)
         return false;
     };
     let (record, field) = (rec.get_name().to_string(), field.name.clone());
-    data.kuna_add_field_call(FieldCall {
+    data.unlace_add_field_call(FieldCall {
         record,
         field,
         offset,
@@ -681,7 +681,7 @@ fn declare_field(data: &mut Funcdata, op: OpId, ty: &Rc<Datatype>, agreed: bool)
 /// `fd`: the one its calls there agree on.
 fn agreed_fields(fd: &Funcdata) -> BTreeMap<(String, int4), Rc<Datatype>> {
     let mut seen: BTreeMap<(String, int4), Option<Rc<Datatype>>> = BTreeMap::new();
-    for call in fd.kuna_field_calls() {
+    for call in fd.unlace_field_calls() {
         let entry = seen
             .entry((call.record.clone(), call.offset))
             .or_insert_with(|| call.ty.clone());
@@ -1137,36 +1137,36 @@ fn carry_back(
     }
 }
 
-/// (kuna `calltargettype`) The calls through fields of synthesized records; kept across
+/// (unlace `calltargettype`) The calls through fields of synthesized records; kept across
 /// `Funcdata::clear`, forgotten with the call target types.
 #[derive(Default)]
 struct FieldCallsSlot(Vec<crate::calltargettype::FieldCall>);
-crate::kuna_func_state!(FieldCallsSlot, keep_across_clear: true);
+crate::unlace_func_state!(FieldCallsSlot, keep_across_clear: true);
 
-/// The `kuna_calltargettype` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_calltargettype` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataCalltargettypeExt {
-    /// (kuna `calltargettype`) Forget every recorded call target type.
-    fn kuna_clear_call_target_types(&mut self);
-    /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
-    fn kuna_add_field_call(&mut self, call: crate::calltargettype::FieldCall);
-    /// (kuna `calltargettype`) The calls through fields of synthesized records.
-    fn kuna_field_calls(&self) -> &[crate::calltargettype::FieldCall];
+    /// (unlace `calltargettype`) Forget every recorded call target type.
+    fn unlace_clear_call_target_types(&mut self);
+    /// (unlace `calltargettype`) Record a call through a field of a synthesized record.
+    fn unlace_add_field_call(&mut self, call: crate::calltargettype::FieldCall);
+    /// (unlace `calltargettype`) The calls through fields of synthesized records.
+    fn unlace_field_calls(&self) -> &[crate::calltargettype::FieldCall];
 }
 
 impl FuncdataCalltargettypeExt for crate::funcdata::Funcdata {
-    /// (kuna `calltargettype`) Forget every recorded call target type.
-    fn kuna_clear_call_target_types(&mut self) {
-        self.kuna_clear_call_target_type_map();
-        self.kuna_state_mut::<FieldCallsSlot>().0.clear();
+    /// (unlace `calltargettype`) Forget every recorded call target type.
+    fn unlace_clear_call_target_types(&mut self) {
+        self.unlace_clear_call_target_type_map();
+        self.unlace_state_mut::<FieldCallsSlot>().0.clear();
     }
-    /// (kuna `calltargettype`) Record a call through a field of a synthesized record.
-    fn kuna_add_field_call(&mut self, call: crate::calltargettype::FieldCall) {
-        self.kuna_state_mut::<FieldCallsSlot>().0.push(call);
+    /// (unlace `calltargettype`) Record a call through a field of a synthesized record.
+    fn unlace_add_field_call(&mut self, call: crate::calltargettype::FieldCall) {
+        self.unlace_state_mut::<FieldCallsSlot>().0.push(call);
     }
-    /// (kuna `calltargettype`) The calls through fields of synthesized records.
-    fn kuna_field_calls(&self) -> &[crate::calltargettype::FieldCall] {
-        &self.kuna_state::<FieldCallsSlot>().0
+    /// (unlace `calltargettype`) The calls through fields of synthesized records.
+    fn unlace_field_calls(&self) -> &[crate::calltargettype::FieldCall] {
+        &self.unlace_state::<FieldCallsSlot>().0
     }
 }
 

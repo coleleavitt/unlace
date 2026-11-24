@@ -272,7 +272,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
     let count = fd.vbank().num_varnodes();
     let mut wire = Vec::new();
     fd.encode(&mut XmlEncode::new(&mut wire), 1, false).unwrap();
-    let carriers = fd.kuna_wrapped_wire_storage.clone();
+    let carriers = fd.unlace_wrapped_wire_storage.clone();
     assert_eq!(carriers.len(), 2);
     let locations: Vec<_> = carriers.values().map(|(addr, _)| addr).collect();
     assert_ne!(locations[0], locations[1]);
@@ -303,10 +303,10 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
     fd.encode(&mut XmlEncode::new(&mut repeated), 1, false)
         .unwrap();
     assert_eq!(wire, repeated);
-    assert_eq!(fd.kuna_wrapped_wire_storage, carriers);
+    assert_eq!(fd.unlace_wrapped_wire_storage, carriers);
     let first_id = *carriers.keys().next().unwrap();
     super::super::wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
-    let grown = fd.kuna_wrapped_wire_storage[&first_id].clone();
+    let grown = fd.unlace_wrapped_wire_storage[&first_id].clone();
     assert_eq!(grown.1, 76);
     assert!(
         locations
@@ -314,7 +314,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
             .all(|addr| grown.0.get_offset() >= addr.get_offset() + 72)
     );
     super::super::wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
-    assert_eq!(fd.kuna_wrapped_wire_storage[&first_id], grown);
+    assert_eq!(fd.unlace_wrapped_wire_storage[&first_id], grown);
     let next = fd.new_unique(4, None);
     let next_addr = fd.vbank().get(next).unwrap().get_addr();
     assert!(
@@ -326,7 +326,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
         std::fs::write(path, wire).unwrap();
     }
     fd.clear();
-    assert!(fd.kuna_wrapped_wire_storage.is_empty());
+    assert!(fd.unlace_wrapped_wire_storage.is_empty());
 }
 
 #[test]

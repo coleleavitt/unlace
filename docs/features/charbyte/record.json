@@ -1,6 +1,6 @@
 {
  "opportunity": "kuna declares a byte read through a `char *` as `unsigned char`, and pushes `unsigned char *` back over the pointer, because x86 loads every byte with movzx and TypeOpIntZext::getInputLocal's uint1 vote outranks char (SUB_UINT_PLAIN 16 < SUB_INT_CHAR 19). Over fmt/ls/sort/grep -O0/-O2: 40 LOAD sites where a char * meets a uint1 byte, 65 where the byte pushes unsigned char * over char *; 39 declarations and 15 signature lines move when fixed. Readability item: type_match strips `unsigned`, so its metric effect is zero by construction.",
- "test_name": "tests/stages/kuna-charbyte.xml (21 two-pass assertions: witness, unsigned char * control, unsigned-compare control, the 0xe9 constant, a pointer that is char * only through strlen, and four controls that keep uint1 in both passes: a byte passed to a call, a sibling byte passed to a call, a counter, a switch with case 0x80) + 4 unit tests",
+ "test_name": "tests/stages/charbyte.xml (21 two-pass assertions: witness, unsigned char * control, unsigned-compare control, the 0xe9 constant, a pointer that is char * only through strlen, and four controls that keep uint1 in both passes: a byte passed to a call, a sibling byte passed to a call, a counter, a switch with case 0x80) + 4 unit tests",
  "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
  "selector": "0x79b0",
  "func_addr": "0x79b0",

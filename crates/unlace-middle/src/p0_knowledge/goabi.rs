@@ -1,4 +1,4 @@
-//! (kuna) The `goabi` option: select the vendored golang compiler spec for a
+//! (unlace) The `goabi` option: select the vendored golang compiler spec for a
 //! Go image, and bind the `abi0` prototype model to `.abi0`-named functions
 //! (`docs/multilang.md` W4, the Go ABI plane).
 //!
@@ -12,7 +12,7 @@
 //! statements feeding it are DELETED. Ghidra vendors golang cspecs for
 //! exactly this (`x86-64-golang.cspec`, `x86-32-golang.cspec`,
 //! `AARCH64_golang.cspec` — `abi-internal` default, `abi0` the stack ABI,
-//! plus the write-barrier/duff helper models), and kuna ships them compiled;
+//! plus the write-barrier/duff helper models), and unlace ships them compiled;
 //! nothing selected them. With `goabi auto` (the default) an image whose
 //! effective source language is Go composes the `:golang` compiler field in
 //! its SLEIGH language id on the three architectures that have one; every
@@ -38,7 +38,7 @@
 //!
 //! The register ABI reached amd64 in go1.17 and arm64 in go1.18. An image an
 //! older release built passes every argument on the stack, so `abi0` becomes
-//! its default model (`Architecture::kuna_go_stack_default`).
+//! its default model (`Architecture::unlace_go_stack_default`).
 
 /// Environment variable carrying the `goabi` choice into the load path.
 /// Absent or any value other than the off-tokens means **enabled** (`auto`).
@@ -49,7 +49,7 @@ pub fn goabi_env_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.goabi).unwrap_or_else(crate::loadoptions::env::goabi)
 }
 
-/// Export a `set_kuna_option("goabi", val)` toggle to [`GOABI_ENV`] so a later
+/// Export a `set_unlace_option("goabi", val)` toggle to [`GOABI_ENV`] so a later
 /// `load file` in the same process sees the choice.
 pub fn set_goabi_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
@@ -67,13 +67,13 @@ pub fn parse_goabi(value: &str) -> Result<bool, String> {
     }
 }
 
-/// (kuna `goabi`) `auto` lets a Go image take the vendored golang compiler spec.
+/// (unlace `goabi`) `auto` lets a Go image take the vendored golang compiler spec.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GoAbi(pub bool);
 
-impl crate::optionset::KunaOption for GoAbi {
+impl crate::optionset::UnlaceOption for GoAbi {
     const NAME: &'static str = "goabi";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         GoAbi(false)
@@ -83,8 +83,8 @@ impl crate::optionset::KunaOption for GoAbi {
         GoAbi(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let on = parse_goabi(value).map_err(unlace_base::error::KunaError::parse)?;
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        let on = parse_goabi(value).map_err(unlace_base::error::UnlaceError::parse)?;
         let state = if on { "auto" } else { "off" };
         Ok((
             GoAbi(on),

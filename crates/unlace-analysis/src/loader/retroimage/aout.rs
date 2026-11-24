@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use object::SectionKind;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 
 use super::{Bytes, MAX_MODULE, RetroImage, RetroSection, RetroSymbol, invalid, symbol_name};
 
@@ -167,7 +167,7 @@ fn round_up(value: u64, to: u64) -> u64 {
     value.div_ceil(to) * to
 }
 
-pub fn parse(filename: &str, bytes: &[u8]) -> KunaResult<RetroImage> {
+pub fn parse(filename: &str, bytes: &[u8]) -> UnlaceResult<RetroImage> {
     let bad = |detail: &str| invalid(filename, FORMAT, detail);
     let Header {
         machine,

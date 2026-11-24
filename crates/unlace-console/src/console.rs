@@ -1,34 +1,34 @@
-//! Port of `decompiler/cpp/kuna_console.{cc,hh}` (W9) — the kuna console
+//! Port of `decompiler/cpp/kuna_console.{cc,hh}` (W9) — the unlace console
 //! capability and the stage-registry console commands.
 //!
-//! This file is **not** part of upstream Ghidra. In C++ it registers all kuna
+//! This file is **not** part of upstream Ghidra. In C++ it registers all unlace
 //! console commands through the upstream `IfaceCapability` discovery mechanism
-//! (a static `IfaceKunaCapability` singleton collected by
-//! `CapabilityPoint::initializeAll`). The kuna Rust console has no static
-//! capability registry; instead [`register_kuna_commands`] is called from the
+//! (a static `IfaceUnlaceCapability` singleton collected by
+//! `CapabilityPoint::initializeAll`). The unlace Rust console has no static
+//! capability registry; instead [`register_unlace_commands`] is called from the
 //! console binaries' command-registration step (mirroring how
 //! `register_decomp_commands` is invoked), which is the faithful equivalent of
-//! `IfaceKunaCapability::registerCommands`.
+//! `IfaceUnlaceCapability::registerCommands`.
 //!
 //! # The commands and what is expressible today
 //!
-//! The kuna stage model is pure static data ([`unlace_decomp::phases`], the
+//! The unlace stage model is pure static data ([`unlace_decomp::phases`], the
 //! W4 registry), so the **registry-only** commands port in full, byte-for-byte:
 //!
-//! - [`IfcKunaPhaseList`] — `phase list`: the stages, Band B membership, and the
+//! - [`IfcUnlacePhaseList`] — `phase list`: the stages, Band B membership, and the
 //!   sub-stage decision catalog (with `LATENT` markers).
-//! - [`IfcKunaPhaseMap`] — `phase map [<name>]`: resolve an action/rule group,
+//! - [`IfcUnlacePhaseMap`] — `phase map [<name>]`: resolve an action/rule group,
 //!   console surface, or sub-stage to its stage (or dump the full tables).
-//! - [`IfcKunaPhaseCatalog`] — `phase catalog [<option>]`: emit the
+//! - [`IfcUnlacePhaseCatalog`] — `phase catalog [<option>]`: emit the
 //!   LLM-settable assertion catalog as JSON, calling the **W4 byte-compatible
 //!   emitter** ([`unlace_decomp::phases::emit_catalog_json`]). With a program
 //!   loaded the live `current` field is joined per option from the
-//!   [`Architecture`] flags ([`kuna_live_value`], the port of
-//!   `kuna_console.cc kunaLiveValue`). `tests/stages/kuna-catalog.toml`
+//!   [`Architecture`] flags ([`unlace_live_value`], the port of
+//!   `kuna_console.cc unlaceLiveValue`). `tests/stages/unlace-catalog.toml`
 //!   string-matches this output.
-//! - [`IfcKunaFunctions`] — `functions`: emit the canonical executable
+//! - [`IfcUnlaceFunctions`] — `functions`: emit the canonical executable
 //!   function inventory used by whole-binary decompilation.
-//! - [`IfcKunaAssert`] — `kassert ...`: validate a typed assertion against the
+//! - [`IfcUnlaceAssert`] — `kassert ...`: validate a typed assertion against the
 //!   registry and route it to a store. The **validation + routing decision**
 //!   core (parse-error precedence, `kassert list`, the LATENT/unroutable
 //!   branches) ports in full via [`unlace_decomp::assert`]; the store
@@ -36,7 +36,7 @@
 //!   layer (Override / FuncProto locks / retype / `OptionDatabase::set`) and is
 //!   routed through [`engine_unavailable`].
 //!
-//! The remaining kuna commands read live decompiler state through accessors the
+//! The remaining unlace commands read live decompiler state through accessors the
 //! merged `rust-port` tree does not yet expose at the `Architecture` level (the
 //! same integration gap `ifacedecomp.rs` documents): the print language
 //! (`Architecture::print`, for `phase status`'s `arraynotation` line), the
@@ -47,17 +47,17 @@
 //! that *is* expressible — its `dcp->conf`/`dcp->fd` null guards with exact text
 //! — then routes the engine read through [`engine_unavailable`]:
 //!
-//! - [`IfcKunaPhaseStatus`] — `phase status`.
-//! - [`IfcKunaRestarts`] — `restarts`.
-//! - [`IfcKunaPipeline`] — `pipeline [list|<variant>]` (the `list` sub-form is
+//! - [`IfcUnlacePhaseStatus`] — `phase status`.
+//! - [`IfcUnlaceRestarts`] — `restarts`.
+//! - [`IfcUnlacePipeline`] — `pipeline [list|<variant>]` (the `list` sub-form is
 //!   fully expressible and ported; running a variant needs the drive).
-//! - [`IfcKunaQuality`] — `quality`.
+//! - [`IfcUnlaceQuality`] — `quality`.
 //!
-//! The S7 region commands (`region tree`/`blocks`/`walk`, C++ `IfcKunaRegion*`
+//! The S7 region commands (`region tree`/`blocks`/`walk`, C++ `IfcUnlaceRegion*`
 //! from `kuna_regionid.cc`) register through this capability in C++; their
 //! `buildFromBlockGraph` block-graph adapter is explicitly `STUB(W7)` in the
-//! ported `kuna_regionid` module, so they are registered with a placeholder that
-//! routes through [`engine_unavailable`] (see [`register_kuna_commands`]).
+//! ported `unlace_regionid` module, so they are registered with a placeholder that
+//! routes through [`engine_unavailable`] (see [`register_unlace_commands`]).
 //!
 //! Where C++ writes the *bulk* stream (`*status->fileoptr`) the port writes
 //! [`IfaceStatus::file_out`] (honoring an open `openfile` redirect, which the
@@ -70,14 +70,14 @@ use crate::interface::{CommandStream, IfaceCommandAction, IfaceError, IfaceResul
 use std::borrow::Cow;
 use std::cell::RefCell;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::assert::{AssertLog, Dispatch, KunaAssertion, validate_assertion};
+use unlace_decomp::assert::{AssertLog, Dispatch, UnlaceAssertion, validate_assertion};
 use unlace_decomp::phases::{
-    KunaPhase, KunaStrength, emit_catalog_json, emit_catalog_json_one, kuna_group_by_index,
-    kuna_num_groups, kuna_num_subphases, kuna_num_surfaces, kuna_subphase_by_index,
-    kuna_surface_by_index, lookup_group, lookup_settable, lookup_subphase, lookup_surface,
+    UnlacePhase, UnlaceStrength, emit_catalog_json, emit_catalog_json_one, lookup_group,
+    lookup_settable, lookup_subphase, lookup_surface, unlace_group_by_index, unlace_num_groups,
+    unlace_num_subphases, unlace_num_surfaces, unlace_subphase_by_index, unlace_surface_by_index,
 };
 use unlace_decomp::printc::ArchPrintExt;
-use unlace_decomp::regionid::KunaRegionIdentifier;
+use unlace_decomp::regionid::UnlaceRegionIdentifier;
 
 /// The named pipeline variants built by `ActionDatabase::buildDefaultGroups`
 /// (C++ `PIPELINE_VARIANTS`).
@@ -90,29 +90,29 @@ const PIPELINE_VARIANTS: [&str; 6] = [
     "firstpass",
 ];
 
-/// The stages in registry order P0,S1..S9 — the `for(i=0;i<=9;++i)(KunaPhase)i`
-/// loop of `IfcKunaPhaseList::execute`.
-const STAGES_IN_ORDER: [KunaPhase; 10] = [
-    KunaPhase::P0,
-    KunaPhase::P1,
-    KunaPhase::P2,
-    KunaPhase::P3,
-    KunaPhase::P4,
-    KunaPhase::P5,
-    KunaPhase::P6,
-    KunaPhase::P7,
-    KunaPhase::P8,
-    KunaPhase::P9,
+/// The stages in registry order P0,S1..S9 — the `for(i=0;i<=9;++i)(UnlacePhase)i`
+/// loop of `IfcUnlacePhaseList::execute`.
+const STAGES_IN_ORDER: [UnlacePhase; 10] = [
+    UnlacePhase::P0,
+    UnlacePhase::P1,
+    UnlacePhase::P2,
+    UnlacePhase::P3,
+    UnlacePhase::P4,
+    UnlacePhase::P5,
+    UnlacePhase::P6,
+    UnlacePhase::P7,
+    UnlacePhase::P8,
+    UnlacePhase::P9,
 ];
 
 // ---------------------------------------------------------------------------
-// dcp access — every kuna command shares the "decompile" module data, exactly
+// dcp access — every unlace command shares the "decompile" module data, exactly
 // like the upstream IfaceDecompCommand family (kuna_console.cc reads dcp->...).
 // ---------------------------------------------------------------------------
 
-/// Reach the shared [`IfaceDecompData`] from a kuna command.
+/// Reach the shared [`IfaceDecompData`] from a unlace command.
 ///
-/// The kuna commands share the `"decompile"` module's [`IfaceDecompData`] (in
+/// The unlace commands share the `"decompile"` module's [`IfaceDecompData`] (in
 /// C++ they are `IfaceDecompCommand` subclasses, so `getModule()` is
 /// `"decompile"` and `dcp` is the same object the decompiler commands read).
 /// A missing entry is an internal wiring bug (never user-reachable) surfaced as
@@ -135,7 +135,7 @@ fn dcp_ref(status: &IfaceStatus) -> Option<&IfaceDecompData> {
         .and_then(|d| d.as_any().downcast_ref::<IfaceDecompData>())
 }
 
-/// The error returned where a kuna command's engine read depends on the
+/// The error returned where a unlace command's engine read depends on the
 /// unported decompiler integration layer (mirrors `ifacedecomp.rs`'s private
 /// `engine_unavailable`, kept local because that one is module-private).
 ///
@@ -149,19 +149,19 @@ fn engine_unavailable(entry: &str) -> IfaceError {
     ))
 }
 
-/// Read the live value of a kuna settable from the loaded [`Architecture`], or
-/// `None` if it cannot be determined — port of `kuna_console.cc kunaLiveValue`.
+/// Read the live value of a unlace settable from the loaded [`Architecture`], or
+/// `None` if it cannot be determined — port of `kuna_console.cc unlaceLiveValue`.
 ///
 /// The C++ `arraynotation` reader dereferences `conf->print` (the owned
 /// `PrintC`); that accessor is `STUB(W8)` in the merged tree (no `print` field
 /// on [`Architecture`]), so `arraynotation` returns `None` here — exactly the
-/// `kunaLiveValue` `""` path that suppresses the `current` field. Every other
+/// `unlaceLiveValue` `""` path that suppresses the `current` field. Every other
 /// option reads a flag/string that [`Architecture`] does expose, so the
 /// `current` field is joined for them, matching C++.
-pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static, str>> {
+pub fn unlace_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static, str>> {
     // C++ returns "" for an unknown option (suppressing the current field).
     let on_off = |b: bool| if b { "on" } else { "off" };
-    // (kuna `dyldimage`) The valued live reader whose value is not a fixed
+    // (unlace `dyldimage`) The valued live reader whose value is not a fixed
     // token owns its string; every other arm borrows.
     if option == "dyldimage" {
         let _load = conf.load_scope();
@@ -171,14 +171,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
     }
     if option == "typelib" {
         return Some(Cow::Owned(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::typelib::TypeLib>()
                 .as_str(),
         ));
     }
     if option == "comcfg" {
         return Some(Cow::Owned(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::comcfg::ComCfg>()
                 .as_str(),
         ));
@@ -206,18 +206,18 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             }
         }
         "loopcontinue" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::loopcontinue::LoopContinue>()
                 .0,
         ),
         "postinc" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::coreoptions::PostIncrement>()
                 .0,
         ),
         "compareform" => {
             if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::compareform::PresentLessequal>()
                 .0
             {
@@ -230,28 +230,28 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // exposed via `Architecture::print()` (the owned `PrintC`).
         "arraynotation" => on_off(conf.print().options.array_notation()),
         "armfloatargs" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::armfloatargs::ArmFloatArgs>()
                 .0,
         ),
         "callarrayextent" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::callarrayextent::CallArrayExtent>()
                 .0,
         ),
         "stackstruct" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::stackstruct::StackStruct>()
                 .0,
         ),
         "globalarrayanchor" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::globalarrayanchor::GlobalArrayAnchor>()
                 .0,
         ),
         "opaquepredicate"
             if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::coreoptions::OpaquePredicate>()
                 .globals =>
         {
@@ -259,64 +259,64 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
 
         "bitidioms" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::bitidioms::BitIdioms>()
                 .0,
         ),
         "helperroles" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::helperrole::HelperRoles>()
                 .0,
         ),
         "dynalloca" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::dynalloca::DynAlloca>()
                 .0,
         ),
-        "vaarg" => on_off(conf.kuna_options.get::<unlace_decomp::vaarg::VaArg>().0),
+        "vaarg" => on_off(conf.unlace_options.get::<unlace_decomp::vaarg::VaArg>().0),
         "indexrescale" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::indexrescale::IndexRescale>()
                 .0,
         ),
         "looprotate" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::looprotate::LoopRotate>()
                 .0,
         ),
         "vastart" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::vastart::VaStartRewrite>()
                 .0,
         ),
         "typevote" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::typevote::TypeVote>()
                 .0,
         ),
         "switchguardmerge" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::switchguardmerge::SwitchGuardMerge>()
                 .0,
         ),
         "opaquepredicate" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::coreoptions::OpaquePredicate>()
                 .on,
         ),
         "memsetrecover" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::memsetsequence::MemsetRecover>()
                 .0,
         ),
         "rodatastring" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::rodatastring::RodataString>()
                 .0,
         ),
         "returnpair" => {
             if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::returnpair::ReturnSingle>()
                 .0
             {
@@ -326,42 +326,42 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             }
         }
         "nulterminator" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::nulterminator::NulTerminator>()
                 .0,
         ),
         "retsplitglobal" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::coreoptions::RetSplitGlobal>()
                 .0,
         ),
-        // (kuna `protoorder`) Three-valued, so it reports its own token.
+        // (unlace `protoorder`) Three-valued, so it reports its own token.
         "protoorder" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::protoorder::ProtoOrderMode>()
             .as_str(),
-        // (kuna `calleevote`) Three-valued, so it reports its own token.
+        // (unlace `calleevote`) Three-valued, so it reports its own token.
         "calleevote" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::calleevote::CalleeVoteMode>()
             .as_str(),
-        // (kuna `callbacktype`) A mode over an enum field like its two
+        // (unlace `callbacktype`) A mode over an enum field like its two
         // neighbours, so it reports its own token rather than a `live_field`.
         "callbacktype" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .as_str(),
-        // (kuna `calleereginputs`) Three-valued (off|on|custom), reported from
+        // (unlace `calleereginputs`) Three-valued (off|on|custom), reported from
         // its two engine flags.
         "calleereginputs" => {
             if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::calleereginputs::CalleeRegInputs>()
                 .custom
             {
                 "custom"
             } else if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::calleereginputs::CalleeRegInputs>()
                 .on
             {
@@ -370,154 +370,154 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
                 "off"
             }
         }
-        // (kuna `castwiden`) Three-valued, so it reports its own token.
+        // (unlace `castwiden`) Three-valued, so it reports its own token.
         "castwiden" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::castwiden::CastWidenMode>()
             .as_str(),
-        // (kuna `narrowext`) Three-valued, so it reports its own token.
+        // (unlace `narrowext`) Three-valued, so it reports its own token.
         "narrowext" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::narrowext::NarrowExtMode>()
             .as_str(),
-        // (kuna `syscallregs`) Three-valued, so it reports its own token.
+        // (unlace `syscallregs`) Three-valued, so it reports its own token.
         "syscallregs" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::syscallregs::SyscallRegsMode>()
             .as_str(),
-        // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
+        // (unlace `linuxsyscall`) Three-valued, so it reports its own token.
         "linuxsyscall" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::linuxsyscall::LinuxSyscallMode>()
             .as_str(),
-        // (kuna `callmechanisms`) Three-valued, so it reports its own token.
+        // (unlace `callmechanisms`) Three-valued, so it reports its own token.
         "callmechanisms" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callmechanisms::CallMechanismMode>()
             .as_str(),
-        // (kuna `rustabi`) Three-valued, so it reports its own token.
+        // (unlace `rustabi`) Three-valued, so it reports its own token.
         "rustabi" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::rustabi::RustAbiMode>()
             .as_str(),
-        // (kuna `fatstr`) Three-valued, so it reports its own token.
+        // (unlace `fatstr`) Three-valued, so it reports its own token.
         "fatstr" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::fatstr::FatStrMode>()
             .as_str(),
         "swiftstr" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::swiftstr::SwiftStr>()
             .0
             .as_str(),
-        // (kuna `gobool`) Three-valued, so it reports its own token.
+        // (unlace `gobool`) Three-valued, so it reports its own token.
         "gobool" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::gobool::GoBoolMode>()
             .as_str(),
-        // (kuna `fpuemu`) Three-valued, so it reports its own token.
+        // (unlace `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::fpuemu::FpuEmuMode>()
             .as_str(),
         "mzdgroup" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::coreoptions::MzDgroupOn>()
                 .0,
         ),
         "rustprobestack" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::rustprobestack::RustProbestackMode>()
             .as_str(),
         "rustfmt" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::rustfmt::RustFmtMode>()
             .as_str(),
-        // (kuna `gomorestack`) Three-valued, so it reports its own token.
+        // (unlace `gomorestack`) Three-valued, so it reports its own token.
         "gomorestack" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::gomorestack::GoMorestackMode>()
             .as_str(),
-        // (kuna `gowritebarrier`) Three-valued, so it reports its own token.
+        // (unlace `gowritebarrier`) Three-valued, so it reports its own token.
         "gowritebarrier" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::gowritebarrier::GoWriteBarrierMode>()
             .as_str(),
         "gonewtype" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::gonewtype::GoNewType>()
                 .0,
         ),
-        // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
+        // (unlace `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
         "sourcelang" => match conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::sourcelang::SourceLangForced>()
             .0
         {
             Some(lang) => lang.as_str(),
             None => "auto",
         },
-        // (kuna `bejoin`) Three-valued, so it reports its own token.
+        // (unlace `bejoin`) Three-valued, so it reports its own token.
         "bejoin" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::bejoin::BeJoinMode>()
             .as_str(),
         "bejoinpass" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::bejoinpass::BeJoinPassMode>()
             .as_str(),
         "octeoneffects" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::octeoneffects::OcteonEffectsMode>()
             .as_str(),
         "sparcstructret" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::sparcstructret::SparcStructReturn>()
                 .0,
         ),
         "arraystride" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::arraystride::RecoverArrayStride>()
                 .0,
         ),
         "stackalias" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::heritage::StackAliasDeadstore>()
                 .0,
         ),
         "stackviews" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::coreoptions::StackViews>()
                 .0,
         ),
         "v850indirectbranch" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::v850indbranch::V850IndirectBranch>()
                 .0,
         ),
         "switchmodbound" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::jumptable::SwitchModuloBound>()
                 .0,
         ),
         "constselectjump" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::constselectjump::ConstSelectMode>()
             .as_str(),
         "switchsharedcase" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::jumptable::SwitchSharedCase>()
                 .0,
         ),
         "realtypes" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::printc::Realtypes>()
                 .0,
         ),
-        // (kuna `calloverlap`) Report the selected overlap policy.
+        // (unlace `calloverlap`) Report the selected overlap policy.
         "calloverlap" => match conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::calloverlap::CallOverlap>()
             .0
         {
@@ -526,39 +526,39 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             unlace_decomp::calloverlap::LEVEL_IN => "in",
             _ => "full",
         },
-        // (kuna) Analysis-pass gates: the live `current` field reflects each pass's
+        // (unlace) Analysis-pass gates: the live `current` field reflects each pass's
         // per-run enable flag (set by `--option <id> on|off`). Real-ELF path only;
-        // with no program loaded these never reach (kuna_live_value's caller passes
+        // with no program loaded these never reach (unlace_live_value's caller passes
         // None), so the no-program catalog byte-compat fixture is untouched.
         "noreturn_known" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::NoreturnKnown>()
                 .0,
         ),
         "godwarfsig" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Godwarfsig>()
                 .0,
         ),
         "goitabcalls" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::goitabcalls::GoItabCalls>()
                 .0,
         ),
         "libgccsigs" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Libgccsigs>()
                 .0,
         ),
         "gotypeglobals" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::GoTypeGlobals>()
                 .0,
         ),
-        // (kuna `libctypes`) Valued `off|opaque|glibc`, so the live token is the
+        // (unlace `libctypes`) Valued `off|opaque|glibc`, so the live token is the
         // value, not an on/off word.
         "libctypes" => match conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::libctypes::LibcTypesLayout>()
         {
             unlace_decomp::libctypes::LibcTypesLayout::Off => "off",
@@ -566,73 +566,73 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             unlace_decomp::libctypes::LibcTypesLayout::Glibc => "glibc",
         },
         "strings" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Strings>()
                 .0,
         ),
         "blobs" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Blobs>()
                 .0,
         ),
         "widestrings" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Widestrings>()
                 .0,
         ),
         "widestrings32" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Widestrings32>()
                 .0,
         ),
         "entry_disc" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::EntryDisc>()
                 .0,
         ),
         "eh_frame_full" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::EhFrameFull>()
                 .0,
         ),
         "unwindstarts" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Unwindstarts>()
                 .0,
         ),
 
         "machoehframe" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Machoehframe>()
                 .0,
         ),
         "machobinds" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Machobinds>()
                 .0,
         ),
         "exporttrie" => on_off(unlace_decomp::exporttrie::exporttrie_enabled()),
         "ppc32picimports" => conf.analysis_ppc32picimports.as_str(),
         "ifuncfpret" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::ifuncfpret::IfuncFpRet>()
                 .0,
         ),
-        "ppcapu" => on_off(conf.kuna_options.get::<unlace_decomp::ppcapu::PpcApu>().0),
+        "ppcapu" => on_off(conf.unlace_options.get::<unlace_decomp::ppcapu::PpcApu>().0),
         "delphiabi" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::delphiabi::DelphiAbi>()
                 .0,
         ),
 
         "debuglink" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::debuglink::DebugLink>()
                 .0,
         ),
-        // (kuna `goabi`) Two-valued but spelled auto|off, so it reports its token.
+        // (unlace `goabi`) Two-valued but spelled auto|off, so it reports its token.
         "goabi" => {
-            if conf.kuna_options.get::<unlace_decomp::goabi::GoAbi>().0 {
+            if conf.unlace_options.get::<unlace_decomp::goabi::GoAbi>().0 {
                 "auto"
             } else {
                 "off"
@@ -640,47 +640,47 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "dyldcrossrefs" => on_off(unlace_decomp::dyldcache::dyldcrossrefs_enabled()),
         "cil" => on_off(unlace_decomp::cil::cil_enabled()),
-        // (kuna `symbolnamechars`) Three-valued, so it reports its own token.
+        // (unlace `symbolnamechars`) Three-valued, so it reports its own token.
         "symbolnamechars" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::symbolnamechars::NameChars>()
             .as_str(),
         "ruststdsigs" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::ruststdsigs::RustStdSigs>()
             .as_str(),
         "dwarf" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Dwarf>()
                 .0,
         ),
-        // (kuna) ELF data-symbol naming (DIV-76): committed at `read symbols`
+        // (unlace) ELF data-symbol naming (DIV-76): committed at `read symbols`
         // like the analysis-pass gates, so the live flag is authoritative.
-        // (kuna `cppsig`) Three-valued, so it reports its own token rather than
+        // (unlace `cppsig`) Three-valued, so it reports its own token rather than
         // on/off.
         "cppsig" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::cppsig::CppSigMode>()
             .as_str(),
         "addrtable" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Addrtable>()
                 .0,
         ),
         "listing" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
         ),
         "fid" => {
             if !conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .on
             {
                 "off"
             } else if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
             {
@@ -691,13 +691,13 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "armframes" => {
             if !conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::ArmFrames>()
                 .inventory
             {
                 "off"
             } else if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::ArmFrames>()
                 .full
             {
@@ -707,21 +707,21 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             }
         }
         "x86listingswitch" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::X86listingswitch>()
                 .0,
         ),
         "addrtakenentry" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Addrtakenentry>()
                 .0,
         ),
-        // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
+        // (unlace `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
         "flowmode" => match (
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::FlowMode>()
                 .on,
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::FlowMode>()
                 .after_call,
         ) {
@@ -730,10 +730,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             (true, true) => "aftercall",
         },
         "cvftrace" => match (
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .names,
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .lines,
         ) {
@@ -743,7 +743,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         },
         "gopcln" => {
             let g = conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::GoPcln>();
             match (g.on, g.lines) {
                 (false, _) => "off",
@@ -752,51 +752,51 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             }
         }
         "elfmain" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Elfmain>()
                 .0,
         ),
         "fast_funcdisc" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::FastFuncdisc>()
                 .0,
         ),
-        // (kuna `aif`) Four-valued, so it reports its own token.
+        // (unlace `aif`) Four-valued, so it reports its own token.
         "aif" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::aif::AifMode>()
             .as_str(),
 
         "objectview" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Objectview>()
                 .0,
         ),
         "mapglobalsyms" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::mapglobalsyms::Mapglobalsyms>()
                 .0,
         ),
         "aifpoolslide" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::analysisgates::Aifpoolslide>()
                 .0,
         ),
         "esprom" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::esprom::EspRom>()
             .as_str(),
         "armconstshift" => conf
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::armconstantshift::ConstShiftMode>()
             .as_str(),
         "fpargboxed" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::boxedcompare::FpArgBoxed>()
                 .0,
         ),
         "satconvert" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::satconvert::SatConvert>()
                 .0,
         ),
@@ -804,7 +804,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // state (the live spec-selection gate is the load-time env var, but the
         // catalog `current` mirrors the `option macho-arm64e on|off` request).
         "macho-arm64e" => on_off(
-            conf.kuna_options
+            conf.unlace_options
                 .get::<unlace_decomp::macho_arm64e::MachoArm64e>()
                 .0,
         ),
@@ -814,14 +814,14 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
 }
 
 // ---------------------------------------------------------------------------
-// `phase list` — IfcKunaPhaseList
+// `phase list` — IfcUnlacePhaseList
 // ---------------------------------------------------------------------------
 
-/// (kuna) `phase list`: print the stage model and sub-stage catalog
-/// (C++ `IfcKunaPhaseList`). Pure static data; requires no program.
-pub struct IfcKunaPhaseList;
+/// (unlace) `phase list`: print the stage model and sub-stage catalog
+/// (C++ `IfcUnlacePhaseList`). Pure static data; requires no program.
+pub struct IfcUnlacePhaseList;
 
-impl IfaceCommandAction for IfcKunaPhaseList {
+impl IfaceCommandAction for IfcUnlacePhaseList {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let mut os = String::new();
         os.push_str("Phases (kuna phase model, docs/phases.md):\n");
@@ -830,7 +830,7 @@ impl IfaceCommandAction for IfcKunaPhaseList {
             os.push_str(stage.code());
             os.push_str("  ");
             os.push_str(stage.name());
-            if stage == KunaPhase::P0 {
+            if stage == UnlacePhase::P0 {
                 os.push_str("  [orthogonal plane]");
             } else if stage.in_band_b() {
                 os.push_str("  [Band B]");
@@ -842,8 +842,8 @@ impl IfaceCommandAction for IfcKunaPhaseList {
         }
         os.push('\n');
         os.push_str("Sub-phases (named decision points; LATENT = no override surface today):\n");
-        for i in 0..kuna_num_subphases() {
-            let sub = kuna_subphase_by_index(i);
+        for i in 0..unlace_num_subphases() {
+            let sub = unlace_subphase_by_index(i);
             os.push_str("  [");
             os.push_str(sub.phase.code());
             os.push_str("] ");
@@ -858,9 +858,9 @@ impl IfaceCommandAction for IfcKunaPhaseList {
             os.push_str("        assertion: ");
             os.push_str(sub.assertion);
             match sub.strength {
-                KunaStrength::Hard => os.push_str(" (HARD)"),
-                KunaStrength::Hint => os.push_str(" (HINT)"),
-                KunaStrength::None => {}
+                UnlaceStrength::Hard => os.push_str(" (HARD)"),
+                UnlaceStrength::Hint => os.push_str(" (HINT)"),
+                UnlaceStrength::None => {}
             }
             os.push_str("   rewind: ");
             os.push_str(sub.rewind.code());
@@ -878,14 +878,14 @@ impl IfaceCommandAction for IfcKunaPhaseList {
 }
 
 // ---------------------------------------------------------------------------
-// `phase map [<name>]` — IfcKunaPhaseMap
+// `phase map [<name>]` — IfcUnlacePhaseMap
 // ---------------------------------------------------------------------------
 
-/// (kuna) `phase map [<name>]`: resolve a group/surface/sub-stage to its stage
-/// (C++ `IfcKunaPhaseMap`). With no argument, dump the full tables.
-pub struct IfcKunaPhaseMap;
+/// (unlace) `phase map [<name>]`: resolve a group/surface/sub-stage to its stage
+/// (C++ `IfcUnlacePhaseMap`). With no argument, dump the full tables.
+pub struct IfcUnlacePhaseMap;
 
-impl IfaceCommandAction for IfcKunaPhaseMap {
+impl IfaceCommandAction for IfcUnlacePhaseMap {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         // C++ builds a space-joined token from the rest of the line.
         let mut token = String::new();
@@ -906,8 +906,8 @@ impl IfaceCommandAction for IfcKunaPhaseMap {
         if token.is_empty() {
             // Dump everything.
             os.push_str("Action/rule groups -> phase (dominant artifact; see docs/history/stage-model.md s15 for straddlers):\n");
-            for i in 0..kuna_num_groups() {
-                let entry = kuna_group_by_index(i);
+            for i in 0..unlace_num_groups() {
+                let entry = unlace_group_by_index(i);
                 os.push_str("  ");
                 os.push_str(entry.phase.code());
                 os.push_str("  ");
@@ -926,8 +926,8 @@ impl IfaceCommandAction for IfcKunaPhaseMap {
             }
             os.push('\n');
             os.push_str("Console surfaces -> phase:\n");
-            for i in 0..kuna_num_surfaces() {
-                let entry = kuna_surface_by_index(i);
+            for i in 0..unlace_num_surfaces() {
+                let entry = unlace_surface_by_index(i);
                 os.push_str("  ");
                 os.push_str(entry.phase.code());
                 os.push_str("  ");
@@ -1027,12 +1027,12 @@ impl IfaceCommandAction for IfcKunaPhaseMap {
 }
 
 // ---------------------------------------------------------------------------
-// `phase status` — IfcKunaPhaseStatus
+// `phase status` — IfcUnlacePhaseStatus
 // ---------------------------------------------------------------------------
 
-/// (kuna) `phase status`: report the active pipeline variant and the state of
-/// kuna sub-stage options (C++ `IfcKunaPhaseStatus`), then, for a selected
-/// function, its maturity level and settled facts (kuna).
+/// (unlace) `phase status`: report the active pipeline variant and the state of
+/// unlace sub-stage options (C++ `IfcUnlacePhaseStatus`), then, for a selected
+/// function, its maturity level and settled facts (unlace).
 ///
 /// The first two lines (pipeline variant, compareform) read accessors the
 /// merged tree exposes; the third (`arraynotation`) dereferences `conf->print`
@@ -1041,16 +1041,16 @@ impl IfaceCommandAction for IfcKunaPhaseMap {
 /// is routed through [`engine_unavailable`] after the `No load image present`
 /// guard, exactly as the merged `ifacedecomp` commands do for unported `print`
 /// accessors.
-pub struct IfcKunaPhaseStatus;
+pub struct IfcUnlacePhaseStatus;
 
-impl IfaceCommandAction for IfcKunaPhaseStatus {
+impl IfaceCommandAction for IfcUnlacePhaseStatus {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let dcp = dcp_mut(status)?;
         let conf = match dcp.conf.as_ref() {
             Some(c) => c.arch(),
             None => return Err(IfaceError::execution("No load image present")),
         };
-        // C++ IfcKunaPhaseStatus::execute.
+        // C++ IfcUnlacePhaseStatus::execute.
         let mut os = String::new();
         os.push_str("pipeline variant: ");
         os.push_str(conf.allacts.get_current_name());
@@ -1058,7 +1058,7 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
         os.push_str("compareform: ");
         os.push_str(
             if conf
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::compareform::PresentLessequal>()
                 .0
             {
@@ -1075,7 +1075,7 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
             "off"
         });
         os.push('\n');
-        // (kuna maturity) How far the selected function's last pass got
+        // (unlace maturity) How far the selected function's last pass got
         // (`docs/spec/00-overview.md` §0.10), and the facts settled there.
         if let Some(fd) = dcp.fd.as_ref() {
             let settled: Vec<&str> = fd.settled_facts().iter().map(|f| f.name()).collect();
@@ -1101,20 +1101,20 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
 }
 
 // ---------------------------------------------------------------------------
-// `phase catalog [<option>]` — IfcKunaPhaseCatalog
+// `phase catalog [<option>]` — IfcUnlacePhaseCatalog
 // ---------------------------------------------------------------------------
 
-/// (kuna) `phase catalog [<option>]`: emit the LLM-settable assertion catalog as
-/// JSON (C++ `IfcKunaPhaseCatalog`).
+/// (unlace) `phase catalog [<option>]`: emit the LLM-settable assertion catalog as
+/// JSON (C++ `IfcUnlacePhaseCatalog`).
 ///
 /// Calls the W4 byte-compatible emitter
 /// ([`unlace_decomp::phases::emit_catalog_json`] /
 /// [`emit_catalog_json_one`]); the live `current` field is joined per option
-/// from the loaded [`Architecture`] via [`kuna_live_value`] (C++
-/// `kunaLiveValue`). Works with no program loaded (the static doc form).
-pub struct IfcKunaPhaseCatalog;
+/// from the loaded [`Architecture`] via [`unlace_live_value`] (C++
+/// `unlaceLiveValue`). Works with no program loaded (the static doc form).
+pub struct IfcUnlacePhaseCatalog;
 
-impl IfaceCommandAction for IfcKunaPhaseCatalog {
+impl IfaceCommandAction for IfcUnlacePhaseCatalog {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         // C++: s >> ws >> option;
         s.skip_ws();
@@ -1130,16 +1130,16 @@ impl IfaceCommandAction for IfcKunaPhaseCatalog {
                     "Unknown settable option: {option} (try `phase catalog`)"
                 )));
             }
-            let live = conf.and_then(|c| kuna_live_value(c.arch(), &option));
+            let live = conf.and_then(|c| unlace_live_value(c.arch(), &option));
             let live = live.as_deref();
             // lookup_settable just succeeded, so this is Some.
             emit_catalog_json_one(&option, live).unwrap_or_default()
         } else {
             // Full form: `phase catalog`. The emitter calls the closure per
-            // option (in registry order), matching the C++ per-row kunaLiveValue
+            // option (in registry order), matching the C++ per-row unlaceLiveValue
             // join. The closure returns &'static str (the registry value table).
             match conf {
-                Some(c) => emit_catalog_json(|opt| kuna_live_value(c.arch(), opt)),
+                Some(c) => emit_catalog_json(|opt| unlace_live_value(c.arch(), opt)),
                 None => emit_catalog_json(|_| None),
             }
         };
@@ -1152,12 +1152,12 @@ impl IfaceCommandAction for IfcKunaPhaseCatalog {
 }
 
 // ---------------------------------------------------------------------------
-// `kassert ...` — IfcKunaAssert (class lives in kuna_assert.cc; registered here)
+// `kassert ...` — IfcUnlaceAssert (class lives in kuna_assert.cc; registered here)
 // ---------------------------------------------------------------------------
 
-/// (kuna) `kassert <phase> <subphase> <args...> [hard|hint]` / `kassert list`:
-/// write a typed assertion through an existing store (C++ `IfcKunaAssert`,
-/// `kuna_assert.cc`; registered by the kuna capability in `kuna_console.cc`).
+/// (unlace) `kassert <phase> <subphase> <args...> [hard|hint]` / `kassert list`:
+/// write a typed assertion through an existing store (C++ `IfcUnlaceAssert`,
+/// `kuna_assert.cc`; registered by the unlace capability in `kuna_console.cc`).
 ///
 /// The **validation + routing decision** core ports in full (the parse-error
 /// precedence, `kassert list`, the LATENT/unroutable error arms) on top of
@@ -1169,29 +1169,29 @@ impl IfaceCommandAction for IfcKunaPhaseCatalog {
 /// `assertLog.push_back` follow the store write in C++).
 ///
 /// `assert_log` is the per-instance equivalent of the C++ file-static
-/// `assertLog`: one [`IfcKunaAssert`] is registered, so its [`RefCell`] holds
+/// `assertLog`: one [`IfcUnlaceAssert`] is registered, so its [`RefCell`] holds
 /// the session log for the console's lifetime, matching the C++ semantics.
-pub struct IfcKunaAssert {
+pub struct IfcUnlaceAssert {
     /// Session log (C++ file-static `assertLog`).
     assert_log: RefCell<AssertLog>,
 }
 
-impl IfcKunaAssert {
+impl IfcUnlaceAssert {
     /// A fresh `kassert` command with an empty session log.
-    pub fn new() -> IfcKunaAssert {
-        IfcKunaAssert {
+    pub fn new() -> IfcUnlaceAssert {
+        IfcUnlaceAssert {
             assert_log: RefCell::new(AssertLog::new()),
         }
     }
 }
 
-impl Default for IfcKunaAssert {
+impl Default for IfcUnlaceAssert {
     fn default() -> Self {
-        IfcKunaAssert::new()
+        IfcUnlaceAssert::new()
     }
 }
 
-impl IfaceCommandAction for IfcKunaAssert {
+impl IfaceCommandAction for IfcUnlaceAssert {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         {
             let dcp = dcp_mut(status)?;
@@ -1226,13 +1226,13 @@ impl IfaceCommandAction for IfcKunaAssert {
 
         // C++: optional trailing hard|hint pops off the token list and sets the
         // requested strength override (default to the catalog strength).
-        let mut strength_override: Option<KunaStrength> = None;
+        let mut strength_override: Option<UnlaceStrength> = None;
         if let Some(last) = tokens.last() {
             if last == "hard" {
-                strength_override = Some(KunaStrength::Hard);
+                strength_override = Some(UnlaceStrength::Hard);
                 tokens.pop();
             } else if last == "hint" {
-                strength_override = Some(KunaStrength::Hint);
+                strength_override = Some(UnlaceStrength::Hint);
                 tokens.pop();
             }
         }
@@ -1241,7 +1241,7 @@ impl IfaceCommandAction for IfcKunaAssert {
         // routing decision (the console-independent core). C++ throws
         // IfaceParseError in this precedence: bad stage code -> missing sub-stage
         // -> unknown sub-stage -> sub-stage/stage mismatch. validate_assertion
-        // returns KunaError::Parse for all four; surface them as IfaceParseError.
+        // returns UnlaceError::Parse for all four; surface them as IfaceParseError.
         let validated = validate_assertion(&stagecode, &subname, strength_override)
             .map_err(|e| IfaceError::parse(e.explain().to_string()))?;
 
@@ -1252,7 +1252,7 @@ impl IfaceCommandAction for IfcKunaAssert {
             Some(fd) => fd.get_name().to_string(),
             None => "(global)".to_string(),
         };
-        let record = KunaAssertion {
+        let record = UnlaceAssertion {
             func_name,
             phase: validated.phase,
             subphase: validated.subphase.clone(),
@@ -1361,8 +1361,8 @@ impl IfaceCommandAction for IfcKunaAssert {
                 Ok(())
             }
             Dispatch::Option(name) => {
-                // C++ kassert option -> OptionDatabase::set (the kuna options are
-                // not in the OptionDatabase; `set_kuna_option` dispatches them into
+                // C++ kassert option -> OptionDatabase::set (the unlace options are
+                // not in the OptionDatabase; `set_unlace_option` dispatches them into
                 // the live architecture flags — e.g. compareform original sets
                 // present_lessequal). Then emit the option's confirmation message
                 // and the `kassert applied:` line, and record the assertion.
@@ -1378,7 +1378,7 @@ impl IfaceCommandAction for IfcKunaAssert {
                     .expect("conf checked non-None at command entry");
                 let msg = conf
                     .arch_mut()
-                    .set_kuna_option(name, &tokens[0])
+                    .set_unlace_option(name, &tokens[0])
                     .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
                 conf.callwide_changed();
                 let mut out = msg;
@@ -1396,28 +1396,28 @@ impl IfaceCommandAction for IfcKunaAssert {
 }
 
 // ---------------------------------------------------------------------------
-// `restarts` — IfcKunaRestarts
+// `restarts` — IfcUnlaceRestarts
 // ---------------------------------------------------------------------------
 
-/// (kuna) `restarts`: dump recorded restart-trigger events for the current
-/// function (C++ `IfcKunaRestarts`).
+/// (unlace) `restarts`: dump recorded restart-trigger events for the current
+/// function (C++ `IfcUnlaceRestarts`).
 ///
-/// C++ calls `kunaDumpRestarts(*status->fileoptr, *dcp->fd)` over the global
+/// C++ calls `unlaceDumpRestarts(*status->fileoptr, *dcp->fd)` over the global
 /// restart side table; the ported [`unlace_decomp::restartlog::RestartLog`]
 /// is `Architecture`-owned, but the architecture does not yet hold one
 /// (`STUB(W5)`: the log and its trigger sites land together), so the dump is
 /// routed through [`engine_unavailable`] after the `No function selected`
 /// guard.
-pub struct IfcKunaRestarts;
+pub struct IfcUnlaceRestarts;
 
-impl IfaceCommandAction for IfcKunaRestarts {
+impl IfaceCommandAction for IfcUnlaceRestarts {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let dcp = dcp_mut(status)?;
         let fd = match dcp.fd.as_ref() {
             Some(fd) => fd,
             None => return Err(IfaceError::execution("No function selected")),
         };
-        // C++ kunaDumpRestarts over the Architecture-owned RestartLog.
+        // C++ unlaceDumpRestarts over the Architecture-owned RestartLog.
         let conf = match dcp.conf.as_ref() {
             Some(c) => c.arch(),
             None => return Err(IfaceError::execution("No load image present")),
@@ -1432,11 +1432,11 @@ impl IfaceCommandAction for IfcKunaRestarts {
 }
 
 // ---------------------------------------------------------------------------
-// `pipeline [list|<variant>]` — IfcKunaPipeline
+// `pipeline [list|<variant>]` — IfcUnlacePipeline
 // ---------------------------------------------------------------------------
 
-/// (kuna) `pipeline [list|<variant>]`: run a named reduced pipeline on the
-/// current function as a sub-query (C++ `IfcKunaPipeline`).
+/// (unlace) `pipeline [list|<variant>]`: run a named reduced pipeline on the
+/// current function as a sub-query (C++ `IfcUnlacePipeline`).
 ///
 /// The `list` sub-form (and the `(current)` marker on the active variant) ports
 /// in full. Running a variant mirrors `Funcdata::stageJumpTable`'s
@@ -1445,11 +1445,11 @@ impl IfaceCommandAction for IfcKunaRestarts {
 /// the `Architecture` level in the merged tree, so a valid variant is routed
 /// through [`engine_unavailable`] after the guards and the "Unknown pipeline
 /// variant" parse error.
-pub struct IfcKunaPipeline;
+pub struct IfcUnlacePipeline;
 
-impl IfcKunaPipeline {
+impl IfcUnlacePipeline {
     /// Print the named pipeline variants: `pipeline list` (C++
-    /// `IfcKunaPipeline::listPipelines`).
+    /// `IfcUnlacePipeline::listPipelines`).
     fn list_pipelines(&self, status: &mut IfaceStatus) {
         // C++: if (conf != 0 && allacts.getCurrentName() == variant) "  (current)"
         let current = dcp_ref(status)
@@ -1469,7 +1469,7 @@ impl IfcKunaPipeline {
     }
 }
 
-impl IfaceCommandAction for IfcKunaPipeline {
+impl IfaceCommandAction for IfcUnlacePipeline {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
         let name = s.read_token();
@@ -1551,18 +1551,18 @@ impl IfaceCommandAction for IfcKunaPipeline {
 }
 
 // ---------------------------------------------------------------------------
-// `mode <name>` — IfcKunaMode
+// `mode <name>` — IfcUnlaceMode
 // ---------------------------------------------------------------------------
 
-/// (kuna) `mode <reliable|aggressive|fast>`: apply a decompiler mode preset — a batch
+/// (unlace) `mode <reliable|aggressive|fast>`: apply a decompiler mode preset — a batch
 /// of option overrides fanned out through `Architecture::apply_mode` (see
 /// `unlace_decomp::modes`).  Mirrors `IfcOption`'s dcp/conf access; issue it
 /// before `read symbols` so an analysis-tier override (`listing`/`aif`/…) is
 /// committed, exactly like an `option` command.  A later `option NAME VALUE`
 /// overrides the mode (last-write).
-pub struct IfcKunaMode;
+pub struct IfcUnlaceMode;
 
-impl IfaceCommandAction for IfcKunaMode {
+impl IfaceCommandAction for IfcUnlaceMode {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
         let name = s.read_token();
@@ -1591,21 +1591,21 @@ impl IfaceCommandAction for IfcKunaMode {
 }
 
 // ---------------------------------------------------------------------------
-// `quality` — IfcKunaQuality
+// `quality` — IfcUnlaceQuality
 // ---------------------------------------------------------------------------
 
-/// (kuna) `quality`: goto-count structure-quality metric over the structured
-/// result (C++ `IfcKunaQuality`).
+/// (unlace) `quality`: goto-count structure-quality metric over the structured
+/// result (C++ `IfcUnlaceQuality`).
 ///
-/// The goto-count walk (`kunaCountGotos`) operates on the ported `BlockGraph` /
+/// The goto-count walk (`unlaceCountGotos`) operates on the ported `BlockGraph` /
 /// `FlowBlock` arena, but the `goto nodes: N (printed: M)` line needs
 /// `BlockGoto::gotoPrints`, which depends on `FlowBlock::nextFlowAfter`
 /// (`STUB(W7)`, unported). Because that exact line cannot be reproduced today,
 /// the metric is routed through [`engine_unavailable`] after the `No function
 /// selected` and `hasNoStructBlocks` guards (both fully expressible).
-pub struct IfcKunaQuality;
+pub struct IfcUnlaceQuality;
 
-impl IfaceCommandAction for IfcKunaQuality {
+impl IfaceCommandAction for IfcUnlaceQuality {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let dcp = dcp_mut(status)?;
         if dcp.fd.is_none() {
@@ -1620,11 +1620,11 @@ impl IfaceCommandAction for IfcKunaQuality {
             status.file_out(&line);
             return Ok(());
         }
-        // C++ IfcKunaQuality: count gotos/multi-gotos/if-gotos over the
-        // structured tree (kunaCountGotos), report the goto-count quality signal.
+        // C++ IfcUnlaceQuality: count gotos/multi-gotos/if-gotos over the
+        // structured tree (unlaceCountGotos), report the goto-count quality signal.
         let name = fd.get_name().to_string();
         let basic_blocks = fd.bblocks_get_size();
-        let counts = fd.kuna_quality_counts();
+        let counts = fd.unlace_quality_counts();
         let unstructured = counts.printed_gotos + counts.multigoto_edges + counts.ifgoto_edges;
         let mut os = String::new();
         os.push_str(&format!("Structure quality for {name}:\n"));
@@ -1645,28 +1645,28 @@ impl IfaceCommandAction for IfcKunaQuality {
 }
 
 // ---------------------------------------------------------------------------
-// Region commands (IfcKunaRegionTree/Blocks/Walk, from kuna_regionid.cc)
+// Region commands (IfcUnlaceRegionTree/Blocks/Walk, from kuna_regionid.cc)
 // ---------------------------------------------------------------------------
 
-/// (kuna) `region tree` / `region blocks` / `region walk`: inspect the S7
-/// region hierarchy (C++ `IfcKunaRegion*` from `kuna_regionid.cc`; registered by
-/// the kuna capability in `kuna_console.cc`).
+/// (unlace) `region tree` / `region blocks` / `region walk`: inspect the S7
+/// region hierarchy (C++ `IfcUnlaceRegion*` from `kuna_regionid.cc`; registered by
+/// the unlace capability in `kuna_console.cc`).
 ///
 /// The region identifier is ported (`unlace_decomp::regionid`); its
 /// `buildFromBlockGraph` block-graph adapter (the W7 boundary) is now closed
-/// ([`KunaRegionIdentifier::build_from_block_graph`]), so these three commands
+/// ([`UnlaceRegionIdentifier::build_from_block_graph`]), so these three commands
 /// drive it over the real decompiled `bblocks` CFG (block start addresses, the
 /// CFG out-edges, and the per-block `endsWithBranchindOrCbranch` `lastOp` probe).
 ///
-/// Build a [`KunaRegionIdentifier`] from the current function's basic-block
-/// graph (the C++ `IfcKunaRegion*` `buildFromBlockGraph` adapter): one `k_block`
+/// Build a [`UnlaceRegionIdentifier`] from the current function's basic-block
+/// graph (the C++ `IfcUnlaceRegion*` `buildFromBlockGraph` adapter): one `k_block`
 /// node per basic block (keyed on its start address, carrying the real block)
 /// and one edge per CFG out-edge; the entry address is block 0's start.  Returns
 /// the computed identifier ready for tree/blocks/walk rendering.
 fn build_region_identifier(
     fd: &unlace_decomp::funcdata::Funcdata,
-) -> IfaceResult<KunaRegionIdentifier> {
-    let mut ri = KunaRegionIdentifier::new();
+) -> IfaceResult<UnlaceRegionIdentifier> {
+    let mut ri = UnlaceRegionIdentifier::new();
     ri.build_from_block_graph(fd)
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
     ri.compute()
@@ -1674,11 +1674,11 @@ fn build_region_identifier(
     Ok(ri)
 }
 
-/// (kuna) `region tree`: render the nested region hierarchy (C++
-/// `IfcKunaRegionTree`).
-struct IfcKunaRegionTree;
+/// (unlace) `region tree`: render the nested region hierarchy (C++
+/// `IfcUnlaceRegionTree`).
+struct IfcUnlaceRegionTree;
 
-impl IfaceCommandAction for IfcKunaRegionTree {
+impl IfaceCommandAction for IfcUnlaceRegionTree {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let os = {
             let dcp = dcp_mut(status)?;
@@ -1708,11 +1708,11 @@ impl IfaceCommandAction for IfcKunaRegionTree {
     }
 }
 
-/// (kuna) `region blocks`: list each region's flat block-address set (C++
-/// `IfcKunaRegionBlocks`).
-struct IfcKunaRegionBlocks;
+/// (unlace) `region blocks`: list each region's flat block-address set (C++
+/// `IfcUnlaceRegionBlocks`).
+struct IfcUnlaceRegionBlocks;
 
-impl IfaceCommandAction for IfcKunaRegionBlocks {
+impl IfaceCommandAction for IfcUnlaceRegionBlocks {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let os = {
             let dcp = dcp_mut(status)?;
@@ -1760,17 +1760,17 @@ struct RegionWalkVisitor {
     addresses: Vec<u64>,
 }
 
-impl unlace_decomp::regionid::KunaRegionVisitor for RegionWalkVisitor {
+impl unlace_decomp::regionid::UnlaceRegionVisitor for RegionWalkVisitor {
     fn visit_block(&mut self, _block: Option<unlace_decomp::context::BlockId>, addr: u64) {
         self.addresses.push(addr);
     }
 }
 
-/// (kuna) `region walk`: visit the region tree's leaf blocks in walk order (C++
-/// `IfcKunaRegionWalk`).
-struct IfcKunaRegionWalk;
+/// (unlace) `region walk`: visit the region tree's leaf blocks in walk order (C++
+/// `IfcUnlaceRegionWalk`).
+struct IfcUnlaceRegionWalk;
 
-impl IfaceCommandAction for IfcKunaRegionWalk {
+impl IfaceCommandAction for IfcUnlaceRegionWalk {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let os = {
             let dcp = dcp_mut(status)?;
@@ -1808,8 +1808,8 @@ impl IfaceCommandAction for IfcKunaRegionWalk {
     }
 }
 
-/// (kuna) `functions`: print the canonical executable function inventory.
-pub struct IfcKunaFunctions;
+/// (unlace) `functions`: print the canonical executable function inventory.
+pub struct IfcUnlaceFunctions;
 
 pub struct IfcCallwidePrepare;
 
@@ -1821,7 +1821,7 @@ impl IfaceCommandAction for IfcCallwidePrepare {
             .ok_or_else(|| IfaceError::execution("No load image present"))?;
         if !prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::callwide::CallWide>()
             .0
         {
@@ -1838,7 +1838,7 @@ impl IfaceCommandAction for IfcCallwidePrepare {
     }
 }
 
-impl IfaceCommandAction for IfcKunaFunctions {
+impl IfaceCommandAction for IfcUnlaceFunctions {
     fn execute(&self, status: &mut IfaceStatus, _s: &mut CommandStream) -> IfaceResult<()> {
         let entries = {
             let dcp = dcp_mut(status)?;
@@ -1866,10 +1866,10 @@ impl IfaceCommandAction for IfcKunaFunctions {
     }
 }
 
-/// (kuna) `function bounds <start> [<end>] [as <name>]`: declare where a
+/// (unlace) `function bounds <start> [<end>] [as <name>]`: declare where a
 /// function starts and ends.
 ///
-/// The one console primitive for "function F spans `[start,end)`", which kuna
+/// The one console primitive for "function F spans `[start,end)`", which unlace
 /// otherwise has nowhere to say: every extent is DERIVED (the address-contiguous
 /// clip in `funcextent`, and an unbounded flow follow), so on an obfuscated or
 /// packed image — where discovery is exactly what fails — the caller had no way
@@ -1884,9 +1884,9 @@ impl IfaceCommandAction for IfcKunaFunctions {
 /// is indistinguishable from the address width for a small `n` — and the name is
 /// keyed by `as` so a declaration that gives a name but no extent cannot have
 /// its name read as the end address.
-pub struct IfcKunaFunctionBounds;
+pub struct IfcUnlaceFunctionBounds;
 
-impl IfaceCommandAction for IfcKunaFunctionBounds {
+impl IfaceCommandAction for IfcUnlaceFunctionBounds {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         let start = read_vma(&s.read_token())
             .ok_or_else(|| IfaceError::parse("Missing function start address"))?;
@@ -1974,9 +1974,9 @@ impl IfaceCommandAction for IfcKunaFunctionBounds {
 
 /// `function symbol <start>`: ensure an address-backed `FunctionSymbol` exists
 /// without asserting that the address contains a function body.
-pub struct IfcKunaFunctionSymbol;
+pub struct IfcUnlaceFunctionSymbol;
 
-impl IfaceCommandAction for IfcKunaFunctionSymbol {
+impl IfaceCommandAction for IfcUnlaceFunctionSymbol {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         let display_start = read_vma(&s.read_token())
             .ok_or_else(|| IfaceError::parse("Missing function symbol address"))?;
@@ -2011,9 +2011,9 @@ impl IfaceCommandAction for IfcKunaFunctionSymbol {
 /// `function noreturn <func>`: the console form of the `noreturn` assertion
 /// (`crate::assertions`): the function, a name or a `0x` entry address, never
 /// returns; a function is declared first at an entry nothing starts at.
-pub struct IfcKunaFunctionNoReturn;
+pub struct IfcUnlaceFunctionNoReturn;
 
-impl IfaceCommandAction for IfcKunaFunctionNoReturn {
+impl IfaceCommandAction for IfcUnlaceFunctionNoReturn {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
         let func = s.read_token();
@@ -2038,12 +2038,12 @@ impl IfaceCommandAction for IfcKunaFunctionNoReturn {
 /// `function containing <selector>`: name the inventory entry whose extent
 /// holds the function `selector` resolves to, when that is not itself an
 /// entry, so `unlace decompile` can say it is decompiling from inside another
-/// function, or (kuna #1288) the function whose flow ended before it
+/// function, or (unlace #1288) the function whose flow ended before it
 /// (`ConsoleProgram::flow_ended_before`). Silent otherwise: a selector that
 /// does not resolve is the `load` command's to report.
-pub struct IfcKunaFunctionContaining;
+pub struct IfcUnlaceFunctionContaining;
 
-impl IfaceCommandAction for IfcKunaFunctionContaining {
+impl IfaceCommandAction for IfcUnlaceFunctionContaining {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
         let token =
@@ -2093,7 +2093,7 @@ impl IfaceCommandAction for IfcKunaFunctionContaining {
     }
 }
 
-/// (kuna) `map prototype <func> <C declaration>`: bind a declared signature to
+/// (unlace) `map prototype <func> <C declaration>`: bind a declared signature to
 /// the function NAMED by `<func>`.
 ///
 /// `parse line extern <decl>` binds by the name inside the declaration, so it
@@ -2105,9 +2105,9 @@ impl IfaceCommandAction for IfcKunaFunctionContaining {
 /// sub_1400055e0(uint4 *,uint8 *)` (`docs/re-needs/text-output-silently-ignores.md`).
 /// `<func>` is authoritative over the declaration's own name; the declaration
 /// supplies the types and the parameter names.
-pub struct IfcKunaMapPrototype;
+pub struct IfcUnlaceMapPrototype;
 
-impl IfaceCommandAction for IfcKunaMapPrototype {
+impl IfaceCommandAction for IfcUnlaceMapPrototype {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
         let func = s.read_token();
@@ -2142,58 +2142,61 @@ fn read_vma(tok: &str) -> Option<u64> {
 }
 
 // ---------------------------------------------------------------------------
-// Registration — IfaceKunaCapability::registerCommands
+// Registration — IfaceUnlaceCapability::registerCommands
 // ---------------------------------------------------------------------------
 
-/// C++ `IfaceKunaCapability::registerCommands(IfaceStatus *status)`
-/// (`kuna_console.cc:22`): register every kuna stage-model console command.
+/// C++ `IfaceUnlaceCapability::registerCommands(IfaceStatus *status)`
+/// (`kuna_console.cc:22`): register every unlace stage-model console command.
 ///
 /// In C++ the capability is a static singleton discovered by
-/// `CapabilityPoint::initializeAll`; the kuna Rust console invokes this directly
+/// `CapabilityPoint::initializeAll`; the unlace Rust console invokes this directly
 /// from its command-registration step (alongside `register_decomp_commands`),
 /// the faithful equivalent. The token sequences are byte-identical to the C++
 /// `registerCom` calls, so the prefix-expansion the datatests drive
 /// (`stage cat` -> `phase catalog`, etc.) is preserved.
-pub fn register_kuna_commands(status: &mut IfaceStatus) {
-    status.register_com(Box::new(IfcKunaPhaseList), &["phase", "list"]);
-    status.register_com(Box::new(IfcKunaPhaseMap), &["phase", "map"]);
-    status.register_com(Box::new(IfcKunaPhaseStatus), &["phase", "status"]);
-    status.register_com(Box::new(IfcKunaPhaseCatalog), &["phase", "catalog"]);
+pub fn register_unlace_commands(status: &mut IfaceStatus) {
+    status.register_com(Box::new(IfcUnlacePhaseList), &["phase", "list"]);
+    status.register_com(Box::new(IfcUnlacePhaseMap), &["phase", "map"]);
+    status.register_com(Box::new(IfcUnlacePhaseStatus), &["phase", "status"]);
+    status.register_com(Box::new(IfcUnlacePhaseCatalog), &["phase", "catalog"]);
     // Deprecated aliases: the pre-rename `stage ...` spellings keep working.
-    status.register_com(Box::new(IfcKunaPhaseList), &["stage", "list"]);
-    status.register_com(Box::new(IfcKunaPhaseMap), &["stage", "map"]);
-    status.register_com(Box::new(IfcKunaPhaseStatus), &["stage", "status"]);
-    status.register_com(Box::new(IfcKunaPhaseCatalog), &["stage", "catalog"]);
-    status.register_com(Box::new(IfcKunaAssert::new()), &["kassert"]);
-    status.register_com(Box::new(IfcKunaRestarts), &["restarts"]);
-    status.register_com(Box::new(IfcKunaPipeline), &["pipeline"]);
-    status.register_com(Box::new(IfcKunaMode), &["mode"]);
-    status.register_com(Box::new(IfcKunaQuality), &["quality"]);
-    status.register_com(Box::new(IfcKunaFunctions), &["functions"]);
+    status.register_com(Box::new(IfcUnlacePhaseList), &["stage", "list"]);
+    status.register_com(Box::new(IfcUnlacePhaseMap), &["stage", "map"]);
+    status.register_com(Box::new(IfcUnlacePhaseStatus), &["stage", "status"]);
+    status.register_com(Box::new(IfcUnlacePhaseCatalog), &["stage", "catalog"]);
+    status.register_com(Box::new(IfcUnlaceAssert::new()), &["kassert"]);
+    status.register_com(Box::new(IfcUnlaceRestarts), &["restarts"]);
+    status.register_com(Box::new(IfcUnlacePipeline), &["pipeline"]);
+    status.register_com(Box::new(IfcUnlaceMode), &["mode"]);
+    status.register_com(Box::new(IfcUnlaceQuality), &["quality"]);
+    status.register_com(Box::new(IfcUnlaceFunctions), &["functions"]);
     status.register_com(Box::new(IfcCallwidePrepare), &["callwide", "prepare"]);
-    status.register_com(Box::new(IfcKunaRegionTree), &["region", "tree"]);
-    status.register_com(Box::new(IfcKunaRegionBlocks), &["region", "blocks"]);
-    status.register_com(Box::new(IfcKunaRegionWalk), &["region", "walk"]);
-    // (kuna) Not a C++ command: the function-boundary override the `unlace` binary
+    status.register_com(Box::new(IfcUnlaceRegionTree), &["region", "tree"]);
+    status.register_com(Box::new(IfcUnlaceRegionBlocks), &["region", "blocks"]);
+    status.register_com(Box::new(IfcUnlaceRegionWalk), &["region", "walk"]);
+    // (unlace) Not a C++ command: the function-boundary override the `unlace` binary
     // exposes as `--define-function`.
-    status.register_com(Box::new(IfcKunaFunctionBounds), &["function", "bounds"]);
-    status.register_com(Box::new(IfcKunaFunctionSymbol), &["function", "symbol"]);
-    status.register_com(Box::new(IfcKunaFunctionNoReturn), &["function", "noreturn"]);
+    status.register_com(Box::new(IfcUnlaceFunctionBounds), &["function", "bounds"]);
+    status.register_com(Box::new(IfcUnlaceFunctionSymbol), &["function", "symbol"]);
     status.register_com(
-        Box::new(IfcKunaFunctionContaining),
+        Box::new(IfcUnlaceFunctionNoReturn),
+        &["function", "noreturn"],
+    );
+    status.register_com(
+        Box::new(IfcUnlaceFunctionContaining),
         &["function", "containing"],
     );
-    // (kuna) Not a C++ command either: `parse line extern` binds a prototype by
+    // (unlace) Not a C++ command either: `parse line extern` binds a prototype by
     // the name in the declaration, which is the wrong key for an override that
     // exists because the function has no name worth keeping.
-    status.register_com(Box::new(IfcKunaMapPrototype), &["map", "prototype"]);
-    // (kuna) Nor is this one: the bytes a packer writes over itself exist only
+    status.register_com(Box::new(IfcUnlaceMapPrototype), &["map", "prototype"]);
+    // (unlace) Nor is this one: the bytes a packer writes over itself exist only
     // once it has run, so there is no image a loader could read them from.
     status.register_com(
         Box::new(crate::ifacedecomp::IfcOverrideBytes),
         &["override", "bytes"],
     );
-    // (kuna) Nor this: where an indirect call goes is the reader's knowledge.
+    // (unlace) Nor this: where an indirect call goes is the reader's knowledge.
     status.register_com(
         Box::new(crate::ifacedecomp::IfcOverrideIndirect),
         &["override", "indirect"],

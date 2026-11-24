@@ -57,8 +57,8 @@
     "module": "decompiler/crates/kuna-analysis/src/listing/picbase.rs",
     "seam": "decompiler/crates/kuna-analysis/src/listing/xrefs.rs (build)",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/picbase_i386 (+ .s)",
-    "cargo_gate": "decompiler/crates/kuna-console/tests/verify_picbase.rs",
-    "stage_test": "tests/stages/kuna-picbase.xml",
+    "cargo_gate": "decompiler/crates/console/tests/verify_picbase.rs",
+    "stage_test": "tests/stages/picbase.xml",
     "promoted_probe": "tests/cli/strings-json-fails-report.json",
     "spec": "docs/spec/01-program-prep.md section 1.6",
     "div": "docs/history.md DIV-104"

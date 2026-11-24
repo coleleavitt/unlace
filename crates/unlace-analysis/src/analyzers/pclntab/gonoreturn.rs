@@ -1,4 +1,4 @@
-//! (kuna) **gonoreturn** — apply the Go no-return list to pclntab-recovered
+//! (unlace) **gonoreturn** — apply the Go no-return list to pclntab-recovered
 //! functions (`docs/multilang.md`, the Go pack's no-return coverage item).
 //!
 //! ## The structural gap this closes

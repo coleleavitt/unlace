@@ -48,7 +48,7 @@ impl Action for ActionArmFloatArgs {
 /// The option is on over `armfloatreturn`'s widened model, whose positional
 /// rules keep an unused leading VFP parameter in its slot.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.kuna_options.get::<ArmFloatArgs>().0 && crate::armfloatreturn::applies(arch)
+    arch.unlace_options.get::<ArmFloatArgs>().0 && crate::armfloatreturn::applies(arch)
 }
 
 /// Keep a proven double argument independent of an overlapping float call result.
@@ -69,7 +69,7 @@ pub fn link_call_inputs(data: &mut Funcdata, index: i32) {
     {
         return;
     }
-    let Some(stated) = data.kuna_protoorder_types(call.get_entry_address()) else {
+    let Some(stated) = data.unlace_protoorder_types(call.get_entry_address()) else {
         return;
     };
     if !stated.arity_sound {
@@ -118,7 +118,7 @@ fn stated_words(data: &Funcdata, call: &FuncCallSpecs) -> Vec<Address> {
         return Vec::new();
     }
     let Some(stated) = data
-        .kuna_protoorder_types(call.get_entry_address())
+        .unlace_protoorder_types(call.get_entry_address())
         .filter(|s| s.arity_sound)
     else {
         return Vec::new();
@@ -164,7 +164,7 @@ pub fn mark_single_floats(call: &mut FuncCallSpecs, data: &Funcdata) {
         let read = call.proto().has_model().then(|| {
             read_singles(
                 call.proto().model().input().get_entry(),
-                data.kuna_callee_entry_dead(call.get_entry_address()),
+                data.unlace_callee_entry_dead(call.get_entry_address()),
             )
         });
         call.get_active_input().set_single_floats(words);
@@ -195,7 +195,7 @@ pub fn mark_own_reads(active: &mut crate::fspec::ParamActive, data: &Funcdata) {
     if data.get_arch().arm_float_args && data.get_func_proto().has_model() {
         active.set_read_singles(read_singles(
             data.get_func_proto().model().input().get_entry(),
-            data.kuna_own_entry_dead(),
+            data.unlace_own_entry_dead(),
         ));
     }
 }
@@ -309,7 +309,7 @@ fn plan_stated_inputs(
 ) -> Option<StatedPlan> {
     let entry = call.get_entry_address().clone();
     let stated = data
-        .kuna_protoorder_types(&entry)
+        .unlace_protoorder_types(&entry)
         .filter(|s| s.arity_sound)?;
     let entries = call.proto().model().input().get_entry();
     let vfp = |addr: &Address, size: i32| {
@@ -330,8 +330,8 @@ fn plan_stated_inputs(
         .filter(|(a, s, _)| vfp(a, *s))
         .map(|(a, s, _)| (a.clone(), *s))
         .collect();
-    let dead = data.kuna_callee_entry_dead(&entry);
-    let forward = data.kuna_callee_forward(&entry);
+    let dead = data.unlace_callee_entry_dead(&entry);
+    let forward = data.unlace_callee_forward(&entry);
     let overlaps = |a: &Address, s: i32, b: &Address, t: i32| {
         a.overlap(0, b, t) >= 0 || b.overlap(0, a, s) >= 0
     };
@@ -355,8 +355,8 @@ fn plan_stated_inputs(
         return None;
     }
     let reads = data
-        .kuna_callee_entry_through(&entry)
-        .or_else(|| data.kuna_callee_entry_dead(&entry));
+        .unlace_callee_entry_through(&entry)
+        .or_else(|| data.unlace_callee_entry_dead(&entry));
     let passed = |i: i32| {
         data.obank()
             .get(call.get_op())
@@ -571,7 +571,7 @@ pub fn vfp_slot(data: &Funcdata, call: &FuncCallSpecs, addr: &Address, size: i32
 /// writes it first, or the body only returns without touching it where it lies
 /// outside the callee's result, which such a path would hand back unchanged.
 fn never_reads(data: &Funcdata, entry: &Address, addr: &Address, size: i32) -> bool {
-    data.kuna_callee_entry_dead(entry).is_some_and(|d| {
+    data.unlace_callee_entry_dead(entry).is_some_and(|d| {
         d.proves_dead_firmly(addr, size)
             || (d.returns_untouched(addr, size) && result_written(data, entry, d, addr, size))
     })
@@ -588,7 +588,10 @@ fn result_written(
     addr: &Address,
     size: i32,
 ) -> bool {
-    let Some(stated) = data.kuna_protoorder_types(entry).filter(|s| s.arity_sound) else {
+    let Some(stated) = data
+        .unlace_protoorder_types(entry)
+        .filter(|s| s.arity_sound)
+    else {
         return false;
     };
     let Some((out, out_size)) = &stated.result else {
@@ -1151,7 +1154,7 @@ fn typed_inputs(data: &Funcdata) -> Vec<(Address, i32)> {
                             .map(|p| (p.get_address(), p.get_size()))
                     });
                 let recovered = data
-                    .kuna_protoorder_types(call.get_entry_address())
+                    .unlace_protoorder_types(call.get_entry_address())
                     .is_some_and(|s| {
                         s.arity_sound
                             && s.inputs.iter().any(|(a, z, t)| {
@@ -1290,18 +1293,18 @@ pub fn base_inputs(arch: &Architecture, pieces: &mut PrototypePieces) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.armfloatargs_applies = Some(applies);
     hooks.armfloatargs_stated_singles = Some(stated_singles);
 }
 
-/// (kuna `armfloatargs`) Recover VFP arguments under the widened model; the message echoes the value as given.
+/// (unlace `armfloatargs`) Recover VFP arguments under the widened model; the message echoes the value as given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArmFloatArgs(pub bool);
 
-impl crate::optionset::KunaOption for ArmFloatArgs {
+impl crate::optionset::UnlaceOption for ArmFloatArgs {
     const NAME: &'static str = "armfloatargs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArmFloatArgs(false)
@@ -1311,7 +1314,7 @@ impl crate::optionset::KunaOption for ArmFloatArgs {
         ArmFloatArgs(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let on = crate::options::on_or_off(value)?;
         Ok((
             ArmFloatArgs(on),

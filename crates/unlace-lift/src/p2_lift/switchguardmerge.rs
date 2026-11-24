@@ -1,4 +1,4 @@
-//! (kuna `switchguardmerge`) An equality test a range guard sends out-of-range
+//! (unlace `switchguardmerge`) An equality test a range guard sends out-of-range
 //! values to becomes a case of the switch.
 //!
 //! gcc and clang lower `switch` with a far outlier (`case 100:` beside
@@ -333,7 +333,7 @@ impl Action for ActionSwitchGuardMerge {
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::switchguardmerge::SwitchGuardMerge>()
             .0
         {
@@ -371,7 +371,7 @@ impl Action for ActionSwitchGuardMerge {
                     .map(|k| jt.get_address_by_index(k));
                 match at {
                     Some(at) => {
-                        jt.kuna_merge_out_edge(from, into, &at);
+                        jt.unlace_merge_out_edge(from, into, &at);
                         ok = data.remove_branch(s, from).is_ok()
                             && data.remove_unreachable_blocks(false, true).is_ok();
                     }
@@ -396,8 +396,8 @@ impl Action for ActionSwitchGuardMerge {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `switchguardmerge`) Merge an equality guard into its switch.
+crate::unlace_flag!(
+    /// (unlace `switchguardmerge`) Merge an equality guard into its switch.
     SwitchGuardMerge,
     "switchguardmerge",
     "Equality guards merged into their switch",

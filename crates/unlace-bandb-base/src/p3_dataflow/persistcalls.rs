@@ -1,4 +1,4 @@
-//! (kuna `persistcalls`) Guard a persistent global only at the calls next to
+//! (unlace `persistcalls`) Guard a persistent global only at the calls next to
 //! its reads and writes.
 //!
 //! Upstream gives every heritaged global an INDIRECT at every call whose effect
@@ -287,7 +287,7 @@ pub fn restart_full(fd: &mut Funcdata) {
     }
     fd.get_override_mut().set_persist_calls_off();
     fd.set_restart_pending(true);
-    fd.kuna_set_restart_now();
+    fd.unlace_set_restart_now();
 }
 
 /// Take the op and Varnode numbers a skipped guard would have used, so every
@@ -717,7 +717,7 @@ fn solve(
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.persistcalls_applies = Some(applies);
     hooks.persistcalls_crosses_skipped = Some(crosses_skipped);
     hooks.persistcalls_keep = Some(keep);

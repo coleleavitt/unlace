@@ -428,10 +428,10 @@ impl PrintC {
         let proto = fd.get_func_proto();
         let mut first = 0;
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
-            && fd.kuna_go_receiver.as_ref().is_some_and(|receiver| {
+            && fd.unlace_go_receiver.as_ref().is_some_and(|receiver| {
                 receiver.symbol == display
                     && receiver.matches(arch, proto)
                     && arch
@@ -493,8 +493,8 @@ impl PrintC {
         markup: &MarkupRef,
     ) {
         let name = if param.get_name().is_empty() {
-            crate::database::kuna_materialized_param_name(
-                arch.kuna_options
+            crate::database::unlace_materialized_param_name(
+                arch.unlace_options
                     .get::<crate::coreoptions::NameStyleAngr>()
                     .0,
                 index,

@@ -1,4 +1,4 @@
-//! (kuna `blobs`) One well-formed file of every kind, found at its exact
+//! (unlace `blobs`) One well-formed file of every kind, found at its exact
 //! length inside padding; each rejected once truncated or damaged.
 //!
 //! The JPEG, GIF and BMP samples are Pillow output (an 8x8 grey JPEG, a 3x2

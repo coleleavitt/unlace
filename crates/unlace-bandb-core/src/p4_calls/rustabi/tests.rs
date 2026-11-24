@@ -4,7 +4,7 @@
 //! discriminant, that the concatenation is still found after the rule pool
 //! reshapes it, and that the gate fails closed. The end-to-end witness -- a
 //! rustc `Result<u32,u32>` producer and the `match` that consumes it -- lives in
-//! `tests/stages/kuna-rustabi.toml` and
+//! `tests/stages/unlace-rustabi.toml` and
 //! `unlace-console/tests/verify_rustabi_pair.rs`.
 
 use super::*;
@@ -47,7 +47,7 @@ fn build_fd_lang(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     .unwrap();
     m.insert_space(Rc::new(JoinSpace::new(3, false))).unwrap();
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = if is_rust {
         crate::sourcelang::SourceLang::Rust
     } else {
@@ -388,7 +388,7 @@ fn build_call_fd_gates(mode: RustAbiMode, is_rust: bool) -> Funcdata {
     m.insert_space(Rc::new(JoinSpace::new(3, false))).unwrap();
     m.set_register_lookup(Rc::new(NamelessRegisters));
     let mut ctx = ArchContext::new(m);
-    ctx.kuna_options.set(mode);
+    ctx.unlace_options.set(mode);
     ctx.source_lang = if is_rust {
         crate::sourcelang::SourceLang::Rust
     } else {
@@ -409,8 +409,8 @@ impl unlace_base::space::RegisterLookup for NamelessRegisters {
     fn get_register(
         &self,
         _nm: &str,
-    ) -> unlace_base::error::KunaResult<unlace_base::space::VarnodeStorage> {
-        Err(unlace_base::error::KunaError::lowlevel("no registers"))
+    ) -> unlace_base::error::UnlaceResult<unlace_base::space::VarnodeStorage> {
+        Err(unlace_base::error::UnlaceError::lowlevel("no registers"))
     }
     fn get_register_name(&self, _b: &Rc<AddrSpace>, _o: u64, _s: i32) -> String {
         String::new()
@@ -628,7 +628,7 @@ fn a_callee_proven_not_to_write_the_payload_is_not_paired() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(proves_nothing_written()));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(proves_nothing_written()));
     assert_eq!(
         classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
         CallPairRepr::CalleeScalar,
@@ -661,7 +661,7 @@ fn an_incomplete_probe_vetoes_nothing() {
     let mut fd = build_call_fd(RustAbiMode::Always);
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(proves_nothing()));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(proves_nothing()));
     assert_eq!(
         classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
         CallPairRepr::ScalarPair,
@@ -696,7 +696,7 @@ fn a_callee_that_writes_the_payload_still_pairs() {
         writes_stack_outside_return: false,
     };
     assert!(!written.proves_untouched(&Address::new(space(&fd, "ram"), 0x40), 8));
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(written));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(written));
     assert_eq!(
         classify_call_output_pair(&fd, None, &[lo, hi], Some(&entry)),
         CallPairRepr::ScalarPair,
@@ -775,7 +775,7 @@ fn callretpair_honours_the_callee_veto() {
     let mut fd = build_call_fd_gates(RustAbiMode::Off, false);
     let (call, lo, hi) = build_call_with_pair(&mut fd, true);
     let entry = callee_entry(&fd);
-    fd.kuna_set_callee_ret_writes(&entry, Rc::new(proves_nothing_written()));
+    fd.unlace_set_callee_ret_writes(&entry, Rc::new(proves_nothing_written()));
     assert!(!build_call_output_pair(
         call,
         &mut fd,

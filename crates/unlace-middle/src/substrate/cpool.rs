@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::{
     ATTRIB_CONSTRUCTOR, ATTRIB_CONTENT, ATTRIB_DESTRUCTOR, Decoder, ELEM_DATA, ELEM_VALUE, Encoder,
 };
@@ -78,7 +78,7 @@ pub const ELEM_TOKEN: ElementId = ElementId::new("token", 112);
 /// reaching into the skeleton.
 pub trait CPoolTypeRef {
     /// Encode a *reference* to this data-type (C++ `Datatype::encodeRef`).
-    fn encode_ref(&self, encoder: &mut dyn Encoder) -> KunaResult<()>;
+    fn encode_ref(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()>;
 }
 
 /// STUB(W6): the slice of `TypeFactory` cpool needs to *decode* a data-type
@@ -88,7 +88,7 @@ pub trait CPoolTypeRef {
 /// [`CPoolRecord::decode`] / [`ConstantPool::decode_record`].
 pub trait CPoolTypeFactory {
     /// Decode a data-type reference (C++ `TypeFactory::decodeType`).
-    fn decode_type(&mut self, decoder: &mut dyn Decoder) -> KunaResult<Rc<Datatype>>;
+    fn decode_type(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<Datatype>>;
 
     /// Decode a data-type reference, marking it as code with the given
     /// constructor/destructor flags (C++ `TypeFactory::decodeTypeWithCodeFlags`).
@@ -97,7 +97,7 @@ pub trait CPoolTypeFactory {
         decoder: &mut dyn Decoder,
         is_constructor: bool,
         is_destructor: bool,
-    ) -> KunaResult<Rc<Datatype>>;
+    ) -> UnlaceResult<Rc<Datatype>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ impl CPoolRecord {
         CPoolRecord::default()
     }
 
-    /// (kuna `dexmodel`) A record built directly by a pool that answers queries
+    /// (unlace `dexmodel`) A record built directly by a pool that answers queries
     /// from its own tables, as Ghidra's `ConstantPoolDex` fills a `Record`.
     pub fn from_parts(
         tag: uint4,
@@ -192,7 +192,7 @@ impl CPoolRecord {
         }
     }
 
-    /// (kuna `jvmmodel`) The record with constant `value` (a `PRIMITIVE`'s).
+    /// (unlace `jvmmodel`) The record with constant `value` (a `PRIMITIVE`'s).
     pub fn with_value(mut self, value: uintb) -> CPoolRecord {
         self.value = value;
         self
@@ -258,7 +258,11 @@ impl CPoolRecord {
     /// `type_ref` argument (the W6 `Datatype` reference encoder).  The C++
     /// dereferences `type` unconditionally here, so an encode with no type is
     /// an internal-invariant violation.
-    pub fn encode(&self, encoder: &mut dyn Encoder, type_ref: &dyn CPoolTypeRef) -> KunaResult<()> {
+    pub fn encode(
+        &self,
+        encoder: &mut dyn Encoder,
+        type_ref: &dyn CPoolTypeRef,
+    ) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_CPOOLREC);
         // The tag-string mapping (C++ `cpool.cc:36-51`).
         let tagstr: &[u8] = if self.tag == cpool_tag::POINTER_METHOD {
@@ -328,7 +332,7 @@ impl CPoolRecord {
         &mut self,
         decoder: &mut dyn Decoder,
         typegrp: &mut dyn CPoolTypeFactory,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         self.tag = cpool_tag::PRIMITIVE; // Default tag
         self.value = 0;
         self.flags = 0;
@@ -376,7 +380,7 @@ impl CPoolRecord {
             let val: int8 = decoder.read_signed_integer_id(&ATTRIB_LENGTH)?;
             #[allow(clippy::manual_range_contains)]
             if val < 0 || val >= MAX_STRING_SIZE {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Bad constant pool record: bad <data> size",
                 ));
             }
@@ -395,7 +399,7 @@ impl CPoolRecord {
         }
         decoder.close_element(sub_id)?;
         if self.tag == cpool_tag::STRING_LITERAL && self.byte_data.is_none() {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "Bad constant pool record: missing <data>",
             ));
         }
@@ -493,7 +497,7 @@ pub trait ConstantPool {
     /// The object will still need to be initialized but is already associated
     /// with the reference.  Any issue with allocation (e.g. a duplicate
     /// reference) returns an error.  Returns a mutable handle to the new record.
-    fn create_record(&mut self, refs: &[uintb]) -> KunaResult<&mut CPoolRecord>;
+    fn create_record(&mut self, refs: &[uintb]) -> UnlaceResult<&mut CPoolRecord>;
 
     /// Retrieve a constant pool record given a \e reference to it
     /// (C++ pure-virtual `getRecord`).  `None` if no record matches.
@@ -514,7 +518,7 @@ pub trait ConstantPool {
         &self,
         encoder: &mut dyn Encoder,
         type_provider: &dyn CPoolTypeRefProvider,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
 
     /// Restore constant pool records from the given stream decoder
     /// (C++ pure-virtual `decode`).
@@ -522,7 +526,7 @@ pub trait ConstantPool {
         &mut self,
         decoder: &mut dyn Decoder,
         typegrp: &mut dyn CPoolTypeFactory,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
 
     /// Add a new constant pool record to \b this database
     /// (C++ non-virtual `ConstantPool::putRecord`).
@@ -535,7 +539,7 @@ pub trait ConstantPool {
         tag: uint4,
         tok: &[u8],
         ct: Rc<Datatype>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let newrec = self.create_record(refs)?;
         newrec.tag = tag;
         newrec.token = tok.to_vec();
@@ -553,7 +557,7 @@ pub trait ConstantPool {
         refs: &[uintb],
         decoder: &mut dyn Decoder,
         typegrp: &mut dyn CPoolTypeFactory,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // C++ returns the new record pointer; we return Ok(()) and leave the
         // record reachable via get_record (the only borrow-safe shape here).
         let mut newrec = CPoolRecord::new();
@@ -578,7 +582,7 @@ pub trait CPoolTypeRefProvider {
         &self,
         record: &CPoolRecord,
         encoder: &mut dyn Encoder,
-    ) -> KunaResult<()>;
+    ) -> UnlaceResult<()>;
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +639,7 @@ impl CheapSorter {
 
     /// Restore \b this \e reference from a \<ref> element
     /// (C++ `CheapSorter::decode`).
-    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> KunaResult<()> {
+    pub fn decode(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_REF)?;
         self.a = decoder.read_unsigned_integer_id(&ATTRIB_A)?;
         self.b = decoder.read_unsigned_integer_id(&ATTRIB_B)?;
@@ -664,14 +668,14 @@ impl ConstantPoolInternal {
 }
 
 impl ConstantPool for ConstantPoolInternal {
-    fn create_record(&mut self, refs: &[uintb]) -> KunaResult<&mut CPoolRecord> {
+    fn create_record(&mut self, refs: &[uintb]) -> UnlaceResult<&mut CPoolRecord> {
         let sorter = CheapSorter::from_refs(refs);
         // C++ `cpoolMap.emplace(...)` returns (iterator, inserted); a duplicate
         // reference is an error reporting the existing record's token.
         if let Some(existing) = self.cpool_map.get(&sorter) {
             let mut msg = String::from("Creating duplicate entry in constant pool: ");
             msg.push_str(&String::from_utf8_lossy(existing.get_token()));
-            return Err(KunaError::lowlevel(msg));
+            return Err(UnlaceError::lowlevel(msg));
         }
         self.cpool_map.insert(sorter, CPoolRecord::new());
         Ok(self
@@ -697,7 +701,7 @@ impl ConstantPool for ConstantPoolInternal {
         &self,
         encoder: &mut dyn Encoder,
         type_provider: &dyn CPoolTypeRefProvider,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         encoder.open_element(&ELEM_CONSTANTPOOL);
         // BTreeMap iterates in CheapSorter (lexicographic) order, matching the
         // C++ `map` iteration.  Each entry emits its <ref> then its <cpoolrec>.
@@ -721,7 +725,7 @@ impl ConstantPool for ConstantPoolInternal {
         &mut self,
         decoder: &mut dyn Decoder,
         typegrp: &mut dyn CPoolTypeFactory,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let elem_id = decoder.open_element_id(&ELEM_CONSTANTPOOL)?;
         while decoder.peek_element()? != 0 {
             let mut sorter = CheapSorter::new();
@@ -747,7 +751,7 @@ struct ProviderTypeRef<'a> {
 }
 
 impl CPoolTypeRef for ProviderTypeRef<'_> {
-    fn encode_ref(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+    fn encode_ref(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
         self.provider.encode_record_type_ref(self.record, encoder)
     }
 }
@@ -774,7 +778,7 @@ mod tests {
     }
 
     impl CPoolTypeRef for VoidTypeAccess {
-        fn encode_ref(&self, encoder: &mut dyn Encoder) -> KunaResult<()> {
+        fn encode_ref(&self, encoder: &mut dyn Encoder) -> UnlaceResult<()> {
             encoder.open_element(&unlace_base::marshal::ELEM_VOID);
             encoder.close_element(&unlace_base::marshal::ELEM_VOID);
             Ok(())
@@ -786,13 +790,13 @@ mod tests {
             &self,
             _record: &CPoolRecord,
             encoder: &mut dyn Encoder,
-        ) -> KunaResult<()> {
+        ) -> UnlaceResult<()> {
             self.encode_ref(encoder)
         }
     }
 
     impl CPoolTypeFactory for VoidTypeAccess {
-        fn decode_type(&mut self, decoder: &mut dyn Decoder) -> KunaResult<Rc<Datatype>> {
+        fn decode_type(&mut self, decoder: &mut dyn Decoder) -> UnlaceResult<Rc<Datatype>> {
             let id = decoder.open_element()?;
             decoder.close_element(id)?;
             Ok(void_type())
@@ -803,7 +807,7 @@ mod tests {
             decoder: &mut dyn Decoder,
             _is_constructor: bool,
             _is_destructor: bool,
-        ) -> KunaResult<Rc<Datatype>> {
+        ) -> UnlaceResult<Rc<Datatype>> {
             let id = decoder.open_element()?;
             decoder.close_element(id)?;
             Ok(void_type())

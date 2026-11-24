@@ -1,21 +1,21 @@
-//! Independent verifier adversarial tests for item `w7-s7-kuna-regiongraph`
-//! (`decompiler/cpp/kuna_regiongraph.{cc,hh}`): the kuna-owned region digraph
+//! Independent verifier adversarial tests for item `w7-s7-unlace-regiongraph`
+//! (`decompiler/cpp/kuna_regiongraph.{cc,hh}`): the unlace-owned region digraph
 //! substrate for the angr `RegionIdentifier` port (S7).
 //!
 //! These target the hunt-list spots flagged as most fragile for this item:
-//!   - `KunaEdgeSum`/`_sort_edge` 2^64 carry: address sums straddling 2^64
+//!   - `UnlaceEdgeSum`/`_sort_edge` 2^64 carry: address sums straddling 2^64
 //!     must order by (carry, low64), not by the wrapped low64;
 //!   - `_append_scc` loop-head selection on a pairwise-distance tie: the LAST
-//!     successor in `KunaNodeOrder` wins (angr's `{v:k}` dict-inversion
+//!     successor in `UnlaceNodeOrder` wins (angr's `{v:k}` dict-inversion
 //!     overwrite-on-collision = last-wins);
 //!   - quasi-topo self-loop handling (a real self-loop is a `src==dst` edge
 //!     that must collapse to a present-but-edgeless id, never a phantom edge);
 //!   - postorder/`getSortedSuccs` ordering with addresses near `u64::MAX`
 //!     (ascending push => largest-addr successor explored first), proving the
-//!     `KunaNodeOrder` is unsigned;
+//!     `UnlaceNodeOrder` is unsigned;
 //!   - `graph_updated` incremental dominator patching with MULTIPLE dominatees
 //!     re-pointed at once: the C++ iterates `doms`/`invertedDomTree` in raw
-//!     pointer order while the Rust port iterates in `KunaNodeOrder`; the
+//!     pointer order while the Rust port iterates in `UnlaceNodeOrder`; the
 //!     observable result must still equal a from-scratch recomputation
 //!     (order-insensitive consumers — LOSS-recorded divergence);
 //!   - `subgraph_between_nodes` pruning of an interior cycle that cannot reach
@@ -28,32 +28,36 @@ use std::collections::BTreeMap;
 
 use unlace_base::types::{uint4, uintb};
 use unlace_decomp::regiongraph::{
-    KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
-    kuna_dfs_postorder_deterministic, kuna_immediate_dominators, kuna_quasi_topo_sort,
-    kuna_subgraph_between_nodes,
+    NodeKind, UnlaceIncrementalDominators, UnlaceNodeId, UnlaceNodePool, UnlaceNodeSet,
+    UnlaceRegionGraph, unlace_dfs_postorder_deterministic, unlace_immediate_dominators,
+    unlace_quasi_topo_sort, unlace_subgraph_between_nodes,
 };
 
 /// Test harness mirroring the in-crate `Builder`: a pool plus auto-incrementing
 /// creation idents (the deterministic `(addr, ident)` tiebreaker).
 struct B {
-    pool: KunaNodePool,
+    pool: UnlaceNodePool,
     next_ident: uint4,
 }
 
 impl B {
     fn new() -> B {
         B {
-            pool: KunaNodePool::new(),
+            pool: UnlaceNodePool::new(),
             next_ident: 0,
         }
     }
-    fn node(&mut self, addr: uintb) -> KunaNodeId {
+    fn node(&mut self, addr: uintb) -> UnlaceNodeId {
         let id = self.next_ident;
         self.next_ident += 1;
         self.pool.make(NodeKind::Block, addr, id)
     }
-    fn graph(&self, edges: &[(KunaNodeId, KunaNodeId)], extra: &[KunaNodeId]) -> KunaRegionGraph {
-        let mut g = KunaRegionGraph::new();
+    fn graph(
+        &self,
+        edges: &[(UnlaceNodeId, UnlaceNodeId)],
+        extra: &[UnlaceNodeId],
+    ) -> UnlaceRegionGraph {
+        let mut g = UnlaceRegionGraph::new();
         for &n in extra {
             g.add_node(&self.pool, n);
         }
@@ -62,8 +66,8 @@ impl B {
         }
         g
     }
-    fn set(&self, ids: &[KunaNodeId]) -> KunaNodeSet {
-        let mut s = KunaNodeSet::new();
+    fn set(&self, ids: &[UnlaceNodeId]) -> UnlaceNodeSet {
+        let mut s = UnlaceNodeSet::new();
         for &i in ids {
             s.insert(self.pool.key(i));
         }
@@ -71,12 +75,12 @@ impl B {
     }
 }
 
-/// F-A: `KunaNodeOrder` / `getSortedSuccs` must be an UNSIGNED order even with
+/// F-A: `UnlaceNodeOrder` / `getSortedSuccs` must be an UNSIGNED order even with
 /// addresses near `u64::MAX`.  Deterministic postorder pushes successors in
 /// ascending order so the LARGEST-addr successor is explored first.  If the
 /// comparator were signed, `0xFFFF...` would sort as a negative (smallest) and
 /// the postorder would flip.  Re-derived from C++ `getSortedSuccs`
-/// (`sort(..., KunaNodeOrder())`) over `uintb addr`.
+/// (`sort(..., UnlaceNodeOrder())`) over `uintb addr`.
 #[test]
 fn sorted_succs_is_unsigned_near_u64_max() {
     let mut b = B::new();
@@ -84,7 +88,7 @@ fn sorted_succs_is_unsigned_near_u64_max() {
     let lo = b.node(0x20);
     let hi = b.node(u64::MAX); // would be "negative" under a signed compare
     let mid = b.node(0x8000_0000_0000_0000); // high bit set: also "negative" signed
-    // Insert edges out of address order; getSortedSuccs imposes KunaNodeOrder.
+    // Insert edges out of address order; getSortedSuccs imposes UnlaceNodeOrder.
     let g = b.graph(&[(s, hi), (s, lo), (s, mid)], &[]);
     let sorted = g.get_sorted_succs(&b.pool, s).unwrap();
     // Unsigned ascending: 0x20 < 0x8000.. < 0xFFFF..
@@ -93,7 +97,7 @@ fn sorted_succs_is_unsigned_near_u64_max() {
     // Postorder pushes ascending => hi (largest) explored first, finishes first
     // among the leaves; s finishes last.  All three succs are sinks.
     let mut po = Vec::new();
-    kuna_dfs_postorder_deterministic(&b.pool, &g, s, &mut po).unwrap();
+    unlace_dfs_postorder_deterministic(&b.pool, &g, s, &mut po).unwrap();
     // hi pushed last => popped/explored first => finishes first.
     assert_eq!(po[0], hi);
     assert_eq!(po[1], mid);
@@ -101,7 +105,7 @@ fn sorted_succs_is_unsigned_near_u64_max() {
     assert_eq!(*po.last().unwrap(), s); // root finishes last
 }
 
-/// F-B: `_append_scc` loop-head tie-break = LAST successor in `KunaNodeOrder`.
+/// F-B: `_append_scc` loop-head tie-break = LAST successor in `UnlaceNodeOrder`.
 ///
 /// Build a 3-node strongly connected component {x,y,z} fully symmetric so that
 /// every member has equal total pairwise shortest-path distance to the others.
@@ -109,10 +113,10 @@ fn sorted_succs_is_unsigned_near_u64_max() {
 /// `_append_scc` falls into the `sccSuccs.size() > 1` branch and must pick the
 /// loop head by minimum total distance; on the (here total) tie angr's
 /// `{v: k}` inversion overwrites on equal key, so the LAST inserted (largest in
-/// `KunaNodeOrder`, since `sccSuccs` is pre-sorted ascending) wins.  In the
+/// `UnlaceNodeOrder`, since `sccSuccs` is pre-sorted ascending) wins.  In the
 /// fully-symmetric K3 cycle the chosen head is therefore the highest-addr
 /// member `z`, and the expansion lists it first inside the SCC.
-/// Re-derived from C++ `kunaAppendScc` (`distToNode[total]=...; loopHead =
+/// Re-derived from C++ `unlaceAppendScc` (`distToNode[total]=...; loopHead =
 /// (*distToNode.begin()).second`).
 #[test]
 fn append_scc_loop_head_distance_tie_last_wins() {
@@ -138,7 +142,7 @@ fn append_scc_loop_head_distance_tie_last_wins() {
         &[],
     );
     let mut order = Vec::new();
-    kuna_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
+    unlace_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
     assert_eq!(order.len(), 4);
     assert_eq!(order[0], a, "a precedes the SCC");
     // sccSuccs sorted ascending [x,y,z]; equal totals; map overwrites => z (last)
@@ -155,12 +159,12 @@ fn append_scc_loop_head_distance_tie_last_wins() {
     });
 }
 
-/// F-C: quasi-topo with a REAL self-loop edge.  In `kunaQuasiTopoSort` a
+/// F-C: quasi-topo with a REAL self-loop edge.  In `unlaceQuasiTopoSort` a
 /// `src==dst` edge (a real self-loop, since a 1-node SCC is "trivial" and never
 /// collapsed) hits the `if (src == dst) { idPresent[src]=true; continue; }`
 /// branch: the node is present but contributes no condensation edge and no
 /// in-degree.  It must still appear exactly once in the output and in the right
-/// topological slot.  Re-derived from C++ `kunaQuasiTopoSort` self-loop branch.
+/// topological slot.  Re-derived from C++ `unlaceQuasiTopoSort` self-loop branch.
 #[test]
 fn quasi_topo_real_self_loop() {
     let mut b = B::new();
@@ -170,16 +174,16 @@ fn quasi_topo_real_self_loop() {
     // a -> s -> c, plus s -> s (self loop; {s} stays a trivial SCC).
     let g = b.graph(&[(a, s), (s, s), (s, c)], &[]);
     let mut order = Vec::new();
-    kuna_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
+    unlace_quasi_topo_sort(&b.pool, &g, &mut order).unwrap();
     // Each node once; topological a, s, c (self loop does not duplicate s).
     assert_eq!(order, vec![a, s, c]);
 }
 
 /// F-D: `graph_updated` re-points MULTIPLE dominatees at once and must match a
 /// from-scratch recomputation, exercising the documented pointer-order vs
-/// `KunaNodeOrder` iteration divergence (the C++ `doms`/`invertedDomTree` use
+/// `UnlaceNodeOrder` iteration divergence (the C++ `doms`/`invertedDomTree` use
 /// the default `std::less<ptr>` comparator; the Rust port iterates in
-/// `KunaNodeOrder`).  The result is order-insensitive, so `verify()` (recompute
+/// `UnlaceNodeOrder`).  The result is order-insensitive, so `verify()` (recompute
 /// from scratch + compare) must pass after the patch.
 ///
 /// Shape: a diamond region {b,c,m_inner} collapsed.  Concretely:
@@ -203,7 +207,7 @@ fn graph_updated_multi_dominatee_matches_scratch() {
         &[(a, h), (h, bb), (h, c), (bb, t), (c, t), (t, z), (a, w)],
         &[],
     );
-    let mut dom = KunaIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
+    let mut dom = UnlaceIncrementalDominators::new(&b.pool, &g, a, false).unwrap();
     // Sanity: from-scratch dominators before the merge.
     assert_eq!(dom.idom(h), Some(a));
     assert_eq!(dom.idom(bb), Some(h));
@@ -235,8 +239,8 @@ fn graph_updated_multi_dominatee_matches_scratch() {
     dom.verify(&b.pool, &g2).unwrap();
 
     // Cross-check against an independent from-scratch idom computation on g2.
-    let mut scratch: BTreeMap<KunaNodeId, KunaNodeId> = BTreeMap::new();
-    kuna_immediate_dominators(&b.pool, &g2, a, &mut scratch).unwrap();
+    let mut scratch: BTreeMap<UnlaceNodeId, UnlaceNodeId> = BTreeMap::new();
+    unlace_immediate_dominators(&b.pool, &g2, a, &mut scratch).unwrap();
     assert_eq!(scratch.get(&t), Some(&r));
     assert_eq!(scratch.get(&z), Some(&t));
     assert_eq!(scratch.get(&w), Some(&a));
@@ -247,7 +251,7 @@ fn graph_updated_multi_dominatee_matches_scratch() {
 /// internally, so the dangling-node fixpoint (which only removes nodes missing
 /// a pred OR a succ) would never delete it — but the reverse-BFS `canReach`
 /// gate stops the forward BFS from ever enqueuing it, so it never enters the
-/// slice in the first place.  Re-derived from C++ `kunaSubgraphBetweenNodes`
+/// slice in the first place.  Re-derived from C++ `unlaceSubgraphBetweenNodes`
 /// (forward BFS gated on `canReach`, then dangling prune).
 #[test]
 fn subgraph_between_nodes_prunes_unreachable_cycle() {
@@ -259,8 +263,8 @@ fn subgraph_between_nodes_prunes_unreachable_cycle() {
     // a -> e (the real path).  a -> p -> q -> p (a 2-cycle that never reaches e).
     let g = b.graph(&[(a, e), (a, p), (p, q), (q, p)], &[]);
     let frontier = b.set(&[e]);
-    let mut res = KunaRegionGraph::new();
-    kuna_subgraph_between_nodes(&b.pool, &g, a, &frontier, true, &mut res).unwrap();
+    let mut res = UnlaceRegionGraph::new();
+    unlace_subgraph_between_nodes(&b.pool, &g, a, &frontier, true, &mut res).unwrap();
     // The dead cycle {p,q} cannot reach e => never enters the slice.
     assert!(!res.contains_node(p), "unreachable cycle member p pruned");
     assert!(!res.contains_node(q), "unreachable cycle member q pruned");
@@ -269,8 +273,8 @@ fn subgraph_between_nodes_prunes_unreachable_cycle() {
     assert!(res.has_edge(a, e));
 
     // And with includeFrontier=false the frontier itself is dropped.
-    let mut res2 = KunaRegionGraph::new();
-    kuna_subgraph_between_nodes(&b.pool, &g, a, &frontier, false, &mut res2).unwrap();
+    let mut res2 = UnlaceRegionGraph::new();
+    unlace_subgraph_between_nodes(&b.pool, &g, a, &frontier, false, &mut res2).unwrap();
     assert!(!res2.contains_node(e));
     assert!(!res2.contains_node(p));
     assert!(!res2.contains_node(q));
@@ -292,7 +296,7 @@ fn post_dominators_diamond_merge() {
     // Diamond a -> {b,c} -> d.
     let g = b.graph(&[(a, bb), (a, c), (bb, d), (c, d)], &[]);
     // Post-dominators rooted at the exit d.
-    let dom = KunaIncrementalDominators::new(&b.pool, &g, d, true).unwrap();
+    let dom = UnlaceIncrementalDominators::new(&b.pool, &g, d, true).unwrap();
     // d post-dominates all; b and c post-dom only themselves up to d; a's
     // immediate post-dominator is d (both branches reconverge there).
     assert_eq!(dom.idom(d), Some(d));

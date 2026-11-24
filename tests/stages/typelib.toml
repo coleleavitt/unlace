@@ -1,0 +1,104 @@
+# A stripped-of-debug-info x86-64 Linux program calls poll, getrlimit and
+# setrlimit. No built-in prototype table declares them, so the calls are
+# untyped and a `struct pollfd` on the stack is three unrelated locals, one of
+# them read without a write. P1 program prep, option typelib (default auto):
+# the prebuilt type library declares the imports nothing else did, with the
+# record layouts the platform's compiler measured.
+#
+# Pass 1 is `typelib off`, the old output (#1, #2). Pass 2 is the default: the
+# pollfd is one object with its members (#3, #4, #5) and the rlimit copy is a
+# member assignment (#6). Pass 3 reads a library file instead of the built-in
+# one, and the members take that file's names (#7). `puts` is declared by the
+# built-in table in every pass and is never the library's (#8).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/typelib_x86_64',
+    'option typelib off',
+    'read symbols',
+    'load function wait_readable',
+    'decompile',
+    'print C',
+    'load function raise_files',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/typelib_x86_64',
+    'read symbols',
+    'load function wait_readable',
+    'decompile',
+    'print C',
+    'load function raise_files',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/typelib_x86_64',
+    'option typelib crates/unlace-analysis/tests/fixtures/typelib_custom.ktl',
+    'read symbols',
+    'load function wait_readable',
+    'decompile',
+    'print C',
+    'load function main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'typelib #1: off, the poll result needs a cast and the pollfd is a bare int'
+count = 1
+literal = '(int4)poll(&v1,1,a1) <= 0'
+
+[[match]]
+name = 'typelib #2: off, revents is a local nothing assigns'
+count = 1
+literal = 'return v3 & 1;'
+
+[[match]]
+name = 'typelib #3: auto, the three locals are one pollfd'
+count = 2
+literal = 'pollfd v1;'
+
+[[match]]
+name = 'typelib #4: auto, poll takes it and returns int'
+count = 2
+literal = 'if (poll(&v1,1,a1) <= 0)'
+
+[[match]]
+name = 'typelib #5: auto, the result is the member poll wrote'
+count = 1
+literal = 'return v1.revents & 1;'
+
+[[match]]
+name = 'typelib #6: auto, the rlimit copy is a member assignment'
+count = 1
+regex = '\.rlim_cur = v[0-9]+\.rlim_max;'
+
+[[match]]
+name = 'typelib #7: a library file names the members itself'
+count = 1
+literal = 'return v1.got & 1;'
+
+[[match]]
+name = "typelib #8: the table's puts is the same in every pass"
+count = 3
+literal = 'puts(*argv);'

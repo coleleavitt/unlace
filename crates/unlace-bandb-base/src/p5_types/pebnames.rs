@@ -1,4 +1,4 @@
-//! (kuna `pebnames`) Type the Windows thread-environment segment base, so reads
+//! (unlace `pebnames`) Type the Windows thread-environment segment base, so reads
 //! through it render as the `TEB`/`PEB` fields a reverser recognises.
 //!
 //! # The gap
@@ -36,7 +36,7 @@
 //! into `ExceptionList`, and that record's stack layout is recovered from how the
 //! untyped base is used: typing the base split MSVC's `{Next, handler, state}`
 //! record into unrelated scalars, and modelling the record type instead spread a
-//! record-pointer type onto whatever kuna's stack analysis believed was stored
+//! record-pointer type onto whatever unlace's stack analysis believed was stored
 //! there. A function that writes through the base is therefore left as upstream
 //! renders it.
 //!
@@ -82,7 +82,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::int4;
 
 use unlace_num::opcodes::OpCode;
@@ -95,7 +95,7 @@ use crate::varnode::varnode_flags;
 /// The name the segment-base Symbol is given when it is free.
 pub const TEB_SYMBOL_NAME: &str = "teb";
 
-/// (kuna) When to type the segment base: `pebnames off|auto|on`.
+/// (unlace) When to type the segment base: `pebnames off|auto|on`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PebNamesMode {
     /// Upstream: the segment base is an untyped register input.
@@ -107,9 +107,9 @@ pub enum PebNamesMode {
     On,
 }
 
-impl crate::optionset::KunaOption for PebNamesMode {
+impl crate::optionset::UnlaceOption for PebNamesMode {
     const NAME: &'static str = "pebnames";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         PebNamesMode::Off
@@ -119,7 +119,7 @@ impl crate::optionset::KunaOption for PebNamesMode {
         PebNamesMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         OptionPebNames.apply(value)
     }
 }
@@ -135,7 +135,7 @@ impl PebNamesMode {
     }
 }
 
-/// (kuna) Parse `option pebnames off|auto|on`; the caller writes the live field.
+/// (unlace) Parse `option pebnames off|auto|on`; the caller writes the live field.
 pub struct OptionPebNames;
 
 impl OptionPebNames {
@@ -143,13 +143,13 @@ impl OptionPebNames {
     pub const NAME: &'static str = "pebnames";
 
     /// Parse + validate the value.
-    pub fn apply(&self, p1: &str) -> KunaResult<(PebNamesMode, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(PebNamesMode, String)> {
         let mode = match p1 {
             "off" => PebNamesMode::Off,
             "auto" => PebNamesMode::Auto,
             "on" => PebNamesMode::On,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown pebnames value: {other} (expected off|auto|on)"
                 )));
             }
@@ -537,7 +537,7 @@ fn segment_use(data: &Funcdata, reg: &Address, size: int4) -> (bool, bool) {
     (!insns.is_empty(), false)
 }
 
-/// (kuna) `ActionPebNames` -- map `TEB *teb` over the segment-base register input
+/// (unlace) `ActionPebNames` -- map `TEB *teb` over the segment-base register input
 /// (option `pebnames`).
 pub struct ActionPebNames {
     base: ActionBase,
@@ -579,7 +579,7 @@ impl Action for ActionPebNames {
         });
         let arch = data.get_arch();
         let fires = arch
-            .kuna_options
+            .unlace_options
             .get::<PebNamesMode>()
             .fires(arch.windows_cspec, arch.image_windows_user);
         let wanted = fires && {

@@ -73,9 +73,11 @@ fn inventory_size_is_the_chunk_body() {
     let sizes = |on: bool| {
         let mut prog =
             bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots).expect("bootstrap");
-        prog.arch_mut().set_kuna_option("listing", "on").unwrap();
+        prog.arch_mut().set_unlace_option("listing", "on").unwrap();
         if on {
-            prog.arch_mut().set_kuna_option("funcchunks", "on").unwrap();
+            prog.arch_mut()
+                .set_unlace_option("funcchunks", "on")
+                .unwrap();
         }
         prog.commit_pending_analysis().expect("commit");
         prog.function_entries_canonical()

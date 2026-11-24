@@ -34,7 +34,7 @@ fn fixture() -> String {
         .to_string()
 }
 
-fn kuna(args: &[&str]) -> std::process::Output {
+fn unlace(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .env("SLEIGHHOME", repo_root().join("specs"))
@@ -43,8 +43,8 @@ fn kuna(args: &[&str]) -> std::process::Output {
 }
 
 /// Stdout with every whitespace character removed.
-fn run_kuna(args: &[&str]) -> String {
-    let out = kuna(args);
+fn run_unlace(args: &[&str]) -> String {
+    let out = unlace(args);
     let stderr = String::from_utf8_lossy(&out.stderr);
     let code = out.status.code().unwrap_or(-1);
     assert_eq!(code, 0, "unlace {args:?} failed: {stderr}");
@@ -71,7 +71,7 @@ fn the_summary_flags_a_switch_over_jumptablemax_and_a_body_over_maxinstruction()
         "maxinstruction",
         "10",
     ];
-    let out = run_kuna(&args);
+    let out = run_unlace(&args);
     assert!(
         out.contains(
             r#""limits":{"maxinstruction":10,"jumptablemax":2,"over":[{"name":"sub_140001040""#
@@ -88,7 +88,7 @@ fn the_summary_flags_a_switch_over_jumptablemax_and_a_body_over_maxinstruction()
 #[test]
 fn nothing_is_flagged_under_the_default_budgets() {
     let bin = fixture();
-    let out = run_kuna(&["functions", &bin, "--summary", "--json"]);
+    let out = run_unlace(&["functions", &bin, "--summary", "--json"]);
     assert!(
         out.contains(r#""limits":{"maxinstruction":100000,"jumptablemax":1024,"over":[]}"#),
         "{out}"
@@ -100,10 +100,10 @@ fn nothing_is_flagged_under_the_default_budgets() {
 #[test]
 fn only_a_listing_that_already_walked_the_image_carries_limits() {
     let bin = fixture();
-    let plain = run_kuna(&["functions", &bin, "--json", "--option", "jumptablemax", "2"]);
+    let plain = run_unlace(&["functions", &bin, "--json", "--option", "jumptablemax", "2"]);
     assert!(!plain.contains(r#""limits""#), "{plain}");
 
-    let reached = run_kuna(&[
+    let reached = run_unlace(&[
         "functions",
         &bin,
         "--json",
@@ -133,7 +133,7 @@ fn only_a_listing_that_already_walked_the_image_carries_limits() {
 fn a_ceiling_at_the_case_count_reads_the_whole_table() {
     let bin = fixture();
     let summary = |cap: &str| {
-        run_kuna(&[
+        run_unlace(&[
             "functions",
             &bin,
             "--summary",
@@ -165,7 +165,7 @@ fn a_ceiling_at_the_case_count_reads_the_whole_table() {
 #[test]
 fn a_ceiling_below_a_table_still_reports_the_switch() {
     let bin = fixture();
-    let out = run_kuna(&[
+    let out = run_unlace(&[
         "functions",
         &bin,
         "--summary",
@@ -201,7 +201,7 @@ fn a_function_is_measured_on_its_own_descent_whatever_the_walk_reached_first() {
     std::fs::write(&path, image).unwrap();
     let bin = path.to_str().unwrap();
 
-    let out = run_kuna(&[
+    let out = run_unlace(&[
         "functions",
         bin,
         "--summary",
@@ -212,7 +212,7 @@ fn a_function_is_measured_on_its_own_descent_whatever_the_walk_reached_first() {
     ]);
     assert!(out.contains(r#""over":[{"name":"parent","address":65552,"address_hex":"0x10010","size":45,"instructions":45,"over_maxinstruction":true"#), "{out}");
 
-    let out = run_kuna(&[
+    let out = run_unlace(&[
         "functions",
         bin,
         "--summary",
@@ -244,7 +244,7 @@ fn jumptablemax_is_catalogued_and_refuses_anything_but_a_positive_count() {
 
     let bin = fixture();
     for bad in ["wide", "12abc", "1.5", "-5", "0", "4294967296"] {
-        let out = kuna(&["functions", &bin, "--json", "--option", "jumptablemax", bad]);
+        let out = unlace(&["functions", &bin, "--json", "--option", "jumptablemax", bad]);
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert_ne!(out.status.code(), Some(0), "{bad:?} was accepted");
         assert!(

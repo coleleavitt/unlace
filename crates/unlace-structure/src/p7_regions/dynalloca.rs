@@ -1,8 +1,8 @@
-//! (kuna `dynalloca`) A stack pointer moved down by a run-time amount is
+//! (unlace `dynalloca`) A stack pointer moved down by a run-time amount is
 //! `alloca(n)`.
 //!
 //! A variable-length array or an `alloca` compiles to `sub rsp, n` (or `sub sp,
-//! sp, xN`) with `n` computed at run time, and kuna printed the result as stack
+//! sp, xN`) with `n` computed at run time, and unlace printed the result as stack
 //! pointer arithmetic, `use(&(&Stack[-8])[-((long)a0 + 0xf & ~0xf)], ...)`.
 //! Hex-Rays prints `alloca(n)`. This rule turns the `PTRADD(stack pointer,
 //! -n, 1)` the stack pointer's new value is typed as into `alloca(n)` once
@@ -87,7 +87,7 @@ impl Rule for RuleDynAlloca {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::dynalloca::DynAlloca>()
             .0
         {
@@ -129,8 +129,8 @@ impl Rule for RuleDynAlloca {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna `dynalloca`) A run-time stack move prints as `alloca(n)`.
+crate::unlace_flag!(
+    /// (unlace `dynalloca`) A run-time stack move prints as `alloca(n)`.
     DynAlloca,
     "dynalloca",
     "Run-time stack moves as alloca",

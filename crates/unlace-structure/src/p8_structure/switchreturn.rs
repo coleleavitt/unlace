@@ -9,7 +9,7 @@
 //! to one exit return compiles to a merged phi + single return:
 //!
 //! ```c
-//!   // source / angr                          // kuna today (the merged switch)
+//!   // source / angr                          // unlace today (the merged switch)
 //!   switch (x) {                               switch (x) {
 //!     case A: return K0;                         case A: v = K0; break;
 //!     case B: return K1;                         case B: v = K1; break;
@@ -19,7 +19,7 @@
 //! ```
 //!
 //! The shared RETURN block is `v = MULTIEQUAL(#K0, #K1, …); return v` — an **all-constant**
-//! (or per-case-constant) phi whose input slots align 1:1 with the switch cases.  kuna keeps
+//! (or per-case-constant) phi whose input slots align 1:1 with the switch cases.  unlace keeps
 //! the merged `return v` plus one `break` per case, ~2 CFG nodes per case more than the
 //! source's per-case `return K` (the GED gap on e.g. libedit `tty__getcharindex`, 17 cases).
 //!
@@ -31,7 +31,7 @@
 //! has ≤ `MAX_EARLYRETURN_INEDGES` (16) predecessors (e.g. findutils `get_fts_info_name`, a
 //! 14-case switch, hoists to `case 1: return "FTS_D"; …`).  But its in-degree cap leaves the
 //! **wide** dispatch table untouched: a 17-case switch merges 17 in-edges (> 16), so
-//! earlyreturn skips it and kuna keeps the `v = K; break; … return v;` shape.
+//! earlyreturn skips it and unlace keeps the `v = K; break; … return v;` shape.
 //!
 //! # What this pass does
 //!
@@ -57,7 +57,7 @@
 //! (`switch_return`, default-ON per DIV-25); when off, [`ActionSwitchReturn::apply`] early-returns and
 //! output is byte-identical.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 use unlace_base::types::int4;
 
@@ -65,7 +65,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::funcdata::Funcdata;
 use crate::options::on_or_off;
 
-/// Marshaling element `<switchreturn>` (kuna).  ElementIds live in the 4000+ range
+/// Marshaling element `<switchreturn>` (unlace).  ElementIds live in the 4000+ range
 /// (…4110 returndup, 4111 earlyreturn taken; this is 4112).
 pub const ELEM_SWITCHRETURN: ElementId = ElementId::new("switchreturn", 4112);
 
@@ -77,7 +77,7 @@ pub const MAX_SWITCHRETURN_INEDGES: int4 = 256;
 
 /// \brief Peel the constant case arms out of a wide **multi-way switch-phi** shared RETURN
 /// block into per-case `return K`, so a `switch (x) { case A: v = K0; break; … } return v;`
-/// dispatch recovers as `case A: return K0; …` (kuna's continuation of angr's SAILR
+/// dispatch recovers as `case A: return K0; …` (unlace's continuation of angr's SAILR
 /// `ReturnDuplicatorHigh` past `earlyreturn`'s 16-in-edge cap).  Option-gated
 /// (`switch_return`, default-off).  Reuses the existing `return_split_is_splittable` filter
 /// + `earlyreturn_const_edges` + `node_split` machinery; leaves any non-const body arm merged.
@@ -113,7 +113,7 @@ impl Action for ActionSwitchReturn {
         // P0 assertion `option switchreturn on|off`, carried on the Architecture boundary.
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::switchreturn::SwitchReturn>()
             .0
         {
@@ -145,7 +145,7 @@ impl OptionSwitchReturn {
     pub const NAME: &'static str = "switchreturn";
 
     /// Parse `on`/`off`, returning the bool value + a confirmation message.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -155,7 +155,7 @@ impl OptionSwitchReturn {
     }
 }
 
-/// (kuna) The direct continuation of `early_return`: the same per-edge const peel, but
+/// (unlace) The direct continuation of `early_return`: the same per-edge const peel, but
 /// with a wider in-edge cap so a WIDE multi-way switch-phi return
 /// (`switch (x) { case A: v = K0; break; … } return v;` with more cases than
 /// earlyreturn's 16-in-edge limit) is peeled to per-case `return K`
@@ -163,9 +163,9 @@ impl OptionSwitchReturn {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwitchReturn(pub bool);
 
-impl crate::optionset::KunaOption for SwitchReturn {
+impl crate::optionset::UnlaceOption for SwitchReturn {
     const NAME: &'static str = "switchreturn";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         SwitchReturn(false)
@@ -175,7 +175,7 @@ impl crate::optionset::KunaOption for SwitchReturn {
         SwitchReturn(true)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::switchreturn::OptionSwitchReturn.apply(value)?;
         Ok((SwitchReturn(v), msg))
     }

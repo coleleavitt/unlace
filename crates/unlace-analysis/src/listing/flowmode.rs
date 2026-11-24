@@ -1,4 +1,4 @@
-//! (kuna `flowmode`) Decode-mode paints that follow control flow from code
+//! (unlace `flowmode`) Decode-mode paints that follow control flow from code
 //! whose ARM mode the image itself states, over a stripped image whose only
 //! mode changes come from the walk's own `blx` writes.
 //!
@@ -96,7 +96,7 @@ impl FlowMode {
         painter: &ContextPainter,
     ) -> Option<FlowMode> {
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FlowMode>()
             .on
             || arch.input_arm_isa_override
@@ -134,7 +134,7 @@ impl FlowMode {
             mask: range.get_mask(),
             words: usize::try_from(words).ok()?,
             after_call: arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::FlowMode>()
                 .after_call,
             seeds,

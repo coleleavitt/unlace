@@ -71,6 +71,6 @@
     "make test-cli": "27/27",
     "kuna catalog --check": "catalog OK"
   },
-  "promotion": "Not promoted to tests/cli, by design. `verify --promote` refuses it twice over: the need's status is still 'open' (the captain flips it at B_DONE), and the acceptance target is binary_source=dataset while CI has no dataset. `make test-cli` correctly stays at 27/27. The permanent CI pin is the two-pass tests/stages/kuna-rodatastring.xml, already on this branch.",
+  "promotion": "Not promoted to tests/cli, by design. `verify --promote` refuses it twice over: the need's status is still 'open' (the captain flips it at B_DONE), and the acceptance target is binary_source=dataset while CI has no dataset. `make test-cli` correctly stays at 27/27. The permanent CI pin is the two-pass tests/stages/rodatastring.xml, already on this branch.",
   "reproduction_arm_still_pins_bug": "option rodatastring off reproduces `v1[0] = (char[8])s_100003f1d._0_8_;` verbatim and emits no builtin_strncpy; neither probe was weakened."
 }

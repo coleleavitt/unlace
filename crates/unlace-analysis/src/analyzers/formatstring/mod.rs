@@ -1,4 +1,4 @@
-//! Format-string varargs typing — the **pure parser half** of the kuna analog
+//! Format-string varargs typing — the **pure parser half** of the unlace analog
 //! of Ghidra's `FormatStringAnalyzer` ("Variadic Function Signature Override").
 //!
 //! Ghidra origin:
@@ -6,7 +6,7 @@
 //! — chiefly `FormatStringParser.java` (the pure spec-parsing logic ported here)
 //! and `FormatArgument.java` (the `(length-modifier, conversion-specifier)` pair,
 //! mirrored by [`FmtArg`]). Call-site classification and override construction
-//! live in [`apply`]; [`kuna_fmtstatic`] resolves format constants at load time.
+//! live in [`apply`]; [`unlace_fmtstatic`] resolves format constants at load time.
 //!
 //! # What this module does (the faithful `printf`/`scanf` spec grammar)
 //!
@@ -47,7 +47,7 @@
 //!
 //! This module is the shared parser and type mapper. [`apply`] classifies
 //! variadic calls and builds per-call-site prototype overrides from the parsed
-//! argument types. [`kuna_fmtstatic`] uses Listing references and a bounded
+//! argument types. [`unlace_fmtstatic`] uses Listing references and a bounded
 //! p-code window to resolve constants and emit overrides before decompilation.
 //! The console's decompile-time path can inspect lifted calls, install overrides
 //! and decompile again. Those drivers own option handling and application;
@@ -55,7 +55,7 @@
 //!
 //! # Losses
 //!
-//! kuna has no `.gdt` typedef archive, so the typedef-backed extended-precision
+//! unlace has no `.gdt` typedef archive, so the typedef-backed extended-precision
 //! types (`intmax_t`/`uintmax_t`/`size_t`/`ptrdiff_t`,
 //! `FormatStringParser.getIntegralPointerType`/`getSizeT`/…) are modeled as
 //! their plain integer fallbacks ([`spec_to_datatype`] follows the same
@@ -70,7 +70,7 @@ pub mod fmtcallee;
 
 use std::rc::Rc;
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, uint4};
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 
@@ -100,7 +100,7 @@ impl FmtArg {
 /// Ghidra's `convertPairToDataType` / `conversionSpecifierToDataType`. The
 /// extended-precision typedefs (`IntMaxT`/`UIntMaxT`/`SizeT`/`PtrDiffT`) are
 /// distinct variants so callers can render them faithfully; [`spec_to_datatype`]
-/// lowers them to their integer fallback (kuna has no `.gdt` typedefs).
+/// lowers them to their integer fallback (unlace has no `.gdt` typedefs).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Spec {
     /// `int` — `d`/`i`, and the value behind a `*` field width.
@@ -118,7 +118,7 @@ pub enum Spec {
     /// `char` — the `c` conversion's argument.
     ///
     /// Ghidra's `conversionSpecifierToDataType` answers `getUnsignedCharDataType`
-    /// here, and in Ghidra's type system that is a CHARACTER type. kuna's port
+    /// here, and in Ghidra's type system that is a CHARACTER type. unlace's port
     /// lowered it to a plain one-byte unsigned integer, which is a different
     /// thing: a `%c` argument stopped printing as a character literal, so
     /// findutils' `-size` suffix switch rendered `if (v6 != 0x62)` where the
@@ -1081,7 +1081,7 @@ pub fn parse_input_types(fmt: &str) -> Vec<Spec> {
 
 /// The pointer-to-`spec` [`Spec`] for the scanf wrapping. The value types map to
 /// their `*Ptr` cousin; a void pointer becomes itself wrapped (modeled as
-/// [`Spec::VoidPtr`], a `void **` — kuna has no second-level pointer variant, so
+/// [`Spec::VoidPtr`], a `void **` — unlace has no second-level pointer variant, so
 /// this is the documented approximation, matching the libproto `void*` stand-in).
 fn pointer_to(spec: Spec) -> Spec {
     match spec {
@@ -1095,7 +1095,7 @@ fn pointer_to(spec: Spec) -> Spec {
         Spec::SizeT => Spec::SizeTPtr,
         Spec::PtrDiffT => Spec::PtrDiffTPtr,
         // UInt/ULong/ULongLong/UShort: model the pointee as the same-width
-        // signed pointer (kuna's *Ptr variants are width-, not signedness-,
+        // signed pointer (unlace's *Ptr variants are width-, not signedness-,
         // carrying for the pointee; documented approximation).
         Spec::UInt => Spec::IntPtr,
         Spec::UShort => Spec::ShortPtr,
@@ -1115,22 +1115,22 @@ pub fn parse_format_specifiers(fmt: &str) -> Vec<Spec> {
 }
 
 // ---------------------------------------------------------------------------
-// spec_to_datatype — the kuna analog of building the DataType, mirroring
+// spec_to_datatype — the unlace analog of building the DataType, mirroring
 // protos::build_ty. The typedef-backed extended types are lowered to the
 // same integer fallback Ghidra's getIntegralPointerType / fabricated typedefs
-// pick (kuna has no .gdt typedefs — a documented LOSS).
+// pick (unlace has no .gdt typedefs — a documented LOSS).
 // ---------------------------------------------------------------------------
 
-/// Build the kuna [`Datatype`] for a [`Spec`] using the architecture's type
+/// Build the unlace [`Datatype`] for a [`Spec`] using the architecture's type
 /// factory — the analog of `protos::build_ty`. `word_size` is the addressable
 /// word size (the `.2` of `Architecture::data_org`). The extended-precision
 /// typedefs are modeled as their integer fallback per
-/// `FormatStringParser.getIntegralPointerType` (kuna has no `.gdt` typedefs).
+/// `FormatStringParser.getIntegralPointerType` (unlace has no `.gdt` typedefs).
 pub fn spec_to_datatype(
     spec: Spec,
     types: &dyn TypeFactory,
     word_size: uint4,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     let ptr = types.get_size_of_pointer();
     let int_sz = types.get_size_of_int();
     let long_sz = types.get_size_of_long();
@@ -1157,7 +1157,7 @@ pub fn spec_to_datatype(
     // Build a base integer/float of (size, metatype).
     let base = |s: int4, m: type_metatype| types.get_base(s, m);
     // Build a pointer to a base integer/float of (size, metatype).
-    let ptr_to_base = |s: int4, m: type_metatype| -> KunaResult<Rc<Datatype>> {
+    let ptr_to_base = |s: int4, m: type_metatype| -> UnlaceResult<Rc<Datatype>> {
         let pointee = types.get_base(s, m)?;
         types.get_type_pointer(ptr, pointee, word_size)
     };
@@ -1176,7 +1176,7 @@ pub fn spec_to_datatype(
         Spec::ULongLong => base(8, type_metatype::TYPE_UINT),
         Spec::Double => base(8, type_metatype::TYPE_FLOAT),
         Spec::LongDouble => base(8, type_metatype::TYPE_FLOAT),
-        // Typedef-backed: integer fallback (no .gdt typedefs in kuna).
+        // Typedef-backed: integer fallback (no .gdt typedefs in unlace).
         Spec::IntMaxT => base(8, type_metatype::TYPE_INT),
         Spec::UIntMaxT => base(8, type_metatype::TYPE_UINT),
         Spec::SizeT => {

@@ -1,4 +1,4 @@
-//! (kuna) `cortexmvectors` — the widened ARM Cortex-M hardware vector-table
+//! (unlace) `cortexmvectors` — the widened ARM Cortex-M hardware vector-table
 //! signature (P1 code/data partition, oracle 6).
 //!
 //! The shipped signature ([`super::cortexm_vector_table_shipped`]) confirms a table
@@ -82,13 +82,13 @@ use super::{
     in_executable_section, read_u32,
 };
 
-/// (kuna) The widened Cortex-M vector-table discovery pass (`cortexmvectors`).
+/// (unlace) The widened Cortex-M vector-table discovery pass (`cortexmvectors`).
 ///
 /// Emits the reset/exception/IRQ handler pointers of a table the shipped
 /// signature rejects, plus the whole-image Thumb (`TMode=1`) region paint that a
 /// confirmed table unlocks. Like every other analysis pass it RUNS at load; the
 /// **commit** is gated by `--option cortexmvectors on`
-/// (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::analysisgates::Cortexmvectors>().0`), so a
+/// (`engine.rs::analysis_pass_enabled` → `arch.unlace_options.get::<unlace_decomp::analysisgates::Cortexmvectors>().0`), so a
 /// default run computes the facts and commits nothing, leaving the discovery set
 /// byte-identical to the shipped oracle.
 ///

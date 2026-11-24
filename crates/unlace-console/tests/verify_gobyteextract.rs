@@ -53,7 +53,7 @@ fn print_commands(program: ConsoleProgram, commands: Vec<String>) -> String {
     let prefix = commands.len() - 1;
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::console::register_kuna_commands(&mut status);
+    unlace_console::console::register_unlace_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()
@@ -100,7 +100,7 @@ fn native_body(binary: &Path, name: &str) -> String {
     .unwrap();
     program
         .arch_mut()
-        .set_kuna_option("godwarfsig", "on")
+        .set_unlace_option("godwarfsig", "on")
         .unwrap();
     program.commit_pending_analysis().unwrap();
     print(program, name)

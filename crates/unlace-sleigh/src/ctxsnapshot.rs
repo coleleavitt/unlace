@@ -1,4 +1,4 @@
-//! (kuna) A value-exact, `Send` copy of a [`ContextDatabase`]'s read surface.
+//! (unlace) A value-exact, `Send` copy of a [`ContextDatabase`]'s read surface.
 //!
 //! Ordinary partition cloning is not a faithful database copy: `FreeArray`'s
 //! `Clone` deliberately zeroes the explicit-set mask, and `encode`/`decode` carries
@@ -17,7 +17,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 
 use crate::globalcontext::ContextDatabase;
@@ -79,24 +79,24 @@ pub fn restore_context(
     db: &mut dyn ContextDatabase,
     snap: &ContextValueSnapshot,
     space: &Rc<AddrSpace>,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let target_words = usize::try_from(db.get_context_size())
-        .map_err(|_| KunaError::lowlevel("context snapshot: target has a negative word count"))?;
+        .map_err(|_| UnlaceError::lowlevel("context snapshot: target has a negative word count"))?;
     if snap.words != snap.default_blob.len() {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "context snapshot: word count {} does not match default blob length {}",
             snap.words,
             snap.default_blob.len()
         )));
     }
     if snap.words != target_words || target_words != db.get_default_value().len() {
-        return Err(KunaError::lowlevel(format!(
+        return Err(UnlaceError::lowlevel(format!(
             "context snapshot: source has {} words but target has {}",
             snap.words, target_words
         )));
     }
     if snap.points.first().map(|(off, _)| *off) != Some(0) {
-        return Err(KunaError::lowlevel(
+        return Err(UnlaceError::lowlevel(
             "context snapshot: value map must start at offset 0",
         ));
     }
@@ -104,17 +104,17 @@ pub fn restore_context(
     let mut previous = None;
     for (off, blob) in &snap.points {
         if *off > highest {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "context snapshot: split point {off:#x} exceeds the address space"
             )));
         }
         if previous.is_some_and(|prev| *off <= prev) {
-            return Err(KunaError::lowlevel(
+            return Err(UnlaceError::lowlevel(
                 "context snapshot: split points are not strictly ascending",
             ));
         }
         if blob.len() != snap.words {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "context snapshot: split point {off:#x} has {} words, expected {}",
                 blob.len(),
                 snap.words

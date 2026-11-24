@@ -1,4 +1,4 @@
-//! (kuna) Read which registers an x86-32 callee takes as input off its own code.
+//! (unlace) Read which registers an x86-32 callee takes as input off its own code.
 //!
 //! `x86win.cspec`'s default model, `__stdcall`, has no register parameters, so
 //! a direct call to a function with no declared prototype only ever recovers
@@ -80,7 +80,7 @@ const FOREIGN: u8 = 1 | (1 << 3) | (1 << 4) | (1 << 5);
 pub const CUSTOM_DEFAULT: bool = false;
 
 /// The callee-saved registers the `custom` extension recovers, with the bit it
-/// takes in [`Architecture::kuna_custom_reg_callers`]'s per-callee mask, in the
+/// takes in [`Architecture::unlace_custom_reg_callers`]'s per-callee mask, in the
 /// deterministic order they are printed (register-space order).
 pub const CUSTOM: [(&str, u8); 3] = [("EBX", 1), ("ESI", 2), ("EDI", 4)];
 
@@ -102,7 +102,7 @@ pub fn model_name(inputs: u8) -> Option<&'static str> {
 /// default model that leaves extrapop unknown.
 pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int4, Address)> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
         || !arch.archid.starts_with("x86:LE:32:")
@@ -354,7 +354,7 @@ const VIRTUAL_SCAN: usize = 128;
 ///
 /// With `calleereginputs custom`, a callee-saved register (EBX/ESI/EDI) every
 /// direct call site in the image sets and whose entry value the callee genuinely
-/// reads ([`Architecture::kuna_custom_reg_callers`], built once by the
+/// reads ([`Architecture::unlace_custom_reg_callers`], built once by the
 /// callee-first driver) becomes a leading custom argument — a synthesized model
 /// is returned instead of the spec's `__thiscall`/`__fastcall`.
 pub fn callee_register_model(arch: &Architecture, entry: &Address) -> Option<Rc<ProtoModel>> {
@@ -370,8 +370,8 @@ pub fn own_register_model(
     entry: &Address,
 ) -> Option<Rc<ProtoModel>> {
     custom_model(
-        &ctx.kuna_custom_reg_callers,
-        &ctx.kuna_custom_reg_models,
+        &ctx.unlace_custom_reg_callers,
+        &ctx.unlace_custom_reg_models,
         entry,
     )
 }
@@ -381,15 +381,15 @@ pub fn own_register_model(
 /// register straight-line walk (exactly as #1575).
 fn register_model_for(arch: &Architecture, entry: &Address) -> Option<Rc<ProtoModel>> {
     if !arch
-        .kuna_options
+        .unlace_options
         .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
     {
         return None;
     }
     if let Some(m) = custom_model(
-        &arch.kuna_custom_reg_callers,
-        &arch.kuna_custom_reg_models,
+        &arch.unlace_custom_reg_callers,
+        &arch.unlace_custom_reg_models,
         entry,
     ) {
         return Some(m);
@@ -410,7 +410,7 @@ fn custom_model(
 }
 
 /// Model-key bits (shared by the driver that builds the maps and
-/// [`Architecture::kuna_build_reginput_model`] via the driver).
+/// [`Architecture::unlace_build_reginput_model`] via the driver).
 pub const KEY_ECX: u16 = 1;
 pub const KEY_EDX: u16 = 1 << 1;
 /// The custom (EBX/ESI/EDI) mask shifts into key bits 2..5.
@@ -421,11 +421,11 @@ pub const KEY_CUSTOM_SHIFT: u16 = 2;
 /// whole-image caller scan is skipped where this is false, so the extension
 /// costs nothing off its target.
 pub fn custom_applies(arch: &Architecture) -> bool {
-    arch.kuna_options
+    arch.unlace_options
         .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
         && arch
-            .kuna_options
+            .unlace_options
             .get::<crate::calleereginputs::CalleeRegInputs>()
             .custom
         && arch.archid.starts_with("x86:LE:32:")
@@ -493,13 +493,13 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
             .get(fc.get_op())
             .map(|o| o.get_addr().get_offset())
         {
-            arch.kuna_custom_reg_calls
+            arch.unlace_custom_reg_calls
                 .entry(callee.get_offset())
                 .or_default()
                 .insert((entry.get_offset(), site));
         }
     }
-    let Some(reads) = data.kuna_entry_reads() else {
+    let Some(reads) = data.unlace_entry_reads() else {
         return;
     };
     let Some(space) = arch.manage().get_space_by_name("register").cloned() else {
@@ -528,7 +528,8 @@ pub fn record(arch: &mut Architecture, entry: &Address, data: &Funcdata) {
         }
     }
     if mask != 0 {
-        arch.kuna_custom_reg_reads.insert(entry.get_offset(), mask);
+        arch.unlace_custom_reg_reads
+            .insert(entry.get_offset(), mask);
     }
 }
 
@@ -614,11 +615,11 @@ pub fn callee_register_inputs(arch: &Architecture, entry: &Address) -> Option<u8
         return None;
     }
     let off = entry.get_offset();
-    if let Some(hit) = arch.kuna_callee_reginputs.borrow().get(&off) {
+    if let Some(hit) = arch.unlace_callee_reginputs.borrow().get(&off) {
         return *hit;
     }
     let found = walk(arch, entry);
-    arch.kuna_callee_reginputs.borrow_mut().insert(off, found);
+    arch.unlace_callee_reginputs.borrow_mut().insert(off, found);
     found
 }
 
@@ -832,12 +833,12 @@ fn walk(arch: &Architecture, entry: &Address) -> Option<u8> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.calleereginputs_virtual_this = Some(virtual_this);
     hooks.calleereginputs_reads_register = Some(reads_register);
 }
 
-/// (kuna `calleereginputs`) Take `__thiscall`/`__fastcall` from the registers
+/// (unlace `calleereginputs`) Take `__thiscall`/`__fastcall` from the registers
 /// a callee reads (`on`), and recover callee-saved custom arguments too
 /// (`custom`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -859,9 +860,9 @@ impl CalleeRegInputs {
     }
 }
 
-impl crate::optionset::KunaOption for CalleeRegInputs {
+impl crate::optionset::UnlaceOption for CalleeRegInputs {
     const NAME: &'static str = "calleereginputs";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         CalleeRegInputs {
@@ -877,13 +878,13 @@ impl crate::optionset::KunaOption for CalleeRegInputs {
         }
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (on, custom) = match value.trim().to_ascii_lowercase().as_str() {
             "custom" => (true, true),
             "" | "on" => (true, false),
             "off" => (false, false),
             _ => {
-                return Err(unlace_base::error::KunaError::parse(
+                return Err(unlace_base::error::UnlaceError::parse(
                     "Must specify off, on or custom",
                 ));
             }

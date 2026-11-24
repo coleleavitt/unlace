@@ -303,7 +303,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
         &file,
         &inventory,
         prog.arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0,
     );
@@ -336,7 +336,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let target = resolve_target(&prog, &file, &index, &names, resolution.settle(&index)?);
     let proof_note = add_scoped_calls(args, &mut prog, &mut index, &entries, &target);
     warn_other_entries(&index, &names, &target);
-    // (kuna `objcresolve`) A message send whose receiver's class the decompiler
+    // (unlace `objcresolve`) A message send whose receiver's class the decompiler
     // resolves is an edge to the method, not to the runtime entry point; the
     // p-code walk cannot see it, so the functions that could carry one are
     // decompiled and their retargets added.
@@ -444,7 +444,7 @@ fn add_scoped_calls(
     let arch = prog.arch();
     if !arch.analysis_ppc32picimports.scoped()
         || arch
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::ppc32piccalls::PicImports>()
             .is_empty()
         || !args.instructions
@@ -455,7 +455,7 @@ fn add_scoped_calls(
     let selected: Vec<_> = match args.direction {
         Direction::To
             if target.class.iter().any(|a| {
-                arch.kuna_tables
+                arch.unlace_tables
                     .get::<unlace_decomp::ppc32piccalls::PicImports>()
                     .contains_key(a)
             }) =>
@@ -478,13 +478,13 @@ fn add_scoped_calls(
     if selected.is_empty() {
         return None;
     }
-    let budget = prog.arch().kuna_fn_budget;
+    let budget = prog.arch().unlace_fn_budget;
     if budget.is_none() {
         let seconds = unlace_console::project::default_fn_budget_seconds(
             args.mode.as_deref().unwrap_or("reliable"),
             true,
         );
-        prog.arch_mut().kuna_fn_budget = Some(std::time::Duration::from_secs(seconds));
+        prog.arch_mut().unlace_fn_budget = Some(std::time::Duration::from_secs(seconds));
     }
     let mut failed = Vec::new();
     for entry in &selected {
@@ -504,7 +504,7 @@ fn add_scoped_calls(
             Err(_) => failed.push(format!("{} @ 0x{addr:x}", entry.name)),
         }
     }
-    prog.arch_mut().kuna_fn_budget = budget;
+    prog.arch_mut().unlace_fn_budget = budget;
     let first = failed.first()?;
     Some(format!(
         "ppc32picimports: {} of {} functions could not be flowed (first: {first}); PPC32 PIC import calls they make are not listed",
@@ -772,7 +772,7 @@ fn unwalked_note(
     })
 }
 
-/// (kuna) `switchflow`: the computed jumps the walk resolved to no table, so
+/// (unlace) `switchflow`: the computed jumps the walk resolved to no table, so
 /// a miss is never silent. For `--from` a function, the ones inside it; for a
 /// `--to` that found nothing, every one in the image, since the reference
 /// asked about may sit in a case body the walk never decoded.
@@ -1083,7 +1083,7 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
     if prog.arch().analysis_ppc32picimports.scoped()
         && let Some(slot) = prog
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::ppc32piccalls::PicImports>()
             .values()
             .find(|s| s.name == spec)
@@ -1138,7 +1138,7 @@ fn resolve_target(
     if by_name && prog.arch().analysis_ppc32picimports.scoped() {
         class.extend(
             prog.arch()
-                .kuna_tables
+                .unlace_tables
                 .get::<unlace_decomp::ppc32piccalls::PicImports>()
                 .values()
                 .filter(|s| Some(&s.name) == name.as_ref())
@@ -1204,7 +1204,7 @@ fn name_at(
                 .scoped()
                 .then(|| {
                     prog.arch()
-                        .kuna_tables
+                        .unlace_tables
                         .get::<unlace_decomp::ppc32piccalls::PicImports>()
                         .get(&vma)
                         .map(|s| s.name.clone())
@@ -1888,7 +1888,7 @@ fn usage() {
     );
 }
 
-/// (kuna `objcresolve`) The call edges message sends add once their receiver's
+/// (unlace `objcresolve`) The call edges message sends add once their receiver's
 /// class is known. `--from f`: `f` is decompiled and every send it resolved is
 /// an edge to the method. `--to m`: the functions that call the selector's
 /// `objc_msgSend$<sel>` stub or read its `selRef_` slot are decompiled, and the
@@ -1903,12 +1903,12 @@ fn objc_resolved_edges(
 ) -> Vec<Xref> {
     if !prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::objcrettype::ObjcResolve>()
         .0
         || prog
             .arch()
-            .kuna_states
+            .unlace_states
             .get::<unlace_decomp::objcrettype::ObjcClassTable>()
             .is_none_or(|t| t.classes.is_empty())
     {
@@ -1955,7 +1955,7 @@ fn objc_resolved_edges(
         };
         let _ = unlace_console::project::decompile_entry(prog, fe.clone(), &opts);
     }
-    let retargets = &prog.arch().kuna_objc_retargets;
+    let retargets = &prog.arch().unlace_objc_retargets;
     let mut out: Vec<Xref> = retargets
         .iter()
         .filter(|(site, imp)| match direction {

@@ -1,4 +1,4 @@
-//! (kuna `swiftcall`) The convention an indirect call is given in a Swift
+//! (unlace `swiftcall`) The convention an indirect call is given in a Swift
 //! image, read off the decompiled call specs.
 //!
 //! Fixture: `tests/fixtures/swift_call_hook_elf` (README): `callHook` calls a
@@ -29,7 +29,7 @@ fn load(fixture: &str) -> ConsoleProgram {
     let mut prog = bootstrap_from_object(bin.to_str().unwrap(), "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("swiftmetadata", "on")
+        .set_unlace_option("swiftmetadata", "on")
         .expect("swiftmetadata flips on");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

@@ -13,7 +13,7 @@
     wrapper that supplies `decompile-all`'s own options.
   * `warn_protoorder_inert` keeps its two callers: `decompile-project --stream`
     and `decompile-graph`.
-* `kuna-console/project.rs` — `export_options(single_target)`, the options
+* `console/project.rs` — `export_options(single_target)`, the options
   `decompile_export_targets` already ran with, for a driver that owns the loop.
 * `decompile_project.rs` — the serial arm takes the order; the `--jobs` arm
   passes `callee_first` as the pool's `serial_callee_first` (so the replay line

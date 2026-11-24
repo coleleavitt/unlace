@@ -1,4 +1,4 @@
-//! (kuna `wrapadd`) Preserve word-width wrapping before a sign extension
+//! (unlace `wrapadd`) Preserve word-width wrapping before a sign extension
 //! observes the result.
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
@@ -22,7 +22,7 @@ pub fn plan(
     id: OpId,
     printed: impl Fn(VarnodeId) -> Rc<Datatype>,
 ) -> Option<WidenedAddPlan> {
-    if !arch.kuna_options.get::<crate::widenedadd::WrapAdd>().0 {
+    if !arch.unlace_options.get::<crate::widenedadd::WrapAdd>().0 {
         return None;
     }
     let op = data.obank().get(id)?;
@@ -163,8 +163,8 @@ fn integer_observes(data: &Funcdata, start: VarnodeId) -> bool {
     false
 }
 
-crate::kuna_flag!(
-    /// (kuna `wrapadd`) Print a four-byte addition that a wider sign extension
+crate::unlace_flag!(
+    /// (unlace `wrapadd`) Print a four-byte addition that a wider sign extension
     /// observes through unsigned C, so it wraps as the machine word does.
     WrapAdd,
     "wrapadd",

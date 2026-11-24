@@ -60,7 +60,7 @@ fn float_compare_flags_keep_their_unordered_case() {
         let one = format!("data 0x{} float one", symbol(&native, "one"));
         let two = format!("data 0x{} double two", symbol(&native, "two"));
         let huge = format!("data 0x{} double huge", symbol(&native, "huge"));
-        let (printed, stderr, rc) = common::run_kuna(&[
+        let (printed, stderr, rc) = common::run_unlace(&[
             "decompile-all",
             native.to_str().unwrap(),
             "--functions",

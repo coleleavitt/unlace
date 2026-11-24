@@ -1,0 +1,51 @@
+# dynalloca: a variable-length array moves the stack pointer by a
+# run-time amount (option dynalloca).
+#
+# Source (gcc -O2, x86-64):
+#   int vla(int n) { char buf[n]; return use(buf, n); }
+#   movslq %edi,%rax ; add $0xf,%rax ; and $-16,%rax ; sub %rax,%rsp ; mov %rsp,%rdi ; call use
+#
+# Stage: P7, RuleDynAlloca: PTRADD(stack pointer, -n, 1) with n not a
+# constant becomes alloca(n) (Hex-Rays prints alloca for sub rsp, reg).
+#
+# Pass 1 (dynalloca off, the default) prints the stack pointer arithmetic;
+# pass 2 (dynalloca on) prints alloca(...).
+#
+# `alloca` (default on) recognises the same stack move earlier, so this test
+# runs with it off; dynalloca is its default-off fallback.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'use' },
+    { space = 'ram', offset = '0x401010', name = 'vla' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+readonly = true
+hex = 'f30f1efa4088374863f60fbe4437ffc3f30f1efa554863c74889c64883c00f4883e0f04889e54829c44889e7e8cfffffffc9c3'
+
+[script]
+commands = [
+    'option alloca off',
+    'option dynalloca off',
+    'lo fu vla',
+    'decompile',
+    'print C',
+    'option dynalloca on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-DYNALLOCA #1: dynalloca on, the run-time stack move is alloca'
+count = 1
+literal = 'alloca('
+
+[[match]]
+name = 'KUNA-DYNALLOCA #2: dynalloca off (default), the stack arithmetic stays'
+count = 1
+literal = 'Stack'

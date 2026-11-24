@@ -99,7 +99,7 @@ fn render(vma: u64, on: bool) -> String {
 fn render_in(bin: &str, vma: u64, on: bool) -> String {
     let mut prog = boot_fixture(bin);
     prog.arch_mut()
-        .set_kuna_option("importdata", if on { "on" } else { "off" })
+        .set_unlace_option("importdata", if on { "on" } else { "off" })
         .expect("importdata flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

@@ -1,8 +1,8 @@
 //! Locate the engine programs and the compiled SLEIGH tree — the Rust port of
-//! `kuna/paths.py`.
+//! `unlace/paths.py`.
 //!
 //! `unlace` is the whole toolchain: its hidden `decomp_dbg` and `slacomp`
-//! subcommands run the decompiler console and the SLEIGH compiler, so `kuna
+//! subcommands run the decompiler console and the SLEIGH compiler, so `unlace
 //! decompile` and `unlace specs` re-enter the running binary rather than look for
 //! siblings. A release build also carries the SLEIGH tree inside itself
 //! ([`crate::embedded_specs`]), which makes the one file a complete install.
@@ -166,7 +166,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
     ))
 }
 
-/// How to point kuna at a SLEIGH tree, for the failures that surface after the
+/// How to point unlace at a SLEIGH tree, for the failures that surface after the
 /// directory itself resolved.
 pub const SPECS_HINT: &str = "set UNLACE_SPECS to a specs/ directory (a checkout's specs/, whose .sla \
      images compile into the .sla cache on first use, or the kuna-v<ver>-specs release archive)";

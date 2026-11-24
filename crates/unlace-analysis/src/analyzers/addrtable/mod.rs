@@ -1,4 +1,4 @@
-//! Address-table discovery — the kuna analog of Ghidra's `AddressTableAnalyzer`
+//! Address-table discovery — the unlace analog of Ghidra's `AddressTableAnalyzer`
 //! ("Create Address Tables").
 //!
 //! ## What this is (and the three things it is NOT)
@@ -20,7 +20,7 @@
 //!
 //! 2. **switch / jump-table recovery (`JumpTable::recoverAddresses`)** — INHERITED
 //!    🟡. The SSA/data-flow-driven, in-function switch recovery in the engine
-//!    (`decompiler/cpp/jumptable.{cc,hh}` → kuna `p2_lift/jumptable.rs`, driven
+//!    (`decompiler/cpp/jumptable.{cc,hh}` → unlace `p2_lift/jumptable.rs`, driven
 //!    from `p2_lift/flow.rs::recover_jump_tables`). It is the analog of Ghidra's
 //!    `DecompilerSwitchAnalyzer`. **This pass does NOT do that** and must not be
 //!    confused with it — the switch table the `switchtab_x86_64` fixture also
@@ -33,7 +33,7 @@
 //!    attempt it; #9 is a separate, deferred *engine* task (see
 //!    `docs/missing-analyses.md` §7 and `docs/history/analysis-port-log.md`).
 //!
-//! ## Origin (upstream Ghidra, the tree kuna was ported from)
+//! ## Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - Analyzer wrapper:
 //!   `Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/disassembler/AddressTableAnalyzer.java`
@@ -71,9 +71,9 @@
 //! ## Scope / LOSS vs Ghidra (documented divergence)
 //!
 //! - No listing/Bookmark/`makeTable`/`autoLabel` side effects: Ghidra mutates the
-//!   Program listing; kuna has no pre-decompile listing (the same tier limitation
+//!   Program listing; unlace has no pre-decompile listing (the same tier limitation
 //!   documented for the `FindNoReturnFunctionsAnalyzer` "Discovered" analyzer in
-//!   [`crate::loader::noreturn`]). kuna emits *facts only*.
+//!   [`crate::loader::noreturn`]). unlace emits *facts only*.
 //! - No index-table (secondary byte-index) recovery (`AddressTable.getEntry`'s
 //!   `checkForIndex` branch) and no shifted-address tables — deferred; rare on
 //!   x86-64 ELF.
@@ -106,7 +106,7 @@ const DEFAULT_MIN_POINTER_ADDR: u64 = 0x1024;
 
 /// `AddressTable` floor for the minimum run length. The faithful
 /// `getThresholdRunOfValidPointers` computes a probability over total mapped
-/// bytes vs `2^ptrbits` and clamps `>= 2`; kuna uses the clamped floor and lets
+/// bytes vs `2^ptrbits` and clamps `>= 2`; unlace uses the clamped floor and lets
 /// the caller raise `min_run`.
 const MIN_RUN_FLOOR: usize = 2;
 

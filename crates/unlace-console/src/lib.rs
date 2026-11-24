@@ -1,4 +1,4 @@
-//! unlace-console: console front-end of the kuna Rust port.
+//! unlace-console: console front-end of the unlace Rust port.
 //!
 //! Ports the interactive/test command surface (`decompiler/cpp/`):
 //!
@@ -11,7 +11,7 @@
 //!
 //! Binaries: `decomp_dbg` and `decomp_test_dbg` (exact upstream names), so
 //! the XML datatests under `tests/datatests/` and the Python harness
-//! (`kuna/run_tests.py`, `kuna/decompile.py`) drive the Rust engine through
+//! (`unlace/run_tests.py`, `unlace/decompile.py`) drive the Rust engine through
 //! the identical command surface, unchanged.
 //!
 //! Lints are inherited from the workspace (`[lints] workspace = true`).

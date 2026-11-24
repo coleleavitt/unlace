@@ -1,4 +1,4 @@
-//! (kuna) Size an MSVC `__cdecl` import's by-value class argument at the call
+//! (unlace) Size an MSVC `__cdecl` import's by-value class argument at the call
 //! site, so every parameter after it is placed.
 //!
 //! # The gap
@@ -112,10 +112,10 @@ fn stack_pointer(data: &Funcdata) -> Option<(Address, int4)> {
 /// call's open prototype with the full one; run at the end of
 /// `ActionDefaultParams`, on the raw p-code.
 pub fn size_slots(data: &mut Funcdata) {
-    data.kuna_set_msvc_byval_sites(Vec::new());
+    data.unlace_set_msvc_byval_sites(Vec::new());
     let arch = data.get_arch().clone();
-    let decl_map = byval_decls(&arch.kuna_states);
-    let builder_map = builders(&arch.kuna_states);
+    let decl_map = byval_decls(&arch.unlace_states);
+    let builder_map = builders(&arch.unlace_states);
     if decl_map.is_empty() {
         return;
     }
@@ -245,7 +245,7 @@ pub fn size_slots(data: &mut Funcdata) {
             mapped,
         });
     }
-    data.kuna_set_msvc_byval_sites(sites);
+    data.unlace_set_msvc_byval_sites(sites);
 }
 
 /// The type of a by-value slot of `size` bytes.
@@ -667,7 +667,7 @@ pub fn constructed_ranges(
     stack: &Rc<AddrSpace>,
 ) -> Vec<(OpId, uintb, int4)> {
     let mut out = Vec::new();
-    for site in data.kuna_msvc_byval_sites() {
+    for site in data.unlace_msvc_byval_sites() {
         let Some(builder) = site.builder else {
             continue;
         };
@@ -720,19 +720,19 @@ fn within(rel: uintb, size: int4, object: int4) -> bool {
 /// True for a by-value slot whose address the caller formed: that slot is an
 /// object, not just an argument.
 pub fn keeps_slot_mapped(data: &Funcdata, op: OpId, param: int4) -> bool {
-    data.kuna_msvc_byval_sites()
+    data.unlace_msvc_byval_sites()
         .iter()
         .any(|s| s.call == op && s.param as int4 == param && s.mapped)
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.msvcbyval_constructed_ranges = Some(constructed_ranges);
     hooks.msvcbyval_constructs = Some(constructs);
 }
 
-crate::kuna_arch_state!(ByvalDecls);
-crate::kuna_arch_state!(Builders);
+crate::unlace_arch_state!(ByvalDecls);
+crate::unlace_arch_state!(Builders);
 
 /// The image's MSVC by-value declarations, shared through the architecture's states.
 pub fn byval_decls(states: &crate::archstate::ArchStates) -> std::rc::Rc<ByvalDecls> {

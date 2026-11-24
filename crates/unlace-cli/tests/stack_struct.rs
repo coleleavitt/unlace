@@ -7,7 +7,7 @@ use common::process;
 use std::process::Command;
 
 /// `(base, memset)` of the four builds of `fixtures/stack_struct.c` in
-/// `tests/stages/kuna-stackstruct.toml`: gcc -O0, gcc -O2, clang -O0, clang -O2.
+/// `tests/stages/unlace-stackstruct.toml`: gcc -O0, gcc -O2, clang -O0, clang -O2.
 const BUILDS: [(u64, Option<u64>); 4] = [
     (0x401000, None),
     (0x501000, None),
@@ -18,7 +18,7 @@ const BUILDS: [(u64, Option<u64>); 4] = [
 fn image() -> std::path::PathBuf {
     let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-stackstruct.toml"
+        "/../../tests/stages/stackstruct.toml"
     )))
     .unwrap();
     let chunk =
@@ -44,7 +44,7 @@ fn image() -> std::path::PathBuf {
 fn helpers(base: u64) -> Vec<(String, u64)> {
     let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-stackstruct.toml"
+        "/../../tests/stages/stackstruct.toml"
     )))
     .unwrap();
     let symbol =
@@ -97,7 +97,7 @@ fn decompile_with(
     for option in off {
         args.extend(["--option", *option, "off"]);
     }
-    let (stdout, stderr, status) = common::run_kuna(&args);
+    let (stdout, stderr, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{stderr}");
     stdout
 }
@@ -215,7 +215,7 @@ int main(void) {{
 #[test]
 fn two_escaped_addresses_stay_two_objects() {
     let fixture = common::fixture("stack_struct_adjacent_a64.o");
-    let (code, stderr, status) = common::run_kuna(&[
+    let (code, stderr, status) = common::run_unlace(&[
         "decompile",
         &fixture,
         "adjacent",
@@ -240,7 +240,7 @@ fn two_escaped_addresses_stay_two_objects() {
 #[test]
 fn wide_pieces_print_as_c() {
     let vm = common::fixture("arraycoverwidth_x86_64");
-    let (code, stderr, status) = common::run_kuna(&["decompile", &vm, "vm"]);
+    let (code, stderr, status) = common::run_unlace(&["decompile", &vm, "vm"]);
     assert_eq!(status, 0, "{stderr}");
     for want in [
         "memset(&v2,0,0x10);",
@@ -250,7 +250,7 @@ fn wide_pieces_print_as_c() {
         assert!(code.contains(want), "missing `{want}`:\n{code}");
     }
     let pair = common::fixture("zerofillfwd_a64.o");
-    let (pair_code, stderr, status) = common::run_kuna(&["decompile-all", &pair]);
+    let (pair_code, stderr, status) = common::run_unlace(&["decompile-all", &pair]);
     assert_eq!(status, 0, "{stderr}");
     assert!(
         pair_code.contains("return *(unsigned __int128 *)v1;"),

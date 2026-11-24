@@ -160,22 +160,22 @@ fn effect(data: &Funcdata, id: OpId, storage: &Storage) -> Effect {
 
 /// Record raw register identities before SSA and copy propagation erase them.
 pub fn capture(data: &mut Funcdata) {
-    data.kuna_x87_empty_returns.clear();
+    data.unlace_x87_empty_returns.clear();
     let Some(storage) = data.get_arch().x87_empty_storage.clone() else {
         return;
     };
-    data.kuna_x87_float_returns.clear();
-    data.kuna_x87_float_calls.clear();
+    data.unlace_x87_float_returns.clear();
+    data.unlace_x87_float_calls.clear();
     if data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::x87depth::X87Depth>()
         .0
     {
         let facts = crate::x87depth::facts(data, &storage);
-        data.kuna_x87_empty_returns = facts.empty_returns;
-        data.kuna_x87_float_returns = facts.float_returns;
-        data.kuna_x87_float_calls = facts.float_calls;
+        data.unlace_x87_empty_returns = facts.empty_returns;
+        data.unlace_x87_float_returns = facts.float_returns;
+        data.unlace_x87_float_calls = facts.float_calls;
     }
     let has_free = data.obank().iter_code(OpCode::CPUI_CALLOTHER).any(|id| {
         data.obank()
@@ -239,14 +239,14 @@ pub fn capture(data: &mut Funcdata) {
         .into_iter()
         .filter_map(|(addr, empty)| empty.then_some(addr))
     {
-        if !data.kuna_x87_empty_returns.contains(&addr) {
-            data.kuna_x87_empty_returns.push(addr);
+        if !data.unlace_x87_empty_returns.contains(&addr) {
+            data.unlace_x87_empty_returns.push(addr);
         }
     }
 }
 
 pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
-    if data.get_func_proto().is_output_locked() || data.kuna_x87_empty_returns.is_empty() {
+    if data.get_func_proto().is_output_locked() || data.unlace_x87_empty_returns.is_empty() {
         return;
     }
     let Some(storage) = data.get_arch().x87_empty_storage.as_ref() else {
@@ -262,7 +262,7 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
     if ordinary.is_empty()
         || !ordinary
             .iter()
-            .all(|(_, o)| data.kuna_x87_empty_returns.contains(o.get_addr()))
+            .all(|(_, o)| data.unlace_x87_empty_returns.contains(o.get_addr()))
     {
         return;
     }
@@ -282,7 +282,7 @@ pub fn drop_empty(data: &Funcdata, active: &mut ParamActive, returns: &[OpId]) {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.x87emptyreturn_storage = Some(storage);
 }
 

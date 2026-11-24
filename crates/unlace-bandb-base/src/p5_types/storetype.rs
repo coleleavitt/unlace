@@ -1,4 +1,4 @@
-//! (kuna `storetype`) Type a global from the values stored into it.
+//! (unlace `storetype`) Type a global from the values stored into it.
 //!
 //! A global that only ever receives one kind of value has that value's type.
 //! `gBS = SystemTable->BootServices` makes `gBS` an `EFI_BOOT_SERVICES *`, but
@@ -187,9 +187,9 @@ pub fn efi_global_name(ty: &Datatype) -> Option<&'static str> {
     })
 }
 
-impl crate::optionset::KunaOption for StoreTypeMode {
+impl crate::optionset::UnlaceOption for StoreTypeMode {
     const NAME: &'static str = "storetype";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         crate::storetype::StoreTypeMode::Off
@@ -199,9 +199,9 @@ impl crate::optionset::KunaOption for StoreTypeMode {
         crate::storetype::StoreTypeMode::Uefi
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         Ok(crate::storetype::StoreTypeMode::parse(value.trim())
-            .map_err(unlace_base::error::KunaError::parse)
+            .map_err(unlace_base::error::UnlaceError::parse)
             .map(|mode| {
                 (
                     mode,
@@ -211,4 +211,4 @@ impl crate::optionset::KunaOption for StoreTypeMode {
     }
 }
 
-crate::kuna_arch_table!(Ledger);
+crate::unlace_arch_table!(Ledger);

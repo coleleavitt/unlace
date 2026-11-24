@@ -1,11 +1,11 @@
-//! Real-ELF [`LoadImage`] backend (W11, item `w11-elf-loader`) — the kuna
+//! Real-ELF [`LoadImage`] backend (W11, item `w11-elf-loader`) — the unlace
 //! analog of `decompiler/cpp/loadimage_bfd.{cc,hh}` (`LoadImageBfd`, the GNU
 //! BFD-backed loader used by the C++ console for real binaries).
 //!
 //! ## Why a substitution, not a transcription
 //!
 //! `LoadImageBfd` links the GNU BFD library (GPL-3, *excluded from the upstream
-//! build* — see the `loadimage_bfd.cc` header note).  The kuna Rust port cannot
+//! build* — see the `loadimage_bfd.cc` header note).  The unlace Rust port cannot
 //! carry a GPL-3 link dependency into an Apache-2.0 tree, so per the plan's
 //! dependency-substitution LOSS the BFD object model is replaced by the
 //! permissively-licensed [`object`] crate (read-only ELF parsing).  The
@@ -28,7 +28,7 @@
 //! - `getArchType()` returns the SLEIGH **language id** for the ELF machine
 //!   (e.g. `x86:LE:64:default:gcc`).  C++ `LoadImageBfd::getArchType` returns a
 //!   BFD-internal `"<printable>:<target>"` string that the Ghidra Java side
-//!   re-maps; kuna has no such map, so the loader resolves the language id
+//!   re-maps; unlace has no such map, so the loader resolves the language id
 //!   directly off the ELF header (machine + endianness + class), which is
 //!   exactly what `SleighArchitecture::resolveArchitecture` consumes.  The
 //!   compiler field (`:gcc`) is the System V/Linux default (the only ABI a bare
@@ -46,7 +46,7 @@
 //! ## Scope (PARTIAL)
 //!
 //! Machine -> language-id mapping is wired for the common Linux/SysV ELF
-//! machines kuna ships a `.sla` for (x86 32/64, ARM/AArch64, MIPS, PPC, SPARC,
+//! machines unlace ships a `.sla` for (x86 32/64, ARM/AArch64, MIPS, PPC, SPARC,
 //! RISC-V).  An unmapped machine surfaces a `LowlevelError` naming the machine
 //! (the caller falls back to an explicit `--target`).  Non-ELF object formats
 //! (PE/Mach-O) are a hook — this loader is ELF-only, matching the W11 task.
@@ -60,7 +60,7 @@ use object::read::{Object, ObjectSection, ObjectSegment, ObjectSymbol};
 use object::{Architecture, SegmentFlags, SymbolKind};
 
 use unlace_base::address::{Address, RangeList};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 
@@ -85,16 +85,16 @@ fn distinct_aliases(primary: &[FuncSym], aliases: Vec<FuncSym>) -> Vec<FuncSym> 
         .collect()
 }
 
-/// Demangle a loader funcsym name (the kuna analog of Ghidra's
+/// Demangle a loader funcsym name (the unlace analog of Ghidra's
 /// `GnuDemanglerAnalyzer`; see [`crate::demangle`]).  Applied to every
 /// `.symtab` / PLT / `.dynsym` name *after* `@VERSION` stripping and *before* it
 /// is installed as a `FunctionSymbol`, so `_ZN3foo3barEv` -> `foo::bar` and
-/// kuna's `::`-namespace splitter nests the call.  Operates on the byte-string
+/// unlace's `::`-namespace splitter nests the call.  Operates on the byte-string
 /// name: a non-UTF-8 name (or one that is not a recognized mangled symbol) is
 /// returned unchanged.  Reduces to the qualified name only (no signature /
 /// template args), which is a hard requirement of the scope splitter.
 ///
-/// (kuna `symbolnamechars`, GH-340) The character sanitizer runs LAST, on the
+/// (unlace `symbolnamechars`, GH-340) The character sanitizer runs LAST, on the
 /// reduced name: before it, `safe`'s byte pass would be looking at the mangled
 /// `_ZN…` envelope rather than at what actually reaches emitted C, and `ident`
 /// would fold the demangler's own output twice.  It still runs before
@@ -179,7 +179,7 @@ struct Segment {
     /// The bytes present at `vma`, shared from the input image until a relocation
     /// or assertion writes this segment (the C++ `secsize` is `data.len()`).
     data: SegmentData,
-    /// (kuna, `pe-zero-filled-data`) The segment's RAM footprint — ELF
+    /// (unlace, `pe-zero-filled-data`) The segment's RAM footprint — ELF
     /// `p_memsz`, PE `VirtualSize`, Mach-O `vmsize` — which may exceed the file
     /// extent in [`Self::data`]. The excess is the `.bss`-style zero-filled
     /// tail: mapped memory the file does not back, which the loader must still
@@ -224,7 +224,7 @@ fn clamp_virtual_tails(segments: &mut [Segment]) {
     }
 }
 
-/// (kuna) The image's mapped bytes: the vma-sorted segment list and the
+/// (unlace) The image's mapped bytes: the vma-sorted segment list and the
 /// byte-serving routines over it.
 ///
 /// Split out of [`ObjectLoadImage`] so the bytes can outlive one reader and be
@@ -435,7 +435,7 @@ struct SectionInfo {
     vma: u64,
     /// Section size (C++ `asection::size`).
     size: u64,
-    /// kuna [`section_flags`] (the translated BFD `SEC_*` flags).
+    /// unlace [`section_flags`] (the translated BFD `SEC_*` flags).
     flags: u32,
 }
 
@@ -486,7 +486,7 @@ struct DataSym {
 }
 
 /// \brief A [`LoadImage`] over a real ELF executable, backed by the [`object`]
-/// crate (the kuna substitution for C++ `LoadImageBfd`).
+/// crate (the unlace substitution for C++ `LoadImageBfd`).
 ///
 /// The ELF is parsed once at construction into the in-memory model (segments,
 /// sections, function symbols, the resolved language id) so the struct owns no
@@ -496,16 +496,16 @@ struct DataSym {
 pub struct ObjectLoadImage {
     /// Name of the loadimage (the `LoadImage` base-class `filename` member).
     filename: String,
-    /// (kuna) The ARM container states the VFP procedure-call standard
+    /// (unlace) The ARM container states the VFP procedure-call standard
     /// ([`crate::loader::armfloatabi::vfp_args`]).
     arm_vfp_args: bool,
-    /// (kuna) The container's floating-point argument convention
+    /// (unlace) The container's floating-point argument convention
     /// ([`crate::loader::floatabi::float_arg_registers`]).
     float_arg_registers: Option<bool>,
-    /// (kuna) Whether the container states floating-point register hardware
+    /// (unlace) Whether the container states floating-point register hardware
     /// ([`crate::loader::armfloatabi::fp_hardware`]).
     float_hardware: Option<bool>,
-    /// (kuna) Whether the callee extends a narrow return value
+    /// (unlace) Whether the callee extends a narrow return value
     /// ([`crate::loader::returnext::callee_extends_returns`]).
     callee_extends_returns: Option<bool>,
     /// The resolved SLEIGH language id (the `getArchType` payload).
@@ -531,7 +531,7 @@ pub struct ObjectLoadImage {
     /// The container's declared entry as a code address (the Thumb bit folded
     /// on ARM), `None` for a relocatable object or an image that declares none.
     image_entry: Option<u64>,
-    /// (kuna) The loadable segments as mapping *metadata*, ascending by vma —
+    /// (unlace) The loadable segments as mapping *metadata*, ascending by vma —
     /// the same `(vma, size, flags)` shape as [`Self::sections`], reported by
     /// `getSegments` so a section-keyed reader has a container to fall back on
     /// when the image carries no usable section table. Distinct from
@@ -558,17 +558,17 @@ pub struct ObjectLoadImage {
     datasyms: Vec<DataSym>,
     /// A PE or Mach-O image's data exports as `(vma, name)`; see [`ObjectLoadImage::data_exports`].
     data_exports: Vec<(u64, String)>,
-    /// (kuna `globalref`) Sorted, merged `[start, stop]` ranges of the sections
+    /// (unlace `globalref`) Sorted, merged `[start, stop]` ranges of the sections
     /// the program's own data objects live in; see
     /// [`crate::loader::globalref`].
     data_objects: Vec<(u64, u64)>,
-    /// (kuna) Extra `[start, stop]` (inclusive) byte ranges to treat as *constant*
+    /// (unlace) Extra `[start, stop]` (inclusive) byte ranges to treat as *constant*
     /// (read-only) beyond the section-flag scan — the MIPS GOT external slots,
     /// whose static contents (the `.MIPS.stubs` stub addresses) the engine folds
     /// so a `lw $t9, off($gp); jalr $t9` indirect call resolves to the import name.
     /// Empty off-MIPS.  See [`crate::loader::elf_plt::mips_got_const_ranges`].
     const_ranges: Vec<(u64, u64)>,
-    /// (kuna) `[start, stop]` (inclusive) byte ranges whose contents the engine
+    /// (unlace) `[start, stop]` (inclusive) byte ranges whose contents the engine
     /// may fold to a constant **without** the program-wide `option readonly` —
     /// values that are known by construction rather than by policy. Reported
     /// through `get_readonly` (so the varnodes carry `Varnode::readonly`) *and*
@@ -586,12 +586,12 @@ pub struct ObjectLoadImage {
     ///
     /// Empty for a non-ELF linked image, and with both gates off.
     dynreloc_const: Vec<(u64, u64)>,
-    /// (kuna `opaquepredicate globals`) `[lo, hi)` of the mapped bytes the
+    /// (unlace `opaquepredicate globals`) `[lo, hi)` of the mapped bytes the
     /// run-time loader fills with a value this image does not determine
     /// ([`crate::loader::dynrelocs::DynRelocs::runtime_written`] and the
     /// import slots). `None` when the image cannot list them.
     runtime_written: Option<Vec<(u64, u64)>>,
-    /// (kuna) The image's **import pointer slots** as half-open `[lo, hi)` VMA
+    /// (unlace) The image's **import pointer slots** as half-open `[lo, hi)` VMA
     /// ranges — the PE Import Address Table words a run-time loader fills with a
     /// resolved import address. [`Self::funcsyms`] carries a `FunctionSymbol` at
     /// each of them so a `call [slot]` renders the import name; this records that
@@ -601,7 +601,7 @@ pub struct ObjectLoadImage {
     import_slots: Vec<(u64, u64)>,
     nullable_relocations: Vec<unlace_decomp::nullable_reloc::NullableRelocation>,
     function_address_aliases: Vec<(u64, u64)>,
-    /// (kuna `pltlocal`) `(stub, definition)` for each PLT stub the image's own
+    /// (unlace `pltlocal`) `(stub, definition)` for each PLT stub the image's own
     /// dynamic relocations bind to a function it defines, ascending by stub. See
     /// [`crate::loader::pltlocal`].
     plt_local: Vec<(u64, u64)>,
@@ -656,7 +656,7 @@ fn collect_data_sym<'a>(
     if name.is_empty() {
         return;
     }
-    // (kuna `symbolnamechars`, GH-340) A data symbol's name reaches emitted C
+    // (unlace `symbolnamechars`, GH-340) A data symbol's name reaches emitted C
     // exactly as a function symbol's does, so it is sanitized at the same mint.
     // Defer identifier folding until all data names can be reserved together.
     let data_mode = if mode == NameChars::Ident {
@@ -670,7 +670,7 @@ fn collect_data_sym<'a>(
     }
 }
 
-/// (kuna `dynrelocs`) Store `value` into the `width`-byte slot at `vma`, in the
+/// (unlace `dynrelocs`) Store `value` into the `width`-byte slot at `vma`, in the
 /// image's own byte order (`le`), if a loaded segment actually backs it.
 ///
 /// Returns whether the write landed: a slot in a `.bss`-style RAM tail past the
@@ -713,17 +713,17 @@ impl ObjectLoadImage {
     /// the machine/endianness, and snapshots the loadable segments, sections,
     /// and function symbols.  Errors (the C++ `open()` `LowlevelError`s) on an
     /// unreadable file, an unrecognized object format, a non-ELF object, or a
-    /// machine with no kuna `.sla`.
-    pub fn open(filename: &str) -> KunaResult<ObjectLoadImage> {
+    /// machine with no unlace `.sla`.
+    pub fn open(filename: &str) -> UnlaceResult<ObjectLoadImage> {
         // Read the image file.
         let bytes = std::fs::read(filename).map_err(|e| {
-            KunaError::lowlevel(format!("Unable to open image file: {filename}: {e}"))
+            UnlaceError::lowlevel(format!("Unable to open image file: {filename}: {e}"))
         })?;
         Self::from_bytes(filename, &bytes)
     }
 
     /// Open from an in-memory image (the testable core of [`Self::open`]).
-    pub fn from_bytes(filename: &str, bytes: &[u8]) -> KunaResult<ObjectLoadImage> {
+    pub fn from_bytes(filename: &str, bytes: &[u8]) -> UnlaceResult<ObjectLoadImage> {
         Self::from_bytes_with_diagnostics(filename, bytes, true, None, None)
     }
 
@@ -733,13 +733,13 @@ impl ObjectLoadImage {
         filename: &str,
         bytes: &[u8],
         target: &str,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         Self::from_bytes_with_diagnostics(filename, bytes, true, Some(target), None)
     }
 
     /// Reconstruct a load image for an internal analysis consumer without
     /// repeating diagnostics already emitted by the primary load.
-    pub fn from_bytes_silent(filename: &str, bytes: &[u8]) -> KunaResult<ObjectLoadImage> {
+    pub fn from_bytes_silent(filename: &str, bytes: &[u8]) -> UnlaceResult<ObjectLoadImage> {
         Self::from_bytes_with_diagnostics(filename, bytes, false, None, None)
     }
 
@@ -749,7 +749,7 @@ impl ObjectLoadImage {
         filename: &str,
         bytes: &[u8],
         target: &str,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         Self::from_bytes_with_diagnostics(filename, bytes, false, Some(target), None)
     }
 
@@ -757,7 +757,7 @@ impl ObjectLoadImage {
         filename: &str,
         bytes: Arc<[u8]>,
         target: &str,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         Self::from_image_bytes_with_target(filename, bytes.into(), target)
     }
 
@@ -765,7 +765,7 @@ impl ObjectLoadImage {
         filename: &str,
         bytes: crate::image_bytes::ImageBytes,
         target: &str,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         Self::from_bytes_with_diagnostics(filename, &bytes, true, Some(target), Some(bytes.clone()))
     }
 
@@ -775,10 +775,10 @@ impl ObjectLoadImage {
         emit_diagnostics: bool,
         target: Option<&str>,
         shared_image: Option<crate::image_bytes::ImageBytes>,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         // Parse the object file.
         let file = parse_object(bytes).map_err(|e| {
-            KunaError::lowlevel(format!(
+            UnlaceError::lowlevel(format!(
                 "File: {filename} : not in recognized object file format: {e}"
             ))
         })?;
@@ -827,7 +827,7 @@ impl ObjectLoadImage {
                 );
             }
         }
-        // (kuna §2.2) The default-model fallback id: the same arch/endian stem
+        // (unlace §2.2) The default-model fallback id: the same arch/endian stem
         // with the model dropped to the per-arch default. If the format's chosen
         // model (e.g. PE's `:windows`) isn't vendored for this arch, the engine
         // retries with this before erroring.
@@ -836,7 +836,7 @@ impl ObjectLoadImage {
             .then(|| fallback_language_id(&file, effective_arch, &archtype))
             .flatten();
 
-        // (kuna) Relocatable-object (`.o` / `.obj`) path: a pre-link object does
+        // (unlace) Relocatable-object (`.o` / `.obj`) path: a pre-link object does
         // not say where its bytes live.  An ELF `ET_REL` has no `PT_LOAD` program
         // headers, so `file.segments()` is empty and the linked path below would
         // map zero bytes (every function failing with "Unable to load N bytes"); a
@@ -881,7 +881,7 @@ impl ObjectLoadImage {
                 executable_segments.push((vma, seg.size()));
             }
             let data = seg.data().map_err(|e| {
-                KunaError::lowlevel(format!("File: {filename} : unreadable segment data: {e}"))
+                UnlaceError::lowlevel(format!("File: {filename} : unreadable segment data: {e}"))
             })?;
             // The metadata records the RAM footprint whether or not the file
             // backs it, so a `.bss` tail still reads as mapped.
@@ -893,7 +893,7 @@ impl ObjectLoadImage {
                     flags: bits,
                 });
             }
-            // (kuna, `pe-zero-filled-data`) The RAM footprint is what the tail
+            // (unlace, `pe-zero-filled-data`) The RAM footprint is what the tail
             // is zero-filled to — but only where the image says the region holds
             // data. An *executable* uninitialized region is a packer's staging
             // area (`UPX0`: `VirtualSize` 0x9000 over `SizeOfRawData` 0), and
@@ -914,7 +914,7 @@ impl ObjectLoadImage {
                 memsz,
             });
         }
-        // (kuna, `pe-header-entry-mapped`) The header page a format maps ahead
+        // (unlace, `pe-header-entry-mapped`) The header page a format maps ahead
         // of its first section. `file.segments()` enumerates sections, so a PE's
         // `SizeOfHeaders` bytes at `ImageBase` were mapped nowhere and an entry
         // declared inside them read back "not mapped" even with an explicit
@@ -1000,12 +1000,12 @@ impl ObjectLoadImage {
         // Snapshot the function symbols.  Three sources, deduped by address so an
         // import that appears in several tables is registered exactly once:
         //   1. `.symtab` defined functions (BFD BSF_FUNCTION with a name),
-        //   2. PLT stubs → imported library names (the kuna analog of Ghidra's
+        //   2. PLT stubs → imported library names (the unlace analog of Ghidra's
         //      `ElfDefaultGotPltMarkup`; see [`crate::loader::elf_plt`]),
         //   3. `.dynsym` defined functions, for stripped-but-dynamic binaries
         //      whose `.symtab` is gone.
         // A name the address dedup drops is kept in `aliases` instead.
-        // (kuna `symbolnamechars`, GH-340) Read the gate ONCE for the whole walk:
+        // (unlace `symbolnamechars`, GH-340) Read the gate ONCE for the whole walk:
         // a large image carries a few hundred thousand names and the mode is a
         // process env var.
         let namechars = symbolnamechars_mode();
@@ -1251,7 +1251,7 @@ impl ObjectLoadImage {
         }
         let funcsym_aliases = distinct_aliases(&funcsyms, aliases);
 
-        // (kuna) MIPS GOT external slots → constant ranges, so the engine folds the
+        // (unlace) MIPS GOT external slots → constant ranges, so the engine folds the
         // `lw $t9, off($gp)` indirect-call load to the stub address and resolves the
         // call to the import name (the analog of Ghidra's `setConstant` on the GOT
         // pointer entries in `MIPS_ElfExtension.fixupGot`).  Empty off-MIPS.
@@ -1261,12 +1261,12 @@ impl ObjectLoadImage {
         let plt_local = fmt.local_import_targets(&file, bytes);
         let mips_linkage = crate::loader::mipsstubs::linkage(&file);
 
-        // (kuna) The import pointer slots the funcsym walk above just registered
+        // (unlace) The import pointer slots the funcsym walk above just registered
         // names at — recorded as addresses so the enumeration can tell a pointer
         // word from a function entry. Empty off-PE.
         let import_slots = fmt.import_slots(&file, bytes);
 
-        // (kuna `dynrelocs`) A linked image's `PT_LOAD` bytes are the LINKER's,
+        // (unlace `dynrelocs`) A linked image's `PT_LOAD` bytes are the LINKER's,
         // not the run-time loader's: every slot a dynamic relocation fills reads
         // back as 0. Fill them in here, on the owned segment copies, before
         // anything reads them; the RELRO-frozen subset that actually landed is
@@ -1289,7 +1289,7 @@ impl ObjectLoadImage {
             .into_iter()
             .filter(|(lo, _)| applied.contains(lo))
             .collect();
-        // (kuna `debuglink`) A stripped ELF's function names from its debug
+        // (unlace `debuglink`) A stripped ELF's function names from its debug
         // companion (build-id / `.gnu_debuglink`) or its `.gnu_debugdata`.
         if unlace_decomp::debuglink::debuglink_enabled() {
             let (symbols, source) = crate::loader::elf_debuglink::companion_symbols(
@@ -1322,7 +1322,7 @@ impl ObjectLoadImage {
                 ),
             );
         }
-        // (kuna `dynrelocs`) An `IRELATIVE` resolver is code only the dynamic
+        // (unlace `dynrelocs`) An `IRELATIVE` resolver is code only the dynamic
         // loader calls; name the unnamed ones, as IDA's `ifunc_<addr>` does.
         for &resolver in &dynrelocs.ifunc_resolvers {
             let addr = if file.architecture() == object::Architecture::Arm {
@@ -1383,7 +1383,7 @@ impl ObjectLoadImage {
         })
     }
 
-    /// (kuna) Build the image from a **relocatable object** (`ET_REL`): lay the
+    /// (unlace) Build the image from a **relocatable object** (`ET_REL`): lay the
     /// `SHF_ALLOC` sections out above
     /// [`RELOC_BASE`](crate::loader::reloc_object::RELOC_BASE), apply the `.rela.*`
     /// relocations, and rebase / extern-bind the symbols — producing
@@ -1397,7 +1397,7 @@ impl ObjectLoadImage {
         archtype: Vec<u8>,
         fallback_archtype: Option<Vec<u8>>,
         emit_diagnostics: bool,
-    ) -> KunaResult<ObjectLoadImage> {
+    ) -> UnlaceResult<ObjectLoadImage> {
         use crate::loader::reloc_object;
 
         let layout = reloc_object::layout_relocatable(file, fmt);
@@ -1418,7 +1418,7 @@ impl ObjectLoadImage {
         let reloc_sections = layout.section_info.clone();
         let reloc_symbols = layout.symbol_info.clone();
 
-        // (kuna `msvcfpconst`) MSVC spells each floating-point literal in the name
+        // (unlace `msvcfpconst`) MSVC spells each floating-point literal in the name
         // of the COMDAT that holds it, and COMDAT folding leaves that symbol
         // undefined in every object but one. Decode the name back into the datum:
         // the undefined half gets bytes at its synthetic extern slot (which has no
@@ -1556,7 +1556,7 @@ impl ObjectLoadImage {
             data_exports: Vec::new(),
             data_objects,
             const_ranges: Vec::new(),
-            // (kuna) The foldable-range exception list. `dynrelocs` itself is
+            // (unlace) The foldable-range exception list. `dynrelocs` itself is
             // linked-image only (a relocatable object's relocations are already
             // applied by the layout pass); on this path the entries come from
             // `msvcfpconst`, whose ranges qualify for exactly the same reason —
@@ -1650,7 +1650,7 @@ impl ObjectLoadImage {
             .collect()
     }
 
-    /// (kuna) The `[start, stop]` (inclusive) ranges whose contents fold to a
+    /// (unlace) The `[start, stop]` (inclusive) ranges whose contents fold to a
     /// constant with the program-wide `option readonly` still off — the
     /// `PT_GNU_RELRO`-frozen dynamic-relocation slots (`dynrelocs`) on a linked
     /// image, the MSVC `__real@` FP-constant COMDATs (`msvcfpconst`) on a
@@ -1668,7 +1668,7 @@ impl ObjectLoadImage {
         &self.dynreloc_const
     }
 
-    /// (kuna `pltlocal`) `(stub, definition)` for each PLT stub the image's own
+    /// (unlace `pltlocal`) `(stub, definition)` for each PLT stub the image's own
     /// relocations bind to a function it defines, ascending by stub.
     pub fn plt_local_targets(&self) -> &[(u64, u64)] {
         &self.plt_local
@@ -1680,13 +1680,13 @@ impl ObjectLoadImage {
         self.mips_linkage.as_ref()
     }
 
-    /// (kuna `globalref`) Sorted, merged `[start, stop]` ranges of the sections
+    /// (unlace `globalref`) Sorted, merged `[start, stop]` ranges of the sections
     /// a program's own data objects live in ([`crate::loader::globalref`]).
     pub fn data_object_ranges(&self) -> &[(u64, u64)] {
         &self.data_objects
     }
 
-    /// (kuna) The image's import pointer slots as half-open `[lo, hi)` VMA
+    /// (unlace) The image's import pointer slots as half-open `[lo, hi)` VMA
     /// ranges — the PE Import Address Table words.
     ///
     /// The loader registers a `FunctionSymbol` at each slot so a
@@ -1704,7 +1704,7 @@ impl ObjectLoadImage {
         &self.import_slots
     }
 
-    /// (kuna) `(alias, canonical)` VMA pairs for one function the image names
+    /// (unlace) `(alias, canonical)` VMA pairs for one function the image names
     /// at two addresses, such as a weak import's direct address and its slot.
     pub fn function_address_aliases(&self) -> &[(u64, u64)] {
         &self.function_address_aliases
@@ -1865,18 +1865,18 @@ impl LoadImage for ObjectLoadImage {
         &self.filename
     }
 
-    fn kuna_runtime_written(&self) -> Option<Vec<(u64, u64)>> {
+    fn unlace_runtime_written(&self) -> Option<Vec<(u64, u64)>> {
         self.runtime_written.clone()
     }
 
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         let space = addr
             .get_space()
             .expect("ObjectLoadImage::loadFill: address with null space (C++ UB)");
         match &self.spaceid {
             Some(sp) if Rc::ptr_eq(sp, space) => {}
             _ => {
-                return Err(KunaError::data_unavail(format!(
+                return Err(UnlaceError::data_unavail(format!(
                     "Trying to get loadimage bytes from space: {}",
                     space.get_name()
                 )));
@@ -1950,21 +1950,21 @@ impl LoadImage for ObjectLoadImage {
         self.inaccessible_segments.clone()
     }
 
-    fn kuna_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> KunaResult<()> {
+    fn unlace_overlay_bytes(&mut self, addr: &Address, data: &[u8]) -> UnlaceResult<()> {
         let space = addr
             .get_space()
             .expect("ObjectLoadImage::kuna_overlay_bytes: address with null space");
         match &self.spaceid {
             Some(sp) if Rc::ptr_eq(sp, space) => {}
             _ => {
-                return Err(KunaError::data_unavail(format!(
+                return Err(UnlaceError::data_unavail(format!(
                     "Trying to overlay loadimage bytes in space: {}",
                     space.get_name()
                 )));
             }
         }
         self.overlay_span(addr.get_offset(), data)
-            .map_err(KunaError::data_unavail)
+            .map_err(UnlaceError::data_unavail)
     }
 
     fn get_readonly(&self, list: &mut RangeList) {
@@ -1972,13 +1972,13 @@ impl LoadImage for ObjectLoadImage {
         let Some(space) = self.spaceid.as_ref() else {
             return;
         };
-        // (kuna) The MIPS GOT external slots, marked constant so the engine folds
+        // (unlace) The MIPS GOT external slots, marked constant so the engine folds
         // the `lw $t9, off($gp)` indirect-call load to the stub address (the analog
         // of Ghidra's `setConstant` on the GOT pointer entries).  Empty off-MIPS.
         for &(start, stop) in &self.const_ranges {
             list.insert_range(Rc::clone(space), start, stop);
         }
-        // (kuna) The constant-by-construction ranges: the dynamic-relocation slots
+        // (unlace) The constant-by-construction ranges: the dynamic-relocation slots
         // `PT_GNU_RELRO` freezes (read-only in the run-time image, so their
         // relocated contents are trustworthy) and the MSVC `__real@` FP-constant
         // COMDATs (whose value is spelled in the symbol name).
@@ -2096,7 +2096,7 @@ impl LoadImage for ObjectLoadImage {
 }
 
 /// Resolve the SLEIGH **language id** for an object (the `getArchType` payload).
-/// This is the kuna substitution for the Ghidra Java-side BFD-name -> language
+/// This is the unlace substitution for the Ghidra Java-side BFD-name -> language
 /// map: it reads the machine + endianness + class directly and returns the id
 /// `SleighArchitecture::resolveArchitecture` consumes (e.g.
 /// `x86:LE:64:default:gcc`).
@@ -2108,7 +2108,7 @@ impl LoadImage for ObjectLoadImage {
 /// falling back to the per-architecture default (`gcc`/`default`) when the
 /// format has no model for that architecture.
 ///
-/// PARTIAL: covers the common machines kuna ships a `.sla` for.  An unmapped
+/// PARTIAL: covers the common machines unlace ships a `.sla` for.  An unmapped
 /// machine is a `LowlevelError` naming it (the caller falls back to an explicit
 /// `--target` language id).
 fn language_id_for(
@@ -2118,12 +2118,12 @@ fn language_id_for(
     filename: &str,
     arch: Architecture,
     target: Option<&str>,
-) -> KunaResult<Vec<u8>> {
+) -> UnlaceResult<Vec<u8>> {
     if let Some(target) = target {
         return Ok(target.as_bytes().to_vec());
     }
     if let Some(id) = crate::loader::mipsocteon::language_id(file).map_err(|error| {
-        KunaError::lowlevel(format!(
+        UnlaceError::lowlevel(format!(
             "File: {filename}: {error}; pass an explicit --target"
         ))
     })? {
@@ -2148,7 +2148,7 @@ fn language_id_for(
         return Ok(id.into_bytes());
     }
     if let Some(id) = crate::loader::riscvzc::language_id(file).map_err(|error| {
-        KunaError::lowlevel(format!(
+        UnlaceError::lowlevel(format!(
             "File: {filename}: {error}; pass an explicit --target"
         ))
     })? {
@@ -2169,7 +2169,7 @@ fn language_id_for(
     // `gcc` (x86/RISCV) / `default` (everything else), reproducing the old
     // hard-coded id strings exactly.
     let model = fmt.compiler_model(arch);
-    // (kuna `goabi`) A Go image takes the vendored golang compiler spec on the
+    // (unlace `goabi`) A Go image takes the vendored golang compiler spec on the
     // three architectures that ship one: Go's register ABI is not the platform
     // C ABI (RAX/RBX/… carry arguments and multiple returns on x86-64), so
     // under the default model every Go function's parameters are invisible and
@@ -2190,7 +2190,7 @@ fn language_id_for(
     } else {
         model
     };
-    // (kuna `delphiabi`) A 32-bit Delphi PE takes the vendored Delphi compiler
+    // (unlace `delphiabi`) A 32-bit Delphi PE takes the vendored Delphi compiler
     // spec, whose default model is the `register` convention (EAX, EDX, ECX,
     // then the stack). Under the `windows` model those three registers are not
     // inputs, so every method loses `Self` and its first arguments.
@@ -2206,7 +2206,7 @@ fn language_id_for(
     let id: String = match compose_language_id(arch, endian, model) {
         Some(id) => id,
         None => {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "File: {filename} : unsupported machine {arch:?} \
                  (no kuna SLEIGH language; pass an explicit --target language id)"
             )));
@@ -2278,7 +2278,7 @@ pub fn effective_architecture(file: &object::File, bytes: &[u8]) -> Architecture
     }
 }
 
-/// The PE-family machine words kuna ships a SLEIGH language for. One list,
+/// The PE-family machine words unlace ships a SLEIGH language for. One list,
 /// read by the bare-COFF dispatcher, the TE probe, and both loaders' machine
 /// tables, so a machine added to one is added to all.
 pub const PE_MACHINES: [u16; 6] = [
@@ -2402,7 +2402,7 @@ fn target_endian_note(file: &object::File, target: &str) -> Option<String> {
 }
 
 /// Compose the SLEIGH language id from the format-neutral `arch` + `endian`
-/// stem and the per-format compiler `model`. `None` for an arch kuna has no
+/// stem and the per-format compiler `model`. `None` for an arch unlace has no
 /// `.sla` stem for. The single source of truth for the id string shape, shared
 /// by [`language_id_for`] and [`elf_language_ids`] so the resolves-in-the-DB
 /// test cannot drift from the producer.
@@ -2506,7 +2506,7 @@ pub fn elf_language_ids() -> Vec<String> {
             }
         }
     }
-    // (kuna `goabi`) The golang-model ids a Go ELF composes on the three
+    // (unlace `goabi`) The golang-model ids a Go ELF composes on the three
     // architectures that vendor a golang cspec (LE only — Go has no big-endian
     // target among them), so the resolves-in-the-DB gate proves them too.
     for arch in [
@@ -2518,7 +2518,7 @@ pub fn elf_language_ids() -> Vec<String> {
             out.push(id);
         }
     }
-    // (kuna `delphiabi`) The Delphi-model id a Delphi PE composes.
+    // (unlace `delphiabi`) The Delphi-model id a Delphi PE composes.
     if let Some(id) = compose_language_id(Architecture::I386, "LE", Some("borlanddelphi")) {
         out.push(id);
     }
@@ -2568,7 +2568,7 @@ pub fn format_language_ids(
 }
 
 /// The arch/endian set a **PE** image realistically carries (the Windows arches
-/// kuna ships a `.sla` for): x86 (LE only), ARM/AArch64 (LE only on Windows).
+/// unlace ships a `.sla` for): x86 (LE only), ARM/AArch64 (LE only on Windows).
 pub fn pe_language_ids() -> Vec<(String, Option<String>)> {
     use crate::loader::format::pe::PeFormat;
     format_language_ids(
@@ -2624,7 +2624,7 @@ mod tests {
     use super::*;
     use unlace_base::space::{AddrSpaceManager, ConstantSpace, addrspace_flags, spacetype};
 
-    /// (kuna `goabi`) A Go-marked image composes the `:golang` compiler field;
+    /// (unlace `goabi`) A Go-marked image composes the `:golang` compiler field;
     /// the same image without the marker keeps the platform model; a Go image
     /// on an architecture with no vendored golang cspec keeps its default.
     #[test]
@@ -3056,14 +3056,14 @@ mod tests {
             .load(4, &Address::new(Rc::clone(&ram), 0x1000))
             .unwrap_err();
         match &err {
-            KunaError::DataUnavail { explain } => {
+            UnlaceError::DataUnavail { explain } => {
                 assert!(explain.starts_with("Unable to load"), "got {explain}");
             }
             other => panic!("expected DataUnavail, got {other:?}"),
         }
     }
 
-    /// (kuna `--assert bytes`) The overlay is a statement about RAM: every later
+    /// (unlace `--assert bytes`) The overlay is a statement about RAM: every later
     /// read serves it, the file on disk is untouched, and an address no segment
     /// maps is refused rather than invented.
     #[test]
@@ -3082,7 +3082,7 @@ mod tests {
                 .unwrap(),
             vec![0x55, 0x48, 0x89, 0xe5]
         );
-        img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401001), &[0x31, 0xc0])
+        img.unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401001), &[0x31, 0xc0])
             .expect("inside the segment");
         assert_eq!(
             img.load(4, &Address::new(Rc::clone(&ram), 0x401000))
@@ -3094,10 +3094,10 @@ mod tests {
         // naming the span, because a half-applied overlay is worse than none.
         for (vma, len) in [(0x1000u64, 1usize), (0x401002, 4)] {
             let err = img
-                .kuna_overlay_bytes(&Address::new(Rc::clone(&ram), vma), &vec![0x90; len])
+                .unlace_overlay_bytes(&Address::new(Rc::clone(&ram), vma), &vec![0x90; len])
                 .unwrap_err();
             match &err {
-                KunaError::DataUnavail { explain } => {
+                UnlaceError::DataUnavail { explain } => {
                     assert!(explain.contains("no loaded segment maps"), "got {explain}");
                 }
                 other => panic!("expected DataUnavail, got {other:?}"),
@@ -3106,7 +3106,7 @@ mod tests {
         // A wrong-space overlay is the loadFill contract, not a panic.
         let other = Rc::clone(m.get_space_by_name("const").unwrap());
         assert!(
-            img.kuna_overlay_bytes(&Address::new(other, 0), &[0x90])
+            img.unlace_overlay_bytes(&Address::new(other, 0), &[0x90])
                 .is_err()
         );
     }
@@ -3125,7 +3125,7 @@ mod tests {
         let mut img = ObjectLoadImage::from_bytes("t.elf", &bytes).unwrap();
         img.attach_to_space(Rc::clone(&ram));
 
-        img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401020), &[0xde, 0xad])
+        img.unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401020), &[0xde, 0xad])
             .expect("inside the p_memsz tail");
         assert_eq!(
             img.load(4, &Address::new(Rc::clone(&ram), 0x40101f))
@@ -3134,7 +3134,7 @@ mod tests {
         );
         // Past p_memsz is not mapped at all.
         assert!(
-            img.kuna_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401040), &[0x90])
+            img.unlace_overlay_bytes(&Address::new(Rc::clone(&ram), 0x401040), &[0x90])
                 .is_err()
         );
     }
@@ -3164,7 +3164,7 @@ mod tests {
         let mut img = ObjectLoadImage::from_bytes("t.elf", &elf).unwrap();
         img.attach_to_space(Rc::clone(&ram));
         let err = img.load(2, &Address::new(other, 0)).unwrap_err();
-        assert!(matches!(err, KunaError::DataUnavail { .. }));
+        assert!(matches!(err, UnlaceError::DataUnavail { .. }));
     }
 
     #[test]
@@ -3194,7 +3194,7 @@ mod tests {
     #[test]
     fn non_elf_is_rejected() {
         let err = ObjectLoadImage::from_bytes("x", b"not an object file").unwrap_err();
-        assert!(matches!(err, KunaError::Lowlevel { .. }));
+        assert!(matches!(err, UnlaceError::Lowlevel { .. }));
     }
 
     /// The one ARM mode table both PE-family loaders read: the container
@@ -3430,7 +3430,7 @@ mod tests {
         out
     }
 
-    /// (kuna, `zero-function-sizes-make`) `getSegments` reports the program
+    /// (unlace, `zero-function-sizes-make`) `getSegments` reports the program
     /// headers with their permissions translated into section flags — the only
     /// mapping story a sectionless image has left.
     #[test]
@@ -3479,7 +3479,7 @@ mod tests {
         );
     }
 
-    /// (kuna, `pe-header-entry-mapped`) The PE header page reaches the map: an
+    /// (unlace, `pe-header-entry-mapped`) The PE header page reaches the map: an
     /// entry declared inside it has readable bytes. This fixture declares one,
     /// so the region is read-only CODE — the image itself named those bytes
     /// (`whole-binary-decompilation-treats`). The header page of an image that
@@ -3635,7 +3635,7 @@ mod tests {
         }
     }
 
-    /// (kuna, `pe-zero-filled-data`) A PE section that declares more RAM than
+    /// (unlace, `pe-zero-filled-data`) A PE section that declares more RAM than
     /// the file backs maps its whole `VirtualSize`: the file extent reads back
     /// its own bytes, the tail past `SizeOfRawData` reads back zeroes, and the
     /// first byte past `VirtualSize` is still unmapped.
@@ -3660,7 +3660,7 @@ mod tests {
         let mut past = [0u8; 1];
         let err = img.load_fill(&mut past, &at(0x1_4000_27a8)).unwrap_err();
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "VirtualSize is still the bound; got {err:?}"
         );
 
@@ -3698,7 +3698,7 @@ mod tests {
             .load(4, &Address::new(Rc::clone(&ram), 0x401040))
             .unwrap_err();
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "p_memsz bounds it: {err:?}"
         );
         let got = img
@@ -3717,12 +3717,12 @@ mod tests {
             .load(4, &Address::new(Rc::clone(&ram), 0x401030))
             .unwrap_err();
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "an executable segment's tail is not materialised as code; got {err:?}"
         );
     }
 
-    /// (kuna) A read past the end of a mapped segment is answered only from
+    /// (unlace) A read past the end of a mapped segment is answered only from
     /// inside the staging window, so restoring the window a read found brings
     /// back the answer it gave, and restoring an empty one brings back the
     /// failure of a cold read.
@@ -3758,7 +3758,7 @@ mod tests {
         );
     }
 
-    /// (kuna) A read longer than the 512-byte staging buffer is served straight
+    /// (unlace) A read longer than the 512-byte staging buffer is served straight
     /// into the caller's slice.  Upstream copies its answer back with
     /// `memcpy(ptr,buffer,size)` and over-reads the buffer for any such
     /// request; the same copy spelled as a Rust slice panicked ("range end
@@ -3831,12 +3831,12 @@ mod tests {
 
         let err = img.load(667, &at(0x900000)).unwrap_err();
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "unmapped start: {err:?}"
         );
         let err = img.load(667, &at(0x401000 - 8)).unwrap_err();
         assert!(
-            matches!(err, KunaError::DataUnavail { .. }),
+            matches!(err, UnlaceError::DataUnavail { .. }),
             "starts below the map: {err:?}"
         );
     }
@@ -3927,7 +3927,7 @@ mod tests {
         );
     }
 
-    /// (kuna `dynrelocs`) A real PIE: the three `R_X86_64_RELATIVE` slots are
+    /// (unlace `dynrelocs`) A real PIE: the three `R_X86_64_RELATIVE` slots are
     /// filled in with `B + A`, the five `GLOB_DAT` / nine `JUMP_SLOT` entries all
     /// name *undefined* imports and must be left alone, and only the two RELATIVE
     /// slots that `PT_GNU_RELRO` (`0x3d78 + 0x288`) covers are reported constant —
@@ -4088,7 +4088,7 @@ mod tests {
 
     #[test]
     fn et_rel_ptx_fix_output_parameters_loads_and_rebases() {
-        // (kuna) The ET_REL relocatable-object path on the real testcase binary
+        // (unlace) The ET_REL relocatable-object path on the real testcase binary
         // (angr `test_decompiling_ptx_fix_output_parameters`). Before this
         // feature, `ptx.o` (a `.o` with no PT_LOAD segments) mapped zero bytes
         // and every function failed with "Unable to load N bytes". Now the
@@ -4282,11 +4282,11 @@ mod tests {
 
     #[test]
     fn cpp_mangled_symbol_is_demangled_name_only() {
-        // The kuna `GnuDemanglerAnalyzer` analog (`demangle`): a defined C++
+        // The unlace `GnuDemanglerAnalyzer` analog (`demangle`): a defined C++
         // method `_ZN3foo3Bar3bazEi` must surface in the funcsym stream as the
         // demangled NAME-ONLY form `foo::Bar::baz` — not the raw mangled symbol,
         // and not the full c++filt signature `foo::Bar::baz(int)` (the trailing
-        // `(int)` would corrupt kuna's `::` scope splitter).
+        // `(int)` would corrupt unlace's `::` scope splitter).
         let syms = fixture_funcsyms("cpp_mangled_x86_64");
         assert!(
             syms.values().any(|n| n == "foo::Bar::baz"),

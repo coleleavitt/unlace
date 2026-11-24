@@ -1,4 +1,4 @@
-//! (kuna) The `macho-arm64e` option gate: load an arm64e Mach-O under the
+//! (unlace) The `macho-arm64e` option gate: load an arm64e Mach-O under the
 //! `AARCH64:LE:64:AppleSilicon` pointer-authentication spec instead of the
 //! generic `v8A`.
 //!
@@ -23,15 +23,15 @@ pub fn macho_arm64e_enabled() -> bool {
         .unwrap_or_else(crate::loadoptions::env::macho_arm64e)
 }
 
-/// Bridge a `set_kuna_option("macho-arm64e", val)` toggle to
+/// Bridge a `set_unlace_option("macho-arm64e", val)` toggle to
 /// [`MACHO_ARM64E_ENV`] so a later `load file` in the same process sees it.
 pub fn set_macho_arm64e_env(on: bool) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(MACHO_ARM64E_ENV, if on { "on" } else { "off" }) };
 }
 
-crate::kuna_flag!(
-    /// (kuna `macho-arm64e`) The requested state of the arm64e spec selection; the catalog's live `current` field reads it.
+crate::unlace_flag!(
+    /// (unlace `macho-arm64e`) The requested state of the arm64e spec selection; the catalog's live `current` field reads it.
     MachoArm64e,
     "macho-arm64e",
     "Mach-O arm64e Apple-Silicon spec selection",

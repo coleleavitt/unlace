@@ -4,7 +4,7 @@
 //! slots; before, every primary-opcode-4 word was a bad instruction (or an
 //! AltiVec one) and psq_l/psq_st were not decoded.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 const TARGET: &str = "PowerPC:BE:32:Gekko";
 
@@ -31,7 +31,7 @@ fn rows(stdout: &str) -> Vec<String> {
 }
 
 fn decompile(args: &[&str]) -> String {
-    let (stdout, stderr, code) = run_kuna(&[&["decompile"][..], args].concat());
+    let (stdout, stderr, code) = run_unlace(&[&["decompile"][..], args].concat());
     assert_eq!(code, 0, "unlace decompile {args:?}: {stderr}");
     let lower = stdout.to_lowercase();
     assert!(!lower.contains("unimplemented"), "{args:?}:\n{stdout}");
@@ -54,7 +54,7 @@ fn raw(addr: &str) -> String {
 #[test]
 fn every_paired_single_encoding_decodes_as_binutils_names_it() {
     let probe = fixture("probe.o");
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "disassemble",
         &probe,
         "probe",

@@ -1,4 +1,4 @@
-//! (kuna) The `exporttrie` option gate: read Mach-O export tries for names.
+//! (unlace) The `exporttrie` option gate: read Mach-O export tries for names.
 //!
 //! A thin image whose symbol table lacks an export the trie lists gets that
 //! name, and a dyld shared cache image names a call into another image after

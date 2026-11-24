@@ -46,7 +46,7 @@ impl Loaded {
         let mut prog = bootstrap_from_object(&path, "", &specs)
             .expect("bootstrap i386 fixture with built processor specs");
         prog.arch_mut()
-            .set_kuna_option("x86listingswitch", if enabled { "on" } else { "off" })
+            .set_unlace_option("x86listingswitch", if enabled { "on" } else { "off" })
             .expect("set x86listingswitch before discovery");
         let bytes = std::fs::read(&path).expect("read i386 fixture");
         Self { prog, bytes, path }
@@ -635,9 +635,9 @@ fn decompiled_fixture_function(address: u64, enabled: bool) -> String {
     let arch = loaded.prog.arch_mut();
     arch.apply_mode("aggressive")
         .expect("apply aggressive mode");
-    arch.set_kuna_option("fast_funcdisc", "off").unwrap();
-    arch.set_kuna_option("listing", "on").unwrap();
-    arch.set_kuna_option("x86listingswitch", if enabled { "on" } else { "off" })
+    arch.set_unlace_option("fast_funcdisc", "off").unwrap();
+    arch.set_unlace_option("listing", "on").unwrap();
+    arch.set_unlace_option("x86listingswitch", if enabled { "on" } else { "off" })
         .unwrap();
     loaded
         .prog

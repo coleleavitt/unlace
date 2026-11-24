@@ -1,4 +1,4 @@
-//! (kuna) `stackstoreguard` -- every stack byte a guarded indexed store may
+//! (unlace) `stackstoreguard` -- every stack byte a guarded indexed store may
 //! reach is one local.
 //!
 //! The heritage guard of `p3_dataflow/stackstoreguard.rs` keeps an indexed
@@ -1808,30 +1808,30 @@ fn moved_from(fd: &Funcdata, vn: VarnodeId) -> VarnodeId {
     cur
 }
 
-/// (kuna `stackstoreguard`) What the latest `restructure_varnode` pass says the final layout
+/// (unlace `stackstoreguard`) What the latest `restructure_varnode` pass says the final layout
 /// must satisfy; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct ChecksSlot(std::cell::RefCell<crate::storereach::ReachChecks>);
-crate::kuna_func_state!(ChecksSlot, keep_across_clear: false);
+crate::unlace_func_state!(ChecksSlot, keep_across_clear: false);
 
-/// The `kuna_storereach` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_storereach` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStorereachExt {
-    /// (kuna `stackstoreguard`) Record what this pass says the final layout
+    /// (unlace `stackstoreguard`) Record what this pass says the final layout
     /// must satisfy.
     fn note_store_reach_checks(&self, checks: crate::storereach::ReachChecks);
-    /// (kuna `stackstoreguard`) What the latest pass recorded.
+    /// (unlace `stackstoreguard`) What the latest pass recorded.
     fn store_reach_checks(&self) -> crate::storereach::ReachChecks;
 }
 
 impl FuncdataStorereachExt for crate::funcdata::Funcdata {
-    /// (kuna `stackstoreguard`) Record what this pass says the final layout
+    /// (unlace `stackstoreguard`) Record what this pass says the final layout
     /// must satisfy.
     fn note_store_reach_checks(&self, checks: crate::storereach::ReachChecks) {
-        *self.kuna_state::<ChecksSlot>().0.borrow_mut() = checks;
+        *self.unlace_state::<ChecksSlot>().0.borrow_mut() = checks;
     }
-    /// (kuna `stackstoreguard`) What the latest pass recorded.
+    /// (unlace `stackstoreguard`) What the latest pass recorded.
     fn store_reach_checks(&self) -> crate::storereach::ReachChecks {
-        self.kuna_state::<ChecksSlot>().0.borrow().clone()
+        self.unlace_state::<ChecksSlot>().0.borrow().clone()
     }
 }

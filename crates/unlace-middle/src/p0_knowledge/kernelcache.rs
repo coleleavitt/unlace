@@ -1,4 +1,4 @@
-//! (kuna) The `kernelcache` option: whether `load file` unwraps Apple firmware
+//! (unlace) The `kernelcache` option: whether `load file` unwraps Apple firmware
 //! containers (IMG4 / IM4P, LZFSE, `complzss`) and which `LC_FILESET_ENTRY` of an
 //! `MH_FILESET` kernel collection it loads.
 //!
@@ -6,7 +6,7 @@
 //! the [`KERNELCACHE_ENV`] environment variable, exported by the `unlace` CLI and
 //! bridged from the console `option` command.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 pub const KERNELCACHE_ENV: &str = "UNLACE_KERNELCACHE";
 
@@ -62,9 +62,9 @@ pub fn set_kernelcache_env(choice: &KernelcacheChoice) {
     unsafe { std::env::set_var(KERNELCACHE_ENV, choice.as_str()) };
 }
 
-pub fn parse_kernelcache(value: &str) -> KunaResult<(KernelcacheChoice, String)> {
+pub fn parse_kernelcache(value: &str) -> UnlaceResult<(KernelcacheChoice, String)> {
     let choice = KernelcacheChoice::parse(value).ok_or_else(|| {
-        KunaError::parse(format!(
+        UnlaceError::parse(format!(
             "kernelcache expects auto, off, or a fileset entry id, got {value:?}"
         ))
     })?;

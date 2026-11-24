@@ -98,7 +98,7 @@ fn anonymous_aggregate_takes_its_typedef_name() {
     );
 }
 
-/// ...unless that typedef name is already a kuna core type (`code`, which zlib's
+/// ...unless that typedef name is already a unlace core type (`code`, which zlib's
 /// `inftrees.h` really does typedef an anonymous struct to). The factory refuses
 /// the redefinition, and the aggregate is interned under a size-suffixed name
 /// with its fields instead of letting the pointer degrade to `void *`.

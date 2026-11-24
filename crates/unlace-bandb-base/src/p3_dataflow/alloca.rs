@@ -1,4 +1,4 @@
-//! (kuna `alloca`) A dynamic stack allocation becomes `alloca(size)`.
+//! (unlace `alloca`) A dynamic stack allocation becomes `alloca(size)`.
 //!
 //! `alloca(n)` and a variable-length array compile to a subtraction of the
 //! rounded size from the stack pointer:
@@ -195,7 +195,7 @@ fn is_alloca(data: &Funcdata, vn: VarnodeId) -> bool {
 pub fn rewrite_raw(data: &mut Funcdata) {
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::alloca::AllocaCalls>()
         .0
     {
@@ -347,7 +347,7 @@ impl Rule for RuleAlloca {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::alloca::AllocaCalls>()
             .0
         {
@@ -580,7 +580,7 @@ impl Rule for RuleAllocaProbe {
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         if !data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::alloca::AllocaCalls>()
             .0
         {
@@ -633,8 +633,8 @@ impl Rule for RuleAllocaProbe {
     }
 }
 
-crate::kuna_flag!(
-    /// (kuna) A dynamic stack allocation becomes `alloca(size)` (option
+crate::unlace_flag!(
+    /// (unlace) A dynamic stack allocation becomes `alloca(size)` (option
     /// `alloca`). See [`crate::alloca`].
     AllocaCalls,
     "alloca",

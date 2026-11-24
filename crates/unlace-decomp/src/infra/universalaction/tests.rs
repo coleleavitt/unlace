@@ -1,5 +1,5 @@
 //! Structural and installation checks for the universal schedule.
-//! `tests/universalaction_listing.rs` compares its listing with the kuna snapshot.
+//! `tests/universalaction_listing.rs` compares its listing with the unlace snapshot.
 
 use super::*;
 use crate::action::{ActionDatabase, build_default_groups};

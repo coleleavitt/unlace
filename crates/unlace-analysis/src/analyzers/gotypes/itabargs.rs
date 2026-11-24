@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) Interface parameters of a stripped Go binary, typed from
+//! (unlace `goitabcalls`) Interface parameters of a stripped Go binary, typed from
 //! the static itabs its callers pass.
 //!
 //! Without DWARF nothing says that a function's first two integer registers are
@@ -309,7 +309,7 @@ fn scanned_votes(
     leas.len()
 }
 
-/// (kuna `goitabcalls`) The stripped-binary interface-parameter pass (a
+/// (unlace `goitabcalls`) The stripped-binary interface-parameter pass (a
 /// Listing consumer, gated by the option).
 pub struct GoItabArgsPass;
 
@@ -410,7 +410,7 @@ impl AnalysisPass for GoItabArgsPass {
             let facet = LangFacet::GoItab {
                 interface: interface.clone(),
             };
-            if types.kuna_lang_facet(&name) != Some(facet) {
+            if types.unlace_lang_facet(&name) != Some(facet) {
                 continue;
             }
             let Some(record) = types.find_by_name(&name).ok().flatten() else {

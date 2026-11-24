@@ -18,13 +18,13 @@
 //! both arches (it is a real loaded pointer the runtime dereferences), so it is read
 //! at the native pointer width here — only the COL's *internal* fields are `IBO32`.
 //!
-//! Origin (upstream Ghidra, the tree kuna was ported from):
+//! Origin (upstream Ghidra, the tree unlace was ported from):
 //! `Ghidra/Features/MicrosoftCodeAnalyzer/.../rtti/RttiUtil.java` +
 //! `Rtti0Model`/`Rtti1Model`/`Rtti4Model` (`getRtti0Address`/`getReferencedAddress`
 //! switch on `program.getDefaultPointerSize()`).
 
 /// The endianness of the loaded image (PE is always little-endian on every arch
-/// kuna's SLEIGH specs support, but the reader is endian-explicit for symmetry with
+/// unlace's SLEIGH specs support, but the reader is endian-explicit for symmetry with
 /// the rest of the analysis tier — see [`crate::pclntab`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum End {

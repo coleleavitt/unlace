@@ -46,7 +46,7 @@ fn abi_table_is_the_kernel_order_and_excludes_rcx() {
 }
 
 #[test]
-fn element_id_is_in_the_kuna_range() {
+fn element_id_is_in_the_unlace_range() {
     assert_eq!(ELEM_X64SYSCALL.get_id(), 4161);
     assert_eq!(ELEM_X64SYSCALL.get_name(), "x64syscall");
 }

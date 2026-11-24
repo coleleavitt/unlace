@@ -14,7 +14,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
@@ -166,7 +166,7 @@ struct CapturedInstruction {
 
 /// Decode the instruction at `vma` (in `code_space`) by driving `translate`.
 ///
-/// Returns `Err` for an undecodable address (`KunaError::Unimpl` / `BadData`
+/// Returns `Err` for an undecodable address (`UnlaceError::Unimpl` / `BadData`
 /// from the engine); the caller's policy is to stop-this-path on an error
 /// (design §3.4). Assembly capture is best-effort: if rendering errs after the
 /// p-code lift succeeds, the instruction is still returned (with whatever
@@ -191,7 +191,7 @@ pub fn decode_one(
     code_space: &Rc<AddrSpace>,
     want_assembly: bool,
     want_stored_scalars: bool,
-) -> KunaResult<Decoded> {
+) -> UnlaceResult<Decoded> {
     let mut asm = AsmCapture::default();
     let captured = capture_instruction(
         translate,
@@ -224,7 +224,7 @@ pub(super) fn decode_one_listing(
     want_stored_scalars: bool,
     intern: &mut impl FnMut(&str) -> Mnemonic,
     key: Option<&mut Option<Vec<u32>>>,
-) -> KunaResult<DecodedListing> {
+) -> UnlaceResult<DecodedListing> {
     let mut asm = InterningAsmCapture::new(intern);
     let captured = capture_instruction(
         translate,
@@ -252,7 +252,7 @@ fn capture_instruction(
     want_stored_scalars: bool,
     asm: &mut dyn AssemblyEmit,
     key: Option<&mut Option<Vec<u32>>>,
-) -> KunaResult<CapturedInstruction> {
+) -> UnlaceResult<CapturedInstruction> {
     let addr = Address::new(Rc::clone(code_space), vma);
 
     let mut cap = OpCapture {
@@ -313,7 +313,7 @@ pub(crate) fn decode_one_with_assembly(
     vma: u64,
     code_space: &Rc<AddrSpace>,
     decoded: &mut Decoded,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     let addr = Address::new(Rc::clone(code_space), vma);
     decoded.ops.clear();
     decoded.mnemonic.clear();
@@ -350,7 +350,7 @@ mod tests {
     use std::path::PathBuf;
     use std::rc::Rc;
 
-    use unlace_base::error::KunaError;
+    use unlace_base::error::UnlaceError;
     use unlace_base::space::{RegisterLookup, VarnodeStorage};
     use unlace_sleigh::globalcontext::ContextInternal;
     use unlace_sleigh::loadimage::LoadImage;
@@ -371,10 +371,10 @@ mod tests {
             "callback-decode"
         }
 
-        fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+        fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
             self.reads.set(self.reads.get() + 1);
             if self.fail {
-                return Err(KunaError::data_unavail("counted test image failure"));
+                return Err(UnlaceError::data_unavail("counted test image failure"));
             }
             for (i, byte) in ptr.iter_mut().enumerate() {
                 let vma = addr.get_offset().wrapping_add(i as u64);
@@ -400,8 +400,8 @@ mod tests {
             "dummy"
         }
 
-        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-            Err(KunaError::data_unavail("dummy"))
+        fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+            Err(UnlaceError::data_unavail("dummy"))
         }
 
         fn get_arch_type(&self) -> Vec<u8> {
@@ -452,7 +452,7 @@ mod tests {
     }
 
     impl RegisterLookup for AssemblyFailure<'_> {
-        fn get_register(&self, name: &str) -> KunaResult<VarnodeStorage> {
+        fn get_register(&self, name: &str) -> UnlaceResult<VarnodeStorage> {
             self.inner.get_register(name)
         }
 
@@ -474,7 +474,10 @@ mod tests {
             &mut self.base
         }
 
-        fn initialize(&mut self, _store: &mut unlace_base::xml::DocumentStorage) -> KunaResult<()> {
+        fn initialize(
+            &mut self,
+            _store: &mut unlace_base::xml::DocumentStorage,
+        ) -> UnlaceResult<()> {
             Ok(())
         }
 
@@ -489,17 +492,21 @@ mod tests {
             self.inner.get_user_op_names(names);
         }
 
-        fn instruction_length(&self, addr: &Address) -> KunaResult<i32> {
+        fn instruction_length(&self, addr: &Address) -> UnlaceResult<i32> {
             self.inner.instruction_length(addr)
         }
 
-        fn one_instruction(&self, emit: &mut dyn PcodeEmit, addr: &Address) -> KunaResult<i32> {
+        fn one_instruction(&self, emit: &mut dyn PcodeEmit, addr: &Address) -> UnlaceResult<i32> {
             self.inner.one_instruction(emit, addr)
         }
 
-        fn print_assembly(&self, _emit: &mut dyn AssemblyEmit, _addr: &Address) -> KunaResult<i32> {
+        fn print_assembly(
+            &self,
+            _emit: &mut dyn AssemblyEmit,
+            _addr: &Address,
+        ) -> UnlaceResult<i32> {
             self.calls.set(self.calls.get() + 1);
-            Err(KunaError::lowlevel("intentional test assembly failure"))
+            Err(UnlaceError::lowlevel("intentional test assembly failure"))
         }
     }
 

@@ -107,7 +107,7 @@ pub fn wire_storage(fd: &mut crate::funcdata::Funcdata) {
 #[doc(hidden)]
 pub fn reserve_wire_storage(fd: &mut crate::funcdata::Funcdata, id: u64, size: int4) {
     if fd
-        .kuna_wrapped_wire_storage
+        .unlace_wrapped_wire_storage
         .get(&id)
         .is_some_and(|(_, reserved)| *reserved == size)
     {
@@ -117,5 +117,5 @@ pub fn reserve_wire_storage(fd: &mut crate::funcdata::Funcdata, id: u64, size: i
     if addr.get_offset() == 0x20000000 {
         addr = fd.vbank_mut().reserve_unique(size);
     }
-    fd.kuna_wrapped_wire_storage.insert(id, (addr, size));
+    fd.unlace_wrapped_wire_storage.insert(id, (addr, size));
 }

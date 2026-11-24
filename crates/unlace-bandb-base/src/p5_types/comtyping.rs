@@ -1,4 +1,4 @@
-//! (kuna `com`) What a COM object request hands back, from the interface id it
+//! (unlace `com`) What a COM object request hands back, from the interface id it
 //! passes.
 //!
 //! `CoCreateInstance(&CLSID_ShellLink, 0, 1, &IID_IShellLinkW, &p)` writes an
@@ -65,7 +65,7 @@ const MAX_QI: u64 = 8;
 #[derive(Default, Clone)]
 pub struct ComInterfaces(pub BTreeMap<u64, Rc<Datatype>>);
 
-crate::kuna_arch_state!(ComInterfaces);
+crate::unlace_arch_state!(ComInterfaces);
 
 /// The image's interface ids, shared through the architecture's states; empty
 /// before the analysis commits them (and always, with `com` off).
@@ -96,7 +96,7 @@ pub fn out_param_type(
     slot: i32,
 ) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
-    let known = com_interfaces(&arch.kuna_states);
+    let known = com_interfaces(&arch.unlace_states);
     if known.0.is_empty() {
         return None;
     }
@@ -195,7 +195,7 @@ fn multi_qi_record(
         None => "MULTI_QI".to_string(),
     };
     let size = 3 * ptr;
-    let shell = types.kuna_declare_record(&name, false).ok()?;
+    let shell = types.unlace_declare_record(&name, false).ok()?;
     if shell.get_metatype() != type_metatype::TYPE_STRUCT {
         return None;
     }
@@ -240,7 +240,7 @@ fn multi_qi_array(
     );
     let stride = 3 * ptr;
     let size = stride.checked_mul(i32::try_from(elements.len()).ok()?)?;
-    let shell = types.kuna_declare_record(&name, false).ok()?;
+    let shell = types.unlace_declare_record(&name, false).ok()?;
     if shell.get_metatype() != type_metatype::TYPE_STRUCT {
         return None;
     }

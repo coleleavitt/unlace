@@ -1,4 +1,4 @@
-//! Pointer-nesting cap for inferred data types (kuna `ptrdepthcap`, P5).
+//! Pointer-nesting cap for inferred data types (unlace `ptrdepthcap`, P5).
 //!
 //! `ActionInferTypes` solves a bidirectional lattice over the p-code graph.  A
 //! small-string-optimized C++ object (MSVC `std::basic_string`, `std::ostringstream`'s

@@ -25,7 +25,7 @@ use unlace_base::space::{AddrSpace, addrspace_flags, spacetype};
 use unlace_decomp::capability::{CapabilityRegistry, NamedCapability};
 use unlace_decomp::libdecomp::start_decompiler_library;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
@@ -39,8 +39,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -84,7 +84,7 @@ fn ram_space() -> Rc<AddrSpace> {
 #[test]
 fn func_default_name_matches_cpp_printraw_oracle() {
     let mut arch = Architecture::new("t", bare_sleigh());
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::NameStyleAngr(false)); // exercise the upstream `func_` path
 
     let addr = Address::new(ram_space(), 0x401000);

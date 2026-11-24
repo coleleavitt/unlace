@@ -24,14 +24,14 @@ fn decompile_fixture(fixture: &str, function: &str, directives: &[&str]) -> (Str
     for directive in directives {
         args.extend(["--assert", directive]);
     }
-    let (text, stderr, _) = common::run_kuna(&args);
+    let (text, stderr, _) = common::run_unlace(&args);
     let text_rejected: Vec<String> = stderr
         .lines()
         .filter(|line| line.contains("rejected"))
         .map(str::to_string)
         .collect();
     args.push("--json");
-    let (doc, stderr, _) = common::run_kuna(&args);
+    let (doc, stderr, _) = common::run_unlace(&args);
     let parsed: serde_json::Value =
         serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
     let code = parsed

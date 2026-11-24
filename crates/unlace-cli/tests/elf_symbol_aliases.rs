@@ -109,7 +109,7 @@ fn arm_aliases_select_the_definition_instead_of_its_import() {
 #[test]
 fn an_alias_never_outbids_a_function_of_the_same_name() {
     let binary = common::fixture("elfaliasclash_x86_64");
-    let (functions, stderr, code) = common::run_kuna(&["functions", &binary, "--json"]);
+    let (functions, stderr, code) = common::run_unlace(&["functions", &binary, "--json"]);
     assert_eq!(code, 0, "{stderr}");
     let functions: serde_json::Value = serde_json::from_str(&functions).unwrap();
     let twin = functions["functions"]
@@ -127,13 +127,13 @@ fn an_alias_never_outbids_a_function_of_the_same_name() {
         "{twin}"
     );
 
-    let (text, stderr, code) = common::run_kuna(&["decompile", &binary, "shared"]);
+    let (text, stderr, code) = common::run_unlace(&["decompile", &binary, "shared"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(text.contains("a0 + -5"), "{text}");
-    let (json, stderr, code) = common::run_kuna(&["decompile", &binary, "shared", "--json"]);
+    let (json, stderr, code) = common::run_unlace(&["decompile", &binary, "shared", "--json"]);
     assert_eq!(code, 0, "{stderr}");
     assert!(json.contains("\"address_hex\": \"0x1155\""), "{json}");
-    let (_, stderr, code) = common::run_kuna(&[
+    let (_, stderr, code) = common::run_unlace(&[
         "decompile-all",
         &binary,
         "--functions",

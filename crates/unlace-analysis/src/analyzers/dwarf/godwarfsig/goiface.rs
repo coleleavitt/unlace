@@ -1,4 +1,4 @@
-//! (kuna `goitabcalls`) A Go interface formal keeps its two ABI words, the
+//! (unlace `goitabcalls`) A Go interface formal keeps its two ABI words, the
 //! table word typed by the interface's itab record.
 //!
 //! Go DWARF describes an interface type as a typedef chain named after the
@@ -69,7 +69,7 @@ impl Facts {
 /// `gotypes` harvest with its `GoItab` facet) and an opaque data pointer.
 /// `None` with the option off or when the image holds no such record.
 pub(super) fn input_types(arch: &Architecture, interface: &str) -> Option<[Rc<Datatype>; 2]> {
-    if !arch.kuna_options.get::<GoItabCalls>().0 {
+    if !arch.unlace_options.get::<GoItabCalls>().0 {
         return None;
     }
     let types = arch.types();
@@ -80,7 +80,7 @@ pub(super) fn input_types(arch: &Architecture, interface: &str) -> Option<[Rc<Da
     };
     if record.get_metatype() != type_metatype::TYPE_STRUCT
         || record.get_size() == 0
-        || types.kuna_lang_facet(&name) != Some(facet)
+        || types.unlace_lang_facet(&name) != Some(facet)
     {
         return None;
     }

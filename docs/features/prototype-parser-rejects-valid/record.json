@@ -23,8 +23,8 @@
     "retargeted": "The filed acceptance ran against a dataset binary (graphy), which `verify --promote` refuses because CI has no dataset. Retargeted verbatim in shape onto the in-repo fauxware fixture and re-derived the id; both directives measured `rejected` on the unpatched tree at 7e77fb8c."
   },
   "tests": [
-    "decompiler/crates/kuna-console/src/grammar/tests.rs -- 6 cases",
-    "decompiler/crates/kuna-console/tests/verify_assertplane.rs -- 1 end-to-end case",
+    "decompiler/crates/console/src/grammar/tests.rs -- 6 cases",
+    "decompiler/crates/console/tests/verify_assertplane.rs -- 1 end-to-end case",
     "tests/cli/prototype-parser-rejects-valid.json -- the promoted acceptance"
   ],
   "gates": {

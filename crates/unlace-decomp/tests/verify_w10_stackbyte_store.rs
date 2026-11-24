@@ -67,7 +67,7 @@ fn fixture(
     spaces.insert_space(Rc::clone(&stack)).unwrap();
 
     let mut arch = ArchContext::new(spaces);
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::StackViews(true));
     let mut fd = Funcdata::new(
         "build",

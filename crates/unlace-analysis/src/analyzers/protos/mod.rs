@@ -1,4 +1,4 @@
-//! Library-prototype seeding — the kuna analog of Ghidra's
+//! Library-prototype seeding — the unlace analog of Ghidra's
 //! `ApplyDataArchiveAnalyzer` ("Apply Data Archives").
 //!
 //! Ghidra ships parsed C headers as binary data-type archives (`.gdt`) and, for
@@ -8,7 +8,7 @@
 //! call's argument (a `char *`) and — combined with read-only string data — emits
 //! `puts("Username: ")` instead of `puts(0x400915)`.
 //!
-//! The `.gdt` archives are a binary format not vendored into the kuna tree, so
+//! The `.gdt` archives are a binary format not vendored into the unlace tree, so
 //! this pass substitutes a **built-in table of the most common libc signatures**
 //! (a faithful, minimal stand-in). It is the deliberate analog of the
 //! dependency/data substitutions elsewhere in the port (BFD → `object`); the
@@ -31,7 +31,7 @@ use std::rc::Rc;
 use object::SymbolKind;
 use object::read::{Object, ObjectSymbol};
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
@@ -95,7 +95,7 @@ enum Ty {
     Complex(i32),
     /// `double` (8-byte IEEE 754). `long double` has no fixed width and no Ty.
     Double,
-    /// (kuna `libctypes`) A pointer to the NAMED libc/POSIX aggregate spelled by
+    /// (unlace `libctypes`) A pointer to the NAMED libc/POSIX aggregate spelled by
     /// the payload (`FILE`, `stat`, `DIR`, ...), sized from
     /// [`libctypes::NAMED_AGGREGATES`].
     ///
@@ -525,13 +525,13 @@ const CXX_ALLOC: &[(&str, Sig)] = &[
     ),
 ];
 
-/// Build the kuna [`Datatype`] for a [`Ty`] using the architecture's type factory.
+/// Build the unlace [`Datatype`] for a [`Ty`] using the architecture's type factory.
 fn build_ty(
     t: Ty,
     types: &dyn TypeFactory,
     word_size: uint4,
     layout: libctypes::Layout,
-) -> KunaResult<Rc<Datatype>> {
+) -> UnlaceResult<Rc<Datatype>> {
     let ptr = types.get_size_of_pointer();
     match t {
         Ty::Void => types.get_type_void(),
@@ -567,7 +567,7 @@ fn build_ty(
             types.get_type_pointer(ptr, v, word_size)
         }
         Ty::Complex(size) => crate::analyzers::dwarf::dwarfcomplex::complex_type(types, size)
-            .ok_or_else(|| unlace_base::error::KunaError::lowlevel("unsupported complex layout")),
+            .ok_or_else(|| unlace_base::error::UnlaceError::lowlevel("unsupported complex layout")),
         Ty::Float => types.get_base(4, type_metatype::TYPE_FLOAT),
         Ty::Double => types.get_base(8, type_metatype::TYPE_FLOAT),
         Ty::NamedPtr(n) => {
@@ -584,7 +584,7 @@ fn build_pieces(
     types: &dyn TypeFactory,
     word_size: uint4,
     layout: libctypes::Layout,
-) -> KunaResult<PrototypePieces> {
+) -> UnlaceResult<PrototypePieces> {
     let outtype = Some(build_ty(sig.ret, types, word_size, layout)?);
     let mut intypes = Vec::with_capacity(sig.params.len());
     for p in sig.params {
@@ -599,12 +599,12 @@ fn build_pieces(
         first_var_arg_slot: sig.vararg,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: libcnames::library_names(name)
+        unlace_library_names: libcnames::library_names(name)
             .filter(|n| n.params.len() == sig.params.len()),
     })
 }
 
-/// (kuna) The named-aggregate layout this image's built-in prototypes are built
+/// (unlace) The named-aggregate layout this image's built-in prototypes are built
 /// under: the `libctypes` gate, narrowed by whether the aggregate widths are
 /// true of THIS object (`Off` when they are not) and then by whether the
 /// published glibc layouts are.
@@ -624,13 +624,13 @@ pub(crate) fn effective_libctypes_layout(
     }
 }
 
-/// (kuna `formatstring static`) The table names whose last fixed parameter is a
+/// (unlace `formatstring static`) The table names whose last fixed parameter is a
 /// `char *` and whose varargs are nevertheless NOT governed by it. `execlp`'s is
 /// `argv[0]`, not a format — every other variadic in the tables is excluded
 /// structurally (its last fixed slot is an `int` or a `size_t`).
 const NOT_FORMAT_VARIADICS: &[&str] = &["execl", "execle", "execlp"];
 
-/// (kuna `formatstring static`) The built-in prototype for a VARIADIC
+/// (unlace `formatstring static`) The built-in prototype for a VARIADIC
 /// format-taking libc function, plus the parameter index its format string
 /// occupies — or `None` when neither table knows the name, or knows it as
 /// something else.
@@ -753,7 +753,7 @@ fn seed_named_prototypes(
     }
 }
 
-/// (kuna `declaredlibcproto`) The built-in signature for a function name the
+/// (unlace `declaredlibcproto`) The built-in signature for a function name the
 /// OPERATOR declared, or `None` when neither table knows the name.
 ///
 /// The two load-time passes match a name the *image* carries: [`LibProtoPass`]
@@ -773,7 +773,7 @@ pub fn declared_libc_prototype(
     word_size: uint4,
     layout: unlace_decomp::libctypes::LibcTypesLayout,
 ) -> Option<PrototypePieces> {
-    // (kuna `libctypes`) The named-aggregate form of the same signature when that
+    // (unlace `libctypes`) The named-aggregate form of the same signature when that
     // gate is on, so a declared `fopen` agrees with what the load-time pass parks
     // on an imported one. A named signature that cannot be built -- the image
     // holds `stat` as its own 24-byte struct, say -- degrades to the width-stable
@@ -1013,7 +1013,7 @@ impl AnalysisPass for LibProtoPass {
         seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
         if ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::cppsig::CppSigMode>()
             .enabled()
         {

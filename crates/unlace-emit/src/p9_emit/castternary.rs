@@ -1,4 +1,4 @@
-//! (kuna `castternary`) Leave out the integer widening on an arm of
+//! (unlace `castternary`) Leave out the integer widening on an arm of
 //! `dest = c ? a : b;` that the conditional operator performs itself.
 //!
 //! `iteregion` prints an assignment diamond as one conditional.  Each arm keeps
@@ -385,8 +385,8 @@ fn is_int(t: &Datatype) -> bool {
         && int_range(t).is_some()
 }
 
-crate::kuna_flag!(
-    /// (kuna `castternary`) Leave out an integer widening on an arm of an
+crate::unlace_flag!(
+    /// (unlace `castternary`) Leave out an integer widening on an arm of an
     /// `iteregion` conditional when the conditional converts the arm to that same
     /// type itself (its type under the usual arithmetic conversions is the cast's
     /// target with and without the cast).  See [`crate::castternary`].

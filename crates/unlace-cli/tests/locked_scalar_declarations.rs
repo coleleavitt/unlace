@@ -33,7 +33,7 @@ fn pe64_detached_binding_keeps_locked_float() {
 }
 
 fn check_target(target: &str, weaker: bool, detached: bool) {
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
@@ -79,7 +79,7 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
     );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
@@ -109,8 +109,8 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         .high_bank()
         .iter()
         .find(|(_, h)| {
-            h.kuna_name() == Some("v1")
-                && h.kuna_symbol_type()
+            h.unlace_name() == Some("v1")
+                && h.unlace_symbol_type()
                     .is_some_and(|t| t.get_metatype() == type_metatype::TYPE_FLOAT)
         })
         .map(|(id, _)| id)
@@ -119,7 +119,7 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
         .high_bank()
         .get(high)
         .unwrap()
-        .kuna_link_symbol()
+        .unlace_link_symbol()
         .expect("mapped Symbol");
     assert!(
         fd.get_scope_local()
@@ -190,7 +190,7 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
             }
         }
         let old = fd.high_bank().get(high).unwrap();
-        let ty = old.kuna_symbol_type().unwrap().clone();
+        let ty = old.unlace_symbol_type().unwrap().clone();
         let members: Vec<_> = (0..old.num_instances())
             .map(|i| old.get_instance(i))
             .collect();
@@ -238,7 +238,7 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
             });
         }
         let h = bank.get_mut(replacement).unwrap();
-        h.set_kuna_name("v1");
+        h.set_unlace_name("v1");
         h.set_symbol_type(ty);
         h.set_symbol_offset(-1);
         *fd.high_bank_mut() = bank;
@@ -249,14 +249,14 @@ __declspec(dllexport) unsigned int choose_word(unsigned int first,unsigned int s
             fd.high_bank()
                 .get(replacement)
                 .unwrap()
-                .kuna_link_symbol()
+                .unlace_link_symbol()
                 .is_none()
         );
     }
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::printc::Realtypes(true));
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::CTypes(true));
     let body = arch.with_print(|printer, arch| printer.doc_function_full(fd, arch));
     assert!(body.contains("float v1;"), "locked type was lost:\n{body}");
@@ -338,7 +338,7 @@ fn function_pointer_local_round_trips(debug: &str) {
     {
         return;
     }
-    let (body, err, status) = common::run_kuna(&["decompile", object.to_str().unwrap(), "apply"]);
+    let (body, err, status) = common::run_unlace(&["decompile", object.to_str().unwrap(), "apply"]);
     assert_eq!(status, 0, "{err}");
     assert!(
         body.contains("int (*f)(int,int);"),

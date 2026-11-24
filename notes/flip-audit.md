@@ -39,7 +39,7 @@ Every run exited 0, and the two default runs were byte-identical for all 16 inpu
 - `boolreturn` does not change the x86-64 decbench builds tried (bzip2recover, mksyntax; also
   zlib's minigzipsh and examplesh and coreutils' basename, not in the table). It does change
   betaflight's `isBoardAlignmentStandard` (the #759 nested-run case), which is the input that
-  exercises it here. Its four x86-64 shapes are pinned by `tests/stages/kuna-boolreturn-default.toml`.
+  exercises it here. Its four x86-64 shapes are pinned by `tests/stages/boolreturn-default.toml`.
 - `mfcmsgmap` and `msvcptrentry` change none of the MSVC inputs available (two analysis
   fixtures and a small console tool; none links MFC or stores a function pointer the way
   `msvcptrentry` reads). They run on all three, and the output stays deterministic with them on.

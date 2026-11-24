@@ -72,7 +72,7 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
         .unwrap()
         .address();
     for case in 0..5 {
-        program.arch_mut().kuna_callee_overrides.clear();
+        program.arch_mut().unlace_callee_overrides.clear();
         let expected = match case {
             0 | 1 => {
                 if case == 1 {
@@ -97,7 +97,7 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
                 let other_site = Address::new(Rc::clone(&code), site.get_offset() + 1);
                 program
                     .arch_mut()
-                    .kuna_callee_overrides
+                    .unlace_callee_overrides
                     .entry(caller.clone())
                     .or_default()
                     .insert(other_site, alternate.clone());
@@ -107,14 +107,14 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
                 let foreign = Rc::new(AddrSpace::new_for_decode(spacetype::IPTR_INTERNAL));
                 program
                     .arch_mut()
-                    .kuna_callee_overrides
+                    .unlace_callee_overrides
                     .entry(caller.clone())
                     .or_default()
                     .insert(site.clone(), Address::new(foreign, alternate.get_offset()));
                 slot
             }
         };
-        let stated = program.arch().kuna_callee_overrides.clone();
+        let stated = program.arch().unlace_callee_overrides.clone();
         let index = xrefs::build(
             &file,
             program.arch(),
@@ -136,6 +136,6 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
             );
         }
         assert!(index.has_indirect_calls(caller.get_offset()));
-        assert_eq!(program.arch().kuna_callee_overrides, stated);
+        assert_eq!(program.arch().unlace_callee_overrides, stated);
     }
 }

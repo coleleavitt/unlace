@@ -6,7 +6,7 @@
 //! map-4 instruction, and every EVEX instruction with an EGPR, was a bad
 //! instruction.
 use crate::common;
-use common::{repo_root, run_kuna};
+use common::{repo_root, run_unlace};
 
 fn fixture(name: &str) -> String {
     repo_root()
@@ -52,7 +52,7 @@ const PROBE: [&str; 16] = [
 #[test]
 fn apx_forms_decode() {
     let elf = fixture("apx.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "probe"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "probe"]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     assert_eq!(&listing[..PROBE.len()], PROBE, "{stdout}");
@@ -74,7 +74,7 @@ const EVEX_PROBE: [&str; 10] = [
 #[test]
 fn apx_evex_egpr_forms_decode() {
     let elf = fixture("apx.elf");
-    let (stdout, stderr, code) = run_kuna(&["disassemble", &elf, "evex_probe"]);
+    let (stdout, stderr, code) = run_unlace(&["disassemble", &elf, "evex_probe"]);
     assert_eq!(code, 0, "{stderr}");
     let listing = rows(&stdout);
     assert_eq!(&listing[..EVEX_PROBE.len()], EVEX_PROBE, "{stdout}");
@@ -82,7 +82,7 @@ fn apx_evex_egpr_forms_decode() {
 
 fn decompile_raw(addr: &str) -> String {
     let bin = fixture("apx.bin");
-    let (stdout, stderr, code) = run_kuna(&[
+    let (stdout, stderr, code) = run_unlace(&[
         "decompile",
         &bin,
         addr,

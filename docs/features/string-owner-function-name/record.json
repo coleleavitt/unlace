@@ -20,7 +20,7 @@
       "detail": "The fallback runs only after the name/alias filter produced zero candidates, so an ambiguity is still reported with its candidates and a binary that genuinely carries a symbol spelled `sub_1234` still wins -- no name that resolved before can change. The accepted address must additionally satisfy vma_is_mapped, which is the numeric selector's own test in the same function, so a resolved placeholder reaches exactly the entry `--addr` on that address reaches and `sub_deadbeef` still answers `no function`. Deliberate consequence: a `sub_<hex>` naming a mapped-but-not-code address (BSS, .data) now decompiles instead of erroring, exactly as `--addr` on it does. Making the by-name form STRICTER than --addr was the alternative and was rejected: vma_is_mapped falls back to a byte probe when the loader publishes no sections (the XML corpus, sectionless ELFs), so a CODE-flag test would have made the fallback inert on precisely the stripped images that need it."
     },
     {
-      "what": "placed in kuna-console, not kuna-cli",
+      "what": "placed in console, not kuna-cli",
       "detail": "`touches:` named kuna-cli/src/decompile.rs and strings.rs. Both name lookups every surface goes through are ConsoleProgram::resolve_entry (console `load function`, which is what `kuna decompile` scripts, plus decompile-all --functions and xrefs) and ConsoleProgram::find_entry_by_name (disassemble, decompile-all's resolve_function_spec). One helper behind both closes the round trip on all of them; the same fix in decompile.rs would have closed it for one command and left the other three refusing the name kuna printed. strings.rs is unchanged -- it was never wrong, it just named an entry nothing could then select."
     },
     {

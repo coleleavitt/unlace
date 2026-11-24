@@ -56,7 +56,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::spacetype;
 use unlace_base::types::{Wrap, int4, uint4, uintb};
 use unlace_num::opcodes::OpCode;
@@ -333,7 +333,7 @@ impl LanedRegister {
     /// transform.cc:300).
     ///
     /// `laneSizes` is a comma-separated list of sizes.
-    pub fn parse_sizes(&mut self, register_size: int4, lane_sizes: &str) -> KunaResult<()> {
+    pub fn parse_sizes(&mut self, register_size: int4, lane_sizes: &str) -> UnlaceResult<()> {
         self.whole_size = register_size;
         self.size_bit_mask = 0;
         // The C++ walks comma-separated tokens; the split iterator reproduces the
@@ -345,7 +345,7 @@ impl LanedRegister {
             // used here are plain decimal lane byte-sizes.
             let sz: int4 = parse_int_autobase(value).unwrap_or(-1);
             if !(0..=16).contains(&sz) {
-                return Err(KunaError::lowlevel(format!("Bad lane size: {value}")));
+                return Err(UnlaceError::lowlevel(format!("Bad lane size: {value}")));
             }
             self.add_lane_size(sz);
         }
@@ -713,7 +713,7 @@ impl TransformManager {
         true
     }
 
-    /// (kuna) The preexisting Varnodes the manager holds pieces for.
+    /// (unlace) The preexisting Varnodes the manager holds pieces for.
     pub fn original_varnodes(&self) -> impl Iterator<Item = VarnodeId> + '_ {
         self.piece_map
             .values()
@@ -1028,7 +1028,7 @@ impl TransformManager {
         vn: VarnodeId,
         bit_size: int4,
         lsb_offset: int4,
-    ) -> KunaResult<TVarRef> {
+    ) -> UnlaceResult<TVarRef> {
         let create_index = fd
             .vbank()
             .get(vn)
@@ -1037,7 +1037,7 @@ impl TransformManager {
         if let Some(vec) = self.piece_map.get(&create_index) {
             let res = &vec[0];
             if res.bit_size != bit_size || res.val != lsb_offset as uintb {
-                return Err(KunaError::lowlevel(
+                return Err(UnlaceError::lowlevel(
                     "Cannot create multiple pieces for one Varnode through getPiece",
                 ));
             }
@@ -1175,8 +1175,8 @@ impl TransformManager {
     /// placeholder via [`crate::funcdata_varnode::op_iop_decode`], and indirect
     /// creation via `markIndirectCreation`.
     ///
-    /// (kuna) Fails before touching `fd` when [`Self::check_free_fanout`] does.
-    pub fn apply(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
+    /// (unlace) Fails before touching `fd` when [`Self::check_free_fanout`] does.
+    pub fn apply(&mut self, fd: &mut Funcdata) -> UnlaceResult<()> {
         self.check_free_fanout(fd)?;
         let mut input_list: Vec<TVarRef> = Vec::new();
         self.create_ops(fd)?;
@@ -1187,11 +1187,11 @@ impl TransformManager {
         Ok(())
     }
 
-    /// (kuna) Reject a transform that would give a free Varnode it creates a
+    /// (unlace) Reject a transform that would give a free Varnode it creates a
     /// second reader (`Varnode::addDescend`'s error), which `place_inputs`
     /// would otherwise raise after `remove_old` has already destroyed IR. A
     /// constant may have several readers: `opSetInput` gives each a copy.
-    pub fn check_free_fanout(&self, fd: &Funcdata) -> KunaResult<()> {
+    pub fn check_free_fanout(&self, fd: &Funcdata) -> UnlaceResult<()> {
         let mut readers: BTreeMap<TVarRef, usize> = BTreeMap::new();
         for op in &self.new_ops {
             for rvn in op.input.iter().flatten() {
@@ -1215,7 +1215,9 @@ impl TransformManager {
                 _ => false,
             };
             if free {
-                return Err(KunaError::lowlevel("Free varnode has multiple descendants"));
+                return Err(UnlaceError::lowlevel(
+                    "Free varnode has multiple descendants",
+                ));
             }
         }
         Ok(())
@@ -1223,7 +1225,7 @@ impl TransformManager {
 
     /// Handle some special PcodeOp marking (C++
     /// `TransformManager::specialHandling`, transform.cc:654).
-    fn special_handling(&self, fd: &mut Funcdata, rop: TOpRef) -> KunaResult<()> {
+    fn special_handling(&self, fd: &mut Funcdata, rop: TOpRef) -> UnlaceResult<()> {
         let special = self.new_ops[rop.0].special;
         let replacement = self.new_ops[rop.0]
             .replacement
@@ -1238,7 +1240,7 @@ impl TransformManager {
 
     /// Create a new op for each placeholder, then insert them all into control
     /// flow (C++ `TransformManager::createOps`, transform.cc:665).
-    fn create_ops(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
+    fn create_ops(&mut self, fd: &mut Funcdata) -> UnlaceResult<()> {
         for i in 0..self.new_ops.len() {
             self.create_op_replacement(fd, TOpRef(i))?;
         }
@@ -1259,7 +1261,7 @@ impl TransformManager {
 
     /// Create the new/modified op a placeholder represents (C++
     /// `TransformOp::createReplacement`, transform.cc:225).
-    fn create_op_replacement(&mut self, fd: &mut Funcdata, rop: TOpRef) -> KunaResult<()> {
+    fn create_op_replacement(&mut self, fd: &mut Funcdata, rop: TOpRef) -> UnlaceResult<()> {
         let special = self.new_ops[rop.0].special;
         let opc = self.new_ops[rop.0].opc;
         if (special & top_special::op_preexisting) != 0 {
@@ -1385,7 +1387,7 @@ impl TransformManager {
         &mut self,
         fd: &mut Funcdata,
         input_list: &mut Vec<TVarRef>,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // BTreeMap iteration is ascending create-index order, matching map<int4,...>.
         let keys: Vec<int4> = self.piece_map.keys().copied().collect();
         for key in keys {
@@ -1427,7 +1429,7 @@ impl TransformManager {
 
     /// Create the new/modified variable a placeholder represents (C++
     /// `TransformVar::createReplacement`, transform.cc:175).
-    fn create_var_replacement(&mut self, fd: &mut Funcdata, rvn: TVarRef) -> KunaResult<()> {
+    fn create_var_replacement(&mut self, fd: &mut Funcdata, rvn: TVarRef) -> UnlaceResult<()> {
         if self.var(rvn).replacement.is_some() {
             return Ok(()); // Replacement already created
         }
@@ -1476,7 +1478,7 @@ impl TransformManager {
                         .var(rvn)
                         .replacement
                         .expect("create_var_replacement: temp created");
-                    fd.kuna_inherit_storage_slice(
+                    fd.unlace_inherit_storage_slice(
                         replacement,
                         original,
                         (self.var(rvn).val / 8) as int4,
@@ -1488,7 +1490,7 @@ impl TransformManager {
             tvar_type::piece => {
                 let mut byte_pos = self.var(rvn).val as int4;
                 if (byte_pos & 7) != 0 {
-                    return Err(KunaError::lowlevel("Varnode piece is not byte aligned"));
+                    return Err(UnlaceError::lowlevel("Varnode piece is not byte aligned"));
                 }
                 byte_pos >>= 3;
                 let lsb_byte_pos = byte_pos;
@@ -1519,7 +1521,7 @@ impl TransformManager {
                     }
                 };
                 self.var_mut(rvn).replacement = Some(replacement);
-                fd.kuna_inherit_storage_slice(replacement, vn, lsb_byte_pos, byte_size);
+                fd.unlace_inherit_storage_slice(replacement, vn, lsb_byte_pos, byte_size);
                 fd.transfer_varnode_properties(vn, replacement, lsb_byte_pos);
                 Ok(())
             }
@@ -1530,7 +1532,7 @@ impl TransformManager {
                 self.var_mut(rvn).replacement = Some(new_vn);
                 Ok(())
             }
-            _ => Err(KunaError::lowlevel("Bad TransformVar type")),
+            _ => Err(UnlaceError::lowlevel("Bad TransformVar type")),
         }
     }
 
@@ -1556,7 +1558,7 @@ impl TransformManager {
         &mut self,
         fd: &mut Funcdata,
         input_list: &[TVarRef],
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         for &rvn in input_list {
             let flags = self.var(rvn).flags;
             if (flags & tvar_flags::input_duplicate) == 0 {
@@ -1575,7 +1577,7 @@ impl TransformManager {
 
     /// Set input Varnodes for all new ops (C++ `TransformManager::placeInputs`,
     /// transform.cc:740).
-    fn place_inputs(&mut self, fd: &mut Funcdata) -> KunaResult<()> {
+    fn place_inputs(&mut self, fd: &mut Funcdata) -> UnlaceResult<()> {
         for i in 0..self.new_ops.len() {
             let rop = TOpRef(i);
             let op = self.new_ops[i]

@@ -51,7 +51,7 @@ fn wrapped_struct_spills_preserve_callback_memory_effects() {
                 args.extend(["--assert".into(), format!("prototype {name} {proto}")]);
             }
             let (printed, stderr, code) =
-                common::run_kuna(&args.iter().map(String::as_str).collect::<Vec<_>>());
+                common::run_unlace(&args.iter().map(String::as_str).collect::<Vec<_>>());
             assert_eq!(code, 0, "{fixture}: {stderr}");
             let printed = pieces.replace_all(&printed, |m: &regex::Captures<'_>| {
                 assert_eq!(m[2], m[5]);
@@ -142,7 +142,7 @@ fn an_untyped_caller_of_a_typed_struct_pointer_keeps_decompiling() {
     for target in ["thumb", "arm_be"] {
         for opt in ["O0", "O2"] {
             let fixture = format!("wrappedstackaggregate_clang_{opt}_{target}.o");
-            let (printed, stderr, code) = common::run_kuna(&[
+            let (printed, stderr, code) = common::run_unlace(&[
                 "decompile",
                 &common::fixture(&fixture),
                 "untyped",

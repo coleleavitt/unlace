@@ -76,7 +76,7 @@ fn partial_global_writes_reach_aliasing_loads_before_whole_writes() {
             for p in &PROTOTYPES {
                 args.extend(["--assert", p]);
             }
-            let (printed, stderr, status) = common::run_kuna(&args);
+            let (printed, stderr, status) = common::run_unlace(&args);
             assert_eq!(status, 0, "{cc} {opt}: {stderr}");
             let volatile_body = printed
                 .split("// Function: volatile_halves @")
@@ -184,9 +184,9 @@ fn memory_and_call_roots_keep_the_existing_partial_store_behavior() {
                 "call_frame",
             ] {
                 let args = ["decompile", binary.to_str().unwrap(), function];
-                let (printed, stderr, status) = common::run_kuna(&args);
+                let (printed, stderr, status) = common::run_unlace(&args);
                 assert_eq!(status, 0, "{cc} {opt} {function}: {stderr}");
-                let (existing, stderr, status) = common::run_kuna(&[
+                let (existing, stderr, status) = common::run_unlace(&[
                     "decompile",
                     binary.to_str().unwrap(),
                     function,

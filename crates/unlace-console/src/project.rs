@@ -90,19 +90,19 @@ pub struct FuncResult {
     /// Private project/worker contracts for live callwide proofs.
     pub callwide_prototypes: Vec<unlace_decomp::callwide::ExportPrototype>,
     pub variables: Vec<VarInfo>,
-    /// (kuna `structdefs`) The composite/enum/typedef definitions this
+    /// (unlace `structdefs`) The composite/enum/typedef definitions this
     /// function's C names, in definition-before-use order. Empty unless the
     /// option is on — the same decision that prints them above the body.
     pub types: Vec<TypeInfo>,
-    /// (kuna `globalref`) The globals the C names by address (`&dat_2b080`),
+    /// (unlace `globalref`) The globals the C names by address (`&dat_2b080`),
     /// with the declaration the project header gives each. Never serialized
     /// into `decompile-all --json`; the `decompile-project` header declares them.
     pub globals: Vec<GlobalInfo>,
-    /// (kuna `calltargettype`) The calls through fields of synthesized records,
+    /// (unlace `calltargettype`) The calls through fields of synthesized records,
     /// which the project header declares where they all agree.
     pub field_calls: Vec<unlace_decomp::calltargettype::FieldDecl>,
     pub line_mappings: Vec<LineMapping>,
-    /// (kuna, issue #197) Every OTHER name this entry carries — a generic
+    /// (unlace, issue #197) Every OTHER name this entry carries — a generic
     /// `sub_<addr>` placeholder, an ELF weak/strong twin, a PE
     /// decorated/undecorated pair.  Carried through from
     /// [`crate::engine::FunctionEntry`] so collapsing the enumeration to one
@@ -111,7 +111,7 @@ pub struct FuncResult {
     pub aliases: Vec<String>,
     /// Original object-file coordinate for a relocatable definition.
     pub object_location: Option<ObjectLocation>,
-    /// (kuna `--stream`) Byte addresses this function reaches: the entry address
+    /// (unlace `--stream`) Byte addresses this function reaches: the entry address
     /// of every direct `CALL`, plus every constant that names a known function
     /// entry living in code (the address-taken case — `_start` hands `main` to
     /// `__libc_start_main` as a pointer).  Thumb-bit normalized, sorted,
@@ -125,7 +125,7 @@ pub struct FuncResult {
     /// every error record, and on every run that did not ask for it
     /// ([`DecompileOptions::want_callee_hints`]).
     pub callee_hints: Vec<u64>,
-    /// (kuna `structsynth`) What this decompile asked the synthesized-structure
+    /// (unlace `structsynth`) What this decompile asked the synthesized-structure
     /// ledger, recorded only by a `--jobs` worker whose architecture carries the
     /// shard hook, so the parent can name every `struct_N` as the serial run
     /// does. `None` everywhere else.
@@ -142,7 +142,7 @@ pub struct FuncResult {
 }
 
 impl FuncResult {
-    /// (kuna outlang) How many jumps this body takes that the Rust back-end had
+    /// (unlace outlang) How many jumps this body takes that the Rust back-end had
     /// no form for, each rendered as a diverging `panic!` whose path is not a
     /// translation of the binary.
     ///
@@ -261,7 +261,7 @@ pub struct DecompileOptions {
     pub want_provenance: bool,
     /// Collect [`FuncResult::callee_hints`] — the `--stream` scheduler's frontier.
     pub want_callee_hints: bool,
-    /// (kuna `structdefs`) This caller renders a header that already defines
+    /// (unlace `structdefs`) This caller renders a header that already defines
     /// every type the bodies name, so the bodies must not repeat them: the
     /// `decompile-project` export (and the WASM form of it), whose `.h` block
     /// comes from the same factory through the same `render_type_definitions`.
@@ -269,7 +269,7 @@ pub struct DecompileOptions {
     /// per-function C (`decompile-all`, `decompile-graph`) has nowhere else to
     /// carry a definition, so it keeps the preamble.
     pub header_carries_types: bool,
-    /// (kuna `protoorder`) State this target's recovered prototype for the
+    /// (unlace `protoorder`) State this target's recovered prototype for the
     /// callers decompiled after it; the driver clears it inside a call-graph
     /// cycle.
     pub park_recovered_proto: bool,
@@ -377,16 +377,16 @@ fn decompile_batch(
     // Only the surfaces that can decide a function again pay for the replay list.
     let storetype = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::storetype::StoreTypeMode>();
     let replay = if prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
         || prog
             .arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::elemptr::ElemPtr>()
             .0
         || storetype != unlace_decomp::storetype::StoreTypeMode::Off
@@ -397,7 +397,7 @@ fn decompile_batch(
     };
     unlace_decomp::elemptr::start(prog.arch_mut(), targets.len() <= 1);
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::storetype::Ledger>()
         .start(if targets.len() <= 1 {
             unlace_decomp::storetype::StoreTypeMode::Off
@@ -414,7 +414,7 @@ fn decompile_batch(
     converge_store_types(prog, opts, &replay, &mut out);
     unlace_decomp::elemptr::stop(prog.arch_mut());
     prog.arch_mut()
-        .kuna_tables
+        .unlace_tables
         .get_mut::<unlace_decomp::storetype::Ledger>()
         .stop();
     if opts.want_pointer_arguments {
@@ -423,7 +423,7 @@ fn decompile_batch(
     out
 }
 
-/// (kuna `elemptr`) Decide again the functions that typed a global some other
+/// (unlace `elemptr`) Decide again the functions that typed a global some other
 /// function of the batch disagrees about, with that global blocked for them: a
 /// global is an array of `T` only where every function that says something
 /// about it agrees. Two rounds at most: a redo that blocks a global can only
@@ -453,7 +453,7 @@ pub fn converge_element_globals(
     }
 }
 
-/// (kuna `storetype`) Type the globals every store of the batch agrees about
+/// (unlace `storetype`) Type the globals every store of the batch agrees about
 /// and decide again the functions that refer to them. Two rounds: a global
 /// typed in the first can make a value stored from it typed in the second
 /// (`gBS` first, then a protocol pointer read through it).
@@ -465,12 +465,12 @@ pub fn converge_store_types(
 ) {
     let mode = prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::storetype::StoreTypeMode>();
     for _ in 0..2 {
         let decided = prog
             .arch_mut()
-            .kuna_tables
+            .unlace_tables
             .get_mut::<unlace_decomp::storetype::Ledger>()
             .decide(mode);
         let typed: Vec<u64> = decided
@@ -483,7 +483,7 @@ pub fn converge_store_types(
         }
         let redo = prog
             .arch()
-            .kuna_tables
+            .unlace_tables
             .get::<unlace_decomp::storetype::Ledger>()
             .readers(&typed);
         for (i, t) in targets.iter().enumerate() {
@@ -548,7 +548,7 @@ pub fn commit_store_type(
     true
 }
 
-/// (kuna `structsynth`) Decide again the functions that named a synthesized
+/// (unlace `structsynth`) Decide again the functions that named a synthesized
 /// structure a later, larger one has taken over.
 ///
 /// `structsynth` mints a `struct_N` from one function's evidence, and a function
@@ -598,13 +598,13 @@ pub fn converge_synthesized_structs(
     }
 }
 
-/// (kuna `structsynth`) The synthesized structures a later, larger one has
+/// (unlace `structsynth`) The synthesized structures a later, larger one has
 /// superseded so far in this run: what the convergence sweep looks for. Empty
 /// when `structsynth` is off.
 pub fn superseded_struct_names(prog: &ConsoleProgram) -> Vec<String> {
     if !prog
         .arch()
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::structsynth::StructSynthMode>()
         .fires()
     {
@@ -693,8 +693,8 @@ pub fn decompile_pulled(
         want_pointer_arguments,
         ..
     } = *opts;
-    prog.arch_mut().kuna_float_scan_batch = !single_target;
-    // (kuna `structdefs`) A project export's bodies do NOT carry the
+    prog.arch_mut().unlace_float_scan_batch = !single_target;
+    // (unlace `structdefs`) A project export's bodies do NOT carry the
     // type-definition preamble: they `#include` the generated header, and
     // `build_header` renders every one of those definitions into it from the
     // same factory through the same `render_type_definitions`. Printing them
@@ -759,7 +759,7 @@ pub fn decompile_pulled(
             });
             continue;
         }
-        // (kuna) An entry with no mapped bytes is an EXTERNAL, not a decompile
+        // (unlace) An entry with no mapped bytes is an EXTERNAL, not a decompile
         // failure: a relocatable object's undefined symbols carry an address
         // only so a call to one renders by name, and the
         // definition lives in another module. The whole-binary surfaces never
@@ -832,7 +832,7 @@ pub fn decompile_pulled(
         // catches un-ported-seam panics and returns Err, so a single bad function
         // degrades to an `error` record instead of aborting the binary.
         let mapped = prog.dwarf_locals_for(byte_address);
-        // (kuna, Ghidra-gap) `CALL_RETURN` flow overrides for the binary's
+        // (unlace, Ghidra-gap) `CALL_RETURN` flow overrides for the binary's
         // `call error(nonzero,…)` sites — prune the fall-through so the flow-follower
         // stops at the no-return call (Ghidra "Subroutine does not return") instead of
         // walking into the next function and absorbing it. The whole binary's list is
@@ -854,7 +854,7 @@ pub fn decompile_pulled(
                     .collect(),
                 _ => Vec::new(),
             };
-        // (kuna, DIV-66) The SHARED per-function decompile step — the same one
+        // (unlace, DIV-66) The SHARED per-function decompile step — the same one
         // `IfcDecompile` runs. Before it existed this loop called the drive
         // directly and so skipped Ghidra's `FormatStringAnalyzer` half-B loop (and
         // its scoped read-only propagation), which meant `--option formatstring on`
@@ -862,27 +862,27 @@ pub fn decompile_pulled(
         // was a silent no-op on every whole-binary surface. `discovered` is
         // dropped: each function is decompiled exactly once here, so there is no
         // later re-decompile to persist it for.
-        // A caller-declared extent (`function bounds` / `kuna --define-function`)
+        // A caller-declared extent (`function bounds` / `unlace --define-function`)
         // bounds this function's flow follow; 0 — the usual case — is the natural,
         // unbounded extent.
         let declared = prog.declared_extent(byte_address);
-        // (kuna `--assert`) The caller-declared facts this function is decompiled
+        // (unlace `--assert`) The caller-declared facts this function is decompiled
         // AGAINST: a `prototype`/`param`/`return` directive is consumed at flow
         // time, so it has to be seeded here rather than applied afterwards. Every
         // field is empty for a run that passed no directive, which is what makes
         // the plane free (`crate::assertions`).
         let seed = crate::assertions::function_seed(prog, &name, &entry, single_target);
-        // (kuna `protoorder`) `entry` is consumed by the symbol-scoped second
+        // (unlace `protoorder`) `entry` is consumed by the symbol-scoped second
         // decompile below; the park needs the address afterwards.
         let park_entry = entry.clone();
-        // (kuna `--assert`) A caller-stated `flow` reclassification is appended
+        // (unlace `--assert`) A caller-stated `flow` reclassification is appended
         // AFTER the derived no-return prunes, so it wins the map insert at an
         // address both name (`Override::insertFlowOverride` is a map store):
         // what the caller declared outranks what analysis inferred.
         let mut flow_ovr = flow_ovr;
         flow_ovr.extend(seed.flow_overrides.iter().cloned());
         let replay = crate::assertions::has_symbol_scoped(prog, &name, single_target);
-        prog.arch_mut().kuna_record_names = replay;
+        prog.arch_mut().unlace_record_names = replay;
         let step = crate::decompile_step::decompile_one(
             prog.arch_mut(),
             &name,
@@ -900,8 +900,8 @@ pub fn decompile_pulled(
             },
             &seed.proto_overrides,
         );
-        prog.arch_mut().kuna_record_names = false;
-        // (kuna `--assert`) The symbol-scoped second pass. `name`/`type` name a
+        prog.arch_mut().unlace_record_names = false;
+        // (unlace `--assert`) The symbol-scoped second pass. `name`/`type` name a
         // LOCAL, and a local does not exist until a decompile has produced it --
         // so the only order in which they can work is decompile, mutate the local
         // scope, decompile again with the mutation carried across (exactly the
@@ -921,7 +921,7 @@ pub fn decompile_pulled(
                         let carried_params = crate::paramasserts::carried(&fd, &seed.mapped_params);
                         *prog
                             .arch_mut()
-                            .kuna_tables
+                            .unlace_tables
                             .get_mut::<unlace_decomp::stablenames::PriorNames>() =
                             unlace_decomp::stablenames::carry(&fd);
                         let second = crate::decompile_step::decompile_one(
@@ -944,7 +944,7 @@ pub fn decompile_pulled(
                         .result;
                         *prog
                             .arch_mut()
-                            .kuna_tables
+                            .unlace_tables
                             .get_mut::<unlace_decomp::stablenames::PriorNames>() =
                             Default::default();
                         replayed = expected;
@@ -957,7 +957,7 @@ pub fn decompile_pulled(
         };
         match result {
             Ok(mut fd) => {
-                // (kuna `--assert`) The flow overrides the follower REFUSED are only
+                // (unlace `--assert`) The flow overrides the follower REFUSED are only
                 // known now: `function_seed` recorded `applied` when it seeded them.
                 crate::assertions::record_rejected_flow_overrides(prog, &name, single_target, &fd);
                 crate::assertions::record_rejected_callee_overrides(
@@ -973,25 +973,25 @@ pub fn decompile_pulled(
                 // would otherwise abort the WHOLE binary and discard every function
                 // already decompiled. Containing it here honors the per-function
                 // isolation contract (one bad function → one `error` record).
-                // (kuna `narrowargs callers`) Record what this function passes at each call.
+                // (unlace `narrowargs callers`) Record what this function passes at each call.
                 if prog
                     .arch()
-                    .kuna_tables
+                    .unlace_tables
                     .get::<unlace_decomp::callerargs::Ledger>()
                     .recording
                 {
                     unlace_decomp::callerargs::record(prog.arch_mut(), &park_entry, &fd);
                 }
-                // (kuna `calleereginputs custom`) Record what this function read on
+                // (unlace `calleereginputs custom`) Record what this function read on
                 // entry and the calls it printed, for the two-sided decision.
                 if unlace_decomp::calleereginputs::custom_applies(prog.arch()) {
                     unlace_decomp::calleereginputs::record(prog.arch_mut(), &park_entry, &fd);
                 }
-                // (kuna `protoorder`) State what this function's recovery found for its callers.
+                // (unlace `protoorder`) State what this function's recovery found for its callers.
                 if opts.park_recovered_proto {
                     let mode = prog
                         .arch()
-                        .kuna_options
+                        .unlace_options
                         .get::<unlace_decomp::protoorder::ProtoOrderMode>();
                     let outcome = unlace_decomp::protoorder::park_recovered(
                         prog.arch_mut(),
@@ -1015,42 +1015,42 @@ pub fn decompile_pulled(
                         }
                     }
                 }
-                // (kuna `callrettype`) State what this function returns for its callers.
+                // (unlace `callrettype`) State what this function returns for its callers.
                 if opts.park_recovered_proto {
                     unlace_decomp::callrettype::record(prog.arch_mut(), &park_entry, &fd);
-                    // (kuna `narrowret`) And the narrow value it returns zero-extended.
+                    // (unlace `narrowret`) And the narrow value it returns zero-extended.
                     unlace_decomp::narrowret::record(prog.arch_mut(), &park_entry, &fd);
-                    // (kuna `voidret`) And whether it returns nothing a caller reads.
+                    // (unlace `voidret`) And whether it returns nothing a caller reads.
                     unlace_decomp::voidret::record(prog.arch_mut(), &park_entry, &fd);
-                    // (kuna `elemptr`) And which of its pointers are indexed buffers.
+                    // (unlace `elemptr`) And which of its pointers are indexed buffers.
                     unlace_decomp::elemptr::state(prog.arch_mut(), &park_entry, &fd);
-                    // (kuna `gottailcall`) And whether a tail call to it loses nothing.
+                    // (unlace `gottailcall`) And whether a tail call to it loses nothing.
                     unlace_decomp::gottailcall::record(prog.arch_mut(), &park_entry, &fd);
                 }
-                // (kuna `calleevote`) Record what this function passes at each call.
+                // (unlace `calleevote`) Record what this function passes at each call.
                 if prog
                     .arch()
-                    .kuna_tables
+                    .unlace_tables
                     .get::<unlace_decomp::calleevote::Ledger>()
                     .recording
                 {
                     unlace_decomp::calleevote::record(prog.arch_mut(), &park_entry, &mut fd);
                 }
-                // (kuna `callbacktype`) Record every constant it hands to a
+                // (unlace `callbacktype`) Record every constant it hands to a
                 // declared callback slot.
                 if prog
                     .arch()
-                    .kuna_tables
+                    .unlace_tables
                     .get::<unlace_decomp::callbacktype::Ledger>()
                     .recording
                 {
                     unlace_decomp::callbacktype::record(prog.arch_mut(), &park_entry, &fd);
                 }
-                // (kuna `elemptr`) Record what this function said about each global.
+                // (unlace `elemptr`) Record what this function said about each global.
                 unlace_decomp::elemptr::record(prog.arch_mut(), &fd);
                 unlace_decomp::storetype::record(
                     prog.arch_mut()
-                        .kuna_tables
+                        .unlace_tables
                         .get_mut::<unlace_decomp::storetype::Ledger>(),
                     &fd,
                 );
@@ -1116,7 +1116,7 @@ pub fn decompile_pulled(
                     } else {
                         extract_variables(prog.arch(), &fd)
                     };
-                    // (kuna `structdefs`) The layout side of the same function:
+                    // (unlace `structdefs`) The layout side of the same function:
                     // the definitions the preamble just printed above the body,
                     // as records. Empty unless the option is on.
                     let mut types = extract_type_definitions(prog.arch(), &fd);
@@ -1306,7 +1306,7 @@ pub fn decompile_pulled(
     }
 }
 
-/// (kuna `protoorder`) Is the park/decline trace on (`UNLACE_PROTOORDER_TRACE=1`)?
+/// (unlace `protoorder`) Is the park/decline trace on (`UNLACE_PROTOORDER_TRACE=1`)?
 ///
 /// A run's accept/decline tally is the evidence an operator (or a sweep) needs
 /// to judge what the option actually stated about a binary, and it is not worth
@@ -1467,7 +1467,7 @@ pub fn sanitize_guard(file_name: &str) -> String {
     s
 }
 
-/// (kuna) Every name the type block introduces as a TYPEDEF name.
+/// (unlace) Every name the type block introduces as a TYPEDEF name.
 ///
 /// C has one ordinary-identifier namespace, so a typedef and a function cannot
 /// share a spelling at file scope — and `stat`, `sigaction` and `group` are all
@@ -1847,8 +1847,8 @@ pub fn build_header_with_names(
     Ok(out)
 }
 
-/// (kuna `globalref`) One `extern` line per global the functions name by address,
-/// in address order, including direct scalar reads and writes and (kuna
+/// (unlace `globalref`) One `extern` line per global the functions name by address,
+/// in address order, including direct scalar reads and writes and (unlace
 /// `elemptr`) direct element pointers: a subscript `dat_5068[i]` reads the
 /// element its declaration names.
 ///
@@ -1862,7 +1862,7 @@ pub fn build_header_with_names(
 ///
 /// * a record or union some function takes the address of, the larger one
 ///   first: a scalar access of the name does not compile against it;
-/// * (kuna `elemptr`) an array some function indexes (`T dat_4020[]`), when no
+/// * (unlace `elemptr`) an array some function indexes (`T dat_4020[]`), when no
 ///   function reads the name directly: an indexed body does not compile
 ///   against a scalar, and a direct read does not compile against an array.
 ///   Functions that index it at two element types get nothing, and a comment:
@@ -2053,7 +2053,7 @@ fn global_declarations(
     out
 }
 
-/// (kuna `calltargettype`) Declare each called field of a synthesized record
+/// (unlace `calltargettype`) Declare each called field of a synthesized record
 /// with the function-pointer type every call through it agrees on.
 ///
 /// A record `structsynth` minted is shared by every function that names it, so
@@ -2102,7 +2102,7 @@ fn declare_called_fields(types: &str, results: &[FuncResult]) -> String {
     out
 }
 
-/// (kuna `structsynth`) Drop the `struct_N` definitions this export does not use.
+/// (unlace `structsynth`) Drop the `struct_N` definitions this export does not use.
 ///
 /// The type block is the whole factory in dependency order, and the factory
 /// keeps every structure `structsynth` ever minted -- including the ones a later,
@@ -2221,7 +2221,7 @@ pub fn build_c(file_name: &str, results: &[FuncResult]) -> String {
 // --- dat_ collection ------------------------------------------------------
 
 /// Scan every decompiled function's C for `dat_<hex>` tokens — the names the
-/// printer generates on the fly (`kuna_global_data_name`, `dat_{off:x}`,
+/// printer generates on the fly (`unlace_global_data_name`, `dat_{off:x}`,
 /// lowercase hex) for data addresses no symbol covers.  Hand-rolled (no regex
 /// dep): the char before `dat_` must not be an identifier char, the token is
 /// `dat_` + 1+ lowercase-hex chars, and the char after the hex run must not
@@ -3008,7 +3008,7 @@ mod tests {
         );
     }
 
-    /// (kuna `structsynth`) The header prune must decide "referenced" without a
+    /// (unlace `structsynth`) The header prune must decide "referenced" without a
     /// body: the streaming writer sets `code = None` on every record before the
     /// set reaches `build_header`, so a definition the export still names has to
     /// survive on the prototype and the variable rows alone.
@@ -3031,7 +3031,7 @@ mod tests {
         assert!(!none.contains("struct struct_0 {"), "{none}");
     }
 
-    /// (kuna `structsynth`) Under `--mode fast` the sweep's redo can run out of
+    /// (unlace `structsynth`) Under `--mode fast` the sweep's redo can run out of
     /// the watchdog budget the first pass fit in; the body that succeeded stays.
     #[test]
     fn a_failed_redo_never_replaces_a_body_that_succeeded() {
@@ -3044,7 +3044,7 @@ mod tests {
         assert!(redo_replaces(&failed, &failed));
     }
 
-    /// (kuna `structsynth`) The convergence sweep decides which results to
+    /// (unlace `structsynth`) The convergence sweep decides which results to
     /// decompile again by looking for a superseded type name in their text, so
     /// `struct_1` must not answer for `struct_10` or for `my_struct_1`.
     #[test]

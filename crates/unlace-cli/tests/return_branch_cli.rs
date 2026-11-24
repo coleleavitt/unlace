@@ -98,7 +98,7 @@ fn linker_path(name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-fn kuna() -> Command {
+fn unlace() -> Command {
     Command::new(
         unlace_base::env::var_os("UNLACE_TEST_BIN")
             .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
@@ -106,7 +106,7 @@ fn kuna() -> Command {
 }
 
 fn decompile(image: &Path, options: &[&str]) -> String {
-    let mut command = kuna();
+    let mut command = unlace();
     command
         .args(["decompile"])
         .arg(image)

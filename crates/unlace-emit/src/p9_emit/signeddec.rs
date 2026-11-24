@@ -1,4 +1,4 @@
-//! (kuna `signeddec`) A signed integer constant prints in decimal, as Hex-Rays'
+//! (unlace `signeddec`) A signed integer constant prints in decimal, as Hex-Rays'
 //! `DEFAULT_RADIX 0` does ("decimal for signed, hex for unsigned").
 //!
 //! Ghidra chooses the base by `mostNaturalBase` (decimal up to 10, then whichever base has
@@ -13,8 +13,8 @@ use crate::context::OpId;
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-crate::kuna_flag!(
-    /// (kuna `signeddec`) Print a small signed integer constant in decimal outside bitwise ops.
+crate::unlace_flag!(
+    /// (unlace `signeddec`) Print a small signed integer constant in decimal outside bitwise ops.
     SignedDec,
     "signeddec",
     "decimal signed constants",

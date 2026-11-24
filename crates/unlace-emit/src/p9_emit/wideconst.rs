@@ -1,4 +1,4 @@
-//! (kuna `wideconst`) A constant wider than 64 bits prints as one literal.
+//! (unlace `wideconst`) A constant wider than 64 bits prints as one literal.
 //!
 //! A Varnode constant holds at most 64 bits, so a wider value the lifter
 //! assembles from pieces (EVM's `PUSH20`/`PUSH32`, built from a 7-byte and an
@@ -120,8 +120,8 @@ fn hex(v: Wide) -> String {
     s
 }
 
-crate::kuna_flag!(
-    /// (kuna `wideconst`) Print a constant wider than 64 bits that the lifter
+crate::unlace_flag!(
+    /// (unlace `wideconst`) Print a constant wider than 64 bits that the lifter
     /// assembled from pieces as one hexadecimal literal.
     WideConst,
     "wideconst",

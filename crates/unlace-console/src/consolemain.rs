@@ -3,7 +3,7 @@
 //!
 //! Port of `decompiler/cpp/consolemain.cc` `main()`.
 //!
-//! The kuna Rust [`IfaceStatus`] accumulates command output in an in-memory
+//! The unlace Rust [`IfaceStatus`] accumulates command output in an in-memory
 //! `optr` buffer and bulk output in a `fileoptr` redirect (see `interface.rs`);
 //! a real binary must drain `optr` to stdout and flush an open `fileoptr`
 //! redirect to its file.  The C++ `fileoptr` is a live `ofstream` writing
@@ -11,7 +11,7 @@
 //! the library `mainloop`) so it can, after each command, drain `optr` to stdout
 //! and rewrite any open redirect file to disk — leaving the file complete on
 //! disk before the `closefile` command consumes the in-memory `FileOut`.  This is
-//! exactly the surface the Python tools (`kuna/decompile.py`, which feeds
+//! exactly the surface the Python tools (`unlace/decompile.py`, which feeds
 //! `load file`/`read symbols`/`option`/`load function`/`decompile`/`openfile
 //! write`/`print C`/`closefile`/`quit` over stdin and reads the captured C file)
 //! drive when `UNLACE_ENGINE=rust`.
@@ -22,7 +22,7 @@
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
-use crate::console::register_kuna_commands;
+use crate::console::register_unlace_commands;
 use crate::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands, register_decomp_commands,
 };
@@ -34,7 +34,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     crate::buildstamp::answer_parent(crate::buildstamp::ChildKind::Engine);
 
     // --- argument parsing (consolemain.cc:183) ----------------------------
-    // kuna also accepts the long `-sleighpath <dir>` the Python tooling may pass.
+    // unlace also accepts the long `-sleighpath <dir>` the Python tooling may pass.
     let mut spec_roots: Vec<String> = Vec::new();
     let mut _initscript: Option<String> = None;
     let mut i = 1usize;
@@ -51,7 +51,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
                 spec_roots.push(args[i].clone());
             }
         } else if flag == "--max-fn-memory" {
-            // (kuna) `unlace decompile`'s per-function memory limit: MiB, or
+            // (unlace) `unlace decompile`'s per-function memory limit: MiB, or
             // `cgroup` for the cgroup default.
             i += 1;
             match args.get(i).map(|v| v.trim()) {
@@ -66,7 +66,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
                 None => {}
             }
         } else if flag == "--max-fn-seconds" {
-            // (kuna) `unlace decompile`'s per-function wall-clock budget; 0 disables.
+            // (unlace) `unlace decompile`'s per-function wall-clock budget; 0 disables.
             i += 1;
             if let Some(secs) = args.get(i).and_then(|v| v.trim().parse::<u64>().ok()) {
                 unlace_decomp::decompile_drive::set_default_fn_budget_secs(secs);
@@ -77,7 +77,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
 
     // SLEIGHHOME is the load-bearing spec-root mechanism the Python tooling sets
-    // (kuna/decompile.py); honor it like consolemain.cc honors getenv("SLEIGHHOME").
+    // (unlace/decompile.py); honor it like consolemain.cc honors getenv("SLEIGHHOME").
     if let Ok(home) = std::env::var("SLEIGHHOME") {
         if !home.is_empty() && !spec_roots.contains(&home) {
             spec_roots.push(home);
@@ -90,7 +90,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
 
     // startDecompilerLibrary(...) — the id/capability bootstrap is performed
-    // per-program inside `engine::bootstrap_*` (the kuna IdRegistry is a value,
+    // per-program inside `engine::bootstrap_*` (the unlace IdRegistry is a value,
     // not a global), so the library "start" here is just recording the roots.
 
     // --- the console (IfaceTerm over stdin) -------------------------------
@@ -101,9 +101,9 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
     let mut status = IfaceTerm::into_status("[decomp]> ", &input);
 
-    // C++: registerAllCommands, split into the decomp + kuna modules.
+    // C++: registerAllCommands, split into the decomp + unlace modules.
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     // Console-only commands (consolemain.cc main()): load file (save/restore/addpath
     // are later items, see register_console_commands).
     register_console_commands(&mut status);
@@ -128,7 +128,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
 /// `fileoptr` redirect to disk after each command.
 ///
 /// Mirrors C++ `mainloop`'s nested loop (drain the input stream running each
-/// command, then break on `done`/no-more-scripts).  The kuna console feeds a
+/// command, then break on `done`/no-more-scripts).  The unlace console feeds a
 /// single stdin stream (no `source` script nesting in the Python-driven path), so
 /// the inner drain is the whole loop.
 fn run_console(status: &mut IfaceStatus) -> u8 {

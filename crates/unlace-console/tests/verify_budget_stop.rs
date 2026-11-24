@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use unlace_console::console::register_kuna_commands;
+use unlace_console::console::register_unlace_commands;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
@@ -75,7 +75,7 @@ fn drive(
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     dcp(&mut status).conf = Some(prog);
     for i in 0..count {
         between(i, dcp(&mut status));
@@ -116,7 +116,7 @@ fn a_drive_charges_the_follow_it_adopts_to_its_budget() {
     let mut prog = load();
     let entry = main_entry(&prog);
     let arch = prog.arch_mut();
-    arch.kuna_fn_budget = Some(BUDGET);
+    arch.unlace_fn_budget = Some(BUDGET);
     let drive = |arch: &mut unlace_decomp::architecture::Architecture, spent: Option<Duration>| {
         let mut fd = build_and_follow_flow_within_budget(arch, "main", entry.clone(), 0, &[])
             .expect("main follows");
@@ -200,7 +200,7 @@ fn a_budget_stopped_decompile_keeps_its_shell_without_following_again() {
         ],
         |i, dcp| {
             if i == 2 {
-                dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
+                dcp.conf.as_mut().unwrap().arch_mut().unlace_fn_budget = Some(Duration::ZERO);
             }
         },
     );
@@ -252,7 +252,7 @@ fn a_budget_stopped_decompile_keeps_its_shell_without_following_again() {
         |i, dcp| {
             spend(i, dcp);
             if i == 2 {
-                dcp.conf.as_mut().unwrap().arch_mut().kuna_fn_budget = Some(Duration::ZERO);
+                dcp.conf.as_mut().unwrap().arch_mut().unlace_fn_budget = Some(Duration::ZERO);
             }
         },
     );

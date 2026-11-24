@@ -1,9 +1,9 @@
-//! (kuna) The one place an Objective-C runtime class name becomes the name
-//! kuna shows: a Swift class registers with the runtime as `_TtC6Toyota3Foo`,
+//! (unlace) The one place an Objective-C runtime class name becomes the name
+//! unlace shows: a Swift class registers with the runtime as `_TtC6Toyota3Foo`,
 //! and every rendering of it — method labels, the instance struct, `@"…"`
 //! pointer types, ivar offset symbols — says `Toyota.Foo`. Lookups between the ObjC tables keep the runtime spelling.
 
-/// The class name kuna renders: the Swift demangling of an ObjC runtime name
+/// The class name unlace renders: the Swift demangling of an ObjC runtime name
 /// (`_TtC6Toyota3Foo` → `Toyota.Foo`) when the name is in the demangler's
 /// coverage, else the runtime spelling as is.
 pub fn display_class_name(runtime_name: &str) -> String {

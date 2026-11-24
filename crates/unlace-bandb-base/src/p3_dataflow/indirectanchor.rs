@@ -1,4 +1,4 @@
-//! (kuna) `indirectanchor` — an op inserted after a call's guard INDIRECT
+//! (unlace) `indirectanchor` — an op inserted after a call's guard INDIRECT
 //! belongs after the CALL, not inside the guard run.
 //!
 //! # The symptom
@@ -13,7 +13,7 @@
 //!   14000476e  js   140004d32
 //! ```
 //!
-//! kuna emitted the call for its side effect and then tested a local nothing in
+//! unlace emitted the call for its side effect and then tested a local nothing in
 //! the function assigns:
 //!
 //! ```text
@@ -38,7 +38,7 @@
 //! the run, and `opInsertAfter` (`funcdata_op.cc:373`) *redirects*: asked to
 //! insert after an INDIRECT, it decodes the iop annotation in the marker's
 //! second input and inserts after the CALL (or STORE) the INDIRECT speaks for.
-//! kuna carried that redirect as a `STUB(W3-varnode)` — the iop decode was a
+//! unlace carried that redirect as a `STUB(W3-varnode)` — the iop decode was a
 //! later wave's — so an op inserted after a guard INDIRECT landed *between* the
 //! guards and their CALL.
 //!
@@ -83,7 +83,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
 
-/// Marshaling element `<indirectanchor>` (kuna 4000+ range; 4154 =
+/// Marshaling element `<indirectanchor>` (unlace 4000+ range; 4154 =
 /// calleearitycut).
 pub const ELEM_INDIRECTANCHOR: ElementId = ElementId::new("indirectanchor", 4155);
 
@@ -113,6 +113,6 @@ pub fn anchor_of(data: &Funcdata, prev: OpId) -> Option<OpId> {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.indirectanchor_anchor_of = Some(anchor_of);
 }

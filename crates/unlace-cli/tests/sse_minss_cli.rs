@@ -75,7 +75,7 @@ fn minss_keeps_source_nan_payload_and_signed_zero() {
         if let Some(value) = nanignore {
             args.extend(["--option", "nanignore", value]);
         }
-        let (printed, stderr, rc) = common::run_kuna(&args);
+        let (printed, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}\n{printed}");
         let source = dir.join("printed.c");
         std::fs::write(&source, format!(

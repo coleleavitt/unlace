@@ -1,4 +1,4 @@
-//! (kuna `castarith`) Pointer arithmetic stays in pointer terms.
+//! (unlace `castarith`) Pointer arithmetic stays in pointer terms.
 //!
 //! A pointer plus a constant byte offset reaches `ActionSetCasts` as a plain
 //! `INT_ADD` whenever nothing in P5 could build a `PTRSUB`/`PTRADD` for it: a
@@ -25,7 +25,7 @@
 //! offset exactly, the base is converted pointer-to-pointer (no integer round
 //! trip), the result carries the same pointer type the sum had, and the printed
 //! index reads back as `k`.  The `sizeof` condition is why an enum element is
-//! refused: kuna prints every enum as a plain `enum`, which C sizes by its own
+//! refused: unlace prints every enum as a plain `enum`, which C sizes by its own
 //! rules, while a packed enum, `-fshort-enums` or a C++ `enum class : uint8_t`
 //! is 1 or 2 bytes in the binary; the same holds for `long double` and for an
 //! integer of a width C names no type for.  The index condition is why a

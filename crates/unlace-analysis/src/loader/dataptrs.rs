@@ -1,4 +1,4 @@
-//! (kuna) The pointers an image stores in its data, as its own relocation
+//! (unlace) The pointers an image stores in its data, as its own relocation
 //! metadata states them.
 //!
 //! A word in `.data` that holds `&audit_target` is a reference no instruction
@@ -23,7 +23,7 @@
 //! nothing, either because the image keeps no such metadata
 //! ([`Coverage::None`]: a non-PIE ELF or a PE without base relocations stores
 //! its pointers as plain words, which no metadata tells apart from integers) or
-//! because the metadata it keeps is a kind kuna does not read
+//! because the metadata it keeps is a kind unlace does not read
 //! ([`Coverage::Unsupported`]: a relocatable object's, a MIPS image's). Only a
 //! complete list is an answer when it is empty. Imports are not here: a bound
 //! slot names a symbol of another image, not an address of this one.
@@ -69,7 +69,7 @@ pub enum Coverage {
     /// The image keeps no pointer-relocation metadata, so its data pointers
     /// are not enumerable.
     None,
-    /// The image keeps pointer-relocation metadata of a kind kuna does not
+    /// The image keeps pointer-relocation metadata of a kind unlace does not
     /// read.
     Unsupported,
 }
@@ -629,7 +629,7 @@ fn pointer_relocs(file: &object::File) -> Result<PointerRelocs, String> {
 
 /// A position-independent ELF's dynamic relocations whose value is an address
 /// of this image ([`PointerRelocs`]): `RELATIVE` (`B + A`, the bias 0 at the
-/// vaddrs kuna maps, and every `SHT_RELR` slot, whose addend is the word it
+/// vaddrs unlace maps, and every `SHT_RELR` slot, whose addend is the word it
 /// holds), and an absolute word, `GLOB_DAT` or `JUMP_SLOT` against a symbol the
 /// image defines (`S + A`). A shared object's table of its own exported
 /// functions is the absolute kind (`R_X86_64_64`), the symbol being

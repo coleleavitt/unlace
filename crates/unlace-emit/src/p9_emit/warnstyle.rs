@@ -1,9 +1,9 @@
-//! (kuna) The warning-style presentation sub-stage — no upstream Ghidra
+//! (unlace) The warning-style presentation sub-stage — no upstream Ghidra
 //! equivalent (DIV-38).
 //!
 //! Upstream Ghidra renders every analysis warning as a full banner line at the
 //! comment indent (`/* WARNING: Subroutine does not return */`) above the
-//! statement it describes.  kuna parameterizes the rendering:
+//! statement it describes.  unlace parameterizes the rendering:
 //! `option warnstyle inline` (the default) maps each warning to a terse slug
 //! and appends it as one `// slug, slug` comment at the END of the line it
 //! describes — the call statement (`usage(1); // no-return`), the
@@ -18,20 +18,20 @@
 //! comments of type WARNING/WARNINGHEADER restyle; user and `dwarf_lines`
 //! comments keep their banner-line form.
 //!
-//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
+//! Following the unlace-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct; the caller
-//! (`Architecture::set_kuna_option`) writes the live flag.
+//! (`Architecture::set_unlace_option`) writes the live flag.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<warnstyle>` (kuna 4000+ range; 4116 = braceelide).
+/// Marshaling element `<warnstyle>` (unlace 4000+ range; 4116 = braceelide).
 pub const ELEM_WARNSTYLE: ElementId = ElementId::new("warnstyle", 4117);
 
-/// (kuna) Choose the warning rendering: `warnstyle inline|banner` (DIV-38).
+/// (unlace) Choose the warning rendering: `warnstyle inline|banner` (DIV-38).
 ///
 /// "banner" keeps the upstream full-line `/* WARNING: ... */` form; "inline"
-/// (the kuna default) renders terse `// slug` end-of-line comments.
+/// (the unlace default) renders terse `// slug` end-of-line comments.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionWarnStyle;
 
@@ -41,12 +41,12 @@ impl OptionWarnStyle {
 
     /// Parse + validate the `inline`/`banner` value; the caller performs the
     /// printer write ([`crate::printc::PrintCOptions::set_warn_inline`]).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = match p1 {
             "inline" => true,
             "banner" => false,
             other => {
-                return Err(KunaError::parse(format!(
+                return Err(UnlaceError::parse(format!(
                     "Unknown warnstyle value: {other} (expected inline|banner)"
                 )));
             }

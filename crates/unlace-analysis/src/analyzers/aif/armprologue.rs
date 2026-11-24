@@ -13,7 +13,7 @@ pub(super) fn matches(
 ) -> bool {
     let arm = is_arm_lr_prologue(data, off, little);
     let thumb = arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::ArmFrames>()
         .full
         && is_thumb_lr_prologue_endian(data, off, little);

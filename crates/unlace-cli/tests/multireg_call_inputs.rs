@@ -64,7 +64,7 @@ fn unlocked_sparc_math_wrappers_preserve_entry_values() {
             ]);
         }
         let borrowed: Vec<_> = args.iter().map(String::as_str).collect();
-        let (out, err, rc) = common::run_kuna(&borrowed);
+        let (out, err, rc) = common::run_unlace(&borrowed);
         assert_eq!(rc, 0, "{err}\n{out}");
         let json: serde_json::Value = serde_json::from_str(&out).unwrap();
         let functions = json["functions"].as_array().unwrap();

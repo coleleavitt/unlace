@@ -61,7 +61,7 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
     if !after_call {
         return None;
     }
-    let machine_reads = data.kuna_guarded_reads().by_call.get(&effect)?;
+    let machine_reads = data.unlace_guarded_reads().by_call.get(&effect)?;
     let space = value.get_space();
     if value.get_size() <= 0 {
         return None;
@@ -73,7 +73,7 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
         return None;
     }
     for read in data
-        .kuna_guarded_reads()
+        .unlace_guarded_reads()
         .reads()
         .filter(|read| read.space == space.get_index())
     {
@@ -93,7 +93,7 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
     };
     if !machine_reads.iter().any(|read| overlaps(&read))
         || !data
-            .kuna_guarded_reads()
+            .unlace_guarded_reads()
             .reads()
             .any(|read| overlaps(&read))
     {
@@ -104,7 +104,7 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
         .find(|&candidate| {
             candidate != origin
                 && data
-                    .kuna_guarded_reads()
+                    .unlace_guarded_reads()
                     .reads()
                     .filter(overlaps)
                     .all(|read| {
@@ -140,7 +140,7 @@ pub fn guarded_block(data: &Funcdata, vn: VarnodeId, reads: &[OpId]) -> Option<B
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.guardedreadtrim_guarded_block = Some(guarded_block);
 }
 
@@ -377,12 +377,12 @@ mod tests {
     fn an_unconditional_machine_read_cannot_be_delayed_to_its_conditional_use() {
         let mut f = fixture();
         f.data
-            .kuna_guarded_reads_mut()
+            .unlace_guarded_reads_mut()
             .lowered
             .get_mut(&f.read)
             .unwrap()
             .block = f.origin;
-        f.data.kuna_guarded_reads_mut().by_call.clear();
+        f.data.unlace_guarded_reads_mut().by_call.clear();
         record_propagated_read(&mut f.data, f.read, f.vn);
         assert_eq!(guarded_block(&f.data, f.vn, &[f.read]), None);
     }
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn missing_machine_read_provenance_keeps_the_original_placement() {
         let mut f = fixture();
-        *f.data.kuna_guarded_reads_mut() = Default::default();
+        *f.data.unlace_guarded_reads_mut() = Default::default();
         assert_eq!(guarded_block(&f.data, f.vn, &[f.read]), None);
     }
     #[test]
@@ -398,7 +398,7 @@ mod tests {
         let mut f = fixture();
         let root = f.data.bblocks_ref().root.unwrap();
         f.data
-            .kuna_guarded_reads_mut()
+            .unlace_guarded_reads_mut()
             .lowered
             .get_mut(&f.read)
             .unwrap()
@@ -409,21 +409,27 @@ mod tests {
     #[test]
     fn a_wrapping_machine_read_range_cannot_be_ignored() {
         let mut f = fixture();
-        let mut read = f.data.kuna_guarded_reads().by_call[&f.call][0].clone();
+        let mut read = f.data.unlace_guarded_reads().by_call[&f.call][0].clone();
         read.offset = u64::MAX;
         read.size = 2;
         read.block = f.origin;
         let extra = f.data.new_op(0, Address::new(Rc::clone(&f.ram), 0x1044));
-        f.data.kuna_guarded_reads_mut().lowered.insert(extra, read);
+        f.data
+            .unlace_guarded_reads_mut()
+            .lowered
+            .insert(extra, read);
         assert_eq!(guarded_block(&f.data, f.vn, &[f.read]), None);
     }
     #[test]
     fn an_unbound_machine_read_on_failure_does_not_feed_the_capture() {
         let mut f = fixture();
-        let mut read = f.data.kuna_guarded_reads().lowered[&f.read].clone();
+        let mut read = f.data.unlace_guarded_reads().lowered[&f.read].clone();
         read.block = f.failure;
         let extra = f.data.new_op(0, Address::new(Rc::clone(&f.ram), 0x1044));
-        f.data.kuna_guarded_reads_mut().lowered.insert(extra, read);
+        f.data
+            .unlace_guarded_reads_mut()
+            .lowered
+            .insert(extra, read);
         assert_eq!(guarded_block(&f.data, f.vn, &[f.read]), Some(f.success));
     }
 
@@ -433,7 +439,7 @@ mod tests {
         let root = f.data.bblocks_ref().root.unwrap();
         let old = f.data.bblocks_mut().new_block_basic(root);
         f.data
-            .kuna_guarded_reads_mut()
+            .unlace_guarded_reads_mut()
             .lowered
             .get_mut(&f.read)
             .unwrap()

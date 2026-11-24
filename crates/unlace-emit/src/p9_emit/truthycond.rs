@@ -1,11 +1,11 @@
-//! (kuna) The truthy-condition presentation sub-stage — no upstream Ghidra
+//! (unlace) The truthy-condition presentation sub-stage — no upstream Ghidra
 //! equivalent (DIV-36).
 //!
 //! In boolean contexts — an if/while/for/ternary condition, or an operand of
 //! `&&`/`||`/`!` — a comparison against zero carries no information beyond the
 //! value's own truthiness, and idiomatic C writes `if (expr)` / `if (!expr)`.
 //! Upstream Ghidra always renders the explicit comparison (`if (x != 0)`,
-//! `if (p == (char *)0x0)`).  kuna parameterizes the rendering:
+//! `if (p == (char *)0x0)`).  unlace parameterizes the rendering:
 //! `option truthycond on` (the default) elides the zero comparison in boolean
 //! contexts; `off` restores the upstream explicit form.
 //!
@@ -18,24 +18,24 @@
 //! compares, enum-typed zeros, and equate-named zeros are excluded; value
 //! contexts (`v = (x != 0)`, `return x != 0`, call arguments) never normalize.
 //!
-//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
+//! Following the unlace-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct that flips the
 //! [`crate::printc::PrintCOptions::truthy_cond`] toggle; the caller
-//! (`Architecture::set_kuna_option`) writes the live flag.
+//! (`Architecture::set_unlace_option`) writes the live flag.
 
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::marshal::ElementId;
 
 use crate::options::on_or_off;
 
-/// Marshaling element `<truthycond>` (kuna 4000+ range; 4113 = condfold,
+/// Marshaling element `<truthycond>` (unlace 4000+ range; 4113 = condfold,
 /// 4114 retired — see condfold.rs).
 pub const ELEM_TRUTHYCOND: ElementId = ElementId::new("truthycond", 4115);
 
-/// (kuna) Toggle truthy condition rendering: `truthycond on|off` (DIV-36).
+/// (unlace) Toggle truthy condition rendering: `truthycond on|off` (DIV-36).
 ///
 /// "off" keeps the upstream explicit comparison (`if (x != 0)` /
-/// `if (p == NULL)`); "on" (the kuna default) renders the truthy form
+/// `if (p == NULL)`); "on" (the unlace default) renders the truthy form
 /// (`if (x)` / `if (!p)`) in boolean contexts.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct OptionTruthyCond;
@@ -46,7 +46,7 @@ impl OptionTruthyCond {
 
     /// Parse + validate the `on`/`off` value; the caller performs the printer
     /// write ([`crate::printc::PrintCOptions::set_truthy_cond`]).
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((val, format!("Truthy condition rendering turned {prop}")))

@@ -76,7 +76,7 @@ use std::collections::BTreeMap;
 
 use smallvec::SmallVec;
 use unlace_base::address::SeqNum;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
@@ -247,7 +247,7 @@ pub struct ActionBase {
     pub name: String,
     /// Base group this action belongs to (C++ `basegroup`).
     pub basegroup: String,
-    /// (kuna) The maturity level a function reaches when this action completes, set by the
+    /// (unlace) The maturity level a function reaches when this action completes, set by the
     /// driver on the schedule nodes that settle one (`docs/spec/00-overview.md` §0.10).
     pub settles: Option<crate::maturity::Maturity>,
 }
@@ -580,7 +580,7 @@ pub struct ActionContext {
     /// Where `issueWarning` / `warningHeader` text lands.
     pub warnings: WarningSink,
     /// A recoverable pass failure that aborts the current function.
-    pub error: Option<KunaError>,
+    pub error: Option<UnlaceError>,
     /// Whether the restart loop ([`ActionRestartGroup`]) can re-follow flow after
     /// a `data.clear()` (C++ `ActionStart::startProcessing` → `followFlow`).
     ///
@@ -611,14 +611,14 @@ pub struct ActionContext {
     /// budget) is a no-op compare — the console/`decomp_dbg` parity pipeline
     /// never sets it.
     pub deadline: Option<std::time::Instant>,
-    /// (kuna `stackstoreguard`) Set when the drive will analyze the function
+    /// (unlace `stackstoreguard`) Set when the drive will analyze the function
     /// again, so the containers stop scheduling work as on an expired deadline.
     pub abandon: bool,
-    /// (kuna `earlyrestart`) Set by the outer driver when it will re-follow
+    /// (unlace `earlyrestart`) Set by the outer driver when it will re-follow
     /// flow for a restart: a pass whose heritage bumped a space's dead-code
     /// delay stops at once instead of finishing an analysis it throws away.
     pub restart_early: bool,
-    /// (kuna `earlyrestart`) Set when the pass stopped for that restart.
+    /// (unlace `earlyrestart`) Set when the pass stopped for that restart.
     pub abandoned_for_restart: bool,
     /// (unlace) Repeat passes the `rule_repeatapply` actions of this run have
     /// made ([`ActionContext::repeat_cap_reached`]).
@@ -635,7 +635,7 @@ pub const MAX_REPEATS: u64 = 100_000;
 /// loop only pays an `Instant::now()` every this-many ops).
 const POOL_DEADLINE_STRIDE: u32 = 1024;
 
-/// (kuna perf) How many optree successors [`ActionPool::advance_op_state`] reads
+/// (unlace perf) How many optree successors [`ActionPool::advance_op_state`] reads
 /// per tree descent.  Long enough that a pass over a large function pays a
 /// handful of descents per hundred ops instead of one each; short enough that a
 /// rule that creates an op (which invalidates the run) has thrown away little.
@@ -862,13 +862,13 @@ impl Action for ActionGroup {
                 return 0;
             }
             let res = self.list[self.state].perform(data, ctx);
-            if ctx.restart_early && data.kuna_restart_now() && !data.is_jumptable_recovery_on() {
+            if ctx.restart_early && data.unlace_restart_now() && !data.is_jumptable_recovery_on() {
                 ctx.abandon = true;
                 ctx.abandoned_for_restart = true;
                 ctx.reflow_requested = true;
                 return 0;
             }
-            // (kuna maturity) A completed member that settles a level advances the function.
+            // (unlace maturity) A completed member that settles a level advances the function.
             if res >= 0
                 && let Some(level) = self.list[self.state].base().settles
                 && !ctx.abandon
@@ -1082,13 +1082,13 @@ pub trait Rule {
     /// a no-op; the engine separately clears the [`RuleState`] warning latch.
     fn reset(&mut self, _data: &mut Funcdata) {}
 
-    /// (kuna `deadwaves`) Does this rule only ever remove an op nothing reads
+    /// (unlace `deadwaves`) Does this rule only ever remove an op nothing reads
     /// (`RuleEarlyRemoval`), recording it with `Funcdata::note_dead_removal`?
     fn removes_dead_ops(&self) -> bool {
         false
     }
 
-    /// (kuna `deadwaves`) Can this rule's test read Varnodes further than one
+    /// (unlace `deadwaves`) Can this rule's test read Varnodes further than one
     /// op from the op it is offered (a sub-variable or split flow walking a
     /// whole data-flow web, `RuleIgnoreNan` following boolean readers)? A
     /// wave offers it every op of its opcodes.
@@ -1096,7 +1096,7 @@ pub trait Rule {
         false
     }
 
-    /// (kuna `copywaves`) Does this rule only ever replace an input of the op
+    /// (unlace `copywaves`) Does this rule only ever replace an input of the op
     /// it is offered (`RulePropagateCopy`), recording the change with
     /// `Funcdata::note_wave_input_change`?
     fn replaces_inputs_only(&self) -> bool {
@@ -1224,13 +1224,13 @@ type PerOp = SmallVec<[usize; 4]>;
 /// `ActionPool`).
 pub struct ActionPool {
     base: ActionBase,
-    /// (kuna `dirtypool`) The ops a repeated sweep visits: the neighbourhood of
+    /// (unlace `dirtypool`) The ops a repeated sweep visits: the neighbourhood of
     /// every op a rule changed in the previous sweep.  `None` = visit every op.
     focus: Option<std::collections::HashSet<OpId>>,
-    /// (kuna `dirtypool`) The newest op creation time when the previous sweep
+    /// (unlace `dirtypool`) The newest op creation time when the previous sweep
     /// started; a newer op is always visited.
     focus_time: u32,
-    /// (kuna `dirtypool`) The focus the current sweep is building.
+    /// (unlace `dirtypool`) The focus the current sweep is building.
     touched: std::collections::HashSet<OpId>,
     /// The set of rules in this pool, in insertion order (C++ `allrules`).
     allrules: Vec<RuleEntry>,
@@ -1259,7 +1259,7 @@ pub struct ActionPool {
     /// op just consumed, which cannot move its own successor.  Every `apply`
     /// return path clears it, so a resumed or interleaved pass re-searches.
     next_op: Option<OpId>,
-    /// (kuna perf) A short run of successors read from the optree in one
+    /// (unlace perf) A short run of successors read from the optree in one
     /// descent, consumed one per [`advance_op_state`](ActionPool::advance_op_state).
     ///
     /// The C++ `op_state` is a map iterator, so its `++` is O(1); re-deriving
@@ -1286,21 +1286,21 @@ pub struct ActionPool {
     /// An invariant-violation message (C++ "Rule changed op without returning
     /// result of 1!") stashed for the same reason as [`warnings`](ActionPool::warnings).
     pending_error: Option<String>,
-    /// (kuna `deadwaves`) Dead-op removals and other rule applications in the
+    /// (unlace `deadwaves`) Dead-op removals and other rule applications in the
     /// current pass.
     pass_removals: u32,
     pass_others: u32,
-    /// (kuna `copywaves`) Input replacements in the current pass.
+    /// (unlace `copywaves`) Input replacements in the current pass.
     pass_inputs: u32,
-    /// (kuna `deadwaves`) What the previous pass removed and the Varnodes those
+    /// (unlace `deadwaves`) What the previous pass removed and the Varnodes those
     /// ops read, kept when removal was all that pass changed.
     wave_seed: Option<(Vec<OpId>, Vec<crate::context::VarnodeId>)>,
-    /// (kuna `deadwaves`) The ops a wave pass offers the rules, while it is one.
+    /// (unlace `deadwaves`) The ops a wave pass offers the rules, while it is one.
     wave: Option<crate::fasthash::FxHashSet<OpId>>,
-    /// (kuna `deadwaves`) The opcodes a rule that walks far fires on
+    /// (unlace `deadwaves`) The opcodes a rule that walks far fires on
     /// ([`Rule::walks_far`]), indexed by opcode.
     far: Vec<bool>,
-    /// (kuna `deadcascade`) Passes made in the current run of the pool.
+    /// (unlace `deadcascade`) Passes made in the current run of the pool.
     run_passes: u32,
 }
 
@@ -1412,7 +1412,7 @@ impl ActionPool {
     /// re-enters to resume).  The `op_state` cursor and `rule_index` carry the
     /// resume position.
     ///
-    /// (kuna `copywaves`) With `far_only`, the rules that do not walk far are
+    /// (unlace `copywaves`) With `far_only`, the rules that do not walk far are
     /// skipped until one rule applies.
     fn process_op(&mut self, op: OpId, data: &mut Funcdata, mut far_only: bool) -> int4 {
         if data.obank().get(op).map(|o| o.is_dead()).unwrap_or(true) {
@@ -1446,7 +1446,7 @@ impl ActionPool {
             if res > 0
                 && data
                     .get_arch()
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::action::DirtyPool>()
                     .0
             {
@@ -1589,7 +1589,7 @@ impl ActionPool {
         self.base.breakpoint != 0 || self.allrules.iter().any(|r| r.state.breakpoint != 0)
     }
 
-    /// (kuna `deadwaves`) Does a wave offer `op` to the rules, and only its
+    /// (unlace `deadwaves`) Does a wave offer `op` to the rules, and only its
     /// far-walking ones? The pass before changed nothing but remove dead ops
     /// and replace inputs the way `RulePropagateCopy` does, so every test it
     /// made elsewhere fails again unless it reads what a change touched: a
@@ -1613,7 +1613,7 @@ impl ActionPool {
     }
 }
 
-/// (kuna `deadwaves`) Add `ops` and the definition and readers of each of
+/// (unlace `deadwaves`) Add `ops` and the definition and readers of each of
 /// `vns` that still exist to a wave. The other readers of a shared effect
 /// annotation are guards of the same call or store, not neighbours.
 #[doc(hidden)]
@@ -1635,7 +1635,7 @@ pub fn add_wave_ops(
     }
 }
 
-/// (kuna `dirtypool`) Add `op` and the ops within two def-use steps of it.
+/// (unlace `dirtypool`) Add `op` and the ops within two def-use steps of it.
 fn touch_neighbourhood(set: &mut std::collections::HashSet<OpId>, data: &Funcdata, op: OpId) {
     let mut frontier = vec![op];
     set.insert(op);
@@ -1725,7 +1725,7 @@ impl Action for ActionPool {
 
     /// C++ `ActionPool::apply`, `action.cc:877`.
     ///
-    /// (kuna `deadwaves`) A pass that follows one whose only change was dead-op
+    /// (unlace `deadwaves`) A pass that follows one whose only change was dead-op
     /// removal is a wave: it offers the rules only the ops
     /// [`wave_wants`](ActionPool::wave_wants) names.
     fn apply(&mut self, data: &mut Funcdata, ctx: &mut ActionContext) -> ApplyResult {
@@ -1737,7 +1737,7 @@ impl Action for ActionPool {
             };
             let cascade = data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::DeadCascade>()
                 .0
                 .is_some_and(|n| self.run_passes > n);
@@ -1761,11 +1761,11 @@ impl Action for ActionPool {
         }
         self.next_op = None;
         self.lookahead_epoch = None;
-        // (kuna `dirtypool`) A repeat sweep visits only what the previous sweep's
+        // (unlace `dirtypool`) A repeat sweep visits only what the previous sweep's
         // rules touched and the ops created since it began.
         let dirty = data
             .get_arch()
-            .kuna_options
+            .unlace_options
             .get::<crate::action::DirtyPool>()
             .0;
         let filter = if dirty && self.base.status == statusflags::status_repeat {
@@ -1967,7 +1967,7 @@ impl ActionDatabase {
         self.register_action(UNIVERSAL_NAME, act);
     }
 
-    /// (kuna) Forget every root derived from the universal tree, so the next
+    /// (unlace) Forget every root derived from the universal tree, so the next
     /// [`set_current`](ActionDatabase::set_current) derives it again.
     pub fn drop_derived(&mut self) {
         self.actionmap.retain(|name, _| name == UNIVERSAL_NAME);
@@ -1980,7 +1980,7 @@ impl ActionDatabase {
 
     /// Replace the current root Action, returning the previous one.
     ///
-    /// (kuna) The P4 callee-contract bootstrap runs a callee's own pipeline while
+    /// (unlace) The P4 callee-contract bootstrap runs a callee's own pipeline while
     /// the caller's action tree is paused mid-pass.  Sharing the cached root
     /// would `reset` its state, so the drive swaps a fresh derived tree in for
     /// the callee drives and swaps the paused one back afterwards.
@@ -2003,10 +2003,10 @@ impl ActionDatabase {
     }
 
     /// Get a specific grouplist by name (C++ `getGroup`).  Errors if absent.
-    pub fn get_group(&self, grp: &str) -> KunaResult<&ActionGroupList> {
+    pub fn get_group(&self, grp: &str) -> UnlaceResult<&ActionGroupList> {
         self.groupmap
             .get(grp)
-            .ok_or_else(|| KunaError::lowlevel(format!("Action group does not exist: {grp}")))
+            .ok_or_else(|| UnlaceError::lowlevel(format!("Action group does not exist: {grp}")))
     }
 
     /// (Re)set the grouplist for a particular root Action (C++ `setGroup`).
@@ -2032,7 +2032,7 @@ impl ActionDatabase {
 
     /// Copy an existing root Action's grouplist under a new name (C++
     /// `cloneGroup`).
-    pub fn clone_group(&mut self, oldname: &str, newname: impl Into<String>) -> KunaResult<()> {
+    pub fn clone_group(&mut self, oldname: &str, newname: impl Into<String>) -> UnlaceResult<()> {
         let curgrp = self.get_group(oldname)?.clone();
         self.groupmap.insert(newname.into(), curgrp);
         self.is_default_groups = false;
@@ -2057,11 +2057,11 @@ impl ActionDatabase {
 
     /// Look up a registered root Action by name (C++ `getAction`).  Errors if
     /// not registered.
-    fn get_action(&self, nm: &str) -> KunaResult<&dyn Action> {
+    fn get_action(&self, nm: &str) -> UnlaceResult<&dyn Action> {
         self.actionmap
             .get(nm)
             .map(|b| b.as_ref())
-            .ok_or_else(|| KunaError::lowlevel(format!("No registered action: {nm}")))
+            .ok_or_else(|| UnlaceError::lowlevel(format!("No registered action: {nm}")))
     }
 
     /// Register a root Action under a name, taking ownership (C++
@@ -2074,7 +2074,7 @@ impl ActionDatabase {
     /// grouplist if not already derived (C++ `setCurrent`).  The derived action
     /// is cached in `actionmap`; the current action is then `actionmap[actname]`
     /// (see [`get_current`](ActionDatabase::get_current)).
-    pub fn set_current(&mut self, actname: &str) -> KunaResult<()> {
+    pub fn set_current(&mut self, actname: &str) -> UnlaceResult<()> {
         self.currentactname = actname.to_string();
         crate::actionprof::set_root(actname);
         self.derive_action(UNIVERSAL_NAME, actname)?;
@@ -2083,7 +2083,7 @@ impl ActionDatabase {
 
     /// Derive (or fetch the cached) root Action by cloning the base action's
     /// tree through the named grouplist (C++ `deriveAction`).
-    fn derive_action(&mut self, baseaction: &str, grp: &str) -> KunaResult<()> {
+    fn derive_action(&mut self, baseaction: &str, grp: &str) -> UnlaceResult<()> {
         if self.actionmap.contains_key(grp) {
             return Ok(()); // Already derived this action
         }
@@ -2104,7 +2104,7 @@ impl ActionDatabase {
     /// Derive a fresh root Action from the universal through the named group,
     /// returning it by value (does not touch the cache).  This is the testable
     /// face of the filtered-clone semantics.
-    pub fn derive_fresh(&self, grp: &str) -> KunaResult<Option<Box<dyn Action>>> {
+    pub fn derive_fresh(&self, grp: &str) -> UnlaceResult<Option<Box<dyn Action>>> {
         let curgrp = self.get_group(grp)?;
         let base = self.get_action(UNIVERSAL_NAME)?;
         Ok(base.clone_filtered(curgrp))
@@ -2116,7 +2116,7 @@ impl ActionDatabase {
 /// `ActionDatabase::buildDefaultGroups` (`coreaction.cc:5675`).
 ///
 /// The W5 `universal_action` builder registers concrete rules against these
-/// group names; the member lists are the C++ kuna-divergent lists (note the
+/// group names; the member lists are the C++ unlace-divergent lists (note the
 /// `"canonicalcompare"`/`"presentcompare"` substages split out of `"analysis"`).
 /// Returns the populated [`ActionDatabase`] group map (leaving the universal
 /// tree to be installed by W5).
@@ -2125,7 +2125,7 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
         return;
     }
     db.groupmap.clear();
-    // (kuna) "canonicalcompare" (comparison canonicalization, split out of
+    // (unlace) "canonicalcompare" (comparison canonicalization, split out of
     // "analysis") accompanies "analysis" in every variant; "presentcompare"
     // (restore original comparison form for presentation) joins the full
     // decompile pipeline only.
@@ -2245,8 +2245,8 @@ pub fn build_default_groups(db: &mut ActionDatabase) {
     db.is_default_groups = true;
 }
 
-crate::kuna_flag!(
-    /// (kuna) Let a repeated rule-pool sweep visit only the ops near the previous sweep's rewrites. (option `dirtypool`).
+crate::unlace_flag!(
+    /// (unlace) Let a repeated rule-pool sweep visit only the ops near the previous sweep's rewrites. (option `dirtypool`).
     DirtyPool,
     "dirtypool",
     "dirty-op rule scheduling",

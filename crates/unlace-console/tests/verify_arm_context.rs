@@ -11,9 +11,9 @@ fn bootstrap_frames(
     target: &str,
     specs: &[String],
     isa: Option<unlace_console::engine::ArmIsa>,
-) -> unlace_base::error::KunaResult<unlace_console::engine::ConsoleProgram> {
+) -> unlace_base::error::UnlaceResult<unlace_console::engine::ConsoleProgram> {
     let mut prog = bootstrap_from_object_with_isa(path, target, specs, isa)?;
-    prog.arch_mut().set_kuna_option("armframes", "on")?;
+    prog.arch_mut().set_unlace_option("armframes", "on")?;
     Ok(prog)
 }
 
@@ -66,7 +66,7 @@ fn explicit_isa_preserves_backward_inventory_callee_modes() {
                     ("funcstart_patterns", "on"),
                     ("aif", aif),
                 ] {
-                    prog.arch_mut().set_kuna_option(name, value).unwrap();
+                    prog.arch_mut().set_unlace_option(name, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let space = prog
@@ -157,7 +157,7 @@ fn ordinary_aif_does_not_publish_unreachable_interworking_modes() {
                 ("armframes", frames),
                 ("aif", "on"),
             ] {
-                prog.arch_mut().set_kuna_option(name, value).unwrap();
+                prog.arch_mut().set_unlace_option(name, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let space = prog
@@ -226,7 +226,7 @@ fn ordinary_decompilation_preserves_a_backward_blx_callers_mode() {
                             ("funcstart_patterns", "on"),
                             ("armframes", frames),
                         ] {
-                            prog.arch_mut().set_kuna_option(name, value).unwrap();
+                            prog.arch_mut().set_unlace_option(name, value).unwrap();
                         }
                         prog.commit_pending_analysis().unwrap();
                         let space = prog
@@ -317,7 +317,7 @@ fn recovered_xrefs_leave_unclaimed_modes_and_later_c_unchanged() {
                     ("aif", aif),
                     ("funcstart_patterns", "on"),
                 ] {
-                    prog.arch_mut().set_kuna_option(key, value).unwrap();
+                    prog.arch_mut().set_unlace_option(key, value).unwrap();
                 }
                 prog.commit_pending_analysis().unwrap();
                 let bytes = std::fs::read(&path).unwrap();
@@ -387,7 +387,7 @@ fn queued_thumb_callee_keeps_its_distant_block_across_an_arm_seed() {
                 ("aif", "off"),
                 ("funcstart_patterns", patterns),
             ] {
-                prog.arch_mut().set_kuna_option(key, value).unwrap();
+                prog.arch_mut().set_unlace_option(key, value).unwrap();
             }
             prog.commit_pending_analysis().unwrap();
             let bytes = std::fs::read(&path).unwrap();
@@ -446,7 +446,7 @@ fn generated_graphs_preserve_calls_modes_and_c_across_layouts_and_reuse() {
                         )
                         .unwrap();
                         for key in ["listing", "aif", "funcstart_patterns"] {
-                            fresh.arch_mut().set_kuna_option(key, "off").unwrap();
+                            fresh.arch_mut().set_unlace_option(key, "off").unwrap();
                         }
                         fresh.commit_pending_analysis().unwrap();
                         let space = fresh
@@ -485,7 +485,7 @@ fn generated_graphs_preserve_calls_modes_and_c_across_layouts_and_reuse() {
                                     ("aif", aif),
                                     ("funcstart_patterns", "on"),
                                 ] {
-                                    prog.arch_mut().set_kuna_option(key, value).unwrap();
+                                    prog.arch_mut().set_unlace_option(key, value).unwrap();
                                 }
                                 prog.commit_pending_analysis().unwrap();
                                 let mut expected =
@@ -600,7 +600,7 @@ fn failed_callee_decodes_preserve_context_values_boundaries_and_write_policy() {
             ("aif", "off"),
             ("funcstart_patterns", "on"),
         ] {
-            prog.arch_mut().set_kuna_option(key, value).unwrap();
+            prog.arch_mut().set_unlace_option(key, value).unwrap();
         }
         prog.commit_pending_analysis().unwrap();
         let file = object::File::parse(&*bytes).unwrap();

@@ -1,4 +1,4 @@
-//! (kuna) A fast, fixed hasher for the engine's lookup-only hash maps.
+//! (unlace) A fast, fixed hasher for the engine's lookup-only hash maps.
 //!
 //! The standard `RandomState` hashes every key with SipHash-1-3, which costs a
 //! few dozen instructions per lookup: on the per-varnode and per-op maps of a

@@ -1,6 +1,6 @@
 {
  "opportunity": "foldcallret (default on) folded a call into the right-hand operand of the && / || the printer emits for a same-block BOOL_AND/BOOL_OR, so the printed C skipped a call the binary always makes: gcc -O0 `int r = tick(a); if ((r == 0) & (a > 5)) puts(\"A\");` printed `if (a0 <= 5 || tick(a0)) return;` and `gflag = (r == 0) & (a > 5)` printed `gflag = (unsigned int)(5 < a0 && !tick(a0));` (GH-684).",
- "test_name": "kuna-cli/tests/decompile_all_cli.rs a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c (fixtures foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64) + tests/stages/kuna-foldcallret-shortcircuit.xml (8 assertions; main 2/8, fix 8/8) + callretfold/tests.rs shortcircuit::*",
+ "test_name": "kuna-cli/tests/decompile_all_cli.rs a_call_in_a_short_circuit_operand_round_trips_through_the_printed_c (fixtures foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64) + tests/stages/foldcallret-shortcircuit.xml (8 assertions; main 2/8, fix 8/8) + callretfold/tests.rs shortcircuit::*",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_gcc_O0_x86_64 (and the clang -O0 / clang -O2 builds of the same foldcallret_sc_x86_64.c)",
  "selector": "w1f,w4f",
  "option": null,
@@ -113,7 +113,7 @@
   "decompiler/crates/kuna-cli/tests/decompile_all_cli.rs",
   "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_x86_64.c",
   "decompiler/crates/kuna-analysis/tests/fixtures/foldcallret_sc_{gcc_O0,clang_O0,clang_O2}_x86_64",
-  "tests/stages/kuna-foldcallret-shortcircuit.xml",
+  "tests/stages/foldcallret-shortcircuit.xml",
   "docs/spec/06-variables-and-merge.md"
  ],
  "notes": "No datatest assertion moves (675/675). The derived-root fan-out test (expression_contains_foldable_call) still counts a call this rule later keeps spilled as foldable, as it already did for GH-657's declines; that only keeps a derived multi-use root explicit, never folds a call."

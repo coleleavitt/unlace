@@ -1,4 +1,4 @@
-//! (kuna) The Rust type speller: how a recovered `Datatype` is spelled in Rust.
+//! (unlace) The Rust type speller: how a recovered `Datatype` is spelled in Rust.
 //!
 //! The sibling of [`crate::langc`]'s `CSpeller`, and the reason
 //! `TypeSpeller::declarator` is specified as `<front><name><back>` rather than
@@ -8,7 +8,7 @@
 //!
 //! # Deliberate spelling choices
 //!
-//! - kuna's `char`/`wchar2`/`wchar4` spell as `u8`/`u16`/`u32`, never as Rust
+//! - unlace's `char`/`wchar2`/`wchar4` spell as `u8`/`u16`/`u32`, never as Rust
 //!   `char`. A Rust `char` is a 4-byte Unicode scalar value with a validity
 //!   invariant; a decompiled byte is not one, and spelling it `char` would be a
 //!   claim the recovery cannot support.
@@ -18,7 +18,7 @@
 //! - `TYPE_CODE` spells `*const ()` rather than a real `fn` type: the recovered
 //!   prototype is not carried through this path, and an `unsafe extern "C" fn()`
 //!   with the wrong arity would be worse than an honest opaque pointer.
-//! - Pointers spell `*mut T` — raw, and uniformly `mut`. Not references: kuna
+//! - Pointers spell `*mut T` — raw, and uniformly `mut`. Not references: unlace
 //!   recovers no borrow information, and `&T` would assert an aliasing invariant
 //!   that is not known to hold. Uniformly `mut` because const-qualification is
 //!   not recovered either, and guessing `*const` on a pointer that is written

@@ -1,8 +1,8 @@
-//! (kuna) Loop-carried-base PIC jump-table option — `option switchsharedcase`
+//! (unlace) Loop-carried-base PIC jump-table option — `option switchsharedcase`
 //! (angr port: `test_switch_case_shared_case_nodes_b2sum_digest`; S2 switch-model).
 //!
-//! Third sibling of [`kuna_switchmodbound`](crate::p2_lift::switchmodbound)
-//! and [`kuna_switchguardbound`](crate::p2_lift::switchguardbound).  All
+//! Third sibling of [`unlace_switchmodbound`](crate::p2_lift::switchmodbound)
+//! and [`unlace_switchguardbound`](crate::p2_lift::switchguardbound).  All
 //! three address the same surface failure — the basic `JumpBasic` model cannot
 //! bound a LOAD-table index, `JumpTable::recoverAddresses` aborts with *"Too many
 //! branches"*, and `FlowInfo::truncateIndirectJump` rewrites the `BRANCHIND` into
@@ -35,7 +35,7 @@
 //!
 //! As with its two siblings, the assigned scope here is **only** the `ElementId`
 //! and the `ArchOption` that flips the arch flag — *not* the recovery logic.  The
-//! recovery walk `JumpBasic::kuna_try_loop_carried_guard_table(Funcdata*, uint4
+//! recovery walk `JumpBasic::unlace_try_loop_carried_guard_table(Funcdata*, uint4
 //! maxtablesize)` is a member of `JumpBasic` and lives next to the rest of the
 //! model in `jumptable.rs` (it needs the protected `pathMeld`/`jrange`/
 //! `selectguards`/`varnodeIndex` state).  It is invoked from `recoverModel()`
@@ -54,14 +54,14 @@
 
 use unlace_base::marshal::ElementId;
 
-/// Marshaling element `<switchsharedcase>` (kuna). ElementIds live in the 4000+
+/// Marshaling element `<switchsharedcase>` (unlace). ElementIds live in the 4000+
 /// range (C++ `ELEM_SWITCHSHAREDCASE = ElementId("switchsharedcase",4106)`;
 /// renumbered from 4103 at the merge into main — main now uses 4103
 /// `noreturn_extern`, 4104 `noreturn_externmatch`, 4105 `crossjumprevert`, so the
 /// next free id above `regionstructure`'s 4102 is 4106).
 pub const ELEM_SWITCHSHAREDCASE: ElementId = ElementId::new("switchsharedcase", 4106);
 
-/// (kuna, angr `test_switch_case_shared_case_nodes_b2sum_digest`) Toggle
+/// (unlace, angr `test_switch_case_shared_case_nodes_b2sum_digest`) Toggle
 /// recovery of a GCC PIC relative-offset jump table whose base register is a
 /// loop-carried MULTIEQUAL (C++ `OptionSwitchSharedCase`).
 ///
@@ -69,7 +69,7 @@ pub const ELEM_SWITCHSHAREDCASE: ElementId = ElementId::new("switchsharedcase", 
 /// the flag is carried as a plain `bool` whose [`Default`] is the *shipped*
 /// default (`option switchsharedcase off`, i.e. \b false — upstream
 /// byte-identical).  `JumpBasic::recoverModel` reads this gate before calling
-/// `kuna_try_loop_carried_guard_table`.
+/// `unlace_try_loop_carried_guard_table`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SwitchSharedCaseOption {
     /// True if a loop-carried-base PIC relative-offset jump table is recovered by
@@ -86,7 +86,7 @@ impl Default for SwitchSharedCaseOption {
 }
 
 impl SwitchSharedCaseOption {
-    /// (kuna) Set the gate (C++ `OptionSwitchSharedCase::apply`).
+    /// (unlace) Set the gate (C++ `OptionSwitchSharedCase::apply`).
     pub fn apply(&mut self, val: bool) -> &'static str {
         self.enabled = val;
         if val {

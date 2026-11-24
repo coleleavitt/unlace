@@ -3,7 +3,7 @@ use std::process::{Command, Output};
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_sleigh::globalcontext::ContextInternal;
 use unlace_sleigh::loadimage::LoadImage;
 use unlace_sleigh::sleigh::Sleigh;
@@ -14,7 +14,7 @@ impl LoadImage for CodeImg {
     fn get_file_name(&self) -> &str {
         "code"
     }
-    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> KunaResult<()> {
+    fn load_fill(&mut self, ptr: &mut [u8], addr: &Address) -> UnlaceResult<()> {
         for (i, b) in ptr.iter_mut().enumerate() {
             *b = *self.0.get(addr.get_offset() as usize + i).unwrap_or(&0);
         }

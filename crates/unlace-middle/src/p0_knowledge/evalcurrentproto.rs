@@ -1,4 +1,4 @@
-//! (kuna) Evaluate a function's **own** unknown prototype
+//! (unlace) Evaluate a function's **own** unknown prototype
 //! with the model the compiler spec nominates, so register-passed parameters are
 //! recovered instead of surfacing as reads of an undefined local.
 //!
@@ -17,7 +17,7 @@
 //! <eval_current_prototype name="__fastcall/__thiscall/__stdcall"/>
 //! ```
 //!
-//! kuna decoded the `<resolveprototype>` union and registered it by name, and
+//! unlace decoded the `<resolveprototype>` union and registered it by name, and
 //! every consumer of the choice was already wired — `ActionPrototypeTypes` sets
 //! the function's model from `glb->evalfp_current` (`coreaction.cc:4843`),
 //! `ActionInputPrototype` calls `FuncProto::resolveModel` on it

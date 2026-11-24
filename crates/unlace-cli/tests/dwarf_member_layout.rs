@@ -4,7 +4,7 @@
 use crate::common;
 
 fn decompile(fixture: &str, function: &str) -> String {
-    let (out, err, rc) = common::run_kuna(&["decompile", &common::fixture(fixture), function]);
+    let (out, err, rc) = common::run_unlace(&["decompile", &common::fixture(fixture), function]);
     assert_eq!(rc, 0, "{fixture} {function}: {err}\n{out}");
     out
 }
@@ -42,7 +42,7 @@ fn bitfields_read_their_own_bits_in_either_byte_order() {
         ("dwarf_bitfields_x86_64.o", &["return p->wide;"][..]),
     ];
     for (fixture, extra) in fixtures {
-        let (code, err, rc) = common::run_kuna(&["decompile-all", &common::fixture(fixture)]);
+        let (code, err, rc) = common::run_unlace(&["decompile-all", &common::fixture(fixture)]);
         assert_eq!(rc, 0, "{fixture}: {err}\n{code}");
         assert!(!code.contains("error"), "{fixture}: {code}");
         for line in common_lines.iter().chain(extra) {

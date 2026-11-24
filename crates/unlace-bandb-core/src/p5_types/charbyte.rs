@@ -1,4 +1,4 @@
-//! A byte loaded through a `char *` stays `char` (kuna `charbyte`, P5).
+//! A byte loaded through a `char *` stays `char` (unlace `charbyte`, P5).
 //!
 //! x86 loads a byte with `movzx` whether the program meant it signed or not,
 //! so the p-code for `*p` is often `LOAD` followed by `INT_ZEXT`.
@@ -44,7 +44,7 @@
 //! Two kinds of byte never become `char`, recorded or not.  A byte that
 //! reaches a call or user-op argument, a return or a switch, directly or
 //! through copies, joins and one-byte arithmetic ([`read_without_cast`]):
-//! kuna shrinks a call argument to the byte when the `movzx` that widened it
+//! unlace shrinks a call argument to the byte when the `movzx` that widened it
 //! folds away, and C would sign-extend a `char` there with no cast to show it
 //! (`logit("%d",c)` passes -128 for 0x80 where the binary passes 128; a
 //! `switch` on it never reaches `case 0x80:`).  And
@@ -300,7 +300,7 @@ pub fn is_candidate(data: &Funcdata, vn: VarnodeId) -> bool {
 pub fn begin(data: &Funcdata) {
     let on = data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::charbyte::CharByte>()
         .0;
     NOTED.with(|n| *n.borrow_mut() = if on { Some(Vec::new()) } else { None });
@@ -542,10 +542,10 @@ pub fn keep_or_restore(data: &mut Funcdata, upstream: Snapshot) -> bool {
     !strays
 }
 
-crate::kuna_flag!(
-    /// (kuna `charbyte`) Keep `char` for a byte loaded through a `char *` when
+crate::unlace_flag!(
+    /// (unlace `charbyte`) Keep `char` for a byte loaded through a `char *` when
     /// the only unsigned vote on it is a zero-extension.  Implementation:
-    /// [`kuna_charbyte`](crate::charbyte).
+    /// [`unlace_charbyte`](crate::charbyte).
     CharByte,
     "charbyte",
     "char-pointer byte typing",

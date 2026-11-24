@@ -49,20 +49,20 @@ fn a_reloaded_image_reports_the_mode_its_loader_applied() {
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Off);
     assert!(!named(&prog));
     prog.arch_mut()
-        .set_kuna_option("ppc32picimports", "abi")
+        .set_unlace_option("ppc32picimports", "abi")
         .unwrap();
     let mut prog = load(&path);
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Abi);
     assert!(named(&prog));
     prog.arch_mut()
-        .set_kuna_option("ppc32picimports", "on")
+        .set_unlace_option("ppc32picimports", "on")
         .unwrap();
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::On);
     let mut prog = load(&path);
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Off);
     assert!(!named(&prog));
     prog.arch_mut()
-        .set_kuna_option("ppc32picimports", "abi")
+        .set_unlace_option("ppc32picimports", "abi")
         .unwrap();
     prog.arch_mut().reset_wire_defaults();
     assert_eq!(prog.arch().analysis_ppc32picimports, Mode::Off);
@@ -85,7 +85,7 @@ fn proof_only_bindings_match_the_applied_flow() {
         std::fs::write(&path, f.bytes()).unwrap();
         let mut prog = load(&path);
         prog.arch_mut()
-            .set_kuna_option("ppc32picimports", "on")
+            .set_unlace_option("ppc32picimports", "on")
             .unwrap();
         let entry = prog.lookup_symbol("check").unwrap();
         let before = prog.arch().commentdb.comments().len();
@@ -129,7 +129,7 @@ fn api_call_bindings_are_entry_local_and_cleared() {
     std::fs::write(&path, f.bytes()).unwrap();
     let mut prog = load(&path);
     prog.arch_mut()
-        .set_kuna_option("ppc32picimports", "on")
+        .set_unlace_option("ppc32picimports", "on")
         .unwrap();
     let entry = prog.lookup_symbol("check").unwrap();
     let mut fd =

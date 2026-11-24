@@ -1,6 +1,6 @@
 //! Schedule coverage for formerly unported passes: presence, registration
-//! adjacency and listing format. The shared kuna snapshot includes later
-//! kuna-specific additions and is not an independent C++ oracle.
+//! adjacency and listing format. The shared unlace snapshot includes later
+//! unlace-specific additions and is not an independent C++ oracle.
 
 use unlace_decomp::universalaction::{ActionListFilter, UNPORTED_ALLOWLIST, universal_sched};
 

@@ -1,4 +1,4 @@
-//! (kuna) `mixedtailret` — a function that hands back a tail call's result on
+//! (unlace) `mixedtailret` — a function that hands back a tail call's result on
 //! one path, and on another returns the value it branched on to get there,
 //! returns that value.
 //!
@@ -63,7 +63,7 @@
 use crate::passthrough::FuncdataPassthroughExt;
 use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -81,7 +81,7 @@ impl OptionMixedTailRet {
 
     /// Resolve the flag and its confirmation message; the caller writes it into
     /// the registered option `MixedTailRet`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(bool, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(bool, String)> {
         let val = on_or_off(p1)?;
         let prop = if val { "on" } else { "off" };
         Ok((
@@ -117,7 +117,7 @@ pub fn returns_decided_value(
     let [(addr, size)] = pieces else { return false };
     if !data
         .get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::mixedtailret::MixedTailRet>()
         .0
         || !last_write_is_own(data, ret, addr, *size)
@@ -138,7 +138,8 @@ pub fn feeds_tail_call(data: &Funcdata, producers: &[OpId], pieces: &[(Address, 
         else {
             return true;
         };
-        let Some(stated) = data.kuna_protoorder_types(data.get_call_specs(idx).get_entry_address())
+        let Some(stated) =
+            data.unlace_protoorder_types(data.get_call_specs(idx).get_entry_address())
         else {
             return true;
         };
@@ -159,10 +160,13 @@ pub fn feeds_tail_call(data: &Funcdata, producers: &[OpId], pieces: &[(Address, 
 /// yielding to it returned `xmm0` where the function returns `eax`.
 pub fn claimed_beside_own(data: &Funcdata) -> bool {
     data.get_arch()
-        .kuna_options
+        .unlace_options
         .get::<crate::mixedtailret::MixedTailRet>()
         .0
-        && data.kuna_passthrough_claims().iter().any(|c| c.beside_own)
+        && data
+            .unlace_passthrough_claims()
+            .iter()
+            .any(|c| c.beside_own)
 }
 
 fn overlaps(a: &Address, asize: int4, b: &Address, bsize: int4) -> bool {
@@ -783,15 +787,15 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
     feeders
 }
 
-/// (kuna) A value a function returns beside a claimed tail-call result is
+/// (unlace) A value a function returns beside a claimed tail-call result is
 /// its return value too (option `mixedtailret`).  See
 /// [`crate::mixedtailret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct MixedTailRet(pub bool);
 
-impl crate::optionset::KunaOption for MixedTailRet {
+impl crate::optionset::UnlaceOption for MixedTailRet {
     const NAME: &'static str = "mixedtailret";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         MixedTailRet(false)
@@ -801,7 +805,7 @@ impl crate::optionset::KunaOption for MixedTailRet {
         MixedTailRet(false)
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
         let (v, msg) = crate::mixedtailret::OptionMixedTailRet.apply(value)?;
         Ok((MixedTailRet(v), msg))
     }

@@ -1,4 +1,4 @@
-//! (kuna `cppsig`, MSVC arm) A PE DLL keeps no symbol table, so the MSVC
+//! (unlace `cppsig`, MSVC arm) A PE DLL keeps no symbol table, so the MSVC
 //! declaration of a `__declspec(dllexport)` member survives only as its export
 //! name. The export directory is read like a defined symbol: `Port::Send` takes
 //! its `__thiscall` `this` and its `can_frame *`, and the `static` `Port::Pack`
@@ -7,14 +7,14 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn bodies() -> std::collections::HashMap<String, String> {
     let fixture = common::fixture("msvcexport_pe_i386.dll");
-    let mut command = Command::new(kuna());
+    let mut command = Command::new(unlace());
     command.args(["decompile-all", &fixture, "--json"]);
     let output = process::required_output(&mut command);
     let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();

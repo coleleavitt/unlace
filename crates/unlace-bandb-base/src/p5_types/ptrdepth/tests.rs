@@ -1,4 +1,4 @@
-//! Tests for the inferred-pointer-nesting cap (kuna `ptrdepthcap`):
+//! Tests for the inferred-pointer-nesting cap (unlace `ptrdepthcap`):
 //! [`cap_pointer_depth`] is upstream `TypeFactory::getTypePointerNoDepth`'s rule
 //! applied to an already-built candidate type, so the properties that matter are
 //! (a) it leaves the shapes real programs have alone, (b) it collapses the

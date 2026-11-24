@@ -60,7 +60,7 @@ fn explicit_extended_prototypes_round_trip_through_native_i386_calls() {
             "prototype sample_choice long double sample_choice(int choice,long double left,long double right)",
         ),
     ] {
-        let (body, error, status) = common::run_kuna(&[
+        let (body, error, status) = common::run_unlace(&[
             "decompile",
             library.to_str().unwrap(),
             name,

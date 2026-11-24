@@ -1,7 +1,7 @@
-//! (kuna `dexmodel`) Printing the byte-code operators: `CPOOLREF` and `NEW`
+//! (unlace `dexmodel`) Printing the byte-code operators: `CPOOLREF` and `NEW`
 //! (`PrintC::opCpoolRefOp`, `PrintC::opNewOp`), and the java-language forms of
 //! LOAD, STORE and CALLIND (`PrintJava::opLoad`, `opStore`, `opCallind`),
-//! the last also as `new T(args)` (kuna `javanew`).
+//! the last also as `new T(args)` (unlace `javanew`).
 
 use crate::funcdata_facing::FuncdataFacingExt;
 use unlace_num::opcodes::OpCode;

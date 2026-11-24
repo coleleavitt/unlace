@@ -54,7 +54,7 @@ impl WriteNode {
 /// A sequence of PcodeOps that move data in-to/out-of an array data-type
 /// (C++ `class ArraySequence`).
 ///
-/// The fields and base methods are `pub(crate)` so the `kuna_memsetsequence`
+/// The fields and base methods are `pub(crate)` so the `unlace_memsetsequence`
 /// module can reuse the gathering machinery — see the module-level
 /// *Cross-pack visibility* note (the analogue of the upstream `protected`
 /// widening).
@@ -203,7 +203,7 @@ impl ArraySequence {
     /// number of characters in the contiguous region (0 = too small).
     ///
     /// This is the constant-sequence gathering ORDER reused by
-    /// `kuna_memsetsequence`.
+    /// `unlace_memsetsequence`.
     #[doc(hidden)]
     pub fn form_byte_array(
         &mut self,
@@ -793,7 +793,7 @@ impl HeapSequence {
                 .unwrap()
                 .update_type(Rc::clone(&char_ptr_type));
             data.op_insert_before(ptr_add, insert_point);
-            // (kuna) inheritUnionField on a union base pointer omitted — the heap
+            // (unlace) inheritUnionField on a union base pointer omitted — the heap
             // sequence's base pointer is a plain typed pointer in the ported tests;
             // if the base type needs resolution the union-field inheritance is the
             // W6 follow-up (no current datatest exercises it).
@@ -1542,15 +1542,15 @@ impl StringSequence {
     }
 
     // ---------------------------------------------------------------------
-    // Constant-fill (memset/bzero) recovery — kuna GH-9230/1537.
+    // Constant-fill (memset/bzero) recovery — unlace GH-9230/1537.
     //
     // The C++ `MemsetSequence : public StringSequence` reuses StringSequence's
     // `constructTypedPointer`/`removeCopyOps`; the Rust port keeps that reuse in
     // this `impl StringSequence` (private fields are reachable here) and exposes
-    // only the `pub(crate)` entry points the `kuna_memsetsequence` driver needs.
+    // only the `pub(crate)` entry points the `unlace_memsetsequence` driver needs.
     // ---------------------------------------------------------------------
 
-    /// (kuna GH-9230) Build a fill sequence for memset recovery: the same
+    /// (unlace GH-9230) Build a fill sequence for memset recovery: the same
     /// containing-array type-walk as [`build`](Self::build), but gathers the
     /// constant COPY run with each COPY's byte size recorded in the `WriteNode`
     /// slot (via [`collect_fill_run`](Self::collect_fill_run)) and skips
@@ -1637,7 +1637,7 @@ impl StringSequence {
         Some(seq)
     }
 
-    /// (kuna GH-9230) Mirror of [`collect_copy_ops`](Self::collect_copy_ops), but
+    /// (unlace GH-9230) Mirror of [`collect_copy_ops`](Self::collect_copy_ops), but
     /// records each COPY's byte size in the `WriteNode` slot (the memset fill
     /// detection needs the per-COPY stride) instead of `-1`.  The constant
     /// uniform-byte check is deferred to `detect_fill_run`; here it only gathers
@@ -1726,7 +1726,7 @@ impl StringSequence {
         &mut self.base.move_ops
     }
 
-    /// (kuna GH-9230) Build the `builtin_memset(dest, value, count)` CALLOTHER
+    /// (unlace GH-9230) Build the `builtin_memset(dest, value, count)` CALLOTHER
     /// (C++ `MemsetSequence::buildMemset`), mirroring
     /// [`build_string_copy`](Self::build_string_copy): construct the typed dest
     /// pointer into the array, then a 4-input CALLOTHER with the registered
@@ -1775,7 +1775,7 @@ impl StringSequence {
         Some(memset_op)
     }
 
-    /// (kuna GH-9230) `MemsetSequence::transform`: build the memset and tear down
+    /// (unlace GH-9230) `MemsetSequence::transform`: build the memset and tear down
     /// the original COPY run (reusing [`remove_copy_ops`](Self::remove_copy_ops)).
     #[doc(hidden)]
     pub fn transform_memset(&self, data: &mut Funcdata, fill_value: u8, fill_count: int4) -> bool {
@@ -1788,16 +1788,16 @@ impl StringSequence {
     }
 
     // ---------------------------------------------------------------------
-    // Read-only block-copy string recovery — kuna `rodatastring`.
+    // Read-only block-copy string recovery — unlace `rodatastring`.
     //
     // `RuleStringCopy` gathers its byte array out of constant COPY inputs, one
-    // character per op.  The `kuna_rodatastring` driver instead gathers block
+    // character per op.  The `unlace_rodatastring` driver instead gathers block
     // COPYs whose SOURCE is a read-only image varnode, and assembles the byte
     // array from the load image itself, so it needs only the build and teardown
     // halves here (`constructTypedPointer` + `removeCopyOps`).
     // ---------------------------------------------------------------------
 
-    /// (kuna `rodatastring`) Build a sequence over an already-gathered COPY run
+    /// (unlace `rodatastring`) Build a sequence over an already-gathered COPY run
     /// whose byte array was read out of read-only image memory.
     ///
     /// `move_ops` must be in block order (the first entry is the CALLOTHER's
@@ -1827,7 +1827,7 @@ impl StringSequence {
         }
     }
 
-    /// (kuna `rodatastring`) `StringSequence::transform` for a block-copy run:
+    /// (unlace `rodatastring`) `StringSequence::transform` for a block-copy run:
     /// build the `builtin_strncpy` over the assembled byte array, then reuse the
     /// shared [`remove_copy_ops`](Self::remove_copy_ops) teardown.
     #[doc(hidden)]

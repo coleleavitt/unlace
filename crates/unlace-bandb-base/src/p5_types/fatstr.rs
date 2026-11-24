@@ -1,4 +1,4 @@
-//! (kuna `fatstr`) Length-carried string literals — the `(ptr, len)` constant
+//! (unlace `fatstr`) Length-carried string literals — the `(ptr, len)` constant
 //! pair a fat-pointer language materializes (`docs/multilang.md` W3/W4).
 //!
 //! ```text
@@ -120,7 +120,7 @@ pub fn parse_fatstr_mode(value: &str) -> Result<(FatStrMode, String), String> {
 
 /// Is the rewrite live for this function?
 pub fn live(data: &Funcdata) -> bool {
-    match data.get_arch().kuna_options.get::<FatStrMode>() {
+    match data.get_arch().unlace_options.get::<FatStrMode>() {
         FatStrMode::Off => false,
         FatStrMode::Auto => {
             let lang = data.get_arch().source_lang;
@@ -153,7 +153,7 @@ pub fn bytes_are_text(bytes: &[u8]) -> bool {
     has_alnum
 }
 
-/// (kuna) `RuleFatStr` — rewrite a read-only `(ptr, len)` constant argument
+/// (unlace) `RuleFatStr` — rewrite a read-only `(ptr, len)` constant argument
 /// pair into a bounded string literal (option `fatstr`, default auto).
 pub struct RuleFatStr {
     /// Unit-test OR-override of the mode gate (the scheduled instance passes
@@ -312,7 +312,7 @@ fn pointer_has_text_facet(data: &Funcdata, op: OpId, i: int4) -> bool {
     let Some(tf) = data.get_arch().types() else {
         return false;
     };
-    tf.kuna_lang_facet(name).is_some_and(|f| f.is_text())
+    tf.unlace_lang_facet(name).is_some_and(|f| f.is_text())
 }
 
 /// The per-root rule registrations (the `rodatastringcopy` pattern).
@@ -323,9 +323,9 @@ pub fn specs() -> Vec<RuleSpec> {
     }]
 }
 
-impl crate::optionset::KunaOption for FatStrMode {
+impl crate::optionset::UnlaceOption for FatStrMode {
     const NAME: &'static str = "fatstr";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         FatStrMode::Auto
@@ -335,8 +335,8 @@ impl crate::optionset::KunaOption for FatStrMode {
         FatStrMode::Auto
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_fatstr_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_fatstr_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 

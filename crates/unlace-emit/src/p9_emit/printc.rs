@@ -41,7 +41,7 @@
 //!   3. **`PrintCCapability`** registration metadata ([`CAPABILITY_NAME`],
 //!      [`CAPABILITY_IS_DEFAULT`], printc.cc:109-114).
 //!   4. **The PrintC options** ([`PrintCOptions`]) — the option fields, the
-//!      `resetDefaultsPrintC` defaults (printc.cc:1649-1664, including the kuna
+//!      `resetDefaultsPrintC` defaults (printc.cc:1649-1664, including the unlace
 //!      DIV-2 default-on `option_arraynotation`), and the `set*` toggles
 //!      (printc.hh:242-255).  These are the PrintC side of the options.cc
 //!      `// STUB(W8)` markers (`setNULLPrinting`/`setInplaceOps`/… on the
@@ -60,9 +60,9 @@
 //!      (`opBinary`/`opUnary`/`opFunc`/`opTypeCast`).  The *emission* is the
 //!      stub; the *mapping* is faithful data.
 //!
-//! ## Compareform / arraynotation kuna hooks
+//! ## Compareform / arraynotation unlace hooks
 //!
-//! The kuna `compareform` rendering hook and the `arraynotation` `&base[index]`
+//! The unlace `compareform` rendering hook and the `arraynotation` `&base[index]`
 //! mode are both controlled from here: `arraynotation` is the
 //! [`PrintCOptions::array_notation`] toggle (default on, DIV-2), consulted by
 //! the `opPtradd` body; `compareform` is a stage-model assertion that
@@ -75,7 +75,7 @@ use crate::funcdata_spacebase::FuncdataSpacebaseExt;
 use crate::funcdata_union::FuncdataUnionExt;
 use crate::lang::OutLangExt;
 use unlace_base::address::{Address, calc_mask};
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, int8, uint4, uintb};
 
@@ -241,7 +241,7 @@ pub mod tokens {
     pub static CONDITIONAL: OpToken = op_token("?", ":", 3, 16, false, TokenType::Binary, 1, 0);
     /// The assignment operator `=` (printc.cc:57).
     pub static ASSIGNMENT: OpToken = op_token("=", "", 2, 14, false, TokenType::Binary, 1, 5);
-    /// (kuna `postinc`) `p++`, a postfix around its one operand and a blank.
+    /// (unlace `postinc`) `p++`, a postfix around its one operand and a blank.
     pub static POST_INCREMENT: OpToken =
         op_token("", "++", 2, 66, false, TokenType::Postsurround, 0, 0);
     /// The comma operator `,` for parameter lists (printc.cc:58).
@@ -277,7 +277,7 @@ pub mod tokens {
     /// Type declaration with no space (printc.cc:75).
     pub static TYPE_EXPR_NOSPACE: OpToken = op_token("", "", 2, 10, false, TokenType::Space, 0, 0);
 
-    // (kuna) IEEE-754 arithmetic, which has no row upstream: the C++ table maps
+    // (unlace) IEEE-754 arithmetic, which has no row upstream: the C++ table maps
     // the float opcodes onto the integer `*`/`+` above.  These two are spelled
     // and ranked exactly like that pair -- `float_tokens_match_their_integer_twins_except_for_grouping`
     // pins every field -- and differ only in not re-associating.
@@ -309,7 +309,7 @@ pub mod tokens {
 /// `negate` stays null).
 pub fn token_negate(tok: &'static OpToken) -> Option<&'static OpToken> {
     use tokens::*;
-    // (kuna outlang) A language whose comparison tokens are its own statics
+    // (unlace outlang) A language whose comparison tokens are its own statics
     // carries the pairing on the token (`OpToken::negate`, the C++ field the port
     // left unset because Rust statics cannot self-reference -- they CAN reference
     // each other). The C table below is unreachable for those.
@@ -333,7 +333,7 @@ pub fn token_negate(tok: &'static OpToken) -> Option<&'static OpToken> {
     }
 }
 
-/// (kuna `constright`) The comparison token with its operands exchanged (`<` and `>`, `<=`
+/// (unlace `constright`) The comparison token with its operands exchanged (`<` and `>`, `<=`
 /// and `>=`); `None` for any other token.
 pub fn token_mirror(tok: &'static OpToken) -> Option<&'static OpToken> {
     use tokens::*;
@@ -442,7 +442,7 @@ pub mod display_format {
 ///
 /// `resetDefaultsPrintC` (printc.cc:1649-1664) establishes the defaults; the
 /// `set*` methods (printc.hh:242-255) are the toggles wired from the options.cc
-/// `// STUB(W8)` markers (`PrintC::setNULLPrinting(val)` etc.).  The kuna
+/// `// STUB(W8)` markers (`PrintC::setNULLPrinting(val)` etc.).  The unlace
 /// `arraynotation` toggle (printc.hh:250-251) and its DIV-2 default-on
 /// (printc.cc:1658) are carried here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -459,19 +459,19 @@ pub struct PrintCOptions {
     pub unplaced: bool,
     /// Hide implied extension operations (C++ `option_hide_exts`).
     pub hide_exts: bool,
-    /// (kuna) Render standalone PTRADD as `&base[index]` rather than
+    /// (unlace) Render standalone PTRADD as `&base[index]` rather than
     /// `base + index` (C++ `option_arraynotation`, printc.hh:152).
     pub array_notation: bool,
-    /// (kuna) In boolean contexts (if/while/for/ternary conditions, `&&`/`||`/
+    /// (unlace) In boolean contexts (if/while/for/ternary conditions, `&&`/`||`/
     /// `!` operands), render `x != 0` as `x` and `x == 0` as `!x` (DIV-37,
     /// `option truthycond`).  Float compares, enum-typed and equate-named
     /// zeros are excluded; value contexts (`v = (x != 0)`) never normalize.
     pub truthy_cond: bool,
-    /// (kuna) A single-statement if-body drops its braces and prints the
+    /// (unlace) A single-statement if-body drops its braces and prints the
     /// statement indented on the next line (DIV-38, `option braceelide`).
     /// Copy-leaf single-statement bodies only; labels/comments keep braces.
     pub brace_elide: bool,
-    /// (kuna) Warnings render as terse `// slug` end-of-line comments on the
+    /// (unlace) Warnings render as terse `// slug` end-of-line comments on the
     /// statement they describe instead of full `/* WARNING: ... */` banner
     /// lines (DIV-39, `option warnstyle inline|banner`).
     pub warn_inline: bool,
@@ -479,16 +479,16 @@ pub struct PrintCOptions {
     pub inf_loop_top: bool,
     /// Render supported mapped byte-array transfers with standard C helpers.
     pub bytearray_c: bool,
-    /// (kuna) A partial access no member names renders as a typed pointer
+    /// (unlace) A partial access no member names renders as a typed pointer
     /// access instead of `name._<off>_<size>_` (`option partialaccess`).
     pub partial_access: bool,
-    /// (kuna) Print the definitions of the composite/enum/typedef types this
+    /// (unlace) Print the definitions of the composite/enum/typedef types this
     /// function's C names ABOVE the function (`option structdefs`).  See
     /// [`crate::structdefs`].
     pub struct_defs: bool,
     /// A project header carries the definitions omitted from each body.
     pub header_carries_types: bool,
-    /// (kuna) A pointer-typed constant that addresses program data prints as
+    /// (unlace) A pointer-typed constant that addresses program data prints as
     /// `&dat_<addr>` rather than `(T *)0x<addr>` (`option globalref`).  See
     /// [`crate::globalref`].
     pub global_ref: bool,
@@ -511,34 +511,34 @@ impl Default for PrintCOptions {
 impl PrintCOptions {
     /// Construct with the `resetDefaultsPrintC` defaults (printc.cc:1649-1664).
     ///
-    /// Note the kuna DIV-2 default-on `array_notation = true` (printc.cc:1658),
-    /// the `&base[index]` form for a standalone PTRADD (GH-558), the kuna
+    /// Note the unlace DIV-2 default-on `array_notation = true` (printc.cc:1658),
+    /// the `&base[index]` form for a standalone PTRADD (GH-558), the unlace
     /// DIV-34 `brace_func = NextLine` (upstream `Emit::skip_line` leaves a blank
     /// line between the prototype and `{`; `option braceformat function skip`
-    /// restores it), the kuna DIV-35 `null = true` (a zero pointer constant
+    /// restores it), the unlace DIV-35 `null = true` (a zero pointer constant
     /// renders as `NULL`, not `(type *)0x0`; `option nullprinting off`
-    /// restores the casted form), and the kuna DIV-36 `inplace_ops = true`
+    /// restores the casted form), and the unlace DIV-36 `inplace_ops = true`
     /// (`out = out OP y` renders as `out OP= y` via the ported
     /// `emitInplaceOp`; `option inplaceops off` restores).
     pub fn new() -> PrintCOptions {
         PrintCOptions {
             convention: true,
             hide_exts: true,
-            inplace_ops: true, // (kuna) DIV-36; upstream flag default off + never consumed
+            inplace_ops: true, // (unlace) DIV-36; upstream flag default off + never consumed
             nocasts: false,
-            null: true, // (kuna) DIV-35; upstream option_NULL default off
+            null: true, // (unlace) DIV-35; upstream option_NULL default off
             unplaced: false,
-            array_notation: true, // (kuna) DIV-2 default-on (GH-558)
-            truthy_cond: true,    // (kuna) DIV-37; no upstream equivalent
-            brace_elide: true,    // (kuna) DIV-38; no upstream equivalent
+            array_notation: true, // (unlace) DIV-2 default-on (GH-558)
+            truthy_cond: true,    // (unlace) DIV-37; no upstream equivalent
+            brace_elide: true,    // (unlace) DIV-38; no upstream equivalent
             inf_loop_top: true,
-            warn_inline: true, // (kuna) DIV-39; no upstream equivalent
+            warn_inline: true, // (unlace) DIV-39; no upstream equivalent
             bytearray_c: false,
-            partial_access: true, // (kuna) `option partialaccess off` restores `name._<off>_<size>_`
+            partial_access: true, // (unlace) `option partialaccess off` restores `name._<off>_<size>_`
             header_carries_types: false,
-            struct_defs: false, // (kuna) no upstream equivalent; opt-in
-            global_ref: true,   // (kuna) no upstream equivalent
-            brace_func: BraceStyle::NextLine, // (kuna) DIV-34; upstream Emit::skip_line
+            struct_defs: false, // (unlace) no upstream equivalent; opt-in
+            global_ref: true,   // (unlace) no upstream equivalent
+            brace_func: BraceStyle::NextLine, // (unlace) DIV-34; upstream Emit::skip_line
             brace_ifelse: BraceStyle::SameLine, // Emit::same_line
             brace_loop: BraceStyle::SameLine, // Emit::same_line
             brace_switch: BraceStyle::SameLine, // Emit::same_line
@@ -569,53 +569,53 @@ impl PrintCOptions {
     pub fn set_hide_implied_exts(&mut self, val: bool) {
         self.hide_exts = val;
     }
-    /// (kuna) C++ `setArrayNotation(val)` (printc.hh:250).
+    /// (unlace) C++ `setArrayNotation(val)` (printc.hh:250).
     pub fn set_array_notation(&mut self, val: bool) {
         self.array_notation = val;
     }
-    /// (kuna) Toggle truthy condition rendering (`option truthycond`, DIV-37).
+    /// (unlace) Toggle truthy condition rendering (`option truthycond`, DIV-37).
     pub fn set_truthy_cond(&mut self, val: bool) {
         self.truthy_cond = val;
     }
-    /// (kuna) Current truthy-condition rendering flag.
+    /// (unlace) Current truthy-condition rendering flag.
     pub fn truthy_cond(&self) -> bool {
         self.truthy_cond
     }
-    /// (kuna) Toggle single-statement if-body brace elision (`option
+    /// (unlace) Toggle single-statement if-body brace elision (`option
     /// braceelide`, DIV-38).
     pub fn set_brace_elide(&mut self, val: bool) {
         self.brace_elide = val;
     }
-    /// (kuna) Current brace-elision flag.
+    /// (unlace) Current brace-elision flag.
     pub fn brace_elide(&self) -> bool {
         self.brace_elide
     }
-    /// (kuna `structdefs`) Print the referenced type definitions above the
+    /// (unlace `structdefs`) Print the referenced type definitions above the
     /// function.
     pub fn set_struct_defs(&mut self, val: bool) {
         self.struct_defs = val;
     }
-    /// (kuna `structdefs`) Is the per-function type-definition preamble on?
+    /// (unlace `structdefs`) Is the per-function type-definition preamble on?
     pub fn struct_defs(&self) -> bool {
         self.struct_defs
     }
-    /// (kuna `globalref`) Name constant addresses as the globals they point at.
+    /// (unlace `globalref`) Name constant addresses as the globals they point at.
     pub fn set_global_ref(&mut self, val: bool) {
         self.global_ref = val;
     }
-    /// (kuna `globalref`) Current constant-address naming flag.
+    /// (unlace `globalref`) Current constant-address naming flag.
     pub fn global_ref(&self) -> bool {
         self.global_ref
     }
-    /// (kuna) Toggle inline warning style (`option warnstyle`, DIV-39).
+    /// (unlace) Toggle inline warning style (`option warnstyle`, DIV-39).
     pub fn set_warn_inline(&mut self, val: bool) {
         self.warn_inline = val;
     }
-    /// (kuna) Current warning-style flag (true = inline `// slug`).
+    /// (unlace) Current warning-style flag (true = inline `// slug`).
     pub fn warn_inline(&self) -> bool {
         self.warn_inline
     }
-    /// (kuna) C++ `getArrayNotation()` (printc.hh:251).
+    /// (unlace) C++ `getArrayNotation()` (printc.hh:251).
     pub fn array_notation(&self) -> bool {
         self.array_notation
     }
@@ -657,9 +657,9 @@ fn first_integer(s: &str) -> Option<u64> {
     out.parse().ok()
 }
 
-/// (kuna warnstyle, DIV-39) Map a stored warning text (which carries its
+/// (unlace warnstyle, DIV-39) Map a stored warning text (which carries its
 /// `WARNING: ` / `WARNING (jumptable): ` prefix from `Funcdata::warning_prefix`)
-/// to the terse `// slug` form.  Producer-tagged kuna warnings (`branchflip:`,
+/// to the terse `// slug` form.  Producer-tagged unlace warnings (`branchflip:`,
 /// `taildup:`, ...) map by their stable prefix; upstream texts by their stable
 /// stem; anything unrecognized keeps its full text behind a `warn:` marker so
 /// no information is silently dropped.  Count-carrying header warnings
@@ -827,7 +827,7 @@ pub fn print_unicode(s: &mut String, onechar: int4) {
 
 /// The Rust spelling of one codepoint inside a double-quoted string body.
 ///
-/// (kuna outlang) Rust's escape set is a strict subset of C's in the ways that
+/// (unlace outlang) Rust's escape set is a strict subset of C's in the ways that
 /// matter here: it has no `\a`/`\b`/`\v`/`\f`, so those become `\xNN`; and a
 /// single quote inside a `"..."` must be BARE, because `\'` is only an escape in
 /// a character literal and `"PCRE\'s"` does not tokenize. Everything else --
@@ -915,7 +915,7 @@ pub fn format_integer_token(
     t
 }
 
-/// (kuna) The sign of the `signed char` or `unsigned char` operand the byte
+/// (unlace) The sign of the `signed char` or `unsigned char` operand the byte
 /// constant `vn` is compared with by `op`, when that operand prints without a
 /// cast: C promotes it by that sign, so the constant must be its value.
 fn compared_byte_sign(fd: &Funcdata, op: OpId, vn: VarnodeId) -> Option<bool> {
@@ -1084,15 +1084,15 @@ pub fn format_float_token(
     }
 }
 
-/// C++ `PrintC::genericFunctionName` (printc.cc:3516-3526), the non-kuna
+/// C++ `PrintC::genericFunctionName` (printc.cc:3516-3526), the non-unlace
 /// (`func_<addr>`) branch.
 ///
-/// The kuna angr-style `sub_<addr>` branch (printc.cc:3519-3520) is gated on
-/// `kunaAngrNaming(glb)`, an Architecture query the caller owns; pass the
+/// The unlace angr-style `sub_<addr>` branch (printc.cc:3519-3520) is gated on
+/// `unlaceAngrNaming(glb)`, an Architecture query the caller owns; pass the
 /// already-decided flag.  When `angr_naming` is true the caller substitutes
-/// `kunaFunctionName(addr)` (the `kuna_naming` module); this function produces
+/// `unlaceFunctionName(addr)` (the `unlace_naming` module); this function produces
 /// the plain `func_` + raw address form.
-pub fn generic_function_name(addr: &Address) -> KunaResult<String> {
+pub fn generic_function_name(addr: &Address) -> UnlaceResult<String> {
     let mut s = String::from("func_");
     addr.print_raw(&mut s)?;
     Ok(s)
@@ -1425,7 +1425,7 @@ impl PrintEmit {
 // so no call can fall through to a `PrintEmit` default that would diverge from
 // the leaf (`EmitNoMarkup` overrides `tag_line`/`clear`; see the type doc).
 // The statement and brace calls also keep the dangling-label record
-// (`kuna_labelstmt`).
+// (`unlace_labelstmt`).
 impl Emit for PrintEmit {
     fn state(&self) -> &EmitBase {
         pe_forward!(self.state())
@@ -1569,10 +1569,10 @@ impl Emit for PrintEmit {
     fn stop_comment(&mut self, id: int4) {
         pe_forward!(self.stop_comment(id))
     }
-    fn flush(&mut self) -> KunaResult<()> {
+    fn flush(&mut self) -> UnlaceResult<()> {
         pe_forward!(self.flush())
     }
-    fn set_max_line_size(&mut self, mls: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, mls: int4) -> UnlaceResult<()> {
         pe_forward!(self.set_max_line_size(mls))
     }
     fn get_max_line_size(&self) -> int4 {
@@ -1694,9 +1694,9 @@ pub struct PrintC {
     /// ~260 `self.emit.<method>()` sites stay static (see [`PrintEmit`]).
     pub emit: PrintEmit,
     /// The `option maxlinewidth` line size for plain-text output; `None` (the
-    /// kuna default) prints each statement on one line.
+    /// unlace default) prints each statement on one line.
     plain_line_size: Option<int4>,
-    /// (kuna) Scoped raw pointer to the [`Funcdata`] currently being emitted,
+    /// (unlace) Scoped raw pointer to the [`Funcdata`] currently being emitted,
     /// live ONLY for the duration of [`emit_function_document`](PrintC::emit_function_document).
     /// Lets the fd-free RPN leaf emitters ([`emit_atom`](PrintC::emit_atom) /
     /// [`emit_op`](PrintC::emit_op)) resolve an [`Atom`]'s carried op/varnode
@@ -1719,59 +1719,59 @@ pub struct PrintC {
     /// `PrintLanguage::commsorter`).  Seeded by [`setup_comments`] at the start of
     /// the body and consulted by `emit_comment_block_tree`/`emit_comment_group`.
     commsorter: crate::comment::CommentSorter,
-    /// (kuna `voidtailreturn`) The one `CPUI_RETURN` op `emit_basic_block_ops`
+    /// (unlace `voidtailreturn`) The one `CPUI_RETURN` op `emit_basic_block_ops`
     /// must skip: the function's own trailing bare `return;` in a void function.
     /// Computed once per function by [`elidable_void_tail_return`] at the top of
     /// [`emit_function_body`](PrintC::emit_function_body) and cleared after, so it
     /// is live only for that function's emission.
     void_tail_return: Option<OpId>,
-    /// (kuna `itaniumeh`) The landing pad of the `try` being printed: an
+    /// (unlace `itaniumeh`) The landing pad of the `try` being printed: an
     /// exceptional edge to it inside the try body prints as its plain call.
     eh_open_pad: Option<u64>,
-    /// (kuna `itaniumeh`) `catch` braces left open because the handler runs
+    /// (unlace `itaniumeh`) `catch` braces left open because the handler runs
     /// to the end of the function body; closed by `emit_function_body`.
     eh_open_catch: Vec<i32>,
-    /// (kuna `javanew`) This function's `<init>` calls that print as `new T(args)`.
+    /// (unlace `javanew`) This function's `<init>` calls that print as `new T(args)`.
     java_new: std::collections::HashMap<OpId, crate::javanew::NewInit>,
-    /// (kuna `javanew`) A constructor's `this(...)` / `super(...)` calls.
+    /// (unlace `javanew`) A constructor's `this(...)` / `super(...)` calls.
     java_ctor_calls: std::collections::HashMap<OpId, crate::javanew::CtorCall>,
-    /// (kuna `javatry`) This function's catch clauses, in java-language output.
+    /// (unlace `javatry`) This function's catch clauses, in java-language output.
     java_catches: Option<crate::javatry::CatchTable>,
-    /// (kuna) The userop index of Dalvik's `throwException`, in java-language
+    /// (unlace) The userop index of Dalvik's `throwException`, in java-language
     /// output.
     java_throw_userop: Option<u64>,
-    /// (kuna `javatry`) The blocks straddling a `try`'s end, while they print:
+    /// (unlace `javatry`) The blocks straddling a `try`'s end, while they print:
     /// for each, the handlers and whether the statements inside their ranges print.
     java_block_filters: std::collections::HashMap<BlockId, Vec<(u64, bool)>>,
-    /// (kuna `javatry`) Handlers already printed as a `catch` clause.
+    /// (unlace `javatry`) Handlers already printed as a `catch` clause.
     java_caught_shown: std::collections::HashSet<u64>,
-    /// (kuna `javasync`) This function's catch-all idioms, by handler.
+    /// (unlace `javasync`) This function's catch-all idioms, by handler.
     java_idioms: std::collections::BTreeMap<u64, crate::javasync::JavaIdiom>,
-    /// (kuna `javasync`) Statements a printed `synchronized` or `finally`
+    /// (unlace `javasync`) Statements a printed `synchronized` or `finally`
     /// stands for.
     java_hidden: std::collections::HashSet<OpId>,
-    /// (kuna `javasync`) The `try`s marked to print as `synchronized`: the
+    /// (unlace `javasync`) The `try`s marked to print as `synchronized`: the
     /// handler and the `monitorEnter` op left out for it.
     java_sync_enters: std::collections::BTreeMap<u64, OpId>,
-    /// (kuna `gotonext`) The gotos left out or printed as `break;`, and the labels
+    /// (unlace `gotonext`) The gotos left out or printed as `break;`, and the labels
     /// only they reached.  Computed per function at the top of
     /// [`emit_function_body`](PrintC::emit_function_body).
     goto_rewrites: crate::gotonext::GotoRewrites,
-    /// (kuna `switchmerge`) The printed arms of each C `switch` whose arms differ
+    /// (unlace `switchmerge`) The printed arms of each C `switch` whose arms differ
     /// from its own cases.  Computed per function with `goto_rewrites`.
     switch_plans: crate::switchmerge::SwitchPlans,
-    /// (kuna) Resolved `realtypes` rendering context for the function currently
+    /// (unlace) Resolved `realtypes` rendering context for the function currently
     /// being printed — the the registered option `Realtypes` gate plus the data-model fact
     /// (`long` is 8 bytes) needed to relabel residual `TYPE_UNKNOWN` (`xunknownN`)
     /// types as real C types.  Refreshed at the top of [`doc_function_full`] from
     /// the live `arch`; `OFF` until then (so an out-of-band print never relabels).
     pub rt_ctx: RealTypeCtx,
-    /// (kuna outlang) The output language this document renders into.  Selects
+    /// (unlace outlang) The output language this document renders into.  Selects
     /// the surface vocabulary and capability record every language-varying site
     /// reads (`crate::lang`).  Refreshed per document alongside `rt_ctx`;
     /// `OutLang::C` until then, so an out-of-band print is never non-C.
     pub out_lang: crate::lang::OutLang,
-    /// (kuna warnstyle, DIV-39) Warning slugs collected under `warn_inline` by
+    /// (unlace warnstyle, DIV-39) Warning slugs collected under `warn_inline` by
     /// [`emit_comment_group`](PrintC::emit_comment_group) /
     /// [`emit_comment_func_header`](PrintC::emit_comment_func_header), flushed
     /// as one `// slug, slug` end-of-line comment by
@@ -1791,7 +1791,7 @@ pub struct PrintC {
     indirect_input_aliases: std::collections::HashSet<crate::context::HighVariableId>,
     signature_param_names: std::collections::HashMap<i32, String>,
     pub go_suppressed_labels: std::collections::HashSet<BlockId>,
-    /// (kuna `oslog`) Statements that only fill a decoded os_log buffer.
+    /// (unlace `oslog`) Statements that only fill a decoded os_log buffer.
     oslog_hidden: std::collections::BTreeSet<OpId>,
     /// Strict subpieces suppressed in favor of their overlap group's unique
     /// whole-value declaration. References resolve through the whole owner.
@@ -1801,10 +1801,10 @@ pub struct PrintC {
     /// same-named unique whole owner exists. Their references are relative to
     /// their own declared object, not the overlap group's synthetic symbol.
     local_name_standalones: std::collections::HashSet<crate::context::HighVariableId>,
-    /// (kuna) The locals the last document declared, as [`DeclaredLocal`]s.
+    /// (unlace) The locals the last document declared, as [`DeclaredLocal`]s.
     declared_locals: Vec<DeclaredLocal>,
     declared_local_index: std::collections::HashMap<crate::context::HighVariableId, usize>,
-    /// (kuna) The entry of the function the last document printed.
+    /// (unlace) The entry of the function the last document printed.
     declared_entry: Option<Address>,
     /// Final C declarations, including storage and symbol overrides.
     pointer_decls: crate::pointerargs::Declarations,
@@ -1813,19 +1813,19 @@ pub struct PrintC {
     record_pointer_arguments: bool,
     pointer_record: Option<crate::pointerargs::Record>,
     pointer_candidate: Option<crate::pointerargs::Candidate>,
-    /// (kuna `signedness`) The declared-signedness decision for the function
+    /// (unlace `signedness`) The declared-signedness decision for the function
     /// being emitted: which integer locals the operation set says to declare
     /// signed or unsigned, and which of those declarations actually got written
     /// (the ones whose now-redundant `(int)` casts may be dropped).  Empty under
     /// `signedness upstream`.  See [`crate::typeround`].
     sign_plan: crate::typeround::SignPlan,
-    /// (kuna `castimplied`) The declarations written for the function being
+    /// (unlace `castimplied`) The declarations written for the function being
     /// emitted, which decide the casts C's own conversions make redundant.  See
     /// [`crate::castimplied`].
     cast_implied: crate::castimplied::ImpliedCasts,
-    /// (kuna `castimplied`) The op being printed as the statement `lhs = <op>;`.
+    /// (unlace `castimplied`) The op being printed as the statement `lhs = <op>;`.
     stmt_op: Option<OpId>,
-    /// (kuna `globalref`) This function's constant-address globals: the facts
+    /// (unlace `globalref`) This function's constant-address globals: the facts
     /// the decision reads and the globals its C names. See
     /// [`crate::globalref`].
     globalref: crate::globalref::Plan,
@@ -1833,9 +1833,9 @@ pub struct PrintC {
     /// Per-body spelling of a goto-target leaf whose address label another
     /// printed label already uses (see [`assign_label_names`](PrintC::assign_label_names)).
     label_names: std::collections::BTreeMap<BlockId, String>,
-    /// (kuna `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
+    /// (unlace `ctree`) The C syntax tree of the function being printed, with `option ctree on`.
     ctree: Option<crate::ctree::CTree>,
-    /// (kuna `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
+    /// (unlace `noretfirst`) `CBRANCH` ops whose condition prints negated, for an `if` whose
     /// arms the tree swapped.
     flipped_branches: std::collections::BTreeSet<OpId>,
 }
@@ -1930,8 +1930,8 @@ impl PrintC {
     /// `PrintLanguage` is current; here the single owned printer records the
     /// requested name so `print_is_c_language` reflects it).
     ///
-    /// (kuna outlang) The name is the single source of truth for the output
-    /// language: it also resolves `out_lang`, so a name kuna owns switches the
+    /// (unlace outlang) The name is the single source of truth for the output
+    /// language: it also resolves `out_lang`, so a name unlace owns switches the
     /// emitter and a name it does not leaves the C emitter in place -- an unknown
     /// language never silently renders as something else.
     pub fn set_name(&mut self, name: &str) {
@@ -1989,7 +1989,7 @@ impl PrintC {
         let markup = MarkupRef::none();
 
         let id1 = self.emit.begin_function();
-        // (kuna warnstyle, DIV-39) defensive: never let a pending slug from a
+        // (unlace warnstyle, DIV-39) defensive: never let a pending slug from a
         // previous function on this shared printer leak into this one.
         self.eol_warns.clear();
         // emitCommentFuncHeader(fd) — the header comment line (the full
@@ -2058,7 +2058,7 @@ impl PrintC {
             "/* WARNING: body emission blocked on upstream decompilation passes (raw p-code IR) */",
             SyntaxHighlight::CommentColor,
         );
-        // (kuna warnstyle, DIV-39) drain any slug still pending from a
+        // (unlace warnstyle, DIV-39) drain any slug still pending from a
         // construct with no closer flush point onto the last body line, so no
         // warning is ever silently dropped or carried out of this function.
         self.flush_eol_warnings();
@@ -2094,7 +2094,7 @@ impl PrintC {
     /// C++ `glb->print->setMaxLineSize(val)` (options.cc:524). Plain-text output
     /// goes through [`EmitPrettyPrint`] from here on, which breaks lines longer
     /// than `val`; the markup back-end is left unbroken.
-    pub fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+    pub fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()> {
         EmitPrettyPrint::new().set_max_line_size_pretty(val)?;
         self.plain_line_size = Some(val);
         if !self.emit.emits_markup() {
@@ -2146,7 +2146,7 @@ impl PrintC {
         self.emit.set_indent_increment(val);
     }
     /// C++ `glb->print->setLineCommentIndent(val)` (options.cc:559).
-    pub fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()> {
+    pub fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()> {
         self.context
             .set_line_comment_indent(val, self.plain_line_size.unwrap_or(int4::MAX))
     }
@@ -2167,7 +2167,7 @@ impl PrintC {
         self.context.set_instruction_comment(flags);
     }
     /// C++ `glb->print->setIntegerFormat(p1)` (options.cc:623).
-    pub fn set_integer_format(&mut self, fmt: &str) -> KunaResult<()> {
+    pub fn set_integer_format(&mut self, fmt: &str) -> UnlaceResult<()> {
         self.context.set_integer_format(fmt)
     }
     /// C++ `glb->print->setNamespaceStrategy(strategy)` (options.cc:1014).
@@ -2195,13 +2195,13 @@ impl PrintC {
         }
     }
     /// C++ `PrintC::setCommentStyle` (options.cc:570).
-    /// (kuna, Phase 3) Reset the PrintC-proper state the wire options mutate
+    /// (unlace, Phase 3) Reset the PrintC-proper state the wire options mutate
     /// to the construction defaults — the PrintC share of the upstream
     /// `PrintLanguage::resetDefaults`/`resetDefaultsPrintC` chain the
     /// ghidra-mode `setOptions` reset needs (`Architecture::
     /// reset_wire_defaults`): the [`PrintCOptions`] block (nullprinting,
     /// inplaceops, conventionprinting, nocastprinting, hideimpliedexts, the
-    /// four brace formats — plus the kuna rendering toggles, whose
+    /// four brace formats — plus the unlace rendering toggles, whose
     /// construction defaults ARE the shipped defaults) and the emitter's
     /// indent increment (Java default 2), and the plain-text line size (back
     /// to unbroken lines).  `comment_style` is a recorded-no-op stub with no
@@ -2263,7 +2263,7 @@ impl PrintC {
     /// C++ `PrintLanguage::clear` (printlanguage.cc:682), which `docFunction`
     /// runs when a document throws ("Don't leave printer in partial state"):
     /// drop what an interrupted document left behind, keeping every option.
-    /// Beyond the upstream emitter/RPN/mod/scope reset this drops the kuna
+    /// Beyond the upstream emitter/RPN/mod/scope reset this drops the unlace
     /// per-document state (the scoped `fd` pointer, unflushed end-of-line
     /// warnings, the declared locals, the pointer-argument record) and returns a
     /// markup render's back-end to plain text, the state every document starts
@@ -2446,7 +2446,7 @@ impl PrintC {
         self.push_atom(operand);
     }
 
-    /// (kuna) The [`Funcdata`] published for the duration of
+    /// (unlace) The [`Funcdata`] published for the duration of
     /// [`emit_function_document`](PrintC::emit_function_document), else `None`.
     ///
     /// SAFETY: see the `emit_fd` field doc — the pointer is live only within that
@@ -2456,7 +2456,7 @@ impl PrintC {
         self.emit_fd.map(|p| unsafe { &*p })
     }
 
-    /// (kuna) The `MarkupRef` for an RPN operator token from its arena key (C++
+    /// (unlace) The `MarkupRef` for an RPN operator token from its arena key (C++
     /// `EmitMarkup::tagOp` derefs the entry's `PcodeOp *` for `opref =
     /// getTime()`).  The op's `get_time()` is exactly the `<seqnum uniq>`
     /// `PcodeOp::encode` writes into the `<ast>`, so the token resolves by
@@ -2472,7 +2472,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna) The `MarkupRef` for a leaf [`Atom`] from its carried op/varnode
+    /// (unlace) The `MarkupRef` for a leaf [`Atom`] from its carried op/varnode
     /// arena keys (C++ `EmitMarkup::tagVariable`/`tagOp`/`tagField`/`tagCaseLabel`
     /// deref the `Varnode *`/`PcodeOp *`).  `varref = vn->getCreateIndex()` and
     /// `opref = op->getTime()` are the SAME ids `Funcdata::encode` writes into the
@@ -2494,7 +2494,7 @@ impl PrintC {
         m
     }
 
-    /// (kuna) The `MarkupRef` for a DIRECT tag site that already holds an `OpId`
+    /// (unlace) The `MarkupRef` for a DIRECT tag site that already holds an `OpId`
     /// (C++ passes the `PcodeOp *`): `opref = op->getTime()`, the `<ast>`
     /// `<seqnum uniq>`. Gated on the markup back-end or an explicitly requested
     /// plain statement sidecar, so the ordinary plain-text path does no lookup.
@@ -2511,7 +2511,7 @@ impl PrintC {
     /// entry's `id2` for surround tokens (mirrored back by the callers).
     fn emit_op(&mut self, entry_in: &ReversePolish) {
         let mut entry = entry_in.clone();
-        // (kuna) The operator's markup (C++ `EmitMarkup::tagOp` derefs the entry's
+        // (unlace) The operator's markup (C++ `EmitMarkup::tagOp` derefs the entry's
         // `PcodeOp *` for `opref = getTime()`).  Resolved from the entry's arena
         // key; `none()` (no lookup) on the plain-text path so the datatest bytes
         // are unchanged.
@@ -2610,11 +2610,11 @@ impl PrintC {
     /// C++ `PrintLanguage::emitAtom` (printlanguage.cc:379) — send a leaf token
     /// to the low-level emitter according to its tag type.
     fn emit_atom(&mut self, atom: &Atom) {
-        // (kuna) Resolve the leaf's markup (C++ `EmitMarkup::tag*` derefs the
+        // (unlace) Resolve the leaf's markup (C++ `EmitMarkup::tag*` derefs the
         // atom's `Varnode *`/`PcodeOp *` for `varref`/`opref`).  `none()` (no
         // lookup) on the plain-text path, so the datatest bytes are unchanged.
         let markup = self.markup_for_atom(atom);
-        // (kuna outlang) A recovered name can be a demangled path (`hello::main`)
+        // (unlace outlang) A recovered name can be a demangled path (`hello::main`)
         // or carry generic arguments (`driftsort_main<T>`). C emits those verbatim
         // and is equally not-C for it; Rust output is parsed, so the same latent
         // problem has to be fixed rather than tolerated. Off for C, so the corpus
@@ -2926,8 +2926,8 @@ impl PrintC {
         (bytes, provenance)
     }
 
-    /// (kuna) Render ONLY the function's prototype declaration —
-    /// `<ret> <name>(<params>);` — as plain text, for the `kuna
+    /// (unlace) Render ONLY the function's prototype declaration —
+    /// `<ret> <name>(<params>);` — as plain text, for the `unlace
     /// decompile-project` `.h` artifact.
     ///
     /// Mirrors [`doc_function_full`](PrintC::doc_function_full)'s capture
@@ -2951,13 +2951,13 @@ impl PrintC {
         self.emit.output_str().to_string()
     }
 
-    /// (kuna) C++ `PrintC::docTypeDefinitions` (decompiler/cpp/printc.cc:2779):
+    /// (unlace) C++ `PrintC::docTypeDefinitions` (decompiler/cpp/printc.cc:2779):
     /// emit a C definition for every user-defined data-type in the factory, in
     /// [`TypeFactoryImpl::dependent_order`](crate::dtype::TypeFactoryImpl::dependent_order)
     /// (definition-before-use), skipping core types — the `.h` artifact of
     /// `unlace decompile-project`.
     ///
-    /// Documented `(kuna)` divergences from the upstream emission (which prints
+    /// Documented `(unlace)` divergences from the upstream emission (which prints
     /// one `typedef struct {…} name;` per type through the emitter):
     ///
     ///   * **forward-declaration block first**: every struct/union gets a
@@ -3012,16 +3012,16 @@ impl PrintC {
         if !self.emit.emits_markup() {
             self.warnings.clear();
         }
-        // (kuna `signedness`) Round the declared signedness of this function's
+        // (unlace `signedness`) Round the declared signedness of this function's
         // integer locals from the operations applied to them.  Computed before
         // any declaration is written and consumed by
         // `local_decl_type_and_comment` (the declaration) and `op_type_cast_ir`
         // (the casts the new declaration makes redundant).
-        let cast_sign = arch.kuna_options.get::<crate::castsign::CastSign>().0
+        let cast_sign = arch.unlace_options.get::<crate::castsign::CastSign>().0
             && self.out_lang.profile().caps.integer_promotion;
         self.sign_plan = crate::typeround::plan(
             fd,
-            arch.kuna_options.get::<crate::typeround::SignPolicy>(),
+            arch.unlace_options.get::<crate::typeround::SignPolicy>(),
             cast_sign,
             arch.types_impl(),
             |high| {
@@ -3032,29 +3032,34 @@ impl PrintC {
         );
         let promotes = !self.options.nocasts && self.out_lang.profile().caps.integer_promotion;
         self.cast_implied.begin(
-            arch.kuna_options.get::<crate::castimplied::CastImplied>().0 && promotes,
+            arch.unlace_options
+                .get::<crate::castimplied::CastImplied>()
+                .0
+                && promotes,
             cast_sign,
-            arch.kuna_options.get::<crate::castternary::CastTernary>().0
+            arch.unlace_options
+                .get::<crate::castternary::CastTernary>()
+                .0
                 && promotes
                 && arch.types().get_size_of_int() == 4,
             if promotes && arch.types().get_size_of_int() == 4 {
-                arch.kuna_options.get::<crate::castwiden::CastWidenMode>()
+                arch.unlace_options.get::<crate::castwiden::CastWidenMode>()
             } else {
                 crate::castwiden::CastWidenMode::Off
             },
-            arch.kuna_options.get::<crate::castnarrow::CastNarrow>().0
+            arch.unlace_options.get::<crate::castnarrow::CastNarrow>().0
                 && promotes
                 && arch.types().get_size_of_int() == 4,
         );
         self.stmt_op = None;
-        // (kuna) Publish the fd for the fd-free RPN leaf emitters (emit_atom /
+        // (unlace) Publish the fd for the fd-free RPN leaf emitters (emit_atom /
         // emit_op) to resolve op/varnode arena keys to the <ast> ids while markup
         // is active.  SAFETY: `fd` outlives this call; it is only ever read
         // (get_time/get_create_index), never mutated through the pointer, and
         // aliases `fd` (a distinct object from `self`), so no `&mut self` here
         // conflicts.  Cleared before return so the pointer never escapes the call.
         self.emit_fd = Some(fd as *const Funcdata);
-        // (kuna) Resolve the `realtypes` rendering context once per function from
+        // (unlace) Resolve the `realtypes` rendering context once per function from
         // the live architecture (the gate + the `long`-is-8 data-model fact); every
         // type-name chokepoint below reads `self.rt_ctx`.
         self.rt_ctx = RealTypeCtx::for_function(fd, arch, self.out_lang);
@@ -3086,7 +3091,7 @@ impl PrintC {
         // emitFunctionDeclaration shell (the prototype segment, shared with
         // `doc_prototype`).
         self.emit_prototype_declaration(fd, arch, &markup);
-        // (kuna warnstyle, DIV-39) header-warning slugs collected by
+        // (unlace warnstyle, DIV-39) header-warning slugs collected by
         // emit_comment_func_header land at the end of the prototype line —
         // except under `braceformat function same`, where the brace shares
         // that line and must print BEFORE the comment (a `// slug {` would
@@ -3108,7 +3113,7 @@ impl PrintC {
         // the scope walk): one `<type> <name>;` per named local HighVariable, in
         // name order, followed by a blank separating line before the body.  The
         // ScopeLocal symbol walk is the W4 surface; we emit from the named
-        // HighVariables directly (the `kuna_name` stand-in), which is the same set
+        // HighVariables directly (the `unlace_name` stand-in), which is the same set
         // of locals the scope would declare.
         self.java_catches = if self.out_lang == crate::lang::OutLang::Java {
             crate::javatry::CatchTable::new(fd)
@@ -3124,7 +3129,7 @@ impl PrintC {
         self.java_hidden.clear();
         self.java_sync_enters.clear();
         self.java_throw_userop = (self.out_lang == crate::lang::OutLang::Java
-            && arch.kuna_options.get::<crate::coreoptions::JavaTry>().0)
+            && arch.unlace_options.get::<crate::coreoptions::JavaTry>().0)
             .then(|| {
                 arch.userops
                     .get_op_by_name(b"throwException")
@@ -3164,7 +3169,7 @@ impl PrintC {
                 // a pipeline failure (the driver stamped its reason), NOT structuring
                 // declining on analyzed IR.
                 self.emit.tag_line();
-                let warning = match fd.kuna_pipeline_failure() {
+                let warning = match fd.unlace_pipeline_failure() {
                     Some(reason) => format!("WARNING: decompilation failed: {reason}"),
                     None => {
                         "WARNING: structured blocks unavailable (structuring declined)".to_string()
@@ -3175,7 +3180,7 @@ impl PrintC {
                 self.record_warning(crate::functionwarnings::Warning::new(None, &warning), &text);
             }
         }
-        // (kuna warnstyle, DIV-39) drain any slug still pending from a
+        // (unlace warnstyle, DIV-39) drain any slug still pending from a
         // construct with no closer flush point onto the last body line, so no
         // warning is ever silently dropped or carried out of this function.
         self.flush_eol_warnings();
@@ -3183,7 +3188,7 @@ impl PrintC {
         self.emit.tag_line();
         self.emit.end_function(id1);
         self.emit.flush().expect("PrintC::docFunction: emit flush");
-        // (kuna) Retire the scoped fd pointer (see the field doc): it is valid
+        // (unlace) Retire the scoped fd pointer (see the field doc): it is valid
         // only for this call's dynamic extent.
         self.emit_fd = None;
     }
@@ -3369,7 +3374,7 @@ impl PrintC {
         self.stmt_op = None;
     }
 
-    /// (kuna `structdefs`) Emit the definitions of the composite/enum/typedef
+    /// (unlace `structdefs`) Emit the definitions of the composite/enum/typedef
     /// types this function's C names, above the function.
     ///
     /// Off by default, and a no-op for a function that names none.  The text is
@@ -3386,7 +3391,7 @@ impl PrintC {
         if !self.options.struct_defs {
             return;
         }
-        // (kuna outlang) The renderer is C by contract -- it builds a `.h` --
+        // (unlace outlang) The renderer is C by contract -- it builds a `.h` --
         // and a `struct X { … };` block in a Rust document is neither valid
         // Rust nor readable C. `unlace decompile-project` refuses a non-C output
         // language for the same reason rather than half-honouring it; here the
@@ -3447,13 +3452,13 @@ impl PrintC {
         markup: &MarkupRef,
     ) {
         let mut display = fd.get_display_name().to_string();
-        // (kuna java) `PrintJava::docFunction` prints in the scope of the class, so
+        // (unlace java) `PrintJava::docFunction` prints in the scope of the class, so
         // the method name stands alone.
         let mut java_ctor = false;
         if self.out_lang == crate::lang::OutLang::Java {
             if let Some((scope, base)) = display.rsplit_once("::") {
-                // (kuna javanew) A constructor is declared by its class name.
-                java_ctor = arch.kuna_options.get::<crate::javanew::JavaNew>().0
+                // (unlace javanew) A constructor is declared by its class name.
+                java_ctor = arch.unlace_options.get::<crate::javanew::JavaNew>().0
                     && (base == "<init>" || base.starts_with("<init>_"));
                 display = if java_ctor {
                     let class = scope.rsplit("::").next().unwrap_or(scope);
@@ -3508,7 +3513,7 @@ impl PrintC {
                 })
                 .unwrap_or_default();
             let scopes = if arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::cppshortnames::CppShortNames>()
                 .0
             {
@@ -3557,10 +3562,10 @@ impl PrintC {
             None => return,
         };
         let off = func_addr.get_offset();
-        // (kuna, Phase 3) Plain HEADER (plate) comments render first — the C++
+        // (unlace, Phase 3) Plain HEADER (plate) comments render first — the C++
         // emitCommentFuncHeader handles `Comment::header` through the same
         // sorter.  These come from the ghidra-mode getComments fill (Java PLATE
-        // comments) and the ghidra-mode `Kuna v…` banner; the standalone
+        // comments) and the ghidra-mode `Unlace v…` banner; the standalone
         // pipeline never inserts HEADER-typed comments, so this arm is inert
         // there.  Header comments are informational, never inline-slugged.
         let plates: Vec<String> = arch
@@ -3589,7 +3594,7 @@ impl PrintC {
             .map(|c| c.text.clone())
             .collect();
         for text in headers {
-            // (kuna warnstyle, DIV-39) Inline mode: header warnings collect as
+            // (unlace warnstyle, DIV-39) Inline mode: header warnings collect as
             // slugs and flush at the end of the prototype line.
             let warning = crate::functionwarnings::Warning::new(Some(off), &text);
             if self.options.warn_inline {
@@ -3642,7 +3647,7 @@ impl PrintC {
                     Some(p) => p,
                     None => continue,
                 };
-                // (kuna java) `PrintJava` sets `hide_thisparam`.
+                // (unlace java) `PrintJava` sets `hide_thisparam`.
                 if java && param.is_this_pointer() {
                     self.signature_param_names
                         .insert(i, param.get_name().to_string());
@@ -3659,14 +3664,14 @@ impl PrintC {
                 // `ProtoStoreSymbol` in C++; a recovered (unlocked) parameter with
                 // an empty stored name resolves through its scope symbol to the
                 // default name (`Scope::buildDefaultName`, the
-                // `Symbol::function_parameter` branch).  kuna's merged-tree proto
+                // `Symbol::function_parameter` branch).  unlace's merged-tree proto
                 // store keeps the literal empty name, so reproduce that default
                 // here: angr-style `a<i>`, ghidra-style `param_<i+1>`.
                 let default_name;
                 let mut name = param.get_name();
                 if name.is_empty() {
-                    default_name = crate::database::kuna_materialized_param_name(
-                        arch.kuna_options
+                    default_name = crate::database::unlace_materialized_param_name(
+                        arch.unlace_options
                             .get::<crate::coreoptions::NameStyleAngr>()
                             .0,
                         i,
@@ -3747,7 +3752,7 @@ impl PrintC {
     /// HighVariable, in the order `declorder` picks, returning `true` if any were emitted (C++
     /// `emitLocalVarDecls` + `emitVarDeclStatement`, printc.cc:2652).  The W4
     /// ScopeLocal symbol walk is the missing surface; the named HighVariables
-    /// (`kuna_name`) are the same locals the scope would declare.  A trailing
+    /// (`unlace_name`) are the same locals the scope would declare.  A trailing
     /// blank `tag_line` separates the decl block from the body (the C++ blank line
     /// `emitVarDecl`s produce before the statement list).
     pub fn emit_local_var_decls(&mut self, fd: &Funcdata, arch: &Architecture) -> bool {
@@ -3756,7 +3761,7 @@ impl PrintC {
         let mut decls: Vec<(crate::context::HighVariableId, String)> = Vec::new();
         let mut seen: std::collections::BTreeSet<crate::context::HighVariableId> =
             std::collections::BTreeSet::new();
-        // (kuna) The authoritative signature-parameter name set. The `is_param`
+        // (unlace) The authoritative signature-parameter name set. The `is_param`
         // storage-containment test below false-positives on a LOCAL high that merely
         // has an instance overlapping a parameter register (a merge artifact: an
         // un-coalesced phi output that picked up a param-register varnode). Such a
@@ -3775,8 +3780,8 @@ impl PrintC {
                     if let Some(p) = proto.get_param(i) {
                         let n = p.get_name();
                         let nm = if n.is_empty() {
-                            crate::database::kuna_materialized_param_name(
-                                arch.kuna_options
+                            crate::database::unlace_materialized_param_name(
+                                arch.unlace_options
                                     .get::<crate::coreoptions::NameStyleAngr>()
                                     .0,
                                 i,
@@ -3804,12 +3809,12 @@ impl PrintC {
             if seen.contains(&high) {
                 continue;
             }
-            let name = match fd.high_bank().get(high).and_then(|h| h.kuna_name()) {
+            let name = match fd.high_bank().get(high).and_then(|h| h.unlace_name()) {
                 Some(n) => n.to_string(),
                 None => continue,
             };
             seen.insert(high);
-            // (kuna javatry) A catch clause declares its exception variable.
+            // (unlace javatry) A catch clause declares its exception variable.
             if self.java_catches.is_some() {
                 let only_caught = fd.high_bank().get(high).is_some_and(|h| {
                     let defs: Vec<Option<OpId>> = (0..h.num_instances())
@@ -3827,7 +3832,7 @@ impl PrintC {
             // A `&symbol` reference's offset is a CONSTANT operand of the PTRSUB
             // markup, not a scope Symbol.  When a constant-only reference high
             // SHADOWS a real local that is already declared from its own storage —
-            // i.e. there is a whole-symbol sibling (`kuna_symbol_offset == -1`) with
+            // i.e. there is a whole-symbol sibling (`unlace_symbol_offset == -1`) with
             // the same name — the constant reference must NOT be declared a second
             // time (C++ `emitScopeVarDecls` walks the ScopeLocal Symbols once
             // (printc.cc:2667); the `&val` reference renders inline via the PTRSUB
@@ -3856,7 +3861,7 @@ impl PrintC {
             let has_storage_sibling = all_constant
                 && same_named(fd, named.get(&name)).any(|(id, h)| {
                     id != high
-                        && h.kuna_name() == Some(name.as_str())
+                        && h.unlace_name() == Some(name.as_str())
                         && (0..h.num_instances()).any(|i| {
                             fd.vbank()
                                 .get(h.get_instance(i))
@@ -3878,7 +3883,7 @@ impl PrintC {
             // discriminators, both faithful to "not in `fd->getScopeLocal()`":
             //   * `Varnode::isPersist` — a persistent global RAM store/load high
             //     (`glob1 = 0`), whose member varnodes are flagged persist; and
-            //   * `HighVariable::kuna_global` — a `&symbol` reference whose
+            //   * `HighVariable::unlace_global` — a `&symbol` reference whose
             //     `linkSpacebaseSymbol` resolved through the GLOBAL scope
             //     (`sb->getMap()` == the global scope for a ram spacebase, e.g.
             //     `myarray` materialized as a const base address).  A *local*-frame
@@ -3897,28 +3902,28 @@ impl PrintC {
             // Symbol (the `getFirstWholeMap()` entry, type `foo`); the pieces are
             // partial entries and emit none.
             //
-            // The kuna stand-in for "this entry is a piece of a multi-entry Symbol
+            // The unlace stand-in for "this entry is a piece of a multi-entry Symbol
             // whose first-whole-map is a different entry": the piece carries a
-            // composite `kuna_symbol_type` (the root's struct/array/union whole type,
+            // composite `unlace_symbol_type` (the root's struct/array/union whole type,
             // which a scalar field varnode never has on its own) AND a sibling ROOT
-            // high exists — same shared name, `kuna_symbol_offset == -1` (the whole
+            // high exists — same shared name, `unlace_symbol_offset == -1` (the whole
             // keeps the `-1` default; pieces carry `>= 0`).  The sibling root IS the
             // `getFirstWholeMap()` entry and declares the shared `foo v1;` from its
             // own whole-struct varnode type.  A referenced *whole* local (`&a`,
-            // `&myval.b` in passPtrToArray) carries a composite `kuna_symbol_type`
+            // `&myval.b` in passPtrToArray) carries a composite `unlace_symbol_type`
             // too but has NO `-1` sibling of the same name, so it stays declarable.
             let is_proto_partial_piece = fd.high_bank().get(high).is_some_and(|h| {
-                let composite = h.kuna_symbol_type().is_some_and(|t| {
+                let composite = h.unlace_symbol_type().is_some_and(|t| {
                     use crate::dtype::type_metatype::*;
                     matches!(t.get_metatype(), TYPE_STRUCT | TYPE_ARRAY | TYPE_UNION)
                 });
                 composite
-                    && h.kuna_symbol_offset() >= 0
+                    && h.unlace_symbol_offset() >= 0
                     && high_name_has_whole_sibling(fd, named.get(&name), high, &name)
             });
             if is_proto_partial_piece {
                 if let Some(root) = owner_in_group(fd, named.get(&name), high, &name, |_, h| {
-                    h.kuna_symbol_offset() == -1
+                    h.unlace_symbol_offset() == -1
                 }) {
                     self.local_name_aliases.insert(high, root);
                 }
@@ -3928,7 +3933,7 @@ impl PrintC {
             // *Symbol* table ONCE per Symbol (printc.cc:2667/2696), so a tied SCALAR
             // local read at several widths (the int8 `local` of LOSS-245, accessed as
             // int4/int2 sub-fields that `mergeAddrTied`/`groupWith` grouped) yields ONE
-            // declaration (`int8 local;`) — not one per partial high.  The kuna printer
+            // declaration (`int8 local;`) — not one per partial high.  The unlace printer
             // walks HighVariables, so each partial cover of the one scalar Symbol shows
             // up as its own would-be decl.  Skip a high that is a STRICT PARTIAL of a
             // scalar mapped Symbol (its storage rep is narrower than the whole Symbol
@@ -3940,14 +3945,14 @@ impl PrintC {
             // (the partial then remains the symbol's sole declaration, e.g. a lone
             // mapped sub-access).
             let is_scalar_partial_piece = fd.high_bank().get(high).is_some_and(|h| {
-                let scalar_sym = h.kuna_symbol_type().is_some_and(|t| {
+                let scalar_sym = h.unlace_symbol_type().is_some_and(|t| {
                     use crate::dtype::type_metatype::*;
                     !matches!(t.get_metatype(), TYPE_STRUCT | TYPE_ARRAY | TYPE_UNION)
                 });
                 if !scalar_sym {
                     return false;
                 }
-                let sym_size = h.kuna_symbol_type().map(|t| t.get_size()).unwrap_or(0);
+                let sym_size = h.unlace_symbol_type().map(|t| t.get_size()).unwrap_or(0);
                 let rep_size = if h.num_instances() > 0 {
                     fd.vbank()
                         .get(h.get_instance(0))
@@ -3957,7 +3962,7 @@ impl PrintC {
                     0
                 };
                 // A strict partial: offset into the symbol, or narrower than the whole.
-                let is_strict_partial = h.kuna_symbol_offset() > 0 || rep_size < sym_size;
+                let is_strict_partial = h.unlace_symbol_offset() > 0 || rep_size < sym_size;
                 is_strict_partial
                     && high_name_has_scalar_whole_sibling(fd, named.get(&name), high, &name)
             });
@@ -3978,13 +3983,13 @@ impl PrintC {
             let is_param = scope
                 .map(|lm| {
                     let h = fd.high_bank().get(high);
-                    if let Some(sym) = h.and_then(|h| h.kuna_link_symbol()) {
+                    if let Some(sym) = h.and_then(|h| h.unlace_link_symbol()) {
                         return lm.symbol_category(sym)
                             == crate::database::symbol_category::FUNCTION_PARAMETER;
                     }
                     let n = h.map(|h| h.num_instances()).unwrap_or(0);
                     if h.is_some_and(|h| {
-                        h.kuna_link_symbol().is_some_and(|symbol| {
+                        h.unlace_link_symbol().is_some_and(|symbol| {
                             lm.symbol_category(symbol)
                                 == crate::database::symbol_category::FUNCTION_PARAMETER
                         }) && (0..n).any(|index| {
@@ -4024,7 +4029,7 @@ impl PrintC {
             if is_param && param_names.contains(name.as_str()) {
                 continue;
             }
-            // (kuna paramrefdecl) The Symbol-identity half of the same C++
+            // (unlace paramrefdecl) The Symbol-identity half of the same C++
             // predicate: an `&parameter` reference high has only the PTRSUB offset
             // CONSTANT as storage, so the containment test above cannot see that it
             // IS the parameter -- and declaring it re-declares the signature
@@ -4038,7 +4043,7 @@ impl PrintC {
             }
             decls.push((high, name));
         }
-        // (kuna `signedness`) A rounded declaration is only written for a high
+        // (unlace `signedness`) A rounded declaration is only written for a high
         // that owns its declaration line.  Every collapse below pairs two
         // candidates that render the same NAME, so restricting the plan to
         // sole-named candidates keeps a flip from moving a collapse key or
@@ -4047,7 +4052,7 @@ impl PrintC {
             .retain_sole_named(decls.iter().map(|(h, n)| (*h, n.as_str())));
         // C++ `emitScopeVarDecls` walks the ScopeLocal *Symbol* table and emits
         // exactly one declaration per multi-entry Symbol (the `getFirstWholeMap()`
-        // entry; printc.cc:2696).  The kuna printer instead walks HighVariables and
+        // entry; printc.cc:2696).  The unlace printer instead walks HighVariables and
         // dedups by high id, so a single mapped composite Symbol that is
         // represented by several `&symbol`-reference highs (each a piece of the
         // array/struct, all constant-only PTRSUB operands) is declared once per
@@ -4056,7 +4061,7 @@ impl PrintC {
         // Collapse to one declaration per Symbol: two declared highs are the same
         // Symbol when they share a name AND the same *composite* mapped type by Rc
         // identity.  The type factory interns array/struct/union types, so one
-        // mapped Symbol's pieces all carry the identical `kuna_symbol_type` Rc;
+        // mapped Symbol's pieces all carry the identical `unlace_symbol_type` Rc;
         // distinct same-shaped locals are disambiguated by their (unique) names.
         // Restricting to composites is load-bearing: primitive types are shared by
         // every scalar local of that type, so `(name, int4-Rc)` would not identify
@@ -4069,7 +4074,7 @@ impl PrintC {
             let mut collapsed = Vec::new();
             decls.retain(|(high, name)| {
                 let composite_rc = fd.high_bank().get(*high).and_then(|h| {
-                    let t = h.kuna_symbol_type()?;
+                    let t = h.unlace_symbol_type()?;
                     use crate::dtype::type_metatype::*;
                     matches!(t.get_metatype(), TYPE_ARRAY | TYPE_STRUCT | TYPE_UNION)
                         .then(|| std::rc::Rc::as_ptr(t) as usize)
@@ -4094,14 +4099,14 @@ impl PrintC {
         if decls.is_empty() {
             return false;
         }
-        // (kuna) The scalar analogue of the composite collapse above, keyed on the
+        // (unlace) The scalar analogue of the composite collapse above, keyed on the
         // ScopeLocal *Symbol* rather than on the interned type Rc: several highs of
         // one mapped scalar Symbol yield ONE declaration, as C++ `emitScopeVarDecls`
         // does by construction.  Shares `option dedupvardecls` with the rendered-line
         // collapse it generalises.  Returns the `sym->getType()` override for a
         // surviving declaration whose group disagreed on the type.
         let symbol_decl_type = if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::dedupvardecls::DedupVarDecls>()
             .0
         {
@@ -4113,7 +4118,7 @@ impl PrintC {
         // distinct declarations differ by construction.  It is lossless only
         // within one object: a shared name is not evidence of shared identity.
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::dedupvardecls::DedupVarDecls>()
             .0
         {
@@ -4129,7 +4134,7 @@ impl PrintC {
                 }
                 let array_sig = array_count.as_ref().map(|(t, c)| (t.clone(), *c));
                 let comment_sig = if arch
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::coreoptions::NameStyleAngr>()
                     .0
                 {
@@ -4220,14 +4225,14 @@ impl PrintC {
         }
         crate::declorder::order_decls(
             &mut decls,
-            arch.kuna_options.get::<crate::declorder::DeclOrder>(),
-            arch.kuna_options
+            arch.unlace_options.get::<crate::declorder::DeclOrder>(),
+            arch.unlace_options
                 .get::<crate::coreoptions::NameStyleAngr>()
                 .0,
         );
         let mut source_comments = std::collections::HashMap::new();
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::coreoptions::NameStyleAngr>()
             .0
         {
@@ -4260,7 +4265,7 @@ impl PrintC {
             // is not present", so the Decompiler window shows nothing for any function
             // that declares a local.
             //
-            // (kuna, ghidra Phase 4) The id must be the LocalSymbolMap id the
+            // (unlace, ghidra Phase 4) The id must be the LocalSymbolMap id the
             // `<localdb>` encodes — Java resolves `symref` through that map
             // (`ClangVariableDecl.decode` → `pfactory.getSymbol(symref)`), and
             // right-click rename/retype ON THE DECLARATION LINE resolves the
@@ -4291,18 +4296,18 @@ impl PrintC {
             // high — resolve through the declaration representative's own
             // high as well before falling back.
             markup.symref = fd
-                .kuna_high_symbol_wire_id(*high)
+                .unlace_high_symbol_wire_id(*high)
                 .or_else(|| {
                     decl_rep
                         .and_then(|vn| fd.vbank().get(vn))
                         .and_then(|v| v.get_high())
-                        .and_then(|h| fd.kuna_high_symbol_wire_id(h))
+                        .and_then(|h| fd.unlace_high_symbol_wire_id(h))
                 })
                 .or(decl_rep_index);
             let (mut decl_type, mut decl_back, mut array_count, comment, mut declared) =
                 self.rendered_local_decl(fd, arch, *high);
             let comment = source_comments.remove(high).or(comment);
-            // (kuna) The Symbol-keyed collapse arbitrated a type disagreement between
+            // (unlace) The Symbol-keyed collapse arbitrated a type disagreement between
             // the several highs of one Symbol.
             if let Some((t, b, a, ty)) = symbol_decl_type.get(high) {
                 decl_type = t.clone();
@@ -4310,7 +4315,7 @@ impl PrintC {
                 array_count = a.clone();
                 declared = ty.clone();
             }
-            // (kuna `signedness`) A cast on this local may only be dropped as
+            // (unlace `signedness`) A cast on this local may only be dropped as
             // redundant when the rounded type is what actually reached the
             // declaration line - not when a Symbol/array/collapse override took
             // it back.
@@ -4387,7 +4392,7 @@ impl PrintC {
             self.emit
                 .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
             if arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::NameStyleAngr>()
                 .0
             {
@@ -4445,17 +4450,17 @@ impl PrintC {
         }
     }
 
-    /// (kuna) The locals the last printed document declared.
+    /// (unlace) The locals the last printed document declared.
     pub fn declared_locals(&self) -> &[DeclaredLocal] {
         &self.declared_locals
     }
 
-    /// (kuna) The entry of the function the last printed document is of.
+    /// (unlace) The entry of the function the last printed document is of.
     pub fn declared_entry(&self) -> Option<&Address> {
         self.declared_entry.as_ref()
     }
 
-    /// (kuna) A printer of its own that has printed `fd` with `arch`'s
+    /// (unlace) A printer of its own that has printed `fd` with `arch`'s
     /// options, so [`declared_locals`](Self::declared_locals) and
     /// [`declared_local`](Self::declared_local) say what a print of `fd` names
     /// each local while `arch`'s printer keeps its state.
@@ -4467,7 +4472,7 @@ impl PrintC {
         print
     }
 
-    /// (kuna) The highs of the last printed document that read through another
+    /// (unlace) The highs of the last printed document that read through another
     /// high's declaration, keyed by the declared high (which is not repeated).
     pub fn declared_through(
         &self,
@@ -4485,7 +4490,7 @@ impl PrintC {
         out
     }
 
-    /// (kuna) The declaration `high` reads through in the last printed document:
+    /// (unlace) The declaration `high` reads through in the last printed document:
     /// its own, or the one it was collapsed into.
     pub fn declared_local(&self, high: crate::context::HighVariableId) -> Option<&DeclaredLocal> {
         let owner = self.local_name_aliases.get(&high).copied().unwrap_or(high);
@@ -4504,7 +4509,7 @@ impl PrintC {
         self.local_name_overrides
             .get(&high)
             .cloned()
-            .or_else(|| fd.high_bank().get(high)?.kuna_name().map(str::to_string))
+            .or_else(|| fd.high_bank().get(high)?.unlace_name().map(str::to_string))
     }
 
     /// Resolve the emitted name plus the symbol-relative geometry used to render
@@ -4520,10 +4525,14 @@ impl PrintC {
             return Some((name, -1, None));
         }
         let h = fd.high_bank().get(high)?;
-        Some((name, h.kuna_symbol_offset(), h.kuna_symbol_type().cloned()))
+        Some((
+            name,
+            h.unlace_symbol_offset(),
+            h.unlace_symbol_type().cloned(),
+        ))
     }
 
-    /// (kuna) The fully-rendered declaration of one local high: the final declarator
+    /// (unlace) The fully-rendered declaration of one local high: the final declarator
     /// type, the declarator suffix that follows the name (`)[16]` for a pointer to
     /// an array, else empty), the `[count]` array adornment (when the mapped Symbol
     /// — or the declaration representative itself — is an array), the storage
@@ -4547,7 +4556,7 @@ impl PrintC {
         // Type: the high's recovered type name (W8-unknown -> `undefined<N>`).
         let ((mut type_name, comment), mut declared) =
             self.local_decl_type_and_comment(fd, arch, high);
-        let rt = self.rt_ctx.clone(); // (kuna) realtypes ctx for the composite/array relabel
+        let rt = self.rt_ctx.clone(); // (unlace) realtypes ctx for the composite/array relabel
         if let Some(object) = crate::addressdecl::object_type(fd, high) {
             type_name = type_name_for_decl(&object, rt.clone());
             declared = Some(object);
@@ -4561,15 +4570,15 @@ impl PrintC {
         // C++ `emitVarDecl` declares the whole *Symbol*'s type (printc.cc:1719
         // `sym->getType()`), not the partial member Varnode's type.  When the
         // high is a non-array partial cover of a composite Symbol (a struct/
-        // union member, `kuna_symbol_offset() >= 0`), the local storage
+        // union member, `unlace_symbol_offset() >= 0`), the local storage
         // representative carries only the truncated member type (e.g. the
         // 1-byte `flagfield` read => `undefined1`); declare the composite Symbol
         // type (`enumstruct`) so the member access `v1.flagfield` has a base of
         // the right type.  (The array case is handled by `array_count` below, so
         // it is excluded here.)
         if let Some(st) = fd.high_bank().get(high).and_then(|h| {
-            if h.kuna_symbol_offset() >= 0 {
-                h.kuna_symbol_type()
+            if h.unlace_symbol_offset() >= 0 {
+                h.unlace_symbol_type()
             } else {
                 None
             }
@@ -4589,7 +4598,7 @@ impl PrintC {
             .high_bank()
             .get(high)
             .and_then(|h| {
-                let st = h.kuna_symbol_type()?;
+                let st = h.unlace_symbol_type()?;
                 array_decl_parts(st, rt.clone()).map(|parts| (parts, std::rc::Rc::clone(st)))
             })
             // No mapped-Symbol array: fall back to the declaration representative's
@@ -4637,12 +4646,12 @@ impl PrintC {
         (decl_type, decl_back, array_count, comment, declared)
     }
 
-    /// (kuna) Collapse the declarations of the several HighVariables that share one
+    /// (unlace) Collapse the declarations of the several HighVariables that share one
     /// ScopeLocal **Symbol** into a single declaration, and report the type the
     /// survivor should carry.
     ///
     /// C++ `PrintC::emitScopeVarDecls` walks the Symbol table (printc.cc:2667/2696),
-    /// so one Symbol is one declaration by construction; the kuna printer walks
+    /// so one Symbol is one declaration by construction; the unlace printer walks
     /// HighVariables, so a stack slot whose live ranges did not merge is declared once
     /// per high — the same identifier declared twice with two recovered types, which
     /// is invalid C.  Two declarations are the same Symbol when the storage of their
@@ -4657,7 +4666,7 @@ impl PrintC {
     /// arbitrated by the returned type override: the Symbol's own type, the direct
     /// analogue of C++ `emitVarDecl`'s `sym->getType()` (printc.cc:1719), unless that
     /// type is **narrower** than the widest storage the group covers, in which case
-    /// the widest member's rendering wins.  kuna's `ScopeLocal` ranges can be narrower
+    /// the widest member's rendering wins.  unlace's `ScopeLocal` ranges can be narrower
     /// than the accesses that reach them (upstream `restructure` would have grown the
     /// Symbol), and a declaration smaller than the object the body writes through is a
     /// fresh correctness bug, not a faithful one.
@@ -4806,7 +4815,7 @@ impl PrintC {
             return ((("undefined1".to_string(), String::new()), None), None);
         }
         let rep = decl_rep_varnode(fd, high);
-        // (kuna declhightype) The declared type is the merged high's own -- the
+        // (unlace declhightype) The declared type is the merged high's own -- the
         // one `ActionSetCasts` checked every use in the body against -- not
         // whichever member happens to be address-tied or first.  See
         // `crate::declhightype`.
@@ -4818,7 +4827,7 @@ impl PrintC {
                     .and_then(|vn| fd.vbank().get(vn))
                     .map(|tv| tv.get_type())
                     .unwrap_or_else(|| v.get_type());
-                // (kuna `signedness`) The rounded declaration, when the operation
+                // (unlace `signedness`) The rounded declaration, when the operation
                 // set decided one for this high.
                 let decl_ty = self.sign_plan.decl_type(high).unwrap_or(decl_ty);
                 let tn = type_name_for_decl(decl_ty, self.rt_ctx.clone());
@@ -4843,56 +4852,64 @@ impl PrintC {
         // load-once/decompile-many run (generations are globally unique, so this
         // is purely to bound memory, not for correctness).
         self.emit.reset_pending_fired();
-        self.void_tail_return = if arch.kuna_options.get::<crate::printc::Voidtailreturn>().0 {
+        self.void_tail_return = if arch.unlace_options.get::<crate::printc::Voidtailreturn>().0 {
             elidable_void_tail_return(fd)
         } else {
             None
         };
         if self.out_lang == crate::lang::OutLang::Java
-            && arch.kuna_options.get::<crate::javanew::JavaNew>().0
+            && arch.unlace_options.get::<crate::javanew::JavaNew>().0
         {
             self.java_new = crate::javanew::pairs(fd);
             self.java_ctor_calls = crate::javanew::ctor_calls(fd);
         }
         let c_switch = matches!(self.lang().forms.switch, crate::lang::SwitchForm::CSwitch);
-        self.switch_plans =
-            if arch.kuna_options.get::<crate::switchmerge::Switchmerge>().0 && c_switch {
-                let facts = crate::switchmerge::PrintFacts {
-                    prints_nothing: &|head| self.header_prints_nothing(fd, head),
-                    labels: &|sw| self.switch_label_set(fd, arch, sw),
-                    arm_labels: &|sw, index| {
-                        let case = &fd.sblocks_ref().block(sw).switch_caseblocks()[index];
-                        self.switch_case_labels(fd, arch, sw, case)
-                            .into_iter()
-                            .map(|l| l.0)
-                            .collect()
-                    },
-                    block_prints_nothing: &|bb| self.ops_print_nothing(fd, bb),
-                };
-                crate::switchmerge::switch_plans(fd, sroot, &facts)
-            } else {
-                Default::default()
+        self.switch_plans = if arch
+            .unlace_options
+            .get::<crate::switchmerge::Switchmerge>()
+            .0
+            && c_switch
+        {
+            let facts = crate::switchmerge::PrintFacts {
+                prints_nothing: &|head| self.header_prints_nothing(fd, head),
+                labels: &|sw| self.switch_label_set(fd, arch, sw),
+                arm_labels: &|sw, index| {
+                    let case = &fd.sblocks_ref().block(sw).switch_caseblocks()[index];
+                    self.switch_case_labels(fd, arch, sw, case)
+                        .into_iter()
+                        .map(|l| l.0)
+                        .collect()
+                },
+                block_prints_nothing: &|bb| self.ops_print_nothing(fd, bb),
             };
-        self.goto_rewrites =
-            if arch.kuna_options.get::<crate::funcdata_block::GotoNext>().0 && c_switch {
-                crate::gotonext::goto_rewrites(
-                    fd.sblocks_ref(),
-                    sroot,
-                    arch.kuna_options
-                        .get::<crate::loopbreak_recovery::RecoverLoopBreak>()
-                        .0,
-                    &self.switch_plans,
-                )
-            } else {
-                Default::default()
-            };
+            crate::switchmerge::switch_plans(fd, sroot, &facts)
+        } else {
+            Default::default()
+        };
+        self.goto_rewrites = if arch
+            .unlace_options
+            .get::<crate::funcdata_block::GotoNext>()
+            .0
+            && c_switch
+        {
+            crate::gotonext::goto_rewrites(
+                fd.sblocks_ref(),
+                sroot,
+                arch.unlace_options
+                    .get::<crate::loopbreak_recovery::RecoverLoopBreak>()
+                    .0,
+                &self.switch_plans,
+            )
+        } else {
+            Default::default()
+        };
         self.assign_label_names(fd, sroot);
-        let tree_on = arch.kuna_options.get::<crate::ctree::Ctree>().0
-            || arch.kuna_options.get::<crate::ctree::Boolreturn>().0
-            || arch.kuna_options.get::<crate::ctree::Noretfirst>().0
-            || arch.kuna_options.get::<crate::ctree::Nestedand>().0
-            || arch.kuna_options.get::<crate::ctree::Retternary>().0
-            || arch.kuna_options.get::<crate::ctree::Orexit>().0;
+        let tree_on = arch.unlace_options.get::<crate::ctree::Ctree>().0
+            || arch.unlace_options.get::<crate::ctree::Boolreturn>().0
+            || arch.unlace_options.get::<crate::ctree::Noretfirst>().0
+            || arch.unlace_options.get::<crate::ctree::Nestedand>().0
+            || arch.unlace_options.get::<crate::ctree::Retternary>().0
+            || arch.unlace_options.get::<crate::ctree::Orexit>().0;
         self.ctree = if tree_on && !self.is_flat() {
             crate::ctreebuild::build(fd)
         } else {
@@ -4967,7 +4984,7 @@ impl PrintC {
     /// Dispatch one structured block to its emitter (C++ the virtual
     /// `FlowBlock::emit(PrintLanguage*)` -> `PrintC::emitBlock*`).
     /// With `option ctree on`, the statement the function's C syntax tree built from
-    /// `blk` prints instead, when the tree printer models it (`kuna_ctreeprint`).
+    /// `blk` prints instead, when the tree printer models it (`unlace_ctreeprint`).
     #[doc(hidden)]
     pub fn emit_block(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         if self.ctree.is_some() && self.emit_ctree_block(fd, arch, blk) {
@@ -5080,7 +5097,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `boolreturn`, `retternary`) Print the value of a `return` the C syntax tree made
+    /// (unlace `boolreturn`, `retternary`) Print the value of a `return` the C syntax tree made
     /// from an `if`: a `Branch` through the `ONLY_BRANCH` render of its condition block (it
     /// parenthesizes itself), `Not` as `!` unless the branch it negates can print negated
     /// itself (`return_not_flip`), an `Op` as the returned value of that `RETURN` (a
@@ -5235,7 +5252,7 @@ impl PrintC {
         .then_some(cbranch)
     }
 
-    /// (kuna `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:
+    /// (unlace `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:
     /// a `Branch` as its condition block's branch, an `And` the way
     /// [`emit_block_condition`](Self::emit_block_condition) prints a `&&` of two condition
     /// blocks (the left operand in this state, the right operand comma-separated, each
@@ -5317,8 +5334,8 @@ impl PrintC {
 
     /// The display name for a goto target / label line (C++ `PrintC::emitLabel`,
     /// printc.cc:3328): the **entry address** of the block's front-leaf basic
-    /// block, rendered in kuna's angr style as `label_<addr>`
-    /// ([`kuna_label_name`](crate::database::kuna_label_name)).  Falls back to the
+    /// block, rendered in unlace's angr style as `label_<addr>`
+    /// ([`unlace_label_name`](crate::database::unlace_label_name)).  Falls back to the
     /// reverse-post `LAB_<index>` form only when the block has no resolvable entry
     /// address, keeping a `goto`/target pair always consistent.  A duplicated
     /// leaf takes the suffixed name [`assign_label_names`](PrintC::assign_label_names)
@@ -5342,11 +5359,11 @@ impl PrintC {
         if addr.is_invalid() {
             let idx = fd.sblocks_ref().block(bl).get_index();
             format!("LAB_{idx:08x}")
-        } else if fd.get_arch().kuna_name_style() == crate::database::KunaNameStyle::Ghidra {
-            // (kuna, Phase 3) ghidra-mode: the GUI label convention LAB_%08x.
+        } else if fd.get_arch().unlace_name_style() == crate::database::UnlaceNameStyle::Ghidra {
+            // (unlace, Phase 3) ghidra-mode: the GUI label convention LAB_%08x.
             crate::database::ghidra_label_name(&addr)
         } else {
-            crate::database::kuna_label_name(&addr)
+            crate::database::unlace_label_name(&addr)
         }
     }
 
@@ -5471,7 +5488,7 @@ impl PrintC {
                     &String::from_utf8_lossy(&text),
                 )
             });
-            // (kuna warnstyle, DIV-39) Inline mode: a WARNING comment becomes a
+            // (unlace warnstyle, DIV-39) Inline mode: a WARNING comment becomes a
             // terse `// slug` collected for the owning line's end; every other
             // comment type keeps the banner-line render.
             if self.options.warn_inline && (tp & ct::WARNING) != 0 {
@@ -5499,7 +5516,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna warnstyle, DIV-39) Append the collected warning slugs to the
+    /// (unlace warnstyle, DIV-39) Append the collected warning slugs to the
     /// current line as one `// slug, slug` comment token.  Call sites are the
     /// last token of the line the warnings describe: the statement semicolon,
     /// the `if (cond)` header (brace / goto / elided forms), the loop header
@@ -5597,7 +5614,7 @@ impl PrintC {
         self.emit_basic_block_ops(fd, arch, blk, false);
     }
 
-    /// (kuna `itaniumeh`) The landing pad a structured block starts at: the
+    /// (unlace `itaniumeh`) The landing pad a structured block starts at: the
     /// address of the first op of its front leaf, when the image's call-site
     /// table lists it as a pad.
     fn eh_pad_start(&self, fd: &Funcdata, blk: BlockId) -> Option<u64> {
@@ -5616,7 +5633,7 @@ impl PrintC {
         None
     }
 
-    /// (kuna `itaniumeh`) The landing pad an exceptional-edge `if` branches to.
+    /// (unlace `itaniumeh`) The landing pad an exceptional-edge `if` branches to.
     fn eh_if_target(&self, fd: &Funcdata, blk: BlockId) -> Option<u64> {
         let cond = fd.sblocks_ref().block(blk).get_block(0);
         let leaf = fd.sblocks_ref().get_exit_leaf(cond)?;
@@ -5626,7 +5643,7 @@ impl PrintC {
         Some(fd.vbank().get(dest)?.get_offset())
     }
 
-    /// (kuna `itaniumeh`) The landing pad of an exceptional-edge `if`, by the
+    /// (unlace `itaniumeh`) The landing pad of an exceptional-edge `if`, by the
     /// call-site record of the call the edge follows, and the arm the edge
     /// enters, with the other arm. This names the pad where its own block is
     /// gone: a pad that only sets the exception registers and jumps on to a
@@ -5680,7 +5697,7 @@ impl PrintC {
         Some((pad, other, Some(tru)))
     }
 
-    /// (kuna `itaniumeh`) Is `blk` an `if` whose condition is an
+    /// (unlace `itaniumeh`) Is `blk` an `if` whose condition is an
     /// `eh_unwinding()` exceptional edge?
     fn is_eh_if(&self, fd: &Funcdata, blk: BlockId) -> bool {
         use crate::block::BlockType;
@@ -5729,7 +5746,7 @@ impl PrintC {
         false
     }
 
-    /// (kuna `itaniumeh`) `catch (A | B)`: the pad's catch types in handler
+    /// (unlace `itaniumeh`) `catch (A | B)`: the pad's catch types in handler
     /// order, `...` for a catch-all or an unnamed type; cleanup and exception
     /// specifications are not handlers. `catch (...)` when nothing is caught.
     fn eh_catch_header(fd: &Funcdata, pad: u64) -> String {
@@ -5757,7 +5774,7 @@ impl PrintC {
         if types.is_empty() {
             return "catch (...)".into();
         }
-        // (kuna `msvceh`) An x64 SEH `__try` record names its own handler
+        // (unlace `msvceh`) An x64 SEH `__try` record names its own handler
         // header, `__except (<filter>)`.
         if let [only] = types.as_slice()
             && only.starts_with("__except")
@@ -5767,7 +5784,7 @@ impl PrintC {
         format!("catch ({})", types.join(" | "))
     }
 
-    /// (kuna `itaniumeh`) Emit `try { <cond statements> } catch (..) { <pad> }`.
+    /// (unlace `itaniumeh`) Emit `try { <cond statements> } catch (..) { <pad> }`.
     fn emit_eh_try(
         &mut self,
         fd: &Funcdata,
@@ -5846,7 +5863,7 @@ impl PrintC {
             return;
         }
         let n = list.len();
-        // (kuna `itaniumeh`) An exceptional-edge `if` whose normal path never
+        // (unlace `itaniumeh`) An exceptional-edge `if` whose normal path never
         // falls through and whose landing pad starts the rest of the list:
         // `try { call; <normal path> } catch (..) { <pad> }`.
         if self.lang().kw_open_curly == "{" {
@@ -5908,7 +5925,7 @@ impl PrintC {
         // duplicating it — e.g. the single-block `abort(); return;` tail that
         // `taildup`/`gotoreduce` wrap in a 1-element `BlockList`, which otherwise
         // renders `abort(); abort();`.  The datatest corpus never produces a
-        // size-1 `Ls`, so this only surfaced under the kuna structuring passes.
+        // size-1 `Ls`, so this only surfaced under the unlace structuring passes.
         if n == 1 {
             self.emit_block(fd, arch, list[0]);
             self.emit.end_block(id1);
@@ -5939,7 +5956,7 @@ impl PrintC {
     /// block 2 (optional) the else body.
     fn emit_block_if(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::prettyprint::Emit;
-        // (kuna `javatry`) A DEX try dispatch prints as `try { } catch`.
+        // (unlace `javatry`) A DEX try dispatch prints as `try { } catch`.
         if let Some(shape) = self
             .java_try_shape(fd, blk, &[])
             .filter(Self::java_try_standalone)
@@ -5947,17 +5964,17 @@ impl PrintC {
             self.emit_java_try(fd, arch, shape, &[]);
             return;
         }
-        // (kuna) iteregion: a two-arm assignment diamond the S8 `iteregion` pass
-        // marked (its condition `CBRANCH` carries the `kuna_iteregion` addl-flag)
+        // (unlace) iteregion: a two-arm assignment diamond the S8 `iteregion` pass
+        // marked (its condition `CBRANCH` carries the `unlace_iteregion` addl-flag)
         // renders as a single `dest = ( cond ) ? A : B;` ternary instead of the
         // if/else.  The mark is set only with `option iteregion on`, so when off
         // this is never taken and the if/else render is byte-identical.
-        // (kuna) iteboolean: a `0`/`1` select diamond whose condition is a folded
+        // (unlace) iteboolean: a `0`/`1` select diamond whose condition is a folded
         // short-circuit chain renders as the single boolean assignment
         // `dest = ( cond );`.  Checked BEFORE the ternary so the more specific
         // form wins when both match; the mark is set only with
         // `option iteboolean on`.
-        // (kuna `itaniumeh`) Inside a `try` whose pad this edge also reaches,
+        // (unlace `itaniumeh`) Inside a `try` whose pad this edge also reaches,
         // the edge is the try's own: print the call and the normal path only.
         if self.eh_open_pad.is_some()
             && self.is_eh_if(fd, blk)
@@ -5981,7 +5998,7 @@ impl PrintC {
             }
             return;
         }
-        // (kuna `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`.
+        // (unlace `itaniumeh`) `if (eh_unwinding()) { pad } [else { normal }]`.
         if self.lang().kw_open_curly == "{"
             && fd.sblocks_ref().block(blk).get_size() >= 2
             && self.is_eh_if(fd, blk)
@@ -6124,12 +6141,12 @@ impl PrintC {
                     .goto_rewrites
                     .gototype(blk, fd.sblocks_ref().block(blk).get_if_goto_type()),
             };
-            // (kuna outlang) C's one-line `if (cond) goto L;` needs no braces; a
+            // (unlace outlang) C's one-line `if (cond) goto L;` needs no braces; a
             // language that requires block braces gets `if cond { goto-form }`.
             if self.lang().caps.brace_elision {
                 self.emit.spaces(1, 0);
                 self.emit_goto_statement(fd, cond_block, target, gototype);
-                // (kuna warnstyle, DIV-39) condition-attached warnings land at the
+                // (unlace warnstyle, DIV-39) condition-attached warnings land at the
                 // end of the one-line `if (cond) goto L;` form.
                 self.flush_eol_warnings();
             } else {
@@ -6143,14 +6160,14 @@ impl PrintC {
                 self.emit.close_brace_indent(self.lang().kw_close_curly, id);
             }
         } else if self.if_body_elides(fd, self.if_then_block(fd, blk)) {
-            // (kuna braceelide, DIV-38) A single-statement then-body drops its
+            // (unlace braceelide, DIV-38) A single-statement then-body drops its
             // braces: the statement prints on the next line at one extra indent
             // (its own tag_line in emit_basic_block_ops breaks the line).  The
             // predicate is Copy-leaf-only, so the body can never itself be an
             // `if` and the dangling-else hazard cannot arise; the else arm (if
             // any) opens with its own tag_line below, unchanged.
             self.context.set_mod(modifiers::NO_BRANCH);
-            // (kuna warnstyle, DIV-39) condition-attached warnings land at the
+            // (unlace warnstyle, DIV-39) condition-attached warnings land at the
             // end of the braceless `if (cond)` header line.
             self.flush_eol_warnings();
             let id = self.emit.start_indent();
@@ -6193,7 +6210,7 @@ impl PrintC {
                 self.lang().kw_open_curly,
                 self.output_brace(self.options.brace_ifelse),
             );
-            // (kuna warnstyle, DIV-39) condition-attached warnings land after
+            // (unlace warnstyle, DIV-39) condition-attached warnings land after
             // the `if (cond) {` header brace.
             self.flush_eol_warnings();
             let id1 = self.emit.begin_block(0);
@@ -6242,7 +6259,7 @@ impl PrintC {
             self.emit
                 .close_brace_indent(self.lang().kw_close_curly, my_pending_indent);
         }
-        // (kuna `noretfirst`) The arm the tree moved out of the `if`, printed after it.
+        // (unlace `noretfirst`) The arm the tree moved out of the `if`, printed after it.
         if let Some(after) = self.hoisted_after(blk) {
             self.context.push_mod();
             self.context.set_mod(modifiers::NO_BRANCH);
@@ -6253,7 +6270,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna braceelide, DIV-38) Does this if-body render braceless?  True when
+    /// (unlace braceelide, DIV-38) Does this if-body render braceless?  True when
     /// `option braceelide` is on and the body is a plain single-statement
     /// `BlockCopy` leaf: no label line (an unstructured-goto target keeps its
     /// braces), exactly ONE op that `emit_basic_block_ops` would print under
@@ -6264,7 +6281,7 @@ impl PrintC {
     #[doc(hidden)]
     pub fn if_body_elides(&mut self, fd: &Funcdata, body: BlockId) -> bool {
         use crate::block::BlockType;
-        // (kuna outlang) braceelide (DIV-38) drops the braces from a
+        // (unlace outlang) braceelide (DIV-38) drops the braces from a
         // single-statement body; a language that requires block braces must
         // never take that path, whatever the option says.
         if !self.options.brace_elide || !self.lang().caps.brace_elision {
@@ -6318,7 +6335,7 @@ impl PrintC {
             return false;
         }
         // A comment positioned in this block forces its own line; keep braces.
-        // (kuna warnstyle, DIV-39: a WARNING comment under `warn_inline`
+        // (unlace warnstyle, DIV-39: a WARNING comment under `warn_inline`
         // renders at end-of-line instead, so it does NOT force braces.)
         // The probe re-positions the sorter window without marking anything
         // emitted; emit_basic_block_ops sets the window again for the real walk.
@@ -6345,10 +6362,10 @@ impl PrintC {
         true
     }
 
-    /// (kuna) Is `blk` a two-arm assignment diamond that the S8 `iteregion` pass
+    /// (unlace) Is `blk` a two-arm assignment diamond that the S8 `iteregion` pass
     /// selected for `?:` rendering?  Returns the [`IteAssignMatch`] iff both (a) the
     /// structure still matches the narrow diamond schema and (b) its condition
-    /// `CBRANCH` carries the [`kuna_iteregion`](crate::op::pcodeop_addlflags::kuna_iteregion)
+    /// `CBRANCH` carries the [`unlace_iteregion`](crate::op::pcodeop_addlflags::unlace_iteregion)
     /// mark (set only under `option iteregion on`).  The flag is the gate, so with
     /// the option off this is always `None` and the if/else render is byte-identical.
     fn ite_ternary_match(
@@ -6364,7 +6381,7 @@ impl PrintC {
         let marked = fd
             .obank()
             .get(m.cbranch)
-            .map(|o| (o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_iteregion) != 0)
+            .map(|o| (o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_iteregion) != 0)
             .unwrap_or(false);
         if marked
             && !self.needs_storage_assignment(fd, m.true_op)
@@ -6385,7 +6402,7 @@ impl PrintC {
                 || crate::stackassign::assignment(fd, op).is_some())
     }
 
-    /// (kuna) Is `op` Dalvik's `throwException(x)`, which java-language output
+    /// (unlace) Is `op` Dalvik's `throwException(x)`, which java-language output
     /// prints as `throw x`?
     fn is_java_throw(&self, fd: &Funcdata, op: OpId) -> bool {
         let Some(o) = fd.obank().get(op) else {
@@ -6407,7 +6424,7 @@ impl PrintC {
         self.java_throw_userop == Some(id)
     }
 
-    /// (kuna `javatry`) Does the list, nested lists included, hold a `try`
+    /// (unlace `javatry`) Does the list, nested lists included, hold a `try`
     /// dispatch?
     fn list_has_java_try(&self, fd: &Funcdata, list: &[BlockId]) -> bool {
         list.iter()
@@ -6419,7 +6436,7 @@ impl PrintC {
             })
     }
 
-    /// (kuna `javatry`) `emit_block_ls` for a list holding a `try` dispatch: the
+    /// (unlace `javatry`) `emit_block_ls` for a list holding a `try` dispatch: the
     /// `try` takes the statements it protects from the elements after it.
     #[doc(hidden)]
     pub fn emit_block_ls_java_try(&mut self, fd: &Funcdata, arch: &Architecture, list: &[BlockId]) {
@@ -6502,11 +6519,11 @@ impl PrintC {
         crate::stackmarkers::nonprinting(fd, op)
     }
 
-    /// (kuna) Is `blk` a `0`/`1` select diamond that the S8 `iteboolean` pass
+    /// (unlace) Is `blk` a `0`/`1` select diamond that the S8 `iteboolean` pass
     /// selected for boolean-assignment rendering?  Returns the [`IteBoolMatch`] iff
     /// both (a) the structure still matches the schema and (b) the condition's
     /// terminal `CBRANCH` carries the
-    /// [`kuna_iteboolean`](crate::op::pcodeop_addlflags::kuna_iteboolean) mark (set
+    /// [`unlace_iteboolean`](crate::op::pcodeop_addlflags::unlace_iteboolean) mark (set
     /// only under `option iteboolean on`).  The flag is the gate, so with the option
     /// off this is always `None` and the if/else render is byte-identical.
     fn ite_boolean_match(
@@ -6518,7 +6535,7 @@ impl PrintC {
         let marked = fd
             .obank()
             .get(m.cbranch)
-            .map(|o| (o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_iteboolean) != 0)
+            .map(|o| (o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_iteboolean) != 0)
             .unwrap_or(false);
         if marked && !self.needs_storage_assignment(fd, m.assign_op) {
             Some(m)
@@ -6527,7 +6544,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna) Emit an `iteboolean`-selected `0`/`1` select diamond as the single
+    /// (unlace) Emit an `iteboolean`-selected `0`/`1` select diamond as the single
     /// statement `dest = ( cond );` — or `dest = !( cond );` when the true arm is the
     /// `0` one.  The condition goes through the *same* `ONLY_BRANCH` renderer that
     /// produced the `if (...)` header (a `CBRANCH` leaf via `op_cbranch`, a folded
@@ -6593,7 +6610,7 @@ impl PrintC {
         self.emit.end_statement(sid);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-        // (kuna warnstyle, DIV-39) condition-attached warnings land at the end of
+        // (unlace warnstyle, DIV-39) condition-attached warnings land at the end of
         // the assignment line.
         self.flush_eol_warnings();
 
@@ -6604,7 +6621,7 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    /// (kuna `boolreturn`) Emit an `if` whose arms only return `1` and `0` as
+    /// (unlace `boolreturn`) Emit an `if` whose arms only return `1` and `0` as
     /// `return ( cond );`, or `return !( cond );` when the body returns `0`. The
     /// condition goes through the same `ONLY_BRANCH` render as the `if` header, and the
     /// pending-brace and comment handling mirror [`emit_block_if_bool`].
@@ -6663,7 +6680,7 @@ impl PrintC {
         self.context.pop_mod();
     }
 
-    /// (kuna) Emit an `iteregion`-selected assignment diamond as a single ternary
+    /// (unlace) Emit an `iteregion`-selected assignment diamond as a single ternary
     /// statement `dest = ( cond ) ? A : B;` (angr `ITERegionConverter`).  Reuses the
     /// existing renderers: the LHS via `push_vn_explicit_ir`, the condition via the
     /// normal `ONLY_BRANCH` `CBRANCH` render (`( cond )`, honouring boolean-flip),
@@ -6730,7 +6747,7 @@ impl PrintC {
             &MarkupRef::none(),
         );
         self.emit.spaces(1, 0);
-        // (kuna outlang) C spells the选 selection `cond ? A : B`; a language
+        // (unlace outlang) C spells the选 selection `cond ? A : B`; a language
         // without a ternary spells it `if cond { A } else { B }` -- which in Rust
         // is an EXPRESSION, so the `iteregion` recovery is not lost here, it is
         // rendered in the more natural form. Only the punctuation differs: the
@@ -6783,7 +6800,7 @@ impl PrintC {
         self.emit.end_statement(sid);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-        // (kuna warnstyle, DIV-39) condition-attached warnings land at the end
+        // (unlace warnstyle, DIV-39) condition-attached warnings land at the end
         // of the ternary statement line.
         self.flush_eol_warnings();
 
@@ -6829,7 +6846,7 @@ impl PrintC {
             self.lang().kw_open_curly,
             self.output_brace(self.options.brace_switch),
         );
-        // (kuna warnstyle, DIV-39) warnings pending from the switch block land
+        // (unlace warnstyle, DIV-39) warnings pending from the switch block land
         // after the `switch (v) {` header brace.
         self.flush_eol_warnings();
 
@@ -6971,7 +6988,7 @@ impl PrintC {
         (val & mask, sz, signed)
     }
 
-    /// (kuna `switchmerge`) Every label of a non-default case arm, as
+    /// (unlace `switchmerge`) Every label of a non-default case arm, as
     /// [`switch_case_label`](PrintC::switch_case_label) gives them for
     /// `0..switch_case_label_count`, reading the table once instead of once per
     /// label.
@@ -6990,7 +7007,7 @@ impl PrintC {
         ) {
             (Some(j), Some(bb)) => {
                 let jt = fd.get_jump_table(j as int4);
-                let indices = jt.kuna_indices_by_block(fd, bb).unwrap_or_default();
+                let indices = jt.unlace_indices_by_block(fd, bb).unwrap_or_default();
                 (0..n)
                     .map(|i| jt.get_label_by_index(indices.get(i).copied().unwrap_or(0)))
                     .collect()
@@ -7016,7 +7033,7 @@ impl PrintC {
             return (sz, uintb::MAX, false);
         };
         let jt = fd.get_jump_table(j as int4);
-        let mask = if jt.kuna_lowered_var().is_none() {
+        let mask = if jt.unlace_lowered_var().is_none() {
             calc_mask(sz)
         } else {
             uintb::MAX
@@ -7027,16 +7044,16 @@ impl PrintC {
             .and_then(|op| lowered_switch_label_form(fd, arch, op, text_signed));
         let signed = match lowered {
             Some((signed, _)) => signed,
-            None if jt.kuna_lowered_var().is_some() => jt.kuna_has_signed_labels(),
+            None if jt.unlace_lowered_var().is_some() => jt.unlace_has_signed_labels(),
             None => jt
                 .get_indirect_op()
                 .and_then(|op| native_switch_label_signedness(fd, arch, op, text_signed))
-                .unwrap_or(jt.kuna_has_signed_labels()),
+                .unwrap_or(jt.unlace_has_signed_labels()),
         };
         (sz, mask, signed)
     }
 
-    /// (kuna `switchmerge`) The arms `emit_block_switch_c` prints for `blk`.
+    /// (unlace `switchmerge`) The arms `emit_block_switch_c` prints for `blk`.
     fn switch_arms(&self, fd: &Funcdata, blk: BlockId) -> Vec<crate::switchmerge::PlannedCase> {
         if let Some(arms) = self.switch_plans.plans.get(&blk) {
             return arms.clone();
@@ -7047,7 +7064,7 @@ impl PrintC {
             .collect()
     }
 
-    /// (kuna `switchmerge`) Print a switch arm from the `skip`th block of its
+    /// (unlace `switchmerge`) Print a switch arm from the `skip`th block of its
     /// list, keeping the trailing jump of a `BlockGoto` around the list.
     fn emit_arm_rest(&mut self, fd: &Funcdata, arch: &Architecture, caseblk: BlockId, skip: usize) {
         let (list, _) = crate::switchmerge::arm_list(fd.sblocks_ref(), caseblk);
@@ -7062,7 +7079,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `switchmerge`) Does the switch header block `head` print no
+    /// (unlace `switchmerge`) Does the switch header block `head` print no
     /// statement before its `switch`?  Mirrors the skips of
     /// [`emit_basic_block_ops`](PrintC::emit_basic_block_ops) in `NO_BRANCH` mode.
     #[doc(hidden)]
@@ -7080,7 +7097,7 @@ impl PrintC {
             .is_some_and(|bb| self.ops_print_nothing(fd, bb))
     }
 
-    /// (kuna `switchmerge`) Does the basic block `bb` print no statement
+    /// (unlace `switchmerge`) Does the basic block `bb` print no statement
     /// besides its branch?
     #[doc(hidden)]
     pub fn ops_print_nothing(&self, fd: &Funcdata, bb: BlockId) -> bool {
@@ -7104,7 +7121,7 @@ impl PrintC {
         true
     }
 
-    /// (kuna `switchmerge`) The label values the non-default arms of `sw` print,
+    /// (unlace `switchmerge`) The label values the non-default arms of `sw` print,
     /// with their byte size and signedness.
     #[doc(hidden)]
     pub fn switch_label_set(
@@ -7278,7 +7295,7 @@ impl PrintC {
                     .gototype(blk, fd.sblocks_ref().block(blk).get_goto_type()),
             };
             self.emit_goto_statement(fd, inner, target, gototype);
-            // (kuna warnstyle, DIV-39) pending block warnings land after the
+            // (unlace warnstyle, DIV-39) pending block warnings land after the
             // trailing goto/break/continue.
             self.flush_eol_warnings();
         }
@@ -7335,7 +7352,7 @@ impl PrintC {
             self.lang().kw_open_curly,
             self.output_brace(self.options.brace_loop),
         );
-        // (kuna warnstyle, DIV-39) condition-attached warnings land after the
+        // (unlace warnstyle, DIV-39) condition-attached warnings land after the
         // `for (...) {` header brace.
         self.flush_eol_warnings();
         self.context.set_mod(modifiers::NO_BRANCH); // Don't print goto at bottom of clause
@@ -7435,7 +7452,7 @@ impl PrintC {
                 self.lang().kw_open_curly,
                 self.output_brace(self.options.brace_loop),
             );
-            // (kuna warnstyle, DIV-39) condition-attached warnings land after
+            // (unlace warnstyle, DIV-39) condition-attached warnings land after
             // the `while (cond) {` header brace.
             self.flush_eol_warnings();
         }
@@ -7461,7 +7478,8 @@ impl PrintC {
     }
 
     fn emit_block_do_while_c(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
-        if fd.sblocks_ref().block(blk).get_flags() & crate::block::block_flags::f_kuna_top_test != 0
+        if fd.sblocks_ref().block(blk).get_flags() & crate::block::block_flags::f_unlace_top_test
+            != 0
         {
             self.emit_block_top_tested_c(fd, arch, blk);
             return;
@@ -7499,13 +7517,13 @@ impl PrintC {
         self.emit_block(fd, arch, body);
         self.emit
             .print(self.lang().kw_semicolon, SyntaxHighlight::NoColor);
-        // (kuna warnstyle, DIV-39) body/condition warnings still pending land
+        // (unlace warnstyle, DIV-39) body/condition warnings still pending land
         // at the end of the `} while (cond);` line.
         self.flush_eol_warnings();
         self.context.pop_mod();
     }
 
-    /// (kuna `guardedloop`) A do-while whose test runs first on entry anyway:
+    /// (unlace `guardedloop`) A do-while whose test runs first on entry anyway:
     /// `while (block0-branch) { block0-body }`.
     fn emit_block_top_tested_c(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         self.context.push_mod();
@@ -7707,7 +7725,7 @@ impl PrintC {
             if !self.java_block_filters.is_empty() && !self.java_visible(fd, bb, inst) {
                 continue;
             }
-            // (kuna `voidtailreturn`) The function's own trailing bare `return;`.
+            // (unlace `voidtailreturn`) The function's own trailing bare `return;`.
             // The source it came from just falls off the end of the body, and
             // pyjoern's CFG has no node there, so printing it is both redundant C
             // and a structural divergence.  Elided only when
@@ -7757,7 +7775,7 @@ impl PrintC {
             } else {
                 self.emit_statement(fd, arch, inst);
             }
-            // (kuna warnstyle, DIV-39) warnings collected for this statement
+            // (unlace warnstyle, DIV-39) warnings collected for this statement
             // land after its semicolon — but NEVER inside a comma-separated
             // header (`while (...)` / `for (...)` parens), where an inline
             // `// slug` would comment out the rest of the header line
@@ -7770,7 +7788,7 @@ impl PrintC {
         // emitCommentGroup(None): any remaining comments in the block.
         if !self.context.is_set(modifiers::COMMA_SEPARATE) {
             self.emit_comment_group(fd, None);
-            // (kuna warnstyle) trailing warnings — most commonly one attached
+            // (unlace warnstyle) trailing warnings — most commonly one attached
             // to this block's suppressed CBRANCH — stay PENDING here: for a
             // condition block the right line is the upcoming `if (cond)`
             // header, whose emitter flushes them.
@@ -7791,7 +7809,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna) The loop-counter / address-tied store-brake seam for
+    /// (unlace) The loop-counter / address-tied store-brake seam for
     /// [`Self::emit_inplace_op`]: when `op` is a `CPUI_COPY` of an IMPLIED
     /// two-input value, answer that value's defining op and its two inputs, so
     /// the in-place render can be decided on the arithmetic rather than on the
@@ -7822,7 +7840,7 @@ impl PrintC {
     /// C++ `PrintC::emitInplaceOp` (printc.cc, directly above `emitExpression`;
     /// gated by the `option_inplace_ops` head at printc.cc:2546 which upstream
     /// never wires beyond the flag — ported here as the flag's consumer,
-    /// default-on per kuna DIV-36).
+    /// default-on per unlace DIV-36).
     ///
     /// When the statement is `out = out OP y` — a two-input integer op whose
     /// first input is the SAME high-level variable as the output — render the
@@ -7845,7 +7863,7 @@ impl PrintC {
             ),
             None => return false,
         };
-        // (kuna) See through a surviving store: the loop-counter brake keeps
+        // (unlace) See through a surviving store: the loop-counter brake keeps
         // the address-tied `COPY` that writes a loop counter back to its frame
         // slot, so the statement's root op is that `COPY` and the arithmetic
         // hangs off it as an implied expression -- `out = out OP y` reaches here
@@ -7916,7 +7934,7 @@ impl PrintC {
         {
             return false;
         }
-        // (kuna) `x += -c` reads poorly: when the INT_ADD addend is a plain
+        // (unlace) `x += -c` reads poorly: when the INT_ADD addend is a plain
         // negative signed constant (no equate/display override, not char-typed,
         // not the unnegatable type minimum), render `x -= c` with the negated
         // magnitude instead.  The dataflow canonicalizes `sub x, c` into
@@ -8005,7 +8023,7 @@ impl PrintC {
             return;
         }
         // C++ `if (option_inplace_ops && emitInplaceOp(op)) return;`
-        // (printc.cc:2546) — the in-place `OP=` render, kuna DIV-36 default-on
+        // (printc.cc:2546) — the in-place `OP=` render, unlace DIV-36 default-on
         // (`option inplaceops off` restores the upstream `out = out OP y` form).
         // Applied to standalone `;`-terminated statements only: comma contexts
         // (for-loop headers, condition-block side effects) keep the upstream
@@ -8109,7 +8127,7 @@ impl PrintC {
         read_op: Option<OpId>,
     ) {
         let opc = fd.obank().get(op).expect("op_push_ir: stale op").code();
-        // (kuna truthycond, DIV-37) CONDITION_CONTEXT only survives through the
+        // (unlace truthycond, DIV-37) CONDITION_CONTEXT only survives through the
         // boolean-preserving operators; any other operator's operands are value
         // context, so scope the bit off across this dispatch (the mod-stack
         // frame restores it for our siblings).
@@ -8145,7 +8163,7 @@ impl PrintC {
         read_op: Option<OpId>,
         opc: OpCode,
     ) {
-        if arch.kuna_options.get::<crate::wideconst::WideConst>().0 {
+        if arch.unlace_options.get::<crate::wideconst::WideConst>().0 {
             if let Some(tok) = crate::wideconst::wide_literal(fd, op) {
                 self.push_atom(&Atom::with_op(
                     tok,
@@ -8165,7 +8183,7 @@ impl PrintC {
                 return;
             }
         }
-        if self.lang().caps.ternary && arch.kuna_options.get::<crate::selectmul::SelectMul>().0 {
+        if self.lang().caps.ternary && arch.unlace_options.get::<crate::selectmul::SelectMul>().0 {
             if let Some(plan) = crate::selectmul::select_plan(fd, op) {
                 self.op_select_ir(fd, arch, op, plan);
                 return;
@@ -8190,7 +8208,7 @@ impl PrintC {
             // In the non-flat path opCbranch only emits the `( condition )`; the
             // `if` keyword is printed by emit_block_if.  yesparen = !comma_separate.
             OpCode::CPUI_CBRANCH => {
-                // (kuna outlang) A language without parenthesised conditions
+                // (unlace outlang) A language without parenthesised conditions
                 // (`if c {` rather than `if (c)`) suppresses the paren; the
                 // grouping token still opens so line breaking is unchanged.
                 let yesparen = !self.context.is_set(modifiers::COMMA_SEPARATE)
@@ -8221,7 +8239,7 @@ impl PrintC {
                 if booleanflip {
                     self.push_op(&tokens::BOOLEAN_NOT, Some(op_key(op)));
                 }
-                // (kuna truthycond, DIV-37) The condition value is consumed as
+                // (unlace truthycond, DIV-37) The condition value is consumed as
                 // a boolean — mark the context so a `!= 0`/`== 0` comparison
                 // renders in truthy form; same mod-stack frame carries the
                 // negate-token absorption.
@@ -8253,7 +8271,7 @@ impl PrintC {
                     SyntaxHighlight::KeywordColor,
                     &kw_markup,
                 );
-                // (kuna outlang) `switch (v)` in C, `match v` in Rust.
+                // (unlace outlang) `switch (v)` in C, `match v` in Rust.
                 let paren = self.lang().caps.paren_conditions;
                 let id = if paren {
                     self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0)
@@ -8283,8 +8301,8 @@ impl PrintC {
             // RETURN (printc.cc:774 opReturn).
             OpCode::CPUI_RETURN => {
                 let kw_markup = self.op_markup(fd, op);
-                // (kuna decodehalt) The `getHaltType()` arms of the upstream
-                // switch: a RETURN kuna planted because the bytes would not
+                // (unlace decodehalt) The `getHaltType()` arms of the upstream
+                // switch: a RETURN unlace planted because the bytes would not
                 // decode is a pseudo-call naming the failure, not a return.
                 let halt = fd.obank().get(op).map(|o| o.get_halt_type()).unwrap_or(0);
                 if let Some(nm) = crate::decodehalt::halt_call_name(halt) {
@@ -8525,7 +8543,7 @@ impl PrintC {
                 return;
             }
         }
-        // (kuna truthycond, DIV-37) A comparison consumed as a boolean: after
+        // (unlace truthycond, DIV-37) A comparison consumed as a boolean: after
         // the negate-token flip has settled which comparison actually prints,
         // `x != 0` renders as `x` and `x == 0` as `!x`.  The surviving operand
         // keeps CONDITION_CONTEXT (so `(a != 0) != 0` collapses fully); the
@@ -8534,7 +8552,7 @@ impl PrintC {
             && (tok.print1 == "==" || tok.print1 == "!=")
         {
             self.context.unset_mod(modifiers::CONDITION_CONTEXT);
-            // (kuna outlang) truthycond (DIV-37) renders `x != 0` as `x`, which is
+            // (unlace outlang) truthycond (DIV-37) renders `x != 0` as `x`, which is
             // not a condition in a language without implicit bool conversion.
             if self.options.truthy_cond && self.lang().caps.implicit_bool_conditions {
                 if let Some(other) = self.truthy_other_operand(fd, op) {
@@ -8549,16 +8567,16 @@ impl PrintC {
                 }
             }
         }
-        // (kuna `constright`) `c < x` prints as `x > c`.
+        // (unlace `constright`) `c < x` prints as `x > c`.
         let mirror = (self.out_lang == crate::lang::OutLang::C
-            && arch.kuna_options.get::<crate::constright::ConstRight>().0
+            && arch.unlace_options.get::<crate::constright::ConstRight>().0
             && crate::constright::mirrors(fd, op))
         .then(|| token_mirror(tok))
         .flatten();
         let mirrored = mirror.is_some();
         let tok = mirror.unwrap_or(tok);
         self.push_op(tok, Some(op_key(op)));
-        // (kuna truthycond) `&&`/`||` operands are boolean contexts themselves
+        // (unlace truthycond) `&&`/`||` operands are boolean contexts themselves
         // (this is semantics-preserving even in value position: both sides of
         // the equivalence yield the same 0/1).
         let boolean_operands = tok.print1 == "&&" || tok.print1 == "||";
@@ -8620,7 +8638,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `selectmul`) Emit `a * zext(c) + b * zext(!c)` as `c ? a : b`; the
+    /// (unlace `selectmul`) Emit `a * zext(c) + b * zext(!c)` as `c ? a : b`; the
     /// condition is a boolean context, so `x != 0` prints truthy.
     fn op_select_ir(
         &mut self,
@@ -8761,7 +8779,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna truthycond, DIV-37) For an INT_EQUAL/INT_NOTEQUAL comparison with
+    /// (unlace truthycond, DIV-37) For an INT_EQUAL/INT_NOTEQUAL comparison with
     /// exactly one zero operand eligible for truthy rendering, return the OTHER
     /// operand.  A zero is eligible when it is a plain constant 0 (directly, or
     /// through one implied CAST — the casted null-pointer shape) whose
@@ -8875,7 +8893,7 @@ impl PrintC {
     ///   - Otherwise print `!` followed by our input.
     fn op_bool_negate_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         let in0 = fd.obank().get(op).and_then(|o| o.get_in(0));
-        // (kuna truthycond, DIV-37) Whether the operand may render truthy
+        // (unlace truthycond, DIV-37) Whether the operand may render truthy
         // depends on the arm: when the `!` is PRINTED (arm 3), the printed
         // operator re-booleanizes the value, so its operand is always a
         // boolean context.  When the `!` is ABSORBED (arm 2's negate-token
@@ -8995,7 +9013,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `vaarg`) `va_arg(ap,T)`, `T` the type of the call's output; a
+    /// (unlace `vaarg`) `va_arg(ap,T)`, `T` the type of the call's output; a
     /// pointer to a `va_list` (an array type) prints `*ap`. `vaargconst builtin` spells it
     /// `__builtin_va_arg`.
     fn push_va_arg(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
@@ -9026,7 +9044,7 @@ impl PrintC {
             (true, 4, false) => ("int".to_string(), String::new()),
             _ => type_name_for_decl(&ty, self.rt_ctx.clone()),
         };
-        let name = match arch.kuna_options.get::<crate::vaargconst::VaArgConst>() {
+        let name = match arch.unlace_options.get::<crate::vaargconst::VaArgConst>() {
             crate::vaargconst::VaArgConst::Builtin => "__builtin_va_arg",
             _ => "va_arg",
         };
@@ -9047,7 +9065,7 @@ impl PrintC {
         true
     }
 
-    /// (kuna `vaarg`) The `va_list` of a `va_arg`/`va_start` call: `ap` for the
+    /// (unlace `vaarg`) The `va_list` of a `va_arg`/`va_start` call: `ap` for the
     /// constant that stands for a promoted local one, `*ap` through a pointer
     /// to a `va_list` (an array type).
     fn push_va_list(&mut self, fd: &Funcdata, arch: &Architecture, ap: VarnodeId, op: OpId) {
@@ -9071,7 +9089,7 @@ impl PrintC {
         self.push_vn_ir(fd, arch, ap, op);
     }
 
-    /// (kuna `vaarg`) `va_start(ap,last)` for the `va_start` of a promoted
+    /// (unlace `vaarg`) `va_start(ap,last)` for the `va_start` of a promoted
     /// local `va_list`.
     fn push_va_start(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         let Some(o) = fd.obank().get(op) else {
@@ -9101,10 +9119,14 @@ impl PrintC {
         true
     }
 
-    /// (kuna `neonintrin`) Render `SUBPIECE(v, off)` of an ACLE vector `v` that
+    /// (unlace `neonintrin`) Render `SUBPIECE(v, off)` of an ACLE vector `v` that
     /// reads exactly one lane as `vgetq_lane_s32(v, n)`.
     fn push_neon_lane(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
-        if !arch.kuna_options.get::<crate::neonintrin::NeonIntrin>().on {
+        if !arch
+            .unlace_options
+            .get::<crate::neonintrin::NeonIntrin>()
+            .on
+        {
             return false;
         }
         let Some(o) = fd.obank().get(op) else {
@@ -9139,7 +9161,7 @@ impl PrintC {
         true
     }
 
-    /// (kuna `acleintrinsics`) Render a user op under its ACLE spelling.
+    /// (unlace `acleintrinsics`) Render a user op under its ACLE spelling.
     fn push_acle_intrinsic(
         &mut self,
         fd: &Funcdata,
@@ -9257,7 +9279,7 @@ impl PrintC {
                 (false, None) => format!("CALLOTHER[{:#x}]", in0_off),
             };
             let mut order: Vec<int4> = (1..nin).collect();
-            if arch.kuna_options.get::<crate::printc::AvxIntrinsics>().0 {
+            if arch.unlace_options.get::<crate::printc::AvxIntrinsics>().0 {
                 let size = fd
                     .obank()
                     .get(op)
@@ -9286,7 +9308,7 @@ impl PrintC {
                 }
                 for &i in &order {
                     if let Some(vn) = fd.obank().get(op).and_then(|o| o.get_in(i)) {
-                        // (kuna kernelbug) a `__WARN(file,line)` line is a decimal.
+                        // (unlace kernelbug) a `__WARN(file,line)` line is a decimal.
                         let line = in0_off == crate::userop::BUILTIN_KERNEL_WARN as u64
                             && i == nin - 1
                             && fd
@@ -9801,7 +9823,7 @@ impl PrintC {
         )
     }
 
-    /// (kuna) Under `nanignore none`, print a widening that quiets a possibly
+    /// (unlace) Under `nanignore none`, print a widening that quiets a possibly
     /// signaling NaN and feeds a round trip as a read through a volatile compound
     /// literal, so a C compiler cannot erase the `(float)(double)x` pair. GCC drops
     /// a bare `v = (volatile double){ x }` literal; the `*&` access keeps it.
@@ -9856,7 +9878,7 @@ impl PrintC {
     }
 
     /// [`op_type_cast_ir`](Self::op_type_cast_ir), leaving the cast out when
-    /// `implied` (kuna `castimplied`: C's own conversion performs it).
+    /// `implied` (unlace `castimplied`: C's own conversion performs it).
     fn op_type_cast_ir_with(
         &mut self,
         fd: &Funcdata,
@@ -9865,7 +9887,7 @@ impl PrintC {
         implied: bool,
     ) {
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
         {
@@ -9935,7 +9957,7 @@ impl PrintC {
             }
             return;
         }
-        // (kuna `signedness`) A `(int)`/`(unsigned int)` whose operand is now
+        // (unlace `signedness`) A `(int)`/`(unsigned int)` whose operand is now
         // declared at that very type is a no-op token: dropping it leaves an
         // expression of exactly the same C type.
         let cast_ty = if self.options.nocasts || implied || self.sign_plan.drop_cast(fd, op) {
@@ -10029,7 +10051,7 @@ impl PrintC {
         while let Some(t) = base1.get_typedef().cloned() {
             base1 = t;
         }
-        // C++ tests Datatype *pointer* identity; the kuna factory interns every
+        // C++ tests Datatype *pointer* identity; the unlace factory interns every
         // data-type to a unique allocation, so `Rc::ptr_eq` is the faithful identity
         // check.  As a structural fallback (the element types here are scalars whose
         // `compare` is implemented) a `compare == 0` also counts as equal; a compare
@@ -10040,14 +10062,14 @@ impl PrintC {
         if !base_eq {
             return false;
         }
-        // The kuna `getSymbolEntry()` stand-in is the high's bound Symbol — a
-        // `kuna_name` with the mapped `kuna_symbol_type`; `getSymbolOffset()==-1`
+        // The unlace `getSymbolEntry()` stand-in is the high's bound Symbol — a
+        // `unlace_name` with the mapped `unlace_symbol_type`; `getSymbolOffset()==-1`
         // is the whole-symbol match.
         let mut symbol_type: Option<std::rc::Rc<crate::dtype::Datatype>> = None;
         let vnin_high = fd.vbank().get(vnin).and_then(|v| v.get_high());
         let whole_sym = vnin_high.and_then(|h| fd.high_bank().get(h)).and_then(|h| {
-            if h.kuna_symbol_offset() == -1 {
-                h.kuna_symbol_type().cloned()
+            if h.unlace_symbol_offset() == -1 {
+                h.unlace_symbol_type().cloned()
             } else {
                 None
             }
@@ -10336,7 +10358,7 @@ impl PrintC {
                             .and_then(|v| fd.vbank().get(v))
                             .map(|v| v.get_size())
                             .unwrap_or(0);
-                        // The kuna_name binding stands in for C++ getSymbol().
+                        // The unlace_name binding stands in for C++ getSymbol().
                         let high = fd.vbank().get(vn).and_then(|v| v.get_high());
                         let is_explicit =
                             fd.vbank().get(vn).map(|v| v.is_explicit()).unwrap_or(false);
@@ -10554,7 +10576,7 @@ impl PrintC {
         self.push_cast_close(&slice.target_word);
     }
 
-    /// (kuna `boolbyte`) `(bool)(unsigned char)x`: a truncation into a `bool`
+    /// (unlace `boolbyte`) `(bool)(unsigned char)x`: a truncation into a `bool`
     /// whose operand may carry bits above the destination, which a bare
     /// `(bool)x` would test.
     fn op_bool_truncation_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
@@ -10615,12 +10637,12 @@ impl PrintC {
         } else {
             intype
         };
-        // (kuna `boolbyte`) `isSubpieceCast` never saw a TYPE_BOOL destination
+        // (unlace `boolbyte`) `isSubpieceCast` never saw a TYPE_BOOL destination
         // upstream, so a truncation into one falls to the functional arm and
         // prints the raw `SUB41(x,0)` intrinsic -- an undeclared identifier, the
         // class `subright` exists to keep out of the output.
         match crate::boolbyte::truncation_form(
-            arch.kuna_options.get::<crate::boolbyte::BoolByte>().0,
+            arch.unlace_options.get::<crate::boolbyte::BoolByte>().0,
             &outtype,
             &intype,
             offset,
@@ -10659,7 +10681,7 @@ impl PrintC {
             .vbank()
             .get(invn)
             .map(|_| fd.vn_type_read_facing(invn, op))?;
-        // (kuna) A one-element array read whole is its element (`b[0]`), which
+        // (unlace) A one-element array read whole is its element (`b[0]`), which
         // extends as the element's type does.
         let intype = match intype.get_array_base() {
             Some(elem) if elem.get_size() == intype.get_size() => elem,
@@ -10688,7 +10710,7 @@ impl PrintC {
         strat.is_extension_cast_implied(&ctx, op_ref, read_ref)
     }
 
-    /// (kuna) The type the selector `vn` of the switch `op` prints cast to when
+    /// (unlace) The type the selector `vn` of the switch `op` prints cast to when
     /// C's promotion would carry bits the narrow p-code drops.  See
     /// [`crate::narrowselector`].
     fn narrow_selector_cast(
@@ -10707,7 +10729,7 @@ impl PrintC {
         crate::narrowselector::cast(fd, arch, &strat, &ctx, vr, op)
     }
 
-    /// (kuna `castimplied`) Does C's own conversion already perform the cast `op`
+    /// (unlace `castimplied`) Does C's own conversion already perform the cast `op`
     /// prints where `read_op` reads it?  See [`crate::castimplied`].
     fn implied_cast_drops(
         &self,
@@ -10734,7 +10756,7 @@ impl PrintC {
         self.cast_implied.drops(&view, fd, op, read_op)
     }
 
-    /// (kuna `castnarrow`) Does C's own conversion already perform the `(T)name`
+    /// (unlace `castnarrow`) Does C's own conversion already perform the `(T)name`
     /// truncation printed for `vn`, the low piece of `name`, where `op` reads it?
     /// See [`crate::castnarrow::drops_partial`].
     #[allow(clippy::too_many_arguments)]
@@ -10763,7 +10785,7 @@ impl PrintC {
         crate::castnarrow::drops_partial(&self.cast_implied, &view, fd, vn, op, piece, whole, name)
     }
 
-    /// (kuna `castwiden`) Does the arithmetic `read_op` convert the widening `op`
+    /// (unlace `castwiden`) Does the arithmetic `read_op` convert the widening `op`
     /// by itself?  The operand then prints as upstream's hidden extension, which
     /// keeps the parentheses the cast gave it (`p + (a + b)`, never `p + a + b`).
     /// See [`crate::castwiden`].
@@ -10789,7 +10811,7 @@ impl PrintC {
         self.cast_implied.widen_drops(&view, fd, op, read_op)
     }
 
-    /// (kuna `castwiden`) The suffix the constant `vn` read by `op` prints with
+    /// (unlace `castwiden`) The suffix the constant `vn` read by `op` prints with
     /// so C converts the other operand itself: `Some(true)` for `UL`.  See
     /// [`crate::castwiden`].
     fn widen_suffix(
@@ -10812,7 +10834,7 @@ impl PrintC {
         self.cast_implied.widen_suffix(&view, fd, vn, op)
     }
 
-    /// (kuna `castternary`) The casts to leave out of the arms of the conditional
+    /// (unlace `castternary`) The casts to leave out of the arms of the conditional
     /// `iteregion` prints for `m`.  See [`crate::castternary`].
     fn conditional_arm_drops(
         &self,
@@ -10849,7 +10871,7 @@ impl PrintC {
     /// is the only form the int→float cast produces (a scalar `floatN`).
     /// Open a conversion around an operand that is about to be pushed.
     ///
-    /// (kuna outlang) C brackets the operand -- `(T)x`, a `Presurround` token
+    /// (unlace outlang) C brackets the operand -- `(T)x`, a `Presurround` token
     /// whose type is pushed BEFORE the operand. Rust suffixes it -- `x as T`, a
     /// binary token whose type is the RIGHT operand and so must be pushed
     /// AFTER. Every cast site therefore brackets its operand push with
@@ -10862,7 +10884,7 @@ impl PrintC {
 
     /// Push the operator for a field reached THROUGH a pointer.
     ///
-    /// (kuna outlang) C has a dedicated token for it (`p->f`). Rust raw pointers
+    /// (unlace outlang) C has a dedicated token for it (`p->f`). Rust raw pointers
     /// have no auto-deref, so the same access is `(*p).f` -- the member token
     /// over an explicit dereference of the operand that follows. The
     /// parenthesizer supplies the parens on its own: `*` binds looser than `.`,
@@ -10914,7 +10936,7 @@ impl PrintC {
         {
             name = format!("({name})");
         }
-        // The C++ pushes a type Atom carrying the Datatype pointer; the kuna
+        // The C++ pushes a type Atom carrying the Datatype pointer; the unlace
         // emit path renders a TypeToken by its `name` alone (printc.rs:1464),
         // so a syntax-only TypeToken reproduces the cast's `(floatN)` text.
         self.push_atom(&Atom::syntax(
@@ -11097,7 +11119,7 @@ impl PrintC {
     /// the C++ `int4 skip = -1;` for the direct case, no C++ method format yet).
     fn op_call_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<crate::analysisgates::Godwarfsig>()
             .0
         {
@@ -11122,7 +11144,7 @@ impl PrintC {
     pub fn op_call_raw_ir(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) {
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .writers()
         {
@@ -11150,7 +11172,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .writers()
         {
@@ -11198,7 +11220,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
         {
@@ -11209,7 +11231,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
         {
@@ -11220,7 +11242,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
         {
@@ -11256,7 +11278,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
         {
@@ -11267,7 +11289,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::Rust
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::rustfmt::RustFmtMode>()
                 .recovers()
         {
@@ -11295,7 +11317,7 @@ impl PrintC {
         }
         if self.out_lang == crate::lang::OutLang::C
             && arch
-                .kuna_options
+                .unlace_options
                 .get::<super::structassign::StructAssign>()
                 .0
         {
@@ -11306,7 +11328,7 @@ impl PrintC {
             }
         }
         if self.out_lang == crate::lang::OutLang::C
-            && arch.kuna_options.get::<crate::analysisgates::Msvceh>().0
+            && arch.unlace_options.get::<crate::analysisgates::Msvceh>().0
         {
             let callee = self.call_callee_name(fd, op);
             if let Some(throw) = super::msvcthrow::recover(fd, arch, op, &callee) {
@@ -11385,7 +11407,7 @@ impl PrintC {
                 // the operand the unary `dereference` wraps, so it MUST be pushed
                 // before the argument operands.  C++ pushes the callee first only in
                 // its `count>1` arm and (for `count==1`) pushes the arg then callee —
-                // because its `pushVnImplied` pops the operand stack LIFO.  The kuna
+                // because its `pushVnImplied` pops the operand stack LIFO.  The unlace
                 // emitter pops the operand list FIFO (the direct-CALL path below
                 // already relies on forward push order), so a single unified arm
                 // suffices: callee first, then `(count-1)` comma operators, then the
@@ -11545,7 +11567,7 @@ impl PrintC {
                 .expect("indirect input alias requires an emitted parameter");
             let high = input.highs[0];
             let mut markup = MarkupRef::none();
-            markup.symref = fd.kuna_high_symbol_wire_id(high).or_else(|| {
+            markup.symref = fd.unlace_high_symbol_wire_id(high).or_else(|| {
                 decl_rep_varnode(fd, high)
                     .and_then(|vn| fd.vbank().get(vn))
                     .map(|vn| vn.get_create_index() as uintb)
@@ -11578,7 +11600,7 @@ impl PrintC {
         self.emit.tag_line();
     }
 
-    /// (kuna `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
+    /// (unlace `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
     /// object is printed as a load through the first argument would be, so
     /// `&local` reads as `local`.
     fn push_msvc_throw(
@@ -11610,7 +11632,7 @@ impl PrintC {
         self.push_vn_ir_m(fd, arch, obj, op, m);
     }
 
-    /// (kuna `structassign`) `*dst = *src` for a whole-struct `memcpy`: each side
+    /// (unlace `structassign`) `*dst = *src` for a whole-struct `memcpy`: each side
     /// is printed as a load through its pointer would be, so `&local` reads as
     /// `local`. Operands are pushed right side first, as `opStore` does.
     fn push_struct_assign(
@@ -11633,7 +11655,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `oslog`) A direct os_log call: the dso as its header symbol and
+    /// (unlace `oslog`) A direct os_log call: the dso as its header symbol and
     /// the decoded buffer items in place of the buffer and its size.
     fn push_oslog_call(
         &mut self,
@@ -11823,7 +11845,7 @@ impl PrintC {
             &name_used,
         );
         if arch
-            .kuna_options
+            .unlace_options
             .get::<crate::cppshortnames::CppShortNames>()
             .0
         {
@@ -11845,7 +11867,7 @@ impl PrintC {
             }
             // genericFunctionName(entryaddress): angr-style `sub_<addr>` or
             // `func_<addr>` (the architecture's name style).
-            return fc.fspec_printed_name(fd.get_arch().kuna_name_style());
+            return fc.fspec_printed_name(fd.get_arch().unlace_name_style());
         }
         // No call spec (should not happen for a live CALL): print the in0 address.
         crate::printc::generic_function_name(
@@ -12072,7 +12094,7 @@ impl PrintC {
             None => return,
         };
         if let Some(name) = arch
-            .kuna_options
+            .unlace_options
             .get::<crate::printc::ImportData>()
             .0
             .then(|| import_slot_name(fd, ptr))
@@ -12100,7 +12122,7 @@ impl PrintC {
         self.push_vn_ir_m(fd, arch, ptr, op, m);
     }
 
-    /// (kuna `postinc`) `*ptr++` for a LOAD or STORE `kuna_postinc` marked.
+    /// (unlace `postinc`) `*ptr++` for a LOAD or STORE `unlace_postinc` marked.
     fn push_post_increment(
         &mut self,
         fd: &Funcdata,
@@ -12111,7 +12133,7 @@ impl PrintC {
         let marked = fd
             .obank()
             .get(op)
-            .is_some_and(|o| o.get_addlflags() & crate::op::pcodeop_addlflags::kuna_postinc != 0);
+            .is_some_and(|o| o.get_addlflags() & crate::op::pcodeop_addlflags::unlace_postinc != 0);
         if !marked {
             return false;
         }
@@ -12518,7 +12540,7 @@ impl PrintC {
             return None;
         }
         let high = value.get_high()?;
-        if fd.high_bank().get(high)?.kuna_global() {
+        if fd.high_bank().get(high)?.unlace_global() {
             return None;
         }
         let (_, _, _, _, declared) = self.rendered_local_decl(fd, arch, high);
@@ -12964,7 +12986,7 @@ impl PrintC {
         if printval {
             self.push_op(&tokens::SUBSCRIPT, Some(op_key(op)));
         } else if self.options.array_notation() {
-            // (kuna) S9 pointer-notation sub-stage: EMIT &base[index].
+            // (unlace) S9 pointer-notation sub-stage: EMIT &base[index].
             let tok = if raw_address {
                 &crate::rustarrayaddr::RAW_ADDRESS
             } else {
@@ -13000,10 +13022,10 @@ impl PrintC {
     /// `glob.intfield` / `val.c` / `globvar.b.bval1` and the array-element render
     /// `v1.arr[i]` for a struct field that is an array).
     ///
-    /// Reconciled with the kuna naming layer: the base symbol name comes from the
-    /// HighVariable's `kuna_name` binding (the `pushSymbol(sym,vn,op)` stand-in,
+    /// Reconciled with the unlace naming layer: the base symbol name comes from the
+    /// HighVariable's `unlace_name` binding (the `pushSymbol(sym,vn,op)` stand-in,
     /// printc.cc:2127) rather than a `Symbol *`; the walked data-type is the
-    /// `kuna_symbol_type` (the `sym->getType()` stand-in, printc.cc:2030).  The
+    /// `unlace_symbol_type` (the `sym->getType()` stand-in, printc.cc:2030).  The
     /// UNION `findTruncation` (type.cc:2613-2627) reads the Funcdata union
     /// resolution cache via [`Funcdata::get_union_field`]; the STRUCT
     /// `findTruncation` (type.cc:1878) walks the field table
@@ -13073,7 +13095,7 @@ impl PrintC {
         // arm when the trailing truncation is a SUBPIECE-style cast (`(undefined1)
         // v1.flagfield`); rendered as a leading `(cast)` before the member tokens.
         let mut finalcast: Option<std::rc::Rc<crate::dtype::Datatype>> = None;
-        // (kuna `partialaccess`) The type an artificial `._<off>_<sz>_` member was
+        // (unlace `partialaccess`) The type an artificial `._<off>_<sz>_` member was
         // taken out of.
         let mut unnamed_in: Option<std::rc::Rc<crate::dtype::Datatype>> = None;
         let volatile_annotation = fd
@@ -13083,7 +13105,7 @@ impl PrintC {
         let facing_type = crate::aggregatefields::edge_type(fd, vn, op, slot);
 
         while let Some(cur) = ct.clone() {
-            // (kuna arraycoverwidth) The upstream whole-symbol break exits the
+            // (unlace arraycoverwidth) The upstream whole-symbol break exits the
             // walk before the ARRAY arm can see a cover that spans more than one
             // element, so a 16-byte `movaps` transfer through a `char v30[16]`
             // bank left the caller to render `v30[0]` -- a one-byte lvalue for a
@@ -13416,7 +13438,7 @@ impl PrintC {
                 }
             }
         }
-        // The base name (the kuna_name stand-in for pushSymbol).
+        // The base name (the unlace_name stand-in for pushSymbol).
         self.push_atom(&Atom::with_op_vn(
             name.to_string(),
             TagType::VarToken,
@@ -13481,7 +13503,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `partialaccess`) The member walk `push_vn_explicit_ir` gives `vn`
+    /// (unlace `partialaccess`) The member walk `push_vn_explicit_ir` gives `vn`
     /// when it prints as part of a mapped Symbol, with the Symbol's name.
     fn piece_walk(
         &self,
@@ -13594,13 +13616,13 @@ impl PrintC {
         }
     }
 
-    /// (kuna `partialaccess`) A plain store or copy of a width C has no scalar
+    /// (unlace `partialaccess`) A plain store or copy of a width C has no scalar
     /// for, into bytes no member names, as `memset`/`memcpy` of exactly those
     /// bytes. The source is a constant whose bytes are all equal, the same kind
     /// of piece, or a variable; a whole array variable takes a copy out of such a
     /// piece the same way. Anything else (an intrinsic, an expression) declines
     /// and the statement keeps its assignment.
-    /// (kuna `partialaccess`) `v = CONCAT44(((T *)&v)[1], x)` as the store it is,
+    /// (unlace `partialaccess`) `v = CONCAT44(((T *)&v)[1], x)` as the store it is,
     /// `*(T *)&v = x` ([`crate::halfstore`]).
     fn emit_half_store(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
         if !self.options.partial_access || self.out_lang != crate::lang::OutLang::C {
@@ -13725,7 +13747,7 @@ impl PrintC {
         true
     }
 
-    /// (kuna `partialaccess`) The address of the bytes a walk ends in an
+    /// (unlace `partialaccess`) The address of the bytes a walk ends in an
     /// artificial member for: `&v` at offset 0, `&buf[off]` in a byte array,
     /// `(char *)&v + off` otherwise.
     fn push_piece_address(
@@ -13769,7 +13791,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `partialaccess`) Open the cast to the pointer an access reads
+    /// (unlace `partialaccess`) Open the cast to the pointer an access reads
     /// through.
     fn push_pointee_cast_open(&mut self, pointee: &crate::partialaccess::Pointee, op: OpId) {
         match pointee {
@@ -13789,14 +13811,14 @@ impl PrintC {
         }
     }
 
-    /// (kuna `partialaccess`) Close [`Self::push_pointee_cast_open`].
+    /// (unlace `partialaccess`) Close [`Self::push_pointee_cast_open`].
     fn push_pointee_cast_close(&mut self, pointee: &crate::partialaccess::Pointee) {
         if let crate::partialaccess::Pointee::Typed(ptr) = pointee {
             self.push_cast_close(ptr);
         }
     }
 
-    /// (kuna `partialaccess`) Open the rendering that replaces a
+    /// (unlace `partialaccess`) Open the rendering that replaces a
     /// `._<off>_<size>_` token; the symbol and its member path follow.
     fn push_piece_open(&mut self, p: &crate::partialaccess::Piece, op: OpId) {
         use crate::partialaccess::{Form, Piece};
@@ -13837,7 +13859,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `partialaccess`) Close what [`Self::push_piece_open`] opened.
+    /// (unlace `partialaccess`) Close what [`Self::push_piece_open`] opened.
     fn push_piece_close(&mut self, p: &crate::partialaccess::Piece, op: OpId) {
         use crate::partialaccess::{Form, Piece};
         match p {
@@ -14024,7 +14046,7 @@ impl PrintC {
             return;
         }
 
-        // No containing Symbol: register name, then kuna `dat_<addr>` / `Space<hex>`
+        // No containing Symbol: register name, then unlace `dat_<addr>` / `Space<hex>`
         // (printc.cc:1957-1974).
         let spc = match vaddr.get_space() {
             Some(s) => s,
@@ -14035,8 +14057,8 @@ impl PrintC {
             .get_register_name(spc, vaddr.get_offset(), size);
         let name = if !regname.is_empty() {
             regname
-        } else if kuna_global_naming(spc) {
-            kuna_global_data_name(arch.kuna_name_style(), vaddr.get_offset())
+        } else if unlace_global_naming(spc) {
+            unlace_global_data_name(arch.unlace_name_style(), vaddr.get_offset())
         } else {
             let mut s = String::new();
             let sn = spc.get_name();
@@ -14068,7 +14090,7 @@ impl PrintC {
     /// C++ `PrintLanguage::pushVnExplicit` (printlanguage.cc:218) + the
     /// `PrintC` leaf-naming (`pushVnExplicit`/`pushUnnamedLocation`, printc.cc:
     /// 1900-2017): annotation -> constant -> SymbolEntry -> register name ->
-    /// kuna `dat_<addr>` global -> `Space<hex>` fallback.
+    /// unlace `dat_<addr>` global -> `Space<hex>` fallback.
     #[doc(hidden)]
     pub fn push_vn_explicit_ir(
         &mut self,
@@ -14119,7 +14141,7 @@ impl PrintC {
             // enum's base metatype (TYPE_INT / TYPE_UINT) and, when
             // `ct->isEnumType()`, delegates to `pushEnumConstant` (printc.cc:1822/
             // 1830) — which decomposes the value into the OR of matched flag names.
-            // In kuna an enum carries metatype TYPE_INT/TYPE_UINT plus the
+            // In unlace an enum carries metatype TYPE_INT/TYPE_UINT plus the
             // `enumtype` flag (dtype.rs:5244-5246), exactly as upstream, so the
             // dispatch is the `is_enum_type()` flag check (not a metatype match).
             if ct.is_enum_type() {
@@ -14149,15 +14171,15 @@ impl PrintC {
             // documented LOSS below.
             use crate::dtype::type_metatype::{TYPE_PTR, TYPE_PTRREL};
             if matches!(ct.get_metatype(), TYPE_PTR | TYPE_PTRREL) {
-                // (kuna `elemptr`) A pointer the rule gave `char *` says the bytes
+                // (unlace `elemptr`) A pointer the rule gave `char *` says the bytes
                 // are indexed, never that they end at a zero byte.
                 if !v.is_synthetic_literal()
                     && off != 0
                     && !crate::elemptr::reaches_element_pointer(fd, vn)
                 {
                     if let Some(sub) = ct.get_ptr_to() {
-                        // (kuna `cfstrings`) An entry reads as its string whatever its type,
-                        // and so does a literal (kuna `cstringconst`).
+                        // (unlace `cfstrings`) An entry reads as its string whatever its type,
+                        // and so does a literal (unlace `cstringconst`).
                         let sub = if sub.is_char_print() {
                             Some(sub)
                         } else {
@@ -14173,10 +14195,10 @@ impl PrintC {
                                 .get(op)
                                 .map(|o| o.get_addr().clone())
                                 .unwrap_or_default();
-                            // (kuna `elemptr`) A table indexed by a computed value
+                            // (unlace `elemptr`) A table indexed by a computed value
                             // prints as a literal only when the index cannot run
                             // past it.
-                            let bound = if arch.kuna_options.get::<crate::elemptr::ElemPtr>().0 {
+                            let bound = if arch.unlace_options.get::<crate::elemptr::ElemPtr>().0 {
                                 crate::elemptr::literal_index_bound(fd, op, vn)
                             } else {
                                 None
@@ -14277,7 +14299,7 @@ impl PrintC {
                 }
                 return;
             }
-            // (kuna `cstringconst`) A constant at the start of a literal that a
+            // (unlace `cstringconst`) A constant at the start of a literal that a
             // call takes as an argument its prototype does not declare a scalar
             // reads as the literal.
             if !v.is_synthetic_literal() && self.out_lang == crate::lang::OutLang::C {
@@ -14316,7 +14338,7 @@ impl PrintC {
             return;
         }
         if let Some(name) = arch
-            .kuna_options
+            .unlace_options
             .get::<crate::printc::ImportData>()
             .0
             .then(|| import_slot_address(fd, arch, vn, op))
@@ -14335,7 +14357,7 @@ impl PrintC {
         // HighVariable name resolution (C++ `pushSymbolDetail`: `high->getSymbol()`
         // -> `pushSymbol` -> `sym->getDisplayName()`).  The merged tree binds the
         // angr default name directly on the HighVariable (`ActionNameVars` ->
-        // `HighVariable::kuna_name`; the W4 `Symbol`/ScopeLocal stand-in), so a
+        // `HighVariable::unlace_name`; the W4 `Symbol`/ScopeLocal stand-in), so a
         // named high renders its bound `vN` name here — for *every* member, which
         // is exactly how the C++ renders all instances of a merged local.
         if let Some(high) = v.get_high() {
@@ -14547,7 +14569,7 @@ impl PrintC {
                         if symoff == 0 {
                             format!("_{name}")
                         } else {
-                            match kuna_unnamed_location_name(arch, v.get_addr(), v.get_size()) {
+                            match unlace_unnamed_location_name(arch, v.get_addr(), v.get_size()) {
                                 Some(n) => n,
                                 None => name,
                             }
@@ -14568,14 +14590,14 @@ impl PrintC {
         // No bound name: fall to the register / unnamed-location naming, which is
         // the faithful `pushUnnamedLocation` tail (printc.cc:1957-1974).
         //
-        // (kuna) C++ `PrintC::pushSymbolDetail` renders EVERY member of a
+        // (unlace) C++ `PrintC::pushSymbolDetail` renders EVERY member of a
         // HighVariable through `high->getSymbol()` — one shared name for the whole
         // variable.  A HighVariable that copy-shadow-merges a register/`unique`
         // scratch value with an addr-tied persistent GLOBAL — the `global =
         // COPY(reg)` store folded into the global's high, exactly as upstream's
         // variable-merge does (Ghidra's `goal_width` phi has all-register-EAX inputs
         // that every carry `hv=goal_width`) — therefore renders as the GLOBAL at
-        // every member, never as the raw register.  kuna instead renders an unnamed
+        // every member, never as the raw register.  unlace instead renders an unnamed
         // location from the *member's own* address, so a register/`unique` member of
         // such a mixed high would leak a stray `EAX` / `Unique<hex>`.  Mirror the C++
         // `getSymbol()` behavior: resolve the member to its high's canonical global
@@ -14590,7 +14612,7 @@ impl PrintC {
                     arch.translate()
                         .get_register_name(s, a.get_offset(), sz)
                         .is_empty()
-                        && kuna_global_naming(s)
+                        && unlace_global_naming(s)
                 }
                 None => false,
             }
@@ -14631,10 +14653,10 @@ impl PrintC {
             }
         }
         let name = match if stack_pointer_storage {
-            kuna_storage_location_name(&loc)
+            unlace_storage_location_name(&loc)
         } else {
             global_overlap_name(fd, &loc, size)
-                .or_else(|| kuna_unnamed_location_name(arch, &loc, size))
+                .or_else(|| unlace_unnamed_location_name(arch, &loc, size))
         } {
             Some(n) => n,
             None => return,
@@ -14712,7 +14734,7 @@ impl PrintC {
                 return;
             }
         }
-        let name = loc.and_then(|loc| kuna_unnamed_location_name(arch, &loc, ptr_size));
+        let name = loc.and_then(|loc| unlace_unnamed_location_name(arch, &loc, ptr_size));
         let name = match name {
             Some(n) => n,
             None => {
@@ -14805,17 +14827,17 @@ impl PrintC {
         })
     }
 
-    /// (kuna `globalref`) `&dat_<addr>`: the address of the global a constant
+    /// (unlace `globalref`) `&dat_<addr>`: the address of the global a constant
     /// pointer names, in place of the `(T *)0x<addr>` cast.
     fn push_global_ref_ir(&mut self, arch: &Architecture, addr: u64, op: OpId, vn: VarnodeId) {
-        // (kuna `elemptr`) An array's name is already the address of its first
+        // (unlace `elemptr`) An array's name is already the address of its first
         // element, of exactly the pointer type the constant had.
         if !self.globalref.is_array(addr) {
             let tok = self.lang_token(&tokens::ADDRESSOF);
             self.push_op(tok, Some(op_key(op)));
         }
         self.push_atom(&Atom::with_op_vn(
-            kuna_global_data_name(arch.kuna_name_style(), addr),
+            unlace_global_data_name(arch.unlace_name_style(), addr),
             TagType::VarToken,
             crate::printlanguage::SyntaxHighlight::special_color,
             op_key(op),
@@ -14823,7 +14845,7 @@ impl PrintC {
         ));
     }
 
-    /// (kuna `globalref`) The plan of the last function printed: the globals it
+    /// (unlace `globalref`) The plan of the last function printed: the globals it
     /// names by address and the unnamed data it reads directly.
     pub fn named_global_references(&self) -> &crate::namedglobals::References {
         &self.named_globals
@@ -15091,9 +15113,9 @@ impl PrintC {
             // `PTRSUB(spacebase, off)` is a `&symbol` reference into a stack/global
             // frame.  `ActionNameVars::linkSpacebaseSymbol` decoded the reference
             // and parked the Symbol on the offset constant's HighVariable
-            // (`Funcdata::link_symbol_reference` -> `kuna_name`/`symbol_offset`/
-            // `kuna_symbol_type`), so this reads it back here.
-            // The kuna stand-in: read the reference triple off in1's high.
+            // (`Funcdata::link_symbol_reference` -> `unlace_name`/`symbol_offset`/
+            // `unlace_symbol_type`), so this reads it back here.
+            // The unlace stand-in: read the reference triple off in1's high.
             let in1 = fd.obank().get(op).and_then(|o| o.get_in(1));
             let (sym_name, sym_off, sym_type) = match in1
                 .and_then(|v| fd.vbank().get(v))
@@ -15107,7 +15129,7 @@ impl PrintC {
             };
 
             // C++ `opPtrsub` reaches a Symbol here whenever `linkSpacebaseSymbol`
-            // attached one, and takes the `symbol == 0` arm otherwise.  In the kuna
+            // attached one, and takes the `symbol == 0` arm otherwise.  In the unlace
             // model `link_symbol_reference` deliberately attaches ONLY a
             // defined-named Symbol (the mapped stack/global vars; an undefined-named
             // auto-local, or a frame whose spacebase could not be tracked to a
@@ -15138,13 +15160,13 @@ impl PrintC {
                 }
             }
 
-            // Readonly char-array string-literal coexistence (the kuna analog of
+            // Readonly char-array string-literal coexistence (the unlace analog of
             // C++ `PrintC::pushConstant`'s TYPE_PTR -> `pushPtrCharConstant` arm,
             // printc.cc:1842-1880).  In upstream Ghidra a constant pointer to a
             // readonly char-printable object renders as the quoted literal even
             // when a data Symbol covers the address — the constant reaches
             // `pushConstant` and short-circuits to `pushPtrCharConstant` BEFORE any
-            // symbol-name render.  kuna's analysis tier (StringLiteralPass /
+            // symbol-name render.  unlace's analysis tier (StringLiteralPass /
             // ActionMapGlobals) instead promotes the same constant into a global
             // SPACEBASE `PTRSUB(spacebase, 0xADDR)` reference whose bound Symbol is
             // the planted `char[N]`, so the value arrives at THIS arm rather than
@@ -15160,7 +15182,7 @@ impl PrintC {
             // with a readonly char-array spacebase symbol.
             if sym_off == 0 && !arrayvalue {
                 if let Some(st) = &sym_type {
-                    // (kuna `cfstrings`) A `__cfstring` entry reads as its string.
+                    // (unlace `cfstrings`) A `__cfstring` entry reads as its string.
                     let cfstr = if valueon {
                         None
                     } else {
@@ -15337,7 +15359,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna indirectargs) Is `vn` the ABI pointer input of a parameter printed
+    /// (unlace indirectargs) Is `vn` the ABI pointer input of a parameter printed
     /// as its value, so that `&name` stands for it and `name` for its target?
     fn is_value_indirect_input(&self, fd: &Funcdata, vn: VarnodeId) -> bool {
         self.out_lang == crate::lang::OutLang::C
@@ -15396,7 +15418,7 @@ impl PrintC {
     /// data-type display-format override (that is the type layer); the default
     /// `val<=10 -> dec` rule reproduces the oracle's `10` rendering.
     ///
-    /// (kuna) The persistent integer-format force mods (`option integerformat
+    /// (unlace) The persistent integer-format force mods (`option integerformat
     /// dec`/`hex`, printlanguage.cc:705) are honored here so a bare IR constant
     /// follows the same forced-format rule the C++ `push_integer` reads from the
     /// modifier stack (printc.cc:1397-1404).  Without this the `integerformat
@@ -15553,7 +15575,7 @@ impl PrintC {
     /// The format, sign and suffixes the integer path of
     /// [`push_vn_explicit_ir`](Self::push_vn_explicit_ir) prints the constant `vn`
     /// with, whose read-facing type is `ct`.
-    /// (kuna `signeddec`) Print the signed integer constant `val` (`sz` bytes) that `op` reads in
+    /// (unlace `signeddec`) Print the signed integer constant `val` (`sz` bytes) that `op` reads in
     /// decimal when the option is on and no symbol or type fixes its format.
     fn signed_decimal(
         &self,
@@ -15566,7 +15588,7 @@ impl PrintC {
     ) {
         if lit.sign
             && lit.display_fmt == display_format::NONE
-            && arch.kuna_options.get::<crate::signeddec::SignedDec>().0
+            && arch.unlace_options.get::<crate::signeddec::SignedDec>().0
             && crate::signeddec::decimal(fd, op, val, sz)
         {
             lit.display_fmt = display_format::FORCE_DEC;
@@ -15600,7 +15622,7 @@ impl PrintC {
         // `CastStrategy::markExplicitUnsigned`/`markExplicitLongSize` during
         // ActionSetCasts; without threading them here the `(val & 1U)` /
         // `<long>L` literals lose their suffix.
-        // (kuna outlang) The `U`/`L`/`LL` suffixes are C's way of pinning a
+        // (unlace outlang) The `U`/`L`/`LL` suffixes are C's way of pinning a
         // literal's type in an expression. A language that infers the literal
         // type has no spelling for them, and inventing one (Rust `u32`) would
         // assert a width this site does not know. Suppressed, not translated.
@@ -15632,7 +15654,7 @@ impl PrintC {
         }
     }
 
-    /// (kuna `castternary`) The token the constant `vn` prints as where `op`
+    /// (unlace `castternary`) The token the constant `vn` prints as where `op`
     /// reads it, when it takes the integer path of
     /// [`push_vn_explicit_ir`](Self::push_vn_explicit_ir).
     fn integer_constant_token(
@@ -15692,7 +15714,7 @@ impl PrintC {
         // `doEmitWideCharPrefix()` (always true for PrintC) AND `sz > 1`.  The
         // earlier port passed `false` here, dropping the `L` from a size>1
         // force_char constant (e.g. the convert `L'a'` equate on a size-4 char).
-        // (kuna outlang) A language whose character type is not an integer of the
+        // (unlace outlang) A language whose character type is not an integer of the
         // declared width cannot spell every FORCE_CHAR constant. Rust's `char` is
         // a 4-byte Unicode scalar with a validity invariant and has no `'\xff'`;
         // its byte literal `b'a'` covers the 1-byte printable cases and the rest
@@ -15785,17 +15807,17 @@ impl PrintC {
             self.push_constant_ir_fmt_sign(val, ct.get_size(), op, display_fmt, is_signed);
             return;
         }
-        // (kuna `charnum`) A zero or non-printable byte ordered against a value or used in
+        // (unlace `charnum`) A zero or non-printable byte ordered against a value or used in
         // arithmetic prints as a number.
         if ct.get_size() == 1
             && display_fmt == display_format::NONE
-            && arch.kuna_options.get::<crate::charnum::CharNum>().0
+            && arch.unlace_options.get::<crate::charnum::CharNum>().0
             && crate::charnum::as_number(fd, op, val)
         {
             self.push_constant_ir_fmt_sign(val, 1, op, display_format::NONE, is_signed);
             return;
         }
-        // (kuna) `'\xc8'` is -56 or 200 by the sign of the target's `char`, so a
+        // (unlace) `'\xc8'` is -56 or 200 by the sign of the target's `char`, so a
         // `signed char` or `unsigned char` byte above 0x7f prints as a number, as
         // does a byte compared with one. Rust's `b'a'` is a `u8`, so a `signed
         // char` (`i8`) byte prints as a number there too.
@@ -15830,7 +15852,7 @@ impl PrintC {
     /// through `glb->translate->getFloatFormat(sz)`
     /// ([`FloatFormat::get_host_float`]/`extract_sign`/`print_decimal`) and emits
     /// the `INFINITY`/`NAN`/decimal token via [`format_float_token`].  When there
-    /// is no `FloatFormat` for the size, the token is `FLOAT_UNKNOWN`.  (kuna) A
+    /// is no `FloatFormat` for the size, the token is `FLOAT_UNKNOWN`.  (unlace) A
     /// finite 4-byte constant in C output takes an `f` suffix where `float` is
     /// 4 bytes, since an unsuffixed literal is a `double`, and a 2-byte
     /// (binary16) constant takes `f16`.
@@ -15944,7 +15966,7 @@ impl PrintC {
         if !printed {
             return false;
         }
-        // (kuna `elemptr`) `indexed` is `Some(bound)` for the base of an access
+        // (unlace `elemptr`) `indexed` is `Some(bound)` for the base of an access
         // indexed by a computed value, `bound` the largest index it can take when
         // something bounds it. The literal holds `chars_emitted` characters and
         // its NUL; an index that can reach past them -- or that nothing bounds --
@@ -15955,7 +15977,7 @@ impl PrintC {
                 return false;
             }
         }
-        // (kuna emptystrconst) A zero-character literal names no byte of the
+        // (unlace emptystrconst) A zero-character literal names no byte of the
         // image, so it is strictly less informative than the address it would
         // displace -- unless the bytes there really are string data, which is
         // what a genuine `""` looks like.  Read the neighbourhood and let the
@@ -15989,7 +16011,7 @@ impl PrintC {
             s = crate::cfstr::wrap(
                 &s,
                 stringaddr.get_offset(),
-                arch.kuna_options
+                arch.unlace_options
                     .get::<crate::analysisgates::CfStrings>()
                     .annotate,
             );
@@ -16108,7 +16130,7 @@ impl PrintC {
     }
 }
 
-/// (kuna `fatstr`) The text of a NUL-free `char[N]` data symbol starting at
+/// (unlace `fatstr`) The text of a NUL-free `char[N]` data symbol starting at
 /// `addr`: a length-bounded `(ptr, len)` literal, which runs straight into the
 /// next one, so reading to a NUL would glue them (and a NUL-terminated read
 /// that reaches one ends there).
@@ -16270,7 +16292,7 @@ fn declaration_occupied_names(
     names: impl IntoIterator<Item = String>,
 ) -> Vec<String> {
     let mut names: Vec<String> = names.into_iter().collect();
-    let name_style = fd.get_arch().kuna_name_style();
+    let name_style = fd.get_arch().unlace_name_style();
     names.extend((0..fd.num_calls()).filter_map(|index| {
         let call = fd.get_call_specs(index);
         if !call.get_name().is_empty() {
@@ -16297,13 +16319,13 @@ fn sblocks_basic_head(fd: &Funcdata, bb: BlockId) -> Option<OpId> {
 }
 
 /// Tail op of an sblocks-arena basic block.
-/// (kuna `voidtailreturn`) The function's own trailing bare `return;`, when it is
+/// (unlace `voidtailreturn`) The function's own trailing bare `return;`, when it is
 /// safe to elide.
 ///
-/// kuna (faithfully to Ghidra) always prints the final RETURN, so a void function
+/// unlace (faithfully to Ghidra) always prints the final RETURN, so a void function
 /// ends `... }\n  return;\n}`.  The C source it was compiled from has no `return`
 /// there at all -- it falls off the end -- and pyjoern's CFG for the source
-/// therefore has no node for it, while kuna's printed statement re-materialises
+/// therefore has no node for it, while unlace's printed statement re-materialises
 /// one: +1 node, +1..2 edges, and an `is_exitpoint` role flip that alone breaks
 /// GED's isomorphism test.  It is also simply redundant C.
 ///
@@ -16359,9 +16381,9 @@ fn elidable_void_tail_return(fd: &Funcdata) -> Option<OpId> {
     if op.code() != OpCode::CPUI_RETURN || op.num_input() > 1 || op.not_printed() {
         return None;
     }
-    // (kuna decodehalt) A decode-failure halt is a `RETURN` with one input, so it
+    // (unlace decodehalt) A decode-failure halt is a `RETURN` with one input, so it
     // matches the shape above -- but it is not the source's trailing fall-off, it
-    // is the marker for flow kuna could not follow, and eliding it deletes the
+    // is the marker for flow unlace could not follow, and eliding it deletes the
     // only statement that says so.  Only the halt causes the rendering names are
     // kept; a `noreturn` halt keeps whatever `voidtailreturn` already did with it.
     if crate::decodehalt::halt_call_name(op.get_halt_type()).is_some() {
@@ -16417,7 +16439,7 @@ fn elidable_void_tail_return(fd: &Funcdata) -> Option<OpId> {
     Some(tail)
 }
 
-/// (kuna `voidtailreturn`) The last printed op of a structured LEAF, resolving a
+/// (unlace `voidtailreturn`) The last printed op of a structured LEAF, resolving a
 /// `BlockCopy` mirror through to the bblocks basic block it stands for.
 ///
 /// `emit_block_copy` emits its ops via `emit_basic_block_ops(.., under, true)`,
@@ -16492,7 +16514,11 @@ fn ptrsub_resolves(ptype: &crate::dtype::Datatype) -> bool {
 /// `struct_N *`), which cannot name the member.
 fn high_pointer_type(fd: &Funcdata, vn: VarnodeId) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     let high = fd.vbank().get(vn)?.get_high()?;
-    if let Some(t) = fd.high_bank().get(high).and_then(|h| h.kuna_symbol_type()) {
+    if let Some(t) = fd
+        .high_bank()
+        .get(high)
+        .and_then(|h| h.unlace_symbol_type())
+    {
         return Some(std::rc::Rc::clone(t));
     }
     let rep = crate::declhightype::type_representative(fd, high)?;
@@ -16501,7 +16527,7 @@ fn high_pointer_type(fd: &Funcdata, vn: VarnodeId) -> Option<std::rc::Rc<crate::
         .map(|v| std::rc::Rc::clone(v.get_type()))
 }
 
-/// (kuna) The declarator a Symbol-keyed collapse imposes on the surviving
+/// (unlace) The declarator a Symbol-keyed collapse imposes on the surviving
 /// declaration: the final type text, its post-name declarator suffix, the
 /// `(base-type, count)` array adornment (`None` for a scalar), and the datatype
 /// they spell.  Same shape as `rendered_local_decl`'s returns less the comment.
@@ -16512,7 +16538,7 @@ type DeclTypeOverride = (
     Option<std::rc::Rc<crate::dtype::Datatype>>,
 );
 
-/// (kuna) The declaration *representative* Varnode of a local high: the addr-tied
+/// (unlace) The declaration *representative* Varnode of a local high: the addr-tied
 /// (mapped, in-scope) storage member - the C++ symbol's `getFirstWholeMap()`
 /// storage - else instance 0.  Shared by the type-name/comment path and the
 /// array-declarator fallback (GH-9184) so both anchor on the same Varnode.
@@ -16532,7 +16558,7 @@ fn decl_rep_varnode(
         .or_else(|| (0..h.num_instances()).map(|i| h.get_instance(i)).next())
 }
 
-/// (kuna) If `ct` is a `TYPE_ARRAY`, the `(base_type_name, count)` pair that
+/// (unlace) If `ct` is a `TYPE_ARRAY`, the `(base_type_name, count)` pair that
 /// declares it `<base> name [count]` (C++ `emitVarDecl`'s array branch, where the
 /// declared type is the *element* type and the count adorns the identifier).  The
 /// base name is the element's [`type_name_for_decl`] halves, resolved with the
@@ -16572,7 +16598,7 @@ pub fn declarator_parts(
     rt.speller().declarator(&rt, ct)
 }
 
-/// (kuna) The full type string for `ct` with no identifier, rendered exactly as
+/// (unlace) The full type string for `ct` with no identifier, rendered exactly as
 /// the decompiler would print it — e.g. `int`, `char *`, `undefined8`, `int [16]`
 /// in C; `i32`, `*mut u8`, `u64`, `[i32; 16]` in Rust.
 ///
@@ -16591,7 +16617,7 @@ pub fn type_to_c_string(arch: &Architecture, ct: &std::rc::Rc<crate::dtype::Data
     format!("{front}{back}")
 }
 
-/// (kuna) One local declaration the printer emitted: the HighVariable it
+/// (unlace) One local declaration the printer emitted: the HighVariable it
 /// declares, the name the naming pass gave it, the name it was printed under
 /// (suffixed when it collided with another identifier), its declarator with
 /// the name taken out (`char [16]`, `S *`), and the datatype that declarator
@@ -16606,14 +16632,14 @@ pub struct DeclaredLocal {
 }
 
 // ===========================================================================
-// (kuna) `doc_type_definitions` rendering helpers — the pure per-type body
+// (unlace) `doc_type_definitions` rendering helpers — the pure per-type body
 // renderers behind the `docTypeDefinitions` port (see
 // `PrintC::doc_type_definitions` for the emission shape + divergences).  All
 // take an explicit `RealTypeCtx` and hand-built `Datatype`s so they unit-test
 // without an `Architecture`.
 // ===========================================================================
 
-/// (kuna) Rewrite `name` into a valid C identifier: every character outside
+/// (unlace) Rewrite `name` into a valid C identifier: every character outside
 /// `[A-Za-z0-9_]` becomes `_`, and a leading digit gains a `_` prefix.
 /// Borrowed unchanged when already valid (the caller emits a
 /// `/* renamed from "…" */` comment when it changed).
@@ -16652,7 +16678,7 @@ pub fn c_type_definition_name(ct: &crate::dtype::Datatype) -> Option<std::borrow
     .then(|| sanitize_type_name(ct.get_name()))
 }
 
-/// (kuna, GH-340) Make `raw` safe to interpolate into a `/* … */` comment.
+/// (unlace, GH-340) Make `raw` safe to interpolate into a `/* … */` comment.
 ///
 /// The `/* renamed from "<raw>" */` note prints the type name a binary actually
 /// carried, and that string is unvalidated binary data: a `*/` in it closes the
@@ -16682,7 +16708,7 @@ fn comment_safe(raw: &str) -> std::borrow::Cow<'_, str> {
     std::borrow::Cow::Owned(out)
 }
 
-/// (kuna `globalref`) `T name` for a global of type `ct`, via the same
+/// (unlace `globalref`) `T name` for a global of type `ct`, via the same
 /// declarator builder a structure member uses.
 pub fn declaration_text(
     ct: &std::rc::Rc<crate::dtype::Datatype>,
@@ -16692,12 +16718,12 @@ pub fn declaration_text(
     field_decl_text(ct, name, rt.clone())
 }
 
-/// (kuna `globalref`) The name the printer gives the unnamed global at `addr`.
+/// (unlace `globalref`) The name the printer gives the unnamed global at `addr`.
 pub fn global_data_name(arch: &Architecture, addr: u64) -> String {
-    kuna_global_data_name(arch.kuna_name_style(), addr)
+    unlace_global_data_name(arch.unlace_name_style(), addr)
 }
 
-/// (kuna) One member declaration `<front><name><back>` via the C-declarator
+/// (unlace) One member declaration `<front><name><back>` via the C-declarator
 /// builder [`declarator_parts`] — the same front/name spacing rule the emit
 /// loop uses (`a `*` front glues to the identifier with no space).
 fn field_decl_text(
@@ -16714,7 +16740,7 @@ fn field_decl_text(
     format!("{front}{sep}{name}{back}")
 }
 
-/// (kuna) The unsigned C integer spelling for a byte size (the empty-enum /
+/// (unlace) The unsigned C integer spelling for a byte size (the empty-enum /
 /// fallback scalar spelling; 8 covers any larger size best-effort).
 fn unsigned_c_int_of_size(size: int4) -> &'static str {
     match size {
@@ -16725,7 +16751,7 @@ fn unsigned_c_int_of_size(size: int4) -> &'static str {
     }
 }
 
-/// (kuna) Render ONE complete composite (struct/union) body definition —
+/// (unlace) Render ONE complete composite (struct/union) body definition —
 /// `struct <name> { … };` — as a pure function of the data-type.
 ///
 /// Struct field-offset gaps and trailing padding (vs `get_size()`) become
@@ -16797,7 +16823,7 @@ pub fn compose_type_body(
     out
 }
 
-/// (kuna) Render ONE enum definition — `typedef enum <name> { A = <v>, … }
+/// (unlace) Render ONE enum definition — `typedef enum <name> { A = <v>, … }
 /// <name>;` — from the `TypeEnum` namemap.  A `TYPE_INT`-facing enum (the
 /// decode-time `TYPE_ENUM_INT` form) prints signed decimal values
 /// (sign-extended by the enum's byte size); the `TYPE_UINT` form prints hex.
@@ -16836,7 +16862,7 @@ pub fn compose_enum_body(ct: &std::rc::Rc<crate::dtype::Datatype>, name: &str) -
     out
 }
 
-/// (kuna) Render ONE typedef — `typedef <declarator around name>;` — of the
+/// (unlace) Render ONE typedef — `typedef <declarator around name>;` — of the
 /// typedef's immediate base type (`get_typedef()`), via the C-declarator
 /// builder (so `typedef char *mystr;` and array typedefs lay out correctly).
 #[doc(hidden)]
@@ -16851,7 +16877,7 @@ pub fn compose_typedef_line(
     )
 }
 
-/// (kuna) The full `docTypeDefinitions` walk over an already
+/// (unlace) The full `docTypeDefinitions` walk over an already
 /// dependency-ordered type list (see
 /// [`PrintC::doc_type_definitions`](PrintC::doc_type_definitions) for the
 /// shape + divergence notes): pass 1 emits the struct/union forward-declaration
@@ -16976,7 +17002,7 @@ fn type_name_for_decl(
     rt.speller().type_name(&rt, t)
 }
 
-/// (kuna) The per-document type-rendering context.
+/// (unlace) The per-document type-rendering context.
 ///
 /// An alias for [`crate::langtypes::SpellCtx`], which is where it moved when
 /// the output-language seam landed: it now also carries the output language, so
@@ -17005,19 +17031,19 @@ impl RealTypeCtx {
     pub fn from_arch(arch: &Architecture, lang: crate::lang::OutLang) -> RealTypeCtx {
         RealTypeCtx {
             lang,
-            enabled: arch.kuna_options.get::<crate::printc::Realtypes>().0,
+            enabled: arch.unlace_options.get::<crate::printc::Realtypes>().0,
             long_is_8: arch.types().get_size_of_long() == 8,
-            ctypes: arch.kuna_options.get::<crate::coreoptions::CTypes>().0,
+            ctypes: arch.unlace_options.get::<crate::coreoptions::CTypes>().0,
             model: crate::ctypes::CDataModel::from_types(&*arch.types()),
             c_type_definition: false,
             cpp_short_names: arch
-                .kuna_options
+                .unlace_options
                 .get::<crate::cppshortnames::CppShortNames>()
                 .0,
             go_package: None,
             go_pair_types: (lang == crate::lang::OutLang::Go
                 && arch
-                    .kuna_options
+                    .unlace_options
                     .get::<crate::analysisgates::Godwarfsig>()
                     .0)
                 .then(|| arch.types_rc()),
@@ -17025,7 +17051,7 @@ impl RealTypeCtx {
     }
 }
 
-/// (kuna perf) The named highs of one function grouped by name, each group in
+/// (unlace perf) The named highs of one function grouped by name, each group in
 /// the bank's own order and built on the first search, so a declaration's
 /// search for a same-named sibling visits only that name's highs instead of
 /// every high of the function.
@@ -17051,7 +17077,7 @@ impl<'a> SameNamed<'a> {
                 Vec<crate::context::HighVariableId>,
             > = std::collections::HashMap::new();
             for (id, h) in self.fd.high_bank().iter() {
-                if let Some(name) = h.kuna_name() {
+                if let Some(name) = h.unlace_name() {
                     by_name.entry(name).or_default().push(id);
                 }
             }
@@ -17075,9 +17101,9 @@ fn same_named<'a>(
         .filter_map(move |&id| fd.high_bank().get(id).map(|h| (id, h)))
 }
 
-/// STUB A helper — the kuna stand-in for C++ `Symbol::getFirstWholeMap() != entry`
+/// STUB A helper — the unlace stand-in for C++ `Symbol::getFirstWholeMap() != entry`
 /// (printc.cc:2697): is there a *whole-symbol* sibling high (the proto-partial
-/// ROOT) sharing `name` whose `kuna_symbol_offset == -1`?  A register-returned
+/// ROOT) sharing `name` whose `unlace_symbol_offset == -1`?  A register-returned
 /// struct's per-field pieces are all bound to the root's shared name; the root
 /// keeps the `-1` whole-symbol-match offset and is the one entry that declares.
 /// Per-function names are unique (the `vN` allocator), so the only sibling with a
@@ -17089,15 +17115,16 @@ fn high_name_has_whole_sibling(
     except: crate::context::HighVariableId,
     name: &str,
 ) -> bool {
-    same_named(fd, siblings)
-        .any(|(id, h)| id != except && h.kuna_symbol_offset() == -1 && h.kuna_name() == Some(name))
+    same_named(fd, siblings).any(|(id, h)| {
+        id != except && h.unlace_symbol_offset() == -1 && h.unlace_name() == Some(name)
+    })
 }
 
 /// A global's high: a `&symbol` reference resolved through the global scope, or
 /// one with persistent storage.  Never declared in the body, never an owner.
 fn high_is_global(fd: &Funcdata, high: crate::context::HighVariableId) -> bool {
     fd.high_bank().get(high).is_some_and(|h| {
-        h.kuna_global()
+        h.unlace_global()
             || (0..h.num_instances()).any(|i| {
                 fd.vbank()
                     .get(h.get_instance(i))
@@ -17118,7 +17145,7 @@ fn owner_in_group(
     same_named(fd, siblings)
         .find(|(id, h)| {
             *id != except
-                && h.kuna_name() == Some(name)
+                && h.unlace_name() == Some(name)
                 && whole(fd, h)
                 && fd.high_bank().is_same_group(*id, except)
                 && !high_is_global(fd, *id)
@@ -17135,18 +17162,18 @@ fn reference_owner(
     high: crate::context::HighVariableId,
     name: &str,
 ) -> Option<crate::context::HighVariableId> {
-    let sym = fd.high_bank().get(high)?.kuna_ref_symbol()?;
+    let sym = fd.high_bank().get(high)?.unlace_ref_symbol()?;
     same_named(fd, siblings)
         .find(|(id, h)| {
             *id != high
-                && h.kuna_name() == Some(name)
+                && h.unlace_name() == Some(name)
                 && (0..h.num_instances()).any(|i| {
                     fd.vbank()
                         .get(h.get_instance(i))
                         .is_some_and(|v| !v.is_constant())
                 })
                 && !high_is_global(fd, *id)
-                && (h.kuna_link_symbol() == Some(sym)
+                && (h.unlace_link_symbol() == Some(sym)
                     || decl_rep_varnode(fd, *id)
                         .and_then(|vn| fd.vbank().get(vn))
                         .and_then(|v| {
@@ -17161,10 +17188,10 @@ fn reference_owner(
 /// Does `h` cover a whole scalar Symbol: storage at offset 0 of exactly the
 /// mapped type's size (the C++ `getFirstWholeMap()` entry)?
 fn is_scalar_whole(fd: &Funcdata, h: &crate::variable::HighVariable) -> bool {
-    let Some(sym_size) = h.kuna_symbol_type().map(|t| t.get_size()) else {
+    let Some(sym_size) = h.unlace_symbol_type().map(|t| t.get_size()) else {
         return false;
     };
-    h.kuna_symbol_offset() == 0
+    h.unlace_symbol_offset() == 0
         && h.num_instances() > 0
         && fd
             .vbank()
@@ -17185,22 +17212,22 @@ fn high_name_has_scalar_whole_sibling(
     name: &str,
 ) -> bool {
     same_named(fd, siblings)
-        .any(|(id, h)| id != except && h.kuna_name() == Some(name) && is_scalar_whole(fd, h))
+        .any(|(id, h)| id != except && h.unlace_name() == Some(name) && is_scalar_whole(fd, h))
 }
 
-/// Whether `spc` should use the kuna angr-style `dat_<addr>` global naming (a
-/// RAM/data space, not the stack).  (kuna) `kunaAngrNaming` gate, printc.cc:1961.
-fn kuna_global_naming(spc: &std::rc::Rc<unlace_base::space::AddrSpace>) -> bool {
+/// Whether `spc` should use the unlace angr-style `dat_<addr>` global naming (a
+/// RAM/data space, not the stack).  (unlace) `unlaceAngrNaming` gate, printc.cc:1961.
+fn unlace_global_naming(spc: &std::rc::Rc<unlace_base::space::AddrSpace>) -> bool {
     use unlace_base::space::spacetype;
     matches!(spc.get_type(), spacetype::IPTR_PROCESSOR)
 }
 
-/// (kuna) `kunaGlobalDataName(Address)` — `dat_<hex offset>`; ghidra-mode
+/// (unlace) `unlaceGlobalDataName(Address)` — `dat_<hex offset>`; ghidra-mode
 /// (`name_style_ghidra`) prints the Ghidra GUI convention `DAT_%08x` instead
 /// (what Java's `isDynamicSymbolName` recognizes as dynamic).
 #[doc(hidden)]
-pub fn kuna_global_data_name(style: crate::database::KunaNameStyle, off: u64) -> String {
-    if style == crate::database::KunaNameStyle::Ghidra {
+pub fn unlace_global_data_name(style: crate::database::UnlaceNameStyle, off: u64) -> String {
+    if style == crate::database::UnlaceNameStyle::Ghidra {
         return format!("DAT_{off:08x}");
     }
     format!("dat_{off:x}")
@@ -17220,7 +17247,7 @@ fn ptrsub_value_access(fd: &Funcdata, op: OpId, value: bool) -> Option<(VarnodeI
     })
 }
 
-/// (kuna `cfstrings`) The character type a `__cfstring` entry's seeded string is
+/// (unlace `cfstrings`) The character type a `__cfstring` entry's seeded string is
 /// read with, when `val` is the address of one.
 fn cfstring_char(arch: &Architecture, val: uintb) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     if !arch.cfstring_entries.contains(&val) {
@@ -17259,14 +17286,14 @@ fn spacebase_unnamed_address(
 }
 
 /// C++ `PrintC::pushUnnamedLocation` (printc.cc:1957-1974) reduced to its name:
-/// the register name covering `(loc, size)`, else the kuna angr-style
+/// the register name covering `(loc, size)`, else the unlace angr-style
 /// `dat_<addr>` for a data space, else the capitalized `Space<hex>` leaf.
 ///
 /// Shared by the Varnode leaf (`push_symbol_detail_ir`'s tail) and the
 /// symbol-less SPACEBASE arm of [`PrintC::op_ptrsub_ir`], which both need the
 /// same "no Symbol covers this storage" identifier.  `None` only for an
 /// address with no space.
-fn kuna_unnamed_location_name(
+fn unlace_unnamed_location_name(
     arch: &Architecture,
     loc: &unlace_base::address::Address,
     size: int4,
@@ -17278,9 +17305,9 @@ fn kuna_unnamed_location_name(
     if !regname.is_empty() {
         return Some(regname);
     }
-    if kuna_global_naming(spc) {
-        return Some(kuna_global_data_name(
-            arch.kuna_name_style(),
+    if unlace_global_naming(spc) {
+        return Some(unlace_global_data_name(
+            arch.unlace_name_style(),
             loc.get_offset(),
         ));
     }
@@ -17309,7 +17336,7 @@ fn global_overlap_name(
     loc: &unlace_base::address::Address,
     size: int4,
 ) -> Option<String> {
-    if !kuna_global_naming(loc.get_space()?) {
+    if !unlace_global_naming(loc.get_space()?) {
         return None;
     }
     if let Some((_, csize, name)) = fd.global_covers().iter().find(|(a, _, _)| a == loc) {
@@ -17325,7 +17352,7 @@ fn global_overlap_name(
 
 /// Spell an address as storage, without treating a covering register name as a
 /// source-level identifier.
-fn kuna_storage_location_name(loc: &unlace_base::address::Address) -> Option<String> {
+fn unlace_storage_location_name(loc: &unlace_base::address::Address) -> Option<String> {
     let spc = loc.get_space()?;
     let mut s = String::new();
     let sn = spc.get_name();
@@ -17360,7 +17387,7 @@ pub fn vn_key(vn: VarnodeId) -> crate::printlanguage::IrKey {
     vn.data().as_ffi()
 }
 
-/// (kuna) Invert [`op_key`]: reconstruct the `OpId` from the arena key an
+/// (unlace) Invert [`op_key`]: reconstruct the `OpId` from the arena key an
 /// [`Atom`]/[`ReversePolish`] carries and return the op's `get_time()` — the
 /// markup `opref` (C++ `EmitMarkup` derefs the `PcodeOp *` for `getTime()`),
 /// identical to the `<seqnum uniq>` `PcodeOp::encode` writes into the `<ast>`
@@ -17373,7 +17400,7 @@ fn resolve_op_ref(fd: &Funcdata, op_key: Option<crate::printlanguage::IrKey>) ->
     Some(fd.obank().get(op)?.get_time() as uintb)
 }
 
-/// (kuna) Invert [`vn_key`]: reconstruct the `VarnodeId` and return its
+/// (unlace) Invert [`vn_key`]: reconstruct the `VarnodeId` and return its
 /// `get_create_index()` — the markup `varref` (C++ `EmitMarkup` derefs the
 /// `Varnode *` for `getCreateIndex()`), identical to the `<addr ref>`
 /// `Varnode::encode` writes into the `<ast>` `<varnodes>` (varnode.rs:629;
@@ -17416,7 +17443,7 @@ struct IntegerLiteral {
 }
 
 impl IntegerLiteral {
-    /// (kuna `castwiden`) Print the literal with the size suffix of an 8-byte
+    /// (unlace `castwiden`) Print the literal with the size suffix of an 8-byte
     /// integer, `UL` when `unsigned`: `-4UL` is the unsigned value of the bits
     /// `-4` spells, as `(unsigned long)-4` is.
     fn suffix_as_long(&mut self, arch: &Architecture, unsigned: bool) {
@@ -17441,10 +17468,10 @@ impl IntegerLiteral {
 fn cast_strategy_for(arch: &Architecture) -> Option<CastStrategyC> {
     let tlst = arch.types_rc() as std::rc::Rc<dyn crate::dtype::TypeFactory>;
     let c = arch
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::CallTargetType>()
         .0
-        && arch.kuna_options.get::<crate::coreoptions::CTypes>().0
+        && arch.unlace_options.get::<crate::coreoptions::CTypes>().0
         && arch.print().out_lang() == crate::lang::OutLang::C;
     let java = arch.print().out_lang() == crate::lang::OutLang::Java;
     Some(
@@ -17468,7 +17495,7 @@ impl crate::pointerargs::PrintedPointers for PointerView<'_> {
     fn address(&self, high: crate::context::HighVariableId) -> Option<(String, String)> {
         use crate::dtype::type_metatype::{TYPE_ARRAY, TYPE_STRUCT, TYPE_UNION};
         let h = self.fd.high_bank().get(high)?;
-        if h.kuna_symbol_type()
+        if h.unlace_symbol_type()
             .is_some_and(|t| matches!(t.get_metatype(), TYPE_ARRAY | TYPE_STRUCT | TYPE_UNION))
         {
             return None;
@@ -17481,7 +17508,7 @@ impl crate::pointerargs::PrintedPointers for PointerView<'_> {
     }
 }
 
-/// (kuna `castimplied`) The printer's answers to what
+/// (unlace `castimplied`) The printer's answers to what
 /// [`crate::castimplied`] asks about how an op prints.
 struct ImpliedView<'a> {
     pc: &'a PrintC,
@@ -17926,7 +17953,7 @@ mod rustarrayinit;
 mod rustoption_niche;
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.printc_decl_type_representative = Some(decl_type_representative);
     hooks.printc_type_to_c_string = Some(type_to_c_string);
     hooks.printer_new = Some(printer_new);
@@ -17935,8 +17962,8 @@ pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
 
 pub use crate::coreoptions::Realtypes;
 
-crate::kuna_flag!(
-    /// (kuna `voidtailreturn`) Elide the trailing bare `return;` of a void
+crate::unlace_flag!(
+    /// (unlace `voidtailreturn`) Elide the trailing bare `return;` of a void
     /// function -- the one the C source it came from does not have, because the
     /// source just falls off the end of the body.
     ///
@@ -17953,8 +17980,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `importdata`) Render a data read through a loader-marked import slot
+crate::unlace_flag!(
+    /// (unlace `importdata`) Render a data read through a loader-marked import slot
     /// (a GOT / `__got` / `__auth_got` / IAT entry holding an import's address) as
     /// the import itself, instead of a dereference of the anonymous slot. Default
     /// **on**.
@@ -17965,8 +17992,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-crate::kuna_flag!(
-    /// (kuna `avxintrinsics`) Print SLEIGH AVX user-ops as Intel intrinsics.
+crate::unlace_flag!(
+    /// (unlace `avxintrinsics`) Print SLEIGH AVX user-ops as Intel intrinsics.
     AvxIntrinsics,
     "avxintrinsics",
     "Intel intrinsic names for AVX user-ops",
@@ -18019,13 +18046,13 @@ impl crate::printhandle::PrintHandle for PrintC {
     fn set_hide_implied_exts(&mut self, val: bool) {
         PrintC::set_hide_implied_exts(self, val);
     }
-    fn set_max_line_size(&mut self, val: int4) -> KunaResult<()> {
+    fn set_max_line_size(&mut self, val: int4) -> UnlaceResult<()> {
         PrintC::set_max_line_size(self, val)
     }
     fn set_indent_increment(&mut self, val: int4) {
         PrintC::set_indent_increment(self, val);
     }
-    fn set_line_comment_indent(&mut self, val: int4) -> KunaResult<()> {
+    fn set_line_comment_indent(&mut self, val: int4) -> UnlaceResult<()> {
         PrintC::set_line_comment_indent(self, val)
     }
     fn set_comment_style(&mut self, style: &str) {
@@ -18043,7 +18070,7 @@ impl crate::printhandle::PrintHandle for PrintC {
     fn set_instruction_comment_flags(&mut self, flags: uint4) {
         PrintC::set_instruction_comment_flags(self, flags);
     }
-    fn set_integer_format(&mut self, fmt: &str) -> KunaResult<()> {
+    fn set_integer_format(&mut self, fmt: &str) -> UnlaceResult<()> {
         PrintC::set_integer_format(self, fmt)
     }
     fn set_namespace_strategy(&mut self, strategy: NamespaceStrategy) {
@@ -18123,7 +18150,7 @@ mod tests;
 /// How the case labels of a re-rolled lowered switch print: their signedness,
 /// and the cast its selector needs for them to name the values it routes.
 ///
-/// (kuna `loweredswitchexact`) Over a one- or two-byte selector a label with the
+/// (unlace `loweredswitchexact`) Over a one- or two-byte selector a label with the
 /// sign bit set names different values signed and unsigned once C promotes the
 /// selector (`case -0x7f:` never matches an `unsigned char`). The install records
 /// a signedness from the compare tree before any type is inferred, so a selector
@@ -18140,7 +18167,7 @@ fn lowered_switch_label_form(
     let jt = (0..fd.num_jump_tables())
         .map(|i| fd.get_jump_table(i))
         .find(|jt| jt.get_indirect_op() == Some(op))?;
-    jt.kuna_lowered_var()?;
+    jt.unlace_lowered_var()?;
     let sz = fd.vbank().get(fd.obank().get(op)?.get_in(0)?)?.get_size();
     if sz != 1 && sz != 2 {
         return None;
@@ -18157,7 +18184,7 @@ fn lowered_switch_label_form(
             ));
         }
     }
-    let signed = jt.kuna_has_signed_labels();
+    let signed = jt.unlace_has_signed_labels();
     let cast = arch
         .types()
         .get_base_no_char(sz, if signed { TYPE_INT } else { TYPE_UINT })
@@ -18166,7 +18193,7 @@ fn lowered_switch_label_form(
 }
 
 /// The member Varnode whose data-type `local_decl_type_and_comment` writes as a
-/// local high's declaration: the `kuna_declhightype` type representative when
+/// local high's declaration: the `unlace_declhightype` type representative when
 /// the high has no Symbol of its own, else the declaration (storage)
 /// representative.
 #[doc(hidden)]
@@ -18236,10 +18263,10 @@ fn locked_scalar_local_type(
 ) -> Option<std::rc::Rc<crate::dtype::Datatype>> {
     use crate::dtype::type_metatype;
     let h = fd.high_bank().get(high)?;
-    if h.kuna_symbol_offset() > 0 {
+    if h.unlace_symbol_offset() > 0 {
         return None;
     }
-    let ty = if let Some(symbol) = h.kuna_link_symbol() {
+    let ty = if let Some(symbol) = h.unlace_link_symbol() {
         let scope = fd.get_scope_local()?;
         let record = scope.database().symbol(symbol);
         if record.scope != scope.scope_id()
@@ -18250,10 +18277,10 @@ fn locked_scalar_local_type(
         }
         std::rc::Rc::clone(record.dtype.as_ref()?)
     } else {
-        if h.kuna_global() || h.kuna_ref_symbol().is_some() {
+        if h.unlace_global() || h.unlace_ref_symbol().is_some() {
             return None;
         }
-        let ty = h.kuna_symbol_type()?;
+        let ty = h.unlace_symbol_type()?;
         let mut locked = false;
         for index in 0..h.num_instances() {
             let member = fd.vbank().get(h.get_instance(index))?;
@@ -18360,7 +18387,7 @@ fn scaled_index(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
     }
 }
 
-/// (kuna `neonintrin`) The ACLE spelling of the AArch64 NEON user op `op` named
+/// (unlace `neonintrin`) The ACLE spelling of the AArch64 NEON user op `op` named
 /// `name`, and the operands it prints (the element-size immediate dropped).
 fn neon_spelling(
     fd: &Funcdata,
@@ -18368,7 +18395,10 @@ fn neon_spelling(
     op: OpId,
     name: &[u8],
 ) -> Option<(String, Vec<VarnodeId>)> {
-    if !arch.kuna_options.get::<crate::neonintrin::NeonIntrin>().on
+    if !arch
+        .unlace_options
+        .get::<crate::neonintrin::NeonIntrin>()
+        .on
         || !arch.archid.starts_with("AARCH64:")
     {
         return None;

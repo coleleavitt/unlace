@@ -10,13 +10,13 @@
 //!   character-handling switch of `IfaceTerm::readLine` is transcribed,
 //!   including the echo-to-`optr` redraw logic that runs even on a piped
 //!   (non-TTY) stdin — this is the batch path the Python harness
-//!   (`kuna/decompile.py`) drives, so its stdout must stay byte-faithful.
+//!   (`unlace/decompile.py`) drives, so its stdout must stay byte-faithful.
 //!   `doCompletion` (TAB completion) is ported faithfully against the command
 //!   registry.
 //!
 //!   **Documented loss:** the C++ constructor's raw-terminal setup
 //!   (`tcgetattr`/`tcsetattr`, `__TERMINAL__`) that makes a real TTY deliver
-//!   single keystrokes is not reproduced — kuna's binaries are always driven
+//!   single keystrokes is not reproduced — unlace's binaries are always driven
 //!   by a pipe, where the C++ constructor itself takes the `ENOTTY ->
 //!   is_terminal=false; return` branch.  The interactive-only consequence
 //!   (live arrow-key / history editing on a true terminal) is therefore out of

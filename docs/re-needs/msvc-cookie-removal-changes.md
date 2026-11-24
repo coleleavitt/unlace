@@ -159,10 +159,10 @@ Three controls close the adjacent escape hatches:
 2. Set `msvcstackguard off`: both exits retain the raw
    `return sub_140001430(...)` behavior. This proves the opt-out path is
    unchanged.
-3. The stage fixture `tests/stages/kuna-msvcstackguard-return.toml` crosses both
+3. The stage fixture `tests/stages/msvcstackguard-return.toml` crosses both
    options over a two-arm/shared-epilogue caller. Its checker failure tail enters
    a helper containing an ordinary returning CALL before INT 0x29, so the
    generic body probe is deliberately incomplete. Unit negatives additionally
    reject missing/mismatched algebra, duplicate cancels, indirect calls, and
-   live checker outputs; `tests/stages/kuna-calleeretpreserves.toml` retains the
+   live checker outputs; `tests/stages/calleeretpreserves.toml` retains the
    `endbr64; ret` negative and direct/tailcallee `RAX`-writer controls.

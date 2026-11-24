@@ -47,7 +47,7 @@ fn an_impure_getter_observes_the_global_before_the_later_store() {
         ("0x1400", "loop_clear", "0.5f", "1.0f"),
         ("0x1800", "computed", "1.0f", "2.0f"),
     ] {
-        let (code, stderr, status) = common::run_kuna(&[
+        let (code, stderr, status) = common::run_unlace(&[
             "decompile",
             image.to_str().unwrap(),
             entry,
@@ -137,7 +137,7 @@ fn a_vector_copy_captures_both_halves_before_an_aliasing_global_store() {
     bytes[0x100] = 0xc3;
     std::fs::write(&image, bytes).unwrap();
     let specs = common::repo_root().join("specs");
-    let (code, stderr, status) = common::run_kuna(&[
+    let (code, stderr, status) = common::run_unlace(&[
         "decompile",
         image.to_str().unwrap(),
         "0x1000",

@@ -13,7 +13,7 @@ fn an_address_only_scalar_has_the_type_of_its_saved_pointer() {
     // Same handwritten SysV code as the stage case; build a redistributable
     // object directly so the fixture does not depend on compiler stack layout.
     let stage = unlace_stagefile::xml_of_toml(include_str!(
-        "../../../tests/stages/kuna-address-only-local.toml"
+        "../../../tests/stages/address-only-local.toml"
     ))
     .unwrap();
     let hex = stage

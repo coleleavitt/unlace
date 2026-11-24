@@ -49,7 +49,7 @@ fn frame_data_with_views(full_views: bool) -> (Funcdata, Rc<AddrSpace>) {
     manage.set_default_data_space(ram.get_index()).unwrap();
     let mut context = ArchContext::new(manage);
     context
-        .kuna_options
+        .unlace_options
         .set(crate::coreoptions::StackViews(full_views));
     let mut fd = Funcdata::new(
         "early_views",

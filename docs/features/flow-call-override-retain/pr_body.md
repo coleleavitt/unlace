@@ -31,7 +31,7 @@ void chain_entry(void)
 ## The fix
 
 - `call` and `callreturn` overrides now walk the chain the named link starts and
-  plant themselves on the rest of it (`kuna-console/src/retcallchain.rs`).
+  plant themselves on the rest of it (`console/src/retcallchain.rs`).
   Both surfaces run it: the console command and the in-process seed.
 - The test at each `ret` is whether the run that reached it stored that `ret`'s
   **own fall-through address** as a literal. An ordinary epilogue never pushes

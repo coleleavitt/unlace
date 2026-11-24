@@ -20,7 +20,7 @@ fn fixture() -> String {
         .to_string()
 }
 
-fn run_kuna(args: &[&str]) -> (String, String, i32) {
+fn run_unlace(args: &[&str]) -> (String, String, i32) {
     let out = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .output()
@@ -41,7 +41,7 @@ fn rows(text: &str) -> Vec<Vec<String>> {
 
 #[test]
 fn the_scan_finds_every_shape_without_the_reference_walk() {
-    let (out, err, code) = run_kuna(&["crypto", &fixture(), "--no-xrefs"]);
+    let (out, err, code) = run_unlace(&["crypto", &fixture(), "--no-xrefs"]);
     assert_eq!(code, 0, "{err}");
     let rows = rows(&out);
     let at = |addr: &str| {
@@ -72,7 +72,7 @@ fn the_scan_finds_every_shape_without_the_reference_walk() {
 
 #[test]
 fn each_row_names_the_function_that_uses_it() {
-    let (out, err, code) = run_kuna(&["crypto", &fixture()]);
+    let (out, err, code) = run_unlace(&["crypto", &fixture()]);
     assert_eq!(code, 0, "{err}");
     let rows = rows(&out);
     let owner = |addr: &str| {
@@ -95,7 +95,7 @@ fn each_row_names_the_function_that_uses_it() {
 
 #[test]
 fn the_json_document_and_the_filters() {
-    let (out, err, code) = run_kuna(&[
+    let (out, err, code) = run_unlace(&[
         "crypto",
         &fixture(),
         "--json",
@@ -114,7 +114,7 @@ fn the_json_document_and_the_filters() {
     ] {
         assert!(out.contains(key), "missing {key}:\n{out}");
     }
-    let (out, _, code) = run_kuna(&["crypto", &fixture(), "--no-xrefs", "--section", "text"]);
+    let (out, _, code) = run_unlace(&["crypto", &fixture(), "--no-xrefs", "--section", "text"]);
     assert_eq!(code, 0);
     assert!(
         rows(&out)
@@ -122,9 +122,9 @@ fn the_json_document_and_the_filters() {
             .all(|r| r[6] == ".text" && r[3] == "immediate"),
         "{out}"
     );
-    let (_, err, code) = run_kuna(&["crypto", &fixture(), "--no-xrefs", "--section", ".nope"]);
+    let (_, err, code) = run_unlace(&["crypto", &fixture(), "--no-xrefs", "--section", ".nope"]);
     assert_eq!(code, 1);
     assert!(err.contains("no section named"), "{err}");
-    let (_, _, code) = run_kuna(&["crypto"]);
+    let (_, _, code) = run_unlace(&["crypto"]);
     assert_eq!(code, 2);
 }

@@ -1,4 +1,4 @@
-//! (kuna `switchextent`) Where a jump table with no range check ends: at the
+//! (unlace `switchextent`) Where a jump table with no range check ends: at the
 //! next jump table of the function that dispatches through it.
 //!
 //! # The gap

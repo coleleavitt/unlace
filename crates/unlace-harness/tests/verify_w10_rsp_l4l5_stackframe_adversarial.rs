@@ -41,7 +41,7 @@ fn specs_dir_string() -> String {
 }
 
 /// Render a single datatest's `print C` body via the UNLACE_DUMP hook.  Returns the
-/// raw harness output (the `===KUNA_DUMP_BEGIN..MID===` block holds the C body).
+/// raw harness output (the `===UNLACE_DUMP_BEGIN..MID===` block holds the C body).
 fn render_datatest(stem: &str) -> Option<String> {
     if !unlace_slacomp::slacache::sla_path(&x86_64_sla()).is_ok() {
         eprintln!("SKIP: x86-64.sla unavailable (no .slaspec under specs/)");

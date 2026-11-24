@@ -27,9 +27,9 @@ fn call(
         ct: source,
     });
     if withdrawn {
-        fd.kuna_set_callret_withdrawn(key, statement);
+        fd.unlace_set_callret_withdrawn(key, statement);
     } else {
-        fd.kuna_set_callret_type(key, statement);
+        fd.unlace_set_callret_type(key, statement);
     }
     (fd, op)
 }
@@ -172,7 +172,7 @@ fn inconsistent_types_and_recursive_statements_are_ignored() {
     let target = named("uint1", 1, type_metatype::TYPE_UINT);
     let (mut fd, op) = call(source.clone(), target.clone(), false);
     let key = (ram(&fd).get_index(), 0x2000);
-    fd.kuna_set_callret_type(
+    fd.unlace_set_callret_type(
         key,
         Rc::new(StatedReturn {
             addr: Address::new(ram(&fd), 0x400),
@@ -194,7 +194,7 @@ fn inconsistent_types_and_recursive_statements_are_ignored() {
     let entry = fd.get_address().clone();
     let key = (entry.get_space().unwrap().get_index(), entry.get_offset());
     retarget(&mut fd, op, &entry);
-    fd.kuna_set_callret_type(
+    fd.unlace_set_callret_type(
         key,
         Rc::new(StatedReturn {
             addr: Address::new(ram(&fd), 0x400),
@@ -252,14 +252,14 @@ fn computed_untyped_returns_use_the_parameter_recovery_snapshot() {
         passes: Vec::new(),
         callers_vote: false,
     };
-    fd.kuna_set_protoorder_types(&entry, Rc::new(recovered.clone()));
+    fd.unlace_set_protoorder_types(&entry, Rc::new(recovered.clone()));
     assert_eq!(render(&fd, op, "rust", false), "wide_value()");
     recovered.output = Some((
         storage,
         8,
         named("unknown8", 8, type_metatype::TYPE_UNKNOWN),
     ));
-    fd.kuna_set_protoorder_types(&entry, Rc::new(recovered));
+    fd.unlace_set_protoorder_types(&entry, Rc::new(recovered));
     assert_eq!(render(&fd, op, "rust", false), "wide_value() as u8");
     assert_eq!(render(&fd, op, "go", false), "byte(wide_value())");
 }

@@ -25,7 +25,7 @@
   "source_decompiler": "kuna",
   "div": null,
   "default_on": null,
-  "owning_file": "decompiler/crates/kuna-console/src/engine.rs",
+  "owning_file": "decompiler/crates/console/src/engine.rs",
   "owning_function": "ConsoleProgram::function_entries_executable",
   "upstream_anchor": null,
   "spec_chapter": "docs/spec/00-overview.md",
@@ -33,7 +33,7 @@
   "filed_hypothesis": "Batch filtering may prioritize section flags over explicit function declarations.",
   "captain_refutation": "decompile_all.rs resolve_targets builds the list from prog.function_entries_executable(); section executability, not the declaration, decides it.",
   "decisions": [
-    "THE HYPOTHESIS HOLDS, but the filter lives one crate below where the captain pointed. `resolve_targets` (kuna-cli/src/decompile_all.rs:1269) only calls `ConsoleProgram::function_entries_executable` (kuna-console/src/engine.rs), and that is where the section-CODE test is. Fixing it in the engine rather than in the CLI is what makes `decompile-project`, the wasm whole-binary walk and `decompile_graph` honour a declaration too -- all four surfaces derive their target list from that one function.",
+    "THE HYPOTHESIS HOLDS, but the filter lives one crate below where the captain pointed. `resolve_targets` (kuna-cli/src/decompile_all.rs:1269) only calls `ConsoleProgram::function_entries_executable` (console/src/engine.rs), and that is where the section-CODE test is. Fixing it in the engine rather than in the CLI is what makes `decompile-project`, the wasm whole-binary walk and `decompile_graph` honour a declaration too -- all four surfaces derive their target list from that one function.",
     "MEASURED CAUSE: every section of the witness is 0xc0000040 (INITIALIZED_DATA|READ|WRITE) -- .text as much as .NEOpack -- so no entry passes `flags & section_flags::CODE != 0` and the list is empty for the whole image, not just for the declared address. Without the declaration discovery finds 6 import pointer slots and no bodies; with it, `kuna functions` reports 7 and `kuna decompile <bin> entry` emits `void entry(void) { sub_4f7990(); }`. Nothing in the decompiler refuses the address; only the batch target list does.",
     "A NEW `declared_entries` SET, NOT `declared_extents`. Reusing the extent map would have honoured `--define-function 0x4f7001-0x4f700c` and silently dropped the bare `--define-function 0x4f7001`, which asserts exactly the same thing about entry-ness and just leaves the extent natural. `declare_function` writes both, so the console `function bounds` surface gets the same behaviour for free.",
     "NO OPTION, per AGENTS.md and the tooling-track brief: a whole-binary run that drops a function the caller declared and that `kuna decompile` decompiles is wrong output, not a judgement call, and this cannot change emitted C for any binary that passes no declaration. The sweep confirms it: 123 in-repo fixture binaries, 2,973 functions, zero changed bodies.",
@@ -51,8 +51,8 @@
   "parity": "make test PARITY OK 675/675; make test-stages PARITY OK 677/677; make test-cli 75/75; make check-spec OK; kuna catalog --check OK; make rust-test green except the two known environment artifacts recorded below",
   "gate_notes": "make rust-test reported two failures, neither from this change. (1) kuna-cli docs_cli::embedded_docs_match_the_files_on_disk: docs/cli.md was edited while the suite was compiling; re-run alone it passes 23/23. (2) kuna-decomp verify_w10_proto_unlock::w10_proto_unlock_const_return_collapses_no_tied_roundtrip: the repipe launcher exports KUNA_DECOMP_TEST at the worktree's own decomp_test_dbg, so the C++ oracle is kuna and its `unsigned int` reads as drift from the pinned `xunknown4`; `env -u KUNA_DECOMP_TEST cargo test -p kuna-decomp --test verify_w10_proto_unlock` is 4/4 green.",
   "files": [
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_declared_entry_batch.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_declared_entry_batch.rs",
     "decompiler/crates/kuna-cli/src/decompile_all.rs",
     "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.py",
     "decompiler/crates/kuna-analysis/tests/fixtures/pe_datasection_entry_i386.exe",

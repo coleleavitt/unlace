@@ -1,4 +1,4 @@
-//! Unit tests for the (kuna) empty-string-constant sub-stage.
+//! Unit tests for the (unlace) empty-string-constant sub-stage.
 
 use super::*;
 

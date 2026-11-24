@@ -1,4 +1,4 @@
-//! (kuna) `pcform` — the address an instruction computes from its own address,
+//! (unlace) `pcform` — the address an instruction computes from its own address,
 //! which is an address whatever its size.
 //!
 //! # The gap

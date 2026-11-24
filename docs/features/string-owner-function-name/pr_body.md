@@ -50,7 +50,7 @@ decompiled it (1 instance, RE-need `string-owner-function-name`).
 
 `tests/cli/string-owner-function-name.json` (the promoted acceptance, re-pointed at
 the vendored `tailcallframe_x86_64` since CI has no dataset) plus two cases in
-`kuna-console/tests/verify_entry_selectors.rs`: the placeholder resolves to the same
+`console/tests/verify_entry_selectors.rs`: the placeholder resolves to the same
 entry `Numeric(0x1170)` does, and `sub_deadbeef` / `FUN_00001170` / `func_00001170` /
 `handler_1170` / `sub_` all still miss. All three fail with the change reverted.
 Gates: `make test` 675/675 PARITY OK, `make test-stages` PARITY OK, `make rust-test`

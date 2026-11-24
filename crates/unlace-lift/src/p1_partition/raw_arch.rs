@@ -26,7 +26,7 @@
 
 use std::rc::Rc;
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::ElementId;
 use unlace_base::space::AddrSpace;
 use unlace_base::xml::Element;
@@ -49,7 +49,7 @@ pub const ELEM_RAW_SAVEFILE: ElementId = ElementId::new("raw_savefile", 237);
 /// (C++ `class RawBinaryArchitectureCapability : public ArchitectureCapability`,
 /// `raw_arch.hh:29`).
 ///
-/// In C++ a single static singleton registers itself; per the kuna no-static
+/// In C++ a single static singleton registers itself; per the unlace no-static
 /// convention the bootstrap constructs and `register`s this with the
 /// [`CapabilityRegistry`](crate::capability::CapabilityRegistry).  Because
 /// `isFileMatch` always succeeds, `sortCapabilities` moves "raw" to the end of
@@ -170,7 +170,7 @@ impl RawBinaryArchitecture {
     /// (ADR 0004).  This transcription calls `adjust_vma` in the same place, so
     /// the C++ semantics (including the UB on the `adjustvma != 0` save-file
     /// path) are preserved exactly.  See `docs/rust-port/losses.md`.
-    pub fn build_loader(&mut self) -> KunaResult<()> {
+    pub fn build_loader(&mut self) -> UnlaceResult<()> {
         let mut ldr = RawLoadImage::new(self.sleigh.get_filename());
         ldr.open()?;
         // (C++ UB if no space yet — adjustVma runs before the space attach)
@@ -189,14 +189,14 @@ impl RawBinaryArchitecture {
         &mut self,
         default_code_space: Rc<AddrSpace>,
         base: u64,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let mut loader = RawLoadImage::new(self.sleigh.get_filename());
         loader.open()?;
         self.place_loader(loader, default_code_space, base);
         Ok(())
     }
 
-    /// (kuna) [`Self::build_loader_at`] over bytes built in memory instead of
+    /// (unlace) [`Self::build_loader_at`] over bytes built in memory instead of
     /// the file, such as a DOS load module with its relocations applied.
     /// `sections` are the ranges a container names, as
     /// [`RawLoadImage::set_sections`] takes them; empty maps one code range.
@@ -212,7 +212,7 @@ impl RawBinaryArchitecture {
         self.place_loader(loader, default_code_space, base);
     }
 
-    /// (kuna) [`Self::build_loader_at`] over an image already built from
+    /// (unlace) [`Self::build_loader_at`] over an image already built from
     /// separate runs ([`RawLoadImage::from_segments`]) whose first byte is at
     /// `base`.
     pub fn build_loader_from_image(
@@ -243,7 +243,7 @@ impl RawBinaryArchitecture {
     pub fn resolve_architecture(
         &mut self,
         db: &crate::sleigh_arch::LanguageDatabase,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         // archid = getTarget(); -- set archid so the base resolve copies it
         // verbatim (its `if (archid.empty())` branch is skipped).  We route the
         // target into archid via the base by setting target as the source; the
@@ -262,9 +262,9 @@ impl RawBinaryArchitecture {
     /// (the segmented-pointer + read-only chain); only the attach tail is wired
     /// here.  (The C++ `postSpecFile` does NOT re-apply `adjustvma` — that is done
     /// once in `buildLoader`; see [`Self::build_loader`].)
-    pub fn attach_default_space(&mut self, default_code_space: Rc<AddrSpace>) -> KunaResult<()> {
+    pub fn attach_default_space(&mut self, default_code_space: Rc<AddrSpace>) -> UnlaceResult<()> {
         let loader = self.loader.as_mut().ok_or_else(|| {
-            KunaError::lowlevel("RawBinaryArchitecture::postSpecFile: loader not built")
+            UnlaceError::lowlevel("RawBinaryArchitecture::postSpecFile: loader not built")
         })?;
         loader.attach_to_space(default_code_space);
         Ok(())
@@ -283,7 +283,7 @@ impl RawBinaryArchitecture {
         target: &str,
         adjustvma_str: &str,
         children: &[Rc<Element>],
-    ) -> KunaResult<RawRestore> {
+    ) -> UnlaceResult<RawRestore> {
         self.sleigh.restore_xml_header(name, target);
         self.adjustvma = parse_auto_base(adjustvma_str);
 

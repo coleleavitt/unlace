@@ -10,7 +10,7 @@
 | module | `decompiler/crates/kuna-decomp/src/p9_emit/typeround.rs` |
 | consumed at | `p9_emit/printc.rs` — `emit_function_document` (plan), `local_decl_type_and_comment` (the declaration), `emit_local_var_decls` (records what was written), `op_type_cast_ir` (drops the cast the declaration makes a no-op) |
 | spec | `docs/spec/09-emission.md` §9.3, cross-referenced from `docs/spec/05-types.md` §5.1 |
-| stage test | `tests/stages/kuna-signedness.toml` (two functions, 6 assertions: the two-pass witness plus the sub-`int` width guard) and `tests/stages/kuna-signedness-int16.toml` (4 assertions: the same width guard on a target whose own `int` is 2 bytes, with a 4-byte control) |
+| stage test | `tests/stages/signedness.toml` (two functions, 6 assertions: the two-pass witness plus the sub-`int` width guard) and `tests/stages/signedness-int16.toml` (4 assertions: the same width guard on a target whose own `int` is 2 bytes, with a 4-byte control) |
 
 ## Mechanism
 

@@ -1,7 +1,7 @@
 //! A call whose fall-through is the function's own literal pool does not return.
 //!
 //! gcc places the PC-relative constants a body loads right after its last
-//! instruction, so a function that ends in a call kuna cannot prove no-return
+//! instruction, so a function that ends in a call unlace cannot prove no-return
 //! is followed by its pool. The flow walk took the call's fall-through,
 //! decoded the pool words as instructions and stopped at the first that
 //! decodes as nothing (`halt_baddata(); // warn: Bad instruction - Truncating
@@ -24,7 +24,7 @@ fn decompile(fixture: &str, function: &str, extra: &[&str]) -> String {
     let binary = common::fixture(fixture);
     let mut args = vec!["decompile", binary.as_str(), function, "--json"];
     args.extend(extra);
-    let (doc, stderr, status) = common::run_kuna(&args);
+    let (doc, stderr, status) = common::run_unlace(&args);
     assert_eq!(status, 0, "{fixture} {extra:?}: {stderr}");
     let parsed: serde_json::Value =
         serde_json::from_str(&doc).unwrap_or_else(|e| panic!("{e}: {stderr}\n{doc}"));
@@ -64,13 +64,13 @@ fn a_call_followed_by_its_literal_pool_ends_the_function() {
     }
 }
 
-/// The listing kuna already prints calls the same words data. Its rule is its
+/// The listing unlace already prints calls the same words data. Its rule is its
 /// own (`unlace-console/src/litpool.rs` folds any width the range's rows tile);
 /// this only pins that the pool the bound acts on is visible as data there too.
 #[test]
 fn disassemble_lists_the_same_words_as_data() {
     let binary = common::fixture("poolfallthru_arm_le32");
-    let (text, stderr, status) = common::run_kuna(&["disassemble", binary.as_str(), "probe"]);
+    let (text, stderr, status) = common::run_unlace(&["disassemble", binary.as_str(), "probe"]);
     assert_eq!(status, 0, "{stderr}");
     let rows: Vec<&str> = text.lines().filter(|line| line.starts_with("0x")).collect();
     let call = rows

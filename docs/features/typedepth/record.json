@@ -1,6 +1,6 @@
 {
   "opportunity": "kuna's DWARF type mapper truncates ordinary C declarations to void. MAX_TYPE_DEPTH = 3 counted every hop of the DW_AT_type chain, the transparent typedef/const/volatile/restrict links included, so const char *const *, const size_t *, char *const [] and char *** all ran out of budget and fell back to void: 294 truncated sites across six -g C binaries (238 stack locals/params, 55 globals, 1 prototype parameter).",
-  "test_name": "kuna-console verify_typedepth (6 two-pass e2e assertions on a new -g -O0 C fixture) + 6 hermetic guard/mapper unit tests incl. forged cyclic DWARF",
+  "test_name": "console verify_typedepth (6 two-pass e2e assertions on a new -g -O0 C fixture) + 6 hermetic guard/mapper unit tests incl. forged cyclic DWARF",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/typedepth_x86_64",
   "selector": "count_authors",
   "func_addr": null,
@@ -75,7 +75,7 @@
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-cli/src/decompile.rs",
     "decompiler/crates/kuna-cli/src/decompile_all.rs",
-    "decompiler/crates/kuna-console/tests/verify_typedepth.rs (new)",
+    "decompiler/crates/console/tests/verify_typedepth.rs (new)",
     "decompiler/crates/kuna-analysis/tests/fixtures/typedepth_x86_64{,.c} (new)",
     "docs/spec/01-program-prep.md",
     "docs/history.md (DIV-63)"

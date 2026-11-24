@@ -8,7 +8,7 @@
 //! set the FunctionManager recorded as the body) and collects the instructions in
 //! ascending address order.
 //!
-//! kuna's Listing tracks function **entries**, not bodies (`listing/mod.rs` — the
+//! unlace's Listing tracks function **entries**, not bodies (`listing/mod.rs` — the
 //! `DiscoveredFunction` model is keyed by entry VMA; there is no per-function
 //! body address set). So this generator reconstructs the body as the
 //! **address-contiguous clip** `[entry, next_function_after(entry))` over the
@@ -22,14 +22,14 @@
 //! body (code from another function physically sitting between `entry` and the
 //! next function entry, or this function's own code living after the next entry)
 //! is mis-clipped. This is the same approximation `noreturn_disc` accepts and
-//! the one place kuna's FID is *less* faithful than Ghidra's. For the common case
+//! the one place unlace's FID is *less* faithful than Ghidra's. For the common case
 //! (the compiler lays a function down contiguously) it is exact.
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Features/FunctionID/src/main/java/ghidra/feature/fid/hash/FunctionBodyFunctionExtentGenerator.java`
 //!   — `calculateExtent(func)`: iterate `listing.getInstructions(body, true)`
-//!   (ascending) and collect them. kuna substitutes the `[entry, next)` clip for
+//!   (ascending) and collect them. unlace substitutes the `[entry, next)` clip for
 //!   `func.getBody()`.
 
 use crate::listing::funcchunks::ChunkModel;

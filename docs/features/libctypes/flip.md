@@ -31,7 +31,7 @@ taken from a green line:
 * *Only one of the 16 stage fixtures that `load file` changes output at all.*
   Each of the 16 scripts was replayed through `decomp_dbg` in both arms (its own
   `option libctypes` commands removed so the env decides): **15 produce
-  byte-identical output**, and the one that differs is `kuna-libctypes.xml`
+  byte-identical output**, and the one that differs is `libctypes.xml`
   itself, exactly as designed —
 
 ```

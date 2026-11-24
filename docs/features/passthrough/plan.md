@@ -37,7 +37,7 @@ callee-body probes are `calleedeadarg`'s existing bounded walks.
 - Unit: `passthrough/tests.rs` — the option surface, claim overlap
   (`overlaps_claim`: width, neighbour, space), the extension plan (`extension`:
   leading run, stated order, stop at the first gap), and `live_input_width`.
-- Stage: `tests/stages/kuna-passthrough.toml` — the negative control (the console
+- Stage: `tests/stages/passthrough.toml` — the negative control (the console
   states no prototype, so both passes render the forwarding functions without the
   parameter).
 - CLI: `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json`

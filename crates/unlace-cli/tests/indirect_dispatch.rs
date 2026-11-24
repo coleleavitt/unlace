@@ -211,7 +211,7 @@ fn dispatcher_return_updates_survive_narrowing_and_foreign_register_copies() {
         } else {
             "MIPS:BE:64:octeon:default"
         };
-        let (code, stderr, rc) = common::run_kuna(&[
+        let (code, stderr, rc) = common::run_unlace(&[
             "decompile",
             root.join(fixture["binary"].as_str().unwrap())
                 .to_str()

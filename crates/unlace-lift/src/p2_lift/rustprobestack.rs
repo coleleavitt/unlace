@@ -4,7 +4,7 @@
 //! instruction must overwrite the arithmetic flags with `sub rsp,rax`.
 
 use unlace_base::address::Address;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
@@ -28,9 +28,9 @@ pub enum RustProbestackMode {
     Always,
 }
 
-impl crate::optionset::KunaOption for RustProbestackMode {
+impl crate::optionset::UnlaceOption for RustProbestackMode {
     const NAME: &'static str = "rustprobestack";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         RustProbestackMode::Off
@@ -40,8 +40,8 @@ impl crate::optionset::KunaOption for RustProbestackMode {
         RustProbestackMode::Off
     }
 
-    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        parse_mode(value).map_err(unlace_base::error::KunaError::parse)
+    fn parse(value: &str) -> unlace_base::error::UnlaceResult<(Self, String)> {
+        parse_mode(value).map_err(unlace_base::error::UnlaceError::parse)
     }
 }
 
@@ -251,7 +251,7 @@ fn matches_call(data: &Funcdata, call: OpId, target: &Address, regs: &Registers)
     (body == PROBE).then_some(frame)
 }
 
-fn rewrite(data: &mut Funcdata, call: OpId, frame: u64, regs: &Registers) -> KunaResult<()> {
+fn rewrite(data: &mut Funcdata, call: OpId, frame: u64, regs: &Registers) -> UnlaceResult<()> {
     let pc = data
         .obank()
         .get(call)
@@ -276,7 +276,7 @@ fn rewrite(data: &mut Funcdata, call: OpId, frame: u64, regs: &Registers) -> Kun
     data.obank_mut()
         .get_mut(store)
         .expect("probe spill")
-        .set_additional_flag(crate::op::pcodeop_addlflags::kuna_rustprobe_spill);
+        .set_additional_flag(crate::op::pcodeop_addlflags::unlace_rustprobe_spill);
     data.op_insert_before(store, call);
     let pop = data.new_op(2, pc.clone());
     data.op_set_opcode(pop, crate::typeop::type_op_for(OpCode::CPUI_INT_ADD));
@@ -333,7 +333,7 @@ impl Action for ActionRustProbestack {
         })
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        match data.get_arch().kuna_options.get::<RustProbestackMode>() {
+        match data.get_arch().unlace_options.get::<RustProbestackMode>() {
             RustProbestackMode::Off => return 0,
             RustProbestackMode::Auto if !data.get_arch().source_lang.is_rust() => return 0,
             _ => {}
@@ -342,12 +342,12 @@ impl Action for ActionRustProbestack {
             || data.num_calls() == 0
             || data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::StackViews>()
                 .0
             || data
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::heritage::StackAliasDeadstore>()
                 .0
         {

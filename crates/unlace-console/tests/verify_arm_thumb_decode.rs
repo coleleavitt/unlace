@@ -6,7 +6,7 @@
 //! STT_FUNC also surfaced at the even address) into
 //! `unlace-analysis/src/loader/arm_markers.rs`. Those were proven only by a
 //! bare ARM `.o` UNIT test — the linked-executable Thumb-decode e2e was blocked
-//! because the build host had no ARM linker. The kuna-dev container now provides
+//! because the build host had no ARM linker. The unlace-dev container now provides
 //! `arm-linux-gnueabihf-gcc`, so the fixture is a genuine ET_EXEC and this gate
 //! drives the full `bootstrap_from_object` → `load function compute` → `decompile`
 //! → `print C` path against it.
@@ -36,7 +36,7 @@ fn repo_root() -> PathBuf {
         .unwrap()
 }
 
-/// The vendored LINKED ARM Thumb fixture (built in the kuna-dev container;
+/// The vendored LINKED ARM Thumb fixture (built in the unlace-dev container;
 /// `arm-linux-gnueabihf-gcc -mthumb -static -nostdlib -e _start`). ET_EXEC with
 /// a PT_LOAD R E segment (`ObjectLoadImage` reads only segments).
 fn arm_thumb_linked() -> PathBuf {

@@ -1,4 +1,4 @@
-//! (kuna `msvcfpconst`) MSVC `__real@` floating-point constant COMDATs: recover
+//! (unlace `msvcfpconst`) MSVC `__real@` floating-point constant COMDATs: recover
 //! the value from the mangled symbol name, and let the engine fold it.
 //!
 //! # The defect
@@ -14,7 +14,7 @@
 //!
 //! COMDAT folding means only one translation unit keeps the definition, so in
 //! any *other* object the symbol is **undefined**: no section, no bytes, nothing
-//! for the loader to map. kuna binds it to a synthetic extern slot so a
+//! for the loader to map. unlace binds it to a synthetic extern slot so a
 //! reference resolves, and the decompiled C then reads
 //! `... * dat_402020 + dat_402040`, where every operand of the floating-point
 //! expression is an opaque address. The *defined* half is no better at the

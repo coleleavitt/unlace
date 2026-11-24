@@ -37,7 +37,7 @@ fn warning_texts_are_the_upstream_strings() {
 }
 
 #[test]
-fn element_id_is_in_the_kuna_range() {
+fn element_id_is_in_the_unlace_range() {
     assert!(ELEM_DECODEHALT.get_id() >= 4000);
     assert_eq!(ELEM_DECODEHALT.get_name(), "decodehalt");
 }

@@ -6,7 +6,7 @@ use crate::common;
 #[test]
 fn indexed_short_table_is_typed_by_its_accesses() {
     let binary = common::fixture("globalwidth_x86_64");
-    let (on, stderr, rc) = common::run_kuna(&["decompile", &binary, "f"]);
+    let (on, stderr, rc) = common::run_unlace(&["decompile", &binary, "f"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(on.contains("g3[a0 & 7] = (short)a0;"), "{on}");
     assert!(
@@ -14,14 +14,14 @@ fn indexed_short_table_is_typed_by_its_accesses() {
         "a narrowing read is not an array: {on}"
     );
     let (off, _, _) =
-        common::run_kuna(&["decompile", &binary, "f", "--option", "globalwidth", "off"]);
+        common::run_unlace(&["decompile", &binary, "f", "--option", "globalwidth", "off"]);
     assert!(off.contains("*(short *)&g3["), "{off}");
 }
 
 #[test]
 fn padding_after_a_return_is_one_align_row() {
     let binary = common::fixture("globalwidth_x86_64");
-    let (all, stderr, rc) = common::run_kuna(&[
+    let (all, stderr, rc) = common::run_unlace(&[
         "disassemble",
         &binary,
         "0x401000",
@@ -41,7 +41,7 @@ fn a_function_shaped_table_the_code_reads_is_no_entry() {
     let list = |extra: &[&str]| {
         let mut args = vec!["functions", binary.as_str(), "--json"];
         args.extend_from_slice(extra);
-        let (out, stderr, rc) = common::run_kuna(&args);
+        let (out, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}");
         out.contains("\"0x401020\"")
     };
@@ -61,7 +61,7 @@ fn a_hardened_arm64e_jump_table_is_a_switch_and_no_entry() {
         .to_str()
         .unwrap()
         .to_owned();
-    let (c, stderr, rc) = common::run_kuna(&["decompile", &binary, "_dispatch"]);
+    let (c, stderr, rc) = common::run_unlace(&["decompile", &binary, "_dispatch"]);
     assert_eq!(rc, 0, "{stderr}");
     assert!(
         c.contains("switch(a0 >> 0x3e)") && c.contains("case 3:"),
@@ -75,7 +75,7 @@ fn a_hardened_arm64e_jump_table_is_a_switch_and_no_entry() {
     let list = |extra: &[&str]| {
         let mut args = vec!["functions", binary.as_str(), "--option", "listing", "on"];
         args.extend_from_slice(extra);
-        let (out, stderr, rc) = common::run_kuna(&args);
+        let (out, stderr, rc) = common::run_unlace(&args);
         assert_eq!(rc, 0, "{stderr}");
         out
     };

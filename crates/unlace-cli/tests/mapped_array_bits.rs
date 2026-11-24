@@ -30,7 +30,7 @@ __declspec(dllexport) float wrap_float(float value) {
 fn check_target(target: &str) {
     use std::collections::HashMap;
     use unlace_base::address::Address;
-    use unlace_console::console::register_kuna_commands;
+    use unlace_console::console::register_unlace_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
@@ -96,7 +96,7 @@ fn check_target(target: &str) {
     );
     let mut status = IfaceTerm::into_status("", script.as_bytes());
     register_decomp_commands(&mut status);
-    register_kuna_commands(&mut status);
+    register_unlace_commands(&mut status);
     register_console_commands(&mut status);
     let data = status
         .get_data_mut(DECOMPILE_MODULE)
@@ -132,8 +132,8 @@ fn check_target(target: &str) {
             let high = fd.high_bank().get(value.get_high()?)?;
             (op.code() == unlace_num::opcodes::OpCode::CPUI_COPY
                 && value.get_size() == 4
-                && high.kuna_symbol_offset() == 4
-                && high.kuna_link_symbol().is_some())
+                && high.unlace_symbol_offset() == 4
+                && high.unlace_link_symbol().is_some())
             .then_some((id, out))
         })
         .expect("payload definition");
@@ -180,11 +180,11 @@ fn check_target(target: &str) {
     for (vn, h, g) in updates {
         fd.vbank_mut().get_mut(vn).unwrap().set_high(h, g);
     }
-    assert_eq!(fd.high_bank().get(high).unwrap().kuna_symbol_offset(), 4);
+    assert_eq!(fd.high_bank().get(high).unwrap().unlace_symbol_offset(), 4);
     let arch = data.conf.as_mut().unwrap().arch_mut();
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::printc::Realtypes(true));
-    arch.kuna_options
+    arch.unlace_options
         .set(unlace_decomp::coreoptions::CTypes(true));
     let body = arch.with_print(|printer, arch| {
         printer.options.partial_access = true;

@@ -1,6 +1,6 @@
 {
   "opportunity": "kuna's DWARF pass applied parameter names/types only to functions whose name had no `::` or `<` \u2014 a perfect split measured on a purpose-built C++ probe binary",
-  "test_name": "kuna-console verify_cppproto (7 two-pass e2e assertions) + whole-binary decompile-all sweeps",
+  "test_name": "console verify_cppproto (7 two-pass e2e assertions) + whole-binary decompile-all sweeps",
   "binary": "decompiler/crates/kuna-analysis/tests/fixtures/cppproto_x86_64",
   "selector": "Account::deposit",
   "func_addr": "0x4011b2",
@@ -91,8 +91,8 @@
     "decompiler/crates/kuna-analysis/src/analyzers/dwarf/cppproto.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/dwarf/mod.rs",
     "decompiler/crates/kuna-analysis/src/pass.rs",
-    "decompiler/crates/kuna-console/src/engine.rs",
-    "decompiler/crates/kuna-console/tests/verify_cppproto.rs",
+    "decompiler/crates/console/src/engine.rs",
+    "decompiler/crates/console/tests/verify_cppproto.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",

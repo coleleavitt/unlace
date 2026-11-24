@@ -371,7 +371,7 @@ pub fn recover(fd: &mut Funcdata) {
             }
             if !fd
                 .get_arch()
-                .kuna_options
+                .unlace_options
                 .get::<crate::coreoptions::StackViews>()
                 .0
                 && crate::stackparamviews::backing_for_address(
@@ -524,12 +524,12 @@ pub fn describe(fd: &Funcdata) -> String {
     text
 }
 
-/// (kuna `stackobjects`) The stack objects recovered for the function; reset by `Funcdata::clear`.
+/// (unlace `stackobjects`) The stack objects recovered for the function; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct ObjectsSlot(Vec<crate::stackobjects::StackObject>);
-crate::kuna_func_state!(ObjectsSlot, keep_across_clear: false);
+crate::unlace_func_state!(ObjectsSlot, keep_across_clear: false);
 
-/// The `kuna_stackobjects` pass's methods on [`Funcdata`], as an extension trait so the type can
+/// The `unlace_stackobjects` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackobjectsExt {
     fn stack_objects(&self) -> &Vec<crate::stackobjects::StackObject>;
@@ -544,27 +544,27 @@ pub trait FuncdataStackobjectsExt {
 
 impl FuncdataStackobjectsExt for crate::funcdata::Funcdata {
     fn stack_objects(&self) -> &Vec<crate::stackobjects::StackObject> {
-        &self.kuna_state::<ObjectsSlot>().0
+        &self.unlace_state::<ObjectsSlot>().0
     }
     fn stack_objects_mut(&mut self) -> &mut Vec<crate::stackobjects::StackObject> {
-        &mut self.kuna_state_mut::<ObjectsSlot>().0
+        &mut self.unlace_state_mut::<ObjectsSlot>().0
     }
     fn stack_object_bound_uses(
         &self,
     ) -> &std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)> {
-        &self.kuna_state::<BoundUsesSlot>().0
+        &self.unlace_state::<BoundUsesSlot>().0
     }
     fn stack_object_bound_uses_mut(
         &mut self,
     ) -> &mut std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)> {
-        &mut self.kuna_state_mut::<BoundUsesSlot>().0
+        &mut self.unlace_state_mut::<BoundUsesSlot>().0
     }
 }
 
-/// (kuna `stackobjects`) The source uses already bound to a stack object's shared storage; reset by `Funcdata::clear`.
+/// (unlace `stackobjects`) The source uses already bound to a stack object's shared storage; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct BoundUsesSlot(std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)>);
-crate::kuna_func_state!(BoundUsesSlot, keep_across_clear: false);
+crate::unlace_func_state!(BoundUsesSlot, keep_across_clear: false);
 
 #[cfg(test)]
 mod tests;

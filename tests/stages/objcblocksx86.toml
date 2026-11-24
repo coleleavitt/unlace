@@ -1,0 +1,152 @@
+# Stack blocks on x86-64 Mach-O: the invoke named after its creator and
+# typed, the captures and a `__block` cell typed, the creator's frame typed,
+# as objcblocks.xml pins for arm64.
+#
+# Issue: block recovery read only arm64 creators. On an x86-64 image a stack
+# block's invoke stayed a `sub_` taking a `void *`, its captures read as
+# offsets off that pointer, and the creator was a run of stores to numbered
+# locals.
+#
+# Fix: `analyzers/objc/kuna_objcblocks/x86.rs (sites)` decodes each x86-64
+# function that references the `_NSConcreteStackBlock` GOT slot: the isa is
+# `mov r, [rip + slot]`, the invoke and descriptor are `lea r, [rip + addr]`,
+# and the stores go through `rbp`, `rsp` or a register holding a frame
+# address, at offsets taken relative to `rsp` at entry. The copy helper's
+# `objc_retain` and `_Block_object_assign` calls (direct, tail or through the
+# GOT) type the captures.
+#
+# Pass 1 (`objc off`): `sub_100000a20(void *a0,...)`, the creator stores
+# `v6 = sub_100000a20;`. Pass 2 (`objc on`), `macho_objc_blocks_x86_64`:
+# `-[Runner tally:scale:]_block_invoke(Block_layout_100000a20 *block,...)`
+# reading `block->capture_1->forwarding->value`; the creator stores
+# `block.block.invoke`, `block.capture_1 = &cell_1`. Pass 3 (`objc on`),
+# `macho_objc_blocks2_x86_64`: three blocks of one creator with the isa kept
+# in `r12` across the sends, and a block built inside an invoke.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64',
+    'option objc off',
+    'read symbols',
+    'load addr 0x100000a20',
+    'decompile',
+    'print C',
+    'load addr 0x100000960',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks_x86_64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000a20',
+    'decompile',
+    'print C',
+    'load addr 0x100000960',
+    'decompile',
+    'print C',
+    'load addr 0x1000008e0',
+    'decompile',
+    'print C',
+    'load addr 0x100000940',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_blocks2_x86_64',
+    'option objc on',
+    'read symbols',
+    'load addr 0x100000890',
+    'decompile',
+    'print C',
+    'load addr 0x100000a20',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCBLOCKSX86 #1: objc off, the invoke is an anonymous function taking a void pointer'
+count = 1
+literal = 'sub_100000a20(void *a0,int8 a1)'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #2: objc off, the creator stores the invoke to a numbered local'
+count = 1
+literal = 'v6 = sub_100000a20;'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #3: the invoke is named after its creator and typed from the descriptor'
+count = 1
+literal = '-[Runner tally:scale:]_block_invoke(Block_layout_100000a20 *block,int8 arg1)'
+
+[[match]]
+name = "OBJCBLOCKSX86 #4: the copy helper's objc_retain makes the first capture an object"
+count = 1
+literal = 'objc_object *v4; // rdi'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #5: the __block cell is read through its forwarding pointer'
+count = 1
+literal = 'return block->capture_1->forwarding->value;'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #6: the double and int captures'
+count = 1
+literal = 'v2 = block->capture_2;'
+
+[[match]]
+name = "OBJCBLOCKSX86 #7: the creator's literal is a typed local at its frame offset"
+count = 1
+regex = 'Block_layout_100000a20 block; // .*stack - 0x70'
+
+[[match]]
+name = "OBJCBLOCKSX86 #8: the creator stores the cell's address and the cell forwards to itself"
+count = 1
+literal = 'cell_1.forwarding = block.capture_1;'
+
+[[match]]
+name = "OBJCBLOCKSX86 #9: the cell's flags and size are fields"
+count = 1
+literal = 'cell_1.size = 0x20;'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #10: the flags stored from a 32-bit immediate split into flags and reserved'
+count = 1
+literal = 'block.block.flags = -0x3e000000;'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #11: the plain capture of the first block is a word'
+count = 1
+literal = 'return arg1 * block->capture_0;'
+
+[[match]]
+name = "OBJCBLOCKSX86 #12: a second creator's invoke is named and typed"
+count = 1
+literal = '-[Runner maker:]_block_invoke(Block_layout_100000940 *block,int8 arg1)'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #13: three blocks of one creator are numbered'
+count = 1
+literal = 'block_3.block.invoke = -[Chain build:]_block_invoke_3;'
+
+[[match]]
+name = 'OBJCBLOCKSX86 #14: the isa kept in a callee-saved register across the sends still starts a literal'
+count = 2
+regex = 'block_[23]\.block\.isa = v1;'
+
+[[match]]
+name = "OBJCBLOCKSX86 #15: a block built inside an invoke is that invoke's block"
+count = 1
+literal = 'block_1.block.invoke = sum_block_invoke_block_invoke;'

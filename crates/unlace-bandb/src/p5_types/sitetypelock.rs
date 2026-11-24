@@ -1,4 +1,4 @@
-//! (kuna `sitetypelock`) The per-call-site output type lock — the primitive
+//! (unlace `sitetypelock`) The per-call-site output type lock — the primitive
 //! that makes a client-asserted call-result type survive to the rendered
 //! declaration.
 //!
@@ -96,7 +96,7 @@ pub fn apply_pending(data: &mut Funcdata) -> bool {
     changed
 }
 
-/// (kuna) `ActionSiteTypeLock` — collect client site locks and pin them onto
+/// (unlace) `ActionSiteTypeLock` — collect client site locks and pin them onto
 /// the call output Varnodes as type recovery begins.
 ///
 /// Both halves are idempotent, so the action simply re-runs on every pass of

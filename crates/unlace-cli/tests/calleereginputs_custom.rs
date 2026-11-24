@@ -1,4 +1,4 @@
-//! (kuna `calleereginputs custom`) A whole-binary x86-32 Windows run recovers a
+//! (unlace `calleereginputs custom`) A whole-binary x86-32 Windows run recovers a
 //! callee-saved register (EBX/ESI/EDI) custom argument when the callee reads it
 //! and every direct call site in the image sets it, leaves the counterexample
 //! shapes untouched, and keeps callee and callers in agreement on every surface.
@@ -12,13 +12,13 @@ use crate::common;
 use common::process;
 use std::process::Command;
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn run(args: &[&str]) -> (String, String, bool) {
-    let output = Command::new(kuna())
+    let output = Command::new(unlace())
         .args(args)
         .output()
         .expect("spawn kuna");
@@ -35,7 +35,7 @@ fn bodies(mode: &str, extra: &[&str]) -> std::collections::HashMap<String, Strin
 
 fn bodies_of(name: &str, mode: &str, extra: &[&str]) -> std::collections::HashMap<String, String> {
     let fixture = common::fixture(name);
-    let mut command = Command::new(kuna());
+    let mut command = Command::new(unlace());
     command
         .args([
             "decompile-all",

@@ -47,7 +47,7 @@ fn prototype(name: &str) -> String {
 }
 
 fn decompile(path: &Path, name: &str) -> String {
-    let (text, err, rc) = common::run_kuna(&[
+    let (text, err, rc) = common::run_unlace(&[
         "decompile",
         path.to_str().unwrap(),
         name,
@@ -139,7 +139,7 @@ fn project_preserves_caller_storage_and_prototypes() {
     for function in FUNCTIONS {
         args.extend(["--assert".to_string(), prototype(function)]);
     }
-    let (text, err, rc) = common::run_kuna(&args.iter().map(String::as_str).collect::<Vec<_>>());
+    let (text, err, rc) = common::run_unlace(&args.iter().map(String::as_str).collect::<Vec<_>>());
     assert_eq!(rc, 0, "{text}\n{err}");
     let c = std::fs::read_dir(&project)
         .unwrap()
@@ -168,7 +168,7 @@ fn locals_return_address_and_named_parameter_keep_existing_forms() {
         } else {
             prototype(name)
         };
-        let (text, err, rc) = common::run_kuna(&[
+        let (text, err, rc) = common::run_unlace(&[
             "decompile",
             object.to_str().unwrap(),
             name,
@@ -192,7 +192,7 @@ fn typed_object_pointers_keep_the_caller_address() {
     let object = build_object();
     for ty in ["int", "struct Payload"] {
         let proto = format!("prototype caller_first {ty} *caller_first(void)");
-        let (text, err, rc) = common::run_kuna(&[
+        let (text, err, rc) = common::run_unlace(&[
             "decompile",
             object.to_str().unwrap(),
             "caller_first",

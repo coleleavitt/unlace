@@ -38,9 +38,9 @@ fn run(case: &str, records: &[&str], argument: &str) -> String {
     std::fs::create_dir_all(&dir).unwrap();
     let binary = dir.join("fixture.elf");
     std::fs::write(&binary, image()).unwrap();
-    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+    let unlace = unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
-    let mut cmd = Command::new(kuna);
+    let mut cmd = Command::new(unlace);
     cmd.arg("decompile-all")
         .arg(&binary)
         .args([

@@ -32,7 +32,7 @@ fn decompile(
     )
     .unwrap();
     assert!(program.arch().rustc_pieces_layout);
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::On
     } else {
         RustFmtMode::Off
@@ -193,7 +193,7 @@ fn language_options_and_layout_evidence_bound_recovery() {
                 enabled,
                 "rust",
                 |arch| {
-                    arch.kuna_options
+                    arch.unlace_options
                         .set(unlace_decomp::sourcelang::SourceLangForced(Some(source)))
                 },
                 |_| {},
@@ -219,7 +219,7 @@ fn language_options_and_layout_evidence_bound_recovery() {
                     1 => arch.rust_fmt_pieces_relro = None,
                     2 => {
                         arch.rust_display_formatters.clear();
-                        arch.kuna_tables
+                        arch.unlace_tables
                             .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>()
                             .clear();
                     }

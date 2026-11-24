@@ -85,7 +85,7 @@ fn u64_at(b: &[u8], off: usize) -> u64 {
 
 impl SlideInfo {
     /// Parse a `dyld_cache_slide_info*` blob. `Ok(None)` for a version that
-    /// needs no rewrite at slide zero; an error for a version kuna does not read.
+    /// needs no rewrite at slide zero; an error for a version unlace does not read.
     pub fn parse(raw: &[u8]) -> Result<Option<SlideInfo>, String> {
         if raw.len() < 24 {
             return Err("slide info blob is truncated".into());

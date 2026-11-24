@@ -1,22 +1,22 @@
-//! (kuna) `kuna_funcboundflow` — bound fall-through at a known function entry
+//! (unlace) `unlace_funcboundflow` — bound fall-through at a known function entry
 //! (S2 flow classification).  Informed by IDA / Ghidra, both of which bound a
 //! function's decompilation to its own body and never let ordinary fall-through
 //! spill into the next function.
 //!
 //! ## The structural gap
 //!
-//! kuna's flow follower ([`FlowInfo`](crate::flow)) runs with `baddr=0,
+//! unlace's flow follower ([`FlowInfo`](crate::flow)) runs with `baddr=0,
 //! eaddr=~0` (the whole address space is in-bounds) and treats `CALL`/`CALLIND`
 //! as fall-through: flow stops only at a `RETURN` or when the callee is *known*
-//! no-return (`query_call_no_return`).  A kuna `FunctionSymbol` is an entry
+//! no-return (`query_call_no_return`).  A unlace `FunctionSymbol` is an entry
 //! address with **no extent**, so nothing else bounds the walk.
 //!
-//! When a function's last act is a `call` to a no-return routine that kuna
+//! When a function's last act is a `call` to a no-return routine that unlace
 //! cannot prove no-return — in a stripped, statically-linked binary that means
 //! the unnamed `exit`/`abort`/`__stack_chk_fail` bodies and every app-level
 //! `die()`/`throw` wrapper built on them — the compiler emits the `call` with no
 //! trailing `ret` (just inter-function alignment padding) and starts the next
-//! function.  kuna follows the padding's fall-through straight into that next
+//! function.  unlace follows the padding's fall-through straight into that next
 //! function's entry and decodes **its** body into the current one, so the
 //! following function is emitted twice: once correctly, and once as a garbage
 //! tail of its predecessor.  Measured on a static-pie build, ~36% of the
@@ -24,7 +24,7 @@
 //!
 //! ## What this module owns
 //!
-//! [`kuna_should_bound_at_entry`] is the *decision* only: has fall-through
+//! [`unlace_should_bound_at_entry`] is the *decision* only: has fall-through
 //! reached the entry of another known function (so the walk has run off the end
 //! of the current function)?  The flow caller first gives an explicit current
 //! extent precedence over a discovered interior entry. One entry instruction
@@ -37,7 +37,7 @@
 //! the fall-through edge — is driven by `flow.rs` at the fall-through-push site
 //! of `process_instruction`, mirroring the `check_for_flow_modification`
 //! no-return-halt idiom.  This is the same hook class as
-//! [`kuna_tailcalljump`](crate::tailcalljump) (a `FlowEnvironment`
+//! [`unlace_tailcalljump`](crate::tailcalljump) (a `FlowEnvironment`
 //! predicate consulted inside the flow walk, gated by an `Architecture` bool
 //! flag).
 //!
@@ -50,7 +50,7 @@
 use unlace_base::marshal::ElementId;
 use unlace_num::opcodes::OpCode;
 
-/// Marshaling element `<funcboundflow>` (kuna).  ElementIds live in the 4000+
+/// Marshaling element `<funcboundflow>` (unlace).  ElementIds live in the 4000+
 /// range (4122; `orchain` raced this id from the same reasoning and has been renumbered.
 /// Do not read the previous high-water mark by hand -- `scripts.repipe.counters --check`
 /// derives the next free id and fails on a duplicate).
@@ -63,7 +63,7 @@ pub const ELEM_FUNCBOUNDFLOW: ElementId = ElementId::new("funcboundflow", 4122);
 /// `CBRANCH` followed by `RETURN`; that instruction still has a fall-through and
 /// is not safe to admit at a foreign function boundary.
 #[doc(hidden)]
-pub fn kuna_is_unconditional_return(ops: impl IntoIterator<Item = OpCode>) -> bool {
+pub fn unlace_is_unconditional_return(ops: impl IntoIterator<Item = OpCode>) -> bool {
     let mut saw_return = false;
     for op in ops {
         if saw_return {
@@ -88,7 +88,7 @@ pub fn kuna_is_unconditional_return(ops: impl IntoIterator<Item = OpCode>) -> bo
     saw_return
 }
 
-/// (kuna) Has fall-through reached a foreign function entry, so the current
+/// (unlace) Has fall-through reached a foreign function entry, so the current
 /// function's flow should be truncated here?
 ///
 /// Fires iff:
@@ -108,7 +108,7 @@ pub fn kuna_is_unconditional_return(ops: impl IntoIterator<Item = OpCode>) -> bo
 /// function against itself.  A foreign entry whose complete instruction is an
 /// unconditional `CPUI_RETURN` is admitted: flow ends on that instruction, so
 /// no byte after the separately callable function can be swallowed.
-pub fn kuna_should_bound_at_entry(
+pub fn unlace_should_bound_at_entry(
     gate: bool,
     next_is_known_function: bool,
     next_is_self: bool,
@@ -132,7 +132,7 @@ pub const MAX_POOL_PAD: u64 = 4;
 /// `extents` the analysis tier proved, the gap when a pool starts within
 /// [`MAX_POOL_PAD`] of it, and `None` otherwise or when `is_pool_slot` denies
 /// the word (writable bytes are not the instruction stream).
-pub fn kuna_pool_pad(
+pub fn unlace_pool_pad(
     extents: &[(u64, u64)],
     is_pool_slot: impl Fn(u64) -> bool,
     next: u64,
@@ -147,7 +147,7 @@ pub fn kuna_pool_pad(
 /// the pool word after it, do nothing at all: no ops, or only a register copied
 /// onto itself (ARM's `nop` is `mov r8,r8`)? Anything that computes, stores or
 /// transfers control is live code, not alignment padding.
-pub fn kuna_is_padding_run<'a>(
+pub fn unlace_is_padding_run<'a>(
     ops: impl IntoIterator<Item = (OpCode, Option<(i32, u64, u32)>, &'a [(i32, u64, u32)])>,
 ) -> bool {
     ops.into_iter()
@@ -160,18 +160,18 @@ pub fn kuna_is_padding_run<'a>(
 /// Should a call's fall-through be truncated because it leads into the
 /// function's own literal pool? A compiler places the PC-relative constants a
 /// body loads right after its last instruction, so a call followed by them is a
-/// call that does not return, whatever kuna knows of its callee.
+/// call that does not return, whatever unlace knows of its callee.
 ///
 ///   - `pad` — the distance from the fall-through to the pool
-///     ([`kuna_pool_pad`]), `None` when no proven pool starts within
+///     ([`unlace_pool_pad`]), `None` when no proven pool starts within
 ///     [`MAX_POOL_PAD`];
 ///   - `pad_is_padding` — there is no gap, or the bytes in it decode as
-///     instructions that do nothing ([`kuna_is_padding_run`]).
+///     instructions that do nothing ([`unlace_is_padding_run`]).
 ///
 /// A gap is only ever the compiler's alignment padding: live code never sits
 /// between a call and the pool it must jump over. A word anything branches to
 /// is never part of a proven pool, so no label test is needed here.
-pub fn kuna_should_bound_at_pool(pad: Option<u64>, pad_is_padding: bool) -> bool {
+pub fn unlace_should_bound_at_pool(pad: Option<u64>, pad_is_padding: bool) -> bool {
     pad.is_some_and(|pad| pad <= MAX_POOL_PAD) && pad_is_padding
 }
 

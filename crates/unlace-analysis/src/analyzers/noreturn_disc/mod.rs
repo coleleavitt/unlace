@@ -1,4 +1,4 @@
-//! Discovered-no-return detection — the kuna analog of Ghidra's
+//! Discovered-no-return detection — the unlace analog of Ghidra's
 //! `FindNoReturnFunctionsAnalyzer` ("Non-Returning Functions - Discovered").
 //!
 //! # What this is (the first Listing/xref consumer)
@@ -28,7 +28,7 @@
 //! it ports cleanly and read-only. Default-OFF (a flow heuristic that can be
 //! wrong, gated behind its own `noreturn_disc` flag *and* requiring `listing on`).
 //!
-//! # Origin (upstream Ghidra, the tree kuna was ported from)
+//! # Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! - `Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/analysis/FindNoReturnFunctionsAnalyzer.java`
 //!   — `AnalyzerType.INSTRUCTION_ANALYZER`, `setDefaultEnablement(false)`. The
@@ -61,8 +61,8 @@
 //!   tally had a third arm ahead of those two: the fall-through VMA is not a
 //!   decoded instruction start (`!is_instruction_start`). That arm is a
 //!   decode-failure detector (GH-312) — the walk always attempts a call's
-//!   successor, so it fired on kuna's own spec gaps and forged the verdict for
-//!   a callee that plainly returns; see [`kuna_discstrict`]. Computed/indirect
+//!   successor, so it fired on unlace's own spec gaps and forged the verdict for
+//!   a callee that plainly returns; see [`unlace_discstrict`]. Computed/indirect
 //!   calls contribute no evidence (no
 //!   static callee). A call whose callee is already modeled no-return (Known) or
 //!   call-fixup'd is skipped (no double-marking).
@@ -122,9 +122,9 @@ impl AnalysisPass for NoReturnDiscoveredPass {
 ///
 /// The bare "not a decoded instruction start" arm is not evidence (GH-312): the
 /// Listing walk always attempts a call's successor, so that arm is a
-/// decode-failure detector and would vote a callee no-return on kuna's own spec
+/// decode-failure detector and would vote a callee no-return on unlace's own spec
 /// gaps. Only the terminal arm and the two positive arms count — see
-/// [`kuna_discstrict`].
+/// [`unlace_discstrict`].
 fn call_site_has_no_fallthrough(listing: &Listing, call_vma: u64, callee: u64) -> bool {
     let Some(insn) = listing.instruction_at(call_vma) else {
         // The call site is not a decoded instruction; no evidence we can read.

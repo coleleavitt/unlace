@@ -58,7 +58,7 @@ pub fn spanned(spans: &[(usize, usize)], start: usize) -> bool {
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.revisitrefine_spanned = Some(spanned);
 }
 

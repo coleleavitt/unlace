@@ -1,4 +1,4 @@
-//! (kuna) Recover stack-passed call arguments.
+//! (unlace) Recover stack-passed call arguments.
 //!
 //! `ActionActiveParam` -> `FuncCallSpecs::checkInputTrialUse` (`fspec.cc:5585`)
 //! decides whether a call's stack-parameter trial is a real argument.  One of
@@ -6,7 +6,7 @@
 //! **caller's** own local stack range, and upstream asks that of the argument
 //! Varnode's address (`fspec.cc:5618`, `inRange(vn->getAddr(),1)`).
 //!
-//! kuna asked it of the *trial's* address instead.  `Heritage::guard_calls`
+//! unlace asked it of the *trial's* address instead.  `Heritage::guard_calls`
 //! registers the trial at the callee-relative address (`addr - stackoffset`)
 //! while creating the argument Varnode at the caller-relative one, so the two
 //! differ by the call's stack offset.  On a downward-growing stack the
@@ -27,7 +27,7 @@ use unlace_base::marshal::ElementId;
 use unlace_base::space::AddrSpace;
 use unlace_base::types::uintb;
 
-/// Marshaling element `<callsitestackargs>` (kuna 4000+ range; 4117 = warnstyle).
+/// Marshaling element `<callsitestackargs>` (unlace 4000+ range; 4117 = warnstyle).
 pub const ELEM_CALLSITESTACKARGS: ElementId = ElementId::new("callsitestackargs", 4118);
 
 /// Is this stack trial outside the caller's own local stack frame?

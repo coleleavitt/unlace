@@ -1,4 +1,4 @@
-//! (kuna `armwalkmode`) The ARM decode mode the Listing walk carries along the
+//! (unlace `armwalkmode`) The ARM decode mode the Listing walk carries along the
 //! control flow it follows from code whose mode the image states, on an image
 //! whose metadata paints no mode.
 //!
@@ -67,7 +67,7 @@ impl ArmWalkMode {
         painter: &ContextPainter,
     ) -> Option<ArmWalkMode> {
         if !arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Armwalkmode>()
             .0
             || arch.input_arm_isa_override

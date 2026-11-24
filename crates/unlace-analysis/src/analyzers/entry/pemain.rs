@@ -1,4 +1,4 @@
-//! (kuna) `pemain` — name the user entry function of a PE image `main`,
+//! (unlace) `pemain` — name the user entry function of a PE image `main`,
 //! `wmain`, `WinMain` or `wWinMain` (P1 program prep).
 //!
 //! A PE's `AddressOfEntryPoint` is the C runtime's startup (`mainCRTStartup`,
@@ -46,7 +46,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 use super::{executable_sections, existing_function_addrs, in_executable_section};
 
-/// (kuna) The PE user-entry naming pass (`pemain`).
+/// (unlace) The PE user-entry naming pass (`pemain`).
 pub struct PeMainPass;
 
 impl AnalysisPass for PeMainPass {

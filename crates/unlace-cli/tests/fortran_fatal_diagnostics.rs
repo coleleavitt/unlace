@@ -41,7 +41,7 @@ fn fatal_runtime_diagnostics_have_no_fallthrough() {
     );
     for (i, name) in names.iter().enumerate() {
         let (body, err, status) =
-            common::run_kuna(&["decompile", binary.to_str().unwrap(), &format!("probe{i}")]);
+            common::run_unlace(&["decompile", binary.to_str().unwrap(), &format!("probe{i}")]);
         assert_eq!(status, 0, "{err}");
         assert!(body.contains(name), "{body}");
         assert_eq!(body.contains("return 0x23e3;"), i == 4, "{body}");

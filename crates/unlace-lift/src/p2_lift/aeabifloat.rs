@@ -1,4 +1,4 @@
-//! (kuna `aeabifloat`) The Arm run-time ABI's floating-point helpers as the C
+//! (unlace `aeabifloat`) The Arm run-time ABI's floating-point helpers as the C
 //! operators and casts they implement.
 //!
 //! A soft-float caller (or a hard-float one on a single-precision FPU, for its
@@ -155,8 +155,8 @@ pub fn payload_xml(big_endian: bool) -> Vec<String> {
         .collect()
 }
 
-crate::kuna_flag!(
-    /// (kuna `aeabifloat`) Install the AEABI floating-point helper call-fixups
+crate::unlace_flag!(
+    /// (unlace `aeabifloat`) Install the AEABI floating-point helper call-fixups
     /// (`p2_lift/aeabifloat.rs`) so `__aeabi_dadd(a,b)` prints as `a + b`.
     /// Read by the analysis-tier call-fixup installer, like `arithhelpers`.
     AeabiFloat,

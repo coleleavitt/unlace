@@ -89,7 +89,7 @@ fn run(
     )
 }
 
-/// [`run`], with kuna options applied to the session right after registerProgram.
+/// [`run`], with unlace options applied to the session right after registerProgram.
 fn run_with_options(
     binary: &Path,
     lang_dir: &str,
@@ -151,7 +151,7 @@ fn run_with_options(
         if i == 0 {
             for (name, value) in options {
                 process
-                    .set_kuna_option_for_test(0, name, value)
+                    .set_unlace_option_for_test(0, name, value)
                     .unwrap_or_else(|e| panic!("option {name} {value}: {e:?}"));
             }
         }

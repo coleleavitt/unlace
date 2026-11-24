@@ -1,4 +1,4 @@
-//! (kuna) Which `.fid` database applies to an image, and what became of the one
+//! (unlace) Which `.fid` database applies to an image, and what became of the one
 //! a run was given.
 //!
 //! A database applies when its header language has the image language's

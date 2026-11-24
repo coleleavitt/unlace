@@ -1,8 +1,8 @@
-//! (kuna) `pdbinterior` — never start a function inside a procedure the PDB
+//! (unlace) `pdbinterior` — never start a function inside a procedure the PDB
 //! describes (P1 code/data partition).
 //!
 //! The PDB half of [`crate::entry::pdatainterior`], for the functions the
-//! exception table cannot vouch for. A kuna `FunctionSymbol` is an entry address
+//! exception table cannot vouch for. A unlace `FunctionSymbol` is an entry address
 //! with no extent, so the commit boundary cannot answer "is this candidate already
 //! inside a known function?". `.pdata` answers it for every function that needs
 //! unwind data, but a frameless leaf has no `RUNTIME_FUNCTION` at all. When MSVC
@@ -75,7 +75,7 @@ use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use super::walk::PdbProcedure;
 use super::{codeview, locate, open_fingerprint_matched, pe_image_base, walk};
 
-/// (kuna) The PDB-procedure-interior entry-suppression pass (`pdbinterior`).
+/// (unlace) The PDB-procedure-interior entry-suppression pass (`pdbinterior`).
 ///
 /// Reports the usable procedure extents on [`AnalysisOutput::pdb_bodies`]; the
 /// commit applies them with [`suppress_owned_interior_entries`].

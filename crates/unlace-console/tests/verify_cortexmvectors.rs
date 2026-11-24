@@ -87,7 +87,7 @@ fn bootstrap(on: bool) -> unlace_console::engine::ConsoleProgram {
     let mut prog = bootstrap_from_object(&bin, "", &spec_roots)
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
-        .set_kuna_option("cortexmvectors", if on { "on" } else { "off" })
+        .set_unlace_option("cortexmvectors", if on { "on" } else { "off" })
         .expect("cortexmvectors flips");
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");

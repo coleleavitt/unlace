@@ -36,7 +36,7 @@ import sqlite3
 import sys
 import urllib.request
 
-FORMAT = "kuna-typelib 1"
+FORMAT = "typelib 1"
 
 WINE = "wine-10.0"
 WINE_URL = "https://gitlab.winehq.org/wine/wine/-/raw/{tag}/dlls/{dll}/{dll}.spec"

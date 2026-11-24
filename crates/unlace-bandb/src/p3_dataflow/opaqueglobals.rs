@@ -7,7 +7,7 @@
 //! bytes of writable data that some instruction stores to, that a pointer
 //! may reach, or that the run-time loader fills. Any other byte still holds
 //! what the image gives it when the program reads it, so
-//! `kuna_opaquedomain` evaluates a comparison over such a read with that
+//! `unlace_opaquedomain` evaluates a comparison over such a read with that
 //! value.
 //!
 //! The scan decodes the whole program, so it runs when the first comparison
@@ -75,16 +75,16 @@ impl UnwrittenGlobals {
 pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let glb = data.get_arch();
     let gate = glb
-        .kuna_options
+        .unlace_options
         .get::<crate::coreoptions::OpaquePredicate>();
     let found = (gate.on && gate.globals)
-        .then(|| glb.kuna_states.get::<UnwrittenGlobals>())
+        .then(|| glb.unlace_states.get::<UnwrittenGlobals>())
         .flatten();
     let pending = gate.on
         && gate.globals
         && found.is_none()
         && glb
-            .kuna_states
+            .unlace_states
             .get::<crate::floatglobals::FloatScan>()
             .is_some();
     if found.is_none() && !pending {
@@ -121,7 +121,7 @@ pub fn constant_read(data: &Funcdata, vn: VarnodeId) -> Option<u64> {
     Some(value & calc_mask(size))
 }
 
-crate::kuna_arch_state!(UnwrittenGlobals);
+crate::unlace_arch_state!(UnwrittenGlobals);
 
 #[cfg(test)]
 mod tests;

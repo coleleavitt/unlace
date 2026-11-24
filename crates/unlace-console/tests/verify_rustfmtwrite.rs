@@ -32,7 +32,7 @@ fn decompile(
     )
     .unwrap();
     assert_eq!(program.arch().rustc_stable_version, Some((1, 93, 1)));
-    program.arch_mut().kuna_options.set(if enabled {
+    program.arch_mut().unlace_options.set(if enabled {
         RustFmtMode::All
     } else {
         RustFmtMode::On
@@ -142,12 +142,12 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                         0 => arch.rustc_stable_version = None,
                         1 => arch.rustc_stable_version = Some((1, 93, 2)),
                         2 => arch
-                            .kuna_options
+                            .unlace_options
                             .set(unlace_decomp::sourcelang::SourceLangForced(Some(
                                 unlace_decomp::sourcelang::SourceLang::C,
                             ))),
                         3 => arch
-                            .kuna_tables
+                            .unlace_tables
                             .get_mut::<unlace_decomp::rustfmtwrite::WriterMethods>()
                             .clear(),
                         index => {
@@ -157,7 +157,7 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                                 WriterMethod::WriteChar,
                                 WriterMethod::WriteFmt,
                             ][index - 4];
-                            arch.kuna_tables
+                            arch.unlace_tables
                                 .get_mut::<unlace_decomp::rustfmtwrite::WriterMethods>()
                                 .retain(|_, method| *method != missing);
                         }

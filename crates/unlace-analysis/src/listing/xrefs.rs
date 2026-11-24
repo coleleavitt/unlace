@@ -1,4 +1,4 @@
-//! (kuna) The cross-reference query behind `unlace xrefs` — "what references this?"
+//! (unlace) The cross-reference query behind `unlace xrefs` — "what references this?"
 //! and "what does this reference?", answered over the decoded instruction stream.
 //!
 //! This is a **read-only query**, not an [`AnalysisPass`](crate::pass::AnalysisPass):
@@ -121,7 +121,7 @@ pub enum XrefKind {
     Read,
     /// The target is stored to.
     Write,
-    /// (kuna `arm64evcall`) An arm64e virtual call whose vtable slot holds
+    /// (unlace `arm64evcall`) An arm64e virtual call whose vtable slot holds
     /// the target among several methods.
     VirtualCall,
 }
@@ -191,7 +191,7 @@ pub struct XrefIndex {
     /// The targets of decoded direct calls and branches that lie outside the
     /// sections the walk decodes.
     stopped: BTreeSet<u64>,
-    /// (kuna) `switchflow`: the decoded computed jumps on a register that the
+    /// (unlace) `switchflow`: the decoded computed jumps on a register that the
     /// walk read no table at ([`XrefIndex::unresolved_computed_jumps`]).
     unresolved_jumps: BTreeSet<u64>,
 }
@@ -515,7 +515,7 @@ impl XrefIndex {
             .collect()
     }
 
-    /// (kuna `addrtable`) File each slot of an absolute pointer table as a
+    /// (unlace `addrtable`) File each slot of an absolute pointer table as a
     /// [`XrefKind::Data`] reference from the slot to the code it holds, the
     /// reference Ghidra's `AddressTable.makeTable` creates. A slot is data, so it
     /// is not attributed to any function.
@@ -685,7 +685,7 @@ impl XrefIndex {
         self.indirect_callers.contains(&entry)
     }
 
-    /// (kuna) `switchflow`: every decoded computed **jump** on a register the
+    /// (unlace) `switchflow`: every decoded computed **jump** on a register the
     /// walk resolved to no table — a switch whose base or range check it could
     /// not read, or a tail call through a pointer — in address order. The code
     /// such a jump reaches may be undecoded, so a consumer reading an empty
@@ -898,13 +898,13 @@ pub fn build_with_unflagged_focus(
 
 /// The walk behind every `build*`.
 ///
-/// (kuna `armframes`) On an ARM image a computed jump is tried as an A32
+/// (unlace `armframes`) On an ARM image a computed jump is tried as an A32
 /// `addls pc,pc,rN,lsl #2` / `ldrls pc,[pc,rN,lsl #2]` table
 /// ([`super::a32switch`]) before any other table read, because its
 /// PC-relative operand names the dispatch itself rather than a table
 /// ([`super::classify::Classified::predicated_skip`]).
 ///
-/// (kuna) On an ARM image the skip any predicated instruction
+/// (unlace) On an ARM image the skip any predicated instruction
 /// lifts to stays one of its `flows` and is walked, but files no row
 /// ([`super::classify::Classified::condition_skip`]). The skip leads `flows`,
 /// so only the first flow equal to it is the skip: a predicated branch whose
@@ -916,7 +916,7 @@ pub fn build_with_unflagged_focus(
 /// final entry set after the walk, so the walk order cannot change which rows
 /// survive, and rendered in that mode only when kept.
 ///
-/// (kuna) On an ARM image a PLT stub's partial sums are not
+/// (unlace) On an ARM image a PLT stub's partial sums are not
 /// references, its slot is ([`super::pltstub`]).
 fn descend(
     file: &object::File,
@@ -978,10 +978,10 @@ fn descend(
     // match it, so the direct-access projection simply contributes nothing.
     let data_space = arch.manage().get_default_data_space().cloned();
 
-    // (kuna) `picbase`: the module's PIC base register, when the program has one
+    // (unlace) `picbase`: the module's PIC base register, when the program has one
     // this can prove. Detected before the walk because the base a function
     // *inherits* is established in a different function's prologue -- see
-    // `kuna_picbase`. `None` (every non-PIC target, every image with no GOT)
+    // `unlace_picbase`. `None` (every non-PIC target, every image with no GOT)
     // leaves the walk below byte-identical to the pre-feature one. A 64-bit
     // image forms PC-relative addresses directly (RIP-relative, ADRP), so only
     // a 32-bit one pays for probing every seed's prologue.
@@ -994,7 +994,7 @@ fn descend(
     };
     let mut pc_thunks = std::collections::HashMap::new();
 
-    // (kuna) `poolref`: the read-only half of the image, so a read of a literal
+    // (unlace) `poolref`: the read-only half of the image, so a read of a literal
     // pool word can be followed to what it points at. `None` (an image with no
     // read-only mapped section, and every relocatable object, whose sections are
     // not the runtime ones) leaves every reference below exactly as it was.
@@ -1008,13 +1008,13 @@ fn descend(
     } else {
         super::gotcall::GotCalls::new(file, arch, &exec_set)
     };
-    // (kuna) `picpool`: the GOT's file bytes, read through a PC-composed base.
+    // (unlace) `picpool`: the GOT's file bytes, read through a PC-composed base.
     let got = if mapped.is_empty() {
         None
     } else {
         GotImage::new(file)
     };
-    // (kuna) `pcform`: the addresses an instruction forms from its own address,
+    // (unlace) `pcform`: the addresses an instruction forms from its own address,
     // which the `checkOperands` floor must not drop. `None` unless the image
     // maps something below that floor. See [`super::pcform`].
     let pcform = PcForm::new(file, pool.as_ref(), &mapped);
@@ -1028,8 +1028,8 @@ fn descend(
         pool.as_ref()
             .is_some_and(|p| named_set.get_or_init(|| p.code_named(file)).contains(&at))
     };
-    // (kuna `switchextent`) A dispatch's function spans the seeds around it;
-    // its jump tables bound one no range check does (`kuna_switchextent`).
+    // (unlace `switchextent`) A dispatch's function spans the seeds around it;
+    // its jump tables bound one no range check does (`unlace_switchextent`).
     let function_tables = pool.as_ref().map(super::switchextent::FunctionTables::new);
     let extent_entries = seed_set.clone();
     let next_table = |from: u64, table: u64| {
@@ -1051,7 +1051,7 @@ fn descend(
         settled: false,
         named: Some(&named),
         next_table: arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::jumptable::SwitchExtent>()
             .0
             .then_some(&next_table),
@@ -1068,7 +1068,7 @@ fn descend(
         preserved: &preserved,
         deref: arm,
     });
-    // (kuna) `regcarry`: the register space a carried constant lives in.
+    // (unlace) `regcarry`: the register space a carried constant lives in.
     let carry_machine = CarryMachine::new(
         file,
         arch.manage().get_space_by_name("register"),
@@ -1077,7 +1077,7 @@ fn descend(
         &mapped,
         pool.as_ref(),
         match arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::MovwPairs>()
         {
             unlace_decomp::analysisgates::MovwPairs::Off => regcarry::HalfPairs::Off,
@@ -1085,12 +1085,12 @@ fn descend(
             unlace_decomp::analysisgates::MovwPairs::On => regcarry::HalfPairs::On,
         },
     );
-    // (kuna) `picpool`: odd composed addresses held for the Thumb-bit decision.
+    // (unlace) `picpool`: odd composed addresses held for the Thumb-bit decision.
     let mut thumb_refs: Vec<(u64, u64, XrefKind, String)> = Vec::new();
-    // (kuna) `switchtable`: the dispatches whose read stopped for want of a
+    // (unlace) `switchtable`: the dispatches whose read stopped for want of a
     // decoded instruction ending at the key, as `(dispatch, mode, branch)`.
     let mut waiting: HashMap<u64, Vec<(u64, _, VarnodeData)>> = HashMap::new();
-    // (kuna `calltable`) Indexed calls with no range check, read once the walk
+    // (unlace `calltable`) Indexed calls with no range check, read once the walk
     // has settled so a table that runs into the next one stops at its cases.
     let mut call_sites: Vec<(u64, VarnodeData)> = Vec::new();
     let thumb_tables = sections_are_runtime
@@ -1103,17 +1103,17 @@ fn descend(
 
     let preserve_bodies = sections_are_runtime
         && arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && file.architecture() == object::Architecture::Arm;
     let prologues = preserve_bodies
         && arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::ArmFrames>()
             .inventory
         && arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::ArmFrames>()
             .full;
     let mut st = State::new(&seed_set, measure || preserve_bodies);
@@ -1128,7 +1128,7 @@ fn descend(
 
     // Share the decoded partition with prologue recovery and AIF.
     let gapwalk = arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::aif::AifMode>()
         .enabled();
     let mut fingerprint_contexts =
@@ -1141,7 +1141,7 @@ fn descend(
     let mut walk_context =
         super::walkcontext::WalkContext::new(prologues, translate, arch, &code_space, &exec);
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch.input_arm_isa_override
@@ -1263,7 +1263,7 @@ fn descend(
                     focused.push(f);
                     f
                 }
-                // (kuna, `aif`) Nothing reachable is left: run the speculative
+                // (unlace, `aif`) Nothing reachable is left: run the speculative
                 // gap-walk over the partition THIS walk left behind, and take up
                 // whatever it finds as more entries to walk. See `gap_entries`.
                 None if frame_partition.is_some()
@@ -1422,11 +1422,11 @@ fn descend(
                     pending_focus.extend(found.into_iter().rev());
                     continue;
                 }
-                // (kuna `calltable`) Nothing fell into these dispatches: a
+                // (unlace `calltable`) Nothing fell into these dispatches: a
                 // pointer table with no range check above it is a call table
                 // or nothing.
                 None if arch
-                    .kuna_options
+                    .unlace_options
                     .get::<unlace_decomp::analysisgates::Calltable>()
                     .0
                     && !waiting.is_empty()
@@ -1513,10 +1513,10 @@ fn descend(
         let body_range = admitted
             .contains(&entry)
             .then(|| unflagged[unflagged.partition_point(|&(lo, _)| lo <= entry) - 1]);
-        // (kuna) `switchtable`: the dispatches this body's decoding filled the gap
+        // (unlace) `switchtable`: the dispatches this body's decoding filled the gap
         // above, to read again once it drains.
         let mut woken: Vec<(u64, _, VarnodeData)> = Vec::new();
-        // (kuna) `switchflow`: this body's intra-function edges as `(to, from)`,
+        // (unlace) `switchflow`: this body's intra-function edges as `(to, from)`,
         // and the dispatches the linear read declined, read over those edges
         // once the body drains. See [`super::switchflow`].
         let mut body_edges: Vec<(u64, u64)> = Vec::new();
@@ -1525,15 +1525,15 @@ fn descend(
         // body before any of it can be attributed (`picbase::scope`), and
         // buffering it costs nothing on the overwhelmingly common `None` path.
         let mut body: Vec<picbase::BaseCandidate> = Vec::new();
-        // (kuna) `picpool`: the pool words this body is carrying towards the
+        // (unlace) `picpool`: the pool words this body is carrying towards the
         // `add` that turns each into an address. Per function, because the values
         // it tracks are live only inside one straight-line run.
         let mut picpool = PicPool::default();
-        // (kuna) `picpool`: `poolref` rows for pool words still in flight, filed
+        // (unlace) `picpool`: `poolref` rows for pool words still in flight, filed
         // once the body drains unless a PC fold consumed the word.
         let mut held: Vec<(u64, u64, String)> = Vec::new();
         st.carry.begin_body();
-        // (kuna) `switchtable`: a dispatch can be decoded before the code that
+        // (unlace) `switchtable`: a dispatch can be decoded before the code that
         // falls into it -- breadth-first, or by a `.cold` fragment's jump back
         // into its parent's loop ahead of the parent's own walk -- and the slice
         // back from it stops at the gap. Whichever body later decodes the
@@ -1771,7 +1771,7 @@ fn descend(
             if let Some((slot, _)) = proven_call {
                 super::gotcall::resolved_slot_reads(&mut drefs, slot);
             }
-            // (kuna) `regcarry`: the address a register pair forms across
+            // (unlace) `regcarry`: the address a register pair forms across
             // instructions. See [`super::regcarry`].
             if let Some(m) = &carry_machine {
                 st.carry.step(
@@ -1786,7 +1786,7 @@ fn descend(
                     },
                 );
             }
-            // (kuna) `picpool`: the address a PC-relative literal-pool pair forms,
+            // (unlace) `picpool`: the address a PC-relative literal-pool pair forms,
             // which is in neither of its two instructions on its own. See
             // [`super::picpool`].
             let seeded = pic_image.as_ref().and_then(|img| {
@@ -1805,7 +1805,7 @@ fn descend(
             });
             // Every row this instruction produces carries the same render, and an
             // instruction that produces none needs no render at all.
-            let vcall = arch.kuna_vcall_targets.get(&vma).map(|v| &v.targets);
+            let vcall = arch.unlace_vcall_targets.get(&vma).map(|v| &v.targets);
             let only_skip = match c.flows.as_slice() {
                 [t] if Some(*t) == condition => true,
                 flows => flows.iter().all(|&t| Some(t) == skip),
@@ -1833,7 +1833,7 @@ fn descend(
             {
                 st.indirect_call_sites.insert(vma);
             }
-            // (kuna `arm64evcall`) A resolved arm64e virtual call: a call edge to
+            // (unlace `arm64evcall`) A resolved arm64e virtual call: a call edge to
             // the one method its slot holds, a `vcall` edge to each of several.
             for &target in vcall.into_iter().flatten() {
                 let kind = if vcall.is_some_and(|t| t.len() == 1) {
@@ -1892,7 +1892,7 @@ fn descend(
                 insn_queue.push_back((fall, fall_mode));
             }
 
-            // (kuna) `switchtable`: a computed jump has no static successor, so
+            // (unlace) `switchtable`: a computed jump has no static successor, so
             // the descent stops dead at every switch dispatch and the case
             // bodies -- and every reference they form -- are invisible. Read the
             // table the jump indexes and take its entries up as successors of
@@ -1997,13 +1997,13 @@ fn descend(
                     if !cases.is_empty() && text.is_empty() {
                         text = assembly(translate, vma, &code_space);
                     }
-                    // (kuna `calltable`) A table whose distinct targets are other
+                    // (unlace `calltable`) A table whose distinct targets are other
                     // functions' entries (40% of a checked table, all of an
                     // unchecked one) dispatches tail calls, not cases of this
                     // function.
                     if unbounded
                         && arch
-                            .kuna_options
+                            .unlace_options
                             .get::<unlace_decomp::analysisgates::Calltable>()
                             .0
                     {
@@ -2012,7 +2012,7 @@ fn descend(
                         });
                     }
                     let call_table = arch
-                        .kuna_options
+                        .unlace_options
                         .get::<unlace_decomp::analysisgates::Calltable>()
                         .0
                         && calltable::is_call_table(&cases, stated.is_none(), |t| {
@@ -2045,10 +2045,10 @@ fn descend(
                     }
                 }
             }
-            // (kuna `calltable`) An indexed call through a table of function
+            // (unlace `calltable`) An indexed call through a table of function
             // pointers calls every entry of the table.
             if arch
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::Calltable>()
                 .0
                 && c.flows.is_empty()
@@ -2126,7 +2126,7 @@ fn descend(
             }
         }
 
-        // (kuna) `picbase`: the references this body forms THROUGH the base
+        // (unlace) `picbase`: the references this body forms THROUGH the base
         // register, filed only where the body cannot have changed it.
         if let Some((ctx, base)) = &picbase {
             body.sort_by_key(|c| c.vma);
@@ -2152,7 +2152,7 @@ fn descend(
             let _ = ctx;
         }
     }
-    // (kuna) `regcarry`: a carried reference holds only where nothing joined
+    // (unlace) `regcarry`: a carried reference holds only where nothing joined
     // the run that carried it, which the whole walk has to have been seen for.
     let mut carried_text: HashMap<u64, String> = HashMap::new();
     for (vma, to, kind) in st.carry.finish(&st.funcs) {
@@ -2175,7 +2175,7 @@ fn descend(
             st.funcs.remove(&f);
         }
     }
-    // (kuna) `picpool`: a Thumb pointer is its entry with bit 0 set. See
+    // (unlace) `picpool`: a Thumb pointer is its entry with bit 0 set. See
     // [`thumb_target`].
     if !thumb_refs.is_empty() {
         let markers = mapping_markers(file);
@@ -2222,7 +2222,7 @@ fn descend(
         index.flow = None;
     }
     if arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Addrtable>()
         .0
         && sections_are_runtime
@@ -2283,7 +2283,7 @@ fn gap_entries(
         contexts,
     );
     let poolslide = (arch
-        .kuna_options
+        .unlace_options
         .get::<unlace_decomp::analysisgates::Aifpoolslide>()
         .0
         && crate::loadimage_object::is_arm32_language(&arch.archid))
@@ -2294,10 +2294,10 @@ fn gap_entries(
             prior,
             translate,
             Rc::clone(code_space),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
@@ -2311,10 +2311,10 @@ fn gap_entries(
             translate,
             Rc::clone(code_space),
             listing.exec_ranges(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .strict(),
-            arch.kuna_options
+            arch.unlace_options
                 .get::<unlace_decomp::aif::AifMode>()
                 .corroborate(),
             bracket,
@@ -2508,15 +2508,15 @@ struct State {
     /// VMAs of the decoded `CALLIND` instructions; folded onto their containing
     /// function in [`State::finish`].
     indirect_call_sites: BTreeSet<u64>,
-    /// (kuna) `switchflow`: VMAs of the decoded computed jumps on a register.
+    /// (unlace) `switchflow`: VMAs of the decoded computed jumps on a register.
     computed_jumps: BTreeSet<u64>,
     flow: Option<FlowGraph>,
     switches: Vec<SwitchTable>,
-    /// (kuna) `picpool`: instructions a recovered frame's walk refused to enter.
+    /// (unlace) `picpool`: instructions a recovered frame's walk refused to enter.
     /// The frame's own edges into one are in no other body's record, so a body
     /// that decodes it later cannot trust what it carries there.
     refused: HashSet<u64>,
-    /// (kuna) `regcarry`: the register constants in flight and the references
+    /// (unlace) `regcarry`: the register constants in flight and the references
     /// they wait to file.
     carry: regcarry::Tracker,
     /// Condition skips `(from, to, entry, mode)` held until the walk ends: one
@@ -2545,7 +2545,7 @@ impl State {
         }
     }
 
-    /// (kuna) `switchtable`: record the computed jump at `vma` in `function` as a
+    /// (unlace) `switchtable`: record the computed jump at `vma` in `function` as a
     /// switch over `cases` (stating `stated` of them), file a `Jump` to each
     /// case body, and add the case edges to the body's `edges`.
     #[allow(clippy::too_many_arguments)]
@@ -2689,7 +2689,7 @@ impl State {
     }
 }
 
-/// (kuna) `picpool`: the address an odd value `v` whose even half is in an
+/// (unlace) `picpool`: the address an odd value `v` whose even half is in an
 /// executable section names. It is a Thumb pointer, filed at `v & !1`, when the
 /// walk decoded code or knows a function there, or when the nearest ARM mapping
 /// symbol at or below it is `$t`; a `$d` or `$a` there makes it a datum at an
@@ -2708,7 +2708,7 @@ fn thumb_target(v: u64, st: &State, markers: &[(u64, u8)]) -> u64 {
     }
 }
 
-/// (kuna) `picpool`: the ARM mapping symbols (`$a`, `$t`, `$d`), by address.
+/// (unlace) `picpool`: the ARM mapping symbols (`$a`, `$t`, `$d`), by address.
 fn mapping_markers(file: &object::File) -> Vec<(u64, u8)> {
     let mut out: Vec<(u64, u8)> = file
         .symbols()
@@ -2750,7 +2750,7 @@ fn empty() -> XrefIndex {
     }
 }
 
-/// (kuna) `switchtable`: the case bodies of the computed jump at `vma` that
+/// (unlace) `switchtable`: the case bodies of the computed jump at `vma` that
 /// branches on `branch`, read through its register chain or as a Thumb
 /// `tbb`/`tbh` table.
 #[allow(clippy::too_many_arguments)]
@@ -2773,7 +2773,7 @@ fn branch_cases(
         ),
         None => switchtable::TableRead::default(),
     };
-    // (kuna) `thumbswitch`: a Thumb `tbb`/`tbh` reads offsets, not addresses.
+    // (unlace) `thumbswitch`: a Thumb `tbb`/`tbh` reads offsets, not addresses.
     // See [`super::thumbswitch`].
     if read.cases.is_empty() && read.stated.is_none() {
         if let Some(tables) = thumb_tables {
@@ -2886,7 +2886,7 @@ fn data_refs(
     let mut out = Vec::new();
     let linked = links(ops);
     let never_taken = || !branches(ops) && delayed();
-    // (kuna) `poolref`: the second edge a literal-pool load forms, from this same
+    // (unlace) `poolref`: the second edge a literal-pool load forms, from this same
     // instruction to the address the pool word holds. See [`super::poolref`].
     // `width` is how many bytes the instruction READ, which a `LOAD`'s address
     // varnode does not carry -- it is pointer-sized whatever the access is, so
@@ -3127,7 +3127,7 @@ pub(super) fn looks_like_address(value: u64) -> bool {
 /// materializes a function entry is the address-taken case, and is exactly what
 /// makes an indirect-call target findable).
 ///
-/// (kuna) An image with NO section table at all presents no sections, so this
+/// (unlace) An image with NO section table at all presents no sections, so this
 /// would answer "nothing is mapped" and every data reference in it would be
 /// discarded while its control flow survived — a sectionless PIE's strings come
 /// back owner-less and `xrefs --to` a string reports zero. The program header is
@@ -3137,7 +3137,7 @@ pub(super) fn looks_like_address(value: u64) -> bool {
 /// sections which are not the runtime layout (a relocatable object) is declined
 /// before this is ever called.
 ///
-/// (kuna) A Mach-O section carries no allocation bit, and `object` classifies
+/// (unlace) A Mach-O section carries no allocation bit, and `object` classifies
 /// only a dozen `(segment, section)` name pairs, so `__DATA_CONST,__got`,
 /// `__la_symbol_ptr`, `__DATA_CONST,__const`, `__cfstring`, `__objc_selrefs` and
 /// `__TEXT,__stubs` read as unknown and every reference into them was dropped
@@ -3826,7 +3826,7 @@ mod tests {
         );
     }
 
-    /// (kuna) `poolref`: a pointer-sized read of a read-only word files the
+    /// (unlace) `poolref`: a pointer-sized read of a read-only word files the
     /// address that word holds, from the same instruction. The ARM shape — the
     /// `LOAD`'s address is a direct `ram` varnode and its OUTPUT carries the
     /// access width.

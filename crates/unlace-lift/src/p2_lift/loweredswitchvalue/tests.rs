@@ -13,7 +13,7 @@ use unlace_num::opcodes::OpCode;
 use super::*;
 use crate::context::{ArchContext, BlockId, TypeOp, VarnodeId};
 use crate::jumptable::JumpTable;
-use crate::p2_lift::loweredswitch::{KunaLoweredSwitchRecord, new_shared_store};
+use crate::p2_lift::loweredswitch::{UnlaceLoweredSwitchRecord, new_shared_store};
 
 fn input_is_recorded_value(
     data: &Funcdata,
@@ -598,11 +598,11 @@ fn install_fake_switch(
     fd.op_insert_end(ind, bl);
     let mut jt = JumpTable::new(ram(fd, 0x1001));
     jt.set_indirect_op_addr(ind, ram(fd, 0x1001));
-    jt.kuna_set_lowered_var(ram(fd, 0x38), 4);
+    jt.unlace_set_lowered_var(ram(fd, 0x38), 4);
     fd.jumpvec_mut().push(jt);
     let store = new_shared_store();
     let a = |off| ram(fd, off);
-    let rec = KunaLoweredSwitchRecord {
+    let rec = UnlaceLoweredSwitchRecord {
         branch_addr: a(0x1001),
         var_addr: a(0x38),
         var_size: 4,

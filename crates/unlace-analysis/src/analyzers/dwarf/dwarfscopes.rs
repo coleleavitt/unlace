@@ -1,4 +1,4 @@
-//! (kuna `dwarfscopes`) Where a subprogram's frame base is, and which
+//! (unlace `dwarfscopes`) Where a subprogram's frame base is, and which
 //! locals besides its direct children are fixed stack objects.
 //!
 //! `DW_OP_fbreg` is relative to `DW_AT_frame_base`. gcc states the frame base
@@ -265,7 +265,7 @@ pub fn register_name(arch: object::Architecture, reg: u16) -> Option<String> {
     })
 }
 
-/// (kuna `dwarfscopes`) Every parameter of `sub` whose location at entry is
+/// (unlace `dwarfscopes`) Every parameter of `sub` whose location at entry is
 /// one register: the compiler's convention for the function, which differs from
 /// the default model for an IPA-optimized or `regparm` callee. The slot index
 /// rides in [`RegLocalFact::start`](crate::pass::RegLocalFact).

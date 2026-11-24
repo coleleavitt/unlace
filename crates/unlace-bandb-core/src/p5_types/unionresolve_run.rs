@@ -46,7 +46,7 @@ use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;
-use unlace_base::error::KunaResult;
+use unlace_base::error::UnlaceResult;
 use unlace_base::types::{int4, int8, uintb};
 use unlace_num::opcodes::OpCode;
 
@@ -462,7 +462,7 @@ impl<'a> ScoreUnionFields<'a> {
     // -- scoreTrialDown / scoreTrialUp (unionresolve.cc:355-921) ---------------
 
     /// C++ `ScoreUnionFields::scoreTrialDown` (unionresolve.cc:355-717).
-    fn score_trial_down(&mut self, trial: &Trial, last_level: bool) -> KunaResult<()> {
+    fn score_trial_down(&mut self, trial: &Trial, last_level: bool) -> UnlaceResult<()> {
         if trial.direction == DirType::Up {
             return Ok(()); // Trial doesn't push in this direction
         }
@@ -637,7 +637,7 @@ impl<'a> ScoreUnionFields<'a> {
         trial: &Trial,
         op: OpId,
         meta: type_metatype,
-    ) -> KunaResult<(int4, Option<Rc<Datatype>>, int4)> {
+    ) -> UnlaceResult<(int4, Option<Rc<Datatype>>, int4)> {
         use type_metatype::*;
         let mut score: int4 = 0;
         let mut res_type: Option<Rc<Datatype>> = None;
@@ -752,7 +752,7 @@ impl<'a> ScoreUnionFields<'a> {
         trial: &Trial,
         op: OpId,
         meta: type_metatype,
-    ) -> KunaResult<(int4, Option<Rc<Datatype>>)> {
+    ) -> UnlaceResult<(int4, Option<Rc<Datatype>>)> {
         use type_metatype::*;
         let mut score: int4 = 0;
         let mut res_type: Option<Rc<Datatype>> = None;
@@ -792,7 +792,7 @@ impl<'a> ScoreUnionFields<'a> {
     }
 
     /// C++ `ScoreUnionFields::scoreTrialUp` (unionresolve.cc:719-921).
-    fn score_trial_up(&mut self, trial: &Trial, last_level: bool) -> KunaResult<()> {
+    fn score_trial_up(&mut self, trial: &Trial, last_level: bool) -> UnlaceResult<()> {
         if trial.direction == DirType::Down {
             return Ok(()); // Trial doesn't push in this direction
         }
@@ -1002,7 +1002,7 @@ impl<'a> ScoreUnionFields<'a> {
         vn: VarnodeId,
         offset: int4,
         score_index: int4,
-    ) -> KunaResult<Option<Rc<Datatype>>> {
+    ) -> UnlaceResult<Option<Rc<Datatype>>> {
         let vn_size = self.data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(0);
         let (score, res) = score_truncation(ct, vn_size, offset, Some(self.result.get_base()))?;
         self.scores[score_index as usize] += score;
@@ -1046,7 +1046,7 @@ impl<'a> ScoreUnionFields<'a> {
     // -- runOneLevel / run / computeBestIndex (unionresolve.cc:1036-1085) ------
 
     /// C++ `ScoreUnionFields::runOneLevel` (unionresolve.cc:1036-1048).
-    fn run_one_level(&mut self, last_pass: bool) -> KunaResult<()> {
+    fn run_one_level(&mut self, last_pass: bool) -> UnlaceResult<()> {
         // The C++ iterates `trialCurrent` by const-iterator; scoring appends to
         // `trialNext` (never `trialCurrent`), so a snapshot of indices is faithful.
         let current = std::mem::take(&mut self.trial_current);
@@ -1072,7 +1072,7 @@ impl<'a> ScoreUnionFields<'a> {
     }
 
     /// C++ `ScoreUnionFields::run` (unionresolve.cc:1068-1085).
-    fn run(&mut self) -> KunaResult<()> {
+    fn run(&mut self) -> UnlaceResult<()> {
         self.trial_count = 0;
         for pass in 0..MAX_PASSES {
             if self.trial_current.is_empty() {
@@ -1103,7 +1103,7 @@ impl<'a> ScoreUnionFields<'a> {
         parent_type: Rc<Datatype>,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<ScoreUnionFields<'a>> {
+    ) -> UnlaceResult<ScoreUnionFields<'a>> {
         let result = ResolvedUnion::new(Rc::clone(&parent_type));
         let mut s = ScoreUnionFields {
             data,
@@ -1224,7 +1224,7 @@ impl<'a> ScoreUnionFields<'a> {
         union_type: Rc<Datatype>,
         offset: int4,
         op: OpId,
-    ) -> KunaResult<ScoreUnionFields<'a>> {
+    ) -> UnlaceResult<ScoreUnionFields<'a>> {
         let result = ResolvedUnion::new(Rc::clone(&union_type));
         let mut s = ScoreUnionFields {
             data,
@@ -1281,7 +1281,7 @@ impl<'a> ScoreUnionFields<'a> {
         offset: int4,
         op: OpId,
         slot: int4,
-    ) -> KunaResult<ScoreUnionFields<'a>> {
+    ) -> UnlaceResult<ScoreUnionFields<'a>> {
         let result = ResolvedUnion::new(Rc::clone(&union_type));
         let mut s = ScoreUnionFields {
             data,
@@ -1359,7 +1359,7 @@ impl<'a> ScoreUnionFields<'a> {
         s: &mut ScoreUnionFields<'a>,
         offset: int4,
         vn_size: int4,
-    ) -> KunaResult<()> {
+    ) -> UnlaceResult<()> {
         let cur = Rc::clone(s.result.get_datatype());
         if let Some(piece) = s.typegrp.get_exact_piece(cur, offset, vn_size)? {
             s.result.set_resolve(piece);

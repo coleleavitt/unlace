@@ -114,7 +114,7 @@ true with 333 more rows in it. It does NOT ablate the placeholder strip below,
 which is ungated and runs in both arms, so `off` is not `origin/main`. Adding a
 second flag would make the two halves of one measured table separately ablatable
 for no reason a reader would use. The stage
-test `tests/stages/kuna-libcwiden.toml` pins both arms.
+test `tests/stages/libcwiden.toml` pins both arms.
 
 ## 6. What it costs
 

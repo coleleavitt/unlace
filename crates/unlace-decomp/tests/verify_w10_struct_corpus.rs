@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::marshal::IdRegistry;
 use unlace_base::space::AddrSpaceManager;
 use unlace_base::xml::{DocumentStorage, Element};
@@ -174,8 +174,8 @@ impl LoadImage for DummyImg {
     fn get_file_name(&self) -> &str {
         "dummy"
     }
-    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> KunaResult<()> {
-        Err(KunaError::data_unavail("dummy"))
+    fn load_fill(&mut self, _ptr: &mut [u8], _addr: &Address) -> UnlaceResult<()> {
+        Err(UnlaceError::data_unavail("dummy"))
     }
     fn get_arch_type(&self) -> Vec<u8> {
         Vec::new()
@@ -875,8 +875,8 @@ fn verify_w10_pspec_context_forloop_varused_lifts_64bit_and_structures() {
 // must bind to the angr default `aN` names and appear in the body, never the raw
 // argument registers and never the `$$undef` placeholder; (3) parameters must
 // NOT be re-declared as body locals.  These pin the un-seam against the C++
-// oracle (`decomp_dbg` with `namestyle angr`, the kuna default) on the
-// integer/pointer corpus, the same scheme as `kunaArgName`/`buildDefaultName`.
+// oracle (`decomp_dbg` with `namestyle angr`, the unlace default) on the
+// integer/pointer corpus, the same scheme as `unlaceArgName`/`buildDefaultName`.
 // ===========================================================================
 
 /// DETERMINISM: rendering the same function twice must be byte-identical.  The
@@ -1141,7 +1141,7 @@ fn w10_ptr_flow_load_explicit_deref_keeps_base_inside_star() {
 /// persist-proxy `vN`-not-`dat_` property; it also has `<symbol>` entries
 /// `render_corpus` decompiles, which `elseif` lacks.)
 ///
-/// (kuna `inputparamgap`, DIV-114: the witness inside floatconv moved from
+/// (unlace `inputparamgap`, DIV-114: the witness inside floatconv moved from
 /// `ulconv_win`'s `// rcx` local to `rand_calc`'s `// xmm0` one. `render_corpus`
 /// decompiles with the prototype UNLOCKED, and under this datatest's gcc/SysV
 /// cspec `ulconv_win`'s live-in RCX is argument FOUR behind a dead rdi/rsi/rdx

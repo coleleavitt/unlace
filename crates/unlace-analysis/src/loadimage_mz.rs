@@ -1,9 +1,9 @@
-//! (kuna) The MS-DOS `MZ` executable: the header, the load module and its
+//! (unlace) The MS-DOS `MZ` executable: the header, the load module and its
 //! segment relocations, read into the flat image an x86 real-mode decoder sees.
 //!
 //! DOS copies the load module (the file past the header, up to the size the
 //! header declares) to a free paragraph, adds that load segment to every word
-//! the relocation table names, and starts at `CS:IP` relative to it. kuna does
+//! the relocation table names, and starts at `CS:IP` relative to it. unlace does
 //! the same at [`MZ_LOAD_SEGMENT`], so near and far references, the entry and
 //! the stack all land where the program puts them, at linear `segment * 16 +
 //! offset`. Uninitialized memory past the module (the header's minimum
@@ -11,7 +11,7 @@
 //! zeros that decode as code. An `MZ` stub in front of a PE, NE, LE or LX image
 //! is not claimed.
 
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 
 /// The paragraph the load module is placed at, the conventional `1000:0000`.
 pub const MZ_LOAD_SEGMENT: u16 = 0x1000;
@@ -107,9 +107,9 @@ fn linear(load: u16, segment: u16, offset: u16) -> u64 {
 impl MzImage {
     /// Read the header, cut out the load module and relocate it at
     /// [`MZ_LOAD_SEGMENT`].
-    pub fn parse(bytes: &[u8]) -> KunaResult<MzImage> {
+    pub fn parse(bytes: &[u8]) -> UnlaceResult<MzImage> {
         if !is_mz_dos_image(bytes) {
-            return Err(KunaError::lowlevel("not an MS-DOS MZ executable"));
+            return Err(UnlaceError::lowlevel("not an MS-DOS MZ executable"));
         }
         let last_page = usize::from(word(bytes, 0x02));
         let pages = usize::from(word(bytes, 0x04));
@@ -121,7 +121,7 @@ impl MzImage {
         }
         .min(bytes.len());
         if header < HEADER_LEN || header >= image_end {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "MZ header of {header} bytes leaves no load module in a {image_end}-byte image"
             )));
         }
@@ -151,7 +151,7 @@ impl MzImage {
         let base = u64::from(MZ_LOAD_SEGMENT) * 16;
         let entry = linear(MZ_LOAD_SEGMENT, word(bytes, 0x16), word(bytes, 0x14));
         if entry < base || entry >= base + module.len() as u64 {
-            return Err(KunaError::lowlevel(format!(
+            return Err(UnlaceError::lowlevel(format!(
                 "MZ entry {:04x}:{:04x} lies outside the {}-byte load module",
                 word(bytes, 0x16),
                 word(bytes, 0x14),

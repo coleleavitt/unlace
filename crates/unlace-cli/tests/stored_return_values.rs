@@ -108,13 +108,13 @@ fn round_trip(asm: &std::path::Path, cases: &[&(&str, &str, &str)], code: impl F
     }
 }
 
-fn kuna() -> std::ffi::OsString {
+fn unlace() -> std::ffi::OsString {
     unlace_base::env::var_os("UNLACE_TEST_BIN")
         .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn decompile_all(elf: &std::path::Path) -> Vec<(String, String)> {
-    let output = process::required_output(Command::new(kuna()).args([
+    let output = process::required_output(Command::new(unlace()).args([
         "decompile-all",
         elf.to_str().unwrap(),
         "--json",
@@ -161,7 +161,7 @@ fn a_single_function_decompile_returns_what_its_callers_read() {
     let elf = asm.with_extension("elf");
     let decompile = |name: &str, extra: &[&str]| {
         let output = process::required_output(
-            Command::new(kuna())
+            Command::new(unlace())
                 .arg("decompile")
                 .arg(&elf)
                 .arg(name)
@@ -206,7 +206,7 @@ fn a_selected_batch_returns_the_indirect_result_its_unselected_caller_reads() {
     std::fs::set_permissions(&elf, std::fs::Permissions::from_mode(0o444)).unwrap();
 
     let decompile = |mode: &str, args: &[&str]| {
-        let mut command = Command::new(kuna());
+        let mut command = Command::new(unlace());
         command.arg(mode).arg(&elf).args(args).args([
             "--assert",
             "prototype batch_target long batch_target(long value)",

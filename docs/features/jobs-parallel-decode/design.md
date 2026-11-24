@@ -137,7 +137,7 @@ listed landed as written.
   all-or-nothing decision, one stderr line, the serial walk on refusal.
 * **`WalkPlan` carries the kit seed, not a `DecodeKitFactory` trait object.** The
   recipe, the `Arc<dyn ImageBytes>` and the `ContextValueSnapshot` are plain data,
-  so there was no need for a trait or for kuna-analysis to reach into kuna-console;
+  so there was no need for a trait or for kuna-analysis to reach into console;
   the plan is built once per `run_listing_consumers` and reused across all four
   rebuild sites.
 * **Lane 0 is the calling thread.** The pre-spawn probe has to build a kit on this

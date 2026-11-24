@@ -17,8 +17,8 @@ use unlace_console::assertions::{self, Body, Directive};
 use unlace_console::engine::{ConsoleProgram, EntrySelector, bootstrap_from_object};
 use unlace_console::project::decompile_targets;
 use unlace_console::retcallchain::{
-    CHAIN_MAX_INSNS, CHAIN_MAX_SITES, kuna_chain_sites, kuna_entry_chain_sites,
-    kuna_push_immediate_ret,
+    CHAIN_MAX_INSNS, CHAIN_MAX_SITES, unlace_chain_sites, unlace_entry_chain_sites,
+    unlace_push_immediate_ret,
 };
 
 /// `chain_entry`, and the `ret` of each of its three links.
@@ -93,7 +93,7 @@ fn sites(prog: &ConsoleProgram, at: u64) -> Vec<u64> {
         .expect("code space");
     let entry = Address::new(space.clone(), CHAIN_ENTRY);
     let at = Address::new(space, at);
-    kuna_chain_sites(
+    unlace_chain_sites(
         prog.arch().translate(),
         &entry,
         &at,
@@ -127,7 +127,7 @@ fn entry_recognition_reports_the_complete_chain() {
         .cloned()
         .expect("code space");
     let entry = Address::new(space, CHAIN_ENTRY);
-    let sites = kuna_entry_chain_sites(
+    let sites = unlace_entry_chain_sites(
         prog.arch().translate(),
         &entry,
         CHAIN_MAX_SITES,
@@ -149,7 +149,7 @@ fn immediate_ret_recognition_reports_only_the_one_store_tail() {
         .cloned()
         .expect("code space");
     let entry = Address::new(space.clone(), 0x0804_9000);
-    let matched = kuna_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS)
+    let matched = unlace_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS)
         .expect("one-store immediate RET tail");
     assert_eq!(matched.0.get_offset(), 0x0804_900a);
     assert_eq!(matched.1, 0x0804_b000);
@@ -165,7 +165,7 @@ fn immediate_ret_recognition_reports_only_the_one_store_tail() {
     ] {
         let entry = Address::new(space.clone(), entry);
         assert_eq!(
-            kuna_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS),
+            unlace_push_immediate_ret(prog.arch().translate(), &entry, CHAIN_MAX_INSNS),
             None,
             "negative at {entry:?} became an immediate RET tail"
         );
@@ -252,7 +252,7 @@ fn fallthrough_decoys_are_not_entry_chains() {
         0x0804_9080,
     ] {
         let entry = Address::new(space.clone(), entry);
-        let sites = kuna_entry_chain_sites(
+        let sites = unlace_entry_chain_sites(
             prog.arch().translate(),
             &entry,
             CHAIN_MAX_SITES,
@@ -277,7 +277,7 @@ fn the_site_cap_bounds_what_is_reported() {
         .expect("code space");
     let entry = Address::new(space.clone(), CHAIN_ENTRY);
     let at = Address::new(space, LINK_RETS[0]);
-    let capped = kuna_chain_sites(prog.arch().translate(), &entry, &at, 1, CHAIN_MAX_INSNS);
+    let capped = unlace_chain_sites(prog.arch().translate(), &entry, &at, 1, CHAIN_MAX_INSNS);
     // Only the first link fits under the cap, and it is the override's own site,
     // so there is nothing left to report.
     assert!(
@@ -285,7 +285,8 @@ fn the_site_cap_bounds_what_is_reported() {
         "the cap did not bound the walk: {capped:?}"
     );
 
-    let entry_capped = kuna_entry_chain_sites(prog.arch().translate(), &entry, 1, CHAIN_MAX_INSNS);
+    let entry_capped =
+        unlace_entry_chain_sites(prog.arch().translate(), &entry, 1, CHAIN_MAX_INSNS);
     assert_eq!(
         entry_capped.len(),
         1,

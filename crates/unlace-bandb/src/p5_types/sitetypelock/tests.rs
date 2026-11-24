@@ -1,4 +1,4 @@
-// Tests for `kuna_sitetypelock` (included into `mod tests` in
+// Tests for `unlace_sitetypelock` (included into `mod tests` in
 // sitetypelock.rs).
 //
 // Covered:

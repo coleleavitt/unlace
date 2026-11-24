@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use unlace_base::address::Address;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpaceManager;
 use unlace_num::pcoderaw::VarnodeData;
 
@@ -115,7 +115,7 @@ fn physical_pieces(
     size: u32,
     manager: &AddrSpaceManager,
     big_endian: bool,
-) -> KunaResult<Vec<VarnodeData>> {
+) -> UnlaceResult<Vec<VarnodeData>> {
     if addr
         .get_space()
         .zip(manager.get_join_space())
@@ -149,11 +149,11 @@ fn append_padding(
     pieces: &mut Vec<VarnodeData>,
     manager: &AddrSpaceManager,
     size: u32,
-) -> KunaResult<()> {
+) -> UnlaceResult<()> {
     if size > 0 {
         let space = manager
             .get_constant_space()
-            .ok_or_else(|| KunaError::lowlevel("ABI padding requires a constant space"))?;
+            .ok_or_else(|| UnlaceError::lowlevel("ABI padding requires a constant space"))?;
         pieces.push(VarnodeData {
             space: Some(space.clone()),
             offset: 0,
@@ -174,7 +174,7 @@ pub fn assign_fields(
     result: &mut ParameterPieces,
     resource: &ParamListStandard,
     manager: &AddrSpaceManager,
-) -> KunaResult<AssignActionResponse> {
+) -> UnlaceResult<AssignActionResponse> {
     use AssignActionResponse::{fail, success};
     let Some(fields) = direct_fields(dt) else {
         return Ok(fail);

@@ -6,19 +6,19 @@
 pub mod actionprof;
 pub mod addtreestate;
 pub mod archstate;
-pub mod avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops
+pub mod avxintrin; // (unlace `avxintrinsics`) Intel intrinsic names for the SLEIGH AVX user-ops
 pub mod block;
 pub mod budget;
 pub mod calleefacts;
 pub mod capability;
 pub mod checkedarena;
 pub mod comment;
-pub mod condcallpush; // (kuna `condcallpush`) a call's return-address push is not a statement
+pub mod condcallpush; // (unlace `condcallpush`) a call's return-address push is not a statement
 pub mod context;
 pub mod cover;
 pub mod cpool;
 pub mod dtype;
-pub mod dwarfregbind; // (kuna `dwarfscopes`) where a DWARF register local binds
+pub mod dwarfregbind; // (unlace `dwarfscopes`) where a DWARF register local binds
 pub mod dynamic;
 pub mod emittedop;
 pub mod expression;
@@ -36,12 +36,12 @@ pub mod funcslots;
 pub mod funcstate;
 pub mod hostmem;
 pub mod idiom;
-pub mod maturity; // (kuna) how far the scheduler has got through a pass (spec §0.10)
-pub mod namespaces; // (kuna) which namespaces print in front of a name
-pub mod neonintrin; // (kuna `neonintrin`) ACLE NEON intrinsic names and vector types
+pub mod maturity; // (unlace) how far the scheduler has got through a pass (spec §0.10)
+pub mod namespaces; // (unlace) which namespaces print in front of a name
+pub mod neonintrin; // (unlace `neonintrin`) ACLE NEON intrinsic names and vector types
 pub mod op;
 pub mod optionset;
-pub mod orchainbool; // (kuna `orchainbool`) short-circuit protection only for boolean returns
+pub mod orchainbool; // (unlace `orchainbool`) short-circuit protection only for boolean returns
 pub mod outlang;
 pub mod passhooks;
 pub mod pcodeinject;
@@ -51,7 +51,7 @@ pub mod regioneval;
 pub mod specnames;
 pub mod transform;
 pub mod typeop;
-pub mod typequal; // (kuna) C type qualifiers on their own type layer
+pub mod typequal; // (unlace) C type qualifiers on their own type layer
 pub mod userop;
 pub mod variable;
 pub mod varnode;

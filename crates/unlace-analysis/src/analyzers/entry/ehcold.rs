@@ -1,4 +1,4 @@
-//! (kuna) `ehcold` — an exception-cleanup `.cold` fragment belongs to its owner,
+//! (unlace) `ehcold` — an exception-cleanup `.cold` fragment belongs to its owner,
 //! not to the function list (P1 code/data partition).
 //!
 //! GCC moves a function's landing-pad cleanups into its `.cold` partition. Each
@@ -7,11 +7,11 @@
 //! ladder of `free; call _Unwind_Resume` blocks. The FDE oracle lists that
 //! fragment as a function, `coldentry` adds one function per rung, and each
 //! decompiles as code that starts from an undefined `rbx` and ends in
-//! `_Unwind_Resume()`. On IDA's own `objc.so` 193 of kuna's 657 functions were
+//! `_Unwind_Resume()`. On IDA's own `objc.so` 193 of unlace's 657 functions were
 //! such rungs. IDA attaches the fragment to its owner as a function tail
 //! (`append_func_tail`, `eh_parse` 0x114d0).
 //!
-//! kuna has no function tails, so the fragment is withheld from the entry set
+//! unlace has no function tails, so the fragment is withheld from the entry set
 //! instead. An FDE body `[s, e)` is an EH cold part when
 //!
 //! 1. it has no function symbol at `s`,
@@ -37,7 +37,7 @@ const PAD_STUB: u64 = 16;
 /// The function alignment GCC and Clang use on x86 at -O2, which a `.cold` part does not get.
 const TAIL_ALIGN: u64 = 16;
 
-/// (kuna) The EH cold-fragment pass (`ehcold`), gated at the commit.
+/// (unlace) The EH cold-fragment pass (`ehcold`), gated at the commit.
 pub struct EhColdPass;
 
 impl AnalysisPass for EhColdPass {
@@ -66,7 +66,7 @@ impl AnalysisPass for EhColdPass {
     }
 }
 
-/// (kuna) The function-tail pass (`functails`), gated at the commit. Its tails
+/// (unlace) The function-tail pass (`functails`), gated at the commit. Its tails
 /// travel on the same channel as the EH cold parts, so the commit drops every
 /// discovered entry inside one, and the owner's flow follows its jumps into the
 /// tail as into any other block of its own.
@@ -116,7 +116,7 @@ pub fn eh_cold_parts(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
         .collect()
 }
 
-/// (kuna `functails`) The FDE bodies that are a tail of another function: entered
+/// (unlace `functails`) The FDE bodies that are a tail of another function: entered
 /// only by direct jumps from one other FDE body (its owner), never called, with no
 /// function symbol at the start, laid out before the owner and starting off the
 /// 16-byte function alignment, where GCC's hot/cold split puts a `.cold` part.

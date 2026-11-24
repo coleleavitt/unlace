@@ -1,4 +1,4 @@
-//! Scalar / operand reference markup — the kuna analog of Ghidra's
+//! Scalar / operand reference markup — the unlace analog of Ghidra's
 //! `ScalarOperandAnalyzer` / `ElfScalarOperandAnalyzer` (and, for the
 //! listing-cosmetic half, `OperandReferenceAnalyzer` /
 //! `DataOperandReferenceAnalyzer`).
@@ -9,7 +9,7 @@
 //! operand and creates *listing references* — string / pointer / address-table /
 //! subroutine references. Most of that output is **listing cosmetics** (a
 //! `ReferenceManager` xref that never reaches a decompiler) or already delivered
-//! elsewhere in kuna (subroutine refs → `entry`; jump tables → the engine's
+//! elsewhere in unlace (subroutine refs → `entry`; jump tables → the engine's
 //! `JumpTable::recoverAddresses` switch recovery / `addrtable`; PLT/GOT names →
 //! `loader::elf_plt`). See the "covered-elsewhere" map below.
 //!
@@ -21,7 +21,7 @@
 //!
 //! 1. linear-decode every instruction in the executable sections (driving the
 //!    same ported SLEIGH engine the [`crate::listing`] tier uses — design §4),
-//! 2. for each **constant-space** p-code input (the kuna analog of Ghidra's
+//! 2. for each **constant-space** p-code input (the unlace analog of Ghidra's
 //!    `Instruction.getOpObjects(i)` `Scalar` operands — see [`ScalarCapture`]),
 //!    apply `ScalarOperandAnalyzer.checkOperands`'s value filter (reject `< 4096`
 //!    and the byte-mask values like `0xffff`/`0xff00`),
@@ -31,7 +31,7 @@
 //!    the readonly partition),
 //! 4. apply the `ElfScalarOperandAnalyzer` `.got`/`.plt` exclusion (those targets
 //!    are already named by [`crate::loader::elf_plt`], so a scalar pointing at
-//!    them is never a data reference), and (kuna) drop a scalar the instruction
+//!    them is never a data reference), and (unlace) drop a scalar the instruction
 //!    uses as the base of an indexed load wider than a byte, which addresses a
 //!    jump table, a function-pointer table or a word map ([`IndexedBases`]),
 //! 5. emit a [`crate::pass::StringFact`] (a typed `char[N]`) when the target is a
@@ -55,7 +55,7 @@
 //!   returns `!ElfLoader.isElf(program)` — Ghidra ships the producing analyzer
 //!   **disabled for every ELF**. `ElfScalarOperandAnalyzer` exists only to *remove*
 //!   the bad `.got`/`.plt` references its parent would create — a correction of a
-//!   bug kuna never has (kuna names `.plt`/`.got` correctly via `elf_plt`).
+//!   bug unlace never has (unlace names `.plt`/`.got` correctly via `elf_plt`).
 //! - **The one useful product is already covered.** A `.rodata` string ≥ 5 chars
 //!   is already planted as a `char[N]` by the always-on [`crate::strings`] pass,
 //!   and the printer renders it as the literal via the SPACEBASE route (Increment
@@ -98,10 +98,10 @@
 //!
 //! `OperandReferenceAnalyzer` / `DataOperandReferenceAnalyzer` additionally create
 //! **subroutine** references (it even runs a `PseudoDisassembler` to detect a
-//! function start) and **address-table** references. kuna has no commit arm for a
+//! function start) and **address-table** references. unlace has no commit arm for a
 //! bare xref, and these products are delivered by other passes:
 //!
-//! | Ghidra operand-ref product | kuna source (covered elsewhere) |
+//! | Ghidra operand-ref product | unlace source (covered elsewhere) |
 //! |---|---|
 //! | subroutine reference → create function | [`crate::entry`] (entry discovery) |
 //! | jump/address-table reference | engine `JumpTable::recoverAddresses` (S2) + [`crate::addrtable`] |
@@ -112,7 +112,7 @@
 //! no-op (faithful to the buildplan: "faithfully DOCUMENT it as covered-elsewhere
 //! … rather than building a no-op").
 //!
-//! ## Origin (upstream Ghidra, the tree kuna was ported from)
+//! ## Origin (upstream Ghidra, the tree unlace was ported from)
 //!
 //! `Ghidra/Features/Base/src/main/java/ghidra/app/plugin/core/analysis/{ScalarOperandAnalyzer,ElfScalarOperandAnalyzer,OperandReferenceAnalyzer,DataOperandReferenceAnalyzer}.java`
 //! — `ScalarOperandAnalyzer.checkOperands()` (the per-operand `Scalar` loop +
@@ -198,7 +198,7 @@ impl SecRange {
     /// scalar may point at? `SHF_ALLOC` set, `SHF_WRITE` clear, not executable.
     fn is_readonly_data(&self) -> bool {
         if self.elf_flags != 0 {
-            // (kuna) The loader's tables, the notes and `.interp` are allocated
+            // (unlace) The loader's tables, the notes and `.interp` are allocated
             // and not writable, so the flag test alone accepts them -- and in a
             // position-independent executable `.dynsym` covers `0x1000`, so a
             // buffer size lands in it and the pass plants a `char[2]` on a
@@ -295,7 +295,7 @@ impl Operand {
 
 /// A capturing [`PcodeEmit`] that records every **constant-space** input varnode's
 /// value for one instruction. These are the scalar immediates the
-/// `ScalarOperandAnalyzer` reads as `Instruction.getOpObjects(i)` `Scalar`s — kuna
+/// `ScalarOperandAnalyzer` reads as `Instruction.getOpObjects(i)` `Scalar`s — unlace
 /// has no separate operand model at this tier, so the constant inputs of the
 /// instruction's p-code are the faithful projection (every literal an operand
 /// contributes appears as a constant-space varnode in the emitted ops).  The ops
@@ -337,11 +337,11 @@ impl PcodeEmit for ScalarCapture {
     }
 }
 
-/// (kuna) How many instructions an address stays in a register for
+/// (unlace) How many instructions an address stays in a register for
 /// [`TableUses`].
 const TABLE_WINDOW: u8 = 32;
 
-/// (kuna) The addresses code puts in a register and, within [`TABLE_WINDOW`]
+/// (unlace) The addresses code puts in a register and, within [`TABLE_WINDOW`]
 /// instructions, adds a computed index to (`lea rcx,table` then
 /// `mov eax,[rcx+rax*4]`, or `lea rdi,[rax+table]`): the base of an array,
 /// whatever its bytes spell. A conditional branch or a call falls through to the
@@ -420,7 +420,7 @@ impl TableUses {
     }
 }
 
-/// (kuna) The scalars an instruction uses as the base of an indexed load wider
+/// (unlace) The scalars an instruction uses as the base of an indexed load wider
 /// than a byte: added to a value the instruction does not know (`table(,%rax,8)`,
 /// `map(%rdi,%rdi)`) to form the address of a 2-byte or wider LOAD.  Such a scalar
 /// addresses an array of wider elements -- a jump table, a table of function
@@ -528,7 +528,7 @@ pub(crate) fn string_len(bytes: &[u8]) -> Option<u32> {
     (bytes[len] == 0 && len >= STRING_MIN_LEN).then_some((len + 1) as u32)
 }
 
-/// (kuna) If `bytes`, at `addr`, read as the head of an array of 2- or 4-byte
+/// (unlace) If `bytes`, at `addr`, read as the head of an array of 2- or 4-byte
 /// elements that hold character codes (a `wchar_t`, `char32_t` or `char16_t`
 /// string, or an `int` or `short` table such as `{65, 66, 67, 68}`) rather than
 /// as a one-character string, the address of its second element. The first two
@@ -551,10 +551,10 @@ fn wide_element_neighbour(bytes: &[u8], addr: u64) -> Option<u64> {
         .map(|(width, _)| addr + width)
 }
 
-/// (kuna) The most entries [`relative_string_table`] reads from one table.
+/// (unlace) The most entries [`relative_string_table`] reads from one table.
 const RELATIVE_TABLE_ENTRIES: usize = 256;
 
-/// (kuna) Which of `wanted` (sorted) the image holds as a pointer: the value of a
+/// (unlace) Which of `wanted` (sorted) the image holds as a pointer: the value of a
 /// pointer-aligned slot of an allocated section, read in the image's byte order,
 /// or the addend of a dynamic relocation, where a position-independent image
 /// keeps the pointers its loader writes. With `code_slots` false the slots of
@@ -599,7 +599,7 @@ pub(crate) fn held_pointers(file: &object::File, wanted: &[u64], code_slots: boo
     held
 }
 
-/// (kuna) The strings a table of 32-bit offsets from its own start at `table`
+/// (unlace) The strings a table of 32-bit offsets from its own start at `table`
 /// addresses (clang's position-independent lookup table, `.long .str - table`),
 /// or none if `table` holds no such table. It must be 4-aligned and not itself
 /// open a string. Its entries are read up to the first that is zero, a small
@@ -645,7 +645,7 @@ pub(crate) fn relative_string_table(
     strings
 }
 
-/// (kuna) The start and size of every sized data object the image's symbol
+/// (unlace) The start and size of every sized data object the image's symbol
 /// tables declare, sorted. A relocatable object has no image addresses yet and
 /// lists none.
 pub(crate) struct DataObjects(Vec<(u64, u64)>);
@@ -749,7 +749,7 @@ pub fn scan_scalar_refs(
     scan(file, translate, code_space, None)
 }
 
-/// (kuna) [`scan_scalar_refs`], also returning the addresses [`TableUses`] saw
+/// (unlace) [`scan_scalar_refs`], also returning the addresses [`TableUses`] saw
 /// the code index as tables of wider elements.
 fn scan_scalar_refs_and_tables(
     file: &object::File,
@@ -826,7 +826,7 @@ fn scan(
 /// literal. Targets that are not printable runs are skipped (no type to plant),
 /// and so is a target whose pointer-sized slot holds an address of the image
 /// ([`crate::strings::ptrslot`]): an entry of a vtable or of a pointer table.
-/// (kuna) So is a run where a sized data object of another size starts
+/// (unlace) So is a run where a sized data object of another size starts
 /// ([`DataObjects`]), and a one-character run that opens an array of wider
 /// character codes ([`wide_element_neighbour`]) whose second element is no
 /// declared object's start and nothing points at: neither an operand nor a
@@ -926,7 +926,7 @@ impl AnalysisPass for OperandRefsPass {
         };
         if !ctx
             .arch
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::Widestrings32>()
             .0
         {
@@ -943,7 +943,7 @@ impl AnalysisPass for OperandRefsPass {
     }
 }
 
-/// (kuna `widestrings32`) The 4-byte string facts of the decode's operand
+/// (unlace `widestrings32`) The 4-byte string facts of the decode's operand
 /// targets `refs` and table uses `tables` (sorted).
 fn wide_strings32(
     file: &object::File,
@@ -956,7 +956,7 @@ fn wide_strings32(
     crate::strings::widestrings32::wide_string32_facts(file, &targets, tables)
 }
 
-/// (kuna `widestrings32`) The 4-byte string facts alone, for a run with
+/// (unlace `widestrings32`) The 4-byte string facts alone, for a run with
 /// `operand_refs` off: the same decode, for the operand targets and table uses
 /// the facts weigh, without the pass's own string facts.
 pub fn wide_strings32_alone(ctx: &AnalysisCtx) -> AnalysisOutput {

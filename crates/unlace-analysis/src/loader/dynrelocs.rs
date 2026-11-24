@@ -1,4 +1,4 @@
-//! (kuna) `dynrelocs` — apply a **linked** ELF image's dynamic relocations into
+//! (unlace) `dynrelocs` — apply a **linked** ELF image's dynamic relocations into
 //! the loaded image, and report the slots `PT_GNU_RELRO` freezes as constant.
 //!
 //! ## The gap
@@ -46,7 +46,7 @@
 //! `SG_READ_ONLY` segment are reported constant. A classic `LC_DYLD_INFO` image
 //! needs neither: its rebased words are already the unslid pointers.
 //!
-//! [`fixup_sites`] lists the same slots for a reader of the loaded image (`kuna
+//! [`fixup_sites`] lists the same slots for a reader of the loaded image (`unlace
 //! read`), every one of them, including the ones [`resolve`] leaves as the file
 //! holds them and the `SHT_RELR` ones it never needs to write, so the reader can
 //! say which of its bytes are the file's.
@@ -86,16 +86,16 @@ pub struct DynRelocs {
     pub const_ranges: Vec<(u64, u64)>,
     /// `IRELATIVE` resolvers: functions only the dynamic loader calls.
     pub ifunc_resolvers: Vec<u64>,
-    /// (kuna `opaquepredicate globals`) `[lo, hi)` of every slot whose run-time
+    /// (unlace `opaquepredicate globals`) `[lo, hi)` of every slot whose run-time
     /// content this image does not determine: an import's bind, a `COPY`
-    /// relocation's whole object, any relocation kuna does not apply. `None`
+    /// relocation's whole object, any relocation unlace does not apply. `None`
     /// when the tables were not all read, or the image's format keeps such
     /// slots where this walk does not look.
     pub runtime_written: Option<Vec<(u64, u64)>>,
 }
 
 /// The `RELATIVE` / `GLOB_DAT` / `JUMP_SLOT` `r_type` triple for `machine`, or
-/// `None` if kuna does not handle this architecture's dynamic relocations.
+/// `None` if unlace does not handle this architecture's dynamic relocations.
 pub(crate) fn reloc_triple(arch: object::Architecture) -> Option<(u32, u32, u32)> {
     use object::elf;
     match arch {
@@ -134,7 +134,7 @@ pub(crate) struct DynTypes {
     pub irelative: Option<u32>,
 }
 
-/// [`DynTypes`] for `arch`, or `None` if kuna does not handle this
+/// [`DynTypes`] for `arch`, or `None` if unlace does not handle this
 /// architecture's dynamic relocations.
 pub(crate) fn dyn_types(arch: object::Architecture) -> Option<DynTypes> {
     use object::elf;
@@ -361,7 +361,7 @@ pub fn resolve(file: &object::File, bytes: &[u8]) -> DynRelocs {
             }
         };
 
-    // kuna maps a linked image at the vaddrs the ELF itself declares, so the load
+    // unlace maps a linked image at the vaddrs the ELF itself declares, so the load
     // bias every `RELATIVE` relocation adds is zero. Named rather than folded
     // away so the formula stays the ABI's `B + A`.
     let load_bias: u64 = 0;
@@ -517,7 +517,7 @@ impl ElfTable {
         else {
             return other;
         };
-        // kuna maps a linked image at the vaddrs the ELF itself declares, so the
+        // unlace maps a linked image at the vaddrs the ELF itself declares, so the
         // load bias every `RELATIVE` relocation adds is zero. Named rather than
         // folded away so the formula stays the ABI's `B + A`.
         let load_bias: u64 = 0;
@@ -585,7 +585,7 @@ pub enum FixupKind {
     /// ELF `GLOB_DAT` / `JUMP_SLOT` relocation.
     Bind,
     /// Any other dynamic relocation (`COPY`, `IRELATIVE`, an absolute word, TLS),
-    /// which kuna does not apply.
+    /// which unlace does not apply.
     Relocation,
 }
 

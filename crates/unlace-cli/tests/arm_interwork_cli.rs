@@ -108,10 +108,10 @@ fn marked(stem: &str, code: &[u8]) -> PathBuf {
 }
 
 fn run(args: &[&str], extra: &[&str]) -> String {
-    kuna(&[args, extra].concat())
+    unlace(&[args, extra].concat())
 }
 
-fn kuna(args: &[&str]) -> String {
+fn unlace(args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_unlace"))
         .args(args)
         .args(["--sleighpath"])
@@ -131,7 +131,7 @@ fn decompile_with(path: &PathBuf, addr: u64, extra: &[&str]) -> String {
     let addr = format!("{addr:#x}");
     let mut args = vec!["decompile", path.to_str().unwrap(), &addr, "--json"];
     args.extend_from_slice(extra);
-    kuna(&args)
+    unlace(&args)
 }
 
 fn decompile(path: &PathBuf, addr: u64, mode: &str) -> String {
@@ -374,7 +374,7 @@ fn whole_binary_decompile_keeps_each_callee_in_its_own_mode() {
         let path = stripped(stem, &code);
         let mut args = vec!["decompile-all", path.to_str().unwrap()];
         args.extend_from_slice(extra);
-        let all = kuna(&args);
+        let all = unlace(&args);
         assert!(
             body(&all, "sub_10040").contains("return 7;"),
             "{stem}: {all}"
@@ -474,7 +474,7 @@ fn a_fall_through_does_not_redecode_the_next_function_symbol() {
     bytes[24..28].copy_from_slice(&0x10040u32.to_le_bytes());
     let path = common::scratch_file("fall-through", "elf");
     std::fs::write(&path, bytes).unwrap();
-    let all = kuna(&["decompile-all", path.to_str().unwrap()]);
+    let all = unlace(&["decompile-all", path.to_str().unwrap()]);
     assert!(body(&all, "thumb_tail").contains("sub_10020("), "{all}");
     assert!(body(&all, "sub_10020").contains("return 9;"), "{all}");
     std::fs::remove_file(path).unwrap();
@@ -493,7 +493,7 @@ fn fixture(name: &str) -> PathBuf {
 fn an_unsymbolized_a32_helper_after_an_a32_export_keeps_its_mode() {
     let path = fixture("arm_funcmode_helper_o2_le32.so");
     let lib = path.to_str().unwrap();
-    let helper = kuna(&["decompile", lib, "0x1020c", "--addr"]);
+    let helper = unlace(&["decompile", lib, "0x1020c", "--addr"]);
     assert!(helper.contains("return a0 * 5 + a1 * 7 + 3;"), "{helper}");
 }
 
@@ -540,7 +540,7 @@ fn arm_exports_are_proven_and_pointer_only_thumb_keeps_its_mode() {
         ("arm_interwork_stubs_o2_le32", "0x304", "v1 = a0 + -10;"),
     ] {
         let path = fixture(name);
-        let pointer = kuna(&["decompile", path.to_str().unwrap(), pointer_only, "--addr"]);
+        let pointer = unlace(&["decompile", path.to_str().unwrap(), pointer_only, "--addr"]);
         assert!(pointer.contains(ternary), "{name}: {pointer}");
     }
 }
@@ -558,7 +558,7 @@ fn whole_binary_decompile_of_gcc_interworking_objects_has_no_bad_decode() {
     ] {
         let path = fixture(name);
         let lib = path.to_str().unwrap();
-        let all = kuna(&["decompile-all", lib]);
+        let all = unlace(&["decompile-all", lib]);
         assert!(!all.contains("halt_"), "{name}: {all}");
         assert!(
             run(&["decompile-all", lib], &WALK_OFF).contains("halt_"),

@@ -278,7 +278,7 @@ pub fn function_xrefs(prog: &ConsoleProgram, file: &object::File, entry: u64) ->
         file,
         &inventory,
         prog.arch()
-            .kuna_options
+            .unlace_options
             .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0,
     );
@@ -474,7 +474,7 @@ impl UseWalk {
             file,
             &inventory,
             prog.arch()
-                .kuna_options
+                .unlace_options
                 .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
                 .0,
         );

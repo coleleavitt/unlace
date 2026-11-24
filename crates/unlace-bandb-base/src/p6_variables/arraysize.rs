@@ -1,4 +1,4 @@
-//! (kuna) `arraysize` -- an escaped stack buffer is as long as the length a
+//! (unlace) `arraysize` -- an escaped stack buffer is as long as the length a
 //! call states for it, not the gap to the next frame object.
 //!
 //! `ScopeLocal::restructure` (`varmap.cc:1294`) ends an open range (a frame
@@ -44,7 +44,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use unlace_base::address::sign_extend;
-use unlace_base::error::{KunaError, KunaResult};
+use unlace_base::error::{UnlaceError, UnlaceResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::{int4, intb, uintb};
 use unlace_num::opcodes::OpCode;
@@ -71,9 +71,9 @@ const MAX_BYTES: intb = 1 << 24;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArraySize(pub int4);
 
-impl crate::optionset::KunaOption for ArraySize {
+impl crate::optionset::UnlaceOption for ArraySize {
     const NAME: &'static str = "arraysize";
-    crate::kuna_option_id!();
+    crate::unlace_option_id!();
 
     fn unset() -> Self {
         ArraySize(0)
@@ -83,7 +83,7 @@ impl crate::optionset::KunaOption for ArraySize {
         ArraySize(LEVEL_ON)
     }
 
-    fn parse(value: &str) -> KunaResult<(Self, String)> {
+    fn parse(value: &str) -> UnlaceResult<(Self, String)> {
         OptionArraySize
             .apply(value)
             .map(|(v, msg)| (ArraySize(v), msg))
@@ -96,7 +96,7 @@ pub struct OptionArraySize;
 impl OptionArraySize {
     /// Parse the level and its confirmation message; the caller writes it into
     /// the registered option `ArraySize`.
-    pub fn apply(&self, p1: &str) -> KunaResult<(int4, String)> {
+    pub fn apply(&self, p1: &str) -> UnlaceResult<(int4, String)> {
         match p1 {
             "off" => Ok((LEVEL_OFF, "Stack buffer sizing from call lengths turned off".to_string())),
             "on" | "" => Ok((LEVEL_ON, "Stack buffer sizing from library call lengths turned on".to_string())),
@@ -104,7 +104,7 @@ impl OptionArraySize {
                 LEVEL_CALLS,
                 "Stack buffer sizing from library call lengths and constant call arguments turned on".to_string(),
             )),
-            _ => Err(KunaError::parse("Must specify one of off, on, calls")),
+            _ => Err(UnlaceError::parse("Must specify one of off, on, calls")),
         }
     }
 }
@@ -561,7 +561,7 @@ fn trace(fd: &Funcdata, base: VarnodeId, offset: intb, stored: &StoredResults) -
 /// buf[n] = 0;`), is one byte more.
 #[doc(hidden)]
 pub fn gather(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
-    let level = fd.get_arch().kuna_options.get::<ArraySize>().0;
+    let level = fd.get_arch().unlace_options.get::<ArraySize>().0;
     if level == LEVEL_OFF {
         return;
     }
@@ -718,7 +718,7 @@ pub fn fit(cur: &RangeHint, cur_end: intb, gap: intb, state: &MapState) -> Optio
 }
 
 /// Fill this pass's hooks ([`crate::passhooks`]).
-pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
+pub fn provide(hooks: &mut crate::passhooks::UnlaceHookSlots) {
     hooks.arraysize_fit = Some(fit);
 }
 

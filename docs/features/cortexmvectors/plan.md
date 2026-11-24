@@ -58,7 +58,7 @@ tail-call absorption).
 * Hard-coded catalog counts: `phases/tests.rs` (settable 83->84, analysis tier 25->26,
   the `PASS_GATES` list, the JSON row count 82->83) and `catalog_bytecompat.rs`
   (83->84 plus the recaptured `tests/fixtures/phase_catalog.json`).
-  `tests/stages/kuna-catalog.toml` needs no edit: its exact-count asserts key on
+  `tests/stages/catalog.toml` needs no edit: its exact-count asserts key on
   `source_decompiler = "angr"` and the `structure-recovery` / `opt-in-tool` change_kinds,
   none of which this row joins; the `use_when` / `change_kind` asserts are ranges.
 
@@ -68,7 +68,7 @@ tail-call absorption).
   table, the `word[1] != e_entry` shape, the `.data` false-positive floor and the
   two-vs-three handler threshold, the non-ARM no-op, shipped-match monotonicity, and a pin
   on the committed fixture.
-* e2e (`kuna-console/tests/verify_cortexmvectors.rs`): two passes over
+* e2e (`console/tests/verify_cortexmvectors.rs`): two passes over
   `tests/fixtures/cortexm_ccm_vectors_le32` — option off, the four handlers are in no symbol
   table and even the one `e_entry` function produces no C (A32 misdecode); option on, all
   four are registered and every body decompiles to its real constant.

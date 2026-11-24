@@ -4408,6 +4408,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `IQ2000` | Vitesse IQ2000 | `iq2000:BE:32:default` | binutils CGEN `cpu/iq2000.cpu` and `cpu/iq2000m.cpu`, GCC `config/iq2000` | `unlace-cli/tests/iq2000_raw.rs` |
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
 | `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
+| `Uxn` | Uxn virtual machine (Varvara ROMs) | `Uxn:BE:16:default` | Uxntal reference (opcode table and modes) | `unlace-cli/tests/uxn.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

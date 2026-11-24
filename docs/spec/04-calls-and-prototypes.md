@@ -2199,7 +2199,12 @@ classified:
   only bounded is set to the saved value there, if the bounds contain it. The
   pops after the unlink (the cookie slot, the callee-saved registers) then read
   the slots the prologue wrote, instead of unplaced stack. A later store to the
-  saved slot forgets it. This one does change what the pop proof reads, so with
+  saved slot forgets it. A call the walk cannot read that is made with the
+  stack pointer at the saved value (only its return address pushed; the
+  virtual call `mov eax,[ecx]; call [eax+4]` between statements) takes no
+  stack argument, so it pops none and the stack pointer stays at the saved
+  value. Without that, every push of a local's address after such a call reads
+  as an unplaced store. This one does change what the pop proof reads, so with
   the option on an MSVC EH function whose virtual calls left its stack pointer
   bounded can prove its pop.
   The rest of this bookkeeping runs only with the option on and never changes

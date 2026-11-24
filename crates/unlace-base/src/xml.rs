@@ -2352,7 +2352,10 @@ mod tests {
         // and unlace-guardedloop-entryconst / an unsigned counted loop's truthiness guard is its first test
         // and unlace-jvm / a Java class file and a JAR load, the constant pool names their references
         // and rawswitch / an x86-64 table matched from its cmp/ja/lea/movslq/jmp instructions (option rawswitch)
-        assert_eq!(count, 1018, "corpus file count drifted");
+        // and spphistack-mips + spphistack-aarch64 + spphistack-hexagon + spphistack-or1k / a va_list
+        // walk from the incoming stack pointer is a stack-address local (option spphistack)
+        // and vastart-callindirect / a va_start prologue whose field writes moved into call INDIRECTs
+        assert_eq!(count, 1023, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

@@ -4598,7 +4598,12 @@ multiplier too wide means no proof and no rewrite.
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
 root, and the root becomes a `COPY` of the result; dead-code elimination removes
-the old tree. Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
+the old tree. A tree with a leaf (or a reused subtree) that is still a free
+varnode, one heritage has not reached, is left alone: a free varnode keeps its
+single reader, so no new op can read it, and a rewrite to a bare leaf would
+leave the root a `COPY` with no input
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_mba.rs (replace)`; CoreADI32.dll
+under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
 `tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
 groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,

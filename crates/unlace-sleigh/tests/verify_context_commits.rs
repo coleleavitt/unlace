@@ -7,7 +7,7 @@
 //! each way, and the agreement of the whole corpus with a `globalset` count over
 //! each language's own source closure (`.slaspec` plus every `.sinc` it
 //! `@include`s, transitively). Zero occurrences must mean `false`, and any
-//! occurrence must mean `true`, for all 351 vendored languages.
+//! occurrence must mean `true`, for all 352 vendored languages.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

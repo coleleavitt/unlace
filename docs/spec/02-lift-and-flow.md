@@ -4263,6 +4263,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
 | `PDP11` | DEC PDP-11 (base set, EIS, MFPS/MTPS) | `PDP-11:LE:16:default` | written for unlace from the DEC PDP-11 handbooks, Apache-2.0 |
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
+| `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
 <!-- vendor-rows -->
 
 ### DEC PDP-11 (#98)

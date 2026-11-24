@@ -1,3 +1,7 @@
+# - `kuna-ppc32picimports-abi.toml`, `kuna-ppc32picimports-abi-indirect.toml`, and
+# `kuna-ppc32picimports-driver.toml` exercise explicit `ppc32picimports abi` recovery, including
+# ordinary returning callers and compiler start files.
+
 [image]
 arch = 'PowerPC:BE:32:default'
 symbols = [

@@ -240,8 +240,9 @@ fn the_version_word_reads_like_pklite_prints_it() {
 #[test]
 #[ignore]
 fn dump_synthetic_files_for_an_external_check() {
-    let dir =
-        std::path::PathBuf::from(std::env::var("KUNA_PKLITE_DUMP").expect("KUNA_PKLITE_DUMP"));
+    let dir = std::path::PathBuf::from(
+        unlace_base::env::var("UNLACE_PKLITE_DUMP").expect("KUNA_PKLITE_DUMP"),
+    );
     for (seed, (name, layout, relocs)) in synth::layouts().into_iter().enumerate() {
         let stored: &[usize] = if layout.mode.large {
             &[5000, 9100]

@@ -116,7 +116,7 @@ pub fn build_records(
     // ⇒ empty, never skips).
     let is_x86 = arch.archid.starts_with("x86:");
 
-    let dbg = std::env::var("KUNA_FID_DEBUG").is_ok();
+    let dbg = unlace_base::env::var("UNLACE_FID_DEBUG").is_ok();
     if dbg {
         eprintln!(
             "[fid] funcs={} archid={} is_x86={is_x86}",

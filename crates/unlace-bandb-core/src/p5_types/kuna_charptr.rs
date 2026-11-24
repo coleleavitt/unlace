@@ -152,7 +152,7 @@ impl Evidence {
 fn census_on() -> bool {
     use std::sync::OnceLock;
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KUNA_CHARPTR_CENSUS").is_some())
+    *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_CHARPTR_CENSUS").is_some())
 }
 
 /// What one reader of a walked Varnode tells us.

@@ -1,3 +1,7 @@
+# `ghangr-call-argument-extensions.toml` checks explicit and missing parameter contracts. The CLI
+# companion executes complete emitted C, Go and Rust callers and callees, covering zero extension,
+# sign extension, signedness and store canaries.
+
 [image]
 arch = 'x86:LE:64:default:gcc'
 symbols = [

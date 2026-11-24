@@ -111,7 +111,7 @@ impl OptionElemPtr {
 fn trace_on() -> bool {
     use std::sync::OnceLock;
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KUNA_ELEMPTR_TRACE").is_some())
+    *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_ELEMPTR_TRACE").is_some())
 }
 
 /// What the walk learned about one candidate base.

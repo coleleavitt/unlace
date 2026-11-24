@@ -598,7 +598,7 @@ fn choose(
 pub fn trace_on() -> bool {
     use std::sync::OnceLock;
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KUNA_FIELDTYPE_TRACE").is_some())
+    *ON.get_or_init(|| unlace_base::env::var_os("UNLACE_FIELDTYPE_TRACE").is_some())
 }
 
 fn spell(t: Option<&Datatype>) -> String {

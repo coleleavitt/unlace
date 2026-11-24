@@ -565,7 +565,7 @@ pub const PATTERN_DIR_ENV: &str = "KUNA_PATTERN_DIR";
 /// The contents of `name` in the user's pattern directory, when it has one.
 fn user_file(name: &str) -> Option<String> {
     user_file_in(
-        std::path::Path::new(&std::env::var_os(PATTERN_DIR_ENV)?),
+        std::path::Path::new(&unlace_base::env::var_os(PATTERN_DIR_ENV)?),
         name,
     )
 }

@@ -348,7 +348,7 @@ pub fn stated_bytes_consumed(data: &Funcdata, fc: &FuncCallSpecs, slot: usize) -
 
 /// Is the decision trace on (`KUNA_NARROWARGS_TRACE=1`)?
 fn trace() -> bool {
-    std::env::var("KUNA_NARROWARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+    unlace_base::env::var("UNLACE_NARROWARGS_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// (kuna `narrowargs`) Declare a register parameter at the width its uses read

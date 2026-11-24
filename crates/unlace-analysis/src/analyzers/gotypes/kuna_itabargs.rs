@@ -331,7 +331,7 @@ impl AnalysisPass for GoItabArgsPass {
             .into_iter()
             .collect();
         if itabs.is_empty() {
-            if std::env::var_os("KUNA_GOITABARGS_DEBUG").is_some() {
+            if unlace_base::env::var_os("UNLACE_GOITABARGS_DEBUG").is_some() {
                 eprintln!("[kuna goitabargs] no static itabs located");
             }
             return AnalysisOutput::default();
@@ -340,7 +340,7 @@ impl AnalysisPass for GoItabArgsPass {
         let mut hints = Vec::new();
         let mut votes = votes(listing, &itabs);
         let scanned = scanned_votes(ctx, &itabs, &mut votes);
-        let debug = std::env::var_os("KUNA_GOITABARGS_DEBUG").is_some();
+        let debug = unlace_base::env::var_os("UNLACE_GOITABARGS_DEBUG").is_some();
         if debug {
             let leas = listing
                 .instructions()

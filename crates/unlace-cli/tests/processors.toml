@@ -603,6 +603,40 @@ expect = [
     "0x56781234",
 ]
 
+# Epiphany hardware loops built with epiphany-elf-as: movts ls/le/lc from mov/movt constants
+# give the last loop instruction a count-down back edge (16- and 32-bit movts).
+[[family]]
+name = "epiphany_hwloop"
+language = "epiphany:LE:32:default"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/epiphany/loop.bin"
+forbid = ["halt_baddata", "write_special"]
+
+[[family.function]]
+test = "epiphany_hwloop_movts16_back_edge"
+address = "0x1000"
+expect = [
+    "do {",
+    "v1 += v2;",
+    "} while (a2);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_movts32_back_edge"
+address = "0x1048"
+expect = [
+    "v3 = 0x10;",
+    "do {",
+    "v1 ^= v2;",
+    "} while (v3);",
+]
+
+[[family.function]]
+test = "epiphany_hwloop_unknown_bounds_no_loop"
+address = "0x1098"
+expect = ["return a0 + a2;"]
+forbid = ["do {"]
+
 # The Fujitsu FR language loads a big-endian raw image of two hand-assembled
 # functions that use delay slots (`ble:d`, `ret:d`, `call:d`) and decompiles
 # both.

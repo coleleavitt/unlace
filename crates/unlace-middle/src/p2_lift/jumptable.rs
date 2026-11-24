@@ -77,7 +77,7 @@ use crate::kuna_emulatefunction::EmulateFunction;
 /// and whether the rows could be labelled (why a table stays unbounded).
 macro_rules! jt_trace {
     ($($arg:tt)*) => {
-        if std::env::var_os("KUNA_JUMPTABLE_TRACE").is_some() {
+        if unlace_base::env::var_os("UNLACE_JUMPTABLE_TRACE").is_some() {
             eprintln!("jumptable: {}", format_args!($($arg)*));
         }
     };

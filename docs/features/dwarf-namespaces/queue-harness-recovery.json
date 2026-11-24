@@ -1,8 +1,0 @@
-{
-  "original_queue_returncode": 1,
-  "reason": "Original coordinator retained initial raw-name-filter harness exception while its gate/breadth workers finished successfully.",
-  "gates_passed": true,
-  "breadth_complete": true,
-  "proofs_complete": true,
-  "production_changes_for_harness_retries": false
-}

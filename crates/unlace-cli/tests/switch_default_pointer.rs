@@ -93,7 +93,8 @@ fn decompile(image: &[u8], end: usize) -> String {
     std::fs::write(&binary, image).unwrap();
     let specs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../specs");
     let mut command = Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
+        unlace_base::env::var_os("UNLACE_TEST_BIN")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     );
     command
         .arg("decompile-all")

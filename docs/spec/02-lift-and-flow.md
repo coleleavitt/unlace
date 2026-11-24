@@ -4757,7 +4757,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `CellSPU` | Cell SPU (PS3) | `SPU:BE:32:default` | aleph-void/GhidraSPU (fork of aerosoul94/GhidraSPU) @ `a2efc11569`, Apache-2.0 |
 | `Falcon` | NVIDIA Falcon | `falcon:LE:32:v0`, `falcon:LE:32:v3`, `falcon:LE:32:v4`, `falcon:LE:32:v5`, `falcon:LE:32:v6` | aleph-void/ghidra_falcon (fork of marysaka/ghidra_falcon) @ `d835a7c618`, ISC |
 | `TMS34010` | TI TMS34010 (GSP) | `tms34010:LE:32:default`, `tms34020:LE:32:default` | aleph-void/Ghidra_TMS34010 (fork of ZPaul2Fresh8/Ghidra_TMS34010) @ `271d988289`, Apache-2.0 |
-| `TeakLite` | CEVA-TeakLite | `teak:LE:16:default`, `teak:LE:16:modulo` | aleph-void/TeakLite-SLEIGH (fork of SachinVin/TeakLite-SLEIGH) @ `32d05a51a3`, MIT |
+| `TeakLite` | CEVA-TeakLite, CEVA OakDSP | `teak:LE:16:default`, `teak:LE:16:modulo`, `oakdsp:LE:16:default`, `oakdsp:LE:16:modulo` | aleph-void/TeakLite-SLEIGH (fork of SachinVin/TeakLite-SLEIGH) @ `32d05a51a3`, MIT; the OakDSP languages are generated from it by `tools/gen_oakdsp.py` (TeakLite II constructors restricted to Oak's encodings, checked against an Oak first-word map) |
 | `RockwellL39` | Rockwell C39 / L39 | `RockwellL39:LE:16:default` | aleph-void/ghidra-rockwell-l39 @ `df9c28fdc1`, Apache-2.0 |
 | `AdrenoQRISC` | Qualcomm Adreno SQE / QRISC | `QRisc:LE:32:a6xx`, `QRisc:LE:32:a7xx`, `QRisc:LE:32:a7xx_gen3`, `QRisc:LE:32:a8xx` | aleph-void/ida-adreno-qrisc (fork of locus-x64/ida-adreno-qrisc) @ `f5b3d0de28`, MIT |
 | `PRU` | TI PRU / PRU-ICSS | `PRU:LE:32:v0`, `PRU:LE:32:v1`, `PRU:LE:32:v2`, `PRU:LE:32:v3`, `PRU:LE:32:v4` | aleph-void/Ghidra-Rare (PRU) @ `87cc554e33`, MIT |
@@ -6613,7 +6613,11 @@ several clauses the selector tests stay in the handler
 (`if (eh_selector() == 1)`) and the pad comment maps each selector to its
 type.
 
-**Limits.** SjLj tables are not read. Pinned by
+**Limits.** SjLj tables are not read. A call whose exceptional edge structures as a
+loop condition prints `while (readFile(...), !eh_unwinding()) { ... }` with the pad
+after the loop, not a `try` (`eh4_x86_64.elf` `probe`), and a negated edge whose pad
+falls out of an enclosing `if` (a g++ `-fno-reorder-blocks-and-partition` build of
+the same source) stays an `if`. Pinned by
 `tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
 fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
 `tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),

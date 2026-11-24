@@ -14,7 +14,7 @@ fn repo_root() -> PathBuf {
 #[test]
 fn shared_div3_reciprocal_recovers_the_modulo() {
     let root = repo_root();
-    let specs = std::env::var_os("KUNA_SPECS")
+    let specs = unlace_base::env::var_os("UNLACE_SPECS")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("specs"));
     assert!(

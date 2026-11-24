@@ -66,8 +66,8 @@ fn run(msabi: bool, typed: bool) -> String {
         format!("prototype read_scale float {model}read_scale(struct VirtualNode *node)"),
         format!("prototype set_scale void {model}set_scale(struct VirtualNode *node, float scale)"),
     ];
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut cmd = Command::new(kuna);
     cmd.args(["decompile-all"])
         .arg(&binary)

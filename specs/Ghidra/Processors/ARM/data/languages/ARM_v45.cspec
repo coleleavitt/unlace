@@ -90,8 +90,110 @@
     </pcode>
   </callotherfixup>
   
+  <!-- (kuna) Apple's ARM-mode libgcc switch helpers (called with blx from Thumb code): the
+       table follows the call, its entry count at lr-1 (a byte, a halfword or a word) and the
+       entries after it; an index in r0 at or past the count takes the last entry (the
+       default). The target is lr plus twice a byte or halfword entry, or plus a word entry. -->
+  <callfixup name="switchS8_r0_sized">
+    <target name="___switch8"/>
+    <target name="__switch8"/>
+    <pcode>
+      <body><![CDATA[
+            tmpptr = lr - 1;
+            tblsize = *:1 tmpptr;
+            r12 = zext(tblsize);
+            inbounds = r0 < r12;
+            if (!inbounds) goto <next1>;
+            offset = *:1 (lr + r0);
+            r0 = sext(offset);
+            <next1>
+            if (inbounds) goto <next2>;
+            offset = *:1 (lr + r12);
+            r0 = sext(offset);
+            <next2>
+            r12 = lr + r0 * 2;
+            TB = (r12 & 1) != 0;
+            pc = r12 & 0xfffffffe;
+            goto [pc];
+      ]]></body>
+    </pcode>
+  </callfixup>
+
+  <callfixup name="switch8_r0_sized">
+    <target name="___switchu8"/>
+    <target name="__switchu8"/>
+    <pcode>
+      <body><![CDATA[
+            tmpptr = lr - 1;
+            tblsize = *:1 tmpptr;
+            r12 = zext(tblsize);
+            inbounds = r0 < r12;
+            if (!inbounds) goto <next1>;
+            offset = *:1 (lr + r0);
+            r0 = zext(offset);
+            <next1>
+            if (inbounds) goto <next2>;
+            offset = *:1 (lr + r12);
+            r0 = zext(offset);
+            <next2>
+            r12 = lr + r0 * 2;
+            TB = (r12 & 1) != 0;
+            pc = r12 & 0xfffffffe;
+            goto [pc];
+      ]]></body>
+    </pcode>
+  </callfixup>
+
+  <callfixup name="switch16_r0_sized">
+    <target name="___switch16"/>
+    <target name="__switch16"/>
+    <pcode>
+      <body><![CDATA[
+            tmpptr = lr - 1;
+            tblsize = *:2 tmpptr;
+            r12 = zext(tblsize);
+            inbounds = r0 < r12;
+            if (!inbounds) goto <next1>;
+            offset = *:2 (lr + r0 * 2 + 1);
+            r0 = sext(offset);
+            <next1>
+            if (inbounds) goto <next2>;
+            offset = *:2 (lr + r12 * 2 + 1);
+            r0 = sext(offset);
+            <next2>
+            r12 = lr + r0 * 2;
+            TB = (r12 & 1) != 0;
+            pc = r12 & 0xfffffffe;
+            goto [pc];
+      ]]></body>
+    </pcode>
+  </callfixup>
+
+  <callfixup name="switch32_r0_sized">
+    <target name="___switch32"/>
+    <target name="__switch32"/>
+    <pcode>
+      <body><![CDATA[
+            tmpptr = lr - 1;
+            r12 = *:4 tmpptr;
+            inbounds = r0 < r12;
+            if (!inbounds) goto <next1>;
+            r0 = *:4 (lr + r0 * 4 + 3);
+            <next1>
+            if (inbounds) goto <next2>;
+            r0 = *:4 (lr + r12 * 4 + 3);
+            <next2>
+            r12 = lr + r0;
+            TB = (r12 & 1) != 0;
+            pc = r12 & 0xfffffffe;
+            goto [pc];
+      ]]></body>
+    </pcode>
+  </callfixup>
+
   <callfixup name="switch8_r3">
     <target name="switch8_r3"/>
+    <target name="__rt_switch8"/>
     <pcode>
       <body><![CDATA[
             tmpptr = lr - 1;

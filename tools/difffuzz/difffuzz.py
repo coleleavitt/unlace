@@ -98,7 +98,10 @@ def lift(unlace, arch, cands, tmp, sleighpath=None):
                 break
             c = cands[idx[at]]
             if r["size"] != len(c["bytes"]):
-                problems[at] = ("length", f"sleigh {r['size']} bytes ({r['mnemonic']} {r['operands']}), capstone {len(c['bytes'])}")
+                # an architecture whose binutils decoder is the unreliable side reports the
+                # disagreement as ref-length (the simulator's pc check covers SLEIGH's length)
+                kind = "ref-length" if getattr(arch, "ref_length_unreliable", False) else "length"
+                problems[at] = (kind, f"sleigh {r['size']} bytes ({r['mnemonic']} {r['operands']}), capstone {len(c['bytes'])}")
                 resume = next((x for x in addrs if x > at), end)
                 break
             rows[at] = r

@@ -9,8 +9,8 @@ fn boolean_loop_expressions_preserve_values_calls_and_stores() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations =
         include_str!("../../unlace-analysis/tests/fixtures/rust_boolean_expressions.kuna");
     let bodies = |language: &str| {

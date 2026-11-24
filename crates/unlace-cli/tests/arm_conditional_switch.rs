@@ -47,7 +47,8 @@ fn guarded_arm_branch_tables_keep_cases_and_the_shared_frame() {
         .collect();
     for tail in ["on", "off"] {
         let binary = env!("CARGO_BIN_EXE_unlace");
-        let runner = std::env::var_os("KUNA_CLI_WRAPPER").unwrap_or_else(|| binary.into());
+        let runner =
+            unlace_base::env::var_os("UNLACE_CLI_WRAPPER").unwrap_or_else(|| binary.into());
         let mut command = Command::new(runner);
         command.env("KUNA_BINARY", binary).env("KUNA_SPECS", &specs).args([
             "decompile-all", elf.to_str().unwrap(), "--target", "ARM:LE:32:v5t:default",

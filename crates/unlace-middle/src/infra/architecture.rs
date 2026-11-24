@@ -1073,7 +1073,8 @@ impl Architecture {
             nullable_literal_values: Rc::default(),
 
             symbol_snapshots: RefCell::new(SymbolSnapshots::default()),
-            kuna_snapshot_cache: std::env::var_os("KUNA_NO_SYMBOL_SNAPSHOT_CACHE").is_none(),
+            kuna_snapshot_cache: unlace_base::env::var_os("UNLACE_NO_SYMBOL_SNAPSHOT_CACHE")
+                .is_none(),
             load_options: crate::kuna_loadoptions::LoadOptions::in_force(),
             load_options_from_env: !crate::kuna_loadoptions::options_in_force(),
 
@@ -2200,6 +2201,14 @@ impl Architecture {
                 .0
                 && self.archid.starts_with("x86:LE:64"),
         ));
+        let neon = self
+            .kuna_options
+            .get::<crate::kuna_neonintrin::NeonIntrin>();
+        let aarch64 = self.archid.starts_with("AARCH64:");
+        ctx.kuna_options.set(crate::kuna_neonintrin::NeonIntrin {
+            on: neon.on && aarch64,
+            fuse: neon.fuse && aarch64,
+        });
         let lane_fuse = self.kuna_options.get::<crate::kuna_coreoptions::LaneFuse>();
         ctx.kuna_options.set(crate::kuna_coreoptions::LaneFuse {
             on: lane_fuse.on && self.archid.starts_with("x86:LE:64"),
@@ -2228,8 +2237,34 @@ impl Architecture {
             .get::<crate::kuna_coreoptions::VectorAbi>()
             .0
             && self.archid.starts_with("x86:LE:64")
+            || self
+                .kuna_options
+                .get::<crate::kuna_neonintrin::NeonIntrin>()
+                .on
+                && self.archid.starts_with("AARCH64:")
         {
             Rc::clone(self.vector_userop_kinds.get_or_init(|| {
+                if self.archid.starts_with("AARCH64:") {
+                    let mut all: Vec<(unlace_base::types::uint4, u8)> = self
+                        .userops
+                        .named_ops()
+                        .filter_map(|(i, nm)| {
+                            Some((
+                                i,
+                                crate::kuna_neonintrin::userop_kind(std::str::from_utf8(nm).ok()?)?,
+                            ))
+                        })
+                        .chain(
+                            (self.pass_hooks().lanefuse_builtins)()
+                                .into_iter()
+                                .filter_map(|(i, nm)| {
+                                    Some((i, crate::kuna_neonintrin::userop_kind(&nm)?))
+                                }),
+                        )
+                        .collect();
+                    all.sort_unstable();
+                    return Rc::new(all);
+                }
                 let sleigh = self.userops.named_ops().filter_map(|(i, nm)| {
                     let (intr, _) =
                         (self.pass_hooks().avxintrin_intrinsic)(std::str::from_utf8(nm).ok()?, 32)?;

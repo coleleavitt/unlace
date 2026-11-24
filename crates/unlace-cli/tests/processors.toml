@@ -13,6 +13,14 @@
 # (docs/processor-tests.md).
 
 [images]
+# TeakLite II / OakDSP (16-bit words): mov #5,a0; add #3,a0; mov a0l,(r0); ret
+teak_oak_acc_store = """
+185e0500c0860300401b80450000
+"""
+# OakDSP only: mov #0x21,a0; mov a0,r0 (a0 as a register-move source; TeakLite II's mma_mov); mov a0l,(r0); ret
+oakdsp_acc_to_pointer = """
+185e21001858401b80450000
+"""
 # TMS320C1x (BE): ldpk 0; lark ar0,0x20; lark ar1,7; zac; loop: larp 0; add *+,ar1; banz loop; sacl 0x10; ret
 tms320c1x_sum = """
 6e00702071077f89688000a1f400000450107f8d
@@ -4580,6 +4588,53 @@ test = "ebpf_retindexuse_default_counter_is_returned"
 address = "0x0"
 expect = ["return "]
 
+[[family]]
+name = "aarch64_neon_acle"
+language = "AARCH64:LE:64:v8A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/aarch64/neon_intrinsics.bin"
+forbid = ["NEON_", "a64_TBL"]
+
+# `fixtures/aarch64/neon_intrinsics.c` (clang 22 -O2, armv8-a+crypto), `.text` only: the
+# SLEIGH NEON user ops print as their ACLE intrinsics on ACLE vector types (option neonintrin).
+[[family.function]]
+test = "aarch64_neon_acle_tbl"
+address = "0x0"
+expect = ["uint8x16_t sub_0(uint8x16_t a0,uint8x16_t a1)", "return vqtbl1q_u8(a0,a1);"]
+
+[[family.function]]
+test = "aarch64_neon_acle_qadd"
+address = "0x8"
+expect = ["return vqaddq_s16(a0,a1);"]
+
+[[family.function]]
+test = "aarch64_neon_acle_rshr"
+address = "0x30"
+expect = ["return vrshrq_n_s32(a0,3);"]
+
+[[family.function]]
+test = "aarch64_neon_acle_aes"
+address = "0x24"
+expect = ["vaeseq_u8(a0,a1)", "return vaesmcq_u8(v1);"]
+
+[[family]]
+name = "aarch64_neon_fused"
+language = "AARCH64:LE:64:v8A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/aarch64/neon_intrinsics.bin"
+args = ["--option", "neonintrin", "all"]
+
+# With `neonintrin all` the lane-wise float multiply and add and the scalar splat fuse.
+[[family.function]]
+test = "aarch64_neon_fused_fma"
+address = "0x18"
+expect = ["return vaddq_f32(vmulq_f32(a0,a1),a2);"]
+
+[[family.function]]
+test = "aarch64_neon_fused_dup"
+address = "0x4c"
+expect = ["return vdupq_n_s32(a0);"]
+
 # Option carryuse: Xtensa has no carry flag, so a 64-bit add branches on the low sum
 # (add a2,a2,a4; bgeu a2,a4,1f; addi a3,a3,1); the returned sum keeps its low word.
 [[family]]
@@ -4608,6 +4663,29 @@ expect = ["__umulsidi3(", "return "]
 test = "xtensa_carryuse_call8_result"
 address = "w_call7"
 expect = ["ext64(", "return "]
+
+# The OakDSP languages are TeakLite II's module restricted to Oak's encodings (tools/gen_oakdsp.py).
+[[family]]
+name = "teaklite_oakdsp"
+language = ["teak:LE:16:default", "teak:LE:16:modulo", "oakdsp:LE:16:default", "oakdsp:LE:16:modulo"]
+base = "0x1000"
+image = "teak_oak_acc_store"
+
+[[family.function]]
+test = "teak_oak_accumulator_store_decompiles"
+address = "0x1000"
+expect = ["*v1 = 8;"]
+
+[[family]]
+name = "oakdsp"
+language = ["oakdsp:LE:16:default", "oakdsp:LE:16:modulo"]
+base = "0x1000"
+image = "oakdsp_acc_to_pointer"
+
+[[family.function]]
+test = "oakdsp_accumulator_register_move_decompiles"
+address = "0x1000"
+expect = ["= 0x21;"]
 
 # TMS320C1x: a BANZ loop that sums eight words through AR0 (*+) while AR1 counts. ARP and DP are
 # flow context, so the store is a fixed address and the counter a fixed register.

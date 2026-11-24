@@ -10,8 +10,8 @@ fn recovered_integer_call_arguments_match_complete_callee_contracts() {
         return;
     }
     let have_go = process::optional_output(Command::new("go").arg("version")).is_some();
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         ("pass_u8", "uint8", "uint8 value"),
         ("pass_u16", "uint8", "uint8 value"),

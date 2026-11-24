@@ -164,7 +164,8 @@ fn specs() -> PathBuf {
 
 fn kuna() -> Command {
     Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
+        unlace_base::env::var_os("UNLACE_TEST_BIN")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     )
 }
 

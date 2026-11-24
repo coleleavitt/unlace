@@ -5153,6 +5153,17 @@ bytes the indirect result register stands, as in C. On x86-64 the default
 model's output is an explicit `join_dual_class` rule rather than a register
 list, so only the threshold changes there.
 
+(kuna `swiftcallers`, default off) A function that calls a Swift runtime entry
+point takes `__swiftcall` with no signature, `__swiftcall_throws` when it calls
+`swift_willThrow` (`crates/unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs
+(runtime_callers)`): IDA's caller rule, which reaches the closures, partial-apply
+forwarders, heap-object destroyers and outlined copies that no symbol or metadata
+places. A call is a direct `bl`/`b` or `call`/`jmp rel32` to a `swift_*` import
+stub, or to a local function whose first instruction jumps to one (three levels),
+credited to the nearest entry oracle or text symbol at or below it; a binding from
+the type and symbol arms wins, and the binding is `maybe_self`, so a call site
+passes `self` only where it set the register.
+
 A convention can be bound to a function without a signature: the analysis
 tier's `(addr, model)` facts land in `Architecture::loader_proto_models` and
 reach every function's handle as `ArchContext::bound_proto_models`
@@ -5693,7 +5704,7 @@ target with no carry flag adds a 64-bit value as two 32-bit adds and moves the c
 with an unsigned compare of the low sum against one of its addends, on Xtensa as a
 branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a returned
 64-bit sum is refused and `long long f(...) { return a * b + (a >> 3); }` prints
-`void`. With option `carryuse` (default `off`),
+`void`. With option `carryuse` (default `on`),
 `crates/unlace-middle/src/p4_calls/kuna_carryuse.rs (carry_test)` skips, for a
 RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
 when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a
@@ -5926,6 +5937,19 @@ neither half: the model never returns `EDX` on its own, and keeping it printed a
 dead byte write after a call (`movb gc1,%dl; xorb $0,%dl; ret`, or `setne %dl;
 ret`) as `unsigned int f(...)` returning the call's leftover `EDX`. The function
 then returns `void`, as it does when no pair forms.
+
+The walk keeps a half when *any* path computes it. Under `option retpairpaths on`
+(default off) the second register of such a join must be computed on *every*
+path instead (`kuna_returnuncomputed.rs (second_half_on_every_path)`, the
+`computes_everywhere` walk with the same placement test): a phi that reaches the
+RETURN with the caller's own `EDX`, or a call's clobber, on one path is not a
+returned half, because a function that returns a 64-bit value writes `EDX` on
+every path. MSVC's `int __fastcall CmdBufStartCommand` (SysWOW64
+`TpmCoreProvisioning.dll` `0x100a4bec`) returns early with `EDX` untouched and
+otherwise leaves the last call's register argument in it, and printed `return
+CONCAT44(a1,v1);`; with the option it returns `v1`. A fastcall function that
+hands back its own `EDX` argument as the high word on one path loses that half,
+which is why the rule is an option.
 
 A high register the function set to zero is computed too, so the pair of a
 zero-extended 64-bit return survives this repair. The earlier trim that narrowed

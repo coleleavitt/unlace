@@ -11,8 +11,8 @@ fn pointer_byte_arithmetic_survives_go_checkptr_at_both_native_widths() {
     {
         return;
     }
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     for (arch, flag, goarch, size) in [("x86_64", "-m64", "amd64", 8), ("i386", "-m32", "386", 4)] {
         let fixture = common::scratch_file("go_pointer_arithmetic", "elf");
         process::required_output(

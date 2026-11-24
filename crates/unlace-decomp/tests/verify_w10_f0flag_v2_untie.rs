@@ -40,13 +40,13 @@ fn repo_root() -> PathBuf {
 }
 
 fn specs_root() -> PathBuf {
-    std::env::var_os("KUNA_SPECS")
+    unlace_base::env::var_os("UNLACE_SPECS")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("specs"))
 }
 
 fn datatests_dir() -> PathBuf {
-    std::env::var_os("KUNA_DATATESTS")
+    unlace_base::env::var_os("UNLACE_DATATESTS")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("tests/datatests"))
 }
@@ -68,7 +68,7 @@ fn rust_test_bin_any() -> Option<PathBuf> {
 }
 
 fn cpp_oracle_bin() -> PathBuf {
-    std::env::var_os("KUNA_DECOMP_TEST")
+    unlace_base::env::var_os("UNLACE_DECOMP_TEST")
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root().join("decompiler/cpp/decomp_test_dbg"))
 }

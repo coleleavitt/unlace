@@ -44,7 +44,7 @@ Each IDA module maps to unlace as follows:
 | **78k0, 78k0s** | NEC 78K0 / 78K0S | `upd78` is the uCOM-87AD (uPD78C1x), a different ISA | **missing** |
 | **tms32055** | TMS320C55x | none (C54x only) | **missing** |
 | **tms320c1** | TMS320C1x | `TMS320C1x` (`TMS320C1x:BE:16:default`, `:LE:`) | **done** |
-| **oakdsp** | CEVA OakDSP | `teak` (TeakLite II, the Oak successor) | **partial** |
+| oakdsp | CEVA OakDSP | `oakdsp:LE:16:default`/`modulo`, generated from `teak` (TeakLite II) restricted to Oak's encodings (`tools/gen_oakdsp.py`) | have |
 | **s390** | S/390 31-bit and z/Architecture | `s390x:BE:64` only | **partial**: no 31-bit ESA/390 |
 | script | IDA's script-defined processors | n/a | n/a |
 
@@ -109,7 +109,7 @@ Ranked by corpus reach x evidence x size.
 7. **Java `.class` loader** (`javaldr.so`; missing). The `JVM` language exists, but a `.class` or `.jar` cannot be opened. Constant pool, methods, `Code` attributes, names. M.
 8. **x64 unwind codes seed the stack-pointer solve** (pc `sub_6FA00`; partial). Frames whose `sub rsp` sits behind a `__chkstk` or an unusual prologue. Option, M, P3.
 9. **OMF object and library loader** (`omf.so`, `intelomf.so`; missing). Borland/Watcom/MS-DOS `.obj`/`.lib` inputs and FLIRT signature building from 16-bit libraries. M.
-10. **Missing DSP/MCU languages**: TMS320C55x (`tms32055`), NEC 78K0/78K0S (`78k0`, `78k0s`), TMS320C1x, OakDSP, ESA/390 31-bit (`s390`). One SLEIGH spec each, L; route through #98.
+10. **Missing DSP/MCU languages**: TMS320C55x (`tms32055`), NEC 78K0/78K0S (`78k0`, `78k0s`), TMS320C1x, ESA/390 31-bit (`s390`). One SLEIGH spec each, L; route through #98.
 
 Not ranked (niche or n/a): LX/LE and VxD naming (needs the LE loader, legacy), Borland C++ `tpid` RTTI,
 DOS memory-model inference, `__vbaChkstk`/`__aFchkstk`, and the console/OS loaders

@@ -28,7 +28,7 @@ use std::process::Command;
 /// A non-empty environment variable read as a path (`OsString`, so a Windows
 /// path that is not valid UTF-8 still resolves).
 fn env_path(var: &str) -> Option<PathBuf> {
-    env::var_os(var)
+    unlace_base::env::var_os(var)
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
 }

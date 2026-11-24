@@ -1989,7 +1989,7 @@ enum Fault {
 
 impl Faults {
     pub(crate) fn from_env() -> Faults {
-        std::env::var(JOBS_FAULT_ENV)
+        unlace_base::env::var(JOBS_FAULT_ENV)
             .map(|raw| Faults::parse(&raw).0)
             .unwrap_or_default()
     }
@@ -1997,7 +1997,7 @@ impl Faults {
     /// The parent's copy, which also says which directives it could not read,
     /// once, so a mistyped fault cannot pass for a test that injected nothing.
     fn from_env_reporting(tag: &str) -> Faults {
-        let Ok(raw) = std::env::var(JOBS_FAULT_ENV) else {
+        let Ok(raw) = unlace_base::env::var(JOBS_FAULT_ENV) else {
             return Faults::default();
         };
         let (faults, rejected) = Faults::parse(&raw);

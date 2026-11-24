@@ -169,32 +169,9 @@ answer: it runs as before, without a warning.
 
 ## The parity gates
 
-The datatest corpus (`tests/datatests`, 675 assertions) and the stage corpus (`tests/stages`)
-are plain cargo tests: `crates/unlace-harness/tests/parity.rs` runs each corpus in-process
-through the harness's datatest runner and compares the passing assertions with
-`docs/baseline.json` and `docs/baseline-stages.json`.
-
-```bash
-cargo test -p unlace-harness --test parity              # both corpora; expect PARITY OK twice
-cargo test -p unlace-harness --test parity datatests    # tests/datatests only
-cargo test -p unlace-harness --test parity stage_tests  # tests/stages only
-UNLACE_BLESS=1 cargo test -p unlace-harness --test parity stage_tests   # re-record a baseline
-```
-
-A test fails on a baseline assertion that no longer passes (listed under `REGRESSED`), on any
-failing assertion, and on a test file that cannot be parsed or run. Assertions that pass but
-are not in the baseline are listed as newly passing and do not fail. The corpora need the
-compiled `.sla` files in `specs/`.
-
-`UNLACE_BLESS=1` re-records the baseline from the run instead of comparing, and refuses while
-any assertion fails. It rewrites the `data:` keys and `data_footer`; other keys in the file are
-kept. Routine use: `docs/baseline-stages.json` when adding stage tests.
-`docs/baseline.json` is re-recorded only for sanctioned intentional changes (an upstream sync
-per `docs/history.md`, or a deliberate default flip the commit message names), never to
-absorb a regression.
-
-A baseline is a JSON object whose `passing` array holds strings; a record without one is an
-error, never an empty baseline.
+The datatest and stage corpora run as `cargo test -p unlace-harness --test parity`; the
+commands, filters, `UNLACE_BLESS=1` and the baseline rules are in
+[`docs/dev-setup.md` § Gates](dev-setup.md#gates).
 
 ## `unlace decompile` — one function
 
@@ -2050,6 +2027,11 @@ Only an x86-64 image qualifies, for the reason `calleevote` gives. Like
 a narrowed run, `decompile-project --stream`, under `--option protoorder off`,
 and on a `--jobs N` run that does not name it; naming it alongside `--jobs N` is
 refused. `KUNA_CALLBACKTYPE_TRACE=1` prints each park or refusal and its reason.
+
+`KUNA_ENTRY_TRACE=1` prints on stderr every function entry and function symbol a
+load-time or Listing-consumer analysis pass commits, with the pass id
+(`entry-source: <pass> entry 0x...`); `KUNA_ENTRY_TRACE=0x4024d0` prints only that
+address. It says which source put a function in the inventory.
 
 On x86-32 Windows, `KUNA_CALLEEPURGE_DEBUG=1` traces the callee walk behind
 `calleeargs` and the proven callee pops on stderr. Each walk prints the address

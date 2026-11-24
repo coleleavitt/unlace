@@ -409,8 +409,17 @@ fn zero_low_pair(data: &Funcdata, def: OpId) -> Option<(VarnodeId, i32, VarnodeI
 /// is read in its folded form `ZEXT(hi) << 8*k`: the zero is kept when the
 /// high half is uncomputed, as it is for any other literal.
 ///
+/// With `option retpairpaths`, the second register of such a join (`EDX`
+/// beside `EAX`) is a returned half only when every path computes it
+/// ([`second_half_on_every_path`]).
+///
 /// Returns `true` when a RETURN was rewritten.
 pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
+    let every_path = data
+        .get_arch()
+        .kuna_options
+        .get::<crate::kuna_returnuncomputed::RetPairPaths>()
+        .0;
     // Collect first: the rewrite mutates the op bank.
     let mut fixes: Vec<(OpId, VarnodeId, OpId)> = Vec::new();
     let mut own_pairs: Vec<(OpId, VarnodeId, OpId)> = Vec::new();
@@ -478,7 +487,8 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
             };
         let hi_slot = slot_storage(data, whole, lo_size, hi_size).unwrap_or(hi_addr);
         let lo_slot = slot_storage(data, whole, 0, lo_size).unwrap_or(lo_addr);
-        let hi_placed = computes_from(data, hi, 0, Some(&hi_slot));
+        let hi_placed = computes_from(data, hi, 0, Some(&hi_slot))
+            && (!every_path || second_half_on_every_path(data, hi, &hi_slot, hi_size));
         let lo_placed = computes_from(data, lo, 0, Some(&lo_slot));
         let hi_moved = !hi_placed && moved(data, hi, &hi_slot, hi_size);
         let lo_moved = !lo_placed && moved(data, lo, &lo_slot, lo_size);
@@ -568,6 +578,34 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     }
     true
 }
+
+/// Does the high half `hi` of a return pair, stored at `slot`, carry a value
+/// the function computed on EVERY path to the RETURN, when `slot` is the second
+/// register of one of the model's join pairs?
+///
+/// `computes_from` keeps a half when ANY path computes it, which is right for a
+/// pair the ABI may return either way but wrong for i386's `EDX:EAX`: a function
+/// returning a 64-bit value writes `EDX` on every path, so a phi that reaches
+/// the RETURN with the caller's own `EDX` on one path (or a call's clobber) is
+/// not a returned half, whatever the other paths put there. MSVC's
+/// `CmdBufStartCommand` (`int __fastcall`, SysWOW64 TpmCoreProvisioning.dll
+/// `0x100a4bec`) returns early with `EDX` untouched and otherwise leaves the
+/// last call's register argument in it, and was recovered as `return
+/// CONCAT44(a1,v1);`. Any other storage answers `true`, today's answer.
+fn second_half_on_every_path(data: &Funcdata, hi: VarnodeId, slot: &Address, size: i32) -> bool {
+    !crate::kuna_retcallhalf::in_pair_second(data, slot, size)
+        || computes_everywhere(data, hi, Some(slot), !data.kuna_pairs_first_low())
+}
+
+crate::kuna_flag!(
+    /// (kuna `retpairpaths`) Keep the second register of an `EDX:EAX`-style
+    /// return join only when every path to the RETURN computes it.
+    RetPairPaths,
+    "retpairpaths",
+    "return pair second half on every path",
+    unset: false,
+    shipped: false
+);
 
 #[cfg(test)]
 #[path = "kuna_returnuncomputed/tests.rs"]

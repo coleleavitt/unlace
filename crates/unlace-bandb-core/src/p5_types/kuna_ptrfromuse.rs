@@ -191,18 +191,25 @@ crate::kuna_flag!(
 
 /// (kuna `ptrfromlocal`) The `void *` candidate for a pointer-width value `vn` that a `CALL`,
 /// `CALLIND` or `LOAD` writes, when the same walk as [`pointer_from_use`] finds it used as a
-/// memory base and nothing inconsistent with a pointer. The caller offers it only over a vote
-/// that is still `TYPE_UNKNOWN` (`undefined8`), so a declared callee return keeps its type.
+/// memory base and nothing inconsistent with a pointer. A call whose prototype locks its output
+/// declines; the caller offers the candidate only over an unknown or integer vote (the `int8`
+/// an `INT_ADD` reader votes), never over a pointer, float or composite one.
 pub fn pointer_from_local_use(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
     let v = data.vbank().get(vn)?;
     if v.is_input() || v.is_constant() || v.is_type_lock() || v.is_annotation() {
         return None;
     }
-    let def = data.obank().get(v.get_def()?)?;
+    let def_op = v.get_def()?;
+    let def = data.obank().get(def_op)?;
     if !matches!(
         def.code(),
         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND | OpCode::CPUI_LOAD
     ) {
+        return None;
+    }
+    if let Some(i) = data.get_call_specs_index(def_op)
+        && data.get_call_specs(i).proto().is_output_locked()
+    {
         return None;
     }
     let size = v.get_size();

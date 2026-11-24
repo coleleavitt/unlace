@@ -39,6 +39,10 @@
 //! ([`lock_retyped`]), and the merge then follows the previous decompile's
 //! variables where the keys still identify them ([`same_variable`]).
 //!
+//! Two locals with the same evidence for the same number are ordered by their
+//! smallest [`Place`] (storage, width and use point), not by [`HighVariableId`],
+//! which follows creation order and so changes with SSA renumbering.
+//!
 //! Without a carried record the pass numbers in sequence, exactly as before.
 
 use crate::libcnames::FuncdataLibcnamesExt;
@@ -414,7 +418,7 @@ pub fn assign_numbers(
 ) -> BTreeMap<HighVariableId, int4> {
     let prior = fd.unlace_prior_names();
     let angr = fd.get_arch().name_style_angr;
-    let mut options: Vec<((usize, usize), int4, HighVariableId)> = Vec::new();
+    let mut options: Vec<((usize, usize), int4, Option<Place>, HighVariableId)> = Vec::new();
     for (high, counts) in tallies {
         let mut numbers: BTreeMap<int4, (usize, usize)> = BTreeMap::new();
         for (name, count) in counts {
@@ -426,12 +430,28 @@ pub fn assign_numbers(
                 total.1 += count.1;
             }
         }
-        options.extend(numbers.into_iter().map(|(i, count)| (count, i, *high)));
+        if numbers.is_empty() {
+            continue;
+        }
+        let place = instances_with_keys(fd, *high)
+            .into_iter()
+            .map(|(_, keys)| keys.2)
+            .min();
+        options.extend(
+            numbers
+                .into_iter()
+                .map(|(i, count)| (count, i, place.clone(), *high)),
+        );
     }
-    options.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    options.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then(a.1.cmp(&b.1))
+            .then(a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
+    });
     let mut assigned: BTreeMap<HighVariableId, int4> = BTreeMap::new();
     let mut taken: BTreeSet<int4> = BTreeSet::new();
-    for (_, i, high) in options {
+    for (_, i, _, high) in options {
         if !assigned.contains_key(&high) && taken.insert(i) {
             assigned.insert(high, i);
         }

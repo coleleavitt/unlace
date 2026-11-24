@@ -134,6 +134,8 @@ Every release publishes these assets, named from the version (`<ver>` is
 | `unlace-v<ver>-windows-x86_64.zip` | `x86_64-pc-windows-msvc` (build) |
 | `unlace-v<ver>-specs.tar.gz` | the compiled SLEIGH tree (specs) |
 | `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip` | the Ghidra extension (ghidra-ext) |
+| `SHA256SUMS` | SHA-256 of every asset above (release job) |
+| `SHA256SUMS.sig`, `SHA256SUMS.cert` | keyless cosign signature over `SHA256SUMS` and its Sigstore certificate (release job) |
 
 Each archive unpacks to a directory of the same name holding `unlace` (or
 `unlace.exe`), `LICENSE` and `NOTICE`. The `unlace_ghidra` binaries are
@@ -210,7 +212,7 @@ the maintainer's job before dispatch.
    re-run the failed jobs (`gh run rerun <run-id> -R coleleavitt/unlace --failed`);
    the version is recomputed the same way.
 7. **Assets.** `gh release view v<ver> -R coleleavitt/unlace --json assets -q '.assets[].name'`
-   must list the eight assets in [Assets](#assets).
+   must list the eleven assets in [Assets](#assets).
 8. **Smoke.** Extract `unlace-v<ver>-linux-x86_64.tar.gz` and run
    `unlace --version`; it must print `unlace <ver>`. The Ghidra zip is checked
    for structure by CI only, so install it into a Ghidra install once when a
@@ -221,3 +223,25 @@ the maintainer's job before dispatch.
 A published release is public and may already be cached or downloaded. Deleting
 one (`gh release delete v<ver> --cleanup-tag -R coleleavitt/unlace`) needs the
 owner's confirmation first; prefer publishing a fixed release.
+
+## Verifying a download
+
+Every release signs `SHA256SUMS` with cosign, keyless (Sigstore). The signing
+identity is the release workflow run, so no key has to be trusted in advance.
+Download an asset and the three checksum files, then:
+
+```bash
+cosign verify-blob \
+  --certificate SHA256SUMS.cert \
+  --signature SHA256SUMS.sig \
+  --certificate-identity="https://github.com/coleleavitt/unlace/.github/workflows/release.yml@refs/heads/main" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+The identity ends in the ref the workflow was dispatched from; it is
+`refs/heads/main` for a release cut from `main`. A verify that names another
+ref fails on purpose. `--ignore-missing` skips the checksums of assets you did not
+download. The release job signs the sums after all builds have passed, and a
+failed run creates no tag (see [After publish](#after-publish)).

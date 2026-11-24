@@ -123,6 +123,34 @@ impl LanedKey {
     }
 }
 
+/// (unlace `stack_frame_recovery::FrameSlotKind`) What a recovered stack-frame slot holds,
+/// from its frame offset alone. Only the kinds main can derive from the stack space are
+/// produced today; saved-register and shadow-space slots need the calling convention and
+/// saved-register set that main does not yet carry on `Funcdata`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameSlotKind {
+    /// Callee-local storage below the return address (negative stack offset).
+    Local,
+    /// The saved return-address slot `[0, ptr_size)` in stack-space coordinates.
+    ReturnAddress,
+    /// Caller-pushed stack argument at or above the return-address slot's end.
+    StackArg,
+}
+
+impl FrameSlotKind {
+    /// Classify a stack-space offset: below the return address is `Local`, the
+    /// return-address word is `ReturnAddress`, everything above is `StackArg`.
+    pub fn classify(offset: i64, ptr_size: i64) -> Self {
+        if offset < 0 {
+            Self::Local
+        } else if offset < ptr_size {
+            Self::ReturnAddress
+        } else {
+            Self::StackArg
+        }
+    }
+}
+
 /// (unlace `framelayout`) One recovered stack-frame slot: the name, data type and
 /// byte size a `restructure_varnode` pass gave it.
 ///
@@ -138,6 +166,8 @@ pub struct FrameSlot {
     pub dtype: std::rc::Rc<crate::dtype::Datatype>,
     /// Byte size of the slot.
     pub size: int4,
+    /// What the slot holds (local, return address, stack argument).
+    pub kind: FrameSlotKind,
 }
 
 /// (unlace `--assert`) A `type` directive's retype of a whole printed variable to `ct`, keeping

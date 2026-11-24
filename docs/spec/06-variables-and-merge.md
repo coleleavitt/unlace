@@ -473,6 +473,14 @@ input; single joins took 3 to 30 s. None of this changes a test's answer.
 marking (below), three passes fuse variables to reduce clutter:
 
 - `coreaction_cleanup.rs (ActionMergeCopy)` → `merge.rs (Merge::merge_opcode)`
+  over COPY, and over MULTIEQUAL (the phi merge), where a pair is refused when
+  one HighVariable is dereferenced as an address (a LOAD/STORE address input)
+  and the other is defined by pure integer arithmetic (`INT_MULT`, shifts,
+  `INT_DIV`/`INT_REM`, `INT_AND`/`INT_OR`/`INT_XOR`, through COPY chains;
+  `INT_ADD` is excluded because it is also pointer advance). The check is
+  structural (`merge.rs (phi_address_arith_conflict)`), so it holds when both
+  types are `Unknown`: a merged variable declared a scalar would be read as a
+  pointer at runtime. It is a strict correctness guard and ships unconditional.
   over COPY: a COPY's output and input merge whenever the required rung and
   the cover allow — still a non-speculative merge (only the required tests
   gate it), and the assignment then disappears (marked internal below).
@@ -1045,10 +1053,16 @@ non-constant value returns, through the folded copies and casts; a function
 whose returns name two different locals names neither. A counter outranks
 every library kind but a library call's result (a counter passed as `read`'s
 `nbytes` stays `i`; `len = strlen(s)` counted down stays `len`), and `result`
-is the weakest evidence. Evidence an option prints
+ranks below a counter, a loop bound and an array base rank below it, and the local's type is the weakest evidence of all. Evidence an option prints
 is preferred to library evidence that is decided only so a directive can name
 a local, so with `libcnames` off a returned `open` descriptor still prints
-`result`. The option is off by default because it renames locals that other
+`result`. A loop bound and an array base (`contextnames`, the same option) are evidence
+too: the local an integer compare pits against a counter, through the same folded
+copies, casts, extensions and integer arithmetic, is named `len` (`i < len`, `i != n`),
+and the pointer local a `LOAD` or `STORE` address adds a counter-derived index to,
+through a `PTRADD` or an `INT_ADD`, is named `buf` (`buf[i]`). Neither is a loop
+counter, so neither moves a counter's name; a bound or base that is also a counter,
+or a local that is not a pointer, names nothing. The option is off by default because it renames locals that other
 features' stage assertions and CLI tests spell as `vN`.
 
 **A local is named from the fields and the type it meets (`flownames`,
@@ -1488,6 +1502,14 @@ rewrite `LOAD/STORE` through a spacebase-relative pointer into direct
 `(stack, offset)` Varnodes. Third, the stack-pointer *flow* itself is kept
 affine by `ActionStackPtrFlow` (§6.5). Everything below consumes the
 `(stack, offset)` Varnodes those links produce.
+
+**Frame slot kinds** (`FrameSlotKind`, `crates/unlace-middle/src/substrate/funcdata.rs`). Each
+slot that `record_frame_layout_pass` folds into the frame union is tagged by its
+stack-space offset alone: negative offsets are `Local`, the word `[0, ptr_size)` holding
+the return address is `ReturnAddress`, and anything at or above it is `StackArg`. The tag is
+data only; it changes no printed output and needs no option. Saved-register and
+Microsoft x64 shadow-space kinds are not produced yet: they need the saved-register set and
+the calling convention on `Funcdata`, which main does not carry.
 
 **Keeping non-locals out** (`crates/unlace-bandb/src/p4_calls/coreaction_protos.rs
 (ActionRestrictLocal)` → `funcdata_spacebase.rs (Funcdata::restrict_local)`,

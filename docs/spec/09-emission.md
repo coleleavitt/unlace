@@ -5754,6 +5754,16 @@ condition block's statements above it as for an `if`, then `return ( cond );` or
 body's `RETURN` as the statement's markup. The option builds the tree even when
 `ctree` is off.
 
+With `option retternary on` (C output; default off), an `if`/`else` the forms
+above leave, whose arms are such leaves each printing one `RETURN` of a constant
+or an explicit variable, becomes one return (`return_ternary_shape`): a `1` or
+`0` arm against a `bool`-typed variable `x` gives `Or`/`And` of the condition (or
+its negation) and `x` (`c ? 1 : x` is `c || x`, `c ? x : 1` is `!c || x`,
+`c ? x : 0` is `c && x`, `c ? 0 : x` is `!c && x`); any other pair gives
+`Ternary(cond, A, B)`. `emit_return_value` prints the value: a condition through
+its `ONLY_BRANCH` render, an arm as its `RETURN`'s value, and `?`/`:`/`&&`/`||`
+between operands.
+
 With `option noretfirst on` (C output; default off), the pass then takes an
 `if`/`else` without a goto, neither rewritten above, whose structured arms
 differ in whether they have an out edge (one returns or ends in a no-return call,

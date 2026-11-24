@@ -588,6 +588,8 @@ Three tiers:
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-off) |
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-off) |
+| if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
+| a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2533,6 +2535,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when nested ifs with no else read as one source condition (`if (p && p->x)` chains a compiler laid out as separate tests). Leave off to keep each test as its own if, as Ghidra prints it; with no else the two forms run the same code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-nestedand
 - **Example:** `option nestedand on`
+
+### `retternary` -- on | off, default `off`
+
+- **Symptoms:** if (c) { return a; } else { return b; } where the source returned c ? a : b; a function ends in two returns of a variable and a constant.
+- **What it does:** C output only: print an if/else (no goto) whose body and else each print one statement, a return of a constant or of a named variable, as one return. A 1 or 0 arm against a bool variable x joins with the condition: `c ? 1 : x` prints `return (c) || x;`, `c ? x : 1` prints `return !(c) || x;`, `c ? x : 0` prints `return (c) && x;`, `c ? 0 : x` prints `return !(c) && x;`; any other pair prints `return (c) ? A : B;`. Each arm must be a basic-block leaf with no label line and no comment; the condition prints through the same render as the if header, and the statements in front of the test print above it. Two constant returns 1 and 0 take the `boolreturn` form when that option is on. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
+- **When to flip:** Turn on when the source likely returned one expression (`return ok ? a : b;`, `return !c || flag;`), which compilers lower to two returns. Leave off to keep the if/else of returns the binary literally has; both are the same object code.
+- **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-retternary
+- **Example:** `option retternary on`
 
 ## Analysis & loader passes
 

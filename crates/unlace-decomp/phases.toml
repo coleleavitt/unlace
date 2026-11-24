@@ -7987,3 +7987,22 @@ inspiration = "Backlog issue 10 (under-folded condition chains printed as nested
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "if (a) { if (b) { ... } } where the source wrote one if (a && b)|a chain of tests on one pointer prints as nested ifs with no else"
+
+[[settable]]
+option = "retternary"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "condition-form"
+strength = "HARD"
+rewind = "P9"
+issue = "kuna-retternary"
+summary = "C output only: print an if/else (no goto) whose body and else each print one statement, a return of a constant or of a named variable, as one return. A 1 or 0 arm against a bool variable x joins with the condition: `c ? 1 : x` prints `return (c) || x;`, `c ? x : 1` prints `return !(c) || x;`, `c ? x : 0` prints `return (c) && x;`, `c ? 0 : x` prints `return !(c) && x;`; any other pair prints `return (c) ? A : B;`. Each arm must be a basic-block leaf with no label line and no comment; the condition prints through the same render as the if header, and the statements in front of the test print above it. Two constant returns 1 and 0 take the `boolreturn` form when that option is on. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function."
+use_when = "Turn on when the source likely returned one expression (`return ok ? a : b;`, `return !c || flag;`), which compilers lower to two returns. Leave off to keep the if/else of returns the binary literally has; both are the same object code."
+example = "option retternary on"
+source_decompiler = "kuna"
+inspiration = "Backlog issue 9: the reference decompiler prints such tails as one return of a conditional; its lead on DecBench in this shape is 692 functions"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "if (c) { return a; } else { return b; } where the source returned c ? a : b|a function ends in two returns of a variable and a constant"

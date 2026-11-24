@@ -1716,7 +1716,7 @@ address, then drops the table and the structured-block graph so no `switch`
 is emitted. A header warning (`Switch with 1 destination removed at <addr>`,
 plus `: N cases all go to same destination` when every entry matches) is
 added unless the table has one entry and the switch value is a constant
-(`tests/stages/kuna-switchsingle.xml`). Unlike upstream, a one-entry table
+(`tests/stages/kuna-switchsingle.toml`). Unlike upstream, a one-entry table
 over a computed value is left alone: kuna's table recovery can keep only the
 entries its guards prove reachable, so a single kept entry is not proof that
 the dispatch has one destination. This is a strict fix with no option: a
@@ -3620,7 +3620,7 @@ Power-of-two widths stay with `ActionLaneDivide`, `simdlane` and
 `constspaceload` to preserve their view of register lanes. The rule runs during
 simplification because other rules can recreate the odd widths after heritage.
 It leaves all 675 datatest assertions unchanged.
-`tests/stages/kuna-wideslice.xml` pins clang
+`tests/stages/kuna-wideslice.toml` pins clang
 `-O3` SSE byte-unpacking (eight direct lane additions, no 13-byte locals and
 no `SUB13x` reads);
 `gh275-spillargtrial.xml` independently exercises a 12-byte packed-double tree.

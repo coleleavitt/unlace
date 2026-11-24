@@ -1,0 +1,170 @@
+# Kuna `xnutables` option (P1 external refinement): kalloc_type views and
+# IOExternalMethodDispatch tables on an XNU kext.
+#
+# The fixture (gen_iokit.py) adds to the iokitclasses kext one
+# __kalloc_type view for site.Derived (signature 121112, 0x30 bytes), a
+# four-record IOExternalMethodDispatch table whose address Derived's own
+# vtable method computes, alloc_derived (allocates through kalloc_type_impl
+# and stores into the result) and a reader of the table's third function
+# pointer. Only the allocator and alloc_derived have symbols.
+#
+# Pass 1 (`option xnutables off`) is the bug: the view is a bare address,
+# the dispatched handler is sub_<addr>, the allocation is a long with casts
+# around it and the table read is dat_<addr>. Pass 2 (`on`) names the view
+# kalloc_type_view_Derived and the handler after its owner and selector,
+# types the allocation Derived * from the view's signature (field_0x18 a
+# pointer, field_0x8 data) and the table IOExternalMethodDispatch[4], and
+# types the variable-size allocation as its header struct Packet *, and
+# names the __got slot Base::m1_ptr. The stub at 0xfffffff007a04260 jumps
+# through that slot; `__DATA_CONST` is mapped read-only, so jump-table
+# recovery reads the slot as a one-entry table naming `Base::m1`.
+# `Base::m1` states no prototype, so under `tailcalljump on` the
+# single-function drive decompiles it first, finds it takes nothing, and
+# the stub prints as a tail call in both passes (#15). Each pass then
+# decompiles the stub again under `tailcalljump direct`, which follows the
+# table (`switch(Base::m1_ptr) { case 0xfffffff007a040f0: ... }`); the
+# slot's name there is what #13/#14 check.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho',
+    'option xnutables off',
+    'read symbols',
+    'load addr 0xfffffff007a04200',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a041b0',
+    'decompile',
+    'print C',
+    'load function alloc_derived',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04240',
+    'decompile',
+    'print C',
+    'load function alloc_packet',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04260',
+    'decompile',
+    'print C',
+    'option tailcalljump direct',
+    'load addr 0xfffffff007a04260',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/iokit_kext.macho',
+    'option xnutables on',
+    'read symbols',
+    'load addr 0xfffffff007a04200',
+    'decompile',
+    'print C',
+    'load function Derived::externalMethod_1',
+    'decompile',
+    'print C',
+    'load function alloc_derived',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04240',
+    'decompile',
+    'print C',
+    'load function alloc_packet',
+    'decompile',
+    'print C',
+    'load addr 0xfffffff007a04260',
+    'decompile',
+    'print C',
+    'option tailcalljump direct',
+    'load addr 0xfffffff007a04260',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'XNUTABLES #1: off leaves the kalloc_type view a bare address'
+count = 1
+literal = 'kalloc_type_impl(0xfffffff007a05200); // tail-call'
+
+[[match]]
+name = 'XNUTABLES #2: off leaves the dispatched handler unnamed'
+count = 1
+regex = '^unsigned long sub_fffffff007a041b0\('
+
+[[match]]
+name = 'XNUTABLES #3: on names the view after its type'
+count = 1
+literal = 'kalloc_type_impl(kalloc_type_view_Derived,a1); // tail-call'
+
+[[match]]
+name = 'XNUTABLES #4: on names the handler by owner and selector'
+count = 1
+regex = '^unsigned long Derived::externalMethod_1\('
+
+[[match]]
+name = 'XNUTABLES #5: off leaves the allocation an untyped word'
+count = 1
+regex = '^  \*\(unsigned long \*\)\(v1 \+ 0x18\) = 0;'
+
+[[match]]
+name = 'XNUTABLES #6: off reads the dispatch table as a bare word'
+count = 1
+literal = 'return dat_fffffff007a05270;'
+
+[[match]]
+name = "XNUTABLES #7: on types the allocation from the view's signature"
+count = 1
+regex = '^  Derived \*v1; // x0'
+
+[[match]]
+name = 'XNUTABLES #8: on stores through the synthesized fields'
+count = 1
+regex = '^  v1->field_0x18 = NULL;'
+
+[[match]]
+name = 'XNUTABLES #9: on types the dispatch table as records'
+count = 1
+literal = 'return Derived_sMethods[2].function;'
+
+[[match]]
+name = 'XNUTABLES #10: off leaves a variable-size allocation an untyped word'
+count = 1
+regex = '^  \*\(unsigned long \*\)v1 = v1;'
+
+[[match]]
+name = 'XNUTABLES #11: on names the var view and types its allocation by the header'
+count = 1
+literal = 'v1 = kalloc_type_var_impl(kalloc_type_var_view_Packet,0x28,0,0);'
+
+[[match]]
+name = 'XNUTABLES #12: on types the variable-size allocation from the header signature'
+count = 1
+regex = '^  Packet \*v1; // x0'
+
+[[match]]
+name = 'XNUTABLES #13: off leaves an unindexed __got slot a bare address'
+count = 1
+literal = 'switch(dat_fffffff007a05300) {'
+
+[[match]]
+name = 'XNUTABLES #14: on names the __got slot after the function it holds'
+count = 1
+literal = 'switch(Base::m1_ptr) {'
+
+[[match]]
+name = 'XNUTABLES #15: under tailcalljump on the stub through the slot is a tail call to Base::m1'
+count = 2
+literal = 'v1 = Base::m1(); // tail-call'

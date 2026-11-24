@@ -196,7 +196,7 @@ completion link and so one identity, but not one shape, so a type carrying such
 a link orders by id, then after every unlinked type of that id, then by the
 link's address, never by shape: the order of two identity classes cannot depend
 on which member of a class is compared.
-`tests/stages/kuna-typeorder.xml` pins the order on a DWARF fixture.
+`tests/stages/kuna-typeorder.toml` pins the order on a DWARF fixture.
 
 (kuna) **A record the C grammar declared completes the pointers built to it.**
 Upstream completes a struct or union in place (`TypeFactory::setFields`), so a
@@ -4311,11 +4311,11 @@ store of `0x80000001038e4750` as its forty-byte text, and the empty literal
 (`0xe000000000000000` beside a zero count word) as `""`; the count word is left,
 because the code really stores it. At `auto` the rule acts when the image's
 source language is Swift; `always` drops the language test; `off` keeps the
-constants. The stage test `tests/stages/kuna-swiftstr.xml` runs the stripped
-`swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.xml` runs the
+constants. The stage test `tests/stages/kuna-swiftstr.toml` runs the stripped
+`swift_types_elf` off and on; `tests/stages/kuna-swiftstrcsel.toml` runs the
 arm64 Mach-O `macho_swift_strsel_arm64`, whose literals are picked by `csel`
 pairs, a switch and a selected store, off, on, and on with `swiftmetadata`;
-`tests/stages/kuna-swiftstrcmp.xml` runs `macho_swift_strcmp_arm64`, whose
+`tests/stages/kuna-swiftstrcmp.toml` runs `macho_swift_strcmp_arm64`, whose
 `s == "…"` tests compare both words inline, off and on.
 
 The **language-facet table** the rule consults is the multilang W3 plane's

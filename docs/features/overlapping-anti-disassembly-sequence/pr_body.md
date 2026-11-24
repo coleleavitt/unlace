@@ -121,7 +121,7 @@ asked for. No `sub_b10cdc7`, no `dat_d98ddd00`.
 
 ## Regression cover
 
-* `tests/stages/overlapbranch.xml` — two-pass (default recovers the real stream;
+* `tests/stages/overlapbranch.toml` — two-pass (default recovers the real stream;
   `option overlapbranch off` reproduces **both** artefacts, `sub_b0c48ac()` and
   `dat_d98ddd00`), 3 assertions, all pinned `min=1 max=1` so each is present in exactly one
   of the two passes.

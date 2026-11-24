@@ -1,0 +1,119 @@
+# Swift type layouts from static metadata (`option swifttypes on|off`, the
+# type-layout arm of `swiftmetadata`).
+#
+# Issue: `swiftmetadata` names a stripped Swift binary's functions but
+# knows nothing of its types, so a getter reads `*(long *)(v2 + 0x60)`
+# off an unnamed register and a metadata accessor returns a bare constant.
+# The static type metadata the accessors return holds every fixed-layout
+# struct's and class's size and field offsets, and the reflection field
+# descriptors hold the field names and types; on a large third-party iOS
+# app they lay out 4,585 structs and 3,205 classes (30,997 fields) and type the
+# `self` of 8,560 getters.
+#
+# Stage / sub-stage: P1 external-refinement, the Swift metadata pass
+# (`unlace-analysis/src/analyzers/swift/kuna_swifttypes.rs`).
+#
+# P0 assertion: `option swifttypes on|off` (default on; inert unless
+# `swiftmetadata` is on).
+#
+# Both passes clear the harness architecture and load the real fixture
+# `swift_types_elf` (x86-64 ELF, swiftc 6.3, `llvm-strip` strip all) with
+# `swiftmetadata on`. Pass 1 (`option swifttypes off`) reproduces the BUG:
+# `typefix.Sprite.vtable#6.getter` takes no parameter and reads
+# `v2 + 0x60`, and `typefix.Point.type_metadata_accessor` returns
+# `ZEXT816(0x5318)` with no prototype. Pass 2 (the default) is the FIX:
+# the getter takes `typefix.Sprite *self` and returns `self->count`, the
+# origin getter returns `self->origin` as a `typefix.Point`, the accessor
+# returns a `swift.MetadataResponse` (the metadata and its state, two
+# words: the complete metadata has state 0), and the
+# witness getter takes `typefix.Pixel *self` behind the type metadata and
+# witness table.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'option swifttypes off',
+    'read symbols',
+    'load addr 0x3e60',
+    'decompile',
+    'print C',
+    'load addr 0x4110',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x3e60',
+    'decompile',
+    'print C',
+    'load addr 0x3cb0',
+    'decompile',
+    'print C',
+    'load addr 0x4110',
+    'decompile',
+    'print C',
+    'load addr 0x2ce0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swifttypes off: the getter takes no self and reads a raw offset'
+count = 1
+literal = 'vtable#6.getter(void)'
+
+[[match]]
+name = 'swifttypes off: the field is an offset off an unnamed register'
+count = 1
+literal = 'return *(unsigned long *)(v2 + 0x60);'
+
+[[match]]
+name = 'swifttypes off: the accessor returns a bare constant'
+count = 1
+literal = 'return ZEXT816(0x5318);'
+
+[[match]]
+name = "swifttypes on: the getter takes the class's self"
+count = 1
+literal = 'typefix.Sprite.vtable#6.getter(typefix.Sprite *self)'
+
+[[match]]
+name = 'swifttypes on: the stored property is a field of the layout'
+count = 1
+literal = 'return self->count;'
+
+[[match]]
+name = 'swifttypes on: a struct-typed field returns as the nested struct'
+count = 1
+literal = 'typefix.Point typefix.Sprite.vtable#0.getter(typefix.Sprite *self)'
+
+[[match]]
+name = 'swifttypes on: the accessor returns the metadata response'
+count = 1
+literal = 'return (swift.MetadataResponse)ZEXT816(0x5318);'
+
+[[match]]
+name = 'swifttypes on: the accessor prototype'
+count = 1
+literal = 'swift.MetadataResponse typefix.Point.type_metadata_accessor(void)'
+
+[[match]]
+name = "swifttypes on: the witness getter takes the struct's self behind Self and the witness table"
+count = 1
+literal = 'requirement#1(swift.type_metadata *Self,void *witness_table,typefix.Pixel *self)'

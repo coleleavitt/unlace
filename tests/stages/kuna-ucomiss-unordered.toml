@@ -1,0 +1,272 @@
+# Authored SSE COMISS/COMISD probe: seta, setae, setbe and setb after a
+# compare with a memory operand, a borrow (sbb) after COMISD, and a jbe
+# branch after UCOMISS. Each condition flag is true for unordered inputs
+# (ZF=PF=CF=1), so x > one must print as one < x (false for a NaN) and
+# setbe as !(one < x) (true for a NaN), never as x <= one.
+# P3 nanignore folding (kuna_floatnegation.rs) keeps the exact single
+# comparison before the NaN guards are dropped. Strict correctness fix,
+# no new option: pass 1 pins the defaults, pass 2 (nanignore none) keeps
+# the explicit guards. The compiled-C oracle is in
+# unlace-cli/tests/float_unordered_compare.rs.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'above' },
+    { space = 'ram', offset = '0x40100d', name = 'at_least' },
+    { space = 'ram', offset = '0x40101a', name = 'not_above' },
+    { space = 'ram', offset = '0x401027', name = 'not_at_least' },
+    { space = 'ram', offset = '0x401034', name = 'pick' },
+    { space = 'ram', offset = '0x401041', name = 'above_branch' },
+    { space = 'ram', offset = '0x404000', name = 'nan_or_huge' },
+    { space = 'ram', offset = '0x404020', name = 'ordered_below_pair' },
+    { space = 'ram', offset = '0x404040', name = 'nan_or_above' },
+    { space = 'ram', offset = '0x404060', name = 'ordered_below' },
+    { space = 'ram', offset = '0x404079', name = 'jp_jbe' },
+    { space = 'ram', offset = '0x404090', name = 'work' },
+    { space = 'ram', offset = '0x407000', name = 'guarded_below' },
+    { space = 'ram', offset = '0x407016', name = 'guarded_sum' },
+    { space = 'ram', offset = '0x407033', name = 'guarded_below_os' },
+    { space = 'ram', offset = '0x407044', name = 'guarded_sum_os' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '''
+31c00f2f05f70f00000f97c0c331c00f2f05ea0f00000f93c0c331c00f2f
+05dd0f00000f96c0c331c00f2f05d00f00000f92c0c3660f2fc119c083e0
+0283c003c30f2e05b80f00007606b803000000c3b805000000c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '0000803f'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x404000'
+hex = '''
+660f2ec07a0a660f2f05f20f00007608f20f58c0c30f1f00e9730000000f
+1f000f2fc10f92c231c00f2ec10f9bc021d0c3662e0f1f8400000000000f
+1f440000660f2ec00f9ac0660f2e05b90f00000f97c108c10fb6c1c30f1f
+8400000000000f2ec00f9bc048c7c1105040000f2e010f92c120c10fb6c1
+c30f2e05900f00007a087606b803000000c3b805000000c3c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x405000'
+hex = '9c7500883ce4377e00000000000004400000c842'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x407000'
+hex = '''
+0f2ec07a0a0f2fc10f92c00fb6c0c3b800000000ebf5660f2ec07a10660f
+2fc10f92c00fb6c08d044001f8c3b800000000ebf031c00f2ec07a060f2f
+c10f92c00fb6c0c331c0660f2ec07a07660f2fc10f92c00fb6c08d044001
+f8c3
+'''
+
+[script]
+commands = [
+    'parse line extern int above(float x);',
+    'parse line extern int at_least(float x);',
+    'parse line extern int not_above(float x);',
+    'parse line extern int not_at_least(float x);',
+    'parse line extern int pick(double x,double y);',
+    'parse line extern int above_branch(float x);',
+    'parse line extern double nan_or_huge(double x);',
+    'parse line extern int ordered_below_pair(float x,float y);',
+    'parse line extern int nan_or_above(double x);',
+    'parse line extern int ordered_below(float x);',
+    'parse line extern int jp_jbe(float x);',
+    'parse line extern double work(double x);',
+    'parse line extern int guarded_below(float x,float y);',
+    'parse line extern int guarded_sum(double x,double y,int k);',
+    'parse line extern int guarded_below_os(float x,float y);',
+    'parse line extern int guarded_sum_os(double x,double y,int k);',
+    'map address r0x402000 float one',
+    'map address r0x405000 float8 huge',
+    'map address r0x405008 float8 bound',
+    'map address r0x405010 float4 limit',
+    'lo fu above',
+    'decompile',
+    'print C',
+    'lo fu at_least',
+    'decompile',
+    'print C',
+    'lo fu not_above',
+    'decompile',
+    'print C',
+    'lo fu not_at_least',
+    'decompile',
+    'print C',
+    'lo fu pick',
+    'decompile',
+    'print C',
+    'lo fu above_branch',
+    'decompile',
+    'print C',
+    'lo fu nan_or_huge',
+    'decompile',
+    'print C',
+    'lo fu ordered_below_pair',
+    'decompile',
+    'print C',
+    'lo fu nan_or_above',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'lo fu nan_or_above',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'lo fu nan_or_above',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'lo fu ordered_below',
+    'decompile',
+    'print C',
+    'option outlang go',
+    'lo fu ordered_below',
+    'decompile',
+    'print C',
+    'option outlang rust',
+    'lo fu ordered_below',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'lo fu jp_jbe',
+    'decompile',
+    'print C',
+    'lo fu guarded_below',
+    'decompile',
+    'print C',
+    'lo fu guarded_sum',
+    'decompile',
+    'print C',
+    'lo fu guarded_below_os',
+    'decompile',
+    'print C',
+    'lo fu guarded_sum_os',
+    'decompile',
+    'print C',
+    'option nanignore none',
+    'lo fu not_above',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'UCOMISS unordered #1: seta is one < x'
+count = 1
+literal = 'return one < x;'
+
+[[match]]
+name = 'UCOMISS unordered #2: setae is one <= x'
+count = 1
+literal = 'return one <= x;'
+
+[[match]]
+name = 'UCOMISS unordered #3: setbe keeps the unordered case'
+count = 1
+literal = 'return !(one < x);'
+
+[[match]]
+name = 'UCOMISS unordered #4: setb keeps the unordered case'
+count = 1
+literal = 'return !(one <= x);'
+
+[[match]]
+name = 'UCOMISS unordered #5: sbb borrow keeps the unordered case'
+count = 1
+literal = '-(uint4)!(y <= x)'
+
+[[match]]
+name = 'UCOMISS unordered #6: jbe branch is one < x'
+count = 1
+literal = 'if (one < x)'
+
+[[match]]
+name = 'UCOMISS unordered #7: nanignore none keeps the guards'
+count = 1
+literal = '(NAN(x) || NAN(one)) || x <= one'
+
+[[match]]
+name = 'UCOMISS unordered #8: no ordered spelling of an unordered flag'
+count = 0
+regex = 'x != one|return x <= one;|return x < one;|!\(x <= one\)|!\(x < one\)|\(x < y\)'
+
+[[match]]
+name = 'UCOMISS unordered #9: an isnan test beside an exact jbe stays'
+count = 1
+literal = 'if ((!NAN(x)) && (!(huge < x)))'
+
+[[match]]
+name = 'UCOMISS unordered #10: setnp beside an exact setb stays'
+count = 1
+literal = '(!NAN(x) && !NAN(y)) && !(y <= x)'
+
+# Compare the same NaN test across output languages at each width.
+[[match]]
+name = 'UCOMISS unordered #11: setp beside an exact seta stays'
+count = 1
+regex = [
+    'return bound < x \|\| NAN\(x\);',
+    '^\}$',
+    '^$',
+    '^func nan_or_above\(x float64\) int32 \{$',
+    '^  return .*\(bound < x \|\| math\.IsNaN\(x\)\)$',
+    '^\}$',
+    '^$',
+    '^$',
+    '^#\[allow\(',
+    '^unsafe fn nan_or_above\(mut x: f64\) -> i32$',
+    '^\{$',
+    '^  return \(bound < x \|\| NAN\(x\)\) as i32;$',
+    '^\}$',
+]
+
+[[match]]
+name = 'UCOMISS unordered #12: setnp beside an exact setb through a pointer stays'
+count = 1
+regex = [
+    'return !\(limit <= x\) && !NAN\(x\);',
+    '^\}$',
+    '^$',
+    '^func ordered_below\(x float32\) int32 \{$',
+    '^  return .*\(!\(limit <= x\) && !math\.IsNaN\(float64\(x\)\)\)$',
+    '^\}$',
+    '^$',
+    '^$',
+    '^#\[allow\(',
+    '^unsafe fn ordered_below\(mut x: f32\) -> i32$',
+    '^\{$',
+    '^  return \(!\(limit <= x\) && !NAN\(x\)\) as i32;$',
+    '^\}$',
+]
+
+[[match]]
+name = 'UCOMISS unordered #13: jp then jbe on one memory compare'
+count = 1
+literal = 'if ((!NAN(x) && !NAN(limit)) && (limit < x))'
+
+[[match]]
+name = 'UCOMISS unordered #14: no NaN test dropped beside an exact compare'
+count = 0
+regex = 'if \(x <= limit\)|return x < limit;|!\(x < bound\)|!\(x <= huge\)'
+
+[[match]]
+name = 'UCOMISS unordered #15: a guard hoisted out of the branch keeps its NaN test (gcc -O1/-Os)'
+count = 4
+literal = '!NAN(x) && !(y <= x)'
+
+[[match]]
+name = 'UCOMISS unordered #16: the hoisted guard never prints unguarded'
+count = 0
+regex = 'return x < y;|= x < y;'

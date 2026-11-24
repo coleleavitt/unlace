@@ -1,0 +1,68 @@
+# Swift runtime prototypes (`option swiftruntime on|off`).
+#
+# Issue: a stripped Swift binary's runtime calls carry no signature, so
+# `swift_allocObject` returns a `long` and takes whatever the call site
+# passes.
+#
+# Stage / sub-stage: P1 external-refinement, `SwiftRuntimePass`
+# (`unlace-analysis/src/analyzers/swift/kuna_swiftruntime.rs`).
+#
+# P0 assertion: `option swiftruntime on|off` (default on).
+#
+# Both passes load the real fixture `swift_types_elf` with `swiftmetadata
+# on` for the names. Pass 1 (`option swiftruntime off`): the allocating
+# initializer's `swift_allocObject(self,0x28,7)` returns a `long`. Pass 2
+# (the default): it takes a `swift.type_metadata *` and two sizes and
+# returns the object as a `void *`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'option swiftruntime off',
+    'read symbols',
+    'load addr 0x3940',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_types_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x3940',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftruntime off: the allocation returns a bare word'
+count = 1
+literal = 'int8 v1; // rax'
+
+[[match]]
+name = "swiftruntime off: the allocation's arguments are the call site's"
+count = 1
+literal = 'swift_allocObject(self,0x28,7)'
+
+[[match]]
+name = 'swiftruntime on: the allocation returns the object'
+count = 1
+literal = 'void *v1; // rax'
+
+[[match]]
+name = 'swiftruntime on: the allocation takes the metadata'
+count = 1
+literal = 'swift_allocObject((swift.type_metadata *)self,0x28,7)'

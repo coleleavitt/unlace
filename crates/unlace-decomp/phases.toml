@@ -2662,6 +2662,25 @@ tier = "transform"
 symptoms = "an evm dispatcher prints its jumpi conditions as bare expression statements|re-entered indirect jump warnings throughout an evm contract|solidity internal functions are inlined into every caller|evm return labels such as 0x91 are assigned to stack slots instead of calls|every evm internal function return is a switch on a stack value"
 
 [[settable]]
+option = "evmstorage"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "literal-format"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-evm-storage-slots"
+summary = "Print an EVM storage access as a storage access instead of a raw `sload(0)` or `sstore(0,v1)` call. The EVM spec lowers `SLOAD` and `SSTORE` to the user ops `sload(slot)` and `sstore(slot, value)`, so contract state reads as slot arithmetic. With the option on, a constant slot prints as `storage[0x0]` (a fixed state variable), a slot that a `keccak256` user op computes prints as `mapping(v5)` (a mapping or dynamic-array element, the Solidity layout `keccak(key . slot)`), any other computed slot prints as `storage(v3)`, and an `sstore` prints as an assignment to the same spelling. `evmstorage.rs` reads the slot operand's def chain (at most six ops) for the hash, a dataflow test in place of the original lifter's eight-instruction SHA3 window. The hash test is a heuristic: a slot that adds a hash to an unrelated value is read as hashed, so the printed slot operand stays visible for the reader to check. Printing only; the lifted operations are unchanged."
+use_when = "Off by default: the output of every corpus unit is unchanged. Turn on for a solc storage layout read by hand, to see which storage words are fixed and which are mapping elements; expect a false `mapping` where a hash feeds an arithmetic slot."
+example = "option evmstorage on"
+source_decompiler = "unlace"
+inspiration = "original unlace lifter crates/unlace-lift-evm/src/solidity.rs (StorageAccess, window_has_sha3): a constant slot is a state variable and a SHA3-computed slot is a mapping or array element"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "sload and sstore print as raw sload(0) and sstore(0,v1) calls|contract state reads as slot arithmetic|a mapping slot prints as an opaque keccak result"
+
+[[settable]]
 option = "wideconst"
 values = "on|off"
 default = "on"
@@ -9399,6 +9418,25 @@ inspiration = "unlace issue 33: silent loss is worse than a visible gap; a reade
 change_kind = "opt-in-tool"
 tier = "core"
 symptoms = "a debug build shows a generic register name where the DWARF information names a local|a function with unimplemented instructions says so in its header but not where|the real-binary harness cannot tell which functions lost information"
+
+[[settable]]
+option = "nonnullparam"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "warning-style"
+strength = "HINT"
+rewind = "P9"
+issue = "unlace-1345"
+summary = "Mark a parameter the function dereferences before any branch as non-null, with a comment above its first use. A function that loads or stores through a parameter in its entry block, before any conditional branch or indirect jump, requires the caller to have passed a pointer that is not null, or the access traps. With the option on, the printer adds `/* non-null: p is dereferenced before any branch */` above the first statement that dereferences the parameter, or a copy of it made in the entry block, once per parameter. The parameter is the function prototype's input whose storage the entry-block varnode is, so a callee-saved register read on entry is not one. Only the comment is added: the printed statements and every other comment are unchanged."
+use_when = "Off by default. Flip on when reading a function whose parameters are dereferenced at once, to see which pointers it assumes are valid without a NULL test. The claim assumes the dereference traps on NULL, which is not true on a target that maps address zero, so read the comment as a hint, not a proof."
+example = "option nonnullparam on"
+source_decompiler = "unlace"
+inspiration = "the archived engine's collect_non_null_param_hints (origin/master crates/unlace-output/src/instruction_annotations.rs), which walked the entry block to the first branch and followed copies"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "a pointer parameter is used at once with no NULL test and nothing says the caller must not pass NULL|the decompiled function gives no hint that its parameter is dereferenced on entry"
 
 [[settable]]
 option = "goitabcalls"

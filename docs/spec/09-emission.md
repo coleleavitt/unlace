@@ -2517,6 +2517,8 @@ prints as `vget[q]_lane_<t>(v, n)`. At `all`, the flow walk also runs `fuse_neon
   becomes one built-in (`vaddq_s32`; integer lanes print signed);
 - a run of lane COPYs of one scalar covering a register becomes `vdup[q]_n_s<bits>`.
 
+(unlace `evmstorage`, default off) An EVM `sload`/`sstore` user op prints as a storage access, `storage[0x..]` for a constant slot, `mapping(..)` when a `keccak256` user op computes the slot (a def-chain walk of at most six ops), `storage(..)` for any other computed slot, and an `sstore` as an assignment (`crates/unlace-emit/src/p9_emit/evmstorage.rs`, `printc.rs` `op_evm_storage_ir`). The hash test is a heuristic and is printed-only.
+
 (unlace `wideconst`, default on) A constant wider than 64 bits that the lifter built from
 pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/wideconst.rs`).
 A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's
@@ -3413,6 +3415,10 @@ pending `else if` brace when it does. Which categories display is a
 render as `/* ... */` lines above the prototype, user and warning types inside
 the body at the 20-column comment indent; a comment is marked emitted after
 printing so overlapping windows never repeat it.
+
+### Non-null parameter comments (`nonnullparam`)
+
+With `option nonnullparam on` the printer adds a `/* non-null: <p> is dereferenced before any branch */` comment above the first statement that dereferences a parameter in the entry block, before any conditional branch or indirect jump. The scan walks the function's live operations in address order, follows `COPY` chains from a parameter, and matches the parameter to the prototype input whose storage the varnode is (so a callee-saved register read on entry is skipped). It reports each parameter once. The comment is added to the print-time comment database only: it attaches to the statement that carries the operation and changes no printed code. The option is off by default, because the inference assumes the dereference traps on NULL. Implementation: `crates/unlace-emit/src/p9_emit/nonnullparamhint.rs`, hooked from `PrintC::setup_comments`.
 
 ## 9.5 Pointer & array notation
 
@@ -6192,6 +6198,27 @@ through `emit_block`. At `built` each of these prints exactly the calls the
 block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
+
+
+## (unlace) Per-stage attribution of text cleanup removals (`UNLACE_STAGE_DIFF`)
+
+With `UNLACE_STAGE_DIFF` set in the environment, each text-level cleanup stage that
+runs after the C text is rendered reports the statement lines it removed or added,
+to stderr. The stage diff is a multiset diff of the trimmed, non-blank lines before
+and after the stage, so a line the stage moves or rewrites appears once as removed
+and once as added, and a repeated line reports its multiplicity. Each line names the
+stage and the function's entry address; per stage and direction at most 40 lines
+print, then a `note=diff-capped` line gives the full totals. The helper is
+`unlace_emit::stagediff` (`p9_emit/stagediff.rs`) and is off by default: with the
+variable unset the only cost is one environment lookup per stage.
+
+The stages wired today are the ones main runs on the rendered text: the cookie
+literal-return rewrite (`rewrite_cookie_literal_returns`, the `/GS` checker inline),
+called from `print_c`, `print_c_with_provenance` and `print_c_with_srcmap`. The
+structured printer's own passes that change the rendered text inside
+`doc_function_full` are not yet traced, so a statement they drop is not attributed.
+Output is unchanged with the variable set.
+||||||| a49947cd2a
 
 ## (unlace) Part macros (`partmacro`) -- `option partmacro`, default off
 

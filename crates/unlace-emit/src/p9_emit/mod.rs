@@ -72,6 +72,7 @@ pub mod memberbase;
 pub mod msvcthrow;
 pub mod namedglobals;
 pub mod narrowselector; // (unlace) a switch on a narrow expression casts it to its own width
+pub mod nonnullparamhint;
 pub mod oslog;
 pub mod paramrefdecl;
 pub mod partialaccess;
@@ -141,6 +142,7 @@ pub mod callprototypes;
 pub mod gostorevalue;
 
 pub mod constantshift;
+pub mod evmstorage;
 pub mod fidproto; // (unlace) the prototype a .fid record carries, and its check against the body
 pub mod reglocals;
 pub mod selectmul; // (unlace `selectmul`) a*zext(c) + b*zext(!c) prints as c ? a : b
@@ -152,3 +154,4 @@ pub mod returnselector;
 pub mod slotreport; // (unlace) a frame slot a printed local lives in is reported as that local
 pub mod slotsplit; // (unlace) a frame row a narrower printed declaration lives inside is split at it
 pub mod stackobjectinfo;
+pub mod stagediff; // (unlace) per-stage attribution of text cleanup removals (UNLACE_STAGE_DIFF)

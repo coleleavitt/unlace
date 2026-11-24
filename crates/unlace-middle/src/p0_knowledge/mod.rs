@@ -63,6 +63,7 @@ pub mod goitabcalls;
 pub mod gopointermethod;
 pub mod gostringinput;
 pub mod gotypes;
+pub mod nonnullparam;
 // (unlace) Language facets: what a C-shaped type means in the source language
 // (the VariantLayout-style side table on the type factory).
 pub mod langfacet;

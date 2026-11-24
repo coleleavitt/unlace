@@ -3143,7 +3143,7 @@ pub fn print_c(arch: &mut Architecture, fd: &Funcdata) -> String {
             printer.doc_function_full(fd, arch)
         } else {
             let (out, mut markup) = printer.doc_function_full_with_statement_provenance(fd, arch);
-            rewrite_cookie_literal_returns(out, &cookie_calls, &mut markup)
+            traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup).0
         }
     })
 }
@@ -3231,6 +3231,7 @@ fn is_exact_call_statement(line: &str, callee: &str) -> bool {
     depth == 0
 }
 
+#[cfg(test)]
 fn rewrite_cookie_literal_returns(
     text: String,
     calls: &BTreeMap<u64, BTreeSet<String>>,
@@ -3309,6 +3310,28 @@ fn rewrite_cookie_literal_returns_with_edits(
     (out, edits)
 }
 
+/// [`rewrite_cookie_literal_returns_with_edits`] whose removed and added lines
+/// are reported for the stage under `UNLACE_STAGE_DIFF` ([`unlace_emit::stagediff`]).
+fn traced_cookie_rewrite(
+    fd: &Funcdata,
+    text: String,
+    calls: &BTreeMap<u64, BTreeSet<String>>,
+    markup: &mut crate::prettyprint::MarkupProvenance,
+) -> (String, Vec<crate::srcmap::CookieRewrite>) {
+    if !unlace_emit::stagediff::stage_diff_enabled() {
+        return rewrite_cookie_literal_returns_with_edits(text, calls, markup);
+    }
+    let before = text.clone();
+    let (after, edits) = rewrite_cookie_literal_returns_with_edits(text, calls, markup);
+    unlace_emit::stagediff::trace_stage_diff(
+        fd.get_name(),
+        "cookie-literal-return",
+        &before,
+        &after,
+    );
+    (after, edits)
+}
+
 /// Render the ordinary C text and independently collect the markup references
 /// needed to map its lines back to machine instructions.
 pub fn print_c_with_provenance(arch: &mut Architecture, fd: &Funcdata) -> (String, CodeProvenance) {
@@ -3319,7 +3342,7 @@ pub fn print_c_with_provenance(arch: &mut Architecture, fd: &Funcdata) -> (Strin
             printer.doc_function_provenance(fd, arch),
         )
     });
-    let out = rewrite_cookie_literal_returns(out, &cookie_calls, &mut markup);
+    let (out, _) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup);
     align_markup_to_trimmed(&mut markup, &out);
     (out, resolve_markup_provenance(fd, &markup))
 }
@@ -3352,7 +3375,7 @@ pub fn print_c_with_srcmap(
             printer.doc_function_tokens(fd, arch),
         )
     });
-    let (out, edits) = rewrite_cookie_literal_returns_with_edits(out, &cookie_calls, &mut markup);
+    let (out, edits) = traced_cookie_rewrite(fd, out, &cookie_calls, &mut markup);
     crate::srcmap::apply_cookie_rewrites(&mut tokens, &edits);
     align_markup_to_trimmed(&mut markup, &out);
     (out, resolve_markup_provenance(fd, &markup), tokens)

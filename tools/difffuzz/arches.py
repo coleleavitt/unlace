@@ -2752,4 +2752,107 @@ class Frv(ObjdumpArch):
         return a < 0x1000000
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv())}
+H8_DENY = re.compile(
+    r"^(b[a-z]*(\.[sbwl])?|bra[a-z]*|bsr.*|jmp|jsr|rts[a-z]*|rte|rtd|trapa|sleep|ldc.*|stc.*|eepmov.*|movfpe|"
+    r"movtpe|mac|clrmac|ldmac|stmac|nop|ldm.*|stm.*|tas.*|movmd.*|movsd.*|rte.*|bfld|bfst|.*xs.*|"
+    r"(and|or|xor)c(\.[bw])?)$"
+)
+
+
+class H8300h(ObjdumpArch):
+    """Hitachi/Renesas H8/300H, advanced (24-bit) mode, against gdb's h8300 simulator
+    (--oracle gdbsim, ELF machine flags E_H8_MACH_H8300H: 16 MiB of memory). C, V, Z and N are
+    compared through CCR (sim/h8300 leaves H alone). Branches, calls, returns, traps, control-register moves, block moves
+    and the MAC unit are not generated."""
+    name = "h8300h"
+    lang = "h8_300h:BE:32:advanced"
+    elf_machine = 46
+    elf_flags = 0x00810000
+    big = True
+    pc = "pc"
+    gprs = [(f"er{i}", None) for i in range(8)]
+    pc_const = None
+    flags_reg = "ccr"
+    flag_bits = {"C": 0, "V": 1, "Z": 2, "N": 3}       # sim/h8300 never computes H
+    deny = H8_DENY
+    gdbsim = "h8300"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    # sim/h8300's own numbering (enum h8_regnum): er0..er7, CCR 8, PC 9, all 32-bit
+    sim_regnums = dict([(f"er{i}", (i, 4)) for i in range(7)] + [("sp", (7, 4)), ("ccr", (8, 4)), ("pc", (9, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("h8300 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("h8300h", True, 16, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(80).to_bytes(10, "big")
+
+    def gdb_reg(self, n):
+        return "sp" if n == "er7" else n
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x500000, 0xF00000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+    def canonical(self, cand):
+        # binutils' h8300h decoder also prints H8S/H8SX forms: multi-bit shifts, short
+        # immediates, MOVA, RTS/L, BRA/S, immediate-to-memory moves
+        mn, ops, n = cand["mnemonic"], cand["op_str"].replace(" ", ""), len(cand["bytes"])
+        if mn.startswith(("mova", "rts/", "bra/", "rte/", "bsr/", "jsr/", "jmp/")):
+            return False
+        if re.match(r"(shl|shar|shal|shlr|shll|rot|ext)", mn) and ops.startswith("#"):
+            return False
+        if re.match(r"(add|sub|mov|cmp)\.[wl]$", mn) and ops.startswith("#") and n == 2:
+            return False
+        if mn.startswith("mov.") and ops.startswith("#") and not re.search(r",(e?r\d[hl]?|er\d)$", ops):
+            return False
+        return True
+
+    def skip(self, cand):
+        # DAA/DAS read H, which sim/h8300 never computes
+        return cand["mnemonic"] in ("daa", "das")
+
+    def ignored(self, mnemonic, operands, state):
+        ops = operands.replace(" ", "").split(",")
+        # a zero divisor leaves DIVXU/DIVXS undefined
+        if mnemonic.startswith(("divxu", "divxs")) and self._divisor_zero(state, ops[0]):
+            return {"*"}
+        # a store of part of ERn through @-ERn or @ERn+ (which half is stored is not pinned down)
+        m = re.match(r"(?:er|e|r)(\d)[hl]?,@-?er(\d)\+?$", ",".join(ops))
+        if m and m.group(1) == m.group(2) and mnemonic.startswith("mov"):
+            return {"*"}
+        # an @aa:16 operand is sign-extended to 24 bits; sim/h8300 zero-extends it
+        m = re.search(r"@0x([0-9a-f]+):16", operands)
+        if m and int(m.group(1), 16) & 0x8000:
+            return {"*"}
+        # sim/h8300's subtraction overflow test compares rd with -ea instead of ea (INC/DEC too),
+        # and its ADDX/SUBX set Z where the manual only clears it
+        out = set()
+        if mnemonic.startswith(("sub", "cmp", "dec", "neg", "inc")):
+            out.add("V")
+        if mnemonic.startswith(("addx", "subx")):
+            out |= {"Z", "V"}                   # and their V leaves the carry in out
+        return out
+
+    def _divisor_zero(self, state, op):
+        name = {"r%dh" % i: ("er%d" % i, 8, 0xFF) for i in range(8)}
+        name.update({"r%dl" % i: ("er%d" % i, 0, 0xFF) for i in range(8)})
+        name.update({"r%d" % i: ("er%d" % i, 0, 0xFFFF) for i in range(8)})
+        name.update({"e%d" % i: ("er%d" % i, 16, 0xFFFF) for i in range(8)})
+        reg, sh, mask = name.get(op, (op, 0, 0xFFFFFFFF))
+        try:
+            return (state.get(reg) >> sh) & mask == 0
+        except KeyError:
+            return True
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h())}

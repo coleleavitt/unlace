@@ -1063,6 +1063,8 @@ mod typelib;
 
 #[path = "calleeargsmsvc_cli.rs"]
 mod calleeargsmsvc_cli;
+#[path = "importcache_cli.rs"]
+mod importcache_cli;
 #[path = "msvccookie_return_cli.rs"]
 mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]

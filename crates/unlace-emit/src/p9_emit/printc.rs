@@ -15942,7 +15942,11 @@ fn import_slot_name(fd: &Funcdata, mut vn: VarnodeId) -> Option<String> {
 /// The import whose address `op` reads when `vn` is the slot of a data import
 /// itself, not a pointer through it: the loader fills the slot with the import's
 /// address, so a read of the whole value it was loaded with, before or after a
-/// call, is `&import`. An operator C does not apply to a pointer (a mask, a
+/// call, is `&import`. On a Windows PE a function import's `externref` IAT slot
+/// read as a value (MSVC caching `[__imp_GetLastError]` in a register or frame
+/// slot before a loop) is the same `&import`; a call through the slot never
+/// reaches here, and a Mach-O function slot keeps its name (a weak import's
+/// test reads it). An operator C does not apply to a pointer (a mask, a
 /// shift, a multiply) keeps the slot name.
 fn import_slot_address(
     fd: &Funcdata,
@@ -15950,17 +15954,15 @@ fn import_slot_address(
     vn: VarnodeId,
     op: OpId,
 ) -> Option<String> {
-    if arch.data_import_slots.is_empty() {
-        return None;
-    }
     let v = fd.vbank().get(vn)?;
     let slot = v.get_addr();
     let space = slot.get_space()?;
     let reader = fd.obank().get(op)?;
-    if !(v.is_persist()
-        && arch
-            .data_import_slots
-            .contains(&(space.get_index(), slot.get_offset())))
+    let data_slot = arch
+        .data_import_slots
+        .contains(&(space.get_index(), slot.get_offset()));
+    let pe_code_slot = arch.image_windows_user && v.is_external_ref();
+    if !(v.is_persist() && (data_slot || pe_code_slot))
         || v.get_size() as u32 != space.get_addr_size()
         || reader.get_out() == Some(vn)
         || integer_only_operator(reader.code())

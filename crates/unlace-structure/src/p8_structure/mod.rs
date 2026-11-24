@@ -19,6 +19,7 @@ pub mod gotosink;
 pub mod guardedloop;
 pub mod ifelseflatten;
 pub mod ifnoexit;
+pub mod irreducible_split;
 pub mod iteboolean;
 pub mod itecondlist;
 pub mod iteregion;

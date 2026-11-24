@@ -313,6 +313,7 @@ unlace_options! { self, p1;
     "rettriangle" => registered!(crate::coreoptions::RetTriangle),
     "earlyreturn" => registered!(crate::earlyreturn::EarlyReturn),
     "switchreturn" => registered!(crate::switchreturn::SwitchReturn),
+    "irreduciblesplit" => registered!(crate::irreducible_split::IrreducibleSplit),
     "foldcallret" => registered!(crate::callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::indirectonly::MarkIndirectOnly),
     "typemerge" => registered!(crate::typemerge::TypeMergeMode),

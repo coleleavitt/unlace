@@ -150,6 +150,28 @@ X86_DENY = re.compile(
 )
 
 
+def x86_reg_family(r):
+    r = r.lower()
+    m = re.match(r"^r(\d+)[dwb]?$", r)
+    if m:
+        return "r" + m.group(1)
+    m = re.match(r"^[re]?([abcd])[xlh]$", r)
+    if m:
+        return m.group(1)
+    m = re.match(r"^[re]?(sp|bp|si|di)l?$", r)
+    return m.group(1) if m else r
+
+
+def x86_reg_in_address(operands):
+    """True when a register operand also appears inside the memory operand's brackets."""
+    m = re.search(r"\[([^\]]*)\]", operands)
+    if not m:
+        return False
+    inside = {x86_reg_family(t) for t in re.findall(r"[a-z]+\d*[a-z]?", m.group(1))}
+    rest = operands[:m.start()] + operands[m.end():]
+    return any(x86_reg_family(t) in inside for t in re.findall(r"\b[a-z]+\d*[a-z]?\b", rest) if t not in ("ptr", "byte", "word", "dword", "qword"))
+
+
 class X86_64(Arch):
     name = "x86-64"
     lang = "x86:LE:64:default"
@@ -233,6 +255,11 @@ class X86_64(Arch):
         if mnemonic == "cmpxchg" and not operands.startswith(("byte", "word", "dword", "qword")):
             # Unicorn zero-extends a 32-bit register destination when the compare fails; hardware
             # leaves it unchanged (checked natively), as SLEIGH does.
+            return {"*"}
+        if mnemonic == "xadd" and x86_reg_in_address(operands):
+            # SLEIGH writes the register before it stores through the address (the op order the Go
+            # atomic proofs match, see lockable.sinc), so xadd [rbx], bh stores where the new RBX
+            # points; compilers never emit a register that is also part of the address
             return {"*"}
         ign = {"AF"} | X86_UNDEF.get(mnemonic, set())
         if mnemonic in X86_SHIFTS:

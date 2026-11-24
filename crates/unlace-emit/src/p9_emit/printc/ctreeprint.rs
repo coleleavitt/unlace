@@ -2,11 +2,12 @@
 //! (`docs/architecture/ctree.md` §6), with `option ctree on`.
 //!
 //! `unlace_ctreebuild` builds the tree at `built`, one statement per structured block. The walk
-//! here prints the kinds it models (the root's statements, a `BlockGraph`'s statements, a leaf)
-//! and the components the block printers take through `emit_part` (an `if`'s arms, a loop's
-//! body, a goto block's body) and hands every other statement to the block printer, whose children come
-//! back through `emit_block` and so through the tree. At `built` each modelled kind prints what
-//! the block printer prints for its origin block, call for call.
+//! here prints the root's statements, a `BlockGraph`'s statements and the leaves itself, and
+//! chooses the emitter for every other statement kind (an `if` and its rewrites, the loops, a
+//! switch, a list, a goto block); those emitters take their components back through `emit_part`
+//! and `emit_block`, and so through the tree. Only an `Opaque` statement (a condition or
+//! multi-goto block) reaches the block printer's own dispatch, `emit_block_raw`. Each kind prints
+//! what the block printer prints for its origin block, call for call.
 
 use unlace_base::types::int4;
 
@@ -138,6 +139,38 @@ impl PrintC {
                 }
                 _ => false,
             },
+            StmtKind::Seq(_) if ty == BlockType::Ls => {
+                self.emit_block_ls(fd, arch, blk);
+                true
+            }
+            StmtKind::Seq(_) if ty == BlockType::Goto => {
+                self.emit_block_goto(fd, arch, blk);
+                true
+            }
+            StmtKind::Opaque => false,
+            _ if ty == BlockType::If => {
+                match self.switch_of(blk) {
+                    Some(sw) => self.emit_block_switch(fd, arch, sw),
+                    None => self.emit_block_if(fd, arch, blk),
+                }
+                true
+            }
+            StmtKind::While { .. } | StmtKind::For { .. } if ty == BlockType::WhileDo => {
+                self.emit_block_while_do(fd, arch, blk);
+                true
+            }
+            StmtKind::DoWhile { .. } if ty == BlockType::DoWhile => {
+                self.emit_block_do_while(fd, arch, blk);
+                true
+            }
+            StmtKind::Loop { .. } if ty == BlockType::InfLoop => {
+                self.emit_block_inf_loop(fd, arch, blk);
+                true
+            }
+            StmtKind::Switch { .. } if ty == BlockType::Switch => {
+                self.emit_block_switch(fd, arch, blk);
+                true
+            }
             _ => false,
         }
     }

@@ -145,7 +145,7 @@ pub fn read_idb(path: &str, bytes: bool) -> Result<Idb, String> {
         types: true,
         comments: false,
     };
-    let knowledge = crate::idb::knowledge(&db, target.as_deref(), selection);
+    let knowledge = crate::idb::knowledge(&db, selection);
     let entries = db.functions.iter().map(|f| f.start).collect();
     Ok(Idb {
         processor: db.info.processor.clone(),

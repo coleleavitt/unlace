@@ -44,7 +44,7 @@ pub enum Change {
     /// `bookmark <addr> <title>`: project-only, never sent to the engine.
     Bookmark { address: u64, title: String },
     /// Every other directive (`param`, `return`, `flow`, `format`, `readonly`,
-    /// `volatile`, `register`), stored verbatim under its kind and target.
+    /// `volatile`, `register`, `noreturn`), stored verbatim under its kind and target.
     Assertion {
         kind: String,
         target: String,
@@ -54,7 +54,7 @@ pub enum Change {
 
 /// The directive kinds stored verbatim in the `assertions` table.
 pub const VERBATIM: &[&str] = &[
-    "param", "return", "flow", "format", "readonly", "volatile", "register",
+    "param", "return", "flow", "format", "readonly", "volatile", "register", "noreturn",
 ];
 
 fn take_token(s: &str) -> (&str, &str) {
@@ -421,6 +421,18 @@ mod tests {
         assert_eq!(typedef_name("typedef int (*cb)(int);"), "cb");
         assert_eq!(typedef_name("typedef char name[16];"), "name");
         assert_eq!(typedef_name("enum color { RED, GREEN };"), "enum color");
+    }
+
+    #[test]
+    fn noreturn_is_stored_by_its_function() {
+        assert_eq!(
+            parse("noreturn 0x401200").unwrap(),
+            Change::Assertion {
+                kind: "noreturn".into(),
+                target: "0x401200".into(),
+                directive: "noreturn 0x401200".into(),
+            }
+        );
     }
 
     #[test]

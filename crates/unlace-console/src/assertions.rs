@@ -207,6 +207,10 @@ pub enum Body {
         value: u64,
         range: Option<(u64, int4)>,
     },
+    /// `noreturn <func>` -- the function never returns, so each caller stops at
+    /// its calls to it; a function is declared at an entry address nothing
+    /// starts at yet.
+    NoReturn { func: String },
 }
 
 /// What became of one directive.  `status` is `applied` or `rejected`; a
@@ -254,6 +258,7 @@ impl Body {
             Body::Volatile { .. } => ("volatile", "P1", "code-data-partition"),
             Body::Bytes { .. } => ("bytes", "P1", "code-data-partition"),
             Body::Register { .. } => ("register", "P0", "external-refinement"),
+            Body::NoReturn { .. } => ("noreturn", "P4", "prototype-source"),
         }
     }
 
@@ -567,8 +572,34 @@ fn apply_one_program_scoped(prog: &mut ConsoleProgram, body: &Body) -> Result<()
             unlace_decomp::varnode::varnode_flags::volatil,
         ),
         Body::Register { name, value, range } => apply_register(prog, name, *value, *range),
+        Body::NoReturn { func } => apply_noreturn(prog, func),
         // Handled by the decompile loop.
         _ => Err("internal: not a program-scoped directive".into()),
+    }
+}
+
+/// `noreturn <func>` -- set the no-return property of the function's symbol,
+/// which every caller's flow following reads; a function is declared first at an
+/// entry address nothing starts at yet. `<func>` is a name or a `0x` address.
+fn apply_noreturn(prog: &mut ConsoleProgram, func: &str) -> Result<(), String> {
+    let hex = func.strip_prefix("0x").or_else(|| func.strip_prefix("0X"));
+    let addr = match hex.and_then(|h| u64::from_str_radix(h, 16).ok()) {
+        Some(vma) => code_addr(prog, vma)?,
+        None => match resolve_proto_target(prog, func)? {
+            ProtoTarget::At(addr, _) => addr,
+            ProtoTarget::Named(name) => return Err(format!("no function is named {name}")),
+        },
+    };
+    let offset = addr.get_offset();
+    if prog.declare_no_return(offset) {
+        return Ok(());
+    }
+    prog.declare_function(addr, None, 0)
+        .map_err(|e| e.explain().to_string())?;
+    if prog.declare_no_return(offset) {
+        Ok(())
+    } else {
+        Err(format!("no function could be declared at {func}"))
     }
 }
 

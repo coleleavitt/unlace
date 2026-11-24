@@ -282,7 +282,8 @@ pub(crate) struct Selection {
 /// A database's knowledge as directives.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Knowledge {
-    /// `typedef`s first, then `function`, `prototype` and `comment` directives.
+    /// `typedef`s first, then `function` (each with its `noreturn`), `prototype` and
+    /// `comment` directives.
     pub(crate) directives: Vec<String>,
     /// Entries of functions IDA marked no-return.
     pub(crate) noreturn: Vec<u64>,
@@ -364,6 +365,7 @@ pub(crate) fn knowledge(db: &Database, selection: Selection) -> Knowledge {
             ));
         bump(&mut k.counts, "functions");
         if f.no_return {
+            k.directives.push(format!("noreturn {:#x}", f.start));
             k.noreturn.push(f.start);
             bump(&mut k.counts, "noreturn");
         }

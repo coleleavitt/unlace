@@ -75,6 +75,139 @@ def field(hi, lo, signed=False):
     fields[n] = (lo, hi, signed)
     return n
 
+# ---- real p-code for the element-wise groups (element i of a register is its subpiece at byte i*size)
+def _elems(reg, s, n, tag):
+    return ["local %s%d:%d = %s(%d);" % (tag, i, s, reg, i * s) for i in range(n)]
+
+def _pack(res, s):
+    return "msa_wd = " + " | ".join("(zext(%s) << %d)" % (r, 8 * s * i) if i else "zext(%s)" % r for i, r in enumerate(res)) + ";"
+
+def _smax(s):
+    return "0x%x" % ((1 << (8 * s - 1)) - 1)
+
+def _smin(s):
+    return "-0x%x" % (1 << (8 * s - 1))
+
+def _umax(s):
+    return "0x%x" % ((1 << (8 * s)) - 1)
+
+def semantics(mn, suf, imm):
+    base = mn.split(".")[0]
+    if suf == "v":
+        two = {"and": "msa_ws & msa_wt", "or": "msa_ws | msa_wt", "xor": "msa_ws ^ msa_wt", "nor": "~(msa_ws | msa_wt)",
+               "bmnz": "(msa_ws & msa_wt) | (msa_wd & ~msa_wt)", "bmz": "(msa_ws & ~msa_wt) | (msa_wd & msa_wt)",
+               "bsel": "(msa_ws & ~msa_wd) | (msa_wt & msa_wd)"}
+        if base in two:
+            return ["msa_wd = %s;" % two[base]]
+        return None
+    if suf not in SIZE:
+        return None
+    s = SIZE[suf]; n = 16 // s; bits = 8 * s
+    L = []
+    def a(i): return "ma%d" % i
+    def b(i): return "mb%d" % i
+    binop = {"addv": "%s + %s", "subv": "%s - %s", "mulv": "%s * %s"}
+    shf = {"sll": "<<", "srl": ">>", "sra": "s>>"}
+    cmpop = {"ceq": "==", "clt_s": "s<", "clt_u": "<", "cle_s": "s<=", "cle_u": "<="}
+    sel = {"max_s": "s>=", "max_u": ">=", "min_s": "s<=", "min_u": "<="}
+    imm_ops = {"addvi": "addv", "subvi": "subv", "slli": "sll", "srli": "srl", "srai": "sra", "ceqi": "ceq",
+               "clti_s": "clt_s", "clti_u": "clt_u", "clei_s": "cle_s", "clei_u": "cle_u", "maxi_s": "max_s",
+               "maxi_u": "max_u", "mini_s": "min_s", "mini_u": "min_u", "andi": "and", "ori": "or", "xori": "xor", "nori": "nor"}
+    op = base
+    usesimm = op in imm_ops
+    if usesimm:
+        op = imm_ops[op]
+        L.append("local mk:%d = %s;" % (s, imm))
+    rhs = (lambda i: "mk") if usesimm else b
+    known = set(binop) | set(shf) | set(cmpop) | set(sel) | {"and", "or", "xor", "nor", "adds_s", "adds_u", "subs_s",
+             "subs_u", "div_s", "div_u", "mod_s", "mod_u", "pcnt", "nlzc", "nloc", "fill", "ldi", "splat", "splati",
+             "ilvev", "ilvod", "ilvl", "ilvr", "pckev", "pckod"}
+    if op not in known:
+        return None
+    if op in ("fill", "ldi", "splat", "splati"):
+        if op == "fill":
+            L.append("local me:%d = msa_rs:%d;" % (s, s))
+        elif op == "ldi":
+            L.append("local me:%d = %s;" % (s, imm))
+        elif op == "splat":
+            L.append("local mix:4 = (msa_rt:4 & %d) * %d;" % (n - 1, bits))
+            L.append("local msh:16 = msa_ws >> mix;")
+            L.append("local me:%d = msh:%d;" % (s, s))
+        else:
+            L.append("local msh:16 = msa_ws >> (%s * %d);" % (imm, bits))
+            L.append("local me:%d = msh:%d;" % (s, s))
+        L.append(_pack(["me"] * n, s))
+        return L
+    L += _elems("msa_ws", s, n, "ma")
+    if not usesimm and op not in ("pcnt", "nlzc", "nloc"):
+        L += _elems("msa_wt", s, n, "mb")
+    res = []
+    if op in ("ilvev", "ilvod", "ilvl", "ilvr", "pckev", "pckod"):
+        h = n // 2
+        for i in range(n):
+            j, odd = i // 2, i % 2
+            if op == "ilvr":
+                src = (a if odd else b)(j)
+            elif op == "ilvl":
+                src = (a if odd else b)(j + h)
+            elif op == "ilvev":
+                src = (a if odd else b)(2 * j)
+            elif op == "ilvod":
+                src = (a if odd else b)(2 * j + 1)
+            elif op == "pckev":
+                src = b(2 * i) if i < h else a(2 * (i - h))
+            else:
+                src = b(2 * i + 1) if i < h else a(2 * (i - h) + 1)
+            res.append(src)
+        L.append(_pack(res, s))
+        return L
+    for i in range(n):
+        x, y, r = a(i), rhs(i), "mr%d" % i
+        if op in binop:
+            L.append("local %s:%d = %s;" % (r, s, binop[op] % (x, y)))
+        elif op in shf:
+            L.append("local %s:%d = %s %s (%s & %d);" % (r, s, x, shf[op], y, bits - 1))
+        elif op in cmpop:
+            L.append("local %s:%d = 0 - zext(%s %s %s);" % (r, s, x, cmpop[op], y))
+        elif op in sel:
+            L.append("local %s:%d = (%s * zext(%s %s %s)) | (%s * zext(!(%s %s %s)));" % (r, s, x, x, sel[op], y, y, x, sel[op], y))
+        elif op in ("and", "or", "xor"):
+            L.append("local %s:%d = %s %s %s;" % (r, s, x, {"and": "&", "or": "|", "xor": "^"}[op], y))
+        elif op == "nor":
+            L.append("local %s:%d = ~(%s | %s);" % (r, s, x, y))
+        elif op in ("adds_s", "subs_s"):
+            o = "+" if op == "adds_s" else "-"
+            L.append("local mw%d:%d = sext(%s) %s sext(%s);" % (i, 2 * s, x, o, y))
+            L.append("local mh%d:1 = mw%d s> %s;" % (i, i, _smax(s)))
+            L.append("local ml%d:1 = mw%d s< %s;" % (i, i, _smin(s)))
+            L.append("local %s:%d = (mw%d:%d * zext(!(mh%d || ml%d))) | (%s * zext(mh%d)) | (%s * zext(ml%d));" % (r, s, i, s, i, i, _smax(s), i, _smin(s), i))
+        elif op == "adds_u":
+            L.append("local mw%d:%d = zext(%s) + zext(%s);" % (i, 2 * s, x, y))
+            L.append("local %s:%d = mw%d:%d | (0 - zext(mw%d > %s));" % (r, s, i, s, i, _umax(s)))
+        elif op == "subs_u":
+            L.append("local %s:%d = (%s - %s) * zext(%s >= %s);" % (r, s, x, y, x, y))
+        elif op in ("div_s", "div_u", "mod_s", "mod_u"):
+            # a zero divisor gives what QEMU's helpers give (the architecture leaves it UNPREDICTABLE)
+            L.append("local mz%d:1 = %s == 0;" % (i, y))
+            L.append("local md%d:%d = %s + zext(mz%d);" % (i, s, y, i))
+            if op == "div_u":
+                L.append("local %s:%d = ((%s / md%d) * zext(!mz%d)) | (0 - zext(mz%d));" % (r, s, x, i, i, i))
+            elif op == "div_s":
+                L.append("local %s:%d = ((%s s/ md%d) * zext(!mz%d)) + (((zext(%s s< 0) * 2) - 1) * zext(mz%d));" % (r, s, x, i, i, x, i))
+            elif op == "mod_u":
+                L.append("local %s:%d = ((%s %% md%d) * zext(!mz%d)) + (%s * zext(mz%d));" % (r, s, x, i, i, x, i))
+            else:
+                L.append("local %s:%d = ((%s s%% md%d) * zext(!mz%d)) + (%s * zext(mz%d));" % (r, s, x, i, i, x, i))
+        elif op == "pcnt":
+            L.append("local %s:%d = popcount(%s);" % (r, s, x))
+        elif op == "nlzc":
+            L.append("local %s:%d = lzcount(%s);" % (r, s, x))
+        elif op == "nloc":
+            L.append("local %s:%d = lzcount(~%s);" % (r, s, x))
+        res.append(r)
+    L.append(_pack(res, s))
+    return L
+
 out = []
 skipped = []
 for name, fmt, args in encs:
@@ -197,8 +330,12 @@ for name, mn, suf, cons, ops, asm, wd_in, signed_imm, fmt in out:
                 ins.append("msa_" + op)
         if imm:
             ins.append(imm + ":4")
-        pcodeops.add(uop)
-        body = ["msa_wd = %s(%s);" % (uop, ", ".join(ins))]
+        sem = semantics(mn, suf, imm)
+        if sem:
+            body = sem
+        else:
+            pcodeops.add(uop)
+            body = ["msa_wd = %s(%s);" % (uop, ", ".join(ins))]
     cons_lines.append(":%s %s is %s {\n\t%s\n}" % (mn, disp, " & ".join(pat), "\n\t".join(body)))
 
 GPR = "zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp s8 ra"

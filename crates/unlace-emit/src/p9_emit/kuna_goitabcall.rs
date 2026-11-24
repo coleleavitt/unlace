@@ -190,11 +190,70 @@ fn field_table(fd: &Funcdata, arch: &Architecture, address: VarnodeId) -> Option
                 return Some(found);
             }
         }
-        let (base, step) = constant_offset(fd, vn)?;
+        let Some((base, step)) = constant_offset(fd, vn) else {
+            return receiver_field_interface(fd, arch, vn, offset);
+        };
         offset = offset.checked_add(step)?;
         vn = base;
     }
     None
+}
+
+/// The interface of the interface-typed field at `offset` of a pointer
+/// method's receiver, when `vn` is the receiver as the function received it:
+/// the function's own name `pkg.(*T).M` names the receiver's struct `pkg.T`
+/// (a stripped binary keeps it in its pclntab), whose `GoInterfaceFields`
+/// facet lists its interface fields, and the Go register ABI passes the
+/// receiver first (amd64 `RAX`), so the input in that register is it. Only
+/// the struct's own fields are named (no nested layout is assumed).
+fn receiver_field_interface(
+    fd: &Funcdata,
+    arch: &Architecture,
+    vn: VarnodeId,
+    offset: i64,
+) -> Option<String> {
+    if !arch.archid.starts_with("x86:LE:64:") {
+        return None;
+    }
+    let mut v = fd.vbank().get(vn)?;
+    for _ in 0..MAX_DEPTH {
+        if v.is_input() {
+            break;
+        }
+        let def = fd.obank().get(v.get_def()?)?;
+        if def.code() != OpCode::CPUI_COPY {
+            return None;
+        }
+        v = fd.vbank().get(def.get_in(0)?)?;
+    }
+    let rax = arch.get_register_varnode(b"RAX").ok()?;
+    if !v.is_input()
+        || v.get_offset() != rax.offset
+        || Some(v.get_space().get_index()) != rax.space.as_ref().map(|s| s.get_index())
+    {
+        return None;
+    }
+    let record = pointer_receiver_type(fd.get_name())?;
+    match arch.types().kuna_lang_facet(&record)? {
+        LangFacet::GoInterfaceFields { fields } => fields
+            .into_iter()
+            .find(|(at, _)| i64::from(*at) == offset)
+            .map(|(_, interface)| interface),
+        _ => None,
+    }
+}
+
+/// `pkg.T` for a pointer method named `pkg.(*T).M`; `None` for any other
+/// name (a function, a value method, a generic receiver).
+fn pointer_receiver_type(name: &str) -> Option<String> {
+    let open = name.find(".(*")?;
+    let rest = &name[open + 3..];
+    let close = rest.find(").")?;
+    let ty = &rest[..close];
+    if ty.is_empty() || ty.contains(['[', '(', '*', ' ']) || rest[close + 2..].is_empty() {
+        return None;
+    }
+    Some(format!("{}.{ty}", &name[..open]))
 }
 
 /// The interface of the interface-typed field whose first word sits at
@@ -374,4 +433,24 @@ fn reads_record(
     (0..def.num_input().min(MAX_JOIN_INPUTS))
         .filter_map(|i| def.get_in(i))
         .any(|input| reads_record(fd, arch, input, record, depth - 1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pointer_receiver_type;
+
+    #[test]
+    fn pointer_methods_name_their_receiver_struct() {
+        assert_eq!(
+            pointer_receiver_type("bufio.(*Writer).Flush").as_deref(),
+            Some("bufio.Writer")
+        );
+        assert_eq!(
+            pointer_receiver_type("compress/flate.(*huffmanBitWriter).flush").as_deref(),
+            Some("compress/flate.huffmanBitWriter")
+        );
+        assert_eq!(pointer_receiver_type("io.nopCloserWriterTo.WriteTo"), None);
+        assert_eq!(pointer_receiver_type("main.describe"), None);
+        assert_eq!(pointer_receiver_type("p.(*Box[go.shape.int]).Get"), None);
+    }
 }

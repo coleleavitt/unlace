@@ -98,6 +98,10 @@ specs/Ghidra/Processors/uPD78xx vendors the NEC 78K0 / 78K0S / 78K4 (uPD78xx) SL
 aleph-void/ghidra-upd78xx (https://github.com/aleph-void/ghidra-upd78xx), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/R8C vendors the Renesas M16C/20 and R8C/Tiny SLEIGH specification of
+AlexDev-TH/ghidra-r8c (https://github.com/AlexDev-TH/ghidra-r8c), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

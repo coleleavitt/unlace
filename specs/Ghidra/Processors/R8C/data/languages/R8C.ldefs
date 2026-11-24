@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Renesas R8C/Tiny CPU core for Ghidra.
+  Version history (language version is used by Ghidra to upgrade saved programs):
+    1.0  first public release (fork of M16C/60 1.1, corrected for R8C - see docs/TECHNICAL.md)
+-->
+<language_definitions>
+  <language processor="R8C"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="R8C.sla"
+            processorspec="R8C.pspec"
+            manualindexfile="../manuals/R8C.idx"
+            id="R8C:LE:16:default">
+    <description>Renesas R8C/Tiny CPU core (R8C/1x, 2x, 3x ...) - corrected decoder, NC30/NC8C calling convention</description>
+    <compiler name="Renesas NC30 / NC8C" spec="R8C_NC30.cspec" id="default"/>
+    <external_name tool="gnu" name="m32c:r8c"/>
+    <external_name tool="IDA-PRO" name="m16c"/>
+  </language>
+</language_definitions>

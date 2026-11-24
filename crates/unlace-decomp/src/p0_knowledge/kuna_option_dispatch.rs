@@ -302,6 +302,7 @@ kuna_options! { self, p1;
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
     "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
+    "phiarm" => registered!(crate::kuna_phiarm::PhiArmSplit),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -361,6 +362,7 @@ kuna_options! { self, p1;
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
     "flownames" => registered!(crate::kuna_flownames::FlowNames),
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
+    "cppshortnames" => registered!(crate::kuna_cppshortnames::CppShortNames),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),
     "calltargettype" => registered!(crate::kuna_coreoptions::CallTargetType),
@@ -564,6 +566,7 @@ kuna_options! { self, p1;
     },
     "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
+    "msvceh" => registered!(crate::kuna_analysisgates::Msvceh),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },

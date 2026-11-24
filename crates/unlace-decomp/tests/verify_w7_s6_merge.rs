@@ -930,3 +930,37 @@ fn typemerge_on_joins_across_storage() {
         .unwrap();
     assert_eq!(m.merged.len(), 2, "upstream joins all three");
 }
+
+#[test]
+fn phiarm_keeps_apart_only_the_recorded_pair() {
+    let t_a = dt(4, type_metatype::TYPE_INT);
+    let mut m = Mock::new();
+    for h in 1..=3u32 {
+        m.make_high(h, h as u64, t_a.clone(), cover_block(h as int4, 0, 2));
+    }
+    let arms = [(vid(1), vid(2))];
+    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(1),
+        hid(2)
+    ));
+    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(2),
+        hid(1)
+    ));
+    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
+        &arms,
+        &m,
+        hid(1),
+        hid(3)
+    ));
+    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
+        &[],
+        &m,
+        hid(1),
+        hid(2)
+    ));
+}

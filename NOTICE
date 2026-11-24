@@ -201,6 +201,10 @@ specs/Ghidra/Processors/unSP vendors the Sunplus unSP SLEIGH specification of
 aleph-void/ghidra-unSP (https://github.com/aleph-void/ghidra-unSP), a fork of SamuelWAnderson45/ghidra-unSP, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/VideoCore4 vendors the Broadcom VideoCore IV SLEIGH specification of
+aleph-void/ghidra-videocore4 (https://github.com/aleph-void/ghidra-videocore4), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

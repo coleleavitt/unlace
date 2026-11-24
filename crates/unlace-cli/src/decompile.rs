@@ -57,6 +57,8 @@ pub struct DecompileArgs {
     pub assert_strict: bool,
     pub decomp_dbg: Option<String>,
     pub sleighpath: Option<String>,
+    /// `--engine`: the console gets it as `UNLACE_ENGINE`.
+    pub engine: Option<String>,
     /// Mach-O fat / universal slice override (`--slice <arch>`, e.g. `x86_64` /
     /// `arm64`). Picks which arch slice of a universal binary is loaded; absent
     /// ⇒ the deterministic default (x86-64 → arm64 → first present). Exported as
@@ -772,6 +774,11 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
                 cmd.env_remove(ARM_ISA_ENV);
             }
         }
+        // `--engine cpp|rust` (accepted for the Python tools' invocations; `rust`
+        // is the only engine) reaches the console as `UNLACE_ENGINE`.
+        if let Some(engine) = &args.engine {
+            cmd.env("UNLACE_ENGINE", engine);
+        }
         crate::loadtime::apply_to_command(&mut cmd, &args.options, args.slice.as_deref());
         let output = cmd
             .stdin(std::process::Stdio::piped())
@@ -1195,14 +1202,6 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     if apply_rust_signatures.is_some() && engine.is_some() {
         return Err("--engine is not supported with --apply-rust-signatures".into());
     }
-    // Honor `--engine cpp|rust` like the Python tools: set `UNLACE_ENGINE`.  In the
-    // Rust-only world `rust` is already the default and `cpp` would fail to
-    // resolve, but the flag is accepted (and exported) for compatibility with
-    // existing invocations / the pipeline.
-    if let Some(e) = &engine {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var("UNLACE_ENGINE", e) };
-    }
     addr |= looks_like_addr(&target);
     // An IDA database (`crate::idb`) loads in-process as its segments, and a name
     // selects through the database's own function list: a raw load selects by address.
@@ -1332,6 +1331,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         assert_strict,
         decomp_dbg,
         sleighpath,
+        engine,
         slice,
         isa,
         raw_image,
@@ -1719,6 +1719,7 @@ mod tests {
             assert_strict: false,
             decomp_dbg: None,
             sleighpath: None,
+            engine: None,
             slice: None,
             isa: None,
             raw_image: false,

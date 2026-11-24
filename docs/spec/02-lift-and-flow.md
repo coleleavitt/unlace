@@ -61,7 +61,12 @@ the instruction writes are still computed from `Old`. On the success path of
 an x86 `cmpxchg`, where the accumulator equals `Old`, the store's op is reused
 to assign `Old` to the accumulator, so both paths agree on it; the branch then
 only decides the upper half of `RAX` after a 32-bit `cmpxchg`, which hardware
-zero-extends only on failure. An operand that no storage holds at the first
+zero-extends only on failure. A 32-bit `xadd` or `xchg` on x86-64 ends with
+`RAX = ZEXT(EAX)` after `UNLOCK()` (the hardware clear of the upper half);
+an instruction with no branch whose ops after the envelope are only such
+register-into-containing-register zero-extensions is rewritten without them,
+and they then extend the builtin's result
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (register_zext_tail)`). An operand that no storage holds at the first
 load (`~X` for `ldclr`, `imm + CF` for `adc`) is rebuilt with new ops in front
 of it, which is allowed only when the instruction updates memory through a
 pointer and none of its relative branches targets its end: a new op is
@@ -4662,6 +4667,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
+| `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5040,22 +5046,31 @@ decompile with no bad or unimplemented instruction.
 
 ### RISC-V Zfa (#98)
 
-`riscv.zfa.sinc` decodes the rest of Zfa 1.0 next to `fli.s` (§ GH-7451):
-`fli.d` and `fli.h` (the same 32-entry constant table, lifted like `fli.s`
-through the `fli` user operation with the table index), `fminm`/`fmaxm` in
-S, D and H (as `fmin`/`fmax`, but a NaN operand is the result),
-`fround`/`froundnx` (round to an integral value in the same format; user
-operations taking the value and the rounding mode, since p-code has no
-operation parameterised by rounding mode), `fcvtmod.w.d` (the low 32 bits of
-the truncated 64-bit conversion, sign-extended on RV64), the quiet compares
-`fleq`/`fltq` (the ordinary p-code float compares, which raise no exceptions
-in p-code either), and on RV32 `fmvh.x.d` (the high word of a double) and
-`fmvp.d.x` (a double from `rs2:rs1`). The `fli` constant at index 0 now
-displays as `-1.0` (it read `min`, the name of index 1). Exercised by
-`unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32 `fli`
-constants) against LLVM's names, RV32 and RV64, and LLVM-selected
-`fminm.d`, `fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that
-decompile with no bad or unimplemented instruction.
+`riscv.zfa.sinc` decodes Zfa 1.0. It is generated from the Sail model's
+`zfa_insts.sail` by `tools/gen_riscv_sail.py` (`docs/sleigh-from-isa-specs.md`) and
+replaces the hand-written file and `fli.s` in `riscv.rv32f.sinc` (§ GH-7451), whose
+decoding it repeats word for word. The 32 `fli` constants (`fli.s`, `fli.d`, `fli.h`)
+are one constructor each, displayed through `fliConstS`, that writes the
+constant's bit pattern (NaN-boxed for S and H) instead of calling the `fli` user
+operation. Single- and half-precision sources are NaN-unboxed as the ISA requires:
+a register whose upper bits are not all ones reads as the canonical NaN, and S/H
+results are written NaN-boxed. `fminm`/`fmaxm` follow Sail: either operand NaN
+gives the canonical NaN, `-0` orders below `+0`, otherwise the quiet `f<=`
+decides. The quiet compares `fleq`/`fltq` are `f<=`/`f<` on the unboxed values.
+`fround`/`froundnx` with a static rounding mode lift to `floor` (rdn), `ceil` (rup),
+`round` (rmm) or `floor`/`ceil` by sign (rtz); `rne` and `dyn` have no p-code
+operation and stay user operations named after the mnemonic, taking the source and
+the rounding mode. `fcvtmod.w.d` lifts Sail's modular conversion: the low 32 bits
+of the truncated integer, 0 for NaN, infinities, subnormals and exponents of 84 or
+more, sign-extended on RV64. On RV32, `fmvh.x.d` takes the high word of a double and
+`fmvp.d.x` builds one from `rs2:rs1`. Floating-point exception flags are not
+modelled. Before, the hand-written file read S and H operands without unboxing and
+returned the other operand instead of the canonical NaN, so `fminm.s`, `fmaxm.s`,
+`fleq.s` and `fltq.s` (and their H forms) disagreed with QEMU on unboxed inputs.
+Exercised by `unlace-cli/tests/riscv_zfa.rs`: one probe row per encoding (all 32
+`fli` constants) against LLVM's names, RV32 and RV64, and LLVM-selected `fminm.d`,
+`fmaxm.s`, `fround.d`, `fli.d` and `fleq.d` functions that decompile with no bad or
+unimplemented instruction.
 
 ### RISC-V cache-block operations, hints, may-be-operations and CFI (#98)
 

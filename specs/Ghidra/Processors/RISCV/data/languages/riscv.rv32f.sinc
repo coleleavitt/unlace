@@ -196,14 +196,6 @@ fliConstS: "65536.0"         is op1519=29 { export 29:$(SFLEN); }
 fliConstS: "inf"             is op1519=30 { export 30:$(SFLEN); }
 fliConstS: "nan"             is op1519=31 { export 31:$(SFLEN); }
 
-# fli.s D,c f0100053 fff0707f Zfa (0, 0)
-# Zfa single-precision load-immediate.  Selected from fmv.w.x (same funct7=0x78)
-# by the rs2 field op2024=0x1; the rs1 field is the constant-table index.
-:fli.s frd,fliConstS is frd & fliConstS & op0001=0x3 & op0204=0x4 & op0506=0x2 & funct3=0x0 & funct7=0x78 & op2024=0x1
-{
-	fli(frd, fliConstS:1);
-}
-
 # fmv.x.w d,S e0000053 fff0707f SIMPLE (0, 0) 
 :fmv.x.w rd,frs1S is frs1S & rd & op0001=0x3 & op0204=0x4 & op0506=0x2 & funct3=0x0 & funct7=0x70 & op2024=0x0
 {

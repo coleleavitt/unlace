@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  TI C54x C compiler conventions: first argument in accumulator A, the rest on the stack
+  (data space, grows down, one word per push); result in A. CALL pushes a one-word return
+  address. AR1, AR6 and AR7 are saved by the called function. Hand-written DSP assembly
+  often ignores this, so treat parameters in the decompiler as a guide.
+-->
+<compiler_spec>
+  <global>
+    <range space="data"/>
+    <range space="prog"/>
+    <range space="io"/>
+  </global>
+  <stackpointer register="SP" space="data" growth="negative"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="2"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__c54x" extrapop="1" stackshift="1">
+      <input>
+        <pentry minsize="1" maxsize="4">
+          <register name="A"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr space="stack" offset="1"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="8">
+          <register name="A"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+        <register name="AR1"/>
+        <register name="AR6"/>
+        <register name="AR7"/>
+      </unaffected>
+    </prototype>
+  </default_proto>
+</compiler_spec>

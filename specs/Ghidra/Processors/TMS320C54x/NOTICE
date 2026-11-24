@@ -1,0 +1,11 @@
+TMS320C54x Ghidra extension
+Copyright 2026 Gabriel Tremblay
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The instruction encodings in data/languages/TMS320C54x.slaspec are generated from
+tools/c54x_encodings.py, transcribed by Ghidra-Rare from Texas Instruments' TMS320C54x DSP
+Reference Set manuals (SPRU172C, Mnemonic Instruction Set; SPRU131G, CPU and Peripherals). The
+manuals are not included (tools/fetch-ti-docs.sh downloads them). Earlier versions of this
+extension took the encodings from the opcode table in GNU binutils (opcodes/tic54x-opc.c); that
+table was not used for the current encodings. No binutils source code is included.

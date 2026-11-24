@@ -107,6 +107,18 @@ impl Kind {
     }
 }
 
+/// The parameters a core module's entry takes, when its FFS file type names it
+/// and it is entered as the kind that type gives: `DxeMain(VOID *HobStart)` for
+/// a DXE core, `PeiCore(VOID *SecCoreData, VOID *PpList)` for a PEI core.
+/// `None` for any other pairing.
+pub(super) fn core_seeds(file_type: u8, kind: Kind) -> Option<[Option<&'static str>; 2]> {
+    match (file_type, kind) {
+        (0x05, Kind::Dxe) => Some([Some("VOID*"), None]),
+        (0x04, Kind::Pei) => Some([Some("VOID*"), Some("VOID*")]),
+        _ => None,
+    }
+}
+
 /// A protocol or PPI interface instance the module installs.
 #[derive(Clone, Debug)]
 pub(super) struct Install {
@@ -957,20 +969,24 @@ impl<'a, 'e> Walk<'a, 'e> {
     /// Walk the module as the kind `forced` names, or as each kind it could be
     /// until one reading resolves service calls: a module whose calls go
     /// through `EFI_PEI_SERVICES` is a PEIM whatever its entry was read as.
-    pub(super) fn run(mut self, forced: Option<Kind>) -> (Kind, Found) {
+    pub(super) fn run(
+        mut self,
+        forced: Option<Kind>,
+        core: Option<[Option<&'static str>; 2]>,
+    ) -> (Kind, Found) {
         if let Some(kind) = forced {
-            return (kind, self.walk(kind));
+            return (kind, self.walk(kind, core));
         }
-        let dxe = self.walk(Kind::Dxe);
+        let dxe = self.walk(Kind::Dxe, None);
         let calls = |found: &Found, owner: &str| found.owners.get(owner).copied().unwrap_or(0);
         if calls(&dxe, PEI_SERVICES) > calls(&dxe, BOOT_SERVICES) {
-            return (Kind::Pei, self.walk(Kind::Pei));
+            return (Kind::Pei, self.walk(Kind::Pei, None));
         }
         if dxe.service_calls() > 0 {
             return (Kind::Dxe, dxe);
         }
         for kind in [Kind::Pei, Kind::Mm] {
-            let found = self.walk(kind);
+            let found = self.walk(kind, None);
             if found.service_calls() > 0 {
                 return (kind, found);
             }
@@ -978,10 +994,10 @@ impl<'a, 'e> Walk<'a, 'e> {
         (Kind::Dxe, dxe)
     }
 
-    fn walk(&mut self, kind: Kind) -> Found {
+    fn walk(&mut self, kind: Kind, core: Option<[Option<&'static str>; 2]>) -> Found {
         self.learned = Learned::default();
         let mut seeds = BTreeMap::new();
-        for (i, seed) in kind.seeds().into_iter().enumerate() {
+        for (i, seed) in core.unwrap_or_else(|| kind.seeds()).into_iter().enumerate() {
             if let Some(spec) = seed {
                 seeds.insert(i as u8, Some(Rc::from(spec)));
             }
@@ -2199,5 +2215,16 @@ mod tests {
         assert_eq!(offset(Val::Stack(0), 0x10, 8, true), Some(Val::Stack(-16)));
         assert_eq!(offset(Val::Stack(i64::MAX), 1, 8, false), None);
         assert_eq!(offset(Val::Param(0), 8, 8, false), None);
+    }
+
+    #[test]
+    fn a_core_takes_its_own_parameters() {
+        assert_eq!(core_seeds(0x05, Kind::Dxe), Some([Some("VOID*"), None]));
+        assert_eq!(
+            core_seeds(0x04, Kind::Pei),
+            Some([Some("VOID*"), Some("VOID*")])
+        );
+        assert_eq!(core_seeds(0x05, Kind::Pei), None);
+        assert_eq!(core_seeds(0x06, Kind::Pei), None);
     }
 }

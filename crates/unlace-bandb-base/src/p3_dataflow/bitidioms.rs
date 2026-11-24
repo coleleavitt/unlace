@@ -487,6 +487,64 @@ fn sign_test(
     }
 }
 
+/// `x` when `vn` is `x s>> (W - 1)`, the sign mask of an `x` of `vn`'s width.
+fn sign_mask_of(data: &Funcdata, vn: VarnodeId) -> Option<VarnodeId> {
+    let def = data.vbank().get(vn)?.get_def()?;
+    if data.obank().get(def)?.code() != OpCode::CPUI_INT_SRIGHT {
+        return None;
+    }
+    let (x, c) = const_operand(data, def)?;
+    let bits = 8 * data.vbank().get(x)?.get_size() as u64;
+    (c.checked_add(1)? == bits).then_some(x)
+}
+
+/// `x` when `t` is `INT_XOR(x, s)` and `s` is the sign mask `x s>> (W - 1)`.
+fn xor_with_sign_mask(data: &Funcdata, t: VarnodeId, s: VarnodeId) -> Option<VarnodeId> {
+    let def = data.vbank().get(t)?.get_def()?;
+    let o = data.obank().get(def)?;
+    if o.code() != OpCode::CPUI_INT_XOR {
+        return None;
+    }
+    let (p, q) = (o.get_in(0)?, o.get_in(1)?);
+    let x = if q == s {
+        p
+    } else if p == s {
+        q
+    } else {
+        return None;
+    };
+    (sign_mask_of(data, s)? == x).then_some(x)
+}
+
+/// Branch-free abs: `INT_SUB(INT_XOR(x, s), s)` with `s = x s>> (W - 1)` is
+/// `abs(x)` for every `x` (`labs` at 8 bytes), rewritten in place as that call.
+fn xor_sign_abs(op: OpId, data: &mut Funcdata) -> int4 {
+    let Some(o) = data.obank().get(op) else {
+        return 0;
+    };
+    let (Some(t), Some(s), Some(out)) = (o.get_in(0), o.get_in(1), o.get_out()) else {
+        return 0;
+    };
+    let size = data.vbank().get(out).map_or(0, |v| v.get_size());
+    let builtin = match size {
+        4 => BUILTIN_ABS,
+        8 => BUILTIN_LABS,
+        _ => return 0,
+    };
+    let Some(x) = xor_with_sign_mask(data, t, s) else {
+        return 0;
+    };
+    if data.vbank().get(x).is_none_or(|v| v.get_size() != size) {
+        return 0;
+    }
+    let id = data.new_constant(4, builtin as uintb);
+    if data.op_set_all_input(op, &[id, x]).is_err() {
+        return 0;
+    }
+    data.op_set_opcode(op, crate::typeop::type_op_for(OpCode::CPUI_CALLOTHER));
+    1
+}
+
 /// `MULTIEQUAL(x, -x)` chosen by a sign test of `x` becomes `abs(x)` (or the
 /// MULTIEQUAL stays when the choice is `-abs(x)`): the cmov / `cneg` lowering
 /// of `x < 0 ? -x : x`.
@@ -504,7 +562,7 @@ impl RuleIntAbs {
 
 impl Rule for RuleIntAbs {
     fn get_op_list(&self) -> Vec<OpCode> {
-        vec![OpCode::CPUI_MULTIEQUAL]
+        vec![OpCode::CPUI_MULTIEQUAL, OpCode::CPUI_INT_SUB]
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
@@ -521,6 +579,13 @@ impl Rule for RuleIntAbs {
             .0
         {
             return 0;
+        }
+        if data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_INT_SUB)
+        {
+            return xor_sign_abs(op, data);
         }
         let Some(o) = data.obank().get(op) else {
             return 0;

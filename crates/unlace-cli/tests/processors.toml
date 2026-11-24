@@ -13,6 +13,15 @@
 # (docs/processor-tests.md).
 
 [images]
+xtensa_hifi1_rt700 = """
+3641002001a82011a83411042d031df03641001f3200c00228121df0
+"""
+xtensa_hifi3_tgl = """
+3641008e02b0004117800d8e12b0004117800d0413012d031df0
+"""
+xtensa_hifi5_mt8196 = """
+3641002e54e500c00007222e54e508c00007223e93e508c00007222d031df0
+"""
 xtensa_hifi4_rt700 = """
 3641001f3270166d006c04c777391f3270167d006c04c77739142030042301ff2270163d006c44c477392d031df00000
 3641000fa2700d0a2050002a8f000f22700d4a0010062c8f001df0
@@ -3901,3 +3910,53 @@ expect = ["*a1 = hifi_ae_s64_i(hifi_ae_add32(", "hifi_ae_l64_ip(a0->field_0x8)"]
 test = "xtensa_hifi4_flix_branch_guards_the_load"
 address = "0x30"
 expect = ["if (!a0)", "return ((unsigned int *)a0)[1];"]
+
+# The Xtensa hifi1_rt700 language: two post-incremented ae_l64.ip loads and an ae_s64.i store, and a beqz.w15 in a one-slot FLIX format over an l32i.n.
+# Built with the core's overlay xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi1_rt700"
+language = "Xtensa:LE:32:hifi1_rt700"
+base = "0x0"
+image = "xtensa_hifi1_rt700"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi1_rt700_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]
+
+[[family.function]]
+test = "xtensa_hifi1_rt700_flix_branch_guards_the_load"
+address = "0x10"
+expect = ["if (!a0)", "return ((unsigned int *)a0)[1];"]
+
+# The Xtensa hifi3_tgl language: two post-incremented ae_l64.ip loads and an ae_s64.i store (64-bit ae_format2 bundles).
+# Built with the core's overlay xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi3_tgl"
+language = "Xtensa:LE:32:hifi3_tgl"
+base = "0x0"
+image = "xtensa_hifi3_tgl"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi3_tgl_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]
+
+# The Xtensa hifi5_mt8196 language: two post-incremented ae_l64.ip loads and an ae_s64.i store (64-bit ae_format_3 bundles).
+# Built with the core's overlay xtensa-elf-as.
+[[family]]
+name = "xtensa_hifi5_mt8196"
+language = "Xtensa:LE:32:hifi5_mt8196"
+base = "0x0"
+image = "xtensa_hifi5_mt8196"
+args = ["--addr"]
+forbid = ["halt_baddata", "hifi_nop"]
+
+[[family.function]]
+test = "xtensa_hifi5_mt8196_loads_feed_the_store"
+address = "0x0"
+expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]

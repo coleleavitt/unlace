@@ -519,18 +519,26 @@ impl PrintC {
         let mut folded = vec![tail];
         for (at, &sid) in list[..list.len() - 1].iter().enumerate().rev() {
             let Some((cond, clause)) = self.return_guard(fd, sid) else {
+                boolreturn_trace(fd, || format!("run {id:?}: statement {sid:?} is no guard"));
                 break;
             };
             if graph && !self.falls_to(fd, sid, list[at + 1]) {
+                boolreturn_trace(fd, || {
+                    format!("run {id:?}: guard {sid:?} does not fall through")
+                });
                 break;
             }
             let Some((_, arm)) = self.return_term(fd, clause).or_else(|| {
                 let then = self.ctree.as_ref()?.node_for(clause)?;
                 self.folded_return(fd, then)
             }) else {
+                boolreturn_trace(fd, || {
+                    format!("run {id:?}: guard {sid:?} body is no run value")
+                });
                 break;
             };
             let Some(next) = combine_return(cond, &arm, &value) else {
+                boolreturn_trace(fd, || format!("run {id:?}: guard {sid:?} does not combine"));
                 break;
             };
             value = next;
@@ -724,11 +732,19 @@ impl PrintC {
     /// nothing before its test, with no label line and no comment.
     fn clean_guard_cond(&mut self, fd: &Funcdata, cond: BlockId) -> bool {
         let sb = fd.sblocks_ref();
-        if sb.block(cond).get_type() != BlockType::Copy
-            || !self.header_prints_nothing(fd, cond)
-            || (sb.block(cond).is_unstructured_target()
-                && !self.goto_rewrites.labels.contains(&cond))
+        let why = if sb.block(cond).get_type() != BlockType::Copy {
+            Some("not a copy leaf")
+        } else if !self.header_prints_nothing(fd, cond) {
+            Some("prints before its test")
+        } else if sb.block(cond).is_unstructured_target()
+            && !self.goto_rewrites.labels.contains(&cond)
         {
+            Some("label")
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            boolreturn_trace(fd, || format!("condition {cond:?}: {why}"));
             return false;
         }
         let Some(under) = sb.block(cond).get_copy() else {
@@ -737,7 +753,11 @@ impl PrintC {
         let bb_index = fd.bblocks_ref().block(under).get_index();
         self.commsorter.setup_block_list(bb_index);
         self.commsorter.setup_op_list(None);
-        !self.commsorter.has_next()
+        let clean = !self.commsorter.has_next();
+        if !clean {
+            boolreturn_trace(fd, || format!("condition {cond:?}: comment"));
+        }
+        clean
     }
 
     /// The leaf `leaf` as one value of a return run: a [`single_return`](Self::single_return)
@@ -1259,6 +1279,13 @@ impl PrintC {
             return None;
         };
         matches!(tree.expr(*cond).kind, ExprKind::And(..) | ExprKind::Or(..)).then_some(*cond)
+    }
+}
+
+/// With `UNLACE_BOOLRETURN_DEBUG` set, print to stderr why a `boolreturn` run stopped.
+fn boolreturn_trace(fd: &Funcdata, msg: impl FnOnce() -> String) {
+    if std::env::var_os("UNLACE_BOOLRETURN_DEBUG").is_some() {
+        eprintln!("boolreturn {}: {}", fd.get_name(), msg());
     }
 }
 

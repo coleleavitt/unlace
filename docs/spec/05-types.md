@@ -3933,6 +3933,20 @@ high word of `b` is read off the leaves, so `b` may be a constant, a split
 value or two unrelated words, which `find_create_whole` joins. Every leaf must
 be accounted for, so a tree with any other term is left alone.
 
+**Branchless equalities.** A 64-bit `a == b` on a 32-bit target is
+`(alo ^ blo) | (ahi ^ bhi)` tested against 0 (`xor`, `xor`, `or`, then
+`sete`/`setne` or a `jne`/`bne`); upstream's `Equal2Form` only knows
+`hi1 == hi2 && lo1 == lo2`. `kuna_borrowcompare.rs (apply_equal_rule)` is
+tried from an INT_XOR or INT_OR reading a piece of a split value, before
+`LogicalForm` on the XOR (which would otherwise build the whole `a ^ b` first)
+and after it on the OR. It reads the INT_OR as one term reading the low piece and
+one reading the high piece, each the piece XORed with a word of `b` or the
+piece itself (a word of `b` that is the constant 0, which simplification has
+already dropped), and rewrites an INT_EQUAL or INT_NOTEQUAL of the OR with 0
+as `a == b` or `a != b`. The words of `b` must be both constants or both
+varnodes, which `find_create_whole` joins. The fold is unconditional: the
+rewritten compare is the same value.
+
 **Pairing input words.** Neither form fires when the two words are separate
 parameters, because nothing marks them as pieces of one value: with no
 prototype, a `long long` parameter on i386 or 32-bit ARM is recovered as two
@@ -3950,7 +3964,13 @@ storage: a stack slot, not two separate argument registers such as ARM's r0
 and r1, which only a declared prototype can join), and that word appears with coefficient +-1 in the same
 linear sum as `c` among the values `c` reaches (or in the difference of a
 compare's operands). Propagating the low word's borrow or carry into the high
-word is what makes the two words one value. The rule merges the pair with
+word is what makes the two words one value. The rule also fires on an INT_XOR
+of such an input word: when an INT_OR combines it with the XOR of the word
+above (the branchless equality above), and the other operand's two words are a
+pair too (two adjacent input words, the two SUBPIECEs of one whole, or two
+constants), the input words are joined the same way. Requiring the other
+operand to be a pair keeps the XOR of one parameter's high word from being read
+as the low word of the next parameter. The rule merges the pair with
 `combine_input_varnodes` and marks the two SUBPIECEs it leaves as
 double-precision pieces; `RuleDoubleIn` then folds the arithmetic or compare,
 and `ActionInputPrototype` reports one 8-byte parameter. The rule does nothing

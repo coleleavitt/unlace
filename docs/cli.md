@@ -2308,7 +2308,15 @@ modeled; `structuring-declined` for a body the printer could not structure; the 
 `warnstyle inline` prints for any other warning it abbreviates (`no-return`,
 `tail-call`, `branch-flip`, `return-dupe`, `inlined`, ...), less its ` xN`
 count; the producer tag of a kuna warning (`calltrampoline`, `overlapbranch`,
-`tailcallframe`, ...); and `other` for the rest. Like `unstructured_gotos`, a
+`tailcallframe`, ...); and `other` for the rest. With `--option honestgaps on`
+two losses that are otherwise silent are listed too: `notmodelled` for an
+instruction SLEIGH has no p-code for, stepped over as a no-op under the
+`ignoreunimplemented` policy (its `message` names the instruction), and
+`debuginfo` for a DWARF register local the decompile could not bind (a header
+warning naming the local). The document's top-level `warning_kinds` totals the
+records' warnings by `kind`, keys in byte order, so a harness can rank a run's
+gaps without walking every record; it is always present, `{}` for a run with
+no warnings. Like `unstructured_gotos`, a
 warning does not change the verdict: `error` stays reserved for a function that
 failed to decompile, and the exit status is the same with or without warnings.
 A variable's `kind` is `arg` for a parameter, `stack` for a local with a frame
@@ -2380,7 +2388,7 @@ ones in a top-level
 whose variables were examined and none reported, and an absent `stack_objects`
 with no `omitted` still means none were recovered. A document that omits nothing
 has no `omitted` key, so the default document is unchanged. The run-level
-`language`, `count`, `error` and `assertions` and each record's `name`,
+`language`, `count`, `error`, `assertions` and `warning_kinds` and each record's `name`,
 `address`, `address_hex`, `object_location`, `size`, `code`, `error`,
 `unstructured_gotos` and `warnings` (and `interior_to` and `declared`, where
 they apply) are always present;
@@ -2394,7 +2402,7 @@ unlace decompile ./fixture audit_many --json --omit aliases,line_mappings,variab
 #    "count": 1, "error": null,
 #    "functions": [{"name": "audit_many", ..., "code": "void audit_many(void) ...",
 #                   "error": null, "unstructured_gotos": 0, "warnings": []}],
-#    "assertions": []}
+#    "assertions": [], "warning_kinds": {}}
 ```
 
 Omitting a collection also skips the work behind it where nothing else needs it.

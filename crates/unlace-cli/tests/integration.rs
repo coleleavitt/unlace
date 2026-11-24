@@ -68,6 +68,8 @@ mod riscv_zcmp;
 mod riscv_zfa;
 #[path = "riscv_zfh.rs"]
 mod riscv_zfh;
+#[path = "romp_raw.rs"]
+mod romp_raw;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]

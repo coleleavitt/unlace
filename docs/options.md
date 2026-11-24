@@ -628,8 +628,8 @@ Three tiers:
 | if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
 | a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
 | if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-off) |
-| if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
-| the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
+| if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-on) |
+| the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-on) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-on) |
 | a chain of tests on one pointer prints as nested ifs with no else | [`nestedand`](#nestedand----on--off-default-on) |
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
@@ -2740,11 +2740,11 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
 - **Example:** `option boolreturn on`
 
-### `noretfirst` -- on | off, default `off`
+### `noretfirst` -- on | off, default `on`
 
 - **Symptoms:** if (c) { ...long body... } else { abort(); } with the error path last; the main path of a function is nested in an if whose else only exits.
 - **What it does:** Print a guard clause that ends in a no-return call first, with the code that continues after it. In P8, when ruleBlockIfNoExit finds both arms of a two-way block terminal (a tie: each arm has in-degree 1 and no way out) and exactly one of them ends in a call to a function that does not return, that arm becomes the if body and the other arm (usually the function's own return) stays flat after the if: `if (p == NULL) { fprintf(...); abort(); } return p;` rather than `if (p != NULL) { return p; } fprintf(...); abort();`. Any other tie keeps the out-index order (or the layout order of `guardarm`). Then, C output only: when exactly one arm of an if/else never falls through (its structured block has no way out: it returns or calls a function that does not return), print that arm as the if's only body and the other arm after the if, so the code that continues is not nested in an else. When the arm that never falls through is the else, the condition prints negated, the way any flipped branch prints (`if (x < 5)` rather than `if (!(x >= 5))`). Only for an if that is a statement of a list (not part of a loop or if condition, not the else of another if), whose condition is a single leaf, and that does not print as a switch or an exception try. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function.
-- **When to flip:** Turn on to read guard clauses as the source likely wrote them: `if (p == NULL) { abort(); } use(p);` instead of `if (p != NULL) { use(p); } else { abort(); }`. Leave off for Ghidra's own arm order; both orders are the same object code.
+- **When to flip:** On by default. MEASURED on DecBench O2-noinline (257 binaries, 33,396 functions, mode auto): mean GED 10.673 -> 10.588, GED0 39.21% -> 40.51%, 739 functions better / 119 worse, 445 moved to GED 0 and 12 off it; the worse ones are mostly sources that write the returning arm first (`if (!x) return; ...; exit(1);`) or an if/else around the fatal call. Turn off for Ghidra's own arm order; both orders are the same object code.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-noretfirst
 - **Example:** `option noretfirst on`
 

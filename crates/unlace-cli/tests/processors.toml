@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+m7900 = """
+466400900316640084747474747474741634129d000026010084747474747474314a0025167fde400045847474747474
+"""
 m7700 = """
 c964009003a9640060eaeaeaeaeaeaeaa934122000001869010060eaeaeaeaea89c200f8a97f8d4000d860eaeaeaeaea
 """
@@ -270,6 +273,38 @@ test = "csky_vdsp_vector_add_decompiles"
 address = "0x8000"
 expect = [
     "*a2 = vadd_s32(*a0,*a1);",  # vldq.32, vadd.s32, vstq.32
+]
+
+# C-SKY ABIv1 (CSKY:LE:32:v1) built with csky-elf-as -mcpu=ck610: a decne/bt loop
+# with an lrw literal, a call through bsr with the r2/r3 arguments, and cmplt+movt.
+[[family]]
+name = "csky_abiv1"
+language = "CSKY:LE:32:v1"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/abiv1.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_abiv1_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 += *a0++;",  # ld.w, addu, addi
+    "} while (a1);",  # decne + bt
+]
+
+[[family.function]]
+test = "csky_abiv1_call_with_register_arguments_decompiles"
+address = "0x8018"
+expect = [
+    "return sub_8014(7,5) << 2;",  # r2/r3 arguments, bsr, r2 result
+]
+
+[[family.function]]
+test = "csky_abiv1_conditional_move_decompiles"
+address = "0x802a"
+expect = [
+    "if (a0 < a1)",  # cmplt sets C
+    "a0 = a1;",  # movt
 ]
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
@@ -2457,3 +2492,32 @@ address = "0x0"
 expect = [
     "return dsp_mul(dsp_add(a1,a3),0x10);",
 ]
+
+# The 7900 Series language decompiles routines hand-assembled from the software manual's
+# machine-code rows: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store after
+# SEM and LDT (data bank 0).
+[[family]]
+name = "m7900"
+language = "M7900:LE:24:default"
+base = "0x0"
+image = "m7900"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m7900_compare_and_branch_clamps"
+address = "0x0"
+expect = [
+    "if (a0 <= 99)",  # CMP A,#100 then BCC skips LDA A,#100
+    "return 100;",
+]
+
+[[family.function]]
+test = "m7900_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(0x1234) + 1;"]
+
+[[family.function]]
+test = "m7900_sem_store_is_one_byte"
+address = "0x20"
+expect = ["dat_40 = 0x7f;"]

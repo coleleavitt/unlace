@@ -382,6 +382,7 @@ kuna_options! { self, p1;
     "lanefuse" => registered!(crate::kuna_coreoptions::LaneFuse),
     "strcodelen" => registered!(crate::kuna_analysisgates::Strcodelen),
     "mba" => registered!(crate::kuna_mba::Mba),
+    "egraph" => registered!(crate::kuna_egraph::Egraph),
     "avxintrinsics" => registered!(crate::printc::AvxIntrinsics),
     "x87depth" => registered!(crate::kuna_x87depth::X87Depth),
     "trapaftercall" => registered!(crate::kuna_coreoptions::TrapAfterCall),
@@ -485,6 +486,12 @@ kuna_options! { self, p1;
         let (val, msg) = <crate::kuna_ppcapu::PpcApu as crate::kuna_optionset::KunaOption>::parse(p1)?;
         self.load_options_mut().ppcapu = val.0;
         crate::kuna_ppcapu::set_ppcapu_env(val.0);
+        self.kuna_options.set(val);
+        Ok(msg)
+    },
+    "delphiabi" => {
+        let (val, msg) = <crate::kuna_delphiabi::DelphiAbi as crate::kuna_optionset::KunaOption>::parse(p1)?;
+        crate::kuna_delphiabi::set_delphiabi_env(val.0);
         self.kuna_options.set(val);
         Ok(msg)
     },

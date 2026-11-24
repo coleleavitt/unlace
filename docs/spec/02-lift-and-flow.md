@@ -4455,6 +4455,40 @@ one user op. Exercised by `unlace-cli/tests/pdp11_raw.rs` (hand-assembled add
 and signed max routines decompile to the expected C).
 
 
+### x86-64 APX: REX2 and EVEX map 4 (#98)
+
+`specs/Ghidra/Processors/x86/data/languages/apx.sinc` adds Intel APX to
+`x86:LE:64:*` (Intel APX Architecture Specification 355828-009): the extended
+GPRs `R16`-`R31` under the REX2 prefix (`D5`, map 0 and, with M0=1, map 1,
+whose constructors `apx_rex2map1.sinc` repeats under the REX2 key), and the
+legacy instructions promoted to EVEX map 4 in `apx_map4.sinc`: new data
+destination (EVEX.ND writes the V4:vvvv register), no-flags forms (EVEX.NF
+drops the flag writes), CCMPscc/CTESTscc (a false source condition loads OF,
+SF, ZF and CF from the dfv bits), CMOVcc NDD and CFCMOVcc (the memory access
+happens only on a true condition), SETcc.zu and IMUL.zu, PUSH2/POP2 with the
+PPX hint, and JMPABS. The 32-bit and 16-bit x86 languages are unchanged: in
+64-bit mode `D5` was AAD, which is invalid there, so a REX2 prefix was a bad
+instruction before, as was every map-4 instruction. Both generated files come
+from `scripts/gen_x86_apx.py`. Exercised by `unlace-cli/tests/x86_apx.rs`:
+a probe of each APX form against `llvm-objdump` and an LLVM-assembled raw
+image whose functions (PUSH2/POP2 around an NDD multiply-add, a CCMP chain,
+a CFCMOV load, EGPR addressing, an NF add between a CMP and its SETcc)
+decompile to the expected C. Coverage and gaps are in
+`specs/Ghidra/Processors/x86/README.md`.
+
+The other EVEX maps reach the EGPRs too: the 64-bit EVEX prefix in `ia.sinc`
+accepts the X4 and B4 bits (inverted P1 bit 2 and P0 bit 3, which AVX-512
+required to be 1 and 0) and sets the fifth register-id bits from them and from
+EVEX.R', so AVX-512 memory operands and GPR operands can name `R16`-`R31`;
+encodings AVX-512 accepted decode as before. `apx_evex.sinc` adds the EVEX
+forms of the VEX GPR instructions (BMI1, BMI2, KMOV, the AMX tile loads and
+stores and tile configuration), with the `.NF` forms of the flag-writing BMI
+instructions, and `apx_map4.sinc` the map-4 forms of MOVDIR64B, MOVDIRI,
+INVEPT, INVVPID, INVPCID and the CET shadow-stack writes. Before, each of these
+with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
+`evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
+decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
+
 ### Processor modules written for unlace (#98)
 
 These processor directories hold SLEIGH written for unlace from public ISA documentation
@@ -4482,11 +4516,23 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 | `Uxn` | Uxn virtual machine (Varvara ROMs) | `Uxn:BE:16:default` | Uxntal reference (opcode table and modes) | `unlace-cli/tests/uxn.rs` |
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
+| `TMS320C3x` | TI TMS320C3x (C30/C31/C32/C33) and the C3x core of the C4x | `TMS320C3x:LE:32:default` | TI TMS320C3x User's Guide (SPRU031), TMS320C4x User's Guide (SPRU063), binutils `tic4x` opcode table | `unlace-cli/tests/tms320c3x_raw.rs` |
 | `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
 | `Epiphany` | Adapteva Epiphany | `epiphany:LE:32:default` | Epiphany Architecture Reference, binutils CGEN `cpu/epiphany.cpu`, GCC `config/epiphany` | `unlace-cli/tests/epiphany_raw.rs` |
 | `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 | `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
+| `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
+| `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
+| `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
+| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
+| `Lanai` | Lanai v11 (Myricom, Google) | `lanai:BE:32:default` | LLVM Lanai backend (`LanaiInstrFormats.td` format descriptions, `LanaiInstrInfo.td`, `LanaiCallingConv.td`) | `unlace-cli/tests/lanai_raw.rs` |
+| `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
+| `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
+| `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/st20_raw.rs` |
+| `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
+| `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/v60.rs` |
+| `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -4662,6 +4708,27 @@ with LLVM 23's disassembler, 102 rows RV64 and 80 RV32), LLVM-selected
 `th.lrd`/`th.lrw`, `th.extu`, `th.mvnez` and `th.mula` functions, and a
 raw RV64 image. Gaps (XTheadVector, Vdot, Fmv, Int) are listed in
 `specs/Ghidra/Processors/RISCV/README.md`.
+
+### PowerPC SPE2 and EFS2 (#98)
+
+A new language `PowerPC:BE:32:e200-SPE2` (`ppc_32_e200_spe2_be.slaspec`) adds
+`SPE2.sinc` to the Power ISA embedded + VLE language: the SPE2 and EFS2
+instructions of the NXP e200z4/e200z7 cores (MPC56xx/MPC57xx), with encodings from
+the binutils opcode table and names from the SPE2 intrinsics. Every SPE2/EFS2 row
+decodes (a probe of 2428 words agrees with `objdump -M spe2 -M efs2`). Lane add,
+subtract, negate, absolute value, min and max, extends, splats, `evmar` and the
+addressing of every load and store lift exactly: immediate offsets are scaled by
+the access size with rA read as 0 for r0, the `u` forms write the address back to
+rA, the modulo `mx` forms access at rA and then advance it through `__circinc`.
+The rest are named pcodeops that read and write `ACC` as the mnemonic says (an
+`a` suffix writes it, the `aa`/`an` forms also read it, the `3` forms read rD
+instead). Under `@define SPE2` the encodings SPE2 and EFS2 reuse are left out of
+the included files (`maddhd`/`maddhdu`/`maddld`, `evmwhusiaaw`/`evmwhusianw`,
+`efdcfuid`/`efdcfsid`/`efdctuidz`/`efdctsidz`), so the other PowerPC languages are
+unchanged. A raw `evlbbsplatbx r3,r3,r4; evaddd r3,r3,r5; blr` decompiles to
+`return *(unsigned char *)(a0 + a1) * 0x101010101010101ULL + a2;`. Exercised by
+`unlace-cli/tests/ppc_spe2.rs`; gaps (record-form CR updates, encodings binutils
+rejects) in `specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### RISC-V Zacas register pairs (#98)
 

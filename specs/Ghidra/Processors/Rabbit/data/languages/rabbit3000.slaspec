@@ -1,0 +1,3 @@
+# Rabbit 3000A: the Rabbit 2000 set plus the 3000A system and block-copy instructions
+@define R3000A ""
+@include "rabbit.sinc"

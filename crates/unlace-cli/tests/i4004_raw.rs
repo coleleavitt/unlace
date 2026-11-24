@@ -25,6 +25,12 @@ fn i4004_add_and_ram_store_decompiles() {
     assert!(!lower.contains("unimplemented"), "{stdout}");
     assert!(!lower.contains("bad instruction"), "{stdout}");
     assert!(!lower.contains("halt_baddata"), "{stdout}");
-    assert!(stdout.contains("dat_12 = 3;"), "the RAM store folds to bank 0, address 0x12: {stdout}");
-    assert!(stdout.contains("return 0;"), "BBL 0 returns 0 in A: {stdout}");
+    assert!(
+        stdout.contains("dat_12 = 3;"),
+        "the RAM store folds to bank 0, address 0x12: {stdout}"
+    );
+    assert!(
+        stdout.contains("return 0;"),
+        "BBL 0 returns 0 in A: {stdout}"
+    );
 }

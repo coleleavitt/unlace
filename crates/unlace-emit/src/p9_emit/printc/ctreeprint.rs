@@ -1,5 +1,5 @@
 //! (unlace `ctree`) Printing the function body through its C syntax tree
-//! (`docs/architecture/ctree.md` §6), with `option ctree on`.
+//! (`docs/architecture/ctree.md` §6), for every function not printed flat.
 //!
 //! `unlace_ctreebuild` builds the tree at `built`, one statement per structured block. The walk
 //! here prints the root's statements, a `BlockGraph`'s statements and the leaves itself, and

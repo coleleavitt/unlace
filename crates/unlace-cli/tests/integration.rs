@@ -62,6 +62,9 @@ mod pdp11_raw;
 mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
+#[path = "tlcs870_raw.rs"]
+mod tlcs870_raw;
+
 #[path = "v60.rs"]
 mod v60;
 

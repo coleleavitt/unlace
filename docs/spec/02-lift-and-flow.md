@@ -4565,6 +4565,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Propeller` | Parallax Propeller 1 (P8X32A) cog | `propeller:LE:16:default` | Propeller Manual v1.2 assembly reference, P8X32A datasheet opcode matrix | `unlace-cli/tests/propeller_raw.rs` |
 | `MIPS` (MIPS-3D, SmartMIPS) | MIPS64 with MIPS-3D, MIPS32 with SmartMIPS (pre-R6 languages) | existing `MIPS:*:64:*` and `MIPS:*:32:*` pre-R6 languages | binutils MIPS opcode table (MIPS-3D/SmartMIPS rows), MIPS-3D (MD00099) and SmartMIPS ASE specifications; checked against `mips-elf-objdump` 2.43.1 | `unlace-cli/tests/mips_ase.rs` |
 | `NFP` | Netronome NFP-6xxx flow-processor microengine (ME v2.8, 8 contexts) | `NFP:LE:32:ME28` | binutils `opcodes/nfp-dis.c` and `include/opcode/nfp.h` field layouts; checked against binutils objdump (`elf64-nfp`) | `unlace-cli/tests/nfp_raw.rs` |
+| `TLCS870` | Toshiba TLCS-870 (TMP87xx) | `TLCS870:LE:16:default` | Toshiba TLCS-870 data books; MAME tlcs870 (BSD-3) | `unlace-cli/tests/tlcs870_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

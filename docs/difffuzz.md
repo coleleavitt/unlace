@@ -206,6 +206,11 @@ afterwards. The register file is unchanged.
     MULHI multiplies the sign-extended halfword of reg1; SATADD/SATSUB/SATSUBR/SATSUBI saturate
     (`__saturate` was an empty pcodeop) and S/Z follow the saturated value. Seed 3, 3000
     encodings: 6663 matches.
+  - MN10300 (`--arch mn10300`, `mn10300:LE:32:mn10300`): the simulator has memory below 1 MiB, so the
+    instruction sits at 0x10000; Z, N, C, V go through PSW. DIV/DIVU are undefined on overflow
+    (sim/mn10300 only tests a zero divisor). Fixed in `mn103_base.sinc`: the register forms of
+    ADD/SUB read the source register again for the flags after writing the destination, so
+    `add d3,d3` set C and V from the sum. Seed 2, 2000 encodings: 5190 matches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

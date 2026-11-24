@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default `auto` (measured in unlace#581),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -126,7 +126,7 @@ spells no 16-byte intrinsic with these operands (`_InterlockedCompareExchange128
 returns a flag and writes the old value through a pointer), so the 16-byte forms
 keep the GCC name under every spelling.
 
-**(kuna) Load/store-exclusive loops — `option llscfold`, default off,
+**(kuna) Load/store-exclusive loops — `option llscfold`, default on (unlace#581; it acts only with `atomics`),
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**
 Without LSE, AArch64 code (and all ARMv6+/Thumb-2 code) updates memory with a retry loop: `ldaxr w8, [x0];
 add w9, w8, w1; stlxr w10, w9, [x0]; cbnz w10, loop`. The store-exclusive

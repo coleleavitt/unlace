@@ -26,4 +26,28 @@
     <compiler name="default" spec="teak.cspec" id="default"/>
   </language>
 
+  <language processor="OakDSP"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="oakdsp.sla"
+            processorspec="teak.pspec"
+            id="oakdsp:LE:16:default">
+    <description>CEVA OakDSP core (the TeakLite predecessor), address registers as plain counters</description>
+    <compiler name="default" spec="teak.cspec" id="default"/>
+  </language>
+
+  <language processor="OakDSP"
+            endian="little"
+            size="16"
+            variant="modulo"
+            version="1.0"
+            slafile="oakdsp.sla"
+            processorspec="teak_modulo.pspec"
+            id="oakdsp:LE:16:modulo">
+    <description>CEVA OakDSP core: modulo and bit-reversed addressing modelled</description>
+    <compiler name="default" spec="teak.cspec" id="default"/>
+  </language>
+
 </language_definitions>

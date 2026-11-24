@@ -13,6 +13,14 @@
 # (docs/processor-tests.md).
 
 [images]
+# TeakLite II / OakDSP (16-bit words): mov #5,a0; add #3,a0; mov a0l,(r0); ret
+teak_oak_acc_store = """
+185e0500c0860300401b80450000
+"""
+# OakDSP only: mov #0x21,a0; mov a0,r0 (a0 as a register-move source; TeakLite II's mma_mov); mov a0l,(r0); ret
+oakdsp_acc_to_pointer = """
+185e21001858401b80450000
+"""
 c28x_epwm1_tbprd = """
 1f76010123283412060000000000000000000000
 """
@@ -4651,3 +4659,26 @@ expect = ["__umulsidi3(", "return "]
 test = "xtensa_carryuse_call8_result"
 address = "w_call7"
 expect = ["ext64(", "return "]
+
+# The OakDSP languages are TeakLite II's module restricted to Oak's encodings (tools/gen_oakdsp.py).
+[[family]]
+name = "teaklite_oakdsp"
+language = ["teak:LE:16:default", "teak:LE:16:modulo", "oakdsp:LE:16:default", "oakdsp:LE:16:modulo"]
+base = "0x1000"
+image = "teak_oak_acc_store"
+
+[[family.function]]
+test = "teak_oak_accumulator_store_decompiles"
+address = "0x1000"
+expect = ["*v1 = 8;"]
+
+[[family]]
+name = "oakdsp"
+language = ["oakdsp:LE:16:default", "oakdsp:LE:16:modulo"]
+base = "0x1000"
+image = "oakdsp_acc_to_pointer"
+
+[[family.function]]
+test = "oakdsp_accumulator_register_move_decompiles"
+address = "0x1000"
+expect = ["= 0x21;"]

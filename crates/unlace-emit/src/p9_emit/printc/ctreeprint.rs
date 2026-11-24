@@ -372,6 +372,7 @@ impl PrintC {
             }
         }
         self.ctree_list_tries(fd);
+        self.ctree_rest_tries(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
         }
@@ -407,6 +408,46 @@ impl PrintC {
                 && let Some(tree) = self.ctree.as_mut()
             {
                 tree.set_java_list(id);
+            }
+        }
+    }
+
+    /// (unlace `itaniumeh`) Record on each list and graph sequence the `try` form of every rest
+    /// of it: `eh_list_try_match` on `list[skip..]`, the match a switch arm or goto block
+    /// printed from `skip` used to make while printing (`list_try_form`). The match reads only
+    /// the function and the language, so it gives the same form at either point.
+    fn ctree_rest_tries(&mut self, fd: &Funcdata) {
+        if crate::itaniumeh::eh_table(fd.get_arch()).is_none() {
+            return;
+        }
+        let lists: Vec<(StmtId, BlockId)> = match self.ctree.as_ref() {
+            Some(tree) => tree
+                .stmt_ids()
+                .into_iter()
+                .filter_map(|id| {
+                    let stmt = tree.stmt(id);
+                    let blk = stmt.origin?;
+                    (tree.node_for(blk) == Some(id)
+                        && matches!(stmt.kind, StmtKind::Seq(_))
+                        && matches!(
+                            fd.sblocks_ref().block(blk).get_type(),
+                            BlockType::Ls | BlockType::Graph
+                        ))
+                    .then_some((id, blk))
+                })
+                .collect(),
+            None => return,
+        };
+        for (id, blk) in lists {
+            let list: Vec<BlockId> = fd.sblocks_ref().block(blk).get_list().to_vec();
+            if list.len() > MAX_REST_TRIES {
+                continue;
+            }
+            let rests: Vec<Option<crate::ctree::ListTry>> = (0..list.len())
+                .map(|skip| self.eh_list_try_match(fd, blk, &list[skip..]))
+                .collect();
+            if let Some(tree) = self.ctree.as_mut() {
+                tree.set_rest_tries(id, rests);
             }
         }
     }
@@ -501,16 +542,24 @@ impl PrintC {
         blk: BlockId,
         list: &[BlockId],
     ) -> Option<crate::ctree::ListTry> {
-        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
-        let node = self
-            .ctree
-            .as_ref()
-            .and_then(|tree| tree.node_for(blk))
-            .filter(|_| whole);
-        match (self.ctree.as_ref(), node) {
-            (Some(tree), Some(id)) => tree.list_try(id),
-            _ => self.eh_list_try_match(fd, blk, list),
+        let full = fd.sblocks_ref().block(blk).get_list();
+        let whole = full.len() == list.len();
+        if let Some(tree) = self.ctree.as_ref()
+            && let Some(id) = tree.node_for(blk)
+        {
+            if whole {
+                return tree.list_try(id);
+            }
+            let rest = full
+                .len()
+                .checked_sub(list.len())
+                .filter(|&skip| full[skip..] == *list)
+                .and_then(|skip| tree.rest_try(id, skip));
+            if let Some(found) = rest {
+                return found;
+            }
         }
+        self.eh_list_try_match(fd, blk, list)
     }
 
     /// The assignment form of the `BlockIf` `blk`, if any. With a tree, the tree decides: an
@@ -1681,6 +1730,10 @@ impl PrintC {
         matches!(tree.expr(*cond).kind, ExprKind::And(..) | ExprKind::Or(..)).then_some(*cond)
     }
 }
+
+/// Longest list whose rests get their `try` forms recorded (each rest is one match of its suffix,
+/// so the work is quadratic in the list length).
+const MAX_REST_TRIES: usize = 512;
 
 /// With `UNLACE_BOOLRETURN_DEBUG` set, print to stderr why a `boolreturn` run stopped.
 fn boolreturn_trace(fd: &Funcdata, msg: impl FnOnce() -> String) {

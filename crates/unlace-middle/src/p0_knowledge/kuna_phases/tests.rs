@@ -48,8 +48,8 @@ fn surface_count_is_101() {
 
 #[test]
 fn settable_count_is_331() {
-    assert_eq!(kuna_num_settables(), 331);
-    assert_eq!(SETTABLE_TABLE.len(), 331);
+    assert_eq!(kuna_num_settables(), 332);
+    assert_eq!(SETTABLE_TABLE.len(), 332);
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn tier_counts_are_67_core_164_transform_100_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (67, 164, 100));
+    assert_eq!((core, transform, analysis), (68, 164, 100));
 }
 
 #[test]
@@ -954,7 +954,8 @@ fn option_values_live_value_present_for_129() {
     // Recounted after merging upstream/main (2026-11-22): the fork's live-field rows plus upstream's.
     // +1 for `oslog` (live_field = os_log_args).
     // 137 -> 138: `spsolve` (#70) added a live_field row without the bump.
-    assert_eq!(with_live, 138);
+    // +1 for `flownames` (live_field = flow_names).
+    assert_eq!(with_live, 139);
 }
 
 #[test]
@@ -1279,7 +1280,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted after merging upstream/main (2026-11-22): one row per settable, the last without a comma.
     // +1 for `oslog`; its P9 row.
     // +1 for `callresultuse`; its P4 row.
-    assert_eq!(json.matches("},\n").count(), 324);
+    // +1 for `flownames`; its P6 row sits beside `contextnames`.
+    assert_eq!(json.matches("},\n").count(), 325);
 }
 
 #[test]

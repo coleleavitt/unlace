@@ -1121,6 +1121,8 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvccookie_return_cli.rs"]
+mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]
 mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]

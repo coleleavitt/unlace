@@ -1,10 +1,10 @@
 //! (unlace `floatidentity`) Fold the floating-point identities a compiler leaves
-//! behind: `x + +0.0` and `x - +0.0` to `x`, `x * 1.0`, `1.0 * x` and `x / 1.0` to `x`,
+//! behind: `x + -0.0` and `x - +0.0` to `x`, `x * 1.0`, `1.0 * x` and `x / 1.0` to `x`,
 //! `(-x) + y` to `y - x`, `x + (-y)` to `x - y` and `x - (-y)` to `x + y`.
 //!
 //! Ported from the float rules of the original unlace `algebraic_simplify.rs`
-//! (`origin/master`). `x + +0.0` turns `-0.0` into `+0.0`, so it is not exact for
-//! that one input. The constant folds run only where [`super::floatquiet::can_elide`]
+//! (`origin/master`), except that the original also folded `x + +0.0`, which turns
+//! `-0.0` into `+0.0`; that form is left alone. The constant folds run only where [`super::floatquiet::can_elide`]
 //! allows the NaN quieting an arithmetic op performs to be dropped; the negation
 //! folds are exact.
 
@@ -30,6 +30,7 @@ crate::unlace_flag!(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Konst {
     PosZero,
+    NegZero,
     One,
 }
 
@@ -40,6 +41,7 @@ fn konst(data: &Funcdata, vn: VarnodeId) -> Option<Konst> {
     }
     match (v.get_size(), v.get_offset()) {
         (4, 0) | (8, 0) => Some(Konst::PosZero),
+        (4, 0x8000_0000) | (8, 0x8000_0000_0000_0000) => Some(Konst::NegZero),
         (4, 0x3f80_0000) | (8, 0x3ff0_0000_0000_0000) => Some(Konst::One),
         _ => None,
     }
@@ -90,10 +92,10 @@ fn fold(data: &mut Funcdata, op: OpId) -> int4 {
     let (ka, kb) = (konst(data, a), konst(data, b));
     match code {
         OpCode::CPUI_FLOAT_ADD => {
-            if kb == Some(Konst::PosZero) && can_elide(data, a) {
+            if kb == Some(Konst::NegZero) && can_elide(data, a) {
                 return become_copy(data, op, 0);
             }
-            if ka == Some(Konst::PosZero) && can_elide(data, b) {
+            if ka == Some(Konst::NegZero) && can_elide(data, b) {
                 return become_copy(data, op, 1);
             }
             if let Some(x) = negated(data, a) {

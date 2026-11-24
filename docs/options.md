@@ -1572,8 +1572,8 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `floatidentity` -- on | off, default `off`
 
 - **Symptoms:** a float add of +0.0 or a float multiply by 1.0 survives in the output; a float subtraction of a negated operand prints as a subtraction of a negation; a float add of a negated operand prints as (-x) + y.
-- **What it does:** Fold the float identities a compiler leaves behind: x + +0.0 and x - +0.0 to x, x * 1.0, 1.0 * x and x / 1.0 to x, (-x) + y to y - x, x + (-y) to x - y and x - (-y) to x + y. The constant folds run only where floatquiet allows the NaN quieting an arithmetic op performs to be dropped. x + +0.0 also turns -0.0 into +0.0, so the rule is not exact for that one input.
-- **When to flip:** Off by default: x + +0.0 changes the sign of a -0.0 input, so a few results differ from the source. Turn it on for float code where accumulators start from +0.0 or scale by 1.0 and sign flips arrive as (-x) + y, which otherwise print as the identity and the negation.
+- **What it does:** Fold the float identities a compiler leaves behind: x + -0.0 and x - +0.0 to x, x * 1.0, 1.0 * x and x / 1.0 to x, (-x) + y to y - x, x + (-y) to x - y and x - (-y) to x + y. The constant folds run only where floatquiet allows the NaN quieting an arithmetic op performs to be dropped. x + +0.0 is left alone, since it turns -0.0 into +0.0.
+- **When to flip:** Off by default until measured on a corpus. Turn it on for float code that scales by 1.0 and sign flips arrive as (-x) + y, which otherwise print as the identity and the negation.
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-1270
 - **Example:** `option floatidentity on`
 

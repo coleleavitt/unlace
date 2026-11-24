@@ -2925,3 +2925,397 @@ address = "0x10000"
 expect = [
     "return ((unsigned int *)a0)[1];",  # ld.w w0,0(a0); copy_s.w v0,w0[1]
 ]
+
+# ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
+# built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),
+# lays a 16-bit object out inside its space (#707) and applies the relocations (#713-#737). `chain` calls `scale7`
+# twice, `lookup` indexes the global `g_tab`, `pick` is a switch with a call in one case.
+
+# AVR ET_REL (EM_AVR, e_flags avr2) routes to avr8:LE:16:default and lays out below 0x10000 (#706, #707); calls stay unrelocated until #757.
+[[family]]
+name = "elfroute_avr_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/avr.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_avr_o_scale7"
+address = "scale7"
+expect = ["short scale7(short x)"]
+
+[[family.function]]
+test = "elfroute_avr_o_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AVR ET_EXEC linked at 0.
+[[family]]
+name = "elfroute_avr_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/avr.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_avr_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_avr_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# MSP430 ET_REL (EM_MSP430) routes to TI_MSP430:LE:16:default inside the 16-bit space (#706, #707).
+[[family]]
+name = "elfroute_msp430_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/msp430.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_msp430_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_msp430_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# MSP430 ET_EXEC linked at 0x4400.
+[[family]]
+name = "elfroute_msp430_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/msp430.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_msp430_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_msp430_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_msp430_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
+[[family]]
+name = "elfroute_hexagon_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/hexagon.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_hexagon_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_hexagon_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_hexagon_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Hexagon ET_EXEC.
+[[family]]
+name = "elfroute_hexagon_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/hexagon.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_hexagon_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# Lanai ET_REL (EM_LANAI, no object architecture) routes to lanai:BE:32:default (#706); R_LANAI_25 branches, HI16/LO16 globals (#732).
+[[family]]
+name = "elfroute_lanai_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/lanai.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_lanai_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_lanai_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_lanai_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# LoongArch64 ET_REL (EM_LOONGARCH, double-float) routes to Loongarch:LE:64:lp64d (#706); CALL36 calls, PCALA_HI20/LO12 globals (#726).
+[[family]]
+name = "elfroute_loongarch64_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/loongarch64.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_loongarch64_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# LoongArch64 ET_EXEC.
+[[family]]
+name = "elfroute_loongarch64_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/loongarch64.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_loongarch64_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# s390x ET_REL: PC32DBL larl of the jump table and PLT32DBL calls (#713).
+[[family]]
+name = "elfroute_s390x_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/s390x.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_s390x_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_s390x_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_s390x_o_pick"
+address = "pick"
+expect = ["switch(op)", "scale7("]
+
+# s390x ET_EXEC.
+[[family]]
+name = "elfroute_s390x_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/s390x.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_s390x_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_s390x_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_s390x_elf_pick"
+address = "pick"
+expect = ["switch(op)", "scale7("]
+
+# AArch64 big-endian ET_REL: CALL26/JUMP26 and ADRP/LO12 patched little-endian (#716); the tail call stays a call.
+[[family]]
+name = "elfroute_aarch64_be_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/aarch64_be.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_aarch64_be_o_pick"
+address = "pick"
+expect = ["0x2c", "return scale7(a); // tail-call"]
+
+# AArch64 big-endian ET_EXEC.
+[[family]]
+name = "elfroute_aarch64_be_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/aarch64_be.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_aarch64_be_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# SPARC64 ET_REL: WDISP30 calls and the H44/M44/L44 address triple (#721).
+[[family]]
+name = "elfroute_sparc64_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sparc64_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_sparc64_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_sparc64_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# SPARC64 ET_EXEC linked at 0x100000.
+[[family]]
+name = "elfroute_sparc64_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/sparc64.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_sparc64_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+xfail = "#756: the linked image marks the leaf scale7 no-return"
+
+[[family.function]]
+test = "elfroute_sparc64_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_sparc64_elf_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
+# AMDGPU ET_REL (EM_AMDGPU, EF_AMDGPU_MACH gfx900) routes to AMDGPU:LE:64:GFX9 (#706); REL32 calls stay unrelocated until #757.
+[[family]]
+name = "elfroute_gfx900_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx900.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx900_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx900_o_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AMDGPU gfx900 ET_EXEC.
+[[family]]
+name = "elfroute_gfx900_elf"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx900.elf"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_gfx900_elf_pick"
+address = "pick"
+expect = ["0x2c"]
+
+# AMDGPU gfx1030 ET_REL routes to AMDGPU:LE:64:GFX10.
+[[family]]
+name = "elfroute_gfx1030_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx1030.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx1030_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx1030_o_lookup"
+address = "lookup"
+expect = ["& 7"]
+
+# AMDGPU gfx1100 ET_REL routes to AMDGPU:LE:64:GFX11.
+[[family]]
+name = "elfroute_gfx1100_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/gfx1100.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_gfx1100_o_scale7"
+address = "scale7"
+expect = ["* 7"]
+
+[[family.function]]
+test = "elfroute_gfx1100_o_pick"
+address = "pick"
+expect = ["0x2c"]

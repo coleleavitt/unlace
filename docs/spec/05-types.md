@@ -3726,8 +3726,15 @@ destructor) is `C::~C`. That calling slot, when it is the only slot of `C`'s
 offset-0 vftables that calls it, is the deleting destructor and is named
 `C::~C` too, the name a symbol table gives an Itanium `D0`; it replaces the slot's
 `vfunc_<i>` name. Holley's `PEGRP32F.dll` and `USBCAN-Driver.dll` hold 46 deleting
-destructors IDA 9.5 names `` C::`scalar deleting destructor' `` that read
-`vfunc_<i>` before. A function the symbol table already names keeps it.
+destructors IDA 9.5 names `` C::`scalar deleting destructor' ``; 18 call their
+destructor. The rest inlined it (`std::ctype<char>`'s at USBCAN `0x10001d70` stores
+the vftable itself), so a slot of `C`'s offset-0 vftables is also `C::~C` when its
+fall-through walk stores `C`'s own vftable through `this` before any call, every
+other store being a base's, it does not return `this`, and its first 256 bytes
+test bit 0 of the flags argument, the `delete this` request
+(`kuna_msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1` or
+`[esp+n]` on x86; `test dl, 1`, its `bl`/`dil` copy or a frame copy on x64). A
+function the symbol table already names keeps it.
 Named or not, its `this` gets the `C *` hint: a helper that stores `C`'s
 vftable into the object it is passed is handed a `C`.
 

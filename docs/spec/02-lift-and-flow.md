@@ -172,11 +172,14 @@ to the head's failure exit
 the block between (whose barrier, `DataMemoryBarrier`, stays) and the
 store-exclusive's blocks fold as above. Since a retry re-runs only the
 store-exclusive, status and reload blocks, the head's values are not
-checked against what those blocks write; instead no op of that cycle may
-read a storage a later op of the cycle writes (`cycle_invariant`), the
-values the reload block leaves must equal the head's where they stay live
-after either exit, and the store-exclusive's constant status writes are
-exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
+checked against what those blocks write. Instead a storage an op of that
+cycle reads before an earlier op of the cycle writes it, while a later op
+does (ARM's `cmp` reads the old carry for its shifter carry), is followed
+forward through the ops that read it (`cycle_taint`): it may not reach a
+load, a store, a user operation or a branch, and what it still holds at the
+end must be dead after either exit. The values the reload block leaves must
+equal the head's where they stay live after either exit, and the
+store-exclusive's constant status writes are exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always
@@ -5243,6 +5246,12 @@ fix, so they stay inside the user operations; what is kept is the data flow
 between vector registers, scalar registers, FP registers and the memory
 addresses a load or store uses, so a vectorized function decompiles to a
 sequence of calls such as `v8 = vadd_vv(v8,v9)` instead of stopping.
+Whole-register loads, stores and moves (`vl<n>re<eew>.v`, `vs<n>r.v`, `vmv<n>r.v`)
+move `n` registers whatever `vtype` says, so for `n` = 2, 4 and 8 they read or write a
+register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
+`v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
+`vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
+a multiple of `n` is reserved and, as in LLVM, not decoded.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a

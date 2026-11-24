@@ -65,6 +65,13 @@ afterwards. The register file is unchanged.
   sign-extends the address. Release 6 compact branches (`b*c`, `j*c`) are compared; their target
   goes to a second epilogue. Unaligned loads and stores trap on QEMU and count as reference
   exceptions.
+- MSA (`mipsr6`, `mips64r6`; the I6400 core has MSA): w0..w31 are loaded with `ld.d` and stored
+  with `st.d` at table offset 512, and MSACSR is seeded and read back with `ctcmsa`/`cfcmsa` at 1032
+  (through a general register the epilogue saves and restores). MSACSR starts with random sticky
+  Flags (bits 6:2), round-to-nearest, and no enables or cause bits, so no MSA floating-point
+  operation traps. An instruction that writes enables together with a matching cause
+  (`ctcmsa $1`) traps on QEMU and counts as a reference exception. MSA instructions SLEIGH lifts
+  to a user operation count as unmodeled.
 - Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
   with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
   QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree
@@ -277,14 +284,23 @@ in Unicorn, while the lifted p-code of the original runs from the same state. An
 (R16-R31) is renamed to an R8-R15 register the instruction does not use; a new-data-destination
 form `op dst, src1, src2` becomes `mov T, src1; op T, src2; mov dst, T` through a free temporary
 (zero-extending an 8- or 16-bit result, as APX does); `{nf}` must leave every flag unchanged in the
-p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMP/CTEST,
-CFCMOVcc, JMPABS, branches and RIP-relative operands are skipped.
+p-code; SETcc.zu/IMUL.zu add the zero-extension; PUSH2/POP2 become two PUSHes/POPs. CCMPcc/CTESTcc become
+a branch around the CMP/TEST whose false path loads OF SF ZF CF from dfv, PF from dfv.CF and clears AF
+(PUSHFQ/POPFQ; the reference's stack slot is not compared); CFCMOVcc becomes a branch around the move
+that zeroes the destination (or keeps src1 in the NDD form) on the false path, so a false condition
+never touches memory. JMPABS, branches and RIP-relative operands are skipped.
 
 ```sh
 clang -O2 -mapxf -fPIC -shared -o lib.so *.c
 ~/.local/share/difffuzz-venv/bin/python tools/difffuzz/apxcheck.py lib.so --unlace <unlace> --sleighpath specs
 ```
 
-On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3131 of the 3272 distinct APX
-encodings were verified (at least one trial with in-range addresses) and none differed; replacing
-the NF ADD's sum with a difference in `apx_map4.sinc` makes the check report it.
+On Lua 5.3 and zlib built with clang 22 and gcc 15 (`-O2 -mapxf`), 3314 of the 3406 distinct APX
+encodings (CCMP/CTEST/CFCMOV included) were verified (at least one trial with in-range
+addresses) and none differed. A hand-written probe of every CCMP/CTEST condition, size, operand form
+and several dfv values, and every CFCMOVcc/CMOVcc NDD form and condition (928 encodings) verifies
+927 with no difference. Breaking the NF ADD, or the false-path PF of CCMP or the zeroing of CFCMOV,
+in a copy of `apx_map4.sinc` makes the check report it (122 and 360 mismatches).
+
+There is no reference for the AVX-512 or AVX10.2 lifts here: Unicorn and QEMU (11.0) have no
+AVX-512, and Intel SDE needs Intel's licence accepted to download.

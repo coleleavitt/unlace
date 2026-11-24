@@ -2255,6 +2255,9 @@ DSA: "["^jv0^"+"^dsoff16^"]" is dsoff16 ; jv0 { a:4 = jv0 + dsoff16; export a; }
 :s_or_saveexec_b32 i16_lo7, S32_i0 is e9=0x17d ... & sop1op=61 ... & i16_lo7 ... & S32_i0 ... {
   a:4 = S32_i0; r:4 = exec_lo; exec_lo = a | exec_lo; SCC = exec_lo != 0; i16_lo7 = r;
 }
+:s_xor_saveexec_b32 i16_lo7, S32_i0 is e9=0x17d ... & sop1op=62 ... & i16_lo7 ... & S32_i0 ... {
+  a:4 = S32_i0; r:4 = exec_lo; exec_lo = a ^ exec_lo; SCC = exec_lo != 0; i16_lo7 = r;
+}
 :s_andn2_saveexec_b32 i16_lo7, S32_i0 is e9=0x17d ... & sop1op=63 ... & i16_lo7 ... & S32_i0 ... {
   a:4 = S32_i0; r:4 = exec_lo; exec_lo = a & ~exec_lo; SCC = exec_lo != 0; i16_lo7 = r;
 }

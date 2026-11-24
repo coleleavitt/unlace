@@ -12389,7 +12389,7 @@ G_302d7e38: ".M8.RZ" is f78_79=3 & f84_86=7 {  }
 { local oc0a:4 = SUR32_37 * 0x10000 + SI_ebf50ec1; local oc0:4 = *[cbank]:4 oc0a; SR16_23d = sass_F2FP(G_9a4e649f, oc0); }
 # CALL.ABS.NOINC !P1, 0x4  [fe40004c000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 "!"^SP87_89^","^SI_7fff4b49 is f0_11=2371 & f90_91=1 & GD_619b08c9 & G_cfbd5bc4 & SP87_89 & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # F2FP.SATFINITE.MERGE_C R1, c[0x1][0x4], R1  [fe400000060010040010000017a3e]
 :^GD_619b08c9^"F2FP"^G_47ba70ab^G_95fd2a97^".MERGE_C" SR16_23d^",c["^SI_c70643ca^"]["^SI_623ec3d8^"],"^G_a4ca91aa is f0_11=2622 & f78_81=1 & f86_86=0 & f91_91=0 & f122_123=0 & GD_619b08c9 & G_47ba70ab & G_95fd2a97 & SR16_23d & SI_c70643ca & SI_623ec3d8 & G_a4ca91aa
 { local oc0a:4 = SI_c70643ca * 0x10000 + SI_623ec3d8; local oc0:4 = *[cbank]:4 oc0a; SR16_23d = sass_F2FP(oc0, G_a4ca91aa); }
@@ -22099,7 +22099,7 @@ G_302d7e38: ".M8.RZ" is f78_79=3 & f84_86=7 {  }
 { local oc0a:4 = SUR32_37 * 0x10000 + SI_ebf50ec1; local oc0:4 = *[cbank]:4 oc0a; local r:4 = ((~G_9a4e649f & ~oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 0) & 1))) | ((~G_9a4e649f & ~oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 1) & 1))) | ((~G_9a4e649f & oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 2) & 1))) | ((~G_9a4e649f & oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 3) & 1))) | ((G_9a4e649f & ~oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 4) & 1))) | ((G_9a4e649f & ~oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 5) & 1))) | ((G_9a4e649f & oc0 & ~G_b51a524f) & (0 - ((SI_5daa8b56 >> 6) & 1))) | ((G_9a4e649f & oc0 & G_b51a524f) & (0 - ((SI_5daa8b56 >> 7) & 1))); SR16_23d = r; G_2d48330e = r != 0; }
 # CALL.ABS P1, 0x4  [fe400008000000000000400007943]
 :^GD_619b08c9^"CALL.ABS"^G_cfbd5bc4 G_e52b3d2f^SI_7fff4b49 is f0_11=2371 & f90_91=0 & GD_619b08c9 & G_cfbd5bc4 & G_e52b3d2f & SI_7fff4b49
-{ sass_CALL(); }
+{ RETPC = inst_next; local target:8 = SI_7fff4b49; call [target]; }
 # BMOV.64 ATEXIT_PC, cx[UR1][0x4]  [fe400080000000000010100007b57]
 :^GD_619b08c9^"BMOV.64" "ATEXIT_PC,cx["^SUR32_37^"]["^SI_ebf50ec1^"]" is f0_11=2903 & f91_91=1 & GD_619b08c9 & SUR32_37 & SI_ebf50ec1
 {  }

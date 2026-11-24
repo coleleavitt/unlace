@@ -501,12 +501,21 @@ class Mips64(Arch):
 
 # Release 6 compact branches (no delay slot) are compared; delay-slot branches are not.
 MIPSR6_DENY = re.compile(MIPS64_DENY.pattern.replace("^(b.*|j.*|", "^(b(?!\\w*c$).*|j(?!\\w*c$).*|").replace("|bc.*|bal.*|", "|")
-                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)|cfcmsa|ctcmsa"))
-# MSA: w0..w31 are compared; FPU operations (on $f registers, outside the harness state) are skipped.
+                         .replace(".*\\.(s|d|ps|w|l|b|h|v)", ".*\\.(s|ps|l)"))
+# MSA: w0..w31 and MSACSR are compared; FPU operations (on $f registers, outside the harness state)
+# are skipped.
 MSA_VECS = [(f"w{i}", None) for i in range(32)]
 
 
-class Mips64R6(Mips64):
+class MsaCsr:
+    """MSACSR as a flag word: random sticky Flags (bits 6:2), round-to-nearest, no enables, no
+    cause, so no FP operation traps and the rounding mode is the one p-code uses."""
+
+    def flag_words(self):
+        return [(None, {"MSACSR": (0, 32)}, lambda w: w & 0x7C)]
+
+
+class Mips64R6(MsaCsr, Mips64):
     """MIPS64 Release 6 (MIPS:BE:64:R6): no HI/LO, new compact branches and multiply/divide."""
     name = "mips64r6"
     lang = "MIPS:BE:64:R6"
@@ -524,7 +533,7 @@ class Mips64R6(Mips64):
         return set()
 
 
-class Mips32R6(Mips32):
+class Mips32R6(MsaCsr, Mips32):
     """MIPS32 Release 6 (MIPS:BE:32:R6) on a MIPS64R6 core."""
     name = "mipsr6"
     lang = "MIPS:BE:32:R6"

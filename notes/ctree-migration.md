@@ -5,7 +5,7 @@ Goal: one printer. Today the function body prints through a hybrid of the C synt
 (`crates/unlace-emit/src/p9_emit/printc.rs`). This note records where each structured block kind
 prints today and the order the remaining kinds move into the tree walk.
 
-## The tree is already built for every printed function
+## The tree was already built for every printed function (before the option was retired)
 
 `emit_function_body` (`printc.rs`, `tree_on`) builds the tree when any of `ctree`,
 `boolreturn`, `noretfirst`, `nestedand`, `retternary` or `orexit` is on, and not in flat
@@ -55,6 +55,20 @@ Rewrites already on the tree (`ctree_rewrite`): `iteboolean`, `iteregion`, `bool
 (`fold_return_run`, `fold_return_ite`), `retternary`, `noretfirst`, `nestedand`, `orexit`,
 and the `switchmerge`/`gotonext` plans (`ctree_take_plans`).
 
+## Proof (2026-11-24, build unlace-ctree1 = main 246fb35c45)
+
+With `option boolreturn off` and `option nestedand off` injected before every `print` command
+(`ctree off` vs `ctree on`):
+
+- datatests: 675/675 both ways, identical result lists.
+- stage corpus (whole `tests/stages`, 5996 assertions): 5973 pass both ways, identical result
+  lists. The 23 failures are the same on both sides; seven are the `BOOLRETURN` assertions the
+  injected `boolreturn off` turns off, and the rest fail on unmodified main too (5980/5996).
+- `decompile-all` of `/usr/bin/env`, `/usr/bin/cat`, `/usr/bin/sort` (399 functions):
+  byte-identical C. A first `sort` run at `--max-fn-seconds 30` differed only because `main`
+  and two thunks timed out on one side under load; at 120 s, off and on are identical, and two
+  `off` runs are identical to each other.
+
 ## Order of work
 
 1. The walk dispatches every statement kind: `emit_ctree_stmt` owns the choice of emitter for
@@ -65,8 +79,8 @@ and the `switchmerge`/`gotonext` plans (`ctree_take_plans`).
 2. Proof run on a branch build: datatests and the whole stage corpus with
    `option boolreturn off` + `option nestedand off` injected, `ctree` off vs on (pass sets
    equal), plus real binaries printed both ways and diffed.
-3. `ctree` default on (no change under default options; see above).
-4. Retire the `ctree` option: the tree is built for every non-flat printed function, the
+3. and 4., done in one change since the flip is a no-op under default options: retire the
+   `ctree` option: the tree is built for every non-flat printed function, the
    no-tree `emit_block_graph` path stays only for flat printing.
 5. Later, statement by statement: lists print from the tree's `Seq` children instead of
    `get_list()`, and the print-time matchers left in `emit_block_if` (Java `try`, itaniumeh) move

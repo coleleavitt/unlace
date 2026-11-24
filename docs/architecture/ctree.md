@@ -1,8 +1,10 @@
 # A C syntax tree between structuring and printing (ctree)
 
 Status (2026-11-23): section 9 steps 2-4 landed: `crates/unlace-ctree` holds the types, `CMaturity`
-and the builder at `built`; `option ctree on` (default off) prints the body through the tree
-(`printc/ctreeprint.rs`: graph sequences, leaves, and through `CTree::part` the arms of an
+and the builder at `built`; the body prints through the tree for every function not printed flat
+(2026-11-24: the walk chooses the emitter for every statement kind, and the `ctree` migration
+option is retired, `notes/ctree-migration.md`;
+`printc/ctreeprint.rs`: graph sequences, leaves, and through `CTree::part` the arms of an
 `if` and the bodies of loops and goto blocks). Loops, switches and goto blocks are tree nodes, and the tree reaches `statements`: each leaf holds
 its ops, and the leaf printer prints from that list. The first rewrites, `iteboolean` and
 `iteregion`, run on the tree (`PrintC::ctree_rewrite`, level `rewritten`); they live in the emit

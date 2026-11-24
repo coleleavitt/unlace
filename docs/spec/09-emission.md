@@ -5890,11 +5890,15 @@ succeeds at 398 of 404 log calls; the rest store an argument the decode cannot
 attribute to one variable at the call (an implied expression split across
 cells) and keep the raw form.
 
-## (unlace) Printing through the C syntax tree — `option ctree`, default off
+## (unlace) Printing through the C syntax tree
 
-The design is `docs/architecture/ctree.md`. With `option ctree on`,
-`PrintC::emit_function_body` builds a C syntax tree for the function before it
-prints the body, unless the printer is in flat mode. The tree lives in
+The design is `docs/architecture/ctree.md`. `PrintC::emit_function_body` builds
+a C syntax tree for every function before it prints the body, unless the printer
+is in flat mode (flat printing walks the basic blocks through `emit_block_graph`
+with no tree). The tree walk (`printc/ctreeprint.rs`, `emit_ctree_stmt`) prints
+graph sequences and leaves itself and chooses the emitter for every other
+statement kind; only an opaque statement (a condition or multi-goto block)
+reaches the block printer's own dispatch, `emit_block_raw`. The tree lives in
 `crates/unlace-ctree/src`: `unlace_ctree` holds the statement and expression
 arenas and the tree's maturity (`built`, `statements`, `rewritten`, `final`,
 which only rises), and `unlace_ctreebuild::build` makes one statement per
@@ -5934,8 +5938,7 @@ is the condition, negated when the body returns `0`. `emit_block_if` prints it
 (`return_form`, `emit_block_if_return`) after the assignment forms: the
 condition block's statements above it as for an `if`, then `return ( cond );` or
 `return !( cond );` through the `ONLY_BRANCH` render of the header, with the
-body's `RETURN` as the statement's markup. The option builds the tree even when
-`ctree` is off.
+body's `RETURN` as the statement's markup.
 The positive form `return ( cond );` is taken only when the condition's value is
 already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whose
 `CBRANCH` tests an op with a boolean output that is not `BOOL_NEGATE` and that the

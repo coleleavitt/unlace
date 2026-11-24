@@ -120,6 +120,8 @@ mod cdp1802_raw;
 mod scmp_raw;
 #[path = "tms9900_raw.rs"]
 mod tms9900_raw;
+#[path = "x86_apx.rs"]
+mod x86_apx;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

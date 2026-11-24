@@ -6930,6 +6930,18 @@ every other binary's pass list is byte-identical to before the pass existed):
   spellings, so it holds whether the harvest or DWARF built the layout. A name
   the harvest marked ambiguous, whose descriptors disagree, or that already
   carries a facet gets none.
+  A type assertion's result is the third source
+  (`crates/unlace-emit/src/p9_emit/kuna_goitabcall.rs (asserted_interface)`):
+  the output of a call to `runtime.typeAssert` whose first argument is a
+  constant `abi.TypeAssert` record names the interface in the record's
+  `Inter` word (read from the image at the record plus 8), and
+  `runtime.assertE2I` or `runtime.getitab` name it in a constant first
+  argument; either address must start a `type:<interface>` symbol
+  (`gotypeglobals`). The compiler joins that result with the hit path of the
+  assertion's inline cache probe, an itab loaded from the cache the record's
+  `Cache` word points at; a join input computed from a read of that word
+  within eight defining ops counts as the same interface, any other input must
+  resolve to it.
 
 - **Go pclntab** (`gopclntab`, Go-detected binaries only, always on;
   `crates/unlace-analysis/src/analyzers/pclntab/mod.rs`): the runtime

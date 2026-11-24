@@ -5480,9 +5480,10 @@ moves.
   file's entry also carries a comment naming its kinds (`module kind
   COMBINED_PEIM_DRIVER`, `module kind COMBINED_MM_DXE`). Without this option, a PEIM
   and a standalone MM module keep the names the index gives them (see below), and every other entry keeps
-  `_ModuleEntryPoint`. The walk still
-  seeds a PEI or DXE core's parameters from the phase the index's kind gives
-  (PEI or DXE), so only the entry's name and prototype follow the file type.
+  `_ModuleEntryPoint`. With the option on, the walk also
+  seeds a core's parameters from its file type: a DXE core's HobStart and a PEI
+  core's SecCoreData and PpList are `VOID *`. Other modules keep the phase's
+  table types (PEI or DXE).
 
   The pass then follows the service tables through the code
   (`crates/unlace-analysis/src/analyzers/uefi/flow.rs (Walk)`). It
@@ -6540,6 +6541,14 @@ moves.
   member is brought to `msvc_demangler`'s (`dtor` is `destructor`) so a member
   reads the same whichever crate demangled it.
 
+  **Lambda closures** (`crates/unlace-analysis/src/analyzers/demangle/lambda.rs`,
+  `is_lambda_symbol`) are flagged, not renamed. A closure type's `operator()` is
+  recognised from three signals, any one enough: the Itanium closure-type name
+  `Ul <sig> E [digits] _` (the `Ul` at a nested-name, substitution or length
+  boundary), clang's `$_<n>` source name (in the mangled form, or at the start of
+  a demangled component), and libiberty's `{lambda(...)#N}` text. The flag is
+  metadata only; it changes no emitted name.
+
   **(unlace, docs/multilang.md) Swift names demangle through a pure-Rust
   demangler written for unlace** (`crates/unlace-analysis/src/analyzers/demangle/swift.rs
   (demangle_swift_name)`, with the parser in `swift/parse.rs`, the
@@ -7307,9 +7316,11 @@ every other binary's pass list is byte-identical to before the pass existed):
   `uncommontype.pkgPath` (`type:internal/poll.FD`, where the name record
   holds `poll.FD`), and a pointer, slice, array or map spelling is rebuilt
   from its elements' so the qualifier reaches it (`type:*internal/poll.FD`,
-  `type:[]io/fs.DirEntry`); a func or chan type, an anonymous struct and a
-  map type's own `pkgPath` (its record changed size with the swiss-table
-  maps) keep the record's spelling. A pointer record genuinely starts with
+  `type:[]io/fs.DirEntry`); a func or chan type and an anonymous struct keep the
+  record's spelling. A named map type's `pkgPath` is read past its map record,
+  whose size follows the Go version: the swiss-table record from go1.24
+  (`GoImage::swiss_maps`, set from the build-info version), the old buckets
+  record before (`GoImage::map_record`). A pointer record genuinely starts with
   `*`; an extra-star name was already stripped by the record reader. The
   `gonewtype` client maps the symbol back to the interned record by
   dropping the directory part of a named type's own qualifier, before any
@@ -9664,7 +9675,11 @@ both
   there: a branch or call target or, on x86, the address its 32-bit field encodes
   (an `ifunc` resolver references its implementations with `lea`, which the Listing
   records as no flow). A module with a reference is accepted only when the
-  reference's target already carries that name, so matching runs up to three
+  reference's target already carries that name, or when the target is not named
+  yet and its own bytes match a reference-free signature of that name (the callee's
+  own signature, `callee_named`; a callee discovery never created, reached only
+  by a tail `jmp`, resolves this way). Such a target counts as an agreeing site
+  in the arbitration below. Matching runs up to three
   rounds and names found in one round satisfy references in the next.
   The version-11 reference sites decide the rest. A module that lies wholly inside
   the trie prefix has no CRC to tell it apart, so it is dropped when one of its

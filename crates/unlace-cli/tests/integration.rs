@@ -14,6 +14,8 @@ mod fr_raw;
 mod hexagon_hmx;
 #[path = "iq2000_raw.rs"]
 mod iq2000_raw;
+#[path = "konami.rs"]
+mod konami;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]
@@ -68,20 +70,28 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "upd7725.rs"]
 mod upd7725;
+#[path = "uxn.rs"]
+mod uxn;
 #[path = "v810.rs"]
 mod v810;
+#[path = "visium_raw.rs"]
+mod visium_raw;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
+#[path = "aarch64_sve2.rs"]
+mod aarch64_sve2;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
 #[path = "cdp1802_raw.rs"]
 mod cdp1802_raw;
+#[path = "scmp_raw.rs"]
+mod scmp_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

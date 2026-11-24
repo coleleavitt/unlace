@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="Uxn"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="uxn.sla"
+            processorspec="uxn.pspec"
+            id="Uxn:BE:16:default">
+    <description>Uxn virtual machine (Varvara)</description>
+    <compiler name="default" spec="uxn.cspec" id="default"/>
+  </language>
+</language_definitions>

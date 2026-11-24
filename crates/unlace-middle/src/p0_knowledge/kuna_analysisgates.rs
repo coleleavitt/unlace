@@ -550,6 +550,16 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Read Borland/Delphi RTTI: VMTs, class and method names, type info
+    /// and interface tables (option `delphi`). See `unlace_analysis::delphi`.
+    Delphi,
+    "delphi",
+    "Borland/Delphi RTTI",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna, NOVEL) Gate the Itanium (GCC/Clang) RTTI + vtable recovery pass
     /// (`itaniumrtti`); default **off**. Ghidra has no Itanium RTTI analyzer at all
     /// — its `RttiAnalyzer` is Microsoft-only and its GCC class recovery is

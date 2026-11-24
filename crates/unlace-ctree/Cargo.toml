@@ -1,0 +1,15 @@
+[package]
+name = "unlace-ctree"
+description = "The decompiler's C syntax tree: the statement tree of a printed function, built from the structured block tree between structuring (P8) and printing (P9)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+unlace-base.workspace = true
+unlace-middle.workspace = true
+
+[lints]
+workspace = true

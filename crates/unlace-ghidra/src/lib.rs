@@ -45,6 +45,10 @@
 //! the targeted Ghidra release, and the deliberate divergences (setOptions
 //! tolerance, malformed-archid handling).
 
+// Dev-only: take the engine from the dylib (crates/unlace-decomp-dylib).
+#[cfg(feature = "dynamic_linking")]
+extern crate unlace_decomp_dylib;
+
 pub mod client;
 pub mod ids;
 pub mod process;

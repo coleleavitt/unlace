@@ -63,6 +63,7 @@ pub(super) fn build_script_for_input(
     injected: &[(&'static str, &'static str)],
     defer_fast_funcdisc: bool,
     regions_path: Option<&Path>,
+    trace_path: Option<&Path>,
 ) -> String {
     let DecompileArgs {
         target,
@@ -214,6 +215,12 @@ pub(super) fn build_script_for_input(
         lines.push(format!("openfile write {}", console_path(&rp_display)));
         lines.push("region blocks".into());
         lines.push("region tree".into());
+        lines.push("closefile".into());
+    }
+    if let Some(tp) = trace_path {
+        let tp_display = tp.display().to_string();
+        lines.push(format!("openfile write {}", console_path(&tp_display)));
+        lines.push("phase status".into());
         lines.push("closefile".into());
     }
     lines.push("quit".into());

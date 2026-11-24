@@ -3,6 +3,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# The dev-only dynamic-link facade is built only through a front-end's `dynamic_linking` feature.
+exclude = ["crates/unlace-decomp-dylib"]
 
 [workspace.package]
 version = "0.1.0"
@@ -35,6 +37,7 @@ unlace-sleigh = { path = "crates/unlace-sleigh" }
 unlace-middle = { path = "crates/unlace-middle" }
 unlace-lift = { path = "crates/unlace-lift" }
 unlace-structure = { path = "crates/unlace-structure" }
+unlace-ctree = { path = "crates/unlace-ctree" }
 unlace-bandb-base = { path = "crates/unlace-bandb-base" }
 unlace-bandb-core = { path = "crates/unlace-bandb-core" }
 unlace-bandb = { path = "crates/unlace-bandb" }
@@ -43,6 +46,7 @@ unlace-decomp = { path = "crates/unlace-decomp" }
 unlace-analysis = { path = "crates/unlace-analysis" }
 unlace-console = { path = "crates/unlace-console" }
 unlace-slacomp = { path = "crates/unlace-slacomp" }
+unlace-decomp-dylib = { path = "crates/unlace-decomp-dylib" }
 
 [workspace.lints.clippy]
 # Ordered collections keep output decisions deterministic; see clippy.toml.

@@ -2,7 +2,8 @@
 //! `include_bytes!` table of the repo's compiled SLEIGH tree (every file under
 //! `specs/` except the SLEIGH sources, plus each language's `.sla`, compiled into the
 //! `.sla` cache by `unlace_slacomp::slacache`) and a content id naming that table
-//! (`src/embedded_specs.rs`). Without the feature this does nothing.
+//! (`src/embedded_specs.rs`). Without the feature this does nothing. With the dev-only
+//! `dynamic_linking` feature it also adds the binary's rpath to the engine dylib.
 
 use std::env;
 use std::fmt::Write as _;
@@ -59,6 +60,7 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    dynamic_linking_rpath();
     if env::var_os("CARGO_FEATURE_EMBED_SPECS").is_none() {
         return;
     }
@@ -104,4 +106,25 @@ fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR")).join("embedded_specs.rs");
     fs::write(&out, generated)
         .unwrap_or_else(|e| panic!("embed-specs: cannot write {}: {e}", out.display()));
+}
+
+/// With the dev-only `dynamic_linking` feature, give this package's binaries an rpath to the
+/// engine dylib (`target/<profile>/deps`) and the toolchain's `libstd`, so they run outside
+/// `cargo run` (crates/unlace-decomp-dylib).
+fn dynamic_linking_rpath() {
+    if env::var_os("CARGO_FEATURE_DYNAMIC_LINKING").is_none()
+        || env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux")
+    {
+        return;
+    }
+    println!("cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN/deps");
+    let rustc = env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    if let Ok(out) = std::process::Command::new(rustc)
+        .args(["--print", "sysroot"])
+        .output()
+        && out.status.success()
+    {
+        let sysroot = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        println!("cargo:rustc-link-arg-bins=-Wl,-rpath,{sysroot}/lib");
+    }
 }

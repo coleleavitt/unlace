@@ -1,5 +1,9 @@
 //! Command dispatch for the kuna CLI.
 
+// Dev-only: take the engine from the dylib (crates/unlace-decomp-dylib).
+#[cfg(feature = "dynamic_linking")]
+extern crate unlace_decomp_dylib;
+
 mod args;
 mod armember;
 mod assertdecl;

@@ -142,6 +142,7 @@ impl Action for ActionCallTargetType {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        unlace_middle::debug_assert_settled!(data, Prototype);
         data.kuna_clear_call_target_types();
         if data
             .get_arch()

@@ -30,6 +30,12 @@ unlace-sleigh.workspace = true
 # implements).  unlace-decomp does NOT depend on unlace-ghidra, so this is not a
 # cycle: the ghidra translator is the downstream implementor of the trait.
 unlace-decomp.workspace = true
+unlace-decomp-dylib = { workspace = true, optional = true }
+
+[features]
+# Dev only: link the engine as one Rust dylib (crates/unlace-decomp-dylib). Off by default.
+# unlace_ghidra then needs the dylib and libstd on LD_LIBRARY_PATH (docs/dev-setup.md).
+dynamic_linking = ["dep:unlace-decomp-dylib"]
 
 [dev-dependencies]
 # The ghidra-sim test harness (tests/ghidra_sim/) answers the wire queries from

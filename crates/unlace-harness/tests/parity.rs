@@ -1,16 +1,14 @@
-//! The parity gates: the datatest corpus (`tests/datatests`) against `docs/baseline.json` and
-//! the stage corpus (`tests/stages`) against `docs/baseline-stages.json`.
+//! The parity gates: the datatest corpus (`tests/datatests`) against `docs/baseline.json`, and
+//! the stage corpus (`tests/stages`) against its own assertions.
 //!
-//! A TOML stage test (`tests/stages/*.toml`) is its own baseline: every assertion in it must
-//! pass, and its names are not in `docs/baseline-stages.json`. The baseline holds the passing
-//! assertions of the XML files only, keyed as before (a repeated name's `@dupN` counts over
-//! the whole corpus, TOML files included, so converting a file never renames another's keys).
+//! A stage test (`tests/stages/*.toml`) owns its assertions. `stage_tests_pass` runs every file
+//! and requires every assertion to pass and every file to load; no baseline file records the stage
+//! corpus, so adding a stage test re-records nothing.
 //!
-//! Each corpus runs in this process through the harness's datatest runner
-//! ([`run_test_files_with_specs`], the engine `decomp_test_dbg` drives), and its passing
-//! assertions are compared with the baseline's `data:` keys. A test fails when a baseline
-//! assertion no longer passes (REGRESSED), when any assertion fails, or when a test file cannot be
-//! parsed or run; assertions that pass but are not in the baseline are reported, not failed.
+//! Each datatest corpus runs in this process through the harness's datatest runner
+//! ([`run_test_files_with_specs`], the engine `decomp_test_dbg` drives). A datatest fails when a
+//! baseline assertion no longer passes (REGRESSED), when any assertion fails, or when a test file
+//! cannot be parsed or run; assertions that pass but are not in the baseline are reported, not failed.
 //!
 //! `UNLACE_PARITY_FILES=<paths or globs>` (comma-separated) runs only the matching files of each
 //! corpus ([`parity_selection`]); the baseline's other keys are then not checked, and a corpus
@@ -770,8 +768,35 @@ fn datatests_match_the_baseline() {
 }
 
 #[test]
-fn stage_tests_match_the_baseline() {
-    parity("tests/stages", "docs/baseline-stages.json");
+fn stage_tests_pass() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let root = repo_root();
+    // Test scripts load their fixtures by repository-relative path.
+    std::env::set_current_dir(&root).expect("enter the repository root");
+    let select = parity_selection();
+    let Some(r) = run_corpus(&root, &root.join("tests/stages"), select.as_deref()) else {
+        println!("tests/stages: UNLACE_PARITY_FILES selects none of its files, skipped");
+        return;
+    };
+    write_parity_times("tests/stages", &r);
+    let broken = r.errors.len() + r.failing.len();
+    let mut report = format!(
+        "tests/stages: {}/{} assertions passed\n",
+        r.succeeded, r.applied
+    );
+    for n in &r.failing {
+        report += &format!("  [stage] {n}\n");
+    }
+    for f in &r.errors {
+        report += &format!("  [stage] ERROR in {f}\n");
+    }
+    report += if broken == 0 {
+        "PARITY OK"
+    } else {
+        "PARITY FAIL"
+    };
+    assert!(broken == 0, "{report}");
+    println!("{report}");
 }
 
 /// Every TOML stage test loads exactly like the XML file it was converted from, read from git at

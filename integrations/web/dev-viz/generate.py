@@ -24,6 +24,7 @@ import tomllib
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from scripts.observatory import atlas  # noqa: E402
+from scripts import stage_index  # noqa: E402
 CATALOG = "crates/unlace-decomp/phases.toml"
 PHASES = [
     ("P0", "Knowledge", "Configuration, symbols & assertions"),
@@ -252,7 +253,8 @@ def export(repo: Path) -> dict:
         records.append(item)
 
     baseline = json.loads((repo / "docs/baseline.json").read_text())
-    stages = json.loads((repo / "docs/baseline-stages.json").read_text())
+    stage_rows = stage_index.inventory(repo / "tests" / "stages")
+    stage_total = sum(row["assertions"] for row in stage_rows)
     novel_text = (repo / "docs/decbench/novel.md").read_text()
     novel_match = re.search(r"([\d,]+) cases in ([\d,]+) groups", novel_text)
     phase_counts = Counter(o["phase"] for o in options)
@@ -278,7 +280,7 @@ def export(repo: Path) -> dict:
             "groups": int(novel_match[2].replace(",", "")) if novel_match else None,
             "path": "docs/decbench/novel.md",
         },
-        "baselines": {"upstream": baseline["data_footer"], "stages": stages["data_footer"]},
+        "baselines": {"upstream": baseline["data_footer"], "stages": [stage_total, stage_total]},
         "architecture": architecture(repo),
     }
 

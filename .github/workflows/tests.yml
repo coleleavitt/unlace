@@ -145,7 +145,7 @@ jobs:
           path: .sla-cache
           key: sla-v2-${{ runner.os }}-${{ hashFiles('specs/**/*.slaspec', 'specs/**/*.sinc', 'Cargo.lock', 'crates/unlace-slacomp/**', 'crates/unlace-sleigh/**', 'crates/unlace-base/**', 'crates/unlace-num/**') }}
 
-      # tests/datatests vs docs/baseline.json and tests/stages vs docs/baseline-stages.json,
+      # tests/datatests vs docs/baseline.json and tests/stages (every assertion must pass),
       # run in-process through the harness's datatest runner (crates/unlace-harness/tests/parity.rs).
       # The workspace suite runs the same two tests; this job carries them on every PR.
       - name: parity -- datatest and stage corpora vs their baselines

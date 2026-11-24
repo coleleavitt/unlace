@@ -17,6 +17,7 @@ assert.ok(data.options.length > 50, 'option catalog was not exported');
 assert.ok(data.records.length > 20, 'feature records were not exported');
 assert.ok(data.triage.length > 10, 'triage records were not exported');
 assert.ok(data.baselines.upstream[0] === data.baselines.upstream[1]);
+assert.ok(data.baselines.stages[1] > 0, 'no stage assertions counted');
 assert.ok(data.baselines.stages[0] === data.baselines.stages[1]);
 assert.ok(data.options.every((o) => /^P[0-9]$/.test(o.phase) && o.line > 0));
 assert.ok(data.commits.every((c) => /^\d{4}-\d{2}-\d{2}$/.test(c.date)));

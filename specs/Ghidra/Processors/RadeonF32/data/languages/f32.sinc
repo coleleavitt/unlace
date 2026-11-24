@@ -1,0 +1,288 @@
+# AMD Radeon F32 (command-processor microengine core of GCN-era Radeon GPUs: PFP, ME, CE, MEC, RLC).
+# Instruction set after the f32dis.py disassembler of fail0verflow's radeon-tools and the 33C3 talk.
+#
+# Modelling decisions that no source settles (all listed in GHIDRA-RARE.md as unverified):
+#  * 32-bit operations read the low half of their sources and write the result zero-extended into the
+#    64-bit destination; the "d" forms are 64-bit.
+#  * The data, reg, mem and unk memory spaces are addressed in 32-bit words (the firmware indexes
+#    them with consecutive word numbers); ldd/std access two consecutive words, the low half of the
+#    register in the lower-numbered word (the processor has no byte addressing, so byte order is not
+#    observable: the order of the two halves is spelled out so that both languages agree).
+#  * r0 always reads 0.  Reading r1 pops one dword from the command queue (side effect: modelled as
+#    the pcodeop cp_queue_read, once per read).
+#  * setgt/setge compare signed (ARM-style conditions); mul multiplies the low 16 bits of its sources.
+
+define alignment=4;
+
+define space IM type=ram_space size=4 default;
+define space DM type=ram_space size=4 wordsize=4;
+define space RM type=ram_space size=4 wordsize=4;
+define space SM type=ram_space size=4 wordsize=4;
+define space XM type=ram_space size=4 wordsize=4;
+define space register type=register_space size=4;
+
+define register offset=0 size=8 [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+];
+
+define register offset=0x1000 size=4 [
+	pc
+
+	sp  # Dummy stack pointer (word index into DM) for push/pop.
+
+	lr  # Dummy link register: bl writes it, ret jumps to it.
+
+	ctr # Repeat counter of stm; readable and writable with mov.
+];
+
+define token instr(32)
+	imm2522 = (22, 25)
+	rs2522 = (22, 25)
+	rd2118 = (18, 21)
+	rx1714 = (14, 17)
+
+	simm1500 = (0, 15) signed
+	imm1500 = (0, 15)
+	imm1506 = (6, 15)
+	imm0500 = (0, 5)
+	imm1505 = (5, 15)
+	imm0400 = (0, 4)
+
+	a   = (26, 31)
+	b   = (16, 17)
+	c   = (0, 13)
+;
+
+attach variables [ rs2522 rd2118 rx1714 ] [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+];
+
+define pcodeop cp_queue_read;
+define pcodeop btab;
+
+# Source operands: r0 reads as zero, r1 pops the command queue.
+rs: rs2522 is rs2522 { export rs2522; }
+rs: "r0" is rs2522=0 { export 0:8; }
+rs: "r1" is rs2522=1 { local v:8 = cp_queue_read(); export v; }
+
+rt: rd2118 is rd2118 { export rd2118; }
+rt: "r0" is rd2118=0 { export 0:8; }
+rt: "r1" is rd2118=1 { local v:8 = cp_queue_read(); export v; }
+
+# Destination operands (a write to r0 is lost; nothing ever reads the register r0).
+rd: rd2118 is rd2118 { export rd2118; }
+rx: rx1714 is rx1714 { export rx1714; }
+
+# Immediates that are a field shifted into place, exported with the size the operation uses so that
+# the listing shows every bit.
+ormask32: imm is imm0400 & imm1505 [ imm = imm1505 << imm0400; ] { export *[const]:4 imm; }
+andmask32: imm is imm0400 & imm1505 [ imm = ~((0x7ff ^ imm1505) << imm0400); ] { export *[const]:4 imm; }
+ormask64: imm is imm0500 & imm1506 [ imm = imm1506 << imm0500; ] { export *[const]:8 imm; }
+andmask64: imm is imm0500 & imm1506 [ imm = ~((0x3ff ^ imm1506) << imm0500); ] { export *[const]:8 imm; }
+
+# 16-bit immediates widened to the operation size
+zimm32: "#"imm1500 is imm1500 { export *[const]:4 imm1500; }
+simm32: "#"simm1500 is simm1500 { export *[const]:4 simm1500; }
+zimm64: "#"imm1500 is imm1500 { export *[const]:8 imm1500; }
+simm64: "#"simm1500 is simm1500 { export *[const]:8 simm1500; }
+
+jdest: "#"target is imm1500 [ target = imm1500 * 4; ] { export *:4 target; }
+cdest: "#"target is simm1500 [ target = inst_start + (simm1500 * 4); ] { export *:4 target; }
+
+# Memory operands are [base, #offset] in the data space (b=0) or reg / mem / unk (b=1, 2, 3).
+
+:nop is a=0 {}
+
+# Register to register
+with : a=0x1f {
+	# Move from register to register. Really just a specialized form of the "add" instruction.
+	:mov rx, rs is c=1 & rd2118=0 & rx & rs { rx = zext(rs:4); }
+
+	:add    rx, rs, rt is c=1  & rx & rs & rt { rx = zext(rs:4 + rt:4); }
+	:sub    rx, rs, rt is c=2  & rx & rs & rt { rx = zext(rs:4 - rt:4); }
+	:lsl    rx, rs, rt is c=4  & rx & rs & rt { rx = zext(rs:4 << rt:4); }
+	:lsr    rx, rs, rt is c=5  & rx & rs & rt { rx = zext(rs:4 >> rt:4); }
+	:and    rx, rs, rt is c=9  & rx & rs & rt { rx = zext(rs:4 & rt:4); }
+	:orr    rx, rs, rt is c=10 & rx & rs & rt { rx = zext(rs:4 | rt:4); }
+	:eor    rx, rs, rt is c=11 & rx & rs & rt { rx = zext(rs:4 ^ rt:4); }
+	:seteq  rx, rs, rt is c=12 & rx & rs & rt { rx = zext(rs:4 == rt:4); }
+	:setne  rx, rs, rt is c=13 & rx & rs & rt { rx = zext(rs:4 != rt:4); }
+	:setgt  rx, rs, rt is c=14 & rx & rs & rt { rx = zext(rs:4 s> rt:4); }
+	:setge  rx, rs, rt is c=15 & rx & rs & rt { rx = zext(rs:4 s>= rt:4); }
+	:addd   rx, rs, rt is c=17 & rx & rs & rt { rx = rs + rt; }
+	:subd   rx, rs, rt is c=18 & rx & rs & rt { rx = rs - rt; }
+	:lsld   rx, rs, rt is c=20 & rx & rs & rt { rx = rs << rt; }
+	:lsrd   rx, rs, rt is c=21 & rx & rs & rt { rx = rs >> rt; }
+	:andd   rx, rs, rt is c=25 & rx & rs & rt { rx = rs & rt; }
+	:orrd   rx, rs, rt is c=26 & rx & rs & rt { rx = rs | rt; }
+	:eord   rx, rs, rt is c=27 & rx & rs & rt { rx = rs ^ rt; }
+	:seteqd rx, rs, rt is c=28 & rx & rs & rt { rx = zext(rs == rt); }
+	:setned rx, rs, rt is c=29 & rx & rs & rt { rx = zext(rs != rt); }
+	:setgtd rx, rs, rt is c=30 & rx & rs & rt { rx = zext(rs s> rt); }
+	:setged rx, rs, rt is c=31 & rx & rs & rt { rx = zext(rs s>= rt); }
+	:mul    rx, rs, rt is c=16 & rx & rs & rt { local x:4 = zext(rs:2); local y:4 = zext(rt:2); rx = zext(x * y); }
+}
+
+# Register-immediate (zero extended)
+with : b=0 {
+	# Move from immediate to register. Really just a specialized form of the "add" instruction.
+	:mov rd, zimm32 is a=1 & rs2522=0 & rd & zimm32 { rd = zext(zimm32); }
+
+	:add    rd, rs, zimm32 is a=1  & rd & rs & zimm32 { rd = zext(rs:4 + zimm32); }
+	:sub    rd, rs, zimm32 is a=2  & rd & rs & zimm32 { rd = zext(rs:4 - zimm32); }
+	:lsl    rd, rs, zimm32 is a=4  & rd & rs & zimm32 { rd = zext(rs:4 << zimm32); }
+	:lsr    rd, rs, zimm32 is a=5  & rd & rs & zimm32 { rd = zext(rs:4 >> zimm32); }
+	:and    rd, rs, zimm32 is a=9  & rd & rs & zimm32 { rd = zext(rs:4 & zimm32); }
+	:orr    rd, rs, zimm32 is a=10 & rd & rs & zimm32 { rd = zext(rs:4 | zimm32); }
+	:eor    rd, rs, zimm32 is a=11 & rd & rs & zimm32 { rd = zext(rs:4 ^ zimm32); }
+	:seteq  rd, rs, zimm32 is a=12 & rd & rs & zimm32 { rd = zext(rs:4 == zimm32); }
+	:setne  rd, rs, zimm32 is a=13 & rd & rs & zimm32 { rd = zext(rs:4 != zimm32); }
+	:setgt  rd, rs, zimm32 is a=14 & rd & rs & zimm32 { rd = zext(rs:4 s> zimm32); }
+	:setge  rd, rs, zimm32 is a=15 & rd & rs & zimm32 { rd = zext(rs:4 s>= zimm32); }
+	:mul    rd, rs, zimm32 is a=16 & rd & rs & zimm32 { local x:4 = zext(rs:2); local y:4 = zext(zimm32:2); rd = zext(x * y); }
+	:addd   rd, rs, zimm64 is a=17 & rd & rs & zimm64 { rd = rs + zimm64; }
+	:subd   rd, rs, zimm64 is a=18 & rd & rs & zimm64 { rd = rs - zimm64; }
+	:lsld   rd, rs, zimm64 is a=20 & rd & rs & zimm64 { rd = rs << zimm64; }
+	:lsrd   rd, rs, zimm64 is a=21 & rd & rs & zimm64 { rd = rs >> zimm64; }
+	:andd   rd, rs, zimm64 is a=25 & rd & rs & zimm64 { rd = rs & zimm64; }
+	:orrd   rd, rs, zimm64 is a=26 & rd & rs & zimm64 { rd = rs | zimm64; }
+	:eord   rd, rs, zimm64 is a=27 & rd & rs & zimm64 { rd = rs ^ zimm64; }
+	:seteqd rd, rs, zimm64 is a=28 & rd & rs & zimm64 { rd = zext(rs == zimm64); }
+	:setned rd, rs, zimm64 is a=29 & rd & rs & zimm64 { rd = zext(rs != zimm64); }
+	:setgtd rd, rs, zimm64 is a=30 & rd & rs & zimm64 { rd = zext(rs s> zimm64); }
+
+	# Bit-field forms: lsra extracts (rs >> shift) & mask; the "and" forms clear a field, "mov"/"orr" insert a shifted constant.
+	:lsra  rd, rs, "#"imm0400, "#"imm1505 is a=0x6 & rd & rs & imm0400 & imm1505 { local x:4 = rs:4 >> imm0400; rd = zext(x & imm1505); }
+	:and   rd, rs, "#"andmask32 is a=0x7 & rd & rs & andmask32 { rd = zext(rs:4 & andmask32); }
+	:mov   rd, "#"ormask32 is a=0x8 & rs2522=0 & rd & ormask32 { rd = zext(ormask32); }
+	:orr   rd, rs, "#"ormask32 is a=0x8 & rd & rs & ormask32 { rd = zext(rs:4 | ormask32); }
+	:lsrad rd, rs, "#"imm0500, "#"imm1506 is a=0x16 & rd & rs & imm0500 & imm1506 { local x:8 = rs >> imm0500; rd = x & imm1506; }
+	:andd  rd, rs, "#"andmask64 is a=0x17 & rd & rs & andmask64 { rd = rs & andmask64; }
+	:mov   rd, "#"ormask64 is a=0x18 & rs2522=0 & rd & ormask64 { rd = ormask64; }
+	:orrd  rd, rs, "#"ormask64 is a=0x18 & rd & rs & ormask64 { rd = rs | ormask64; }
+}
+
+# Register-immediate (sign extended)
+with : b=1 {
+	:mov rd, simm32 is a=1 & rs2522=0 & rd & simm32 { rd = zext(simm32); }
+
+	:add   rd, rs, simm32 is a=1  & rd & rs & simm32 { rd = zext(rs:4 + simm32); }
+	:sub   rd, rs, simm32 is a=2  & rd & rs & simm32 { rd = zext(rs:4 - simm32); }
+	:and   rd, rs, simm32 is a=9  & rd & rs & simm32 { rd = zext(rs:4 & simm32); }
+	:orr   rd, rs, simm32 is a=10 & rd & rs & simm32 { rd = zext(rs:4 | simm32); }
+	:eor   rd, rs, simm32 is a=11 & rd & rs & simm32 { rd = zext(rs:4 ^ simm32); }
+	:addd  rd, rs, simm64 is a=17 & rd & rs & simm64 { rd = rs + simm64; }
+	:subd  rd, rs, simm64 is a=18 & rd & rs & simm64 { rd = rs - simm64; }
+	:andd  rd, rs, simm64 is a=25 & rd & rs & simm64 { rd = rs & simm64; }
+	:orrd  rd, rs, simm64 is a=26 & rd & rs & simm64 { rd = rs | simm64; }
+	:eord  rd, rs, simm64 is a=27 & rd & rs & simm64 { rd = rs ^ simm64; }
+}
+
+# Branches.  Absolute targets are word numbers (the 16-bit field) times four; cbz/cbnz are relative to the
+# branch, in words.
+:b jdest       is a=0x20 & b=0 & rs2522=0 & rd2118=0 & jdest { goto jdest; }
+:b rs          is a=0x21 & b=0 & rd2118=0 & imm1500=0 & rs { local dest:4 = rs:4 * 4; goto [dest]; }
+:btab          is a=0x22 & b=0 & rs2522=0 & rd2118=0 & imm1500=0 { local dest:4 = btab(); goto [dest]; }
+:bl jdest      is a=0x23 & b=0 & rs2522=0 & rd2118=0 & jdest { lr = inst_next; call jdest; }
+:ret           is a=0x24 & b=0 & rs2522=0 & rd2118=0 & imm1500=0 { return [lr]; }
+
+:cbz rs, cdest is a=0x25 & b=0 & rd2118=0 & rs & cdest { if (rs != 0) goto inst_next; goto cdest; }
+:cbnz rs, cdest is a=0x26 & b=0 & rd2118=0 & rs & cdest { if (rs == 0) goto inst_next; goto cdest; }
+
+with : a=0x30 & rs2522=0 {
+	:mov rd, "#"imm1500   is b=0 & rd & imm1500 { rd = imm1500; }
+	:mov rd, "#"immediate is b=1 & rd & imm1500 [ immediate = imm1500 | 0xffff0000; ] { rd = immediate; }
+	:mov rd, "#"immediate is b=2 & rd & imm1500 [ immediate = imm1500 << 16; ] { rd = immediate; }
+	:mov rd, "#"immediate is b=3 & rd & imm1500 [ immediate = (imm1500 << 16) | 0xffff; ] { rd = immediate; }
+}
+
+with : a=0x31 {
+	:ldw rd, "["rs, "#"imm1500^"]" is b=0 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; rd = zext(*[DM]:4 ea); }
+	:ldw rd, "reg["rs, "#"imm1500^"]" is b=1 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; rd = zext(*[RM]:4 ea); }
+	:ldw rd, "mem["rs, "#"imm1500^"]" is b=2 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; rd = zext(*[SM]:4 ea); }
+	:ldw rd, "unk["rs, "#"imm1500^"]" is b=3 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; rd = zext(*[XM]:4 ea); }
+}
+
+with : a=0x32 {
+	:ldd rd, "["rs, "#"imm1500^"]" is b=0 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; local lo:8 = zext(*[DM]:4 ea); local hi:8 = zext(*[DM]:4 (ea + 1)); rd = (hi << 32) | lo; }
+	:ldd rd, "reg["rs, "#"imm1500^"]" is b=1 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; local lo:8 = zext(*[RM]:4 ea); local hi:8 = zext(*[RM]:4 (ea + 1)); rd = (hi << 32) | lo; }
+	:ldd rd, "mem["rs, "#"imm1500^"]" is b=2 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; local lo:8 = zext(*[SM]:4 ea); local hi:8 = zext(*[SM]:4 (ea + 1)); rd = (hi << 32) | lo; }
+	:ldd rd, "unk["rs, "#"imm1500^"]" is b=3 & rs & rd & imm1500 { local ea:4 = rs:4 + imm1500; local lo:8 = zext(*[XM]:4 ea); local hi:8 = zext(*[XM]:4 (ea + 1)); rd = (hi << 32) | lo; }
+}
+
+with : a=0x33 {
+	:stw rs, "["rd, "#"imm1500^"]" is b=0 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[DM]:4 ea = rs:4; }
+	:stw rs, "reg["rd, "#"imm1500^"]" is b=1 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[RM]:4 ea = rs:4; }
+	:stw rs, "mem["rd, "#"imm1500^"]" is b=2 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[SM]:4 ea = rs:4; }
+	:stw rs, "unk["rd, "#"imm1500^"]" is b=3 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[XM]:4 ea = rs:4; }
+}
+
+with : a=0x34 {
+	:std rs, "["rd, "#"imm1500^"]" is b=0 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[DM]:4 ea = rs:4; local h:8 = rs >> 32; *[DM]:4 (ea + 1) = h:4; }
+	:std rs, "reg["rd, "#"imm1500^"]" is b=1 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[RM]:4 ea = rs:4; local h:8 = rs >> 32; *[RM]:4 (ea + 1) = h:4; }
+	:std rs, "mem["rd, "#"imm1500^"]" is b=2 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[SM]:4 ea = rs:4; local h:8 = rs >> 32; *[SM]:4 (ea + 1) = h:4; }
+	:std rs, "unk["rd, "#"imm1500^"]" is b=3 & rs & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[XM]:4 ea = rs:4; local h:8 = rs >> 32; *[XM]:4 (ea + 1) = h:4; }
+}
+
+# stm: store rs (re-read each time, so r1 streams the command queue) ctr times to consecutive words.
+with : a=0x35 {
+	:stm rs, "["rd, "#"imm1500^"]" is b=0 & rs & rd & imm1500 {
+		local ea:4 = rd:4 + imm1500;
+		<loop>
+		if (ctr == 0) goto <done>;
+		build rs;
+		*[DM]:4 ea = rs:4;
+		ea = ea + 1;
+		ctr = ctr - 1;
+		goto <loop>;
+		<done>
+	}
+	:stm rs, "reg["rd, "#"imm1500^"]" is b=1 & rs & rd & imm1500 {
+		local ea:4 = rd:4 + imm1500;
+		<loop>
+		if (ctr == 0) goto <done>;
+		build rs;
+		*[RM]:4 ea = rs:4;
+		ea = ea + 1;
+		ctr = ctr - 1;
+		goto <loop>;
+		<done>
+	}
+	:stm rs, "mem["rd, "#"imm1500^"]" is b=2 & rs & rd & imm1500 {
+		local ea:4 = rd:4 + imm1500;
+		<loop>
+		if (ctr == 0) goto <done>;
+		build rs;
+		*[SM]:4 ea = rs:4;
+		ea = ea + 1;
+		ctr = ctr - 1;
+		goto <loop>;
+		<done>
+	}
+	:stm rs, "unk["rd, "#"imm1500^"]" is b=3 & rs & rd & imm1500 {
+		local ea:4 = rd:4 + imm1500;
+		<loop>
+		if (ctr == 0) goto <done>;
+		build rs;
+		*[XM]:4 ea = rs:4;
+		ea = ea + 1;
+		ctr = ctr - 1;
+		goto <loop>;
+		<done>
+	}
+}
+
+with : a=0x36 {
+	:stw "#"imm2522, "["rd, "#"imm1500^"]" is b=0 & imm2522 & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[DM]:4 ea = imm2522; }
+	:stw "#"imm2522, "reg["rd, "#"imm1500^"]" is b=1 & imm2522 & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[RM]:4 ea = imm2522; }
+	:stw "#"imm2522, "mem["rd, "#"imm1500^"]" is b=2 & imm2522 & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[SM]:4 ea = imm2522; }
+	:stw "#"imm2522, "unk["rd, "#"imm1500^"]" is b=3 & imm2522 & rd & imm1500 { local ea:4 = rd:4 + imm1500; *[XM]:4 ea = imm2522; }
+}
+
+# Stack and counter.  push/pop use the dummy stack pointer: one dword per push, growing upward (a guess).
+with : a=0x37 & imm1500=0 {
+	:pop rd      is b=0 & rs2522=0 & rd { sp = sp - 1; rd = zext(*[DM]:4 sp); }
+	:push rs     is b=1 & rd2118=0 & rs { *[DM]:4 sp = rs:4; sp = sp + 1; }
+	:mov rd, ctr is b=2 & rs2522=0 & rd & ctr { rd = zext(ctr); }
+	:mov ctr, rs is b=3 & rd2118=0 & rs & ctr { ctr = rs:4; }
+}

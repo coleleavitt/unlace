@@ -4201,6 +4201,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `MC68HC16` | Motorola MC68HC16 | `68HC16:BE:24:cpu16`, `68HC16:BE:24:default`, `68HC16:BE:24:JTEC` | aleph-void/Ghidra-Processor-MC68HC16Z (fork of HausRummel/Ghidra-Processor-MC68HC16Z) @ `974d796590`, Apache-2.0 |
 | `GCDSP` | Nintendo GameCube DSP | `GCDSP:BE:16:default`, `GCDSP:BE:16:exact` | aleph-void/ghidra-gcdsp-lang (fork of Pokechu22/ghidra-gcdsp-lang) @ `4fc59950c6`, Apache-2.0 |
 ||||||| e949085348
+| `RadeonF32` | AMD Radeon F32 microengine | `F32:BE:64:default`, `F32:LE:64:default` | aleph-void/ghidra-radeon-f32 (fork of cyrozap/ghidra-radeon-f32) @ `104e93f7af`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

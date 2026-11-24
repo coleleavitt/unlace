@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<compiler_spec>
+  <global>
+    <range space="IM"/>
+    <range space="DM"/>
+    <range space="RM"/>
+    <range space="SM"/>
+    <range space="XM"/>
+  </global>
+
+  <!-- This is just a dummy stack pointer to make the decompiler work. -->
+  <stackpointer register="sp" space="DM"/>
+
+  <!-- There is no calling convention: the microcode is hand-written with global register allocation (callers and
+       callees were compared in real images).  r1 (reads pop the command queue) is not an argument or result. -->
+  <default_proto>
+    <prototype extrapop="0" stackshift="0" strategy="register" name="__stdcall">
+      <input>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r2"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r3"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r5"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r6"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r8"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r9"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r10"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="8" extension="inttype">
+          <register name="r2"/>
+        </pentry>
+      </output>
+    </prototype>
+  </default_proto>
+</compiler_spec>

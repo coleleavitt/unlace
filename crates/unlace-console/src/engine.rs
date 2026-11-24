@@ -8584,6 +8584,7 @@ fn commit_analysis_output(
             &out.cpp_vtables.classes,
         )?;
         crate::kuna_iokittypes::commit(prog, code_space, &iokit)?;
+        crate::kuna_msvcclasses::commit(prog, code_space, &out.cpp_vtables)?;
     }
 
     // 5e. (kuna `importvote`) The call sites of every PLT import, read by the

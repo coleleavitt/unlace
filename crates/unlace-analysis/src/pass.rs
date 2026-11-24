@@ -1220,6 +1220,10 @@ impl AnalysisOutput {
         self.cpp_vtables
             .slot_ranges
             .extend(other.cpp_vtables.slot_ranges);
+        self.cpp_vtables
+            .this_types
+            .extend(other.cpp_vtables.this_types);
+        self.cpp_vtables.tables.extend(other.cpp_vtables.tables);
         self.iokit_cxx
             .vtables
             .classes

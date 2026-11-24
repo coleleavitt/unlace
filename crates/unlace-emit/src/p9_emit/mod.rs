@@ -147,3 +147,4 @@ pub mod returnselector;
 pub mod slotreport; // (unlace) a frame slot a printed local lives in is reported as that local
 pub mod slotsplit; // (unlace) a frame row a narrower printed declaration lives inside is split at it
 pub mod stackobjectinfo;
+pub mod stagediff; // (unlace) per-stage attribution of text cleanup removals (UNLACE_STAGE_DIFF)

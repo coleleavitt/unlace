@@ -86,6 +86,10 @@ specs/Ghidra/Processors/DSP56300 vendors the Motorola DSP563xx SLEIGH specificat
 aleph-void/ghidra-dsp56300 (https://github.com/aleph-void/ghidra-dsp56300), a fork of roblg/ghidra-dsp56300, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/NS32000 vendors the National Semiconductor NS32000 SLEIGH specification of
+aleph-void/ghidra-NS32016 (https://github.com/aleph-void/ghidra-NS32016), a fork of raybellis/ghidra-NS32016, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

@@ -44,6 +44,7 @@ use crate::listing::Listing;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, FidMatch, Phase};
 use flirt_sig::{Endian, FLAG_STARTUP, Matcher, Module, Signature};
 
+pub mod cruntime;
 pub mod elf_data_names;
 pub mod rustprofiles;
 pub mod ruststdsigs;
@@ -72,7 +73,7 @@ impl AnalysisPass for FlirtPass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        let mut sigs = load_sigs(ctx.file.format());
+        let mut sigs = load_sigs_for(ctx.file);
         if let Some(sig) =
             ruststdsigs::signature_bytes(ctx.file).and_then(|bytes| Signature::parse(&bytes).ok())
         {
@@ -102,6 +103,35 @@ impl AnalysisPass for FlirtPass {
         }
         out
     }
+}
+
+/// The applicable signatures of `file`, with those of the C runtime its compiler
+/// ships (see [`cruntime`]) first, so they answer collisions first. Reports on
+/// stderr when signature files were given but none of them is that runtime.
+pub fn load_sigs_for(file: &object::File) -> Vec<Signature> {
+    let runtime = cruntime::comment_c_compiler(file);
+    let mut loaded: Vec<(bool, Signature)> = applicable_sig_paths(file.format())
+        .into_iter()
+        .filter_map(|p| {
+            let sig = Signature::parse(&std::fs::read(&p).ok()?).ok()?;
+            let family = runtime
+                .as_ref()
+                .is_some_and(|r| cruntime::is_runtime_of(&p, &sig, r.compiler));
+            Some((family, sig))
+        })
+        .collect();
+    if let Some(r) = &runtime {
+        if !loaded.is_empty() && !loaded.iter().any(|(family, _)| *family) {
+            eprintln!(
+                "flirt: the image was built by {} {}; no signature file named by {} is its C runtime",
+                r.compiler.name(),
+                r.version,
+                FLIRT_SIGS_ENV
+            );
+        }
+    }
+    loaded.sort_by_key(|(family, _)| !*family);
+    loaded.into_iter().map(|(_, sig)| sig).collect()
 }
 
 /// Parse the signature files the load names (`LoadOptions::flirt_sigs`, else

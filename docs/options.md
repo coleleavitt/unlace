@@ -1037,11 +1037,11 @@ Three tiers:
 | an interrupt enable is a store through a computed pointer near -0x1fff1f00 | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a vendor HAL startup routine is a list of stores to raw 0xe000xxxx addresses | [`cortexmscs`](#cortexmscs----on--off-default-on) |
 | a polling loop on a System Control Space register folds away because the read is not volatile | [`cortexmscs`](#cortexmscs----on--off-default-on) |
-| a CLSID or IID in .rdata is an unnamed 16-byte blob | [`com`](#com----on--off-default-off) |
-| a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...) | [`com`](#com----on--off-default-off) |
-| CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed | [`com`](#com----on--off-default-off) |
-| the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long * | [`com`](#com----on--off-default-off) |
-| the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void * | [`com`](#com----on--off-default-off) |
+| a CLSID or IID in .rdata is an unnamed 16-byte blob | [`com`](#com----on--off-default-on) |
+| a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...) | [`com`](#com----on--off-default-on) |
+| CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed | [`com`](#com----on--off-default-on) |
+| the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long * | [`com`](#com----on--off-default-on) |
+| the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void * | [`com`](#com----on--off-default-on) |
 | with com on, a GUID in .rdata is still an unnamed 16-byte blob | [`comcfg`](#comcfg----off---default-off) |
 | a vendor CLSID or IID the built-in COM table does not know | [`comcfg`](#comcfg----off---default-off) |
 | a media or device GUID (MFMediaType_*, WPD_*, SENSOR_*) prints as an unnamed blob | [`comcfg`](#comcfg----off---default-off) |
@@ -3611,13 +3611,13 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-analysis-cortexmscs
 - **Example:** `option cortexmscs off`
 
-### `com` -- on | off, default `off`
+### `com` -- on | off, default `on`
 
 - **Symptoms:** a CLSID or IID in .rdata is an unnamed 16-byte blob; a COM method call renders as (**(code **)(*plVar1 + 0x58))(plVar1, ...); CoCreateInstance(&dat_140003010, 0, 1, &dat_140003020, &local_18) with the ids unnamed; the object a QueryInterface or CoCreateInstance call returns is an untyped void * or long *; the MULTI_QI array of CoCreateInstanceEx is untyped and each pItf a void *.
 - **What it does:** COM markup for a PE image. Every 16-byte value in a data section equal to a known interface or class id (5239 ids: IID_IShellLinkW, CLSID_ShellLink, CLSID_WbemLocator and the rest) is named and typed GUID. For each interface id found, the interface struct is built the way COM lays it out: IShellLinkW holds IShellLinkWVtbl *lpVtbl, and the table holds a typed function pointer per method, the base interfaces' methods first and This the first parameter, from the method tables of 4401 interfaces generated from the Win32 metadata. The out-parameter of CoCreateInstance, CoGetClassObject, CoGetObject, CoGetInterfaceAndReleaseStream, CoGetObjectContext, CoGetCallContext, DllGetClassObject and OleCreate, and of a call through slot 0 (QueryInterface) or, with four arguments, slot 3 (IClassFactory::CreateInstance) of the table of the object the call passes as This, is typed a pointer to the interface its interface-id argument names when that argument is the address of a known id, so the object it fills is typed and each call through it prints as `p->lpVtbl->SetPath(p, ...)`. CoCreateInstanceEx, CoCreateInstanceFromApp, CoGetInstanceFromIStorage and CoGetInstanceFromFile fill an array of MULTI_QI elements, one interface id each: when the count is a literal of 1 to 8 and the array is on the stack, the array is typed MULTI_QI_IShellLinkW (one element) or a record of one MULTI_QI_<Interface> per element (MULTI_QI_IShellLinkW_IPersistFile), each pItf a pointer to the interface whose id the code stores into that element's pIID before the call. The imported ole32 requests get their prototypes, so the out-parameter is an argument at each call. Option comcfg adds the ids of a clsid.cfg file to the built-in table. A method with a by-value aggregate parameter keeps an untyped code pointer.
-- **When to flip:** Off by default. Turn on for Windows code that uses COM (shell links, WMI, the task scheduler, BITS, the firewall, scripting hosts, Office automation): the ids in .rdata are named and the objects the requests return are typed, so their method calls read as names instead of offsets off a table. It acts on PE images only and builds its types only when on. A call whose interface id is computed, or read from memory the decompiler cannot fold, stays untyped.
+- **When to flip:** On by default (unlace#581: 14 Windows 11 System32/SysWOW64 DLLs, x64 and i386, 0 new errors, no time cost; e.g. credprovhost.dll 58 of 1533 functions and its i386 build 62 of 1742 gain named ids and typed interface calls). For Windows code that uses COM (shell links, WMI, the task scheduler, BITS, the firewall, scripting hosts, Office automation) the ids in .rdata (or .text, where i386 MSVC merges it) are named and the objects the requests return are typed, so their method calls read as names instead of offsets off a table. It acts on PE images only and builds its types only when on. A call whose interface id is computed, or read from memory the decompiler cannot fold, stays untyped.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-gap9
-- **Example:** `option com on`
+- **Example:** `option com off`
 
 ### `comcfg` -- off | <path>, default `off`
 

@@ -5324,7 +5324,7 @@ moves.
   `--svd` import puts the device name in front of a structure name the built-in
   layouts use (`STM32F103_SCB_Type`), so an SVD peripheral keeps the SVD's
   registers.
-- **(kuna) COM ids and interfaces** (`com`, default off,
+- **(kuna) COM ids and interfaces** (`com`, default on since unlace#581,
   `crates/unlace-analysis/src/analyzers/com/mod.rs (ComPass)`): on a PE
   image, every 16-byte value at 4-byte alignment in a data or code section
   (an i386 MSVC image merges `.rdata`, ids included, into `.text`) that equals

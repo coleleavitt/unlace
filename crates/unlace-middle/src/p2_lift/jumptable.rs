@@ -2785,12 +2785,17 @@ impl JumpBasicModel {
     /// obfuscated arm64e dispatcher indexes a shared table of signed pointers
     /// with `(cond * k) ^ c`: the circular range cannot follow the XOR, so the
     /// index spans its whole width and the table's rows lead flow into other
-    /// functions, while the index only ever holds `c` or `k ^ c`.
+    /// functions, while the index only ever holds `c` or `k ^ c`. Only an index
+    /// a table LOAD reads qualifies: a destination selected straight between
+    /// constant addresses is `constselectjump`'s decision.
     fn narrow_boolean_selector(&mut self, fd: &Funcdata, maxtablesize: uint4) {
         if self.is_model2 || self.jrange().get_size() <= maxtablesize as uintb {
             return;
         }
         for pos in 0..self.path_meld.num_common_varnode() {
+            if !self.path_meld.is_load_in_path(fd, pos) {
+                continue;
+            }
             let vn = self.path_meld.get_varnode(pos);
             let Some(values) = small_value_set(fd, vn) else {
                 continue;

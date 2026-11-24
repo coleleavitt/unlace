@@ -71,12 +71,15 @@ up to 1,023 more distinct imports declared, 99 of them upgraded from `void *`.
 
 ## Status (2026-11-24, gap-wintil)
 
-Steps 1 and 5 are done, and a narrower step 3: `typelib auto` on an x86 or x64 PE reads a built-in
-Windows API library (`crates/unlace-console/typelib/windows-x86.ktl`, `windows-x86_64.ktl`), derived
-by `scripts/typelib/gen_windows.py` from `mssdk[64]_win10` + `ntapi[64]_win10` in the tils dump and
-kept to the exports of 41 core DLLs (Wine 10.0 .spec names); deriving a compact table into the repo was
-allowed for this gap. On a Windows image a library declaration replaces the `win32sigs` one. Still
-open: `ntddk` for drivers (subsystem 1), several libraries, names beyond imports (step 4).
+All five steps are in. Step 1 and a built-in library (#274): `typelib auto` on an x86 or x64 PE reads
+`crates/unlace-console/typelib/windows-x86{,_64}.ktl`, derived by `scripts/typelib/gen_windows.py` from
+`mssdk[64]_win10` + `ntapi[64]_win10` and kept to the exports of 41 core DLLs (the lead allowed a
+derived table in the repo for this gap), and on a Windows image a library declaration replaces the
+`win32sigs` one. Steps 2-5 (follow-up PR): `typelib a.til:b.til` reads a list, first declaration wins;
+`UNLACE_TIL_DIR` under `auto` picks `mssdk`/`ntddk`/`uefi` (+`ntapi`) by subsystem and width, newest
+release first, ahead of the built-in library, and says what it read on stderr; every library also
+declares functions FLIRT, FID or a PDB named. Not done: compiler voting (Borland `bcb5win`), FLIRT
+`autoload.cfg` pulls, the Hex-Rays IAT-slot fallback.
 
 ## Re-check
 

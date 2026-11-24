@@ -4390,10 +4390,10 @@ XmmReg1 & XmmReg2
     addflags(m32,Reg32);
     local tmp = m32 + Reg32;
     Reg32 = m32;
+    build check_Reg32_dest;
     m32 = tmp;
     resultflags(tmp);
     build unlock; 
-	build check_Reg32_dest;
 }
 # lockable.sinc:1213
 :XADD^lockx m64,Reg64 is $(LONGMODE_ON) & vexMode=3 & vexMMMMM=1 & lockx & unlock & opsize=2 & byte=0xC1; m64 & Reg64 ... 

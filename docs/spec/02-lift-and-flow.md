@@ -5244,7 +5244,9 @@ confirmed on hardware before the spec changed.
   `MOVBE r32,m32`, `MOVMSKPS`/`MOVMSKPD`, MMX `PEXTRW`, `LSL`, `RDRAND`/`RDSEED r32`,
   the VEX and EVEX `VCVT[T]SS2SI`/`VCVT[T]SD2SI`/`VCVT[T]S[SDH]2USI`/`VCVT[T]SH2SI`,
   `VMOVMSKPS`/`VMOVMSKPD`, `VPEXTRW` and `KMOV[BWD] r32`; before, `lock xadd [rdi],eax`
-  left the old upper half of RAX in place.
+  left the old upper half of RAX in place. In the locked `XADD`/`XCHG` the zero extension is
+  built right after the register write, inside the `LOCK()`..`UNLOCK()` envelope, so the
+  `atomics` fold, which requires `UNLOCK()` to be the instruction's last op, still applies.
 - `MOV r32,Sreg` and `MOV r64,Sreg` (`8C` with a register operand) zero-extend the selector
   into the whole register; only the 16-bit form writes 16 bits.
 - `90` with a REX prefix that lacks REX.B (`44 90`, `4C 90`, ...) is `NOP`, not

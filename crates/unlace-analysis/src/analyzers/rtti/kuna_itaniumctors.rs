@@ -46,7 +46,9 @@
 //!   a constructor or a helper a constructor or destructor was inlined into (a
 //!   by-value factory's return slot, a placement-new helper, the constructor of a
 //!   class whose first member is a `C`, a `delete p` wrapper), and the stores are
-//!   the same, so it is left alone. A `this` stored to a second frame slot is an
+//!   the same, so it is left alone, unless its stores build `C` from a base: a
+//!   base's vptr, or a call passed `this`, before `C`'s own, and nothing after it
+//!   ([`built_after_base`]). A `this` stored to a second frame slot is an
 //!   inlined callee's parameter (an always_inline constructor) unless a call
 //!   follows, which makes it the compiler's own spill across that call. A
 //!   constructor calls nothing before its stores but its bases' constructors,
@@ -355,22 +357,27 @@ fn constructors(
         if in_a_vtable.contains(&entry) {
             continue;
         }
-        let walked = walker.walk(entry, &owner_of, MAX_INSNS).stores;
-        // An unoptimized constructor calls nothing before it stores but its
-        // bases' constructors, each passed `this`; a by-value return slot spilled
+        let walk = walker.walk(entry, &owner_of, MAX_INSNS);
+        let walked = &walk.stores;
+        // A constructor calls nothing before it stores but its bases'
+        // constructors, each passed `this`; a by-value return slot spilled
         // across other calls is stored through the same way.
-        if walked
-            .iter()
-            .any(|s| !s.spilled || (s.after_call && !s.after_build))
-        {
+        if walked.iter().any(|s| s.after_call && !s.after_build) {
             continue;
         }
         let Some(c) = owning_class(&pairs(walked.iter()), &owner_of, classes) else {
             continue;
         };
-        // A constructor calls its bases' constructors before it stores its own
-        // vptr; a destructor stores first, and a pure virtual one has no slot.
-        if !classes[c].ancestors.is_empty() && walked.iter().any(|s| !s.after_call) {
+        // Unoptimized: every store through `this` reloaded from its own spill,
+        // and, with a base, after the base constructor's call (a destructor
+        // stores first, and a pure virtual one has no slot).
+        let unoptimized = walked.iter().all(|s| s.spilled)
+            && (classes[c].ancestors.is_empty() || walked.iter().all(|s| s.after_call));
+        if !unoptimized
+            && (walk.returns_this
+                || walk.second
+                || !built_after_base(walked, c, &owner_of, classes))
+        {
             continue;
         }
         let virtual_dtor = has_virtual_dtor.contains(&c)
@@ -388,6 +395,38 @@ fn constructors(
     }
     dedup(&mut out);
     out
+}
+
+/// Whether `stores` build `C` the way an optimized constructor does: its bases
+/// first, then `C`. The last vptr stored at offset 0 is `C`'s primary, no
+/// ancestor's follows the first of `C`'s, and before it either an ancestor's
+/// primary vptr was stored there (an inlined base constructor) or a call was
+/// passed `this` (an out-of-line one). A destructor stores in the other order,
+/// its own vptr and then each base's, and a helper that inlined one does the
+/// same; a by-value factory returns its slot and is ruled out before.
+fn built_after_base(
+    stores: &[Store],
+    c: usize,
+    owner_of: &HashMap<u64, (usize, bool)>,
+    classes: &[ClassVtables],
+) -> bool {
+    let at0: Vec<&Store> = stores.iter().filter(|s| s.off == 0).collect();
+    let own = |s: &Store| owner_of.get(&s.vptr) == Some(&(c, true));
+    let Some(last) = at0.last() else {
+        return false;
+    };
+    let Some(first_own) = at0.iter().position(|s| own(s)) else {
+        return false;
+    };
+    let base_first = at0[..first_own].iter().any(|s| {
+        owner_of
+            .get(&s.vptr)
+            .is_some_and(|&(b, primary)| primary && classes[c].ancestors.contains(&b))
+    });
+    own(last)
+        && at0[first_own..].iter().all(|s| own(s))
+        && !classes[c].ancestors.is_empty()
+        && (base_first || at0[first_own].after_build)
 }
 
 pub(super) fn owners(classes: &[ClassVtables]) -> HashMap<u64, (usize, bool)> {
@@ -1001,6 +1040,38 @@ mod tests {
             vptrs: vptrs.to_vec(),
             null_dtor_pair: false,
         }
+    }
+
+    fn store(vptr: u64, after_build: bool) -> Store {
+        Store {
+            vptr,
+            off: 0,
+            spilled: false,
+            after_call: after_build,
+            after_branch: after_build,
+            after_build,
+        }
+    }
+
+    /// An optimized constructor stores its base's vptr (or calls the base
+    /// constructor with `this`) before its own; a destructor stores in the other
+    /// order, and a class with no base shows no order at all.
+    #[test]
+    fn an_optimized_constructor_builds_its_base_first() {
+        let base = class("Base", &[], &[0x100]);
+        let derived = class("Derived", &[0], &[0x200]);
+        let classes = vec![base, derived];
+        let owner_of = owners(&classes);
+        let inlined = [store(0x100, false), store(0x200, false)];
+        assert!(built_after_base(&inlined, 1, &owner_of, &classes));
+        let called = [store(0x200, true)];
+        assert!(built_after_base(&called, 1, &owner_of, &classes));
+        let dtor = [store(0x200, false), store(0x100, false)];
+        assert!(!built_after_base(&dtor, 1, &owner_of, &classes));
+        let alone = [store(0x200, false)];
+        assert!(!built_after_base(&alone, 1, &owner_of, &classes));
+        let root = [store(0x100, true)];
+        assert!(!built_after_base(&root, 0, &owner_of, &classes));
     }
 
     /// A class derived from an abstract base whose destructor slots are null

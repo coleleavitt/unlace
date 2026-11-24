@@ -2,7 +2,7 @@
 
 ## Writing a stage test: TOML
 
-A stage test is a `.toml` file here (older ones are Ghidra-style `<decompilertest>` XML; the
+A stage test is a `.toml` file here (they all are; the runner still reads Ghidra-style `<decompilertest>` XML too; the
 vendored `tests/datatests` corpus stays XML). Both run through the same datatest runner
 (`cargo test -p unlace-harness --test parity stage_tests`, or `decomp_test_dbg`). The runner puts the
 `KUNA_*`/`UNLACE_*` environment back to its starting state before each file, so a load-time `option`
@@ -224,7 +224,7 @@ one line.
 prints as `_small` with upstream's overlap warning, and that the uncovered
 upper half is named `small_4`.
 
-`kuna-stack-byte-copy.xml` checks pushed scratch bytes, partial reads and a
+`kuna-stack-byte-copy.toml` checks pushed scratch bytes, partial reads and a
 saved snapshot under the stack store guard. Its CLI companion compiles
 and executes the exact C at O2 in default, stackviews and stackalias modes, and checks
 that larger and data-dependent loops retain their control flow. The authored
@@ -394,7 +394,7 @@ writeup, not here.
 | `kuna-x86listingswitch.toml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (a locally proved i386 switch decodes exactly four cases before the gap walk; the independent function between cases remains and a case's real callee is recovered) | `option x86listingswitch off\|on` |
 | `kuna-aifpoolslide.toml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (an AIF gap candidate on a word a PC-relative load reads is pool data: its accept moves to the code after the pool) | `option aifpoolslide on\|off` |
 | `kuna-pushimmediateret.toml` | RE-friction duplicate needs `entry-point-push-return` + `push-immediate-ret-transfer` | S2 flow classification (a proven one-store `push immediate; ret` becomes a terminal branch; no target function is synthesized) | always on (P2 `flow-classification`, `kuna_pushimmediateret.rs`) |
-| `kuna-subcommuteshift.xml` | RE-friction need `cancelling-byte-arithmetic-splits` | S3 simplification quiescence (exact modulo-256 multiply/shift cancellation) | always on |
+| `kuna-subcommuteshift.toml` | RE-friction need `cancelling-byte-arithmetic-splits` | S3 simplification quiescence (exact modulo-256 multiply/shift cancellation) | always on |
 | `kuna-wideslice.toml` | clang x86-64 `-O3` byte-sum regression | P3 SSA reduction (push demanded slices through 9..15-byte `PIECE`, byte shifts, and bitwise operations; the artificial aggregates heritage and the rule pool leave behind, without recognizing the source algorithm) | always on |
 | `kuna-devectorize.toml` | clang x86-64 `-O3` byte-sum regression (follow-up to `kuna-wideslice.toml`) | P3 SSA reduction (a proven vectorized integer reduction: guard, stride loop with one accumulator per lane, fold and scalar remainder loop, re-rolled into its scalar loop by removing the guard's vector edge) | `option devectorize on\|off` |
 | `kuna-devectorize-effects.toml` | hand-written x86-64 byte sums whose exits disagree on a global store | P3 SSA reduction (`devectorize` refuses a reduction whose arm, remainder loop or exits write global storage) | `option devectorize off\|on` |
@@ -461,10 +461,10 @@ writeup, not here.
 | `kuna-arm-register-shift.toml` | kuna [GH-849](https://github.com/Noelo-Lab/kuna/issues/849) (a variable ARM LSL can emit undefined C shifts for low-eight-bit counts 32 through 255) | P9 C emission, a guarded `CPUI_INT_LEFT` with unsigned shiftee, restricted to repeatable ARM operands; correctness fix, no option | default, single pass: preserves `count & 0xff`, checks `< 32`, emits an unsigned shift plus zero fallback, and avoids compound assignment when the guard applies |
 | `kuna-arm-register-shift-signed.toml` | kuna [GH-849](https://github.com/Noelo-Lab/kuna/issues/849) follow-up (the shift's unsigned C repair must retain the signed value consumed by ARM signed compare and ASR) | P9 C emission, signed true/false conditional arms around the guarded unsigned LSL | default: output retains signed comparison and arithmetic shift behavior |
 | `kuna-armshiftguard.toml` | kuna option `armshiftguard` (a variable ARM LSL prints a `< 32u ?` guard even when its count cannot reach 32, and every guard adds a branch) | P9 C emission / cast-policy: a count whose non-zero mask is below 32 prints the plain unsigned shift, unconditionally; `armshiftguard off` also drops the guard for unproven counts | two modes: default keeps the guard only on the unmasked count; `off` prints `(uint4)value << (count & 0xff)` |
-| `kuna-call-array-extent.xml` | Synthetic call-escaped frame storage | P6 stack-frame-layout | `option callarrayextent on\|off` |
+| `kuna-call-array-extent.toml` | Synthetic call-escaped frame storage | P6 stack-frame-layout | `option callarrayextent on\|off` |
 | `kuna-arraysize.toml` | decbench type_match census: stack buffers declared with the alignment padding below the next object | P6 stack-frame-layout (an escaped buffer ends at the byte count its library call states) | `option arraysize off\|on\|calls` |
 | `kuna-narrowret.toml`, `kuna-narrowret-x86.toml` | decbench type_match census: a local holding a call result declared `unsigned int`/`unsigned long` beside a callee the listing declares `unsigned char`/`bool`/`unsigned int` (authored C, clang Thumb-2 and gcc x86-64 -O2) | P4 output-prototype (a call reads the narrow value its callee states, `decompile-all` only) | `option narrowret on\|off`; negative controls, both passes alike; positive witnesses in `tests/cli/narrowret-*.json` and `unlace-cli/tests/narrow_ret.rs` |
-| `kuna-stackstruct.xml` | A local record read through `read(fd,&h,8)` printed its byte and short fields as `v1._4_2_`, which is not C, and no record type was declared (authored C, gcc/clang -O0/-O2) | P6 stack-frame-layout + P9 pointer-notation | `option stackstruct on\|off`, `option partialaccess on\|off` |
+| `kuna-stackstruct.toml` | A local record read through `read(fd,&h,8)` printed its byte and short fields as `v1._4_2_`, which is not C, and no record type was declared (authored C, gcc/clang -O0/-O2) | P6 stack-frame-layout + P9 pointer-notation | `option stackstruct on\|off`, `option partialaccess on\|off` |
 | `kuna-declorder.toml` | A function with ten or more locals declared them in string order, `v1, v10, v11, v2, ...` (authored C, gcc -O0) | P9 naming-policy, local declaration order | `option declorder natural\|name` |
 | `kuna-strlenscan.toml` | gcc 9 expands `strlen` inline as `repnz scasb`, which printed as a do/while over the string and `~count - 1` (authored C, Ubuntu 20.04 gcc 9.4 -O1) | P3 simplification-quiescence, inline string length | `option strlenscan on\|off` |
 | `kuna-opaquepredicate.toml` | a branch on a comparison that is constant for every input (`x * (x + 1) & 1`, `x * x & 3`, `(x \| y) - (x & y) != (x ^ y)`) kept its dead arm (authored C, clang -O0) | P3 simplification-quiescence, constant comparisons | `option opaquepredicate off\|on\|globals` |
@@ -554,7 +554,7 @@ repeated stores, a load between calls, and a truly dead-store control. The
 compiled round trips in `unlace-cli/tests/store_copy_effects.rs` also exercise
 aliasing and distinct pointers on AArch64 and x86-64 at `-O0` and `-O2`.
 
-`kuna-varsources.xml` pins register and stack source comments after copy
+`kuna-varsources.toml` pins register and stack source comments after copy
 elimination, PHI and CMOV merging, byte narrowing, and paired-register returns.
 It also checks explicit names, the absence of parameter source comments,
 outgoing call copies versus genuine local definitions, and the `namestyle
@@ -565,7 +565,7 @@ assembled synthetic examples; it contains no bytes from the reported binary.
 local preserves the incoming parameter, its entry comparisons, and the value
 passed to a callee across repeated decompilation. Its instructions are synthetic.
 
-`kuna-custom-call-storage.xml` checks an authored MSABI caller whose getter
+`kuna-custom-call-storage.toml` checks an authored MSABI caller whose getter
 return is passed in EDX to a callee with one explicit formal. Repeated builds
 retain that value and the one-formal signature; the ordinary two-slot prototype
 passes the same value as argument two. The assertion API and callable-type
@@ -704,7 +704,7 @@ ordinary local struct storage, destructuring calls and nested result selection.
 Its console companion covers the option gate, malformed cross-unit DWARF,
 metadata collisions, indirect calls and complete emitted native Go bodies.
 
-`ghangr-go-string-pointers.xml` exercises internal byte-string arguments in C and
+`ghangr-go-string-pointers.toml` exercises internal byte-string arguments in C and
 Go output, including escapes, UTF-8 and the data-pointer conversion. Its emitted
 Go bodies also compile and execute against a byte-checking sink.
 

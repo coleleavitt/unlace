@@ -1,0 +1,254 @@
+# Independent SPARC assembly; source in fixtures/indirect-value-arguments.s.
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'stack_value' },
+    { space = 'ram', offset = '0x1020', name = 'stack_pointer' },
+    { space = 'ram', offset = '0x1040', name = 'pointer_value' },
+    { space = 'ram', offset = '0x1058', name = 'indirect_value' },
+    { space = 'ram', offset = '0x1078', name = 'value_reader' },
+    { space = 'ram', offset = '0x1200', name = 'value_sink' },
+    { space = 'ram', offset = '0x1210', name = 'pointer_sink' },
+    { space = 'ram', offset = '0x1300', name = 'advanced' },
+    { space = 'ram', offset = '0x1320', name = 'spilled' },
+    { space = 'ram', offset = '0x1340', name = 'updated' },
+    { space = 'ram', offset = '0x1370', name = 'cursor' },
+    { space = 'ram', offset = '0x1400', name = 'indirect_pointer' },
+    { space = 'ram', offset = '0x1500', name = 'stack_value_reverse' },
+    { space = 'ram', offset = '0x1540', name = 'stack_pointer_reverse' },
+    { space = 'ram', offset = '0x1600', name = 'value_sink_reverse' },
+    { space = 'ram', offset = '0x1610', name = 'pointer_sink_reverse' },
+    { space = 'ram', offset = '0x1700', name = 'stack_cursor' },
+    { space = 'ram', offset = '0x1740', name = 'collision_cursor' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '9de3bf90f027bff8f227bffc9007bff84000007c0100000081c7e00881e800009de3bf90f027bff8f227bffc9007bff8400000780100000081c7e00881e800009de3bfa0901000184000006e0100000081c7e00881e800009de3bf90f027bff8f227bffc9007bff89fc680000100000081c7e00881e800009de3bfa0f2060000f0062004b006001981c7e00881e80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000081c3e00801000000000000000000000081c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1300'
+readonly = true
+hex = '9de3bfa0b0062004f2063ffcf0060000b006001981c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1320'
+readonly = true
+hex = '9de3bf98f027bffcf007bffcf2060000f0062004b006001981c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1340'
+readonly = true
+hex = '9de3bfa0f2060000b2066001f2260000f0062004b006001981c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1370'
+readonly = true
+hex = '9de3bfa0b4102000b6102002f2062004b4068019f0060000b6a6e00112bffffc01000000b010001a81c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1400'
+readonly = true
+hex = '9de3bf90f027bff8f227bffc9007bff89fc680000100000081c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1500'
+readonly = true
+hex = '9de3bf90f027bff8f227bffc9007bff84000003c0100000081c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1540'
+readonly = true
+hex = '9de3bf90f027bff8f227bffc9007bff8400000300100000081c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1600'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1610'
+readonly = true
+hex = '81c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1700'
+readonly = true
+hex = '9de3bf90c207a05c84102002b0100000c6006004b0060003c2004000c227a05c84a0a00112bffffb0100000081c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1740'
+readonly = true
+hex = '9de3bfa0b4102000b6102002f2062004b4068019f0060000b6a6e00112bffffc01000000b010001a81c7e00881e80000'
+
+[script]
+commands = [
+    'parse line typedef struct Pair { int a; int b; } Pair;',
+    'parse line extern int advanced(Pair value);',
+    'parse line extern int spilled(Pair value);',
+    'parse line extern int updated(Pair value);',
+    'parse line typedef struct Link { struct Link *next; int count; } Link;',
+    'parse line extern int cursor(Link value);',
+    'parse line extern void pointer_sink(Pair *input);',
+    'parse line extern void value_sink(Pair value);',
+    'parse line extern void stack_value(int a,int b);',
+    'parse line extern void stack_pointer(int a,int b);',
+    'parse line extern void pointer_value(Pair *input);',
+    'parse line extern void indirect_value(int a,int b,void (*fn)(Pair value));',
+    'parse line extern int value_reader(Pair value);',
+    'parse line extern void indirect_pointer(int a,int b,void (*ptr_fn)(Pair *));',
+    'parse line typedef struct PairReverse { int a; int b; } PairReverse;',
+    'parse line extern void value_sink_reverse(PairReverse value);',
+    'parse line extern void pointer_sink_reverse(PairReverse *input);',
+    'parse line extern void stack_value_reverse(int a,int b);',
+    'parse line extern void stack_pointer_reverse(int a,int b);',
+    'parse line extern int stack_cursor(int a,int b,int c,int d,int e,int f,Link value);',
+    'parse line extern int collision_cursor(Link value,int value_addr);',
+    'lo fu stack_value',
+    'decompile',
+    'print C',
+    'lo fu stack_pointer',
+    'decompile',
+    'print C',
+    'lo fu pointer_value',
+    'decompile',
+    'print C',
+    'lo fu indirect_value',
+    'decompile',
+    'print C',
+    'lo fu value_reader',
+    'decompile',
+    'print C',
+    'lo fu advanced',
+    'decompile',
+    'print C',
+    'lo fu spilled',
+    'decompile',
+    'print C',
+    'lo fu updated',
+    'decompile',
+    'print C',
+    'lo fu cursor',
+    'decompile',
+    'print C',
+    'lo fu indirect_pointer',
+    'decompile',
+    'print C',
+    'lo fu stack_value_reverse',
+    'decompile',
+    'print C',
+    'lo fu stack_pointer_reverse',
+    'decompile',
+    'print C',
+    'lo fu stack_cursor',
+    'decompile',
+    'print C',
+    'lo fu collision_cursor',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'local aggregate is passed by value'
+count = 1
+regex = 'value_sink\(v[0-9]+\);'
+
+[[match]]
+name = 'pointer dereference is passed by value'
+count = 1
+literal = 'value_sink(*input);'
+
+[[match]]
+name = 'ordinary pointer retains its address'
+count = 1
+regex = 'pointer_sink\(&v[0-9]+\);'
+
+[[match]]
+name = 'indirect call passes aggregate value'
+count = 1
+regex = '\(\*fn\)\(v[0-9]+\);'
+
+[[match]]
+name = 'function pointer signature uses source aggregate'
+count = 1
+literal = 'void (*fn)(Pair)'
+
+[[match]]
+name = 'callee signature uses source aggregate'
+count = 1
+literal = 'int4 value_reader(Pair value)'
+
+[[match]]
+name = 'by-value callee reads parameter fields'
+count = 3
+literal = 'return value.b + value.a;'
+
+[[match]]
+name = 'mutable ABI pointer has its own local'
+count = 2
+literal = 'Link *value_addr = &value;'
+
+[[match]]
+name = 'pointer callback keeps pointer contract'
+count = 1
+literal = 'void (*ptr_fn)(Pair *)'
+
+[[match]]
+name = 'pointer callback receives local address'
+count = 1
+regex = '\(\*ptr_fn\)\(&v[0-9]+\);'
+
+[[match]]
+name = 'value-first interning preserves value contract'
+count = 1
+regex = 'value_sink_reverse\(v[0-9]+\);'
+
+[[match]]
+name = 'value-first interning preserves pointer contract'
+count = 1
+regex = 'pointer_sink_reverse\(&v[0-9]+\);'
+
+[[match]]
+name = 'mutable ABI pointer advances through its local'
+count = 2
+literal = 'value_addr = value_addr->next;'
+
+[[match]]
+name = 'by-value parameter never used as pointer'
+count = 0
+literal = 'value->'
+
+[[match]]
+name = 'unused parameter name is reserved for pointer alias'
+count = 1
+literal = 'Link *value_addr_1 = &value;'
+
+[[match]]
+name = 'the call never passes the ABI pointer'
+count = 0
+regex = 'value_sink\(&v[0-9]+\);'
+
+[[match]]
+name = 'the indirect call never passes the ABI pointer'
+count = 0
+regex = '\(\*fn\)\(&v[0-9]+\);'
+
+[[match]]
+name = 'the function pointer signature never keeps the ABI pointer'
+count = 0
+literal = 'void (*fn)(Pair *)'

@@ -96,3 +96,32 @@ instructions here, while objdump prints them.
 - `ps_res` and `ps_rsqrte` are exact reciprocals, not the hardware estimates.
 - GQRs print under their SPR names (`spr390`-`spr397` = GQR0-GQR7).
 - Selected with `--target`; ELF headers (`EM_PPC`) do not route to it.
+
+## Xbox 360 Xenon VMX128 (`PowerPC:BE:64:Xenon`)
+
+The Xenon cores of the Xbox 360: 64-bit PowerPC with AltiVec (VMX) and the VMX128 extension
+(128 vector registers, Direct3D pack/unpack, dot products), 32-bit addressing as Xbox 360
+executables use it (`ppc_64_32.cspec`). Written for unlace (#98); no licensed prior SLEIGH
+description of VMX128 was used.
+
+Sources: the Xenia emulator (BSD-3): `tools/ppc-instructions.xml` (the 75 VMX128 mnemonics,
+opcodes and forms), `ppc_decode_data.h` (the VX128, VX128_1..5, VX128_R and VX128_P field
+layouts, the split 7-bit register numbers) and `ppc_emit_altivec.cc` (operand roles: VD as the
+accumulator of `vmaddfp128`, the mask of `vsel128`, the blend of `vrlimi128`).
+
+Modelled (`vmx128.sinc`, `ppc_64_xenon_be.slaspec`):
+- `vr0`..`vr127`; `vr0`..`vr31` are the AltiVec registers (`vs32`..`vs63` here).
+- `lvx128`/`lvxl128` and `stvx128`/`stvxl128` as 16-byte accesses at `(RA|0) + RB` rounded
+  down to 16; `vand128`, `vandc128`, `vor128`, `vxor128`, `vnor128`, `vsel128` exactly; the
+  other loads/stores (element, left/right, shift-control) and every arithmetic, compare,
+  conversion, permute, pack/unpack and estimate operation as named p-code operations
+  (`vmx128_vaddfp`, ...); the compare forms with Rc update `cr6`.
+- The variant leaves out the Power ISA 2.07/3.0 vector additions (`@ifndef XENON` in
+  `altivec.sinc`) and the 4xx multiply-accumulate instructions: Xenon has neither, and their
+  encodings overlap VMX128's.
+
+Gaps: the named operations are not expanded into lane arithmetic; VSCR saturation is not
+tracked; the Xenon-specific non-vector instructions are the base PowerPC ones.
+
+Checked: all 75 VMX128 encodings, with random operands (4500 words), disassemble to their own
+mnemonic; the processors.toml image decompiles to the expected vector expression.

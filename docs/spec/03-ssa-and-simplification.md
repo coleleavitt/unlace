@@ -4732,7 +4732,12 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 `egraph` changes 3 functions, one of them beyond `mba`:
 `(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
 `(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and
-`/usr/bin/bzip2` (84) are unchanged, at the same CPU time within noise.
+`/usr/bin/bzip2` (84) are unchanged, but on 00d4db1c62 the patchelf run executes
+26.9% more instructions with the option on (144.6G vs 114.0G, pinned to one
+core, two runs each), all of it saturations that find nothing. Since then the
+rule remembers, per function, each tree it saturated without a replacement
+(its fingerprint, op count and budget) and does not saturate it again when
+the pool revisits the op.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

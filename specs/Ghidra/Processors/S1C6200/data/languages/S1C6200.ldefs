@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="S1C6200"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="s1c6200.sla"
+            processorspec="s1c6200.pspec"
+            id="S1C6200:BE:16:default">
+    <description>Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core (12-bit instructions in 16-bit words)</description>
+    <compiler name="default" spec="s1c6200.cspec" id="default"/>
+  </language>
+</language_definitions>

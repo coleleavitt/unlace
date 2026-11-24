@@ -744,10 +744,10 @@ fn go_interface_calls_print_by_method_name() {
         named.contains("main.Shape.Area("),
         "with goitabcalls on the interface call is named; transcript:\n{named}"
     );
-    let plain = decompile_one_opt(bin, None, "main.describe");
+    let plain = decompile_one_opt(bin, Some(("goitabcalls", "off")), "main.describe");
     assert!(
         !plain.contains("main.Shape.Area("),
-        "off by default; transcript:\n{plain}"
+        "with goitabcalls off no interface call is named; transcript:\n{plain}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

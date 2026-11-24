@@ -31,12 +31,12 @@ pub fn itab_record_name(interface: &str) -> String {
 crate::kuna_flag!(
     /// (kuna) `option goitabcalls`: type a Go interface formal's table word by
     /// its interface's itab record and print a call through one of its method
-    /// slots as `Interface.Method(receiver, ...)`. Default off.
+    /// slots as `Interface.Method(receiver, ...)`. Shipped on.
     GoItabCalls,
     "goitabcalls",
     "Go interface method calls",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]
@@ -54,10 +54,10 @@ mod tests {
     }
 
     #[test]
-    fn the_option_ships_off() {
+    fn the_option_ships_on() {
         use crate::kuna_optionset::KunaOption;
         assert!(!GoItabCalls::unset().0);
-        assert!(!GoItabCalls::shipped().0);
+        assert!(GoItabCalls::shipped().0);
         assert!(GoItabCalls::parse("on").unwrap().0.0);
     }
 }

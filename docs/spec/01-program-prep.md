@@ -6921,7 +6921,7 @@ every other binary's pass list is byte-identical to before the pass existed):
   `verify_gotypes::stripped_go_itab_renders_named`, green on the itablinks
   and the contiguous-region layouts).
 
-  **Interface method slots** (`goitabcalls`, off by default;
+  **Interface method slots** (`goitabcalls`, on by default;
   `crates/unlace-analysis/src/analyzers/gotypes/kuna_itabtypes.rs (intern)`):
   every itab of one interface lays its `Fun` array out in the order of the
   interface descriptor's `Methods` slice (`Imethod {Name, Typ}` after the

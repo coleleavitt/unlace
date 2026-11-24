@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_352() {
-    assert_eq!(kuna_num_settables(), 352);
-    assert_eq!(SETTABLE_TABLE.len(), 352);
+fn settable_count_is_353() {
+    assert_eq!(kuna_num_settables(), 353);
+    assert_eq!(SETTABLE_TABLE.len(), 353);
 }
 
 #[test]
-fn tier_counts_are_70_core_177_transform_105_analysis() {
+fn tier_counts_are_70_core_177_transform_106_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_177_transform_105_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 177, 105));
+    assert_eq!((core, transform, analysis), (70, 177, 106));
 }
 
 #[test]
@@ -314,6 +314,8 @@ fn option_values_live_value_present_for_129() {
         "dwarfscopes",
         // (kuna) DWARF global types -- a commit-time gate read console-side.
         "dwarfglobaltypes",
+        // (kuna) DWARF declarations of imports -- a commit-time gate read console-side.
+        "dwarfdecls",
         // (kuna) Global typing from stored values -- a batch ledger read in project.rs.
         "storetype",
         // (kuna) The UEFI module pass -- an analysis-pass gate read console-side. Default-ON.
@@ -1273,6 +1275,7 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `haltloopguard`; its P3 row sits after `earlyrestart`.
     // +1 for `truncptrflow`; its P3 row sits after `haltloopguard`.
     // +1 for `clonephiorder`; its P8 row sits after `rettriangle`.
+    // +1 for `dwarfdecls`; its P1 row sits after `dwarfglobaltypes`.
     // +1 for `switchrunon`; its P2 row sits after `switchsharedcase`.
     // +1 for `bejoinpass`; its P4 row sits after `bejoin`.
     // +1 for `persistcalls`; its P3 row sits after `readonlycalls`.

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Samsung SAM88RCRI (S3C9 series): one interrupt vector at 0000h-0001h, reset address
+     0100h (S3C9454B/F9454B user's manual, chapters 2 and 5). The register file is one
+     256-byte page: general registers 00h-BFh, working registers C0h-CFh, system and
+     peripheral control registers D0h-FFh. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="rf" first="0xd0" last="0xd4"/>
+    <range space="rf" first="0xda" last="0xff"/>
+  </volatile>
+  <default_symbols>
+    <symbol name="SYM" address="rf:DF"/>
+    <symbol name="INT_VECTOR" address="code:0000"/>
+    <symbol name="RESET" address="code:0100" entry="true"/>
+  </default_symbols>
+  <default_memory_blocks>
+    <memory_block name="REGS" start_address="rf:00" length="0x100" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

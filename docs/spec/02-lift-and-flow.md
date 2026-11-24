@@ -4455,6 +4455,27 @@ one user op. Exercised by `unlace-cli/tests/pdp11_raw.rs` (hand-assembled add
 and signed max routines decompile to the expected C).
 
 
+### x86-64 APX: REX2 and EVEX map 4 (#98)
+
+`specs/Ghidra/Processors/x86/data/languages/apx.sinc` adds Intel APX to
+`x86:LE:64:*` (Intel APX Architecture Specification 355828-009): the extended
+GPRs `R16`-`R31` under the REX2 prefix (`D5`, map 0 and, with M0=1, map 1,
+whose constructors `apx_rex2map1.sinc` repeats under the REX2 key), and the
+legacy instructions promoted to EVEX map 4 in `apx_map4.sinc`: new data
+destination (EVEX.ND writes the V4:vvvv register), no-flags forms (EVEX.NF
+drops the flag writes), CCMPscc/CTESTscc (a false source condition loads OF,
+SF, ZF and CF from the dfv bits), CMOVcc NDD and CFCMOVcc (the memory access
+happens only on a true condition), SETcc.zu and IMUL.zu, PUSH2/POP2 with the
+PPX hint, and JMPABS. The 32-bit and 16-bit x86 languages are unchanged: in
+64-bit mode `D5` was AAD, which is invalid there, so a REX2 prefix was a bad
+instruction before, as was every map-4 instruction. Both generated files come
+from `scripts/gen_x86_apx.py`. Exercised by `unlace-cli/tests/x86_apx.rs`:
+a probe of each APX form against `llvm-objdump` and an LLVM-assembled raw
+image whose functions (PUSH2/POP2 around an NDD multiply-add, a CCMP chain,
+a CFCMOV load, EGPR addressing, an NF add between a CMP and its SETcc)
+decompile to the expected C. Coverage and gaps are in
+`specs/Ghidra/Processors/x86/README.md`.
+
 ### Processor modules written for unlace (#98)
 
 These processor directories hold SLEIGH written for unlace from public ISA documentation
@@ -4488,6 +4509,9 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 | `sBPF` | Solana sBPF (SBPFv0/v1 and SBPFv2) | `sBPF:LE:64:v1`, `sBPF:LE:64:v2` | anza-xyz/sbpf `doc/bytecode.md`, RFC 9669; syscall hashes labelled | `unlace-cli/tests/sbpf.rs` |
 | `TLCS90` | Toshiba TLCS-90 (TMP90C840, TMP90C841, TMP90C844) | `TLCS90:LE:16:default` | Toshiba TLCS-48/90 data book (1988); MAME tlcs90 core | `unlace-cli/tests/tlcs90_raw.rs` |
+| `SAM8` | Samsung SAM8 (S3C8/S3F8), SAM88RCRI (S3C9/S3F9) | `SAM8:BE:16:default`, `SAM88RCRI:BE:16:default` | Samsung S3C8-series user's manual ch. 6 (instruction set), S3C9454B/F9454B user's manual | `unlace-cli/tests/sam8_raw.rs` |
+| `EVM` | Ethereum Virtual Machine bytecode, Cancun opcode set | `EVM:BE:32:Cancun` | Ethereum Yellow Paper appendix H, evm.codes opcode reference, EIPs 145/1153/3855/4844/5656/7516 | `unlace-cli/tests/evm.rs` |
+| `Rabbit` | Rabbit Semiconductor Rabbit 2000 / Rabbit 3000A | `Rabbit2000:LE:16:default`, `Rabbit3000:LE:16:default` | Rabbit 2000/3000 Instruction Reference Manual (019-0098), Rabbit 2000/3000 User's Manuals, Dynamic C docs | `unlace-cli/tests/rabbit_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

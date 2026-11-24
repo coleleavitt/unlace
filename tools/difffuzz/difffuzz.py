@@ -270,9 +270,14 @@ def main():
     ap.add_argument("--sleighpath", help="SLEIGH tree holding freshly compiled .sla files (unlace --sleighpath)")
     ap.add_argument("--out", help="JSON report path")
     ap.add_argument("--bytes", help="hex encodings to test instead of random ones, comma separated")
-    ap.add_argument("--oracle", choices=("unicorn", "qemu"), default="unicorn",
-                    help="reference: Unicorn (default), or QEMU user mode (tools/difffuzz/qemu_backend.py)")
+    ap.add_argument("--oracle", choices=("unicorn", "qemu", "native"), default="unicorn",
+                    help="reference: Unicorn (default), QEMU user mode (tools/difffuzz/qemu_backend.py), or "
+                         "this CPU (native, --arch x86-64-native)")
     args = ap.parse_args()
+    if args.oracle == "native":
+        if args.arch != "x86-64-native":
+            sys.exit("--oracle native needs --arch x86-64-native")
+        args.oracle = "qemu"
     vector = args.arch == "riscv64v"
     arch = ARCHES["riscv64" if vector else args.arch]
     if vector and args.oracle != "qemu":

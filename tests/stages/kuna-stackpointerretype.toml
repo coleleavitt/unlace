@@ -1,0 +1,85 @@
+[image]
+arch = 'ARM:LE:32:v8:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '1eff2fe1'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/retypestackptr_arm_le32',
+    'read symbols',
+    'parse line struct Probe { uint4 a; uint4 b; uint4 c; uint4 d; };',
+    'load function probe',
+    'decompile',
+    'print C',
+    'retype v1 Probe *',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/retypestackptr_ppc32',
+    'read symbols',
+    'parse line struct Probe { uint4 a; uint4 b; uint4 c; uint4 d; };',
+    'load function probe',
+    'decompile',
+    'print C',
+    'retype v2 Probe *',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Stack pointer retype #1'
+count = 1
+literal = 'Probe *v1; // r4'
+
+[[match]]
+name = 'Stack pointer retype #2'
+count = 1
+literal = 'v1 = &v4;'
+
+[[match]]
+name = 'Stack pointer retype #3'
+count = 8
+literal = 'consume(v1);'
+
+[[match]]
+name = 'Stack pointer retype #4'
+count = 0
+literal = 'consume(&v4);'
+
+[[match]]
+name = 'Stack pointer retype #5'
+count = 1
+literal = 'Probe v4; // stack - 0x24'
+
+[[match]]
+name = 'Stack pointer retype #6'
+count = 1
+literal = 'Probe *v2; // r29'
+
+[[match]]
+name = 'Stack pointer retype #7'
+count = 1
+literal = 'v2 = &v4;'
+
+[[match]]
+name = 'Stack pointer retype #8'
+count = 8
+literal = 'sub_210(v2);'
+
+[[match]]
+name = 'Stack pointer retype #9'
+count = 0
+literal = 'sub_210(&v4);'
+
+[[match]]
+name = 'Stack pointer retype #10'
+count = 1
+literal = 'Probe v4; // stack - 0x34'

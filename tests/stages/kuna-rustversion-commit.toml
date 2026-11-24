@@ -1,0 +1,49 @@
+# kuna #1639: the stable Rust compiler version was read only from the ELF
+# `.comment` record, so an image whose `.comment` was removed lost every
+# version-gated recovery. Stage: P0 knowledge (loader image facts,
+# `unlace-analysis/src/analyzers/sourcelang/kuna_rustversion.rs`). No option: the
+# commit in the standard library's `/rustc/<commit>/` source paths is mapped to
+# its stable release. The fixture is `rust_fmt_args_x86_64` linked without
+# `.comment` and with one 1.93.1 source path; the 1.93 `rustfmt` argument
+# recovery applies to it as it does to the original.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_fmt_args_nocomment_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'load function decimal_lf',
+    'decompile',
+    'print C',
+    'load function reorder',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'commit-identified release recovers the decimal print'
+count = 1
+regex = '\bprintln!\("\{\}"'
+
+[[match]]
+name = 'commit-identified release recovers repeated indices'
+count = 1
+regex = '\bprintln!\("\{0\} \{1\} \{0\}"'
+
+[[match]]
+name = 'no runtime print sink remains'
+count = 0
+literal = 'std::io::stdio::_print('

@@ -8431,7 +8431,7 @@ both
   pass one fewer, and the functions that test a call's error by releasing it
   grow from 84 to 235. It adds no measurable load time and about 8 MB, and the
   42,240 decompiles take 2.5% longer. The
-  stage test `tests/stages/kuna-swiftcall.xml` runs the stripped
+  stage test `tests/stages/kuna-swiftcall.toml` runs the stripped
   `swift_call_elf` with the arm off and on, and its unstripped twin
   `swift_call_syms_elf` on.
 - **Swift runtime prototypes** (`swiftruntime`, Swift-detected Mach-O and
@@ -12424,7 +12424,7 @@ so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
 reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
 table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
 then indexes (`sub_4060[a0 * 4]`), and the veto removes it
-(`tests/stages/kuna-relswitch-a64.xml`). On a Thumb literal-pool image an
+(`tests/stages/kuna-relswitch-a64.toml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

@@ -1,0 +1,186 @@
+# C function prototypes from SDK headers (`option objcsdk <dir>|off`, the C
+# half of the option).
+#
+# Issue: `objcsdk` read only Objective-C declarations, so the C functions the
+# same headers declare had no prototype. A call whose arguments were set up
+# before an earlier call lost them (`v2 = CFStringGetLength();`), a tail call
+# printed bare (`dispatch_async_f(); // tail-call`), a struct filled through
+# a pointer was loose stack slots, and an enum constant was a number.
+#
+# Stage / sub-stage: P1 external-refinement.
+# `analyzers/protos/kuna_sdkprotos.rs` reads the declarations of the names the
+# image imports from the same directory: attribute macros skipped, the `#if`
+# branches the target rules out dropped, types resolved through typedefs,
+# records, the enum macros and the object macros. A by-value struct is spread
+# over registers only where its members travel as separate arguments would.
+#
+# P0 assertion: `option objcsdk <directory>|off` (env-bridged, load-time: set
+# before the `load file` it applies to and cleared at the end).
+#
+# The fixture is `macho_sdk_c.c`, built against the hand-written stand-in
+# headers in `tests/fixtures/sdk_c/` (no SDK text), every callee an import.
+#
+# Pass 1 (no headers) reproduces the BUG. Pass 2 (`objcsdk` pointed at the
+# header directory) is the FIX. `GadgetAmbiguous` (declared two ways) and
+# `GadgetOpaque` (a by-value type no header defines) keep no prototype in
+# both passes.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64',
+    'read symbols',
+    'load function _name_len',
+    'decompile',
+    'print C',
+    'load function _later',
+    'decompile',
+    'print C',
+    'load function _find',
+    'decompile',
+    'print C',
+    'load function _where',
+    'decompile',
+    'print C',
+    'option objcsdk crates/unlace-analysis/tests/fixtures/sdk_c',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_sdk_c_arm64',
+    'read symbols',
+    'load function _name_len',
+    'decompile',
+    'print C',
+    'load function _later',
+    'decompile',
+    'print C',
+    'load function _raise_tier',
+    'decompile',
+    'print C',
+    'load function _same',
+    'decompile',
+    'print C',
+    'load function _find',
+    'decompile',
+    'print C',
+    'load function _info_count',
+    'decompile',
+    'print C',
+    'load function _inset_width',
+    'decompile',
+    'print C',
+    'load function _where',
+    'decompile',
+    'print C',
+    'load function _sum',
+    'decompile',
+    'print C',
+    'load function _show',
+    'decompile',
+    'print C',
+    'load function _unreadable',
+    'decompile',
+    'print C',
+    'option objcsdk off',
+    'quit',
+]
+
+[[match]]
+name = 'SDKPROTOS #1: without headers the argument set up before the earlier call is lost'
+count = 1
+literal = 'v2 = CFStringGetLength();'
+
+[[match]]
+name = 'SDKPROTOS #2: without headers the tail call has no arguments'
+count = 1
+literal = 'dispatch_async_f(); // tail-call'
+
+[[match]]
+name = 'SDKPROTOS #3: without headers the out-parameter call keeps its forwarded registers, but its options are a number'
+count = 1
+literal = 'v3 = CFStringFindWithOptions(a0,a1,a2,a3,4,&v2);'
+
+[[match]]
+name = 'SDKPROTOS #4: without headers a two-word struct return is an integer pair'
+count = 1
+literal = 'return SUB168(v1,0) + SUB168(v1,8);'
+
+[[match]]
+name = 'SDKPROTOS #5: with headers the callee takes the string'
+count = 1
+literal = 'v2 = CFStringGetLength(v1);'
+
+[[match]]
+name = 'SDKPROTOS #6: with headers the tail call passes all three'
+count = 1
+literal = 'dispatch_async_f(a0,a1,a2); // tail-call'
+
+[[match]]
+name = 'SDKPROTOS #7: the caller takes its types from the callee'
+count = 1
+literal = 'void _later(dispatch_queue_s *a0,void *a1,void *a2)'
+
+[[match]]
+name = "SDKPROTOS #8: an enum macro's constant prints by name"
+count = 1
+literal = 'dispatch_set_tier(a0,DISPATCH_TIER_HIGH); // tail-call'
+
+[[match]]
+name = 'SDKPROTOS #9: an options enum prints its flags, and the result its enumerator'
+count = 1
+literal = 'kCFCompareNumerically|kCFCompareCaseInsensitive) == kCFCompareEqualTo;'
+
+[[match]]
+name = 'SDKPROTOS #10: a two-word struct argument is spread, and the out-parameter is the struct'
+count = 1
+literal = 'v3 = CFStringFindWithOptions(a0,a1,a2,a3,kCFCompareBackwards,&v2);'
+
+[[match]]
+name = 'SDKPROTOS #11: the struct behind the pointer has its fields'
+count = 1
+literal = 'v1 = v2.length + v2.location;'
+
+[[match]]
+name = 'SDKPROTOS #12: a struct with an array member is laid out'
+count = 1
+literal = 'v1 = v2.count + (uint8)v2.flags[1];'
+
+[[match]]
+name = 'SDKPROTOS #13: four doubles by value are four arguments, and the return is the struct'
+count = 1
+literal = 'v1 = GadgetRectInset(a0,a1,a2,a3,2.0);'
+
+[[match]]
+name = 'SDKPROTOS #14: a two-word struct return is the struct'
+count = 1
+literal = 'return v1.location + v1.length;'
+
+[[match]]
+name = 'SDKPROTOS #15: a struct over sixteen bytes is the pointer the caller passes'
+count = 1
+literal = 'GadgetWide v1; '
+
+[[match]]
+name = 'SDKPROTOS #16: a variadic keeps its fixed argument and what follows'
+count = 1
+literal = 'CFShowFormat(a0,a1,a2);'
+
+[[match]]
+name = 'SDKPROTOS #17: two declarations that disagree give no prototype'
+count = 1
+literal = 'v1 = GadgetAmbiguous();'
+
+[[match]]
+name = 'SDKPROTOS #18: a by-value type no header defines gives no prototype'
+count = 1
+literal = 'int4 _unreadable(unsigned long a0,unsigned long a1)'

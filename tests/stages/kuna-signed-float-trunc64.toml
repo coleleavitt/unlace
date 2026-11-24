@@ -1,0 +1,55 @@
+# Independent FDTOX unsigned join and FSTOI feeding a widened return.
+
+[image]
+arch = 'sparc:BE:64:default:default'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'merged64' },
+    { space = 'ram', offset = '0x10100', name = 'widened' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '9de3bf7031000080c51e200081a80a42194800050100000081a01040c13fa7f7f25fa7f7b136700381c7e00881e80000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10100'
+readonly = true
+hex = '9de3bf7031000080c106200881a84a20194800050100000081a01a21c127a7fbf207a7fbb1366003b136200081c7e00881e80000'
+
+[script]
+commands = [
+    'parse line extern unsigned long long merged64(double x, unsigned long long fallback);',
+    'parse line extern unsigned long long widened(float value, unsigned int prior);',
+    'map address r0x20000 double limit',
+    'map address r0x20008 float limit32',
+    'lo fu merged64',
+    'decompile',
+    'print C',
+    'lo fu widened',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = '64-bit unsigned merge retains signed conversion'
+count = 1
+literal = 'fallback = (uint8)(int8)x;'
+
+[[match]]
+name = '64-bit logical shift retains unsigned destination'
+count = 1
+literal = 'return fallback >> 3;'
+
+[[match]]
+name = 'widened result retains 32-bit signed conversion'
+count = 1
+literal = 'prior = (uint4)(int4)value;'
+
+[[match]]
+name = 'widened return preserves logical shift'
+count = 1
+literal = 'return prior >> 3;'

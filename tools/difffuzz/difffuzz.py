@@ -28,6 +28,7 @@ import unicorn as uc  # noqa: E402
 from arches import ARCHES  # noqa: E402
 from pcode_emu import State, Unmodeled, step  # noqa: E402
 from slaregs import register_map  # noqa: E402
+import qemu_backend  # noqa: E402
 
 PAGE = 0x1000
 
@@ -264,8 +265,12 @@ def main():
     ap.add_argument("--sleighpath", help="SLEIGH tree holding freshly compiled .sla files (unlace --sleighpath)")
     ap.add_argument("--out", help="JSON report path")
     ap.add_argument("--bytes", help="hex encodings to test instead of random ones, comma separated")
+    ap.add_argument("--oracle", choices=("unicorn", "qemu"), default="unicorn",
+                    help="reference: Unicorn (default), or QEMU user mode (tools/difffuzz/qemu_backend.py)")
     args = ap.parse_args()
     arch = ARCHES[args.arch]
+    if args.oracle == "qemu" and not qemu_backend.available(arch):
+        sys.exit(f"--oracle qemu: no QEMU user harness or binary for {arch.name}")
     regs, big = register_map(arch.lang)
     arch.big = big
     rng = random.Random(args.seed)
@@ -309,7 +314,11 @@ def main():
                     findings.append({"kind": "operand", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",
                                      "sleigh": f"{row['mnemonic']} {row['operands']}", "why": why})
                 for t in range(args.trials):
-                    res = run_case(arch, regs, row, c, random.Random(f"{args.seed}:{c['bytes'].hex()}:{t}"), args.seed + t)
+                    case_rng = random.Random(f"{args.seed}:{c['bytes'].hex()}:{t}")
+                    if args.oracle == "qemu":
+                        res = qemu_backend.run_case_qemu(arch, regs, row, c, case_rng, args.seed + t, tmp)
+                    else:
+                        res = run_case(arch, regs, row, c, case_rng, args.seed + t)
                     counts[res["status"]] += 1
                     if res["status"] == "ref-exception":
                         refexc[c["mnemonic"] + ": " + res["why"]] += 1

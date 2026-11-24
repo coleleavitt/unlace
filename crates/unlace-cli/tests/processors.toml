@@ -3642,6 +3642,26 @@ test = "elfroute_msp430_elf_pick"
 address = "pick"
 expect = ["0x2c", "scale7("]
 
+# switchextent: a byte selector with no range check reads its table up to the next jump table,
+# of the function (csplit's regcomp) or of the next function (an OCaml match's last table).
+[[family]]
+name = "switchextent_x86_byte"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/switchextent_x86/tables.elf"
+forbid = ["halt_baddata", "jump-as-call"]
+
+[[family.function]]
+test = "switchextent_x86_byte_selector_ends_at_own_next_table"
+address = "bytesel"
+expect = ["case 2:", "0x15"]
+forbid = ["case 3:"]
+
+[[family.function]]
+test = "switchextent_x86_last_table_ends_at_next_functions_table"
+address = "lastsel"
+expect = ["case 3:", "return 0x21;"]
+forbid = ["case 4:"]
+
 # Hexagon ET_REL (EM_HEXAGON) routes to Hexagon:LE:32:default (#706); B22_PCREL calls, 32_6_X/16_X/6_X globals (#737).
 [[family]]
 name = "elfroute_hexagon_o"

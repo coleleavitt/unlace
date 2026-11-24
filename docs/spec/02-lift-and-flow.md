@@ -4703,6 +4703,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
 | `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
+| `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

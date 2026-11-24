@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+s1c6200 = """
+0a8103030e0f0fdf0fff0fff0fff0fff0e030e1404000c010fdf0fff0fff0fff0f440a810f5b0fdf
+"""
 kvx_wide = """
 0000d08f40f300e100e208e06ae259811a0900809d5915899a118908
 """
@@ -1773,3 +1776,31 @@ expect = [
     "void sub_82000000(unsigned int a0,unsigned int a1,unsigned int a2)",
     "*(char (*)[16])(a2 & 0xfffffff0) = vmx128_vmulfp(vmx128_vaddfp(",
 ]
+# The S1C6200 (E0C6200) language decompiles 12-bit instructions in big-endian words, assembled
+# by hand from the core manual: a carry-tested add, a caller that CALLs it within the page,
+# and an add bracketed by SDF/RDF, which decodes with the decimal adjustment.
+[[family]]
+name = "s1c6200"
+language = "S1C6200:BE:16:default"
+base = "0x0"
+image = "s1c6200"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "s1c6200_add_with_carry_test_decompiles"
+address = "0x0"
+expect = [
+    "if (v1 <= 0xf)",  # JP NC tests the carry out of ADD A,B
+    "return 0xf;",
+]
+
+[[family.function]]
+test = "s1c6200_call_within_the_page_decompiles"
+address = "0x8"
+expect = ["sub_0(3,4)"]
+
+[[family.function]]
+test = "s1c6200_decimal_mode_add_is_adjusted"
+address = "0x10"
+expect = ["9 < v1"]

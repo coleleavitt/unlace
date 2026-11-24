@@ -1538,6 +1538,9 @@ pub struct CollapseStructure<'a> {
     /// (kuna, `option loopcondhoist`) defer a live loop head in the deferred
     /// `ruleBlockIfNoExit` scan while a non-head candidate is available.
     loop_cond_hoist: bool,
+    /// (kuna, `option noretfirst`) break a two-eligible-arm `ruleBlockIfNoExit`
+    /// tie toward the arm that ends in a no-return call.
+    noret_first: bool,
 }
 
 impl<'a> CollapseStructure<'a> {
@@ -1565,6 +1568,7 @@ impl<'a> CollapseStructure<'a> {
             dbg_apply: 0,
             guard_arm: false,
             loop_cond_hoist: false,
+            noret_first: false,
         }
     }
 
@@ -1573,6 +1577,13 @@ impl<'a> CollapseStructure<'a> {
     pub fn with_ifnoexit_options(mut self, guard_arm: bool, loop_cond_hoist: bool) -> Self {
         self.guard_arm = guard_arm;
         self.loop_cond_hoist = loop_cond_hoist;
+        self
+    }
+
+    /// (kuna) Install the `noretfirst` verdict.  Builder method; hand-built
+    /// unit-test graphs keep the upstream-identical default.
+    pub fn with_noret_first(mut self, noret_first: bool) -> Self {
+        self.noret_first = noret_first;
         self
     }
 
@@ -2681,6 +2692,15 @@ impl<'a> CollapseStructure<'a> {
             .is_some_and(|bb| self.exitleaf_facts.java_dispatch.contains(&bb))
     }
 
+    /// (kuna `noretfirst`) Does the structuring node `bl` end in a no-return call
+    /// (its exit leaf's trailing `RETURN` is an artificial no-return halt)?
+    fn ifnoexit_arm_noreturn(&self, bl: BlockId) -> bool {
+        self.graph
+            .get_exit_leaf(bl)
+            .and_then(|leaf| self.graph.block(leaf).get_copy())
+            .is_some_and(|bb| self.exitleaf_facts.is_noreturn_halt(bb))
+    }
+
     /// The start address of the first leaf that executes inside a structuring
     /// node — the node's position in the original code layout.
     fn ifnoexit_arm_addr(&self, bl: BlockId) -> Option<u64> {
@@ -2709,6 +2729,19 @@ impl<'a> CollapseStructure<'a> {
             }
             if handler(0) {
                 return [0, 1];
+            }
+        }
+        // (kuna `noretfirst`) Of two eligible arms, the one that ends in a no-return
+        // call is the clause, so `if (bad) fatal(); rest;` keeps `rest` flat.
+        if self.noret_first
+            && self.ifnoexit_arm_eligible(bl, 0)
+            && self.ifnoexit_arm_eligible(bl, 1)
+        {
+            let noret = |i| self.ifnoexit_arm_noreturn(self.graph.block(bl).get_out(i));
+            match (noret(0), noret(1)) {
+                (false, true) => return [1, 0],
+                (true, false) => return [0, 1],
+                _ => {}
             }
         }
         if !self.guard_arm {
@@ -4179,6 +4212,11 @@ impl Action for ActionBlockStructure {
             .kuna_options
             .get::<crate::kuna_ifnoexit::LoopCondHoist>()
             .0;
+        let noret_first = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_coreoptions::Noretfirst>()
+            .0;
         exitleaf_facts.java_handlers = crate::kuna_javatry::dispatch_targets(data);
         exitleaf_facts.java_dispatch = crate::kuna_javatry::dispatch_blocks(data)
             .into_iter()
@@ -4267,6 +4305,7 @@ impl Action for ActionBlockStructure {
         let mut collapse = CollapseStructure::new(data.sblocks_mut(), sroot)
             .with_exitleaf_facts(exitleaf_facts, apply_index)
             .with_ifnoexit_options(guard_arm, loop_cond_hoist)
+            .with_noret_first(noret_first)
             .with_complex_blocks(complex_blocks)
             .with_condfold_sets(condfold_sets)
             .with_switch_blocks(switch_blocks)

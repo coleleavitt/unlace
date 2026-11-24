@@ -2271,9 +2271,13 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         .collect();
     let at_load = at_load?;
     let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), |e| {
-        buildable(&at_load, e, false)
+        buildable(&at_load, e, true)
     });
-    if !operands.iter().all(|e| buildable(&at_load, e, false))
+    trace!(
+        "llsc: loop at {:?} folds to builtin {} {:?}",
+        p, builtin, operands
+    );
+    if !operands.iter().all(|e| buildable(&at_load, e, true))
         || reads
             .iter()
             .any(|(&(i, _), &r)| i != first_load && r != Read::Before)

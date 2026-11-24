@@ -4755,7 +4755,9 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 core, two runs each), all of it saturations that find nothing. Since then the
 rule remembers, per function, each tree it saturated without a replacement
 (its fingerprint, op count and budget) and does not saturate it again when
-the pool revisits the op.
+the pool revisits the op. On d963789525, with that memo, the patchelf run
+executes 7.6% more instructions with the option on (122.6G vs 114.0G),
+and the corpus results and the outputs above are the same as without it.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

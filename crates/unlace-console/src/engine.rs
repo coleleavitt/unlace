@@ -6580,18 +6580,6 @@ pub(crate) fn bootstrap_object(
     let stated = if from_env { None } else { options.go_version };
     options.go_version =
         unlace_analysis::loader::gobuildinfo::go_toolchain_version(&bytes).or(stated);
-    if from_env {
-        match options.go_version {
-            Some((maj, min)) => {
-                // FIXME: Audit that the environment access only happens in single-threaded code.
-                unsafe {
-                    std::env::set_var(unlace_decomp::goreg::GOVERSION_ENV, format!("{maj}.{min}"))
-                }
-            }
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            None => unsafe { std::env::remove_var(unlace_decomp::goreg::GOVERSION_ENV) },
-        }
-    }
     let _load = enter_load(&options, from_env);
     let explicit_isa = isa.is_some();
     let import_proofs = unlace_analysis::loader::ImportProofScope::enter(&bytes);

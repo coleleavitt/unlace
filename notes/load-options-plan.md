@@ -177,3 +177,21 @@ identical on its own; lead runs `cargo check`.
    `UNLACE_GOVERSION` write, the `set_*_env` helpers and `export_env`; tests that
    set variables to fake input use explicit options.
 9. CLI plumbing variables -> `paths::Overrides`; `docs/cli.md` environment table.
+
+## Status (2026-11-24)
+
+Landed: #1073-#1076, #1078-#1083 (plan, fields, console, harness, wasm,
+`from_env_with`, strings/blobs, CLI plumbing, object loaders, docs), #1092
+(decompile-all explicit options; the decompile-time bug first suspected there
+does not exist), free functions and option arms via #1091, #1094 (dead
+writers, harness restore), #1100 (CLI invocation value for image selection),
+and the removal of the environment-reading `Bootstrap` mode with its
+`UNLACE_GOVERSION` write.
+
+Left: decompile-all's `LoadtimeEnv` guard still writes the `--option`
+variables around its load (its loads are explicit, so only gates read outside
+a load scope during that window see them, and `UNLACE_DECODE_JOBS` has no
+`LoadOptions` field yet); unit tests still fake input with the
+`ifuncfpret`, `ppcapu`, `macho_arm64e`, `symbolnamechars` and `libctypes`
+`set_*_env` helpers; `enter_environment` and `load_options_from_env` remain for
+a gate read outside any scope.

@@ -94,6 +94,8 @@ python3 tools/check_spec.py                              # docs/spec anchors, ph
 PYTHONPATH=. python3 -m unittest discover -s scripts/tests -p 'test_*.py'   # Python tooling, test layout, layering
 PYTHONPATH=. python3 -m scripts.repipe.clitests          # tests/cli acceptance probes
 target/debug/unlace catalog --check                      # option catalog vs docs/options.md
+python3 scripts/check_determinism.py                     # no new unordered-map iteration (lint)
+python3 scripts/check_determinism.py --run target/debug/unlace   # same input, same output (run)
 target/debug/unlace catalog --markdown | diff -u docs/options.md -   # options.md is the generator's bytes
 cargo clippy -p unlace-cli -p unlace-base -p unlace-num --no-deps -- -D warnings
 cargo nextest run --workspace --exclude unlace-wasm --profile ci   # the workspace suite
@@ -115,15 +117,38 @@ differential harness with its heavier breadth test), `bash scripts/version.sh` (
 tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna
 target/release/unlace` and `bash scripts/coverage.sh` (docs/observatory.md).
 
+### Determinism
+
+The same input gives the same output, byte for byte, whatever the process, its hash seed or the
+`--jobs` count. `scripts/check_determinism.py` enforces it in two halves:
+
+- **The lint** (no binary needed, the `tidy` job): in the non-test code of the crates that produce
+  output, a `for` loop over a std `HashMap`/`HashSet` (`RandomState` reseeds every process), or an
+  `.iter()`/`.keys()`/`.values()`/`.drain()`/`.into_iter()` chain on one, is a finding unless the
+  chain ends in an order-insensitive reduction (`count`, `any`, `all`, `sum`, `len`, `contains`,
+  `min`/`max`, a `collect` into a set or map, or a `let` typed as one) or the collected `Vec` is
+  sorted within the next few lines. `FxHashMap`/`FxHashSet` (`infra/kuna_fasthash.rs`, a fixed
+  hasher) are deterministic and not findings. The findings that exist today are listed in
+  `scripts/determinism-allowlist.txt` as `<file> <binding> <count>`; a count above its entry fails,
+  and so does an entry above its count, so the list only shrinks. Fix a finding with a
+  `BTreeMap`/`BTreeSet`, or by sorting what the iteration yields; an iteration that really is
+  order-insensitive can carry `// determinism:allow: <why>` on its line or the line above.
+- **The run** (`--run UNLACE`, the parity gates job): decompiles a small fixed corpus of in-repo
+  binaries (ELF on x86-64, i386, AArch64, ARM, RISC-V and MIPS, Mach-O, PE, a kernel module and a Go
+  binary; `CORPUS` in the script) with `decompile-all --json` twice in fresh processes, and once
+  under `--jobs 1` and once under `--jobs 4` (both with `--option protoorder off`, the pool's
+  serial equivalent; see docs/cli.md), and fails on any byte difference, printing the first lines
+  that differ. `--corpus FILE...` runs other binaries.
+
 `tools/hooks/unlace-ci-gates.sh` runs them in order:
 
 ```bash
 tools/hooks/unlace-ci-gates.sh [fast|parity|full]   # default parity
 ```
 
-- `fast`: rustfmt, ignored fixtures, `scripts/check_test_layout.py`.
+- `fast`: rustfmt, ignored fixtures, `scripts/check_test_layout.py`, the determinism lint.
 - `parity` adds: the Python tooling tests, build, specs, lint, the parity target,
-  `tools/check_spec.py`, the CLI probes, `unlace catalog --check`, the repipe counters,
+  `tools/check_spec.py`, the CLI probes, `unlace catalog --check`, the determinism run, the repipe counters,
   `docs/options.md` freshness and unlace-ghidra. A full pass records the
   tree hash in `$CARGO_TARGET_DIR/.ci-gates-pass`.
 - `full` adds the workspace suite under nextest (slow; CI runs it on every push to main).
@@ -139,9 +164,9 @@ called whole by the nightly). Its four jobs start together; none waits for anoth
 
 | Job | What it runs | Typical time |
 |---|---|---|
-| `tidy` | `cargo fmt --all --check`, the Python tooling tests (`scripts/check_test_layout.py`, `scripts/check_layers.py`, `scripts/tests`), actionlint with shellcheck over `.github/workflows` | about 1 min |
+| `tidy` | `cargo fmt --all --check`, the Python tooling tests (`scripts/check_test_layout.py`, `scripts/check_layers.py`, `scripts/check_determinism.py`, `scripts/tests`), actionlint with shellcheck over `.github/workflows` | about 1 min |
 | `clippy` | `cargo clippy --release ... -- -D warnings` on unlace-cli, unlace-base and unlace-num (the rest of the workspace is not clippy-clean yet) | about 2 min |
-| `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
+| `parity gates` | release build, `cargo test --release -p unlace-harness --test parity`, `tools/check_spec.py`, the `tests/cli` probes, `unlace catalog --check`, the determinism run, the repipe counters, `docs/options.md` freshness, the unlace-ghidra harness, and the web tests when `UNLACE_WEB` is `true` | about 10 min |
 | `workspace suite (build)` | builds every workspace test binary into a cargo-nextest archive (`cargo nextest archive`), runs the doc tests | about 12 min |
 | `cargo workspace suite (1/3..3/3)` | three jobs, each running a third of the archive (`--partition count:N/3`) under the nextest profile `ci` (`.config/nextest.toml`), which leaves out the slow tests listed there. Both suite jobs are skipped on a PR from a branch of this repository unless it has the `full-ci` label | a few min each |
 

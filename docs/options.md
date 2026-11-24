@@ -53,6 +53,13 @@ Three tiers:
 | rep movsq / rep stosd from -Os code printed as a loop instead of memcpy/memset | [`repstring`](#repstring----on--off-default-on) |
 | a struct copy prints as a 16-iteration word loop | [`repstring`](#repstring----on--off-default-on) |
 | a strcmp against a short constant prints as a do/while over two byte pointers and a count | [`repstring`](#repstring----on--off-default-on) |
+| LOCK(); and UNLOCK(); around a plain load and store | [`atomics`](#atomics----on--off-default-off) |
+| a lock xadd, lock cmpxchg or lock inc prints as an ordinary update | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity | [`atomics`](#atomics----on--off-default-off) |
+| a compare-exchange retry loop whose compare and store moved out of the loop | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus | [`llscfold`](#llscfold----on--off-default-off) |
+| a shared_ptr or Arc reference count update prints as a loop with a char status variable | [`llscfold`](#llscfold----on--off-default-off) |
+| `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop | [`llscfold`](#llscfold----on--off-default-off) |
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
@@ -1356,6 +1363,22 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default. Flip off when a `rep movsb` copies forward over its own output on purpose -- an LZ77 decoder's overlapping match copy is defined for the instruction and not for memcpy -- or to see the instruction's loop.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · GH-1650
 - **Example:** `option repstring off`
+
+### `atomics` -- on | off, default `off`
+
+- **Symptoms:** LOCK(); and UNLOCK(); around a plain load and store; a lock xadd, lock cmpxchg or lock inc prints as an ordinary update; an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity; a compare-exchange retry loop whose compare and store moved out of the loop.
+- **What it does:** Print an atomic read-modify-write instruction as the GCC/Clang `__sync_*` builtin it performs. SLEIGH lifts an x86 `lock`-prefixed instruction as `LOCK()`, a load, an update, a store and `UNLOCK()`, and an AArch64 LSE atomic (`ldadd`, `ldclr`, `ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) or a RISC-V AMO as the same load and store with nothing marking it, so the C showed a plain update between `LOCK();` and `UNLOCK();` or no sign of atomicity at all. `kuna_atomics` evaluates each instruction's p-code right after it is lifted, over every path through its internal branches (at most four), with `Old` for the value the location holds when the instruction starts, and rewrites it in place when the value it writes is `Old + X`, `Old - X`, `Old & X`, `Old | X`, `Old ^ X` or `~Old` (`__sync_fetch_and_add/sub/and/or/xor`), `X` (`__sync_lock_test_and_set`), or `N` on exactly the path where `Old == E` (`__sync_val_compare_and_swap(p, E, N)`), with `X`, `E` and `N` independent of `Old`; the builtin's result is `Old`. Declined: another user operation inside the lock envelope (an HLE hint), an update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence compilers emit), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86 update and every instruction of a Go image (`goatomicreturn` owns those). The builtins carry the call flag and guard writable memory across themselves like a call (`kuna_memoryguard`). Inert off x86, AArch64 and RISC-V.
+- **When to flip:** Off by default. Turn on to read lock-free code (reference counts, spin locks, lock-free queues) as the atomic operations it performs instead of LOCK()/UNLOCK() envelopes or plain loads and stores. The `__sync` names do not encode a memory order: the AArch64 acquire/release markers stay as `LOAcquire()`/`LORelease()`.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option atomics on`
+
+### `llscfold` -- on | off, default `off`
+
+- **Symptoms:** an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus; a shared_ptr or Arc reference count update prints as a loop with a char status variable; `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop.
+- **What it does:** AArch64: fold a load-exclusive/store-exclusive retry loop into the `__sync_*` builtin its successful iteration performs, as option `atomics` names the single-instruction LSE forms: `ldaxr; add; stlxr; cbnz` becomes `__sync_fetch_and_add(p, x)` and a compare-exchange loop (`ldaxr; cmp; b.ne fail; stlxr; cbnz`) becomes `__sync_val_compare_and_swap(p, e, n)`. Pre-SSA, the loop head (holding the load), the store-exclusive's blocks (a branch on `ExclusiveMonitorPass`, then the STORE and `ExclusiveMonitorsStatus`) and the status test are evaluated symbolically as one atomic update with the monitor passing and the status 0: one LOAD and one STORE through one pointer register that the monitor also checks, the status test leaving the loop, and a stored value `Old op X` or `X` (`op` one of `+ - & | ^`), or, for a compare-exchange, a value independent of `Old` stored only when the head finds `Old == E`. Any value the loop reads from a register or temporary it also writes refuses the fold, because a retry would see a different value; so does a compare's exit that does more than `clrex` before branching back. The load becomes the builtin, the pass and status become the constants 1 and 0 and the store a dead copy, so dead-branch removal deletes the back edge. The builtin guards memory like a call. Inert off AArch64 (only AArch64 declares the monitor user operations).
+- **When to flip:** Off by default. Turn on with `atomics` to read AArch64 code built without LSE (shared_ptr and Arc reference counts, std::atomic updates) as the atomic operations it performs; leave off when the loop's failure path or its exact instruction sequence matters.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option llscfold on`
 
 ### `copyrun` -- on | off, default `on`
 

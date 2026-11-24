@@ -86,5 +86,6 @@ pub mod kuna_indirectreturn;
 
 pub mod kuna_nullable_reloc;
 
+pub mod kuna_atomics; // (kuna) a locked x86, AArch64 LSE or RISC-V AMO read-modify-write lifts to one __sync builtin
 #[doc(hidden)]
 pub mod kuna_atomicxadd;

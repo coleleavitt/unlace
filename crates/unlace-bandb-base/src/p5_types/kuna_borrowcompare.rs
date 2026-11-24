@@ -814,7 +814,7 @@ fn is_pair(data: &Funcdata, l: VarnodeId, h: VarnodeId) -> bool {
     }
     let piece = |vn: VarnodeId| -> Option<(VarnodeId, uintb)> {
         let (op, opc) = def_of(data, vn)?;
-        if opc != OpCode::CPUI_INT_SUBPIECE {
+        if opc != OpCode::CPUI_SUBPIECE {
             return None;
         }
         Some((input(data, op, 0)?, vn_const(data, input(data, op, 1)?)?))

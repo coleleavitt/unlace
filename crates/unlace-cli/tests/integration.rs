@@ -1,6 +1,8 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
+#[path = "c28x_raw.rs"]
+mod c28x_raw;
 mod common;
 #[path = "m6800_family.rs"]
 mod m6800_family;
@@ -30,6 +32,8 @@ mod riscv_zfh;
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]
 mod sparc_prologue_start;
+#[path = "stm8_raw.rs"]
+mod stm8_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
 

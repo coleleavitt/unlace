@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/compiler_spec.rxg -->
+<!-- pentry ordering:
+- vector (not used)
+- hiddenret (structure return pointer)
+- ptr (pointers)
+- float (floating-point)
+- general (integers, structs, and fallback for exhausted pools)
+
+See:
+https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0e46f2cb1ed3bdd/Ghidra/Features/Decompiler/src/decompile/cpp/fspec.cc#L1218-L1252
+https://github.com/NationalSecurityAgency/ghidra/blob/aa094ab254d87abbd8431c14a0e46f2cb1ed3bdd/Ghidra/Features/Decompiler/src/decompile/cpp/type.hh#L131-L142
+-->
+
+<!-- SPRU514Z - JULY 2001 - REVISED OCTOBER 2023 -->
+<compiler_spec>
+  <data_organization>
+    <char_size value="2" /> <!-- C28x byte is 16 bits -->
+    <short_size value="2" />
+    <integer_size value="2" />
+    <long_size value="4" />
+    <long_long_size value="8" />
+    <float_size value="4" />
+    <double_size value="8" /> <!-- EABI double is 64-bit -->
+    <pointer_size value="4" />
+  </data_organization>
+
+  <!--
+    TI-generated C/C++ code assumes these status fields have their documented
+    run-time-environment values at every function boundary (SPRU514, Table 7-4).
+    The architectural PM field value 1 denotes "no product shift"; the SLEIGH
+    PM register stores the decoded signed shift amount, so that boundary value
+    is represented here as 0.
+  -->
+  <context_data>
+    <tracked_set space="ram">
+      <set name="PM" val="0" description="TI C run-time product shift: no shift"/>
+      <set name="OVM" val="0" description="TI C run-time overflow mode disabled"/>
+      <set name="PAGE0" val="0" description="TI C run-time direct/stack address mode"/>
+    </tracked_set>
+  </context_data>
+
+  <global>
+    <range space="ram"/>
+  </global>
+
+
+  <stackpointer register="SP" space="ram" growth="positive"/>
+
+  <default_proto>
+    <!-- LCR raw P-Code pushes the older RPC and the call's upon-return
+         P-Code pops it again.  A nonzero completed-call stackshift would
+         count that architectural two-word transition a second time. -->
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
+          <register name="XAR6"/>
+        </pentry>
+
+        <!-- Class 2: Pointers -->
+        <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R1H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R2H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R3H"/>
+        </pentry>
+
+        <!-- The accumulator resources are class4 entries above. -->
+
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Remaining arguments are pushed below the two-word RPC save on
+             the positive-growing stack.  This reverse allocation range puts
+             the first 32-bit stack argument at architectural *-SP[4]. -->
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="0x1fffffe08" space="stack"/>
+        </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+      </input>
+
+      <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
+      </output>
+
+      <returnaddress>
+        <register name="RPC"/>
+      </returnaddress>
+
+      <unaffected>
+        <!-- Registers preserved across function calls (Save on Entry conventions) -->
+        <!-- Derived from Manual Table 7-2 & 7-3 -->
+        <register name="XAR1"/>
+        <register name="XAR2"/>
+        <register name="XAR3"/>
+        <register name="R4H"/>
+        <register name="R5H"/>
+        <register name="R6H"/>
+        <register name="R7H"/>
+        <register name="SP"/>
+      </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="XAR7"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
+
+      <!-- LCR/LRETR's callee-visible stack/RPC machinery is already present
+           in raw instruction P-Code.  For caller analysis, model the matching
+           LRETR effects that occur across an ordinary completed call. -->
+      <pcode inject="uponreturn" incidentalcopy="true">
+        <body><![CDATA[
+          SP = SP - 2;
+          RPC = *:4 SP;
+        ]]></body>
+      </pcode>
+    </prototype>
+  </default_proto>
+
+  <!-- LC/LRET and FFC/XAR7 are distinct architectural call mechanisms.
+       Their parameter classes remain TI EABI-compatible, while their return
+       address and completed-call stack effects differ from LCR/LRETR. -->
+  <!-- LC raw P-Code likewise pushes its two-word return PC and its
+       upon-return model pops it; keep the completed call SP-balanced. -->
+  <prototype name="__lc" extrapop="0" stackshift="0">
+      <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
+          <register name="XAR6"/>
+        </pentry>
+
+        <!-- Class 2: Pointers -->
+        <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R1H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R2H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R3H"/>
+        </pentry>
+
+        <!-- The accumulator resources are class4 entries above. -->
+
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Remaining arguments are pushed below the two-word RPC save on
+             the positive-growing stack.  This reverse allocation range puts
+             the first 32-bit stack argument at architectural *-SP[4]. -->
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="0x1fffffe08" space="stack"/>
+        </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+      </input>
+
+      <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
+      </output>
+
+      <unaffected>
+        <!-- Registers preserved across function calls (Save on Entry conventions) -->
+        <!-- Derived from Manual Table 7-2 & 7-3 -->
+        <register name="XAR1"/>
+        <register name="XAR2"/>
+        <register name="XAR3"/>
+        <register name="R4H"/>
+        <register name="R5H"/>
+        <register name="R6H"/>
+        <register name="R7H"/>
+        <register name="SP"/>
+        <register name="RPC"/>
+      </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="XAR7"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
+
+      <!-- LC/LRET stores the return PC directly on the positive-growing
+           architectural stack.  Model the callee's matching pop across the
+           completed call without inventing an RPC effect. -->
+      <pcode inject="uponreturn" incidentalcopy="true">
+        <body><![CDATA[
+          SP = SP - 2;
+        ]]></body>
+      </pcode>
+    </prototype>
+
+  <prototype name="__ffc" extrapop="0" stackshift="0">
+      <input>
+        <!-- Integer class: AL and AH are independent 16-bit resources,
+             while the containing ACC entry consumes both for a 32-bit value.
+             Size-directed rules below select this class before the remaining
+             general XAR4/XAR5 fallbacks. -->
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class4">
+          <register name="AH"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" storage="class4">
+          <register name="ACC"/>
+        </pentry>
+
+        <!-- Class 3: Hidden return pointer (structure returns) -->
+        <!-- Placed in XAR6 (manual sec 7.3.2) -->
+        <pentry minsize="1" maxsize="4" storage="hiddenret">
+          <register name="XAR6"/>
+        </pentry>
+
+        <!-- Class 2: Pointers -->
+        <!-- Placed in XAR4 and XAR5 (Manual Sec 7.3.1) -->
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- Class 1: 32-bit floats go to R0H-R3H -->
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R1H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R2H"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4" metatype="float">
+          <register name="R3H"/>
+        </pentry>
+
+        <!-- The accumulator resources are class4 entries above. -->
+
+        <!-- XAR4/XAR5 are also the next general-purpose argument slots when
+             their type-specific pointer pools were not consumed.  Keeping
+             these fallback entries is required by TI EABI allocation and by
+             Ghidra's parameter-allocation analysis on untyped raw firmware. -->
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="XAR5"/>
+        </pentry>
+
+        <!-- FFC has no two-word call save.  The reverse-allocation range ends
+             one past entry SP (PrototypeModel reports boundary zero), putting
+             the first 32-bit stack argument at architectural *-SP[2]. -->
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="0x1fffffe0c" space="stack"/>
+        </pentry>
+        <rule>
+          <datatype name="int" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="1" maxsize="2"/>
+          <join storage="class4" stackspill="false"/>
+        </rule>
+        <rule>
+          <datatype name="int" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+        <rule>
+          <datatype name="uint" minsize="3" maxsize="4"/>
+          <consume storage="class4"/>
+        </rule>
+      </input>
+
+      <output>
+        <pentry minsize="1" maxsize="4" metatype="ptr">
+          <register name="XAR4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4" metatype="float">
+          <register name="R0H"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2">
+          <register name="AL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="ACC"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="P"/>
+        </pentry>
+        <!-- The joined value is ordered most-significant first: ACC carries
+             bits 63:32 and P carries bits 31:0. -->
+        <pentry minsize="8" maxsize="8">
+          <addr space="join" piece1="ACC" piece2="P"/>
+        </pentry>
+        <rule>
+          <datatype name="float" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="struct" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="union" minsize="5"/>
+          <hidden_return/>
+        </rule>
+        <rule>
+          <datatype name="array" minsize="5"/>
+          <hidden_return/>
+        </rule>
+      </output>
+
+      <returnaddress>
+        <register name="XAR7"/>
+      </returnaddress>
+
+      <unaffected>
+        <!-- Registers preserved across function calls (Save on Entry conventions) -->
+        <!-- Derived from Manual Table 7-2 & 7-3 -->
+        <register name="XAR1"/>
+        <register name="XAR2"/>
+        <register name="XAR3"/>
+        <register name="R4H"/>
+        <register name="R5H"/>
+        <register name="R6H"/>
+        <register name="R7H"/>
+        <register name="SP"/>
+        <register name="RPC"/>
+      </unaffected>
+
+      <killedbycall>
+        <register name="ACC"/>
+        <register name="P"/>
+        <register name="XT"/>
+        <register name="XAR0"/>
+        <register name="XAR4"/>
+        <register name="XAR5"/>
+        <register name="XAR6"/>
+        <register name="R0H"/>
+        <register name="R1H"/>
+        <register name="R2H"/>
+        <register name="R3H"/>
+        <register name="STF"/>
+        <register name="DP"/>
+        <register name="IFR"/>
+        <register name="IER"/>
+        <register name="DBGIER"/>
+        <register name="ST0"/>
+        <register name="ST1"/>
+      </killedbycall>
+
+      <!-- FFC writes the link to XAR7 and the proven helper returns through
+           the same untouched register; it has no architectural stack/RPC
+           save or restore to inject at the completed call. -->
+    </prototype>
+
+  <prototype name="interrupt" extrapop="0" stackshift="0">
+    <input/>
+    <output>
+      <pentry minsize="1" maxsize="1">
+        <register name="AL"/>
+      </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="ACC"/>
+      <register name="P"/>
+      <register name="XT"/>
+      <register name="XAR0"/>
+      <register name="XAR1"/>
+      <register name="XAR2"/>
+      <register name="XAR3"/>
+      <register name="XAR4"/>
+      <register name="XAR5"/>
+      <register name="XAR6"/>
+      <register name="XAR7"/>
+      <register name="DP"/>
+      <register name="IER"/>
+      <register name="ST0"/>
+      <register name="ST1"/>
+    </unaffected>
+  </prototype>
+</compiler_spec>

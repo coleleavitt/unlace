@@ -1,0 +1,5382 @@
+define token opcode (16)
+	op0_16		= (0,15)
+	op0_8		= (0,7)
+	op0_2		= (0,1)
+	op1_15		= (1,15)
+	op3_5		= (3,7)
+	op3_13		= (3,15)
+	op4_12		= (4,15)
+	op4_4		= (4,7)
+	op5_11		= (5,15)
+	op6_10		= (6,15)
+	op6_2		= (6,7)
+	op7_9		= (7,15)
+	op7			= (7,7)
+	op8_8		= (8,15)
+	op9_7		= (9,15)
+	op10_6		= (10,15)
+	ax8			= (8,8)
+	ax8lsb		= (8,8)
+	ax8msb		= (8,8)
+	ax4			= (4,4)
+	ax0			= (0,0)
+	op11_5		= (11,15)
+	op12_4		= (12,15)
+
+	shift0_4	= (0,3)
+	shift0_4_1	= (0,3)
+	shift8_3	= (8,10)
+	shift8_3_1	= (8,10)
+	shift8_4	= (8,11)
+	cond0_4		= (0,3)
+	cond8_4		= (8,11)
+	reg16		= (0,3)
+	reg32		= (0,3)
+	regax		= (0,3)
+	arn0		= (0,2)
+	xarn0		= (0,2)
+	rah2		= (2,5)
+	rah3		= (0,2)
+	rbh3		= (3,5)
+	rch3		= (6,8)
+	rah3_8		= (8,10)
+	p2_ee		= (14,15)
+	p2_d3		= (11,13)
+	p2_a3		= (8,10)
+	p2_rdh		= (9,11)
+	p1_op15_12	= (12,15)
+	p1_mac_sel	= (11,11)
+	p1_op10		= (10,10)
+	p1_ls		= (8,9)
+	p1_fpu_op	= (4,7)
+	p1_f3		= (1,3)
+	p1_e		= (0,0)
+	p1_f2		= (0,1)
+	p2_reh3		= (12,14)
+	p2_rfh_bit	= (15,15)
+	arn3		= (3,5)
+	arn8		= (8,10)
+	ar67_8		= (8,8)
+	xarn8		= (8,10)
+	imm3		= (0,2)
+	imm3_3		= (3,5)
+	imm3_3_p	= (3,3) # parity bit for imm3_3
+	imm4		= (0,3)
+	imm5		= (0,4)
+	imm6		= (0,5)
+	page0_bit	= (6,6)
+	imm7		= (0,6)
+	imm8		= (0,7)
+	movst0_flags= (0,7)
+	imm8_4		= (8,11)
+	imm8_8		= (8,15)
+	simm8		= (0,7) signed
+	imm10		= (0,9)
+	imm11		= (0,10)
+	imm11_5		= (11,15)
+	imm16		= (0,15)
+	simm16		= (0,15) signed
+
+	fpu_imm10_lo	= (6,15)
+	fpu_imm13_lo	= (3,15)
+;
+
+attach variables [ ax0 ax4 ax8 ] [ AL AH ];
+attach variables [ ax8lsb ] [ AL.LSB AH.LSB ];
+attach variables [ ax8msb ] [ AL.MSB AH.MSB ];
+attach values shift0_4_1 [ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 ];
+attach values shift8_3_1 [ 1 2 3 4 5 6 7 8 ];
+
+# T is also called TH, section 2.2 CPU Registers (p. 23) calls it T but for example the loc16/loc32 addressing mode table (p. 81) uses TH, we call it T throughout as this matches dis2000
+attach variables reg16 [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 AH AL PH PL T SP16 _ _ ];
+
+# Most 16-bit register encodings use the attached variable directly.  SP is
+# special: its encoded architectural operand is the low half of the pointer-
+# width spacebase, while the display remains `SP`.
+reg16loc: "AR0" is reg16=0 { export AR0; }
+reg16loc: "AR1" is reg16=1 { export AR1; }
+reg16loc: "AR2" is reg16=2 { export AR2; }
+reg16loc: "AR3" is reg16=3 { export AR3; }
+reg16loc: "AR4" is reg16=4 { export AR4; }
+reg16loc: "AR5" is reg16=5 { export AR5; }
+reg16loc: "AR6" is reg16=6 { export AR6; }
+reg16loc: "AR7" is reg16=7 { export AR7; }
+reg16loc: "AH" is reg16=8 { export AH; }
+reg16loc: "AL" is reg16=9 { export AL; }
+reg16loc: "PH" is reg16=10 { export PH; }
+reg16loc: "PL" is reg16=11 { export PL; }
+reg16loc: "T" is reg16=12 { export T; }
+reg16loc: "SP" is reg16=13 { export SP16; }
+attach variables regax [ _ _ _ _ _ _ _ _ AH AL _ _ _ _ _ _ ];
+attach variables reg32 [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 _ ACC _ P XT _ _ _ ];
+attach variables [ xarn0 xarn8 ] [ XAR0 XAR1 XAR2 XAR3 XAR4 XAR5 XAR6 XAR7 ];
+attach variables [ arn0 arn3 arn8 ] [ AR0 AR1 AR2 AR3 AR4 AR5 AR6 AR7 ];
+attach variables ar67_8 [ AR6 AR7 ];
+
+################################################################
+# Macros
+################################################################
+
+# Ghidra's assembler can invert | but not + here (which makes sense).
+@define imm22 "imm6; imm16 [ imm22 = (imm6 << 16) | imm16; ]"
+
+define pcodeop breakpoint;
+define pcodeop iack;
+define pcodeop intr_emu;
+define pcodeop cospu_f32;
+
+# Extend one already-snapshotted 16-bit value according to SXM.
+macro mext_value(out, source) {
+	local sxm_mask:4 = 0 - zext(SXM);
+	local zval:4 = zext(source);
+	local sval:4 = sext(source);
+	# Sign extension only contributes upper bits; the low 16 bits are identical.
+	out = zval | (sval & sxm_mask);
+}
+
+# Every architectural operand is evaluated exactly once.  This matters for
+# memory loc16 forms, including volatile and side-effecting addressing modes.
+macro mext(out, in) {
+	local source:2 = in;
+	mext_value(out, source);
+}
+
+# MOV ACC,loc16 << shift has an SXM-dependent upper half but an exact
+# SXM-independent low half.  Snapshot before any overlapping ACC/AL write,
+# commit the complete architectural result, then restate its identical low
+# half so ordinary 16-bit consumers can see that invariant directly.
+macro mov_acc_mext_shift(in, shift) {
+	local source:2 = in;
+	local full:4;
+	mext_value(full, source);
+	ACC = full << shift;
+	AL = source << shift;
+}
+
+# Keep stack changes as ordinary pointer-width deltas.  SP16 preserves the
+# architectural low 16-bit alias; normal ABI frames are confined to low 64K.
+macro sp_add(delta) {
+	SP = SP + delta;
+}
+
+macro sp_sub(delta) {
+	SP = SP - delta;
+}
+
+macro push16(val16) {
+	local sp4:4 = SP;
+	*:2 sp4 = val16;
+	sp_add(1);
+}
+
+macro pop16(ret16) {
+	sp_sub(1);
+	local sp4:4 = SP;
+	ret16 = *:2 sp4;
+}
+
+macro push32(val32) {
+	local sp4:4 = SP;
+	*:4 sp4 = val32;
+	sp_add(2);
+}
+
+macro pop32(ret32) {
+	sp_sub(2);
+	local sp4:4 = SP;
+	ret32 = *:4 sp4;
+}
+
+macro packst0(res) {
+	# Internally PM is kept as its decoded signed shift (-6..+4), while ST0
+	# stores the architectural 3-bit code.  For every normal code the mapping
+	# is raw = (1 - shift) & 7; raw 101 represents either -4 or +4 depending
+	# on AMODE, and both encode to the same value.
+	local pm_signed:2 = sext(PM);
+	local pm_raw:2 = (1 - pm_signed) & 7;
+	local ovc_raw:2 = zext(OVC) & 0x3f;
+	res = (zext(SXM)
+		| (zext(OVM) << 1)
+		| (zext(TC) << 2)
+		| (zext(C) << 3)
+		| (zext(Z) << 4)
+		| (zext(N) << 5)
+		| (zext(V) << 6)
+		| (pm_raw << 7)
+		| (ovc_raw << 10));
+}
+
+macro decode_pm(pm_raw) {
+	# Table 2-3: raw 101 is -4 in C28x mode, +4 in C2xLP mode.
+	local pm_default:1 = 1 - pm_raw;
+	local pm_plus4:1 = (AMODE != 0) && (pm_raw == 5);
+	local pm_plus4_mask:1 = 0 - pm_plus4;
+	PM = (pm_default & ~pm_plus4_mask) | (4 & pm_plus4_mask);
+}
+
+macro unpackst0(in) {
+	# OVC is a signed six-bit counter. Preserve that signed interpretation in
+	# the one-byte internal register so comparisons and wraparound are correct.
+	local ovc_raw:1 = in[10,6];
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+
+	# Decode the raw PM field into the signed shift used by pmshift().  Raw 101
+	# is the sole AMODE-dependent value: -4 in C28x mode, +4 in C2xLP mode.
+	local pm_raw:1 = in[7,3];
+	decode_pm(pm_raw);
+	V   = in[6,1];
+	N   = in[5,1];
+	Z   = in[4,1];
+	C   = in[3,1];
+	TC  = in[2,1];
+	OVM = in[1,1];
+	SXM = in[0,1];
+}
+
+macro packst1(res) {
+	res = (zext(INTM)
+		| (zext(DBGM) << 1)
+		| (zext(PAGE0) << 2)
+		| (zext(VMAP) << 3)
+		| (zext(SPA) << 4)
+		| (zext(LOOP) << 5)
+		| (zext(EALLOW) << 6)
+		| (zext(IDLESTAT) << 7)
+		| (zext(AMODE) << 8)
+		| (zext(OBJMODE) << 9)
+		# bit 10 reserved
+		| (zext(M0M1MAP) << 11)
+		| (zext(XF) << 12)
+		| (zext(ARP) << 13));
+}
+
+macro unpackst1(in) {
+	ARP      = in[13,3];
+	XF       = in[12,1];
+	M0M1MAP  = in[11,1];
+	# bit 10 reserved
+	OBJMODE  = in[9,1];
+	AMODE    = in[8,1];
+	IDLESTAT = in[7,1];
+	EALLOW   = in[6,1];
+	LOOP     = in[5,1];
+	SPA      = in[4,1];
+	VMAP     = in[3,1];
+	PAGE0    = in[2,1];
+	DBGM     = in[1,1];
+	INTM     = in[0,1];
+}
+
+macro flagnz(in) {
+	N = in s< 0;
+	Z = in == 0;
+}
+
+macro bitrev16(v) {
+	v = ((v >> 8) | (v << 8));
+	v = ((v >> 4) & 0x0F0F) | ((v & 0x0F0F) << 4);
+	v = ((v >> 2) & 0x3333) | ((v & 0x3333) << 2);
+	v = ((v >> 1) & 0x5555) | ((v & 0x5555) << 1);
+}
+
+# Reverse-carry add: bitrev16(bitrev16(a) + bitrev16(b)), used by *BR0++ addressing
+macro rcadd16(result, a, b) {
+	local ra:2 = a; local rb:2 = b;
+	bitrev16(ra);
+	bitrev16(rb);
+	local rr:2 = ra + rb;
+	bitrev16(rr);
+	result = rr;
+}
+
+# Reverse-borrow subtract: bitrev16(bitrev16(a) - bitrev16(b)), used by *BR0-- addressing
+macro rbsub16(result, a, b) {
+	local ra:2 = a; local rb:2 = b;
+	bitrev16(ra);
+	bitrev16(rb);
+	local rr:2 = ra - rb;
+	bitrev16(rr);
+	result = rr;
+}
+
+# AMODE=0 circular mode: use the old XAR6 as the effective address, then
+# either clear AR6[7:0] at the AR1[7:0] limit or advance by the operand width.
+# Preserve XAR6[31:16] and AR6[15:8] without intra-instruction branches.
+macro circular_amode0_update(delta) {
+	local at_limit:1 = (AR6:1 == AR1:1);
+	local limit_mask:2 = 0 - zext(at_limit);
+	local advanced:2 = AR6 + delta;
+	local wrapped:2 = AR6 & 0xff00;
+	local next:2 = (advanced & ~limit_mask) | (wrapped & limit_mask);
+	XAR6 = (XAR6 & 0xffff0000) | zext(next);
+}
+
+# AMODE=1 circular mode: XAR6 is the fixed base and XAR1[15:0] is the
+# index.  Compare the old index with XAR1[31:16], wrap to zero at the limit,
+# otherwise advance by the operand width, and preserve the upper limit half.
+macro circular_amode1_address(addr, delta) {
+	local index:2 = AR1;
+	addr = XAR6 + zext(index);
+	local at_limit:1 = (index == AR1H);
+	local limit_mask:2 = 0 - zext(at_limit);
+	local advanced:2 = index + delta;
+	local next:2 = advanced & ~limit_mask;
+	XAR1 = (XAR1 & 0xffff0000) | zext(next);
+}
+
+# In P-Code, inst_next/inst_start are byte addresses, while saved C28x PCs are words.
+macro intr_enter(vec) {
+	RB_RAS = RB_RA;
+	RB_RA = 0;
+	packst0(ST0);
+	local ie_v1:4 = zext(ST0) | (zext(T) << 16);
+	sp_add(1);
+	push32(ie_v1);
+	push32(ACC);
+	push32(P);
+	local ie_v2:4 = zext(AR0) | (zext(AR1) << 16);
+	push32(ie_v2);
+	packst1(ST1);
+	local ie_v3:4 = zext(ST1) | (zext(DP) << 16);
+	push32(ie_v3);
+	local ie_v4:4 = zext(IER);
+	push32(ie_v4);
+	local iret_pc:4 = inst_next >> 1;
+	push32(iret_pc);
+	INTM = 1;
+	DBGM = 1;
+	EALLOW = 0;
+	LOOP = 0;
+	IDLESTAT = 0;
+	call [vec];
+}
+
+# PM positive - left shift, PM negative - arithmetic right shift, PM zero - no shift.
+# Keep this branch-free so a status-controlled data operation does not manufacture CFG edges.
+macro pmshift(result, in) {
+	local is_right:1 = (PM s< 0);
+	local right_mask:4 = 0 - zext(is_right);
+	local pm_value:4 = sext(PM);
+	local left_count:4 = pm_value & ~right_mask;
+	local right_count:4 = (-pm_value) & right_mask;
+	local left_value:4 = in << left_count;
+	local right_value:4 = in s>> right_count;
+	result = (left_value & ~right_mask) | (right_value & right_mask);
+}
+
+macro pmshift64(result, in) {
+	local is_right:1 = (PM s< 0);
+	local right_mask:8 = 0 - zext(is_right);
+	local pm_value:8 = sext(PM);
+	local left_count:8 = pm_value & ~right_mask;
+	local right_count:8 = (-pm_value) & right_mask;
+	local left_value:8 = in << left_count;
+	local right_value:8 = in s>> right_count;
+	result = (left_value & ~right_mask) | (right_value & right_mask);
+}
+
+# Store lower 38 bits of a 64-bit product into P, applying PM shift mode
+macro store_p_lower38(prod64) {
+	local t:8 = prod64 & 0x3FFFFFFFFF;
+	local s:8;
+	pmshift64(s, t);
+	P = s[0,32];
+}
+
+# Commit a signed 32-bit ACC result, including the sticky V flag, signed six-bit
+# overflow counter, and OVM saturation. Positive/negative overflow direction
+# is determined by the sign of the original ACC for both addition and
+# subtraction. The branch-free selects avoid manufacturing analysis CFG edges.
+macro commit_acc_signed(wrapped, old, overflow) {
+	local old_negative:1 = old[31,1];
+	local count_active:1 = overflow && (OVM == 0);
+	local count_mask:1 = 0 - count_active;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & count_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+
+	local saturate:1 = overflow && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local result_sign_mask:4 = 0 - zext(old_negative);
+	local saturation_value:4 = 0x7fffffff ^ result_sign_mask;
+	ACC = (wrapped & ~saturate_mask) | (saturation_value & saturate_mask);
+	V = V || overflow;
+	flagnz(ACC);
+}
+
+macro acc_add32(value) {
+	local old:4 = ACC;
+	local wrapped:4 = old + value;
+	local overflow:1 = scarry(old, value);
+	C = carry(old, value);
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+# Exact OVM=0 specialization used only at analyzer-proved TI C states.  It
+# preserves wrapped ACC, carry, sticky V, signed six-bit OVC, N, and Z while
+# omitting only the unreachable saturation select and OVM read.
+macro acc_add32_ovm0(value) {
+	local old:4 = ACC;
+	local wrapped:4 = old + value;
+	local overflow:1 = scarry(old, value);
+	local old_negative:1 = old[31,1];
+	local overflow_mask:1 = 0 - overflow;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & overflow_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+	C = carry(old, value);
+	ACC = wrapped;
+	V = V || overflow;
+	flagnz(ACC);
+}
+
+macro acc_sub32(value) {
+	local old:4 = ACC;
+	local wrapped:4 = old - value;
+	local overflow:1 = sborrow(old, value);
+	C = old >= value;
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+# Carry/borrow chains are decomposed into two ordinary-width operations.  The
+# unsigned carry/borrow is the OR of the two stages.  A signed overflow in both
+# stages cancels (for example INT_MIN - 1 + 1), so the eventual infinite-
+# precision overflow predicate is the XOR of the stage predicates.
+macro acc_add_carry32(value) {
+	local old:4 = ACC;
+	local incoming:4 = zext(C);
+	local partial:4 = old + value;
+	local first_carry:1 = carry(old, value);
+	local second_carry:1 = carry(partial, incoming);
+	local first_overflow:1 = scarry(old, value);
+	local second_overflow:1 = scarry(partial, incoming);
+	local wrapped:4 = partial + incoming;
+	local overflow:1 = first_overflow != second_overflow;
+	C = first_carry || second_carry;
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+# Exact OVM=0 ADDCL specialization used only at analyzer-proved sites.  The
+# constructor snapshots ACC and incoming C before materializing loc32, so an
+# ACC source alias and every addressing side effect observe the architectural
+# pre-instruction state.  Preserve the full two-stage carry and signed-overflow
+# cancellation behavior of the generic helper, but omit the unreachable OVM
+# read and saturation select.
+macro acc_add_carry32_ovm0(value, old, incoming) {
+	local partial:4 = old + value;
+	local first_carry:1 = carry(old, value);
+	local second_carry:1 = carry(partial, incoming);
+	local first_overflow:1 = scarry(old, value);
+	local second_overflow:1 = scarry(partial, incoming);
+	local wrapped:4 = partial + incoming;
+	local overflow:1 = first_overflow != second_overflow;
+	local old_negative:1 = old[31,1];
+	local overflow_mask:1 = 0 - overflow;
+	local count_direction:1 = 1 - (old_negative << 1); # +1 positive, -1 negative
+	local ovc_delta:1 = count_direction & overflow_mask;
+	local ovc_next:1 = OVC + ovc_delta;
+	local ovc_raw:1 = ovc_next & 0x3f;
+	local ovc_sign_mask:1 = 0 - ovc_raw[5,1];
+	OVC = ovc_raw | (ovc_sign_mask & 0xc0);
+	C = first_carry || second_carry;
+	ACC = wrapped;
+	V = V || overflow;
+	flagnz(ACC);
+}
+
+macro acc_sub_borrow32(value) {
+	local old:4 = ACC;
+	local borrow:1 = (C == 0);
+	local borrow_value:4 = zext(borrow);
+	local partial:4 = old - value;
+	local first_borrow:1 = old < value;
+	local second_borrow:1 = partial < borrow_value;
+	local first_overflow:1 = sborrow(old, value);
+	local second_overflow:1 = sborrow(partial, borrow_value);
+	local wrapped:4 = partial - borrow_value;
+	local overflow:1 = first_overflow != second_overflow;
+	C = !(first_borrow || second_borrow);
+	commit_acc_signed(wrapped, old, overflow);
+}
+
+# OVCU is the same physical six-bit signed counter as OVC, but unsigned
+# ADD/SUB instructions count carry/borrow independently of OVM.
+macro ovcu_increment(event) {
+	local event_mask:1 = 0 - event;
+	local delta:1 = 1 & event_mask;
+	local next:1 = OVC + delta;
+	local raw:1 = next & 0x3f;
+	local sign_mask:1 = 0 - raw[5,1];
+	OVC = raw | (sign_mask & 0xc0);
+}
+
+macro ovcu_decrement(event) {
+	local event_mask:1 = 0 - event;
+	local delta:1 = 0xff & event_mask;
+	local next:1 = OVC + delta;
+	local raw:1 = next & 0x3f;
+	local sign_mask:1 = 0 - raw[5,1];
+	OVC = raw | (sign_mask & 0xc0);
+}
+
+macro add_unsigned32(destination, value) {
+	local old:4 = destination;
+	local wrapped:4 = old + value;
+	local carry_out:1 = carry(old, value);
+	local overflow:1 = scarry(old, value);
+	destination = wrapped;
+	C = carry_out;
+	V = V || overflow;
+	ovcu_increment(carry_out);
+	flagnz(destination);
+}
+
+macro sub_unsigned32(destination, value) {
+	local old:4 = destination;
+	local wrapped:4 = old - value;
+	local borrow:1 = old < value;
+	local overflow:1 = sborrow(old, value);
+	destination = wrapped;
+	C = !borrow;
+	V = V || overflow;
+	ovcu_decrement(borrow);
+	flagnz(destination);
+}
+
+# MOVB indexed offsets are byte indices over the word-addressed C28x data
+# space (SPRU430F Section 5.10).  Divide the offset by two for the RAM word
+# address and use bit zero to select the low or high byte.  The branch-free
+# shift/select keeps data-dependent byte parity out of the instruction CFG.
+macro byte_word_address(result, base, offset) {
+	local word_offset:2 = offset >> 1;
+	result = base + zext(word_offset);
+}
+
+macro select_word_byte(result, word, high) {
+	local shift:2 = zext(high) << 3;
+	local shifted:2 = word >> shift;
+	result = shifted:1;
+}
+
+macro store_word_byte(addr, high, value) {
+	local old_word:2 = *:2 addr;
+	local shift:2 = zext(high) << 3;
+	local byte_mask:2 = 0xff << shift;
+	local inserted:2 = zext(value) << shift;
+	local merged:2 = (old_word & ~byte_mask) | (inserted & byte_mask);
+	*:2 addr = merged;
+}
+
+macro acc_add_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_add32(shifted);
+}
+
+# Exact OVM=0 specialization for the decoded ADDL ACC,P << PM instruction.
+# Keep the complete dynamic signed-PM product shift and omit only the
+# unreachable OVM read/saturation selection at analyzer-proved sites.
+macro acc_add_pm_p_ovm0() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_add32_ovm0(shifted);
+}
+
+macro acc_sub_pm_p() {
+	local shifted:4;
+	pmshift(shifted, P);
+	acc_sub32(shifted);
+}
+
+################################################################
+# Addressing and stuff
+################################################################
+
+dest22: imm22 is $(imm22) {
+	export *:4 imm22;
+}
+
+off16: rel is simm16 [ rel = inst_start + simm16; ] {
+	export *:4 rel;
+}
+
+off8: rel is simm8 [ rel = inst_start + simm8; ] {
+	export *:4 rel;
+}
+
+# Direct, stack, indirect, and register addressing modes for loc16/loc32.
+# SPRU430F Sections 5.2-5.6.  RAM pointers are C28x word addresses; access
+# sizes below are P-Code byte sizes.  Constructors are explicitly split by
+# AMODE so PAGE0+AMODE can remain excluded and the register forms cannot
+# overlap AMODE-specific encodings.  The 3-bit XAR offset remains AMODE=0,
+# while AMODE=1 adds 7-bit direct and ARP-update encodings.
+
+# 16-bit operand.
+loc16: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export *:2 addr;
+}
+loc16: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export *:2 addr;
+}
+loc16: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = SP - imm6;
+	export *:2 addr;
+}
+# The manual's AMODE column for @@7bit is printed as 0, but Section 5.2,
+# Section 5.3, the examples, and assembler behavior all establish AMODE=1.
+loc16: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export *:2 addr;
+}
+loc16: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	export *:2 addr;
+}
+loc16: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	export *:2 addr;
+}
+loc16: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	export *:2 addr;
+}
+loc16: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	export *:2 addr;
+}
+loc16: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export *:2 addr;
+}
+loc16: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export *:2 addr;
+}
+loc16: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export *:2 addr;
+}
+loc16: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export *:2 addr;
+}
+loc16: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:2 addr;
+}
+loc16: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:2 addr;
+}
+loc16: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export *:2 addr;
+}
+loc16: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:2 addr;
+}
+loc16: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:2 addr;
+}
+loc16: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export *:2 addr;
+}
+loc16: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export *:2 addr;
+}
+# The prose tables accidentally say increment for *--.  The mnemonic,
+# glossary, examples, and DIS2000 all identify a decrement, which is modeled.
+loc16: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export *:2 addr;
+}
+loc16: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export *:2 addr;
+}
+loc16: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:2 addr;
+}
+loc16: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:2 addr;
+}
+loc16: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:2 addr;
+}
+loc16: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:2 addr;
+}
+loc16: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:2 addr;
+}
+loc16: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:2 addr;
+}
+# AMODE=1-only C2xLP forms update the XAR selected by the old ARP, then set ARP.
+loc16: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:2 addr;
+}
+loc16: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	circular_amode0_update(1);
+	export *:2 addr;
+}
+loc16: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 1);
+	export *:2 addr;
+}
+loc16: reg16loc          is ctx_amode=0 & op4_4=0b1010 & reg16loc { export reg16loc; }
+loc16: reg16loc          is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16loc { export reg16loc; }
+
+# 32-bit operand.  Pointer deltas are two C28x words; AR0/bit-reversed
+# modifiers remain independent of operand width as specified by Section 5.6.2.
+loc32: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export *:4 addr;
+}
+loc32: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export *:4 addr;
+}
+loc32: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = SP - imm6;
+	export *:4 addr;
+}
+loc32: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export *:4 addr;
+}
+loc32: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(2);
+	export *:4 addr;
+}
+loc32: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(2);
+	export *:4 addr;
+}
+loc32: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	sp_sub(2);
+	local addr:4 = SP;
+	export *:4 addr;
+}
+loc32: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	sp_sub(2);
+	local addr:4 = SP;
+	export *:4 addr;
+}
+loc32: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export *:4 addr;
+}
+loc32: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export *:4 addr;
+}
+loc32: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export *:4 addr;
+}
+loc32: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export *:4 addr;
+}
+loc32: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:4 addr;
+}
+loc32: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export *:4 addr;
+}
+loc32: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export *:4 addr;
+}
+loc32: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:4 addr;
+}
+loc32: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export *:4 addr;
+}
+loc32: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export *:4 addr;
+}
+loc32: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export *:4 addr;
+}
+loc32: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export *:4 addr;
+}
+loc32: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export *:4 addr;
+}
+loc32: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:4 addr;
+}
+loc32: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export *:4 addr;
+}
+loc32: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:4 addr;
+}
+loc32: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export *:4 addr;
+}
+loc32: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export *:4 addr;
+}
+loc32: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export *:4 addr;
+}
+loc32: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	circular_amode0_update(2);
+	export *:4 addr;
+}
+loc32: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 2);
+	export *:4 addr;
+}
+loc32: reg32             is ctx_amode=0 & op4_4=0b1010 & reg32 { export reg32; }
+loc32: reg32             is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg32 { export reg32; }
+
+# Dual-memory MAC: the data-side address generator wins conflicting XAR7
+# updates (SPRU430F pp.187/199/244/385). Evaluate this before building loc,
+# because legacy forms may select a different ARP after updating the old one.
+# Test the addressing mode, not whether XAR7's value changed: an AR0 modifier
+# of zero still belongs to the data-side address generator.
+xar7_prog_step: is op0_8 { local step:4 = 1; export step; }
+xar7_prog_step: is op0_8=0x87 | op0_8=0x8f { local step:4 = 0; export step; }
+xar7_prog_step: is op0_8=0xb9 | op0_8=0xba | op0_8=0xbb | op0_8=0xbc | op0_8=0xae | op0_8=0xaf {
+	local step:4 = zext(ARP != 7); export step;
+}
+xar7_prog_step: is ctx_amode=1 & (op3_5=0x18 | op3_5=0x19 | op3_5=0x1a | op3_5=0x1b | op3_5=0x1c | op3_5=0x1d) {
+	local step:4 = zext(ARP != 7); export step;
+}
+
+# Address-only mirrors for instructions whose semantics need the effective
+# RAM address itself (DMOV/MOVAD/MOVDL/MOVD32/XMACD).  These remain separate
+# from loc16/loc32 so their exports cannot be mistaken for dereferenced values;
+# width-specific update deltas are intentionally mirrored and regression-tested.
+mem16_addr: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export addr;
+}
+mem16_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export addr;
+}
+mem16_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = SP - imm6;
+	export addr;
+}
+mem16_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export addr;
+}
+mem16_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	export addr;
+}
+mem16_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	export addr;
+}
+mem16_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	export addr;
+}
+mem16_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	export addr;
+}
+mem16_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export addr;
+}
+mem16_addr: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	export addr;
+}
+mem16_addr: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem16_addr: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem16_addr: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem16_addr: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem16_addr: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem16_addr: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem16_addr: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export addr;
+}
+mem16_addr: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem16_addr: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem16_addr: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export addr;
+}
+mem16_addr: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	export addr;
+}
+mem16_addr: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export addr;
+}
+mem16_addr: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	export addr;
+}
+mem16_addr: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem16_addr: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem16_addr: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem16_addr: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem16_addr: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem16_addr: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem16_addr: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	circular_amode0_update(1);
+	export addr;
+}
+mem16_addr: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 1);
+	export addr;
+}
+
+mem32_addr: @imm6             is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	export addr;
+}
+mem32_addr: @imm6             is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	export addr;
+}
+mem32_addr: *-SP[imm6]        is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = SP - imm6;
+	export addr;
+}
+mem32_addr: @@imm7            is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	export addr;
+}
+mem32_addr: *SP++             is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(2);
+	export addr;
+}
+mem32_addr: *SP++             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(2);
+	export addr;
+}
+mem32_addr: *--SP             is ctx_amode=0 & op0_8=0b10111110 & SP {
+	sp_sub(2);
+	local addr:4 = SP;
+	export addr;
+}
+mem32_addr: *--SP             is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	sp_sub(2);
+	local addr:4 = SP;
+	export addr;
+}
+mem32_addr: *xarn0++          is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export addr;
+}
+mem32_addr: *xarn0++          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 2;
+	export addr;
+}
+mem32_addr: *--xarn0          is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem32_addr: *--xarn0          is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 2;
+	local addr:4 = xarn0;
+	export addr;
+}
+mem32_addr: *+xarn0[AR0]      is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem32_addr: *+xarn0[AR0]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR0);
+	export addr;
+}
+mem32_addr: *+xarn0[AR1]      is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem32_addr: *+xarn0[AR1]      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + zext(AR1);
+	export addr;
+}
+mem32_addr: *+xarn0[imm3_3]   is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0 + imm3_3;
+	export addr;
+}
+mem32_addr: *                 is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem32_addr: *                 is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	export addr;
+}
+mem32_addr: *++               is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export addr;
+}
+mem32_addr: *++               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	export addr;
+}
+mem32_addr: *--               is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export addr;
+}
+mem32_addr: *--               is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	export addr;
+}
+mem32_addr: *0++              is ctx_amode=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem32_addr: *0++              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111011 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	export addr;
+}
+mem32_addr: *0--              is ctx_amode=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem32_addr: *0--              is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111100 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	export addr;
+}
+mem32_addr: *"BR0"++         is ctx_amode=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"BR0"++         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101110 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"BR0"--         is ctx_amode=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"BR0"--         is ctx_amode=1 & ctx_page0=0 & op0_8=0b10101111 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	export addr;
+}
+mem32_addr: *"ARP"^imm3      is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"ARP"^imm3      is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"++,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 2;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"--,ARP"^imm3   is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 2;
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"0++,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11010 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"0--,ARP"^imm3  is ctx_amode=1 & ctx_page0=0 & op3_5=0b11011 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - zext(AR0);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"BR0++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11100 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rcadd16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *"BR0--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11101 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local new_lo:2;
+	rbsub16(new_lo, addr:2, AR0);
+	*[register]rp = (addr & 0xffff0000) | zext(new_lo);
+	ARP = imm3;
+	export addr;
+}
+mem32_addr: *AR6%++           is ctx_amode=0 & op0_8=0b10111111 & AR6 {
+	ARP = 6;
+	local addr:4 = XAR6;
+	circular_amode0_update(2);
+	export addr;
+}
+mem32_addr: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	ARP = 6;
+	local addr:4;
+	circular_amode1_address(addr, 2);
+	export addr;
+}
+
+# 8-bit subset of the loc16 addressing modes used by MOVB loads.
+#
+# Indexed MOVB operands use byte offsets even though the C28x data space is
+# word addressed.  byte_index_info exports the word address in bits 31:0 and
+# the selected byte (0 = LSB, 1 = MSB) in bit 32 so loads and stores share the
+# same effective-address calculation.
+byte_index_info: *+xarn0[AR0] is ctx_amode=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR0;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[AR0] is ctx_amode=1 & ctx_page0=0 & op3_5=0b10010 & xarn0 & AR0 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR0;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[AR1] is ctx_amode=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR1;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[AR1] is ctx_amode=1 & ctx_page0=0 & op3_5=0b10011 & xarn0 & AR1 & imm3 {
+	ARP = imm3;
+	local offset:2 = AR1;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+byte_index_info: *+xarn0[imm3_3] is ctx_amode=0 & op6_2=0b11 & xarn0 & imm3_3 & imm3 {
+	ARP = imm3;
+	local offset:2 = imm3_3;
+	local addr:4;
+	byte_word_address(addr, xarn0, offset);
+	local high:1 = offset:1 & 1;
+	local info:5 = zext(addr) | (zext(high) << 32);
+	export info;
+}
+
+loc8: byte_index_info is byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	local word:2 = *:2 addr;
+	local byte:1;
+	select_word_byte(byte, word, high);
+	export byte;
+}
+
+# Direct addressing modes.
+loc8: @imm6 is ctx_amode=0 & op6_2=0b00 & imm6 {
+	local addr:4 = (zext(DP) << 6) | imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: @imm6 is ctx_amode=0 & ctx_page0=1 & op6_2=0b01 & imm6 {
+	local addr:4 = imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-SP[imm6] is ctx_amode=0 & ctx_page0=0 & op6_2=0b01 & SP & imm6 {
+	local addr:4 = SP - imm6;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: @@imm7 is ctx_amode=1 & ctx_page0=0 & op7=0 & imm7 {
+	local addr:4 = (zext(DP & 0xfffe) << 6) | imm7;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# Stack and C28x XAR modes.  MOVB advances pointers by one C28x word.
+loc8: *SP++ is ctx_amode=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *SP++ is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111101 & SP {
+	local addr:4 = SP;
+	sp_add(1);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--SP is ctx_amode=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--SP is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111110 & SP {
+	sp_sub(1);
+	local addr:4 = SP;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *xarn0++ is ctx_amode=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *xarn0++ is ctx_amode=1 & ctx_page0=0 & op3_5=0b10000 & xarn0 & imm3 {
+	ARP = imm3;
+	local addr:4 = xarn0;
+	xarn0 = xarn0 + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--xarn0 is ctx_amode=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *--xarn0 is ctx_amode=1 & ctx_page0=0 & op3_5=0b10001 & xarn0 & imm3 {
+	ARP = imm3;
+	xarn0 = xarn0 - 1;
+	local addr:4 = xarn0;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# C2xLP modes whose MOVB result is defined: no offset, +/- one word, and ARP
+# selection.  The MOVB instruction pages explicitly leave AMODE=0 circular,
+# *0, BR0, and the AMODE=1 *0...,ARPn/*BR0...,ARPn variants undefined; those
+# forms remain outside loc8 rather than receiving guessed byte semantics.
+loc8: * is ctx_amode=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: * is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111000 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *++ is ctx_amode=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *++ is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111001 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-- is ctx_amode=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *-- is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111010 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"ARP"^imm3 is ctx_amode=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b10110 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"++,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11000 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr + 1;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+loc8: *"--,ARP"^imm3 is ctx_amode=1 & ctx_page0=0 & op3_5=0b11001 & imm3 {
+	local rp:4 = &XAR0 + zext(ARP * 4);
+	local addr:4 = *[register]rp;
+	*[register]rp = addr - 1;
+	ARP = imm3;
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+# AMODE=1 circular addressing is not in the MOVB undefined-result list.  It
+# accesses the low byte of the selected word and advances XAR1 by one word.
+loc8: "*+XAR6[AR1%++]" is ctx_amode=1 & ctx_page0=0 & op0_8=0b10111111 {
+	local addr:4;
+	circular_amode1_address(addr, 1);
+	local word:2 = *:2 addr;
+	local byte:1 = word:1;
+	export byte;
+}
+
+# Register modes always address the low byte.
+loc8: reg16loc is ctx_amode=0 & op4_4=0b1010 & reg16loc {
+	local byte:1 = reg16loc:1;
+	export byte;
+}
+loc8: reg16loc is ctx_amode=1 & ctx_page0=0 & op4_4=0b1010 & reg16loc {
+	local byte:1 = reg16loc:1;
+	export byte;
+}
+
+cond:  "NEQ"  is cond0_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
+cond:  "EQ"   is cond0_4=0b0001 { local cnd:1 = Z   != 0; export cnd; }
+cond:  "GT"   is cond0_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
+cond:  "GEQ"  is cond0_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
+cond:  "LT"   is cond0_4=0b0100 { local cnd:1 = N   != 0; export cnd; }
+cond:  "LEQ"  is cond0_4=0b0101 { local cnd:1 = Z   != 0 || N != 0; export cnd; }
+cond:  "HI"   is cond0_4=0b0110 { local cnd:1 = C   != 0 && Z == 0; export cnd; }
+cond:  "HIS"  is cond0_4=0b0111 { local cnd:1 = C   != 0; export cnd; }
+cond:  "LO"   is cond0_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
+cond:  "LOS"  is cond0_4=0b1001 { local cnd:1 = C   == 0 || Z != 0; export cnd; }
+cond:  "NOV"  is cond0_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
+cond:  "OV"   is cond0_4=0b1011 { local cnd:1 = V   != 0; V = 0; export cnd; }
+cond:  "NTC"  is cond0_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
+cond:  "TC"   is cond0_4=0b1101 { local cnd:1 = TC  != 0; export cnd; }
+cond:  "NBIO" is cond0_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
+cond:  "UNC"  is cond0_4=0b1111 { local cnd:1 = 1; export cnd; }
+
+cond8: "NEQ"  is cond8_4=0b0000 { local cnd:1 = Z   == 0; export cnd; }
+cond8: "EQ"   is cond8_4=0b0001 { local cnd:1 = Z   != 0; export cnd; }
+cond8: "GT"   is cond8_4=0b0010 { local cnd:1 = Z   == 0 && N == 0; export cnd; }
+cond8: "GEQ"  is cond8_4=0b0011 { local cnd:1 = N   == 0; export cnd; }
+cond8: "LT"   is cond8_4=0b0100 { local cnd:1 = N   != 0; export cnd; }
+cond8: "LEQ"  is cond8_4=0b0101 { local cnd:1 = Z   != 0 || N != 0; export cnd; }
+cond8: "HI"   is cond8_4=0b0110 { local cnd:1 = C   != 0 && Z == 0; export cnd; }
+cond8: "HIS"  is cond8_4=0b0111 { local cnd:1 = C   != 0; export cnd; }
+cond8: "LO"   is cond8_4=0b1000 { local cnd:1 = C   == 0; export cnd; }
+cond8: "LOS"  is cond8_4=0b1001 { local cnd:1 = C   == 0 || Z != 0; export cnd; }
+cond8: "NOV"  is cond8_4=0b1010 { local cnd:1 = V   == 0; V = 0; export cnd; }
+cond8: "OV"   is cond8_4=0b1011 { local cnd:1 = V   != 0; V = 0; export cnd; }
+cond8: "NTC"  is cond8_4=0b1100 { local cnd:1 = TC  == 0; export cnd; }
+cond8: "TC"   is cond8_4=0b1101 { local cnd:1 = TC  != 0; export cnd; }
+cond8: "NBIO" is cond8_4=0b1110 { local cnd:1 = BIO == 0; export cnd; }
+cond8: "UNC"  is cond8_4=0b1111 { local cnd:1 = 1; export cnd; }
+
+################################################################
+# SPRU430F - August 2001 - Revised April 2015
+
+# Repeated program-space transfers use an instruction-local hardware shadow for
+# their program pointer.  The ordinary RPT wrapper below cannot express that by
+# rebuilding the instruction at inst_start: each rebuild would snapshot XAR7,
+# AL, or the immediate address again.  These exact special cases instead keep
+# the shadow in a SLEIGH unique varnode and loop over the addressing operand's
+# P-Code explicitly.  Thus loc16 pre/post updates still execute once per
+# transfer, while the architectural program pointer remains independent.
+
+# SPRU430F p.368: repeated PREAD shadows *XAR7 and postincrements the shadow.
+:pread loc16, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & loc16 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread>;
+<done_pread>
+}
+:pread regax, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & regax & regax=8 & op4_4=0b1010 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread_ah>;
+<done_pread_ah>
+}
+:pread regax, *XAR7 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100100 & regax & regax=9 & op4_4=0b1010 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pread_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pread_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_pread_al>;
+<done_pread_al>
+}
+
+# SPRU430F p.384: repeated PWRITE shadows its *XAR7 destination.
+:pwrite *XAR7, loc16 is rpt_phase=0 & rpt_active=1 & op8_8=0b00100110 & loc16 & XAR7 {
+    local program_shadow:4 = XAR7;
+<repeat_pwrite>
+    build loc16;
+    local value:2 = loc16;
+    *:2 program_shadow = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_pwrite>;
+    RPTC = RPTC - 1;
+    goto <repeat_pwrite>;
+<done_pwrite>
+}
+
+# SPRU430F pp.464-466: XPREAD/XPWRITE use the same rule for the
+# high-program-page immediate or AL pointer, with AL itself left unchanged by
+# the program-side progression.  The @AX forms also refresh N and Z after
+# every transfer, as the instruction pages require.
+:xpread regax, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & regax & regax=8 & op4_4=0b1010; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm_ah>;
+<done_xpread_imm_ah>
+}
+:xpread regax, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & regax & regax=9 & op4_4=0b1010; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm_al>;
+<done_xpread_imm_al>
+}
+:xpread loc16, *(imm16) is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op8_8=0b10101100 & loc16; imm16 {
+    local program_shadow:4 = 0x3f0000 | imm16;
+<repeat_xpread_imm>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_imm>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_imm>;
+<done_xpread_imm>
+}
+:xpread regax, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al_ah>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al_ah>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al_ah>;
+<done_xpread_al_ah>
+}
+:xpread regax, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al_al>
+    local value:2 = *:2 program_shadow;
+    regax = value;
+    flagnz(regax);
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al_al>;
+<done_xpread_al_al>
+}
+:xpread loc16, *AL is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpread_al>
+    build loc16;
+    local value:2 = *:2 program_shadow;
+    loc16 = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpread_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpread_al>;
+<done_xpread_al>
+}
+:xpwrite *AL, loc16 is rpt_phase=0 & rpt_active=1 & ctx_objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {
+    local program_shadow:4 = 0x3f0000 | zext(AL);
+<repeat_xpwrite_al>
+    build loc16;
+    local value:2 = loc16;
+    *:2 program_shadow = value;
+    program_shadow = program_shadow + 1;
+    if (RPTC == 0) goto <done_xpwrite_al>;
+    RPTC = RPTC - 1;
+    goto <repeat_xpwrite_al>;
+<done_xpwrite_al>
+}
+
+# SPRUEO2B pp.70-71: repeated memory MACF32.
+# The repeated form alternates accumulator/product pairs. Keep its phase in
+# an instruction-local temporary, initialized once per RPT, and evaluate the
+# addressing operand on every iteration. The last products remain in R2/R6
+# for the caller's final additions (also true for cascaded even repeats).
+:macf32 "R7H, R3H," loc32^", *XAR7++" is ctx_objmode=1 & rpt_phase=0 & rpt_active=1 & op0_16=0b1110001001010000; op8_8=0b00011111 & loc32 {
+	local second_pair:1 = 0;
+	<repeat_macf32>
+	build loc32;
+	local v1:4 = loc32;
+	local v2:4 = *:4 XAR7;
+	XAR7 = XAR7 + 2;
+	local product:4 = v1 f* v2;
+	if (second_pair != 0) goto <high_pair>;
+	R3H = R3H f+ R2H;
+	R2H = product;
+	goto <next_macf32>;
+	<high_pair>
+	R7H = R7H f+ R6H;
+	R6H = product;
+	<next_macf32>
+	if (RPTC == 0) goto <done_macf32>;
+	RPTC = RPTC - 1;
+	second_pair = second_pair ^ 1;
+	goto <repeat_macf32>;
+	<done_macf32>
+}
+
+# RPT repeat wrapper: when an instruction follows RPT, execute it N+1 times.
+# rpt_active is set (with noflow) by RPT on inst_next; rpt_phase prevents recursion.
+# A separately proved full-width SUBCUL division has already summarized all
+# 32 executions, so it only needs the architecturally final repeat-counter state.
+:^instruction is rpt_phase=0 & rpt_active=1 & subcul_div32=1 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    RPTC = 0;
+}
+:^instruction is rpt_phase=0 & rpt_active=1 & subcul_div32=0 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    if (RPTC == 0) goto inst_next;
+    RPTC = RPTC - 1;
+    goto inst_start;
+}
+
+# RPTB block-end wrapper: loops the whole block RB_RC+1 times total.
+# rptb_flag is set (with noflow) by RPTB via globalset on the last block instruction.
+# RB_RSTART holds the word address consumed by the C28x indirect branch.
+:^instruction is rpt_phase=0 & rptb_flag=1 & instruction [ rpt_phase=1; ] {
+    build instruction;
+    if (RB_RC == 0) goto <done>;
+    RB_RC = RB_RC - 1;
+    goto [RB_RSTART];
+<done>
+    RB_RA = 0;
+}
+
+
+# p.124
+:aborti is op0_16=0b0000000000000001 {
+	DBGM = 1;
+}
+
+# p.125
+:abs ACC is op0_16=0b1111111101010110 & ACC {
+	local start_acc:4 = ACC;
+	local negative:1 = start_acc s< 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local negative_mask:4 = 0 - zext(negative);
+	local absolute:4 = (start_acc & ~negative_mask) | ((-start_acc) & negative_mask);
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	ACC = (absolute & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	C = 0;
+	V = V || minimum;
+	flagnz(ACC);
+}
+
+# p.126
+:abstc ACC is ctx_objmode=1 & op0_16=0b0101011001011111 & ACC {
+	local start_acc:4 = ACC;
+	local negative:1 = start_acc s< 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local negative_mask:4 = 0 - zext(negative);
+	local absolute:4 = (start_acc & ~negative_mask) | ((-start_acc) & negative_mask);
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	ACC = (absolute & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	C = 0;
+	TC = TC ^ negative;
+	V = V || minimum;
+	flagnz(ACC);
+}
+
+# p.128
+:add ACC, #imm16 << #shift0_4 is op4_12=0b111111110001 & ACC & shift0_4; imm16 {
+	local tmp:4;
+	mext(tmp, imm16:2);
+	local value:4 = tmp << shift0_4;
+	acc_add32(value);
+}
+
+# p.129
+:add ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000100011 & ACC & T; op8_8=0 & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << T[0,4];
+	acc_add32(value);
+}
+
+# p.130
+:add ACC, loc16 is ctx_objmode=1 & op8_8=0b10000001 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	acc_add32(tmp);
+}
+
+# p.130
+# A processor analyzer selects this variant only for the exact AR6-indexed,
+# zero-based switch schedule.  MOVZ plus the unsigned guard proves AR6 <= the
+# validated table bound, and SETC SXM makes the architectural extension
+# explicit.  The loaded table base and bounded two-word index cannot carry or
+# overflow, and the intervening flags are dead before the computed branch.
+# Keeping the proven address expression simple lets stock switch analysis
+# recover the table; ordinary ADD sites retain full SXM/OVM-sensitive P-Code.
+:add ACC, loc16 << #shift8_4 is switch_canonical=1 & ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
+	local value:4 = zext(loc16) << shift8_4;
+	ACC = ACC + value;
+	C = 0;
+	flagnz(ACC);
+}
+
+# p.130
+:add ACC, loc16 << #shift8_4 is switch_canonical=0 & ctx_objmode=1 & op0_16=0b0101011000000100; op12_4=0b0000 & ACC & loc16 & shift8_4 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << shift8_4;
+	acc_add32(value);
+}
+
+# p.130
+:add ACC, loc16 << #16 is op8_8=0b00000101 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << 16;
+	acc_add32(value);
+}
+
+# p.130
+:add ACC, loc16 << #shift0_4 is op12_4=0b1010 & ctx_objmode=0 & ACC & loc16 & shift0_4 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << shift0_4;
+	acc_add32(value);
+}
+
+# p.131 — C is fresh unsigned carry; V is sticky signed overflow.
+# Adapted from ghidra-tms320c28x's flag corrections; unlike that tree, do not
+# clear previously latched V.  Snapshots also avoid duplicate memory loads.
+:add ax8, loc16 is op9_7=0b1001010 & ax8 & loc16 {
+	local left:2 = ax8;
+	local right:2 = loc16;
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	ax8 = left + right;
+	flagnz(ax8);
+}
+
+# p.132
+:add loc16, ax8 is op9_7=0b0111001 & ax8 & loc16 {
+	local left:2 = loc16;
+	local right:2 = ax8;
+	local r:2 = left + right;
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.133
+# The encoded SP operand is 16-bit, but normal TI frames stay within low 64K.
+# Keep the analysis carrier as one ordinary pointer-width delta so large frames
+# remain recognizable to the stack model; SP16 continues to expose the
+# architectural low-word alias to encoded register operations.
+:add SP, #simm16 is op8_8=0b00001000 & op4_4=0b1010 & reg16=13 & SP; simm16 {
+	local delta:4 = sext(simm16:2);
+	sp_add(delta);
+	local r:2 = SP16;
+	flagnz(r);
+}
+
+:add loc16, #simm16 is op8_8=0b00001000 & loc16; simm16 {
+	local r:2 = loc16 + simm16:2;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.134
+:addb ACC, #imm8 is op8_8=0b00001001 & ACC & imm8 {
+	local value:4 = zext(imm8:1);
+	acc_add32(value);
+}
+
+# p.135
+:addb ax8, #simm8 is op9_7=0b1001110 & ax8 & simm8 {
+	local left:2 = ax8;
+	local right:2 = sext(simm8:1);
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	ax8 = left + right;
+	flagnz(ax8);
+}
+
+# p.136
+:addb SP, #imm7 is op7_9=0b111111100 & SP & imm7 {
+	sp_add(imm7);
+}
+
+# p.137
+:addb xarn8, #imm7 is op11_5=0b11011 & xarn8 & op7=0 & imm7 {
+	xarn8 = xarn8 + imm7;
+}
+
+# p.138; SPRU430F ADDCL flags and modes.  Only the finite analyzer may select
+# the OVM=0 constructor; the ordinary form remains authoritative elsewhere.
+:addcl ACC, loc32 is ovm_zero=1 & ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
+	local old:4 = ACC;
+	local incoming:4 = zext(C);
+	local value:4 = loc32;
+	acc_add_carry32_ovm0(value, old, incoming);
+}
+
+:addcl ACC, loc32 is ovm_zero=0 & ctx_objmode=1 & op0_16=0b0101011001000000 & ACC; loc32 {
+	local value:4 = loc32;
+	acc_add_carry32(value);
+}
+
+# p.139; SPRU430F ADDCU flags and modes.
+:addcu ACC, loc16 is op8_8=0b00001100 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_add_carry32(value);
+}
+
+# p.140
+:addl ACC, loc32 is op8_8=0b00000111 & ACC & loc32 {
+	local value:4 = loc32;
+	acc_add32(value);
+}
+
+# p.141
+:addl ACC, P << PM is ovm_zero=1 & op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
+	acc_add_pm_p_ovm0();
+}
+
+:addl ACC, P << PM is ovm_zero=0 & op0_16=0b0001000010101100 & ACC & P & PM { # conflict with `mova T, loc16` and `movp T, loc16`
+	acc_add_pm_p();
+}
+
+# p.142
+:addl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011000000001 & ACC; op8_8=0b00000000 & loc32 {
+	local left:4 = loc32;
+	local right:4 = ACC;
+	local r:4 = left + right;
+	C = carry(left, right);
+	V = V || scarry(left, right);
+	loc32 = r;
+	flagnz(r);
+}
+
+# p.143
+# A finite processor analyzer selects this equivalent form only where OVM=0
+# follows from a proved TI C boundary or an explicit CLRC OVM definition.
+:addu ACC, loc16 is ovm_zero=1 & op8_8=0b00001101 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_add32_ovm0(value);
+}
+
+# p.143
+:addu ACC, loc16 is ovm_zero=0 & op8_8=0b00001101 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_add32(value);
+}
+
+# p.144; SPRU430F ADDUL P uses unsigned carry-counting OVCU.
+:addul P, loc32 is ctx_objmode=1 & op0_16=0b0101011001010111 & P; op8_8=0b00000000 & loc32 {
+	local value:4 = loc32;
+	add_unsigned32(P, value);
+}
+
+# p.145; SPRU430F ADDUL ACC uses unsigned carry-counting OVCU.
+:addul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010011 & ACC; loc32 {
+	local value:4 = loc32;
+	add_unsigned32(ACC, value);
+}
+
+# p.146
+:adrk #imm8 is op8_8=0b11111100 & imm8 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + imm8;
+}
+
+# p.147
+:and ACC, #imm16 << #shift0_4 is ctx_objmode=1 & op4_12=0b001111100000 & ACC & shift0_4; imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC & (tmp << shift0_4);
+	flagnz(ACC);
+}
+
+# p.147
+:and ACC, #imm16 << #16 is ctx_objmode=1 & op0_16=0b0101011000001000 & ACC; imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC & (tmp << 16);
+	flagnz(ACC);
+}
+
+# p.148
+:and ACC, loc16 is ctx_objmode=1 & op8_8=0b10001001 & ACC & loc16 {
+	ACC = ACC & zext(loc16);
+	flagnz(ACC);
+}
+
+# p.149
+:and ax8, loc16, #imm16 is op9_7=0b1100110 & ax8 & loc16; imm16 {
+	ax8 = loc16 & imm16:2;
+	flagnz(ax8);
+}
+
+# p.150
+:and IER, #imm16 is op0_16=0b0111011000100110 & IER; imm16 {
+	IER = IER & imm16:2;
+}
+
+# p.151
+:and IFR, #imm16 is op0_16=0b0111011000101111 & IFR; imm16 {
+	IFR = IFR & imm16:2;
+}
+
+# p.152
+:and loc16, ax8 is op9_7=0b1100000 & ax8 & loc16 {
+	local r:2 = loc16 & ax8;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.153
+:and ax8, loc16 is op9_7=0b1100111 & ax8 & loc16 {
+	ax8 = ax8 & loc16;
+	flagnz(ax8);
+}
+
+# p.154
+:and loc16, #imm16 is op8_8=0b00011000 & loc16; imm16 {
+	local r:2 = loc16 & imm16:2;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.155
+:andb ax8, #imm8 is op9_7=0b1001000 & ax8 & imm8 {
+	ax8 = ax8 & zext(imm8:1);
+	flagnz(ax8);
+}
+
+# p.156
+:asp is op0_16=0b0111011000011011 {
+	SPA = 0;
+	if ((SP % 2) == 0) goto inst_next;
+	sp_add(1);
+	SPA = 1;
+}
+
+# p.157
+:asr ax4, shift0_4_1 is op5_11=0b11111111101 & ax4 & shift0_4_1 {
+	local carry_value:2 = ax4 >> (shift0_4_1 - 1);
+	C = carry_value[0,1];
+	ax4 = ax4 s>> shift0_4_1;
+	flagnz(ax4);
+}
+
+# p.158
+:asr ax0, T is op1_15=0b111111110110010 & ax0 & T {
+	local shift:4 = zext(T[0,4]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local carry_value:2 = ax0 >> (safe_shift - 1);
+	C = carry_value[0,1] && nonzero;
+	ax0 = ax0 s>> shift;
+	flagnz(ax0);
+}
+
+# p.159
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=0 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val s>> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	val = tmp s>> 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
+
+# Analyzer-selected first half of an exact adjacent #16,#16 pair.  The pair
+# proof guarantees that this intermediate ACC:P and its flags are unobserved.
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=1 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+}
+
+# Analyzer-selected second half publishes the exact net arithmetic shift by
+# 32 from the original pair input retained by the inert first constructor.
+:asr64 ACC:P, shift0_4_1 is asr64_pair_phase=2 & ctx_objmode=1 & op4_12=0b010101101000 & ACC & P & shift0_4_1 {
+	local original_acc:4 = ACC;
+	local original_p:4 = P;
+	C = original_p[31, 1];
+	P = original_acc;
+	ACC = original_acc s>> 31;
+	N = original_acc[31, 1];
+	Z = original_acc == 0;
+}
+
+# p.160
+:asr64 ACC:P, T is ctx_objmode=1 & op0_16=0b0101011000101100 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:8 = val s>> (shift - 1);
+	C = tmp[0, 1];
+	val = tmp s>> 1;
+	<done>
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
+
+# p.161
+:asrl ACC, T is ctx_objmode=1 & op0_16=0b0101011000010000 & ACC & T {
+	local shift:4 = zext(T[0,5]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC s>> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp s>> 1;
+	<done>
+	flagnz(ACC);
+}
+
+# p.162
+:b off16, "UNC" is op4_12=0b111111111110 & cond0_4=0b1111; off16 {
+	goto off16;
+}
+
+:b off16, cond is op4_12=0b111111111110 & cond; off16 {
+	if (cond) goto off16;
+}
+
+# p.163
+:banz off16, arn0-- is op3_13=0b0000000000001 & arn0; off16 {
+	local take:1 = (arn0 != 0);
+	arn0 = arn0 - 1;
+	if (take) goto off16;
+}
+
+# p.164
+:bar off16, arn3, arn0, "EQ" is ctx_objmode=1 & op6_10=0b1000111110 & arn3 & arn0; off16 {
+	if (arn3 == arn0) goto off16;
+}
+
+# p.164
+:bar off16, arn3, arn0, "NEQ" is ctx_objmode=1 & op6_10=0b1000111111 & arn3 & arn0; off16 {
+	if (arn3 != arn0) goto off16;
+}
+
+# p.165
+:bf off16, "UNC" is ctx_objmode=1 & op4_12=0b010101101100 & cond0_4=0b1111; off16 {
+	goto off16;
+}
+
+:bf off16, cond is ctx_objmode=1 & op4_12=0b010101101100 & cond; off16 {
+	if (cond) goto off16;
+}
+
+# p.172, p.166 (C27MAP)
+:clrc M0M1MAP is op0_16=0b0101011000111111 & M0M1MAP {
+	M0M1MAP = 0;
+}
+
+# p.173, p.167 (C27OBJ)
+:clrc OBJMODE is op0_16=0b0101011000110110 & OBJMODE {
+	OBJMODE = 0;
+}
+
+# p.171, p.168 (C28ADDR)
+:clrc AMODE is op0_16=0b0101011000010110 & AMODE [ ctx_amode=0; globalset(inst_next, ctx_amode); ] {
+	AMODE = 0;
+}
+
+# p.405, p.169 (C28MAP)
+:setc M0M1MAP is op0_16=0b0101011000011010 & M0M1MAP {
+	M0M1MAP = 1;
+}
+
+# p.406, p.170 (C28OBJ)
+:setc OBJMODE is op0_16=0b0101011000011111 & OBJMODE {
+	OBJMODE = 1;
+}
+
+# p.174, p.471 (ZAP OVC)
+:clrc OVC is ctx_objmode=1 & op0_16=0b0101011001011100 & OVC {
+	OVC = 0;
+}
+
+# p.175
+:clrc XF is op0_16=0b0101011000011011 & XF {
+	XF = 0;
+}
+
+# p.176
+:clrc imm8 is op8_8=0b00101001 & page0_bit=0 & imm8 {
+	local bimm8:1 = imm8;
+	SXM   = SXM   && (bimm8[0,1] == 0);
+	OVM   = OVM   && (bimm8[1,1] == 0);
+	TC    = TC    && (bimm8[2,1] == 0);
+	C     = C     && (bimm8[3,1] == 0);
+	INTM  = INTM  && (bimm8[4,1] == 0);
+	DBGM  = DBGM  && (bimm8[5,1] == 0);
+	PAGE0 = PAGE0 && (bimm8[6,1] == 0);
+	VMAP  = VMAP  && (bimm8[7,1] == 0);
+}
+:clrc imm8 is op8_8=0b00101001 & page0_bit=1 & imm8 [ ctx_page0=0; globalset(inst_next, ctx_page0); ] {
+	local bimm8:1 = imm8;
+	SXM   = SXM   && (bimm8[0,1] == 0);
+	OVM   = OVM   && (bimm8[1,1] == 0);
+	TC    = TC    && (bimm8[2,1] == 0);
+	C     = C     && (bimm8[3,1] == 0);
+	INTM  = INTM  && (bimm8[4,1] == 0);
+	DBGM  = DBGM  && (bimm8[5,1] == 0);
+	PAGE0 = PAGE0 && (bimm8[6,1] == 0);
+	VMAP  = VMAP  && (bimm8[7,1] == 0);
+}
+
+# p.177.  CMP determines the sign as though the subtraction had infinite
+# precision.  That sign is exactly the signed ordering predicate, while C is
+# the independent unsigned no-borrow predicate.
+:cmp ax8, loc16 is op9_7=0b0101010 & ax8 & loc16 {
+	local loc:2 = loc16;
+	N = ax8 s< loc;
+	Z = ax8 == loc;
+	C = ax8 >= loc;
+}
+
+# p.178
+:cmp loc16, #simm16 is op8_8=0b00011011 & loc16; simm16 {
+	local loc:2 = loc16;
+	local immediate:2 = simm16:2;
+	N = loc s< immediate;
+	Z = loc == immediate;
+	C = loc >= immediate;
+}
+
+# p.179
+:cmp64 ACC:P is ctx_objmode=1 & op0_16=0b0101011001011110 & ACC & P {
+	N = ACC[31, 1] ^ V;
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	Z = ((hi << 32) | lo) == 0;
+	V = 0;
+}
+
+# p.180
+:cmpb ax8, #imm8 is op9_7=0b0101001 & ax8 & imm8 {
+	local immediate:2 = zext(imm8:1);
+	N = ax8 s< immediate;
+	Z = ax8 == immediate;
+	C = ax8 >= immediate;
+}
+
+# p.181
+:cmpl ACC, loc32 is op8_8=0b00001111 & ACC & loc32 {
+	local loc:4 = loc32;
+	N = ACC s< loc;
+	Z = ACC == loc;
+	C = ACC >= loc;
+}
+
+# p.182
+:cmpl ACC, P << PM is op0_16=0b1111111101011001 & ACC & P & PM {
+	local shifted:4;
+	pmshift(shifted, P);
+	N = ACC s< shifted;
+	Z = ACC == shifted;
+	C = ACC >= shifted;
+}
+
+with : ctx_objmode=1 {
+# p.183
+:cmpr "0" is op0_16=0b0101011000011101 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 == *[register]:2 rp;
+}
+# p.183
+:cmpr "1" is op0_16=0b0101011000011001 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 > *[register]:2 rp;
+}
+# p.183
+:cmpr "2" is op0_16=0b0101011000011000 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 < *[register]:2 rp;
+}
+# p.183
+:cmpr "3" is op0_16=0b0101011000011100 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	TC = AR0 != *[register]:2 rp;
+}
+}
+
+# p.184
+:csb ACC is ctx_objmode=1 & op0_16=0b0101011000110101 & ACC {
+	local acc:4 = ACC;
+	local count:2;
+	if (acc s< 0) goto <neg>;
+	count = lzcount(acc);
+	goto <done>;
+<neg>
+	count = lzcount(~acc);
+<done>
+	T = count - 1;
+	flagnz(acc);
+	TC = N;
+}
+
+# p.185
+:dec loc16 is op8_8=0b00001011 & loc16 {
+	local old:2 = loc16;
+	local r:2 = old - 1;
+	C = old != 0;
+	V = V || sborrow(old, 1:2);
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.403, p.186 (DINT)
+:setc INTM is op0_16=0b0011101100010000 & INTM {
+	INTM = 1;
+}
+
+# p.187
+:dmac ACC:P, loc32, *XAR7 is ctx_objmode=1 & op0_16=0b0101011001001011; op8_8=0b11000111 & ACC & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
+	XT = loc32;
+	local coeff:4 = *:4 program_addr;
+	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
+	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
+	local sh_hi:4;
+	local sh_lo:4;
+	pmshift(sh_hi, prod_hi);
+	pmshift(sh_lo, prod_lo);
+	acc_add32(sh_hi);
+	P = P + sh_lo;
+}
+
+# p.187
+:dmac ACC:P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001011; op8_8=0b10000111 & ACC & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
+	XT = loc32;
+	local coeff:4 = *:4 program_addr;
+	local prod_hi:4 = sext(XT[16,16]) * sext(coeff[16,16]);
+	local prod_lo:4 = sext(XT[0,16]) * sext(coeff[0,16]);
+	local sh_hi:4;
+	local sh_lo:4;
+	pmshift(sh_hi, prod_hi);
+	pmshift(sh_lo, prod_lo);
+	acc_add32(sh_hi);
+	P = P + sh_lo;
+	XAR7 = XAR7 + (program_step << 1);
+}
+
+# p.189
+:dmov mem16_addr is ctx_objmode=1 & op8_8=0b10100101 & mem16_addr {
+	local value:2 = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = value;
+}
+
+# p.190
+:eallow is op0_16=0b0111011000100010 {
+	EALLOW = 1;
+}
+
+# p.191
+:edis is op0_16=0b0111011000011010 {
+	EALLOW = 0;
+}
+
+# p.192 (EINT = CLRC INTM)
+:clrc INTM is op0_16=0b0010100100010000 & INTM {
+	INTM = 0;
+}
+
+# p.193
+:estop0 is op0_16=0b0111011000100101 {
+	breakpoint();
+}
+
+# p.194
+:estop1 is op0_16=0b0111011000100100 {
+	breakpoint();
+}
+
+# p.195
+:ffc XAR7, imm22 is op6_10=0b0000000011 & XAR7 & $(imm22) {
+    XAR7 = inst_next >> 1;
+    local tgt:4 = imm22;
+    call [tgt];
+}
+
+# p.196
+:flip ax0 is ctx_objmode=1 & op1_15=0b010101100111000 & ax0 {
+	bitrev16(ax0);
+	flagnz(ax0);
+}
+
+# p.197
+:iack #imm16 is op0_16=0b0111011000111111; imm16 {
+	iack(imm16:2);
+}
+
+# p.198
+:idle is op0_16=0b0111011000100001 {
+	IDLESTAT = 1;
+}
+
+# p.199
+:imacl P, loc32, *XAR7 is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b11000111 & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
+	local old_p:4 = P;
+	add_unsigned32(ACC, old_p);
+	local tmp:8 = sext(loc32) * sext(*:4 program_addr);
+	store_p_lower38(tmp);
+}
+
+# p.199
+:imacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001101; op8_8=0b10000111 & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
+	local old_p:4 = P;
+	add_unsigned32(ACC, old_p);
+	local tmp:8 = sext(loc32) * sext(*:4 program_addr);
+	store_p_lower38(tmp);
+	XAR7 = XAR7 + (program_step << 1);
+}
+
+# p.201
+:impyal P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001001100; op8_8=0b00000000 & P & XT & loc32 {
+	# Snapshot both sources before ACC and P writeback so register-addressed
+	# aliases observe the instruction's original state.
+	local old_p:4 = P;
+	local multiplicand:4 = loc32;
+	add_unsigned32(ACC, old_p);
+	local prod:8 = sext(XT) * sext(multiplicand);
+	store_p_lower38(prod);
+}
+
+# p.203
+:impyl ACC, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000100; op8_8=0b00000000 & ACC & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	ACC = prod[0,32];
+	flagnz(ACC);
+}
+
+# p.204
+:impyl P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011000000101; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	store_p_lower38(prod);
+}
+
+# p.205
+:impysl P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000011; op8_8=0b00000000 & P & XT & loc32 {
+	local oldp:4 = P;
+	sub_unsigned32(ACC, oldp);
+	local prod:8 = sext(XT) * sext(loc32);
+	store_p_lower38(prod);
+}
+
+# p.207
+:impyxul P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001100101; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * zext(loc32);
+	store_p_lower38(prod);
+}
+
+# p.209
+:in loc16, *(imm16) is ctx_objmode=1 & op8_8=0b10110100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	loc16 = *:2 ptr;
+}
+
+# p.211
+:inc loc16 is op8_8=0b00001010 & loc16 {
+	local old:2 = loc16;
+	local r:2 = old + 1;
+	C = carry(old, 1:2);
+	V = V || scarry(old, 1:2);
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.212
+:intr "INT"^intno is op4_12=0b000000000001 & imm4 [ intno = imm4 + 1; ] {
+	local tmp4:2 = imm4;
+	local imm4v:4 = zext(tmp4) + zext(tmp4);
+	local vec:4 = 0x3FFFC2 + imm4v;
+	intr_enter(vec);
+}
+# p.212
+:intr "DLOGINT" is op4_12=0b000000000001 & imm4=0b1110 {
+	local vec2:4 = 0x3FFFDE;
+	intr_enter(vec2);
+}
+# p.212
+:intr "RTOSINT" is op4_12=0b000000000001 & imm4=0b1111 {
+	local vec3:4 = 0x3FFFE0;
+	intr_enter(vec3);
+}
+# p.212
+:intr "NMI" is op0_16=0b0111011000010110 {
+	local vec4:4 = 0x3FFFE4;
+	intr_enter(vec4);
+}
+# p.212
+:intr "EMU" is op0_16=0b0111011000011100 {
+	intr_emu();
+}
+
+# p.214
+:iret is op0_16=0b0111011000000010 {
+	local ret_pc:4;
+	pop32(ret_pc);
+	local ier_dbgstat:4;
+	pop32(ier_dbgstat);
+	IER = ier_dbgstat[0,16];
+	local dp_st1:4;
+	pop32(dp_st1);
+	unpackst1(dp_st1[0,16]);
+	DP = dp_st1[16,16];
+	local ar1_ar0:4;
+	pop32(ar1_ar0);
+	AR0 = ar1_ar0[0,16];
+	AR1 = ar1_ar0[16,16];
+	pop32(P);
+	pop32(ACC);
+	local t_st0:4;
+	pop32(t_st0);
+	unpackst0(t_st0[0,16]);
+	T = t_st0[16,16];
+	RB_RA = RB_RAS;
+	RB_RAS = 0;
+	# Interrupt entry reserves one alignment word before seven context pairs.
+	sp_sub(1);
+	return [ret_pc];
+}
+
+# p.216
+:lb *XAR7 is ffc_return=0 & switch_canonical=1 & op0_16=0b0111011000100000 & XAR7 {
+	# The switch analyzer has validated that every loaded table entry is a
+	# 22-bit code address.  Keeping the loaded value directly on BRANCHIND lets
+	# Ghidra's generic native jump-table model recognize the data dependency.
+	goto [XAR7];
+}
+
+# p.216
+:lb *XAR7 is ffc_return=1 & switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
+	# FFC writes its fall-through address to XAR7.  The processor analyzer only
+	# selects this constructor for a bounded, exclusive FFC destination whose
+	# straight-line helper body leaves XAR7 untouched through this terminal LB.
+	local target:4 = XAR7 & 0x003fffff;
+	return [target];
+}
+
+# p.216
+:lb *XAR7 is ffc_return=0 & switch_canonical=0 & op0_16=0b0111011000100000 & XAR7 {
+	# Only XAR7(21:0) is loaded into the architectural PC.
+	local target:4 = XAR7 & 0x003fffff;
+	goto [target];
+}
+
+# p.217
+:lb dest22 is op6_10=0b0000000001 ... & dest22 {
+	goto dest22;
+}
+
+# p.218
+:lc *XAR7 is op0_16=0b0111011000000100 & XAR7 {
+	local tmp:4 = inst_next >> 1;
+	push32(tmp);
+	# Like LB *XAR7, LC ignores XAR7(31:22).
+	local target:4 = XAR7 & 0x003fffff;
+	call [target];
+}
+
+# p.219
+:lc dest22 is op6_10=0b0000000010 ... & dest22 {
+	local tmp:4 = inst_next >> 1;
+	push32(tmp);
+	call dest22;
+}
+
+# p.220
+:lcr dest22 is ctx_objmode=1 & op6_10=0b0111011001 ... & dest22 {
+	local tmp:4 = RPC;
+	push32(tmp);
+	RPC = inst_next >> 1;
+	call dest22;
+}
+
+# p.221
+:lcr *xarn0 is ctx_objmode=1 & op3_13=0b0011111001100 & xarn0 {
+	local tmp:4 = RPC;
+	push32(tmp);
+	RPC = inst_next >> 1;
+	local target:4 = xarn0 & 0x003fffff;
+	call [target];
+}
+
+# p.222
+:loopnz loc16, #imm16 is op8_8=0b00101110 & loc16; imm16 {
+	LOOP = 1;
+	local masked:2 = loc16 & imm16:2;
+	N = masked[15,1];
+	Z = (masked == 0);
+	if (Z) goto <done>;
+	goto inst_start;
+<done>
+	LOOP = 0;
+}
+
+# p.224
+:loopz loc16, #imm16 is op8_8=0b00101100 & loc16; imm16 {
+	LOOP = 1;
+	local masked:2 = loc16 & imm16:2;
+	N = masked[15,1];
+	Z = (masked == 0);
+	if (!Z) goto <done>;
+	goto inst_start;
+<done>
+	LOOP = 0;
+}
+
+# p.226 (LPADDR)
+:setc AMODE is op0_16=0b0101011000011110 & AMODE [ ctx_amode=1; globalset(inst_next, ctx_amode); ] {
+	AMODE = 1;
+}
+
+# p.227
+:lret is op0_16=0b0111011000010100 {
+	local tmp:4;
+	pop32(tmp);
+	return [tmp];
+}
+
+# p.228
+:lrete is op0_16=0b0111011000010000 {
+	local tmp:4;
+	pop32(tmp);
+	INTM = 0;
+	return [tmp];
+}
+
+# p.229
+:lretr is ctx_objmode=1 & op0_16=0b0000000000000110 {
+	local tmp = RPC;
+	pop32(RPC);
+	return [tmp];
+}
+
+# p.230
+:lsl ACC, shift0_4_1 is op4_12=0b111111110011 & ACC & shift0_4_1 {
+	local tmp:4 = ACC << (shift0_4_1 - 1);
+	C = tmp[31, 1];
+	ACC = tmp << 1;
+	flagnz(ACC);
+}
+
+# p.231
+:lsl ACC, T is op0_16=0b1111111101010000 & ACC & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC << (shift - 1);
+	C = tmp[31, 1];
+	ACC = tmp << 1;
+	<done>
+	flagnz(ACC);
+}
+
+# p.232
+:lsl ax4, shift0_4_1 is op5_11=0b11111111100 & ax4 & shift0_4_1 {
+	local tmp:2 = ax4 << (shift0_4_1 - 1);
+	C = tmp[15, 1];
+	ax4 = tmp << 1;
+	flagnz(ax4);
+}
+
+# p.233
+:lsl ax0, T is op1_15=0b111111110110011 & ax0 & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:2 = ax0 << (shift - 1);
+	C = tmp[15, 1];
+	ax0 = tmp << 1;
+	<done>
+	flagnz(ax0);
+}
+
+# p.234
+:lsl64 ACC:P, shift0_4_1 is ctx_objmode=1 & op4_12=0b010101101010 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val << (shift0_4_1 - 1);
+	C = tmp[63, 1];
+	val = tmp << 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
+
+# p.235
+:lsl64 ACC:P, T is ctx_objmode=1 & op0_16=0b0101011001010010 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local start_value:8 = (hi << 32) | lo;
+	local carry_value:8 = start_value << (safe_shift - 1);
+	local value:8 = start_value << shift;
+	C = carry_value[63, 1] && nonzero;
+	ACC = value[32, 32];
+	P = value[0, 32];
+	N = value[63, 1];
+	Z = value == 0;
+}
+
+# p.236
+:lsll ACC, T is ctx_objmode=1 & op0_16=0b0101011000111011 & ACC & T {
+	local shift:4 = zext(T[0,5]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local carry_value:4 = ACC << (safe_shift - 1);
+	C = carry_value[31,1] && nonzero;
+	ACC = ACC << shift;
+	flagnz(ACC);
+}
+
+# p.237
+:lsr ax4, shift0_4_1 is op5_11=0b11111111110 & ax4 & shift0_4_1 {
+	local tmp:2 = ax4 >> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	ax4 = tmp >> 1;
+	flagnz(ax4);
+}
+
+# p.238
+:lsr ax0, T is op1_15=0b111111110110001 & ax0 & T {
+	local shift:4 = zext(T[0,4]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:2 = ax0 >> (shift - 1);
+	C = tmp[0, 1];
+	ax0 = tmp >> 1;
+	<done>
+	flagnz(ax0);
+}
+
+# p.239
+:lsr64 ACC:P, shift0_4_1 is ctx_objmode=1 & op4_12=0b010101101001 & ACC & P & shift0_4_1 {
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	local tmp:8 = val >> (shift0_4_1 - 1);
+	C = tmp[0, 1];
+	val = tmp >> 1;
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
+
+# p.240
+:lsr64 ACC:P, T is ctx_objmode=1 & op0_16=0b0101011001011011 & ACC & P & T {
+	local shift:4 = zext(T[0,6]);
+	local lo:8 = zext(P);
+	local hi:8 = zext(ACC);
+	local val:8 = (hi << 32) | lo;
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:8 = val >> (shift - 1);
+	C = tmp[0, 1];
+	val = tmp >> 1;
+	<done>
+	ACC = val[32, 32];
+	P = val[0, 32];
+	N = val[63, 1];
+	Z = val == 0;
+}
+
+# p.241
+# The ordinary form remains exact for unknown and masked-zero T.  A finite
+# analyzer may select the second constructor only after proving one nonzero
+# T(4:0) count on every ingress.
+:lsrl ACC, T is lsrl_t_count=0 & ctx_objmode=1 & op0_16=0b0101011000100010 & ACC & T {
+	local shift:4 = zext(T[0,5]);
+	if (shift != 0) goto <shifted>;
+	C = 0;
+	goto <done>;
+	<shifted>
+	local tmp:4 = ACC >> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp >> 1;
+	<done>
+	flagnz(ACC);
+}
+
+:lsrl ACC, T is lsrl_t_count & ctx_objmode=1 & op0_16=0b0101011000100010 & ACC & T {
+	local shift:4 = lsrl_t_count;
+	local tmp:4 = ACC >> (shift - 1);
+	C = tmp[0, 1];
+	ACC = tmp >> 1;
+	flagnz(ACC);
+}
+
+# p.242
+:mac P, loc16, 0:imm16 is op8_8=0b00010100 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local coeff_addr:4 = zext(imm16:2);
+	local coeff:2 = *:2 coeff_addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
+
+# p.244
+:mac P, loc16, *XAR7 is ctx_objmode=1 & op0_16=0b0101011000000111; op8_8=0b11000111 & P & loc16 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc16;
+	acc_add_pm_p();
+	T = loc16;
+	local coeff:2 = *:2 program_addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
+
+# p.244
+:mac P, loc16, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011000000111; op8_8=0b10000111 & P & loc16 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc16;
+	acc_add_pm_p();
+	T = loc16;
+	local coeff:2 = *:2 program_addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+	XAR7 = XAR7 + program_step;
+}
+
+# p.246
+:max ax0, loc16 is ctx_objmode=1 & op1_15=0b010101100111001 & ax0; op8_8=0b00000000 & loc16 { # MAX AL, @AH has the @ on ah
+	local loc:2 = loc16;
+	local ax:2 = ax0;
+	N = (ax s< loc);
+	Z = (ax == loc);
+	C = (ax >= loc);
+	if (ax s>= loc) goto inst_next;
+	ax0 = loc;
+	V = 1;
+}
+
+# p.247
+:maxcul P, loc32 is ctx_objmode=1 & op0_16=0b0101011001010001; op8_8=0b00000000 & P & loc32 {
+	# N/Z describe the high words: N && !Z selects the incoming low word.
+	if (N == 0) goto <check_eq>;
+	if (Z != 0) goto inst_next;
+	P = loc32;
+	goto inst_next;
+<check_eq>
+	if (Z == 0) goto inst_next;
+	if (P >= loc32) goto inst_next;
+	V = 1;
+	P = loc32;
+}
+
+# p.248
+:maxl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001100001; op8_8=0b00000000 & ACC & loc32 {
+	local loc:4 = loc32;
+	N = (ACC s< loc);
+	Z = (ACC == loc);
+	C = (ACC >= loc);
+	if (ACC s>= loc) goto inst_next;
+	ACC = loc;
+	V = 1;
+}
+
+# p.249
+:min ax0, loc16 is ctx_objmode=1 & op1_15=0b010101100111010 & ax0; op8_8=0b00000000 & loc16 { # MIN AL, @AH has the @ on ah
+	local loc:2 = loc16;
+	local ax:2 = ax0;
+	N = (ax s< loc);
+	Z = (ax == loc);
+	C = (ax >= loc);
+	if (ax s<= loc) goto inst_next;
+	ax0 = loc;
+	V = 1;
+}
+
+# p.250
+:mincul P, loc32 is ctx_objmode=1 & op0_16=0b0101011001011001; P & loc32 {
+	# N/Z from prior; if N=0,Z=0 → P < loc32, update to loc32
+	if (N != 0) goto <check_eq>;
+	if (Z != 0) goto <check_eq>;
+	P = loc32;
+	goto inst_next;
+<check_eq>
+	if (Z == 0) goto inst_next;
+	if (P <= loc32) goto inst_next;
+	V = 1;
+	P = loc32;
+}
+
+# p.251
+:minl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010000; op8_8=0b00000000 & ACC & loc32 {
+	local loc:4 = loc32;
+	N = (ACC s< loc);
+	Z = (ACC == loc);
+	C = (ACC >= loc);
+	if (ACC s<= loc) goto inst_next;
+	ACC = loc;
+	V = 1;
+}
+
+# p.252
+:mov *(0:imm16), loc16 is op8_8=0b11110100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
+
+# p.253
+:mov ACC, #imm16 << #shift0_4 is op4_12=0b111111110010 & shift0_4; ACC & imm16 {
+	mov_acc_mext_shift(imm16:2, shift0_4);
+	flagnz(ACC);
+}
+
+# p.254
+:mov ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000000110; op8_8=0b00000000 & ACC & loc16 & T {
+	mov_acc_mext_shift(loc16, T[0,4]);
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 is ctx_objmode=1 & op8_8=0b10000101 & ACC & loc16 {
+	mov_acc_mext_shift(loc16, 0);
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 is ctx_objmode=0 & op8_8=0b11100000 & ACC & loc16 {
+	mov_acc_mext_shift(loc16, 0);
+	flagnz(ACC);
+}
+
+# p.255
+# A processor analyzer selects this variant only after proving that an unsigned
+# range guard restricts the compiler's switch selector below bit 15.  On that
+# path SXM cannot affect the result, and the canonical zext lets Ghidra bound
+# the subsequent native jump table.
+:mov ACC, loc16 << #shift8_4 is switch_canonical=1 & ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
+	local tmp:4 = zext(loc16);
+	ACC = tmp << shift8_4;
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 << #shift8_4 is switch_canonical=0 & ctx_objmode=1 & op0_16=0b0101011000000011; op12_4=0b0000 & ACC & shift8_4 & loc16 {
+	mov_acc_mext_shift(loc16, shift8_4);
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 << #shift8_4 is ctx_objmode=0 & op12_4=0b1110 & ACC & shift8_4 & loc16 {
+	mov_acc_mext_shift(loc16, shift8_4);
+	flagnz(ACC);
+}
+
+# p.255
+:mov ACC, loc16 << #16 is op8_8=0b00100101 & ACC & loc16 {
+	mov_acc_mext_shift(loc16, 16);
+	flagnz(ACC);
+}
+
+# p.256
+:mov ar67_8, loc16 is op9_7=0b0101111 & ar67_8 & loc16 {
+	ar67_8 = loc16;
+}
+
+# p.257
+:mov ax8, loc16 is op9_7=0b1001001 & ax8 & loc16 {
+	ax8 = loc16;
+	flagnz(ax8);
+}
+
+# p.258
+:mov DP, #imm10 is op10_6=0b111110 & DP & imm10 {
+	# A bitrange extracts and right-justifies; preserve the upper bits in place.
+	# Adapted from ghidra-tms320c28x bc32ac08ba70a5ba194824ec8a00b6f007eb0201.
+	DP = (DP & 0xfc00) | imm10;
+}
+
+# p.259
+:mov IER, loc16 is op8_8=0b00100011 & IER & loc16 {
+	IER = loc16;
+}
+
+# p.260
+:mov loc16, #imm16 is op8_8=0b00101000 & loc16; imm16 {
+	loc16 = imm16;
+}
+:mov regax, #imm16 is op8_8=0b00101000 & regax & regax=8 & op4_4=0b1010; imm16 {
+	regax = imm16;
+	flagnz(regax);
+}
+:mov regax, #imm16 is op8_8=0b00101000 & regax & regax=9 & op4_4=0b1010; imm16 {
+	regax = imm16;
+	flagnz(regax);
+}
+
+# p.261
+:mov loc16, *(0:imm16) is op8_8=0b11110101 & loc16; imm16 {
+	local addr:4 = imm16;
+	loc16 = *:2 addr;
+}
+:mov regax, *(0:imm16) is op8_8=0b11110101 & regax & regax=8 & op4_4=0b1010; imm16 {
+	local addr:4 = imm16;
+	regax = *:2 addr;
+	flagnz(regax);
+}
+:mov regax, *(0:imm16) is op8_8=0b11110101 & regax & regax=9 & op4_4=0b1010; imm16 {
+	local addr:4 = imm16;
+	regax = *:2 addr;
+	flagnz(regax);
+}
+
+# p.262
+:mov loc16, #0 is op8_8=0b00101011 & loc16 {
+	loc16 = 0;
+}
+:mov regax, #0 is op8_8=0b00101011 & regax & regax=8 & op4_4=0b1010 {
+	regax = 0;
+	N = 0;
+	Z = 1;
+}
+:mov regax, #0 is op8_8=0b00101011 & regax & regax=9 & op4_4=0b1010 {
+	regax = 0;
+	N = 0;
+	Z = 1;
+}
+
+# p.263
+:mov loc16, ACC << #1 is ctx_objmode=1 & op8_8=0b10110001 & loc16 & ACC {
+	local tmp:4 = ACC << 1;
+	loc16 = tmp:2;
+}
+
+# p.263
+:mov loc16, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101101; op11_5=0b00000 & loc16 & ACC & shift8_3_1 {
+	local tmp:4 = ACC << shift8_3_1;
+	loc16 = tmp:2;
+}
+
+# p.263
+:mov loc16, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10111 & loc16 & ACC & shift8_3_1 {
+	local tmp:4 = ACC << shift8_3_1;
+	loc16 = tmp:2;
+}
+
+# p.264
+:mov loc16, arn8 is op11_5=0b01111 & arn8 & loc16 {
+	loc16 = arn8;
+}
+:mov regax, arn8 is op11_5=0b01111 & arn8 & regax & regax=8 & op4_4=0b1010 {
+	regax = arn8;
+	flagnz(regax);
+}
+:mov regax, arn8 is op11_5=0b01111 & arn8 & regax & regax=9 & op4_4=0b1010 {
+	regax = arn8;
+	flagnz(regax);
+}
+
+# p.265
+:mov loc16, ax8 is op9_7=0b1001011 & ax8 & loc16 {
+	loc16 = ax8;
+}
+:mov regax, ax8 is op9_7=0b1001011 & ax8 & regax & regax=8 & op4_4=0b1010 {
+	regax = ax8;
+	flagnz(regax);
+}
+:mov regax, ax8 is op9_7=0b1001011 & ax8 & regax & regax=9 & op4_4=0b1010 {
+	regax = ax8;
+	flagnz(regax);
+}
+
+# p.266
+:mov loc16, ax0, cond8 is ctx_objmode=1 & op1_15=0b010101100010101 & ax0; op12_4=0b0000 & cond8 & loc16 {
+	if (!cond8) goto inst_next;
+	loc16 = ax0;
+}
+
+# p.268
+:mov loc16, IER is op8_8=0b00100000 & loc16 & IER {
+	loc16 = IER;
+}
+
+# p.269
+:mov loc16, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & loc16 & OVC {
+	loc16 = zext(OVC) << 10;
+}
+:mov regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & OVC {
+	regax = zext(OVC) << 10;
+	flagnz(regax);
+}
+:mov regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101001; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & OVC {
+	regax = zext(OVC) << 10;
+	flagnz(regax);
+}
+
+# p.270
+:mov loc16, P is pm_store_noshift=1 & op8_8=0b00111111 & loc16 & P {
+	# The analyzer proves decoded PM=0 at this instruction.  Snapshot the low
+	# half before the destination write so register aliases remain well-defined.
+	local low_product:2 = P[0,16];
+	loc16 = low_product;
+}
+:mov loc16, P is pm_store_noshift=0 & op8_8=0b00111111 & loc16 & P {
+	local tmp:4;
+	pmshift(tmp, P);
+	loc16 = tmp:2;
+}
+
+# p.271
+:mov loc16, T is op8_8=0b00100001 & loc16 & T {
+	loc16 = T;
+}
+
+# p.272
+:mov OVC, loc16 is ctx_objmode=1 & op0_16=0b0101011000000010; op8_8=0b00000000 & OVC & loc16 {
+	OVC = loc16[10,6];
+}
+
+# p.273
+:mov PH, loc16 is op8_8=0b00101111 & PH & loc16 {
+	PH = loc16;
+}
+
+# p.274
+:mov PL, loc16 is op8_8=0b00100111 & PL & loc16 {
+	PL = loc16;
+}
+
+# p.275
+:mov PM, ax0 is ctx_objmode=1 & op1_15=0b010101100011100 & PM & ax0 {
+	local raw:1 = ax0[0,3];
+	decode_pm(raw);
+}
+
+# p.276
+:mov T, loc16 is op8_8=0b00101101 & T & loc16 {
+	T = loc16;
+}
+
+# p.277
+:mov TL, #0 is ctx_objmode=1 & op0_16=0b0101011001010110 & TL {
+	TL = 0;
+}
+
+# p.278
+:mov xarn0, PC is ctx_objmode=1 & op3_13=0b0011111001011 & xarn0 & PC {
+	xarn0 = inst_start >> 1;
+}
+
+# p.279
+:mova T, loc16 is op8_8=0b00010000 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+	T = loc16;
+	acc_add_pm_p();
+}
+
+# p.280
+:movad T, mem16_addr is ctx_objmode=1 & op8_8=0b10100111 & T & mem16_addr {
+	T = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = T;
+	acc_add_pm_p();
+}
+
+# p.281
+:movb ACC, #imm8 is ctx_objmode=1 & op8_8=0b00000010 & ACC & imm8 {
+	ACC = imm8;
+	flagnz(ACC);
+}
+
+# p.282
+:movb ar67_8, #imm8 is op9_7=0b1101011 & ar67_8 & imm8 {
+	ar67_8 = zext(imm8:1);
+}
+
+# p.283
+:movb ax8, #imm8 is op9_7=0b1001101 & ax8 & imm8 {
+	ax8 = imm8;
+	flagnz(ax8);
+}
+
+# p.284
+:movb ax8lsb, loc8 is op9_7=0b1100011 & ax8 & ax8lsb & loc8 {
+	ax8 = zext(loc8);
+	Z = ax8 == 0;
+	N = 0;
+}
+
+# p.286
+:movb ax8msb, loc8 is op9_7=0b0011100 & ax8 & ax8msb & loc8 {
+	ax8msb = loc8;
+	flagnz(ax8);
+}
+
+# p.288
+# Unlike the four AX byte-load/store forms in Section 5.10, this instruction
+# writes a zero-extended 16-bit loc16 value.  Indexed operands therefore use
+# ordinary word offsets, and no old memory byte is read or preserved.
+:movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & loc16 {
+	if (!cond) goto inst_next;
+	loc16 = zext(imm8_8:1);
+}
+:movb loc16, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & loc16 {
+	if (!cond) goto inst_next;
+	loc16 = zext(imm8_8:1);
+}
+# The instruction also updates N/Z when the selected loc16 is AH or AL.
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=8 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=9 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=8 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+:movb regax, #imm8_8, cond is ctx_objmode=1 & ctx_amode=1 & ctx_page0=0 & op4_12=0b010101101011 & cond;
+	imm8_8 & op4_4=0b1010 & regax & regax=9 {
+	if (!cond) goto inst_next;
+	regax = zext(imm8_8:1);
+	flagnz(regax);
+}
+
+# p.290
+:movb byte_index_info, ax8lsb is op9_7=0b0011110 & ax8 & ax8lsb & byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	store_word_byte(addr, high, ax8lsb);
+}
+:movb loc16, ax8lsb is ctx_amode=0 & op9_7=0b0011110 & ax8 & ax8lsb
+	& op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8lsb);
+}
+:movb loc16, ax8lsb is ctx_amode=1 & ctx_page0=0 & op9_7=0b0011110 & ax8 & ax8lsb
+	& op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8lsb);
+}
+
+# p.292
+:movb byte_index_info, ax8msb is op9_7=0b1100100 & ax8 & ax8msb & byte_index_info {
+	local addr:4 = byte_index_info:4;
+	local high:1 = byte_index_info[32,8];
+	store_word_byte(addr, high, ax8msb);
+}
+:movb loc16, ax8msb is ctx_amode=0 & op9_7=0b1100100 & ax8 & ax8msb
+	& op3_5!=0b10010 & op3_5!=0b10011 & op6_2!=0b11 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8msb);
+}
+:movb loc16, ax8msb is ctx_amode=1 & ctx_page0=0 & op9_7=0b1100100 & ax8 & ax8msb
+	& op3_5!=0b10010 & op3_5!=0b10011 & loc16 {
+	local old_word:2 = loc16;
+	loc16 = (old_word & 0xff00) | zext(ax8msb);
+}
+
+# p.294
+:movb xarn8, #imm8 is op11_5=0b11010 & xarn8 & imm8 {
+	xarn8 = imm8;
+}
+
+# p.294
+:movb XAR6, #imm8 is ctx_objmode=1 & op8_8=0b10111110 & XAR6 & imm8 {
+	XAR6 = imm8;
+}
+
+# p.294
+:movb XAR7, #imm8 is ctx_objmode=1 & op8_8=0b10110110 & XAR7 & imm8 {
+	XAR7 = imm8;
+}
+
+# p.295
+:movdl XT, mem32_addr is ctx_objmode=1 & op8_8=0b10100110 & XT & mem32_addr {
+	local value:4 = *:4 mem32_addr;
+	XT = value;
+	*:4 (mem32_addr + 2) = value;
+}
+
+# p.296
+:movh loc16, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & loc16 & ACC {
+	local sh:4 = ACC << 1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << 1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #1 is ctx_objmode=1 & op8_8=0b10110011 & regax & regax=9 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << 1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+
+# p.296
+:movh loc16, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & loc16 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=1 & op0_16=0b0101011000101111; op11_5=0b00000 & shift8_3_1 & regax & regax=9 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+
+# p.296
+:movh loc16, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & loc16 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	loc16 = sh[16,16];
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & regax=8 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, ACC << #shift8_3_1 is ctx_objmode=0 & op11_5=0b10110 & shift8_3_1 & regax & regax=9 & op4_4=0b1010 & ACC {
+	local sh:4 = ACC << shift8_3_1;
+	regax = sh[16,16];
+	flagnz(regax);
+}
+
+# p.297
+:movh loc16, P is op8_8=0b01010111 & loc16 & P {
+	local sh:4;
+	pmshift(sh, P);
+	loc16 = sh[16,16];
+}
+:movh regax, P is op8_8=0b01010111 & regax & regax=8 & op4_4=0b1010 & P {
+	local sh:4;
+	pmshift(sh, P);
+	regax = sh[16,16];
+	flagnz(regax);
+}
+:movh regax, P is op8_8=0b01010111 & regax & regax=9 & op4_4=0b1010 & P {
+	local sh:4;
+	pmshift(sh, P);
+	regax = sh[16,16];
+	flagnz(regax);
+}
+
+# p.298
+:movl ACC, loc32 is op8_8=0b00000110 & ACC & loc32 {
+	ACC = loc32;
+	flagnz(ACC);
+}
+
+# p.299
+:movl ACC, P << PM is op0_16=0b0001011010101100 & ACC & P & PM { # alias for `MOVP T, loc16` with `loc16 = @T`
+	pmshift(ACC, P);
+	flagnz(ACC);
+}
+
+# p. 300
+movl_acc_dest: loc32 is loc32 {
+	loc32 = ACC;
+}
+movl_acc_dest: "ACC" is loc32 & reg32=9 {
+	flagnz(ACC);
+}
+:movl movl_acc_dest, ACC is op8_8=0b00011110 & movl_acc_dest & ACC {
+	build movl_acc_dest;
+}
+
+# p.301
+:movl loc32, ACC, cond8 is op0_16=0b0101011001001000; op12_4=0b0000 & loc32 & ACC & cond8 {
+	if (!cond8) goto inst_next; loc32 = ACC;
+}
+
+# p.303
+movl_store_flags: is imm8 {
+}
+movl_store_flags: is op0_8=0b10101001 {
+	flagnz(ACC);
+}
+
+:movl loc32, P is ctx_objmode=1 & op8_8=0b10101001 & loc32 & P & movl_store_flags {
+	loc32 = P;
+	build movl_store_flags;
+}
+
+# p.304
+:movl loc32, XAR0 is ctx_objmode=1 & op8_8=0b00111010 & loc32 & XAR0 & movl_store_flags {
+	loc32 = XAR0;
+	build movl_store_flags;
+}
+:movl loc32, XAR1 is ctx_objmode=1 & op8_8=0b10110010 & loc32 & XAR1 & movl_store_flags {
+	loc32 = XAR1;
+	build movl_store_flags;
+}
+:movl loc32, XAR2 is ctx_objmode=1 & op8_8=0b10101010 & loc32 & XAR2 & movl_store_flags {
+	loc32 = XAR2;
+	build movl_store_flags;
+}
+:movl loc32, XAR3 is ctx_objmode=1 & op8_8=0b10100010 & loc32 & XAR3 & movl_store_flags {
+	loc32 = XAR3;
+	build movl_store_flags;
+}
+:movl loc32, XAR4 is ctx_objmode=1 & op8_8=0b10101000 & loc32 & XAR4 & movl_store_flags {
+	loc32 = XAR4;
+	build movl_store_flags;
+}
+:movl loc32, XAR5 is ctx_objmode=1 & op8_8=0b10100000 & loc32 & XAR5 & movl_store_flags {
+	loc32 = XAR5;
+	build movl_store_flags;
+}
+:movl loc32, XAR6 is op8_8=0b11000010 & loc32 & XAR6 & movl_store_flags {
+	loc32 = XAR6;
+	build movl_store_flags;
+}
+:movl loc32, XAR7 is op8_8=0b11000011 & loc32 & XAR7 & movl_store_flags {
+	loc32 = XAR7;
+	build movl_store_flags;
+}
+
+# p.305
+:movl loc32, XT is ctx_objmode=1 & op8_8=0b10101011 & loc32 & XT & movl_store_flags {
+	loc32 = XT;
+	build movl_store_flags;
+}
+
+# p.306
+:movl P, ACC is op0_16=0b1111111101011010 & P & ACC {
+	P = ACC;
+}
+
+# p.307
+:movl P, loc32 is ctx_objmode=1 & op8_8=0b10100011 & P & loc32 {
+	P = loc32;
+}
+
+# p.308
+:movl XAR0, loc32 is ctx_objmode=1 & op8_8=0b10001110 & XAR0 & loc32 {
+	XAR0 = loc32;
+}
+:movl XAR1, loc32 is ctx_objmode=1 & op8_8=0b10001011 & XAR1 & loc32 {
+	XAR1 = loc32;
+}
+:movl XAR2, loc32 is ctx_objmode=1 & op8_8=0b10000110 & XAR2 & loc32 {
+	XAR2 = loc32;
+}
+:movl XAR3, loc32 is ctx_objmode=1 & op8_8=0b10000010 & XAR3 & loc32 {
+	XAR3 = loc32;
+}
+:movl XAR4, loc32 is ctx_objmode=1 & op8_8=0b10001010 & XAR4 & loc32 {
+	XAR4 = loc32;
+}
+:movl XAR5, loc32 is ctx_objmode=1 & op8_8=0b10000011 & XAR5 & loc32 {
+	XAR5 = loc32;
+}
+:movl XAR6, loc32 is op8_8=0b11000100 & XAR6 & loc32 {
+	XAR6 = loc32;
+}
+:movl XAR7, loc32 is op8_8=0b11000101 & XAR7 & loc32 {
+	XAR7 = loc32;
+}
+
+# p.309
+:movl XAR0, #imm22 is ctx_objmode=1 & op6_10=0b1000110100 & XAR0 & $(imm22) {
+	XAR0 = imm22;
+}
+:movl XAR1, #imm22 is ctx_objmode=1 & op6_10=0b1000110101 & XAR1 & $(imm22) {
+	XAR1 = imm22;
+}
+:movl XAR2, #imm22 is ctx_objmode=1 & op6_10=0b1000110110 & XAR2 & $(imm22) {
+	XAR2 = imm22;
+}
+:movl XAR3, #imm22 is ctx_objmode=1 & op6_10=0b1000110111 & XAR3 & $(imm22) {
+	XAR3 = imm22;
+}
+:movl XAR4, #imm22 is ctx_objmode=1 & op6_10=0b1000111100 & XAR4 & $(imm22) {
+	XAR4 = imm22;
+}
+:movl XAR5, #imm22 is ctx_objmode=1 & op6_10=0b1000111101 & XAR5 & $(imm22) {
+	XAR5 = imm22;
+}
+:movl XAR6, #imm22 is op6_10=0b0111011010 & XAR6 & $(imm22) {
+	XAR6 = imm22;
+}
+:movl XAR7, #imm22 is op6_10=0b0111011011 & XAR7 & $(imm22) {
+	XAR7 = imm22;
+}
+
+# p.310
+:movl XT, loc32 is ctx_objmode=1 & op8_8=0b10000111 & XT & loc32 {
+	XT = loc32;
+}
+
+# p.311
+:movp T, loc16 is op8_8=0b00010110 & T & loc16 { # also does `ACC = ACC + P << PM`, see `addl ACC, P << PM`
+	T = loc16;
+	pmshift(ACC, P);
+	flagnz(ACC);
+}
+
+# p.312
+:movs T, loc16 is op8_8=0b00010001 & T & loc16 {
+	T = loc16;
+	acc_sub_pm_p();
+}
+
+# p.313
+:movu ACC, loc16 is op8_8=0b00001110 & ACC & loc16 {
+	ACC = zext(loc16);
+	N = 0;
+	Z = (ACC == 0);
+}
+
+# p.314
+:movu regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0 & op4_4=0b1010 & regax & regax=8 & OVC {
+	regax = zext(OVC) & 0x3f;
+	flagnz(regax);
+}
+:movu regax, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0 & op4_4=0b1010 & regax & regax=9 & OVC {
+	regax = zext(OVC) & 0x3f;
+	flagnz(regax);
+}
+:movu loc16, OVC is ctx_objmode=1 & op0_16=0b0101011000101000; op8_8=0b00000000 & loc16 & OVC {
+	loc16 = zext(OVC) & 0x3f;
+}
+
+# p.315
+:movu OVC, loc16 is ctx_objmode=1 & op0_16=0b0101011001100010; op8_8=0b00000000 & loc16 & OVC {
+	OVC = loc16[0,6];
+}
+
+# p.316
+:movw DP, #imm16 is op0_16=0b0111011000011111; DP & imm16 {
+	DP = imm16;
+}
+
+# p.317
+:movx TL, loc16 is ctx_objmode=1 & op0_16=0b0101011000100001; TL & loc16 {
+	XT = sext(loc16);
+}
+
+# p.318
+:movz arn8, SP is op11_5=0b01011 & arn8 & xarn8 & op4_4=0b1010 & reg16=13 & SP {
+	xarn8 = SP;
+}
+:movz arn8, loc16 is op11_5=0b01011 & arn8 & xarn8 & loc16 {
+	xarn8 = zext(loc16);
+}
+:movz AR6, loc16 is ctx_objmode=1 & op8_8=0b10001000 & AR6 & loc16 {
+	XAR6 = zext(loc16);
+}
+:movz AR7, loc16 is ctx_objmode=1 & op8_8=0b10000000 & AR7 & loc16 {
+	XAR7 = zext(loc16);
+}
+
+# p.319
+:movz DP, #imm10 is ctx_objmode=1 & op10_6=0b101110 & DP & imm10 {
+	DP = imm10;
+}
+
+# p.320
+:mpy ACC, loc16, #imm16 is op8_8=0b00110100 & ACC & loc16; imm16 {
+	T = loc16;
+	local prod:4 = sext(T) * sext(imm16:2);
+	ACC = prod;
+	flagnz(ACC);
+}
+
+# p.321
+:mpy ACC, T, loc16 is op8_8=0b00010010 & ACC & T & loc16 {
+	local prod:4 = sext(T) * sext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
+
+# p.322
+:mpy P, loc16, #imm16 is ctx_objmode=1 & op8_8=0b10001100 & P & loc16; imm16 {
+	local prod:4 = sext(loc16) * sext(imm16:2);
+	P = prod;
+}
+
+# p.323
+:mpy P, T, loc16 is op8_8=0b00110011 & P & T & loc16 {
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
+
+# p.324
+:mpya P, loc16, #imm16 is op8_8=0b00010101 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(imm16:2);
+	P = prod;
+}
+
+# p.325
+:mpya P, T, loc16 is op8_8=0b00010111 & P & T & loc16 {
+	acc_add_pm_p();
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
+
+# p.326
+:mpyb ACC, T, #imm8 is op8_8=0b00110101 & ACC & T & imm8 {
+	local prod:4 = sext(T) * zext(imm8:1);
+	ACC = prod;
+	flagnz(ACC);
+}
+
+# p.327
+:mpyb P, T, #imm8 is op8_8=0b00110001 & P & T & imm8 {
+	local prod:4 = sext(T) * zext(imm8:1);
+	P = prod;
+}
+
+# p.328
+:mpys P, T, loc16 is op8_8=0b00010011 & P & T & loc16 {
+	acc_sub_pm_p();
+	local prod:4 = sext(T) * sext(loc16);
+	P = prod;
+}
+
+# p.329
+:mpyu P, T, loc16 is op8_8=0b00110111 & P & T & loc16 {
+	local prod:4 = zext(T) * zext(loc16);
+	P = prod;
+}
+
+# p.330
+:mpyu ACC, T, loc16 is op8_8=0b00110110 & ACC & T & loc16 {
+	local prod:4 = zext(T) * zext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
+
+# p.331
+:mpyxu ACC, T, loc16 is op8_8=0b00110000 & ACC & T & loc16 {
+	local prod:4 = sext(T) * zext(loc16);
+	ACC = prod;
+	flagnz(ACC);
+}
+
+# p.332
+:mpyxu P, T, loc16 is op8_8=0b00110010 & P & T & loc16 {
+	local prod:4 = sext(T) * zext(loc16);
+	P = prod;
+}
+
+# p.333
+:nasp is op0_16=0b0111011000010111 {
+	if (SPA == 0) goto inst_next;
+	SPA = 0;
+	sp_sub(1);
+}
+
+# p.334
+:neg ACC is op0_16=0b1111111101010100 & ACC {
+	local start_acc:4 = ACC;
+	local minimum:1 = start_acc == 0x80000000;
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local negated:4 = -start_acc;
+	ACC = (negated & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	V = V || minimum;
+	C = (ACC == 0);
+	flagnz(ACC);
+}
+
+# p.335
+:neg ax0 is op1_15=0b111111110101110 & ax0 {
+	local start_ax:2 = ax0;
+	local minimum:1 = start_ax == 0x8000;
+	ax0 = -start_ax;
+	V = V || minimum;
+	C = (ax0 == 0);
+	N = ax0[15,1];
+	Z = (ax0 == 0);
+}
+
+# p.336
+:neg64 ACC:P is ctx_objmode=1 & op0_16=0b0101011001011000 & ACC & P {
+	local start_value:8 = (zext(ACC) << 32) | zext(P);
+	local minimum:1 = start_value == 0x8000000000000000;
+	local saturate:1 = minimum && (OVM != 0);
+	local saturate_mask:8 = 0 - zext(saturate);
+	local negated:8 = -start_value;
+	local value:8 = (negated & ~saturate_mask) | (0x7fffffffffffffff & saturate_mask);
+	ACC = value[32,32];
+	P = value[0,32];
+	V = V || minimum;
+	C = (value == 0);
+	N = value[63,1];
+	Z = (value == 0);
+}
+
+# p.337
+:negtc ACC is ctx_objmode=1 & op0_16=0b0101011000110010 & ACC {
+	local start_acc:4 = ACC;
+	local old_c:1 = C;
+	local execute:1 = TC != 0;
+	local minimum:1 = start_acc == 0x80000000;
+	local saturate:1 = execute && minimum && (OVM != 0);
+	local saturate_mask:4 = 0 - zext(saturate);
+	local executed:4 = ((-start_acc) & ~saturate_mask) | (0x7fffffff & saturate_mask);
+	local execute_mask:4 = 0 - zext(execute);
+	ACC = (start_acc & ~execute_mask) | (executed & execute_mask);
+	V = V || (execute && minimum);
+	C = (old_c && !execute) || (execute && (ACC == 0));
+	flagnz(ACC);
+}
+
+# p.339
+:nop is op0_16=0b0111011100000000 { }
+
+:nop loc16 is op8_8=0b01110111 & loc16 {
+	# loc16 emits the addressing-mode side effects for NOP *,ARPn forms.
+	build loc16;
+}
+
+# p.340
+:norm ACC, *    is ctx_objmode=1 & op0_16=0b0101011000100100 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *++  is ctx_objmode=1 & op0_16=0b0101011001011010 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *--  is ctx_objmode=1 & op0_16=0b0101011000100000 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *0++ is ctx_objmode=1 & op0_16=0b0101011001110111 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, *0-- is ctx_objmode=1 & op0_16=0b0101011000110000 & ACC {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+
+# p.341
+:norm ACC, xarn0++ is op3_13=0b1111111101111 & ACC & xarn0 {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	xarn0 = xarn0 + 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+:norm ACC, xarn0-- is op3_13=0b1111111101110 & ACC & xarn0 {
+	if (ACC == 0) goto <done>;
+	if ((ACC[31,1] ^ ACC[30,1]) != 0) goto <done>;
+	ACC = ACC << 1;
+	xarn0 = xarn0 - 1;
+	TC = 0;
+	goto <flags>;
+<done>
+	TC = 1;
+<flags>
+	flagnz(ACC);
+}
+
+# p.342
+:not ACC is op0_16=0b1111111101010101 & ACC {
+	ACC = ~ACC;
+	flagnz(ACC);
+}
+
+# p.343
+:not ax0 is op1_15=0b111111110101111 & ax0 {
+	ax0 = ~ax0;
+	flagnz(ax0);
+}
+
+# p.344
+:or ACC, loc16 is ctx_objmode=1 & op8_8=0b10101111 & ACC & loc16 {
+	ACC = ACC | zext(loc16);
+	flagnz(ACC);
+}
+
+# p.345
+:or ACC, #imm16 << #shift0_4 is ctx_objmode=1 & op4_12=0b001111100001 & shift0_4; ACC & imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC | (tmp << shift0_4);
+	flagnz(ACC);
+}
+:or ACC, #imm16 << #16 is ctx_objmode=1 & op0_16=0b0101011001001010; ACC & imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC | (tmp << 16);
+	flagnz(ACC);
+}
+
+# p.346
+:or ax8, loc16 is op9_7=0b1100101 & ax8 & loc16 {
+	ax8 = ax8 | loc16;
+	flagnz(ax8);
+}
+
+# p.347
+:or IER, #imm16 is op0_16=0b0111011000100011; IER & imm16 {
+	IER = IER | imm16:2;
+}
+
+# p.348
+:or IFR, #imm16 is op0_16=0b0111011000100111; IFR & imm16 {
+	IFR = IFR | imm16:2;
+}
+
+# p.349
+:or loc16, #imm16 is op8_8=0b00011010 & loc16; imm16 {
+	local r:2 = loc16 | imm16:2;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.350
+:or loc16, ax8 is op9_7=0b1001100 & loc16 & ax8 {
+	local r:2 = loc16 | ax8;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.351
+:orb ax8, #imm8 is op9_7=0b0101000 & ax8 & imm8 {
+	ax8 = ax8 | zext(imm8:1);
+	flagnz(ax8);
+}
+
+# p.352
+:out *(imm16), loc16 is ctx_objmode=1 & op8_8=0b10111100 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
+
+# p.353
+:pop ACC is op0_16=0b0000011010111110 & ACC { # alias for `MOVL ACC, *--SP`
+	pop32(ACC);
+	flagnz(ACC);
+}
+
+# p.354
+:pop AR1:AR0 is op0_16=0b0111011000000111 & AR1 & AR0 {
+	local val:4; pop32(val); AR0 = val[0,16]; AR1 = val[16,16];
+}
+:pop AR3:AR2 is op0_16=0b0111011000000101 & AR3 & AR2 {
+	local val:4; pop32(val); AR2 = val[0,16]; AR3 = val[16,16];
+}
+:pop AR5:AR4 is op0_16=0b0111011000000110 & AR5 & AR4 {
+	local val:4; pop32(val); AR4 = val[0,16]; AR5 = val[16,16];
+}
+
+# p.355
+:pop AR1H:AR0H is op0_16=0b0000000000000011 & AR1H & AR0H {
+	local val:4; pop32(val); AR0H = val[0,16]; AR1H = val[16,16];
+}
+
+# p.356
+:pop DBGIER is op0_16=0b0111011000010010 & DBGIER {
+	pop16(DBGIER);
+}
+
+# p.357
+:pop DP is op0_16=0b0111011000000011 & DP {
+	pop16(DP);
+}
+
+# p.358
+:pop DP:ST1 is op0_16=0b0111011000000001 & DP & ST1 {
+	local val:4; pop32(val);
+	local st1_val:2 = val[0,16];
+	unpackst1(st1_val);
+	DP = val[16,16];
+}
+
+# p.359
+:pop IFR is op0_16=0b0000000000000010 & IFR {
+	pop16(IFR);
+}
+
+# p.360
+:pop loc16 is op8_8=0b00101010 & loc16 {
+	pop16(loc16);
+}
+
+# p.361
+:pop P is op0_16=0b0111011000010001 & P {
+	pop32(P);
+}
+
+# p.362
+:pop RPC is op0_16=0b0000000000000111 & RPC {
+	pop32(RPC);
+}
+
+# p.363
+:pop ST0 is op0_16=0b0111011000010011 & ST0 {
+	local tmp:2;
+	pop16(tmp);
+	unpackst0(tmp);
+}
+
+# p.364
+:pop ST1 is op0_16=0b0111011000000000 & ST1 {
+	local tmp:2; pop16(tmp); unpackst1(tmp);
+}
+
+# p.365
+:pop T:ST0 is op0_16=0b0111011000010101 & T & ST0 {
+	local val:4; pop32(val);
+	local st0_val:2 = val[0,16]; unpackst0(st0_val);
+	T = val[16,16];
+}
+
+# p.366
+:pop XAR0 is ctx_objmode=1 & op0_16=0b1000111010111110 & XAR0 {
+	pop32(XAR0);
+}
+:pop XAR1 is ctx_objmode=1 & op0_16=0b1000101110111110 & XAR1 {
+	pop32(XAR1);
+}
+:pop XAR2 is ctx_objmode=1 & op0_16=0b1000011010111110 & XAR2 {
+	pop32(XAR2);
+}
+:pop XAR3 is ctx_objmode=1 & op0_16=0b1000001010111110 & XAR3 {
+	pop32(XAR3);
+}
+:pop XAR4 is ctx_objmode=1 & op0_16=0b1000101010111110 & XAR4 {
+	pop32(XAR4);
+}
+:pop XAR5 is ctx_objmode=1 & op0_16=0b1000001110111110 & XAR5 {
+	pop32(XAR5);
+}
+:pop XAR6 is op0_16=0b1100010010111110 & XAR6 {
+	pop32(XAR6);
+}
+:pop XAR7 is op0_16=0b1100010110111110 & XAR7 {
+	pop32(XAR7);
+}
+
+# p.367
+:pop XT is ctx_objmode=0 & op0_16=0b1000011110111110 & XT {
+	pop32(XT);
+}
+:pop XT is ctx_objmode=1 & op0_16=0b1000011110111110 & XT {
+	pop32(XT);
+}
+
+# p.368
+:pread loc16, *XAR7 is op8_8=0b00100100 & loc16 & XAR7 {
+	loc16 = *:2 XAR7;
+}
+:pread regax, *XAR7 is op8_8=0b00100100 & regax & regax=8 & op4_4=0b1010 & XAR7 {
+	regax = *:2 XAR7;
+	flagnz(regax);
+}
+:pread regax, *XAR7 is op8_8=0b00100100 & regax & regax=9 & op4_4=0b1010 & XAR7 {
+	regax = *:2 XAR7;
+	flagnz(regax);
+}
+
+# p.369
+:push ACC is op0_16=0b0001111010111110 & ACC { # alias for `MOVL *SP++, ACC`
+	push32(ACC);
+}
+
+# p.370
+:push AR1:AR0 is op0_16=0b0111011000001101 & AR1 & AR0 {
+	local val:4 = zext(AR0) | (zext(AR1) << 16);
+	push32(val);
+}
+:push AR3:AR2 is op0_16=0b0111011000001111 & AR3 & AR2 {
+	local val:4 = zext(AR2) | (zext(AR3) << 16);
+	push32(val);
+}
+:push AR5:AR4 is op0_16=0b0111011000001100 & AR5 & AR4 {
+	local val:4 = zext(AR4) | (zext(AR5) << 16);
+	push32(val);
+}
+
+# p.371
+:push AR1H:AR0H is op0_16=0b0000000000000101 & AR1H & AR0H {
+	local val:4 = zext(AR0H) | (zext(AR1H) << 16);
+	push32(val);
+}
+
+# p.372
+:push DBGIER is op0_16=0b0111011000001110 & DBGIER {
+	push16(DBGIER);
+}
+
+# p.373
+:push DP is op0_16=0b0111011000001011 & DP {
+	push16(DP);
+}
+
+# p.374
+:push DP:ST1 is op0_16=0b0111011000001001 & DP & ST1 {
+	packst1(ST1);
+	local val:4 = zext(ST1) | (zext(DP) << 16);
+	push32(val);
+}
+
+# p.375
+:push IFR is op0_16=0b0111011000001010 & IFR {
+	push16(IFR);
+}
+
+# p.376
+:push loc16 is op8_8=0b00100010 & loc16 {
+	push16(loc16);
+}
+
+# p.377
+:push P is op0_16=0b0111011000011101 & P {
+	push32(P);
+}
+
+# p.378
+:push RPC is op0_16=0b0000000000000100 & RPC {
+	push32(RPC);
+}
+
+# p.379
+:push ST0 is op0_16=0b0111011000011000 & ST0 {
+	packst0(ST0);
+	push16(ST0);
+}
+
+# p.380
+:push ST1 is op0_16=0b0111011000001000 & ST1 {
+	packst1(ST1);
+	push16(ST1);
+}
+
+# p.381
+:push T:ST0 is op0_16=0b0111011000011001 & T & ST0 {
+	packst0(ST0);
+	local val:4 = zext(ST0) | (zext(T) << 16);
+	push32(val);
+}
+
+# p.382
+:push XAR0 is ctx_objmode=1 & op0_16=0b0011101010111101 & XAR0 {
+	push32(XAR0);
+}
+:push XAR1 is ctx_objmode=1 & op0_16=0b1011001010111101 & XAR1 {
+	push32(XAR1);
+}
+:push XAR2 is ctx_objmode=1 & op0_16=0b1010101010111101 & XAR2 {
+	push32(XAR2);
+}
+:push XAR3 is ctx_objmode=1 & op0_16=0b1010001010111101 & XAR3 {
+	push32(XAR3);
+}
+:push XAR4 is ctx_objmode=1 & op0_16=0b1010100010111101 & XAR4 {
+	push32(XAR4);
+}
+:push XAR5 is ctx_objmode=1 & op0_16=0b1010000010111101 & XAR5 {
+	push32(XAR5);
+}
+:push XAR6 is op0_16=0b1100001010111101 & XAR6 {
+	push32(XAR6);
+}
+:push XAR7 is op0_16=0b1100001110111101 & XAR7 {
+	push32(XAR7);
+}
+
+# p.383
+:push XT is ctx_objmode=1 & op0_16=0b1010101110111101 & XT { # I really don't see how this can coexist with `add ACC, loc16 << #shift0_4 is op12_4=0b1010 & ctx_objmode=0` unless it's ctx_objmode=1
+	push32(XT);
+}
+
+# p.384
+:pwrite *XAR7, loc16 is op8_8=0b00100110 & loc16 & XAR7 {
+	*:2 XAR7 = loc16;
+}
+
+# p.385
+:qmacl P, loc32, *XAR7   is ctx_objmode=1 & op0_16=0b0101011001001111; op8_8=0b11000111 & P & loc32 & XAR7 {
+	local program_addr:4 = XAR7;
+	build loc32;
+	acc_add_pm_p();
+	local prod:8 = sext(loc32) * sext(*:4 program_addr);
+	P = prod[32,32];
+}
+:qmacl P, loc32, *XAR7++ is ctx_objmode=1 & op0_16=0b0101011001001111; op8_8=0b10000111 & P & loc32 & XAR7 & xar7_prog_step {
+	local program_addr:4 = XAR7;
+	build xar7_prog_step;
+	local program_step:4 = xar7_prog_step;
+	build loc32;
+	acc_add_pm_p();
+	local prod:8 = sext(loc32) * sext(*:4 program_addr);
+	P = prod[32,32];
+	XAR7 = XAR7 + (program_step << 1);
+}
+
+# p.387
+:qmpyal P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000110; op8_8=0b00000000 & P & XT & loc32 {
+	acc_add_pm_p();
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
+
+# p.388
+:qmpyl P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001100111; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
+
+# p.389
+:qmpyl ACC, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001100011; op8_8=0b00000000 & ACC & XT & loc32 {
+	local prod:8 = sext(XT) * sext(loc32);
+	ACC = prod[32,32];
+	flagnz(ACC);
+}
+
+# p.390
+:qmpysl P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000101; op8_8=0b00000000 & P & XT & loc32 {
+	acc_sub_pm_p();
+	local prod:8 = sext(XT) * sext(loc32);
+	P = prod[32,32];
+}
+
+# p.391
+:qmpyul P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000111; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = zext(XT) * zext(loc32);
+	P = prod[32,32];
+}
+
+# p.392
+:qmpyxul P, XT, loc32 is ctx_objmode=1 & op0_16=0b0101011001000010; op8_8=0b00000000 & P & XT & loc32 {
+	local prod:8 = sext(XT) * zext(loc32);
+	P = prod[32,32];
+}
+
+# p.393
+:rol ACC is op0_16=0b1111111101010011 & ACC {
+	local old_c:1 = C;
+	C = ACC[31,1];
+	ACC = (ACC << 1) | zext(old_c);
+	flagnz(ACC);
+}
+
+# p.394
+:ror ACC is op0_16=0b1111111101010010 & ACC {
+	local old_c:1 = C;
+	C = ACC[0,1];
+	ACC = (ACC >> 1) | (zext(old_c) << 31);
+	flagnz(ACC);
+}
+
+# p.395 - loads RPTC with N; next instruction executes N+1 times (see ^instruction above)
+:rpt #imm8 is op8_8=0b11110110 & imm8 [ rpt_active=1; globalset(inst_next, rpt_active); ] {
+    RPTC = zext(imm8:1);
+}
+:rpt loc16 is op8_8=0b11110111 & loc16 [ rpt_active=1; globalset(inst_next, rpt_active); ] {
+    local cnt:2 = loc16;
+    RPTC = cnt;
+}
+
+# p.396
+:sat ACC is op0_16=0b1111111101010111 & ACC {
+	C = 0;
+	if (OVC == 0) goto <no_sat>;
+	V = 1;
+	if (OVC[5,1] != 0) goto <neg_sat>;
+	ACC = 0x7fffffff;
+	goto <done>;
+<neg_sat>
+	ACC = 0x80000000;
+	goto <done>;
+<no_sat>
+	V = 0;
+<done>
+	OVC = 0;
+	flagnz(ACC);
+}
+
+# p.397
+:sat64 ACC:P is ctx_objmode=1 & op0_16=0b0101011000111110 & ACC & P {
+	C = 0;
+	if (OVC == 0) goto <no_sat>;
+	V = 1;
+	if (OVC[5,1] != 0) goto <neg_sat>;
+	ACC = 0x7fffffff;
+	P = 0xffffffff;
+	goto <done>;
+<neg_sat>
+	ACC = 0x80000000;
+	P = 0;
+	goto <done>;
+<no_sat>
+	V = 0;
+<done>
+	OVC = 0;
+	N = ACC[31,1];
+	Z = ((ACC | P) == 0);
+}
+
+# p.399 Need description here
+:sb off8, "UNC" is op12_4=0b0110 & cond8_4=0b1111 & off8 {
+	goto off8;
+}
+
+:sb off8, cond8 is op12_4=0b0110 & off8 & cond8 {
+	if (cond8) goto off8;
+}
+
+# p.400; SPRU430F SBBU flags and modes.
+:sbbu ACC, loc16 is op8_8=0b00011101 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_sub_borrow32(value);
+}
+
+# p.401
+:sbf off8, "EQ"  is ctx_objmode=1 & op8_8=0b11101100 & off8 {
+	if (Z != 0) goto off8;
+}
+:sbf off8, "NEQ" is ctx_objmode=1 & op8_8=0b11101101 & off8 {
+	if (Z == 0) goto off8;
+}
+:sbf off8, "TC"  is ctx_objmode=1 & op8_8=0b11101110 & off8 {
+	if (TC != 0) goto off8;
+}
+:sbf off8, "NTC" is ctx_objmode=1 & op8_8=0b11101111 & off8 {
+	if (TC == 0) goto off8;
+}
+
+# p.402
+:sbrk #imm8 is op8_8=0b11111101 & imm8 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - imm8;
+}
+
+# p.403
+:setc imm8 is op8_8=0b00111011 & page0_bit=0 & imm8 {
+	local bimm8:1 = imm8;
+	SXM   = SXM   || (bimm8[0,1] != 0);
+	OVM   = OVM   || (bimm8[1,1] != 0);
+	TC    = TC    || (bimm8[2,1] != 0);
+	C     = C     || (bimm8[3,1] != 0);
+	INTM  = INTM  || (bimm8[4,1] != 0);
+	DBGM  = DBGM  || (bimm8[5,1] != 0);
+	PAGE0 = PAGE0 || (bimm8[6,1] != 0);
+	VMAP  = VMAP  || (bimm8[7,1] != 0);
+}
+:setc imm8 is op8_8=0b00111011 & page0_bit=1 & imm8 [ ctx_page0=1; globalset(inst_next, ctx_page0); ] {
+	local bimm8:1 = imm8;
+	SXM   = SXM   || (bimm8[0,1] != 0);
+	OVM   = OVM   || (bimm8[1,1] != 0);
+	TC    = TC    || (bimm8[2,1] != 0);
+	C     = C     || (bimm8[3,1] != 0);
+	INTM  = INTM  || (bimm8[4,1] != 0);
+	DBGM  = DBGM  || (bimm8[5,1] != 0);
+	PAGE0 = PAGE0 || (bimm8[6,1] != 0);
+	VMAP  = VMAP  || (bimm8[7,1] != 0);
+} 
+
+# p.407
+:setc "XF" is op0_16=0b0101011000100110 {
+	XF = 1;
+}
+
+# p.408
+:sfr ACC, shift0_4_1 is op4_12=0b111111110100 & ACC & shift0_4_1 {
+	local start_acc:4 = ACC;
+	local arithmetic:4 = start_acc s>> shift0_4_1;
+	local logical:4 = start_acc >> shift0_4_1;
+	local sxm_mask:4 = 0 - zext(SXM);
+	local carry_value:4 = start_acc >> (shift0_4_1 - 1);
+	ACC = (arithmetic & sxm_mask) | (logical & ~sxm_mask);
+	C = carry_value[0,1];
+	flagnz(ACC);
+}
+
+# p.409
+:sfr ACC, T is op0_16=0b1111111101010001 & ACC & T {
+	local shift:4 = zext(T[0,4]);
+	local nonzero:1 = shift != 0;
+	local safe_shift:4 = shift | zext(shift == 0);
+	local start_acc:4 = ACC;
+	local arithmetic:4 = start_acc s>> shift;
+	local logical:4 = start_acc >> shift;
+	local sxm_mask:4 = 0 - zext(SXM);
+	local carry_value:4 = start_acc >> (safe_shift - 1);
+	ACC = (arithmetic & sxm_mask) | (logical & ~sxm_mask);
+	C = carry_value[0,1] && nonzero;
+	flagnz(ACC);
+}
+
+# p.410
+:spm  #1 is           op0_16=0b1111111101101000 {
+	PM = 1;
+}
+:spm  #0 is           op0_16=0b1111111101101001 {
+	PM = 0;
+}
+:spm #-1 is           op0_16=0b1111111101101010 {
+	PM = -1;
+}
+:spm #-2 is           op0_16=0b1111111101101011 {
+	PM = -2;
+}
+:spm #-3 is           op0_16=0b1111111101101100 {
+	PM = -3;
+}
+:spm #-4 is ctx_amode=0 & op0_16=0b1111111101101101 {
+	PM = -4;
+}
+:spm  #4 is ctx_amode=1 & op0_16=0b1111111101101101 {
+	PM = 4;
+}
+:spm #-5 is           op0_16=0b1111111101101110 {
+	PM = -5;
+}
+:spm #-6 is           op0_16=0b1111111101101111 {
+	PM = -6;
+}
+
+# p.412
+:sqra loc16 is ctx_objmode=1 & op0_16=0b0101011000010101; op8_8=0b00000000 & loc16 {
+	acc_add_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(T);
+	P = prod;
+}
+
+# p.413
+:sqrs loc16 is ctx_objmode=1 & op0_16=0b0101011000010001; loc16 {
+	acc_sub_pm_p();
+	T = loc16;
+	local prod:4 = sext(T) * sext(T);
+	P = prod;
+}
+
+# p.414
+:sub ACC, loc16 is ctx_objmode=1 & op8_8=0b10101110 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	acc_sub32(tmp);
+}
+:sub ACC, loc16 is ctx_objmode=0 & op8_8=0b10000000 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	acc_sub32(tmp);
+}
+:sub ACC, loc16 << #shift8_4 is ctx_objmode=1 & op0_16=0b0101011000000000; op12_4=0b0000 & ACC & loc16 & shift8_4 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << shift8_4;
+	acc_sub32(value);
+}
+#:sub ACC, loc16 << #shift8_4 is ctx_objmode=0 & op12_4=0b1000 & ACC & loc16 & shift8_4 {} # TODO conflict with `POP XT`
+:sub ACC, loc16 << #16 is op8_8=0b00000100 & ACC & loc16 {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << 16;
+	acc_sub32(value);
+}
+
+# p.416
+:sub ACC, loc16 << T is ctx_objmode=1 & op0_16=0b0101011000100111; op8_8=0b00000000 & ACC & loc16 & T {
+	local tmp:4;
+	mext(tmp, loc16);
+	local value:4 = tmp << T[0,4];
+	acc_sub32(value);
+}
+
+# p.417
+# The switch analyzer selects this form only for a matched 32-bit range guard
+# or its dispatch adjustment.  Bit 15 of the immediate is clear, so SXM cannot
+# change the operand.  The guard's CMPL overwrites C/N/Z; on its taken path, and
+# at the corresponding dispatch, the validated bounds prove no borrow, signed
+# overflow, OVC update, or OVM saturation.  Keeping that proven path simple lets
+# stock switch analysis recover the native table.  Ordinary SUB sites retain
+# the complete SXM/OVM-sensitive semantics below.
+:sub ACC, #imm16 << #shift0_4 is switch_canonical=1 & op4_12=0b111111110000 & shift0_4; ACC & imm16 {
+	local value:4 = zext(imm16:2) << shift0_4;
+	ACC = ACC - value;
+	C = 1;
+	flagnz(ACC);
+}
+
+# p.417
+:sub ACC, #imm16 << #shift0_4 is switch_canonical=0 & op4_12=0b111111110000 & shift0_4; ACC & imm16 {
+	local tmp:4;
+	mext(tmp, imm16:2);
+	local value:4 = tmp << shift0_4;
+	acc_sub32(value);
+}
+
+# p.418
+:sub ax8, loc16 is op9_7=0b1001111 & ax8 & loc16 {
+	local left:2 = ax8;
+	local right:2 = loc16;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	ax8 = left - right;
+	flagnz(ax8);
+}
+
+# p.419
+:sub loc16, ax8 is op9_7=0b0111010 & ax8 & loc16 {
+	local left:2 = loc16;
+	local right:2 = ax8;
+	local r:2 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.420
+# The switch analyzer selects this form only for both SUBB instructions in the
+# exact saved-selector schedule whose finite unsigned guard proves that the
+# dispatch path cannot borrow, overflow, update OVC, or invoke OVM saturation.
+# Ordinary SUBB sites retain the complete architectural accumulator arithmetic
+# below.
+:subb ACC, #imm8 is switch_canonical=1 & op8_8=0b00011001 & ACC & imm8 {
+	local value:4 = zext(imm8:1);
+	ACC = ACC - value;
+	C = 1;
+	flagnz(ACC);
+}
+
+# p.420
+:subb ACC, #imm8 is switch_canonical=0 & op8_8=0b00011001 & ACC & imm8 {
+	local value:4 = zext(imm8:1);
+	acc_sub32(value);
+}
+
+# p.421
+:subb SP, #imm7 is op7_9=0b111111101 & SP & imm7 {
+	sp_sub(imm7);
+}
+
+# p.422
+:subb xarn8, #imm7 is op11_5=0b11011 & op7=0b1 & xarn8 & imm7 {
+	xarn8 = xarn8 - imm7;
+}
+
+# p.423; SPRU430F SUBBL flags and modes.
+:subbl ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010100; op8_8=0b00000000 & ACC & loc32 {
+	local value:4 = loc32;
+	acc_sub_borrow32(value);
+}
+
+# p.424 and Appendix E.3.3.  The instruction page prints `temp > 0`,
+# while the migration appendix specifies the unsigned 33-bit no-borrow test
+# (`temp >= 0`) required by the documented quotient/remainder algorithm.  Split
+# the exact 33-bit comparison into the 32-bit shift carry and low-word compare;
+# the mask-based commit keeps the constructor branch-free and avoids uint5.
+:subcu ACC, loc16 is op8_8=0b00011111 & ACC & loc16 {
+	local old:4 = ACC;
+	local divisor:2 = loc16;
+	local shifted:4 = old << 1;
+	local subtrahend:4 = zext(divisor) << 16;
+	local shift_carry:1 = carry(old, old);
+	local low_no_borrow:1 = (shifted >= subtrahend);
+	local no_borrow:1 = shift_carry | low_no_borrow;
+	local selected:4 = (shifted - subtrahend) + 1;
+	local mask:4 = 0 - zext(no_borrow);
+	C = no_borrow;
+	ACC = (selected & mask) | (shifted & ~mask);
+	flagnz(ACC);
+}
+
+# p.426.  The exact 33-bit dividend fragment is {ACC(31:0), P(31)}.
+# ACC's shift carry makes the subtraction unconditionally no-borrow; otherwise
+# an unsigned low-word compare decides it.  The quotient bit is the same
+# no-borrow predicate, so no intra-instruction branch or nonstandard width is
+# required.
+:subcul ACC, loc32 is subcul_div32=0 & ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
+	local old_acc:4 = ACC;
+	local old_p:4 = P;
+	local divisor:4 = loc32;
+	local shifted:4 = (old_acc << 1) | zext(old_p[31,1]);
+	local shift_carry:1 = carry(old_acc, old_acc);
+	local low_no_borrow:1 = (shifted >= divisor);
+	local no_borrow:1 = shift_carry | low_no_borrow;
+	local difference:4 = shifted - divisor;
+	local mask:4 = 0 - zext(no_borrow);
+	C = no_borrow;
+	ACC = (difference & mask) | (shifted & ~mask);
+	P = (old_p << 1) | zext(no_borrow);
+	flagnz(ACC);
+}
+
+# Analyzer-selected canonical form for the complete manual division idiom.
+# The analyzer proves ACC=0, RPT #31, an unchanged nonzero register divisor,
+# a current P dividend snapshot, straight-line/exclusive ingress, and no alias.
+# One constructor therefore exposes exactly the 32-step unsigned quotient and
+# remainder data flow while preserving the final documented C/N/Z state.
+:subcul ACC, loc32 is subcul_div32=1 & ctx_objmode=1 & op0_16=0b0101011000010111; op8_8=0b00000000 & ACC & loc32 {
+	local dividend:4 = P;
+	local divisor:4 = loc32;
+	local quotient:4 = dividend / divisor;
+	local remainder:4 = dividend % divisor;
+	P = quotient;
+	ACC = remainder;
+	C = quotient[0,1];
+	flagnz(ACC);
+}
+
+# p.428
+:subl ACC, loc32 is ctx_objmode=1 & op8_8=0b00000011 & ACC & loc32 {
+	local value:4 = loc32;
+	acc_sub32(value);
+}
+
+# p.429
+:subl ACC, P << PM is op0_16=0b0001000110101100 & ACC & P & PM { # conflict with MOVS T, T
+	acc_sub_pm_p();
+}
+
+# p.430
+:subl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011001000001; op8_8=0b00000000 & loc32 & ACC {
+	local left:4 = loc32;
+	local right:4 = ACC;
+	local r:4 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	loc32 = r;
+	flagnz(r);
+}
+
+# p.431
+:subr loc16, ax8 is ctx_objmode=1 & op9_7=0b1110101 & ax8 & loc16 {
+	local left:2 = ax8;
+	local right:2 = loc16;
+	local r:2 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.432
+:subrl loc32, ACC is ctx_objmode=1 & op0_16=0b0101011001001001; op8_8=0b00000000 & loc32 & ACC {
+	local left:4 = ACC;
+	local right:4 = loc32;
+	local r:4 = left - right;
+	C = left >= right;
+	V = V || sborrow(left, right);
+	loc32 = r;
+	flagnz(r);
+}
+
+# p.433
+:subu ACC, loc16 is op8_8=0b00000001 & ACC & loc16 {
+	local value:4 = zext(loc16);
+	acc_sub32(value);
+}
+
+# p.434; SPRU430F SUBUL ACC uses unsigned borrow-counting OVCU.
+:subul ACC, loc32 is ctx_objmode=1 & op0_16=0b0101011001010101; op8_8=0b00000000 & ACC & loc32 {
+	local value:4 = loc32;
+	sub_unsigned32(ACC, value);
+}
+
+# p.435; SPRU430F SUBUL P uses unsigned borrow-counting OVCU.
+:subul P, loc32 is op0_16=0b0101011001011101; op8_8=0b00000000 & P & loc32 {
+	local value:4 = loc32;
+	sub_unsigned32(P, value);
+}
+
+# p.436
+:tbit loc16, #imm8_4 is op12_4=0b0100 & imm8_4 & loc16 {
+	local sh:2 = imm8_4;
+	local shifted:2 = loc16 >> sh;
+	TC = shifted[0,1];
+}
+
+# p.437
+:tbit loc16, T is ctx_objmode=1 & op0_16=0b0101011000100101; op8_8=0b00000000 & loc16 & T {
+	# Unlike the immediate form, T=0 selects bit 15 and T=15 selects bit 0.
+	# Adapted from ghidra-tms320c28x 521ee9fc8861e82c9ac5252ae268e8ed3f588fd6.
+	local bit:2 = 15 - (T & 0xf);
+	local shifted:2 = loc16 >> bit;
+	TC = shifted[0,1];
+}
+
+# p.438
+:tclr loc16, #imm8_4 is ctx_objmode=1 & op0_16=0b0101011000001001; op12_4=0b0000 & imm8_4 & loc16 {
+	local sh:2 = imm8_4;
+	local shifted:2 = loc16 >> sh;
+	TC = shifted[0,1];
+	loc16 = loc16 & ~(1:2 << sh);
+}
+
+# p.439
+:test ACC is op0_16=0b1111111101011000 & ACC {
+	flagnz(ACC);
+}
+
+# p.440
+:trap #imm5 is op5_11=0b00000000001 & imm5 {
+	local vector:4 = 0x3fffc0 + (zext(imm5:1) << 1);
+	intr_enter(vector);
+}
+
+# p.442
+:tset loc16, #imm8_4 is ctx_objmode=1 & op0_16=0b0101011000001101; op12_4=0b0000 & loc16 & imm8_4 {
+	local sh:2 = imm8_4;
+	local shifted:2 = loc16 >> sh;
+	TC = shifted[0,1];
+	loc16 = loc16 | (1:2 << sh);
+}
+
+# p.443
+:uout *(imm16), loc16 is ctx_objmode=1 & op8_8=0b10110000 & loc16; imm16 {
+	local ptr:4 = zext(imm16:2);
+	*:2 ptr = loc16;
+}
+
+# p.444
+:xb *AL is ctx_objmode=1 & op0_16=0b0101011000010100 & AL {
+	local target:4 = 0x3f0000 | zext(AL);
+	goto [target];
+}
+
+# p.445
+:xb imm16, *, "ARP"^imm3 is ctx_objmode=1 & op3_13=0b0011111001110 & imm3; imm16 {
+	ARP = imm3;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+
+# p.446
+:xb imm16, cond is ctx_objmode=1 & op4_12=0b010101101101 & cond; imm16 {
+	if (!cond) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+
+# p.448
+:xbanz imm16, *                   is ctx_objmode=1 & op0_16=0b0101011000001100; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *++                 is ctx_objmode=1 & op0_16=0b0101011000001010; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *--                 is ctx_objmode=1 & op0_16=0b0101011000001011; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0++                is ctx_objmode=1 & op0_16=0b0101011000001110; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0--                is ctx_objmode=1 & op0_16=0b0101011000001111; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *"ARP"^imm3         is ctx_objmode=1 & op3_13=0b0011111000110 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *++,  "ARP"^imm3    is ctx_objmode=1 & op3_13=0b0011111000111 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + 1;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *--,  "ARP"^imm3    is ctx_objmode=1 & op3_13=0b0011111001000 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - 1;
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0++, "ARP"^imm3    is ctx_objmode=1 & op3_13=0b0011111001001 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv + zext(AR0);
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+:xbanz imm16, *0--, "ARP"^imm3    is ctx_objmode=1 & op3_13=0b0011111001010 & imm3; imm16 {
+	local rp:4 = &XAR0 + zext(ARP) * 4;
+	local rv:4 = *[register]:4 rp;
+	*[register]:4 rp = rv - zext(AR0);
+	ARP = imm3;
+	if (rv[0,16] == 0) goto inst_next;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	goto [target];
+}
+
+# p.450
+:xcall *AL is ctx_objmode=1 & op0_16=0b0101011000110100 & AL {
+	local tmp:4 = inst_next >> 1;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	local target:4 = 0x3f0000 | zext(AL);
+	call [target];
+}
+
+# p.451
+:xcall imm16, *, "ARP"^imm3 is ctx_objmode=1 & op3_13=0b0011111001101 & imm3; imm16 {
+	local tmp:4 = inst_next >> 1;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	ARP = imm3;
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	call [target];
+}
+
+# p.452
+:xcall imm16, cond is ctx_objmode=1 & op4_12=0b010101101110 & cond; imm16 {
+	if (!cond) goto inst_next;
+	local tmp:4 = inst_next >> 1;
+	local ret:2 = tmp[0,16];
+	push16(ret);
+	local target:4 = 0x3f0000 | zext(imm16:2);
+	call [target];
+}
+
+# p.454
+:xmac P, loc16, *(imm16) is ctx_objmode=1 & op8_8=0b10000100 & P & loc16; imm16 {
+	acc_add_pm_p();
+	T = loc16;
+	local addr:4 = 0x3f0000 | zext(imm16:2);
+	local coeff:2 = *:2 addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
+
+# p.456
+:xmacd P, mem16_addr, *(imm16) is ctx_objmode=1 & op8_8=0b10100100 & P & mem16_addr; imm16 {
+	acc_add_pm_p();
+	T = *:2 mem16_addr;
+	*:2 (mem16_addr + 1) = T;
+	local addr:4 = 0x3f0000 | zext(imm16:2);
+	local coeff:2 = *:2 addr;
+	local prod:4 = sext(T) * sext(coeff);
+	P = prod;
+}
+
+# p.458
+:xor ACC, loc16 is ctx_objmode=1 & op8_8=0b10110111 & ACC & loc16 {
+	ACC = ACC ^ zext(loc16);
+	flagnz(ACC);
+}
+
+# p.459
+:xor ACC, #imm16 << #shift0_4 is ctx_objmode=1 & op4_12=0b001111100010 & shift0_4; ACC & imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC ^ (tmp << shift0_4);
+	flagnz(ACC);
+}
+:xor ACC, #imm16 << #16       is ctx_objmode=1 & op0_16=0b0101011001001110; ACC & imm16 {
+	local tmp:4 = zext(imm16:2);
+	ACC = ACC ^ (tmp << 16);
+	flagnz(ACC);
+}
+
+# p.460
+:xor ax8, loc16 is op9_7=0b0111000 & ax8 & loc16 {
+	ax8 = ax8 ^ loc16;
+	flagnz(ax8);
+}
+
+# p.461
+:xor loc16, ax8 is op9_7=0b1111001 & ax8 & loc16 {
+	local r:2 = loc16 ^ ax8;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p.462
+:xor loc16, #imm16 is op8_8=0b00011100 & loc16; imm16 {
+	local r:2 = loc16 ^ imm16:2;
+	loc16 = r;
+	flagnz(r);
+}
+
+# p. 463
+:xorb ax8, #imm8 is op9_7=0b1111000 & ax8 & imm8 {
+	ax8 = ax8 ^ zext(imm8:1);
+	flagnz(ax8);
+}
+
+# p.464
+:xpread regax, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & regax & regax=8 & op4_4=0b1010; imm16 {
+    local ptr:4 = 0x3F0000 | imm16;
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread regax, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & regax & regax=9 & op4_4=0b1010; imm16 {
+    local ptr:4 = 0x3F0000 | imm16;
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread loc16, *(imm16) is ctx_objmode=1 & op8_8=0b10101100 & loc16; imm16 {
+	local ptr:4 = 0x3F0000 | imm16;
+	loc16 = *:2 ptr;
+}
+
+# p.465
+:xpread regax, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=8 & op4_4=0b1010 & AL {
+    local ptr:4 = 0x3F0000 | zext(AL);
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread regax, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & regax & regax=9 & op4_4=0b1010 & AL {
+    local ptr:4 = 0x3F0000 | zext(AL);
+    regax = *:2 ptr;
+    flagnz(regax);
+}
+:xpread loc16, *AL is ctx_objmode=1 & op0_16=0b0101011000111100; op8_8=0b00000000 & loc16 & AL {
+	local ptr:4 = 0x3F0000 | zext(AL);
+	loc16 = *:2 ptr;
+}
+
+# p.466
+:xpwrite *AL, loc16 is ctx_objmode=1 & op0_16=0b0101011000111101; op8_8=0b00000000 & AL & loc16 {
+	local ptr:4 = 0x3F0000 | zext(AL);
+	*:2 ptr = loc16;
+}
+
+# p.467
+:xret is ctx_objmode=1 & op0_16=0b0101011011111111 {
+	local tmp:4;
+	pop16(tmp);
+	tmp = tmp | 0x3f0000;
+	return [tmp];
+}
+
+# p.468
+:xretc cond is ctx_objmode=1 & op4_12=0b010101101111 & cond {
+	if (!cond) goto inst_next;
+	local tmp:4;
+	pop16(tmp);
+	tmp = tmp | 0x3f0000;
+	return [tmp];
+}
+
+# p.470
+:zalr ACC, loc16 is ctx_objmode=1 & op0_16=0b0101011000010011; op8_8=0b00000000 & ACC & loc16 {
+	local source:2 = loc16;
+	ACC = (zext(source) << 16) | 0x8000;
+	flagnz(ACC);
+}
+
+# p.472
+:zapa is ctx_objmode=1 & op0_16=0b0101011000110011 {
+	ACC = 0;
+	P = 0;
+	OVC = 0;
+	N = 0;
+	Z = 1;
+}

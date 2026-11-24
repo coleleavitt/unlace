@@ -4144,6 +4144,30 @@ accumulator forms of 5) and ARCompact are not decoded. Exercised by
 `kuna-sleigh/tests/arcv2_decode.rs` (one vector per instruction class and
 operand form, assembled by the GNU ARC assembler).
 
+### TMS320C28x (#98)
+
+`specs/Ghidra/Processors/TMS320C28` vendors the SLEIGH specification of
+ghidra-c28x (Apache-2.0, pinned commit in its README) unchanged:
+`tms320c28:LE:32:default`, the C28x CPU with the FPU32 extension, over a
+word-addressed RAM space (16-bit words), with an ELF opinion for e_machine 141.
+Upstream's Ghidra analyzers set several decode-context bits that select proven
+idiom lifts (canonical switch dispatch, the FFC helper return, the 32-step
+division); they are not ported, so those bits stay 0 and the general lift is
+used. Before, the C2000 family had no language. Exercised by
+`unlace-cli/tests/c28x_raw.rs` (a word-addressed `ADDB ACC,#5; LRET` image
+decompiles with no bad or unimplemented instruction).
+
+### STM8 (#98)
+
+`specs/Ghidra/Processors/STM8` vendors the SLEIGH specification of ghidra_STM8
+(Apache-2.0, pinned commit in its README) unchanged: `STM8:BE:16:default`
+(medium memory model, 16-bit pointers) and `STM8:BE:24:default` (large model,
+24-bit far pointers, `CALLF`/`RETF`), both from `STM8.sinc` with the
+prefix bytes 0x72, 0x90, 0x91 and 0x92 tracked in a decode context. Before, the
+STM8 had no language. Exercised by `unlace-cli/tests/stm8_raw.rs` (a
+hand-assembled load/add/store routine decompiles in both models with no bad or
+unimplemented instruction).
+
 ### M6800 family: MC6800, MC6801, HD6301, MC68HC11 (#98)
 
 `specs/Ghidra/Processors/M6800` vendors the SLEIGH specifications of

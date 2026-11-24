@@ -261,6 +261,83 @@ class X86_64Native(X86_64):
         return super().gen(rng)
 
 
+
+def x87_value(rng):
+    """An 80-bit extended value: mostly normal numbers near 1 and small integers, some zeros,
+    infinities, large and tiny exponents and denormals; never a NaN or unnormal."""
+    k = rng.random()
+    s = rng.getrandbits(1) << 79
+    if k < 0.05:
+        return s
+    if k < 0.08:
+        return s | (0x7FFF << 64) | (1 << 63)
+    if k < 0.1:
+        return s | rng.getrandbits(63)                                  # denormal
+    if k < 0.3:
+        n = rng.randrange(1, 1 << rng.choice([4, 16, 32, 63]))
+        e = n.bit_length() - 1
+        return s | ((16383 + e) << 64) | (n << (63 - e))                # an integer
+    if k < 0.9:
+        e = 16383 + rng.randrange(-70, 70)
+    else:
+        e = rng.randrange(1, 0x7FFF)
+    m = (1 << 63) | rng.getrandbits(63)
+    if rng.random() < 0.3:
+        m &= ~((1 << rng.randrange(20, 63)) - 1)                         # few significant bits
+    return s | (e << 64) | m
+
+
+# the x86 deny list with x87 allowed, except the environment/state loads and stores and FLDCW (the
+# oracle runs at the default control word: 64-bit precision, round to nearest, exceptions masked)
+X87_DENY = re.compile(
+    X86_DENY.pattern.replace("|f.*|", "|fx.*|f?wait|fn?stenv|fldenv|fn?save|frstor|fldcw|")
+)
+
+
+# x87 ops whose C1 is the round-up indicator (not expressible in p-code), and the compares whose
+# C1 the SDM clears but this CPU leaves unchanged
+X87_C1_FREE = re.compile(
+    r"^(f(i?(add|sub|subr|mul|div|divr))p?|fsqrt|fscale|frndint|fistp?|f(u)?comp?i|fcmov.*)$"
+)
+
+
+class X86_64X87(X86_64Native):
+    """x86-64-native restricted to the x87 escape opcodes D8..DF (with prefixes now and then)."""
+    name = "x86-64-x87"
+    deny = X87_DENY
+
+    def extra_init(self, rng):
+        """ST0..ST6 hold x87 values (ST7 is empty, so one push does not overflow) and C0..C3 random."""
+        init = {f"C{i}": rng.getrandbits(1) for i in range(4)}
+        for i in range(7):
+            init[f"ST{i}"] = x87_value(rng)
+        init["ST7"] = 0
+        # the harness's FXRSTOR image: control word 0x37F, TOP = 0, the condition bits
+        init["FPUControlWord"] = 0x37F
+        init["FPUStatusWord"] = init["C0"] << 8 | init["C1"] << 9 | init["C2"] << 10 | init["C3"] << 14
+        return init
+
+    def canonical(self, cand):
+        # Capstone's FSTPNCE (D9 D8+i) is an undocumented FSTP alias that LLVM and SLEIGH leave undecoded
+        return cand["mnemonic"] != "fstpnce"
+
+    def ignored(self, mnemonic, operands, state):
+        out = super().ignored(mnemonic, operands, state)
+        if X87_C1_FREE.match(mnemonic) or (mnemonic in ("fst", "fstp") and re.search(r"\b[dq]word ptr", operands)):
+            out = out | {"C1"}
+        # the partial remainder comes from a rounded divide and multiply: exact for small quotients only
+        # and the constants are the double values widened (a decompiler constant is at most 8 bytes)
+        if mnemonic in ("fprem", "fprem1", "fldpi", "fldl2e", "fldl2t", "fldlg2", "fldln2"):
+            out = out | {"ST0"}
+        return out
+
+    def gen(self, rng):
+        tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+        modrm = bytes([rng.choice([rng.getrandbits(8) | 0xC0, rng.getrandbits(8)])])
+        pre = bytes(rng.choice([[], [], [], [0x66], [0x48], [0x9B]]))
+        return pre + bytes([0xD8 + rng.getrandbits(3)]) + modrm + tail
+
+
 A64_DENY = re.compile(
     r"^(svc|hvc|smc|brk|hlt|dcps\d|eret.*|drps|msr|mrs|sys|sysl|tlbi|dc|ic|at|isb|dsb|dmb|sb|ssbb|pssbb|"
     r"wf[ei].*|yield|sev.*|hint|clrex|ld.*xr.*|st.*xr.*|ldar.*|stlr.*|ldapr.*|stlur.*|ldaxp|stlxp|"
@@ -1201,4 +1278,4 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}

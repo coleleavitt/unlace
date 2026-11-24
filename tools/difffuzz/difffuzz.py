@@ -275,8 +275,8 @@ def main():
                          "this CPU (native, --arch x86-64-native)")
     args = ap.parse_args()
     if args.oracle == "native":
-        if args.arch != "x86-64-native":
-            sys.exit("--oracle native needs --arch x86-64-native")
+        if args.arch not in ("x86-64-native", "x86-64-x87"):
+            sys.exit("--oracle native needs --arch x86-64-native or x86-64-x87")
         args.oracle = "qemu"
     vector = args.arch == "riscv64v"
     arch = ARCHES["riscv64" if vector else args.arch]

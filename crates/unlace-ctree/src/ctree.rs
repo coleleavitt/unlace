@@ -8,7 +8,7 @@
 //! keeps the structured block it was built from, so markup, comments, labels and the fallback
 //! printer key on it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use unlace_base::types::uint4;
@@ -216,6 +216,7 @@ pub struct CTree {
     root: Option<StmtId>,
     maturity: CMaturity,
     by_origin: BTreeMap<BlockId, StmtId>,
+    conds: BTreeSet<StmtId>,
 }
 
 impl CTree {
@@ -233,6 +234,21 @@ impl CTree {
             self.by_origin.entry(block).or_insert(id);
         }
         id
+    }
+
+    /// Mark every statement added from arena index `first` on as part of a condition: the
+    /// statements of a condition block, printed only by the `NO_BRANCH` and `ONLY_BRANCH`
+    /// walks of the statement whose test it is. Statement rewrites leave them alone.
+    pub fn mark_conditions_from(&mut self, first: usize) {
+        for i in first..self.stmts.len() {
+            self.conds
+                .insert(StmtId(u32::try_from(i).expect("ctree statement count")));
+        }
+    }
+
+    /// Is `id` part of a condition ([`mark_conditions_from`](CTree::mark_conditions_from))?
+    pub fn is_condition(&self, id: StmtId) -> bool {
+        self.conds.contains(&id)
     }
 
     /// Add an expression.

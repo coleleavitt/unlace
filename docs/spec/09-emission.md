@@ -5907,9 +5907,15 @@ The design is `docs/architecture/ctree.md`. `PrintC::emit_function_body` builds
 a C syntax tree for every function before it prints the body, unless the printer
 is in flat mode (flat printing walks the basic blocks through `emit_block_graph`
 with no tree). The tree walk (`printc/ctreeprint.rs`, `emit_ctree_stmt`) prints
-graph sequences and leaves itself and chooses the emitter for every other
-statement kind; only an opaque statement (a condition or multi-goto block)
-reaches the block printer's own dispatch, `emit_block_raw`. The elements of a
+graph sequences, leaves and multi-goto blocks itself and chooses the emitter for
+every other statement kind. A condition block is built like any other block, its
+statements marked as a condition (`CTree::is_condition`), and prints through the
+tree under the `NO_BRANCH` and `ONLY_BRANCH` walks; of the statement rewrites only
+the `try` form and the `iteboolean`/`iteregion` assignment forms (which the block
+printer also applied inside conditions) reach condition statements. A
+`BlockCondition` is a sequence of its two clauses printed by
+`emit_block_condition`. Only a block past the builder's depth bound, and flat
+printing, reach the block printer's own dispatch, `emit_block_raw`. The elements of a
 `BlockList` print from the tree's sequence statements (`emit_list_items`), so a
 rewrite that changes a statement changes what its list prints. Before any other
 rewrite, `ctree_rewrite` turns each `if` on an `eh_unwinding()` exceptional edge

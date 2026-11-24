@@ -35,6 +35,8 @@ CONFIGS = [
     ("ppc", "qemu"), ("ppc64", "qemu"), ("ppc64le", "qemu"), ("ppc64-isa", "qemu"), ("ppc64le-isa", "qemu"),
     ("s390x", "qemu"), ("nios2", "qemu"), ("sh4", "qemu"), ("m68k", "qemu"),
     ("arm", "qemu"), ("thumb", "qemu"), ("sparc", "qemu"), ("sparc64", "qemu"),
+    ("loongarch64", "qemu"), ("s390x-vec", "qemu"), ("alpha", "qemu"), ("hppa", "qemu"), ("microblaze", "qemu"),
+    ("microblazeel", "qemu"), ("or1k", "qemu"),
     ("x86-64-native", "native"), ("x86-64-x87", "native"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
@@ -65,6 +67,8 @@ def available(arch, oracle, objdump):
         if not shutil.which(objdump):
             return f"no {objdump}"
         arch = "riscv64"
+    if arch == "loongarch64" and not (os.environ.get("DIFFFUZZ_LA_OBJDUMP") or shutil.which("loongarch64-linux-gnu-objdump")):
+        return "no LoongArch objdump (DIFFFUZZ_LA_OBJDUMP)"
     import arches
     if arch not in arches.ARCHES:
         return "unknown arch"

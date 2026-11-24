@@ -2152,6 +2152,73 @@ test = "amdgpu_real_gfx1200_matmul_loop_decompiles"
 address = "0x0"
 expect = ["} while ("]
 
+# CDNA 2 (gfx90a, MI200): `fixtures/amdgpu/cdna_kernels.cl` at -O3. MFMA results and accumulators
+# live in AGPR tuples (a[0:15]) or VGPR tuples, read back with v_accvgpr_read_b32.
+[[family]]
+name = "amdgpu_gfx90a_mfma"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx90a.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+# `gemm_tile`: a v_mfma_f32_32x32x8f16 accumulating over a loop.
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8f16(", "} while ("]
+
+[[family.function]]
+test = "amdgpu_gfx90a_mfma_f32_decompiles"
+address = "0x400"
+expect = ["mfma_f32_32x32x1f32("]
+
+# `fixtures/amdgpu/real_kernels.cl` built with clang -O2 for gfx90a: f64 division uses v_fmac_f64.
+[[family]]
+name = "amdgpu_real_gfx90a"
+language = "AMDGPU:LE:64:GFX90A"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx90a.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_real_gfx90a_f64_division_decompiles"
+address = "0x22c0"
+expect = ["div_fixup(", "cmp_class("]
+
+# CDNA 3 (gfx942, MI300): the same kernels; MFMA mnemonics carry the block counts
+# (v_mfma_f32_32x32x8_f16) and `sparse` is a v_smfmac_f32_16x16x32_f16 with its index VGPR.
+[[family]]
+name = "amdgpu_gfx942_mfma"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/cdna_gfx942.bin"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "amdgpu_gfx942_mfma_loop_decompiles"
+address = "0x0"
+expect = ["= mfma_f32_32x32x8_f16("]
+
+[[family.function]]
+test = "amdgpu_gfx942_smfmac_decompiles"
+address = "0xb00"
+expect = ["= smfmac_f32_16x16x32_f16("]
+
+[[family]]
+name = "amdgpu_real_gfx942"
+language = "AMDGPU:LE:64:GFX942"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/real_gfx942.bin"
+forbid = ["halt_baddata"]
+
+# v_lshl_add_u64 builds the 64-bit addresses on gfx942.
+[[family.function]]
+test = "amdgpu_real_gfx942_f64_division_decompiles"
+address = "0x21b4"
+expect = ["div_fixup(", "cmp_class("]
+
 # Wave64 RDNA code (clang -mwavefrontsize64): lane masks are SGPR pairs. `vote` passes a
 # ballot (v_cmp into VCC, then vcc_lo and vcc_hi as a 64-bit argument); under the wave64
 # language the high half is the compare's zero, not a stale vcc_hi.

@@ -576,6 +576,7 @@ kuna_options! { self, p1;
     "fid" => registered!(crate::kuna_analysisgates::Fid),
     "rtti" => registered!(crate::kuna_analysisgates::Rtti),
     "msvceh" => registered!(crate::kuna_analysisgates::Msvceh),
+    "delphi" => registered!(crate::kuna_analysisgates::Delphi),
     "itaniumrtti" => {
         registered!(crate::kuna_analysisgates::Itaniumrtti)
     },

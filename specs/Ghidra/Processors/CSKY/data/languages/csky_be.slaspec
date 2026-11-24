@@ -1,0 +1,3 @@
+# C-SKY ABIv2, big endian.
+@define CSKY_BE ""
+@include "csky.sinc"

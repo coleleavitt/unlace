@@ -140,6 +140,48 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
 
+# The native C-SKY ABIv2 language decompiles code built with csky-elf-as -mcpu=ck810:
+# a load/accumulate loop closed by a 32-bit bnez, a push/bsr/pop call, and the
+# C-flag compares feeding inct and bf.
+[[family]]
+name = "csky"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/sum_call_cmp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_load_loop_decompiles"
+address = "0x8000"
+expect = [
+    "v1 += *a0++;",  # ld.w, addu and the pointer increment
+    "} while (a1);",  # bnez closes the loop
+    "dat_20000000 = v1;",  # movih + st.w
+]
+
+[[family.function]]
+test = "csky_call_with_register_arguments_decompiles"
+address = "0x801c"
+expect = [
+    "return sub_8018(7,5) << 2;",  # r0/r1 arguments, bsr, and pop returning through lr
+]
+
+[[family.function]]
+test = "csky_c_flag_compares_decompile"
+address = "0x802a"
+expect = [
+    "if (a0 < a1)",  # cmplt sets C, inct consumes it
+    "a0 = a1;",
+]
+
+[[family.function]]
+test = "csky_unsigned_compare_branch_decompiles"
+address = "0x8032"
+expect = [
+    "if (a0 <= 99)",  # cmphsi + bf
+    "return 99;",
+]
+
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
 [[family]]

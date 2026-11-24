@@ -238,22 +238,22 @@ literal = '$$undef'
 [[match]]
 name = 'undefname #2: the va_arg slot is declared once per pass, at the width the body uses'
 count = 2
-regex = 'uint8 v12; // ([^\n]+ \| )?stack - 0x58( \| [^\n]+)?$'
+regex = 'uint8 v13; // ([^\n]+ \| )?stack - 0x58( \| [^\n]+)?$'
 
 [[match]]
 name = 'undefname #3: the va_arg guard reads the name the loop actually writes'
 count = 2
-literal = 'if (0x30 <= (uint4)v12)'
+literal = 'if (0x30 <= (uint4)v13)'
 
 [[match]]
 name = 'undefname #4: the gp_offset bump reads and writes one identifier'
 count = 2
-literal = 'v12 = (uint4)v12 + 8;'
+literal = 'v13 = (uint4)v13 + 8;'
 
 [[match]]
 name = 'undefname #5: that identifier is the one the prologue initialises'
 count = 2
-literal = 'v12 = *a1;'
+literal = 'v13 = *a1;'
 
 [[match]]
 name = 'undefname #6: the ifreq union slot no high covers wholly is named by the wired assignDefaultNames'

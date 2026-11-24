@@ -280,6 +280,16 @@ afterwards. The register file is unchanged.
     (sim/rx shifts by all of it; the count is bits 4..0), the byte sim/rx keeps at 0x88264,
     binutils' RXv2/v3-only forms and its MOV.B/W #imm32 and register-memex readings. Seed 4, 2500
     encodings: 3618 matches; the language needed no fix.
+  - RL78 (`--arch rl78`, `RL78:LE:16:default`, sim argument `g14`, ELF flags E_FLAG_RL78_G14,
+    dfsim_plain): the language keeps the bank-0 registers, SP and PSW at their data addresses
+    (`mem_registers`); CY and Z are compared through PSW (bank 0, interrupts off). The emulator
+    evaluates the `segment(seg, off)` pcodeop (`callother_fn`, NEARSEG = 0xf); the gdbsim backend
+    now passes `callother_fn` on as the Unicorn path does. Data stays in RAM (0xf8000..0xffeff):
+    sim/rl78 mirrors ROM at 0xf1000.. and simulates the SFRs. Ignored: AC (sim/rl78 derives it from
+    bit 4 of the result, wrong for subtraction), the flags after ADDW/SUBW SP,#imm (sim/rl78
+    clears them), odd SP adjustments (SP bit 0 is fixed), stores to CS/ES/PMC, odd word addresses,
+    binutils' ES:-prefixed forms it prints without ES: and its 61 x1 [HL+B] reading. Seed 8, 2500
+    encodings: 4257 matches; the language needed no fix.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

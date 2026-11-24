@@ -176,7 +176,7 @@ crate::kuna_flag!(
     "selectmul",
     "arithmetic select as ?:",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]

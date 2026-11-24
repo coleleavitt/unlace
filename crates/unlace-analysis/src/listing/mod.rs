@@ -501,6 +501,14 @@ impl Listing {
             .map(|(lo, hi, _data)| (lo, hi))
             .collect();
         exec_ranges.sort_unstable();
+        // A Mach-O's `LC_DATA_IN_CODE` runs (inline jump tables, literal pools)
+        // are data: the walk never decodes them.
+        if file.format() == object::BinaryFormat::MachO {
+            let data = crate::loader::kuna_machodataincode::data_in_code_ranges(file);
+            if !data.is_empty() {
+                exec_ranges = crate::loader::kuna_machodataincode::subtract(&exec_ranges, &data);
+            }
+        }
 
         // The code space the Addresses are built in.
         let code_space = match arch.manage().get_default_code_space() {

@@ -28,6 +28,8 @@ pub mod kuna_castsign; // (kuna) signed declarations for frame locals and the re
 pub mod kuna_castternary; // (kuna) a conditional arm keeps no cast the conditional performs
 pub mod kuna_castwiden; // (kuna) a 64-bit widening C performs by itself keeps no cast
 pub mod kuna_cfstr; // (kuna) CFSTR("...") for a Mach-O __cfstring entry
+pub mod kuna_charnum; // (kuna) non-printable char constants as numbers in comparisons and arithmetic
+pub mod kuna_constright; // (kuna) value-first ordered comparisons against a constant
 pub mod kuna_cppshortnames; // (kuna) short spellings of standard C++ names
 pub mod kuna_cstringconst;
 pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core types
@@ -100,12 +102,14 @@ mod kuna_ruststorewidth;
 pub mod kuna_rusttypes; // (kuna) the rust-language type speller
 pub mod kuna_rustuserop;
 pub mod kuna_rustwrapping;
+pub mod kuna_signeddec; // (kuna) decimal signed constants
 pub mod kuna_signedread; // (kuna) a signed read of an expression that prints unsigned casts it back
 pub mod kuna_srcmap;
 pub mod kuna_stackassign;
 pub mod kuna_stackbytes;
 pub mod kuna_stacklayout;
 pub mod kuna_stackmem;
+pub mod kuna_structassign; // (kuna) a memcpy of exactly one struct between pointers to that struct prints as *d = *s
 pub mod kuna_structdefs;
 pub mod kuna_swiftstrobj; // (kuna) a Swift string object is not a pointer to the bytes it lands on
 pub mod kuna_truncarg;

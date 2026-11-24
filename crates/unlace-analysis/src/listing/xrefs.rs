@@ -1078,6 +1078,16 @@ fn descend(
         &preserved,
         &mapped,
         pool.as_ref(),
+        match arch
+            .kuna_options
+            .get::<unlace_decomp::kuna_analysisgates::MovwPairs>()
+        {
+            unlace_decomp::kuna_analysisgates::MovwPairs::Off => kuna_regcarry::HalfPairs::Off,
+            unlace_decomp::kuna_analysisgates::MovwPairs::Access => {
+                kuna_regcarry::HalfPairs::Access
+            }
+            unlace_decomp::kuna_analysisgates::MovwPairs::On => kuna_regcarry::HalfPairs::On,
+        },
     );
     // (kuna) `picpool`: odd composed addresses held for the Thumb-bit decision.
     let mut thumb_refs: Vec<(u64, u64, XrefKind, String)> = Vec::new();

@@ -1728,7 +1728,7 @@ Cortex-M vector table like a raw dump. With an `avr8:` `--target` and no
 word 0, `unlace_analysis::loader::firmware::avrvectors`) gives the entries: the reset and
 interrupt handlers.
 
-**`--svd FILE`** imports a CMSIS-SVD device description
+**`--svd FILE|DEVICE`** imports a CMSIS-SVD device description
 (`unlace_analysis::loader::firmware::svd`): each peripheral becomes a structure
 `<NAME>_Type` (registers as members, clusters flattened into
 `<cluster>_<register>`, `dim` arrays expanded, overlapping alternates dropped,
@@ -1739,6 +1739,16 @@ registers, and each `<interrupt>` names the Cortex-M handler of that IRQ
 `dat_40011004 = 0x78;`. The peripherals are declared for an ELF or other
 object file (an ESP image, the ELF a container wraps) as well; only the handler
 names need a raw dump's vector table.
+
+When no file of that name exists, `--svd` names a device whose description unlace
+bundles (`svd_devices.br`): 180 parts from the vendors' Apache-2.0 and BSD-3-Clause
+device packs, STM32 F0, F3, F4, F7, G0, G4, H7, L0, L4 and WB (Keil packs), SAM D21
+and D51 (Microchip), nRF51, nRF52, nRF53 and nRF91 (Nordic) and RP2040 (Raspberry Pi).
+A part number finds its family's description: `--svd STM32F405RG` reads `STM32F405`,
+`--svd STM32F051K8` reads `STM32F0X1` (an `X` in a bundled name stands for any one
+character), `--svd nrf52840` and `--svd rp2040` read theirs; an unknown name lists the
+bundled parts of the same family. The STM32F1 pack states no licence, so its parts
+are not bundled.
 
 ### Espressif (ESP32 / ESP8266) application images
 

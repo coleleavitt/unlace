@@ -114,7 +114,14 @@ pub fn rebased_view(file: &object::File, bytes: &[u8]) -> Option<RebasedView> {
 
     let mut out = bytes.to_vec();
     splice_laid_sections(file, &layout, &mut out);
-    let inflated = relocate_unlaid_sections(file, &layout, &mut out);
+    // A Mach-O object's debug sections are left as they are: their symbol
+    // values are pre-link addresses, not the section offsets the ELF and COFF
+    // relocation pass reads.
+    let inflated = if file.format() == object::BinaryFormat::MachO {
+        Vec::new()
+    } else {
+        relocate_unlaid_sections(file, &layout, &mut out)
+    };
     patch_section_addresses(file, &layout, &inflated, &mut out)?;
 
     let mut ranges: Vec<(u64, u64)> = layout
@@ -385,6 +392,7 @@ fn patch_section_addresses(
     match file.format() {
         object::BinaryFormat::Elf => patch_elf(file, layout, inflated, out),
         object::BinaryFormat::Coff => patch_coff(layout, out),
+        object::BinaryFormat::MachO => patch_macho(layout, out),
         _ => None,
     }
 }
@@ -609,7 +617,96 @@ fn patch_coff(layout: &RelocLayout, out: &mut [u8]) -> Option<()> {
     Some(())
 }
 
-use super::le::read_u16;
+use super::le::{read_u16, read_u32, read_u64};
+
+/// Move a little-endian Mach-O object's sections and symbols to their laid-out
+/// addresses: each `section_64`/`section` `addr` (and `size`, when the layout
+/// shortened it) and each `N_SECT` symbol's `n_value`, which is an address in
+/// the object's own pre-link layout, by its section's move. `object` numbers the
+/// sections from 1 in load-command order, as `n_sect` does.
+fn patch_macho(layout: &RelocLayout, out: &mut [u8]) -> Option<()> {
+    const MH_MAGIC: u32 = 0xfeed_face;
+    const MH_MAGIC_64: u32 = 0xfeed_facf;
+    const LC_SEGMENT: u32 = 0x1;
+    const LC_SEGMENT_64: u32 = 0x19;
+    const LC_SYMTAB: u32 = 0x2;
+    const N_TYPE: u8 = 0x0e;
+    const N_SECT: u8 = 0x0e;
+    let is64 = match read_u32(out, 0)? {
+        MH_MAGIC_64 => true,
+        MH_MAGIC => false,
+        _ => return None,
+    };
+    let (header, seg_size, nsects_at, sect_size, word) = if is64 {
+        (32usize, 72usize, 64usize, 80usize, 8usize)
+    } else {
+        (28, 56, 48, 68, 4)
+    };
+    let ncmds = read_u32(out, 16)? as usize;
+    let mut moves: Vec<u64> = Vec::new();
+    let mut symtab: Option<(usize, usize)> = None;
+    let mut at = header;
+    for _ in 0..ncmds {
+        let cmd = read_u32(out, at)?;
+        let size = read_u32(out, at + 4)? as usize;
+        if size < 8 {
+            return None;
+        }
+        if cmd == (if is64 { LC_SEGMENT_64 } else { LC_SEGMENT }) {
+            let nsects = read_u32(out, at + nsects_at)? as usize;
+            for i in 0..nsects {
+                let s = at
+                    .checked_add(seg_size)?
+                    .checked_add(i.checked_mul(sect_size)?)?;
+                let ordinal = moves.len() + 1;
+                let old = if is64 {
+                    read_u64(out, s + 32)?
+                } else {
+                    u64::from(read_u32(out, s + 32)?)
+                };
+                let new = layout.section_vma.get(&SectionIndex(ordinal)).copied();
+                moves.push(new.map_or(0, |v| v.wrapping_sub(old)));
+                if let Some(vma) = new {
+                    write_uint(out, s + 32, word, vma)?;
+                }
+                if let Some(&(_, short)) = layout
+                    .shortened
+                    .iter()
+                    .find(|(idx, _)| *idx == SectionIndex(ordinal))
+                {
+                    write_uint(out, s + 32 + word, word, short)?;
+                }
+            }
+        } else if cmd == LC_SYMTAB {
+            symtab = Some((
+                read_u32(out, at + 8)? as usize,
+                read_u32(out, at + 12)? as usize,
+            ));
+        }
+        at = at.checked_add(size)?;
+    }
+    if let Some((symoff, nsyms)) = symtab {
+        let entry = if is64 { 16 } else { 12 };
+        for i in 0..nsyms {
+            let e = symoff.checked_add(i.checked_mul(entry)?)?;
+            let n_type = *out.get(e + 4)?;
+            let n_sect = *out.get(e + 5)? as usize;
+            if n_type & N_TYPE != N_SECT || n_sect == 0 {
+                continue;
+            }
+            let Some(&delta) = moves.get(n_sect - 1) else {
+                continue;
+            };
+            let value = if is64 {
+                read_u64(out, e + 8)?
+            } else {
+                u64::from(read_u32(out, e + 8)?)
+            };
+            write_uint(out, e + 8, word, value.wrapping_add(delta))?;
+        }
+    }
+    Some(())
+}
 
 fn write_uint(b: &mut [u8], at: usize, width: usize, value: u64) -> Option<()> {
     let field = b.get_mut(at..at + width)?;

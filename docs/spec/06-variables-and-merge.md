@@ -473,6 +473,14 @@ input; single joins took 3 to 30 s. None of this changes a test's answer.
 marking (below), three passes fuse variables to reduce clutter:
 
 - `coreaction_cleanup.rs (ActionMergeCopy)` → `merge.rs (Merge::merge_opcode)`
+  over COPY, and over MULTIEQUAL (the phi merge), where a pair is refused when
+  one HighVariable is dereferenced as an address (a LOAD/STORE address input)
+  and the other is defined by pure integer arithmetic (`INT_MULT`, shifts,
+  `INT_DIV`/`INT_REM`, `INT_AND`/`INT_OR`/`INT_XOR`, through COPY chains;
+  `INT_ADD` is excluded because it is also pointer advance). The check is
+  structural (`merge.rs (phi_address_arith_conflict)`), so it holds when both
+  types are `Unknown`: a merged variable declared a scalar would be read as a
+  pointer at runtime. It is a strict correctness guard and ships unconditional.
   over COPY: a COPY's output and input merge whenever the required rung and
   the cover allow — still a non-speculative merge (only the required tests
   gate it), and the assignment then disappears (marked internal below).
@@ -1488,6 +1496,14 @@ rewrite `LOAD/STORE` through a spacebase-relative pointer into direct
 `(stack, offset)` Varnodes. Third, the stack-pointer *flow* itself is kept
 affine by `ActionStackPtrFlow` (§6.5). Everything below consumes the
 `(stack, offset)` Varnodes those links produce.
+
+**Frame slot kinds** (`FrameSlotKind`, `crates/unlace-middle/src/substrate/funcdata.rs`). Each
+slot that `record_frame_layout_pass` folds into the frame union is tagged by its
+stack-space offset alone: negative offsets are `Local`, the word `[0, ptr_size)` holding
+the return address is `ReturnAddress`, and anything at or above it is `StackArg`. The tag is
+data only; it changes no printed output and needs no option. Saved-register and
+Microsoft x64 shadow-space kinds are not produced yet: they need the saved-register set and
+the calling convention on `Funcdata`, which main does not carry.
 
 **Keeping non-locals out** (`crates/unlace-bandb/src/p4_calls/coreaction_protos.rs
 (ActionRestrictLocal)` → `funcdata_spacebase.rs (Funcdata::restrict_local)`,

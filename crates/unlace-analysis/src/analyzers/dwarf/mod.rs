@@ -125,6 +125,7 @@ mod cppproto;
 pub use cppnames::merge_symbols as merge_cpp_symbols;
 mod dwarfbounds;
 mod dwarfbyref;
+pub mod dwarfcfacalib;
 mod dwarflocation;
 pub mod dwarfscopes;
 use dwarfscopes::FrameBase;

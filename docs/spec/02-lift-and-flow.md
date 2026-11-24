@@ -4449,6 +4449,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
 | `TMS9900` | TI TMS9900 | `TMS9900:BE:16:default` | TI TMS9900 Microprocessor Data Manual, TMS9900 Family System Development Manual | `unlace-cli/tests/tms9900_raw.rs` |
 | `Blackfin` | Analog Devices Blackfin (ADSP-BF5xx, BF6xx) | `Blackfin:LE:32:default` | Blackfin Processor Programming Reference rev 2.2, binutils `bfin.h` layouts; checked against `bfin-elf-objdump` | `unlace-cli/tests/blackfin_raw.rs` |
+| `uPD7810` | NEC uPD7810 / 7811 / 78C10 / 78C11 / 78C14 | `uPD7810:LE:16:default` | NEC uPD7810/7811 user's manual, MAME `upd7810` tables | `unlace-cli/tests/upd7810.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

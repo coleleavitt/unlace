@@ -819,6 +819,19 @@ impl Rule for RuleIndirectCollapse {
                 crate::kuna_persistcalls::restart_full(data);
             }
         }
+        if crate::heritage::kuna_jt_trace() {
+            let v = data.vbank().get(out);
+            eprintln!(
+                "jt-trace indirect-collapse jt={} at={:?} space={:?} off={:?} size={:?} nolocalalias={:?} indop_dead={}",
+                data.is_jumptable_recovery_on(),
+                data.obank().get(op).map(|o| o.get_addr().get_offset()),
+                v.map(|v| v.get_space().get_name().to_string()),
+                v.map(|v| v.get_offset()),
+                v.map(|v| v.get_size()),
+                v.map(|v| v.has_no_local_alias()),
+                indop_dead
+            );
+        }
         data.total_replace(out, in0)
             .expect("RuleIndirectCollapse: totalReplace");
         data.op_destroy(op); // Get rid of the INDIRECT

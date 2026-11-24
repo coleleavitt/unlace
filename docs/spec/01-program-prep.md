@@ -2124,7 +2124,10 @@ candidate only when its `LC_UUID` equals the image's, so a dSYM of another
 build is never applied. A universal dSYM is read slice by slice, and the thin
 slice carrying the image's UUID is the one that feeds the DWARF analyzer
 (`analyzers/dwarf/mod.rs (DwarfPass)`), which runs over it as it does over an
-ELF companion. An image with no `LC_UUID` takes no dSYM.
+ELF companion. An image with no `LC_UUID` takes no dSYM. Beside a `*.kext`
+bundle the `*.dSYM` bundles of its directory are also read, in name order (at
+most 64), since a kernel extension's dSYM is often named for its bundle
+identifier; the UUID check still decides each one.
 
 (unlace) **MS-DOS `MZ` executables load as relocated real-mode images.**
 `crates/unlace-analysis/src/loadimage_mz.rs (MzImage)` claims a file

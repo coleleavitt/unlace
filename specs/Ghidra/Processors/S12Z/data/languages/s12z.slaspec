@@ -1,0 +1,143 @@
+# NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) SLEIGH specification.
+# Written for unlace from the NXP S12Z CPU Reference Manual (S12ZCPU RM) opcode
+# tables. Clean-room: no GPL text and no community Ghidra/SLEIGH module was used.
+# Big-endian, 24-bit linear address space. Data registers D2-D5 are 16 bits,
+# D0-D1 8 bits, D6-D7 32 bits; X, Y and S are 24 bits.
+
+define endian=big;
+define alignment=1;
+
+define space ram type=ram_space size=3 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=2 [ D2 D3 D4 D5 ];
+define register offset=0x08 size=1 [ D0 D1 ];
+define register offset=0x10 size=4 [ D6 D7 ];
+define register offset=0x20 size=3 [ X ];
+define register offset=0x24 size=3 [ Y ];
+define register offset=0x28 size=3 [ SP ];
+define register offset=0x2c size=3 [ PC ];
+define register offset=0x30 size=2 [ CCR ];
+define register offset=0x40 size=1 [ fC fV fZ fN fI fH fX fU fS ];
+
+define token opbyte(8)
+  op = (0,7)
+  op5 = (3,7)
+  op4 = (4,7)
+  rsel = (0,2)
+  rhi = (2,2)
+  rmid = (1,1)
+  rW = (0,1)
+  rBL = (0,0)
+;
+define token oprtok(8)
+  opr = (0,7)
+  opr2 = (6,7)
+  opr6 = (0,5)
+;
+define token rel7tok(8)
+  r7flag = (7,7)
+  r7 = (0,6) signed
+;
+define token rel15tok(16)
+  r15flag = (15,15)
+  r15 = (0,14) signed
+;
+define token imm8tok(8) imm8 = (0,7);
+define token imm16tok(16) imm16 = (0,15);
+define token imm24tok(24) imm24 = (0,23);
+define token imm32tok(32) imm32 = (0,31);
+
+attach variables rW [ D2 D3 D4 D5 ];
+attach variables rBL [ D0 D1 ];
+
+define pcodeop bgnd;
+define pcodeop swi;
+define pcodeop unsupported_opr;
+
+macro nzflags(r) { fN = r s< 0; fZ = r == 0; }
+macro addflags(a, b, r) {
+  fC = carry(a, b);
+  fV = scarry(a, b);
+  nzflags(r);
+}
+macro subflags(a, b, r) {
+  fC = a < b;
+  fV = sborrow(a, b);
+  nzflags(r);
+}
+
+# Data registers by size: the register field 0-3 is D2-D5, 4-5 is D0-D1, 6-7 is D6-D7.
+DW: rW is rhi=0 & rW { export rW; }
+DB: rBL is rhi=1 & rmid=0 & rBL { export rBL; }
+DL: D6 is rhi=1 & rmid=1 & rBL=0 & D6 { export D6; }
+DL: D7 is rhi=1 & rmid=1 & rBL=1 & D7 { export D7; }
+
+# OPR memory operand (subset): 24-bit direct (0xFB) and 14-bit direct (10aaaaaa aaaaaaaa).
+OPRA: imm24 is opr=0xfb; imm24 { export *[const]:3 imm24; }
+OPRA: addr is opr2=2 & opr6; imm8 [ addr = (opr6 << 8) | imm8; ] { export *[const]:3 addr; }
+
+rel: dest is r7flag=0 & r7 [ dest = inst_start + r7; ] { export *:3 dest; }
+rel: dest is r15flag=1 & r15 [ dest = inst_start + r15; ] { export *:3 dest; }
+
+:NOP is op=0x01 { }
+:BGND is op=0x00 { bgnd(); }
+:SWI is op=0xff { swi(); }
+:RTS is op=0x05 { local ra:3 = *:3 SP; SP = SP + 3; return [ra]; }
+
+:BRA rel is op=0x20; rel { goto rel; }
+:BSR rel is op=0x21; rel { SP = SP - 3; local ra:3 = inst_next; *:3 SP = ra; call rel; }
+:BHI rel is op=0x22; rel { if ((fC | fZ) == 0) goto rel; }
+:BLS rel is op=0x23; rel { if ((fC | fZ) != 0) goto rel; }
+:BCC rel is op=0x24; rel { if (fC == 0) goto rel; }
+:BCS rel is op=0x25; rel { if (fC != 0) goto rel; }
+:BNE rel is op=0x26; rel { if (fZ == 0) goto rel; }
+:BEQ rel is op=0x27; rel { if (fZ != 0) goto rel; }
+:BVC rel is op=0x28; rel { if (fV == 0) goto rel; }
+:BVS rel is op=0x29; rel { if (fV != 0) goto rel; }
+:BPL rel is op=0x2a; rel { if (fN == 0) goto rel; }
+:BMI rel is op=0x2b; rel { if (fN != 0) goto rel; }
+:BGE rel is op=0x2c; rel { if (fN == fV) goto rel; }
+:BLT rel is op=0x2d; rel { if (fN != fV) goto rel; }
+:BGT rel is op=0x2e; rel { if (fZ == 0 && fN == fV) goto rel; }
+:BLE rel is op=0x2f; rel { if (fZ != 0 || fN != fV) goto rel; }
+
+:JMP imm24 is op=0xba; imm24 { goto [imm24:3]; }
+:JSR imm24 is op=0xbb; imm24 { SP = SP - 3; local ra:3 = inst_next; *:3 SP = ra; call [imm24:3]; }
+
+# ADD/SUB/CMP/LD with an immediate whose width is the register width.
+:ADD DW, "#"imm16 is op5=0x0a & DW; imm16 { local a = DW; local b:2 = imm16; DW = a + b; addflags(a, b, DW); }
+:ADD DB, "#"imm8 is op5=0x0a & DB; imm8 { local a = DB; local b:1 = imm8; DB = a + b; addflags(a, b, DB); }
+:ADD DL, "#"imm32 is op5=0x0a & DL; imm32 { local a = DL; local b:4 = imm32; DL = a + b; addflags(a, b, DL); }
+:SUB DW, "#"imm16 is op5=0x0e & DW; imm16 { local a = DW; local b:2 = imm16; DW = a - b; subflags(a, b, DW); }
+:SUB DB, "#"imm8 is op5=0x0e & DB; imm8 { local a = DB; local b:1 = imm8; DB = a - b; subflags(a, b, DB); }
+:SUB DL, "#"imm32 is op5=0x0e & DL; imm32 { local a = DL; local b:4 = imm32; DL = a - b; subflags(a, b, DL); }
+:CMP DW, "#"imm16 is op5=0x1c & DW; imm16 { local a = DW; local b:2 = imm16; local r = a - b; subflags(a, b, r); }
+:CMP DB, "#"imm8 is op5=0x1c & DB; imm8 { local a = DB; local b:1 = imm8; local r = a - b; subflags(a, b, r); }
+:CMP DL, "#"imm32 is op5=0x1c & DL; imm32 { local a = DL; local b:4 = imm32; local r = a - b; subflags(a, b, r); }
+:LD DW, "#"imm16 is op5=0x12 & DW; imm16 { DW = imm16; nzflags(DW); fV = 0; }
+:LD DB, "#"imm8 is op5=0x12 & DB; imm8 { DB = imm8; nzflags(DB); fV = 0; }
+:LD DL, "#"imm32 is op5=0x12 & DL; imm32 { DL = imm32; nzflags(DL); fV = 0; }
+
+# ADD/SUB/CMP/LD/ST with a memory operand (OPR subset) and LD/ST with a 24-bit address.
+:ADD DW, OPRA is op5=0x0c & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; DW = a + b; addflags(a, b, DW); }
+:ADD DB, OPRA is op5=0x0c & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; DB = a + b; addflags(a, b, DB); }
+:ADD DL, OPRA is op5=0x0c & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; DL = a + b; addflags(a, b, DL); }
+:SUB DW, OPRA is op5=0x10 & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; DW = a - b; subflags(a, b, DW); }
+:SUB DB, OPRA is op5=0x10 & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; DB = a - b; subflags(a, b, DB); }
+:SUB DL, OPRA is op5=0x10 & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; DL = a - b; subflags(a, b, DL); }
+:CMP DW, OPRA is op5=0x1e & DW; OPRA { local a = DW; local b:2 = *:2 OPRA; local r = a - b; subflags(a, b, r); }
+:CMP DB, OPRA is op5=0x1e & DB; OPRA { local a = DB; local b:1 = *:1 OPRA; local r = a - b; subflags(a, b, r); }
+:CMP DL, OPRA is op5=0x1e & DL; OPRA { local a = DL; local b:4 = *:4 OPRA; local r = a - b; subflags(a, b, r); }
+:LD DW, OPRA is op5=0x14 & DW; OPRA { DW = *:2 OPRA; nzflags(DW); fV = 0; }
+:LD DB, OPRA is op5=0x14 & DB; OPRA { DB = *:1 OPRA; nzflags(DB); fV = 0; }
+:LD DL, OPRA is op5=0x14 & DL; OPRA { DL = *:4 OPRA; nzflags(DL); fV = 0; }
+:ST DW, OPRA is op5=0x18 & DW; OPRA { *:2 OPRA = DW; nzflags(DW); fV = 0; }
+:ST DB, OPRA is op5=0x18 & DB; OPRA { *:1 OPRA = DB; nzflags(DB); fV = 0; }
+:ST DL, OPRA is op5=0x18 & DL; OPRA { *:4 OPRA = DL; nzflags(DL); fV = 0; }
+:LD DW, imm24 is op5=0x16 & DW; imm24 { DW = *:2 imm24:3; nzflags(DW); fV = 0; }
+:LD DB, imm24 is op5=0x16 & DB; imm24 { DB = *:1 imm24:3; nzflags(DB); fV = 0; }
+:LD DL, imm24 is op5=0x16 & DL; imm24 { DL = *:4 imm24:3; nzflags(DL); fV = 0; }
+:ST DW, imm24 is op5=0x1a & DW; imm24 { *:2 imm24:3 = DW; nzflags(DW); fV = 0; }
+:ST DB, imm24 is op5=0x1a & DB; imm24 { *:1 imm24:3 = DB; nzflags(DB); fV = 0; }
+:ST DL, imm24 is op5=0x1a & DL; imm24 { *:4 imm24:3 = DL; nzflags(DL); fV = 0; }

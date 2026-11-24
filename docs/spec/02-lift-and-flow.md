@@ -4340,6 +4340,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 | `MeP` | Toshiba MeP-c4 core, both byte orders | `MeP:BE:32:default`, `MeP:LE:32:default` | binutils `cpu/mep-core.cpu` (CGEN), GCC `mep.h` | `unlace-cli/tests/mep.rs` |
 | `V810` | NEC V810 (Virtual Boy, PC-FX) | `V810:LE:32:default` | NEC uPD70732 user's manual, Virtual Boy development manual, MAME `v810` | `unlace-cli/tests/v810.rs` |
+| `Lua` | Lua 5.4 VM bytecode (one function's code array) | `Lua:LE:32:5.4` | Lua 5.4 `lopcodes.h`/`lvm.c` (MIT), reference manual; oracle `luac5.4 -l -l` | `unlace-cli/tests/lua54.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

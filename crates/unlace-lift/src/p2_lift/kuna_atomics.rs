@@ -1533,6 +1533,80 @@ fn loop_blocks(data: &Funcdata, p: BlockId) -> Option<(BlockId, BlockId, BlockId
     None
 }
 
+/// A compare-exchange loop the compiler rotated (clang's ARM and Thumb
+/// `ldrex; cmp; bne fail; dmb; L: strex; cbz done; ldrex; cmp; beq L`): the
+/// store-exclusive block `p` is entered from the head `h` (directly, or
+/// through one block `d`) and from a reload block `r` that the status block
+/// `f` falls into on a failed store and that branches back to `p` or to
+/// `h`'s compare-failure exit. Returns `(h, d, s, f, r)`.
+fn rotated_blocks(
+    data: &Funcdata,
+    p: BlockId,
+) -> Option<(BlockId, Option<BlockId>, BlockId, BlockId, BlockId)> {
+    let g = data.bblocks_ref();
+    let pb = g.block(p);
+    if pb.size_out() != 2 || pb.size_in() != 2 {
+        return None;
+    }
+    let outs = [pb.get_true_out(), pb.get_false_out()];
+    for (s, f) in [(outs[0], outs[1]), (outs[1], outs[0])] {
+        let (sb, fb) = (g.block(s), g.block(f));
+        if s == p
+            || f == p
+            || sb.size_in() != 1
+            || sb.size_out() != 1
+            || sb.get_out(0) != f
+            || fb.size_out() != 2
+        {
+            continue;
+        }
+        for r in [fb.get_true_out(), fb.get_false_out()] {
+            let rb = g.block(r);
+            if [p, s, f].contains(&r) || rb.size_in() != 1 || rb.size_out() != 2 {
+                continue;
+            }
+            let (r0, r1) = (rb.get_true_out(), rb.get_false_out());
+            let x = if r0 == p {
+                r1
+            } else if r1 == p {
+                r0
+            } else {
+                continue;
+            };
+            let e = if pb.get_in(0) == r {
+                pb.get_in(1)
+            } else {
+                pb.get_in(0)
+            };
+            if e == r || [s, f, x].contains(&e) {
+                continue;
+            }
+            let eb = g.block(e);
+            let (h, d) = if eb.size_out() == 2 {
+                (e, None)
+            } else if eb.size_out() == 1 && eb.size_in() == 1 {
+                (eb.get_in(0), Some(e))
+            } else {
+                continue;
+            };
+            let hb = g.block(h);
+            let entry = d.unwrap_or(p);
+            let fails = if hb.size_out() == 2 && hb.get_true_out() == entry {
+                hb.get_false_out()
+            } else if hb.size_out() == 2 && hb.get_false_out() == entry {
+                hb.get_true_out()
+            } else {
+                continue;
+            };
+            if fails != x || [p, s, f, r].contains(&h) {
+                continue;
+            }
+            return Some((h, d, s, f, r));
+        }
+    }
+    None
+}
+
 /// The ops of `b`, without the CBRANCH that ends it.
 fn body(data: &Funcdata, b: BlockId) -> Vec<OpId> {
     let mut ops = block_ops(data, b);
@@ -1617,14 +1691,115 @@ fn dead_after(data: &Funcdata, mut b: BlockId, suspects: &[Storage]) -> bool {
     live.is_empty()
 }
 
+/// Whether the reload block `r` of a rotated compare-exchange loop
+/// ([`rotated_blocks`]) repeats the head: from the state the loop body leaves
+/// (`state`), its one load-exclusive reads `address`, it reads none of the
+/// `avoid` storages (the monitor's outputs, which differ on a failed store),
+/// and its branch back to `p` is taken exactly when the reloaded value equals
+/// `expected`.
+#[allow(clippy::too_many_arguments)]
+fn reload_matches(
+    eval: &Eval,
+    r: BlockId,
+    p: BlockId,
+    state: &BTreeMap<Storage, Expr>,
+    address: &Expr,
+    expected: &Expr,
+    avoid: &[Storage],
+) -> Option<()> {
+    let data = eval.fd;
+    let r_ops = body(data, r);
+    if r_ops.len() > MAX_OPS {
+        return None;
+    }
+    let loads: Vec<usize> = (0..r_ops.len())
+        .filter(|&i| {
+            data.obank()
+                .get(r_ops[i])
+                .is_some_and(|o| o.code() == OpCode::CPUI_LOAD)
+        })
+        .collect();
+    let [load] = loads[..] else {
+        return None;
+    };
+    let pointer = storage(data, data.obank().get(r_ops[load])?.get_in(1)?)?;
+    let sub = Eval {
+        fd: data,
+        ops: &r_ops,
+        userops: eval.userops,
+        width: eval.width,
+        access: Access::Pointer(pointer),
+        first_load: load,
+        store: usize::MAX,
+        old_home: eval.old_home,
+        value_home: None,
+    };
+    let mut path = Path {
+        pc: 0,
+        state: state.clone(),
+        conds: Vec::new(),
+        stored: None,
+        old_writes: Vec::new(),
+        store_state: None,
+    };
+    let mut reads = BTreeMap::new();
+    for index in 0..r_ops.len() {
+        let op = sub.op(index)?;
+        for slot in 0..op.num_input() {
+            let read = op.get_in(slot).and_then(|v| storage(data, v));
+            if read.is_some_and(|s| avoid.iter().any(|a| a.overlaps(s))) {
+                return None;
+            }
+        }
+        match op.code() {
+            OpCode::CPUI_LOAD => {
+                if sub.read(&path.state, op.get_in(1)?)? != *address {
+                    return None;
+                }
+                sub.load(&mut path, index, &mut reads)?;
+            }
+            OpCode::CPUI_CALLOTHER => {
+                let id = is_constant(data, op.get_in(0)?)?.0 as u32;
+                if op.get_out().is_some() || !eval.userops.ordering.contains(&id) {
+                    return None;
+                }
+            }
+            OpCode::CPUI_STORE
+            | OpCode::CPUI_BRANCH
+            | OpCode::CPUI_CBRANCH
+            | OpCode::CPUI_CALL
+            | OpCode::CPUI_CALLIND
+            | OpCode::CPUI_BRANCHIND
+            | OpCode::CPUI_RETURN
+            | OpCode::CPUI_MULTIEQUAL
+            | OpCode::CPUI_INDIRECT => return None,
+            _ => sub.generic(&mut path, index, &mut reads)?,
+        }
+    }
+    let cond = sub.read(
+        &path.state,
+        data.obank().get(data.bb_op_tail(r)?)?.get_in(1)?,
+    )?;
+    let to_p = successor(data, r, true)? == p;
+    (equality(&cond, to_p)? == *expected).then_some(())
+}
+
 fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     let (pass, status) = data.get_arch().atomic_userops.monitor?;
-    let (h, s, f) = loop_blocks(data, p)?;
+    let (h, d, s, f, r) = match loop_blocks(data, p) {
+        Some((h, s, f)) => (h, None, s, f, None),
+        None => {
+            let (h, d, s, f, r) = rotated_blocks(data, p)?;
+            (h, d, s, f, Some(r))
+        }
+    };
     let userops = data.get_arch().atomic_userops.clone();
     let head = if h == p { Vec::new() } else { body(data, h) };
+    let d_ops = d.map(|d| body(data, d)).unwrap_or_default();
     let (p_ops, s_ops, f_ops) = (body(data, p), body(data, s), body(data, f));
     let ops: Vec<OpId> = head
         .iter()
+        .chain(&d_ops)
         .chain(&p_ops)
         .chain(&s_ops)
         .chain(&f_ops)
@@ -1633,7 +1808,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
     if ops.len() > MAX_OPS {
         return None;
     }
-    let p_end = head.len() + p_ops.len();
+    let p_end = head.len() + d_ops.len() + p_ops.len();
     let code = |i: usize| data.obank().get(ops[i]).map(|o| o.code());
     let callother = |i: usize| {
         data.obank()
@@ -1750,7 +1925,7 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         return None;
     };
     let exit = successor(data, f, *fc != 0)?;
-    if successor(data, p, pc != 0)? != s || exit == h {
+    if successor(data, p, pc != 0)? != s || exit == h || Some(exit) == r {
         return None;
     }
     let stored = path.stored.clone()?;
@@ -1759,13 +1934,29 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         let (builtin, operand) = update(&stored, width)?;
         (builtin, vec![operand])
     } else {
-        let to_p = successor(data, h, true)? == p;
+        let to_p = successor(data, h, true)? == d.unwrap_or(p);
         let exit = successor(data, h, !to_p)?;
         let expected = equality(h_cond.as_ref()?, to_p)?;
         if stored.has_old() || !quiet_exit(data, h, exit) {
             return None;
         }
         h_exit = Some(exit);
+        if let Some(r) = r {
+            let monitor_outs: Vec<Storage> = [Some(pass_at), status_at]
+                .into_iter()
+                .flatten()
+                .filter_map(|i| storage(data, data.obank().get(ops[i])?.get_out()?))
+                .collect();
+            reload_matches(
+                &eval,
+                r,
+                p,
+                &path.state,
+                address.as_ref()?,
+                &expected,
+                &monitor_outs,
+            )?;
+        }
         (BUILTIN_ATOMIC_COMPARE_SWAP, vec![expected, stored.clone()])
     };
     let written: Vec<Storage> = ops

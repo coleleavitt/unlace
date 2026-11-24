@@ -158,6 +158,20 @@ monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that
 fails stores nothing, as the loop did, and keeps its exit (with its `clrex`).
 
+clang rotates an ARM and Thumb compare-exchange: `ldrex r0, [r0]; cmp r0, r1;
+bne fail; dmb ish; L: strex r3, r2, [r12]; cbz r3, done; ldrex r0, [r12]; cmp
+r0, r1; beq L; fail: clrex`. The store-exclusive block then has two
+predecessors: the head (directly or through one block, here the `dmb`) and a
+reload block that the status test falls into and that branches back to it or
+to the head's failure exit
+(`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
+the block between and the store-exclusive's blocks fold as above, and the
+reload block must repeat the head: evaluated from the state the loop body
+leaves, its one load-exclusive reads the head's address, it reads neither
+monitor output, and it branches back exactly when the reloaded value equals
+the head's expected value (`reload_matches`). The status test then always
+leaves the loop and the reload block is dead.
+
 On ARM and Thumb, `strex rd, rt, [rn]` lifts to `access = hasExclusiveAccess(rn);
 rd = 1; if (!access) goto next; rd = 0; *rn = rt`, with no status user
 operation: the monitor test is `hasExclusiveAccess`, the status is the

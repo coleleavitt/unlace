@@ -13,8 +13,16 @@
 //! format and machine ([`any_target`]), which no built-in library matches, so
 //! only a text library of that target or an IDA type library (`.til`), which
 //! is rendered for whatever target reads it, declares its imports.
+//!
+//! The pass also names the IDA type libraries IDA itself would load for an ELF
+//! or Mach-O image ([`til_slots`]), which `typelib auto` reads from
+//! `UNLACE_TIL_DIR`: `gnulnx_<arch>` with the `gnuunx` library it builds on for
+//! a Linux ELF, `android_<arch>` for one linked against Bionic, and the newest
+//! macOS or iOS SDK library not newer than the SDK a Mach-O was built with.
 
-use object::{Object, ObjectSection};
+use object::macho;
+use object::read::macho::{LoadCommandVariant, MachHeader};
+use object::{FileKind, Object, ObjectSection};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, TypeLibFacts};
 
@@ -66,6 +74,149 @@ fn any_target(file: &object::File) -> &'static str {
     }
 }
 
+/// The macOS SDK libraries IDA ships, by the SDK major version they serve,
+/// without the arch suffix (`macos14_sdk00` + `_x64` / `_arm64`).
+const MACOS_SDKS: &[u32] = &[14, 13, 12, 11];
+/// The 64-bit iOS SDK libraries IDA ships, by SDK major version.
+const IOS_SDKS: &[u32] = &[17, 16, 15, 14, 13, 12];
+
+/// The Mach-O `PLATFORM_*` and the major SDK version an image's
+/// `LC_BUILD_VERSION` or `LC_VERSION_MIN_*` names (an SDK of 10.15 is
+/// `(10, 15)`), or `None` when it names neither.
+fn macho_build(file: &object::File, bytes: &[u8]) -> Option<(u32, u32, u32)> {
+    fn read<Mach: MachHeader<Endian = object::Endianness>>(
+        bytes: &[u8],
+    ) -> Option<(u32, u32, u32)> {
+        let header = Mach::parse(bytes, 0).ok()?;
+        let endian = header.endian().ok()?;
+        let mut commands = header.load_commands(endian, bytes, 0).ok()?;
+        while let Ok(Some(command)) = commands.next() {
+            match command.variant() {
+                Ok(LoadCommandVariant::BuildVersion(build)) => {
+                    let sdk = build.sdk.get(endian);
+                    return Some((build.platform.get(endian), sdk >> 16, sdk >> 8 & 0xff));
+                }
+                Ok(LoadCommandVariant::VersionMin(min)) => {
+                    let platform = match command.cmd() {
+                        macho::LC_VERSION_MIN_MACOSX => macho::PLATFORM_MACOS,
+                        macho::LC_VERSION_MIN_IPHONEOS => macho::PLATFORM_IOS,
+                        _ => return None,
+                    };
+                    let sdk = min.sdk.get(endian);
+                    return Some((platform, sdk >> 16, sdk >> 8 & 0xff));
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+    match (file.format(), FileKind::parse(bytes)) {
+        (object::BinaryFormat::MachO, Ok(FileKind::MachO64)) => {
+            read::<macho::MachHeader64<object::Endianness>>(bytes)
+        }
+        (object::BinaryFormat::MachO, Ok(FileKind::MachO32)) => {
+            read::<macho::MachHeader32<object::Endianness>>(bytes)
+        }
+        _ => None,
+    }
+}
+
+/// `versions` (newest first) ordered by preference for an image built with
+/// SDK `major`: the newest not newer than it first, then older ones, then the
+/// newer ones, oldest first.
+fn by_preference(versions: &[u32], major: u32) -> Vec<u32> {
+    let mut out: Vec<u32> = versions.iter().copied().filter(|&v| v <= major).collect();
+    out.extend(versions.iter().rev().copied().filter(|&v| v > major));
+    out
+}
+
+/// Whether an ELF is linked against Android's Bionic C library: its loader is
+/// `/system/bin/linker` or `linker64`, or it imports with Bionic's `LIBC`
+/// symbol version.
+fn is_bionic(file: &object::File) -> bool {
+    let section = |name: &str| file.section_by_name(name).and_then(|s| s.data().ok());
+    if section(".interp").is_some_and(|s| s.windows(18).any(|w| w == b"/system/bin/linker")) {
+        return true;
+    }
+    section(".dynstr").is_some_and(|s| {
+        let mut names = s.split(|b| *b == 0);
+        names.clone().any(|n| n == b"libc.so") && names.any(|n| n == b"LIBC")
+    })
+}
+
+/// The IDA type libraries IDA would load for an ELF or Mach-O image, as slots
+/// of candidate paths relative to an IDA `til` directory: `typelib auto` reads
+/// the first candidate of each slot that exists. Empty for a PE (whose choice
+/// depends on its subsystem and is made where the library is read) and for any
+/// image IDA ships no library for.
+pub fn til_slots(file: &object::File, bytes: &[u8]) -> Vec<Vec<String>> {
+    use object::Architecture as A;
+    use object::BinaryFormat as F;
+    let one = |name: &str| vec![name.to_string()];
+    match file.format() {
+        F::Elf => {
+            if is_bionic(file) {
+                return match file.architecture() {
+                    A::Aarch64 => vec![one("arm/android_arm64.til")],
+                    A::Arm => vec![one("arm/android_arm.til")],
+                    _ => Vec::new(),
+                };
+            }
+            match file.architecture() {
+                A::X86_64 => vec![one("pc/gnulnx_x64.til"), one("gnuunx64.til")],
+                A::I386 => vec![one("pc/gnulnx_x86.til"), one("gnuunx.til")],
+                A::Aarch64 => vec![one("arm/gnulnx_arm64.til"), one("gnuunx64.til")],
+                A::Arm => vec![one("arm/gnulnx_arm.til"), one("gnuunx.til")],
+                A::PowerPc => vec![one("ppc/gnulnx_ppc.til"), one("gnuunx.til")],
+                A::PowerPc64 => vec![one("ppc/gnulnx_ppc64.til")],
+                _ => Vec::new(),
+            }
+        }
+        F::MachO => {
+            let (platform, major, minor) =
+                macho_build(file, bytes).unwrap_or((macho::PLATFORM_MACOS, 0, 0));
+            let ios = matches!(platform, macho::PLATFORM_IOS | macho::PLATFORM_IOSSIMULATOR);
+            match (ios, file.architecture()) {
+                (true, A::Aarch64) => vec![
+                    by_preference(IOS_SDKS, major)
+                        .into_iter()
+                        .map(|v| format!("arm/iphoneos64_sdk{v}.til"))
+                        .collect(),
+                ],
+                (true, A::Arm) => vec![one("arm/iphoneos_sdk12.til")],
+                (false, A::Aarch64) => vec![
+                    by_preference(MACOS_SDKS, major.max(11))
+                        .into_iter()
+                        .map(|v| format!("arm/macos{v}_sdk00_arm64.til"))
+                        .collect(),
+                ],
+                (false, A::X86_64) => {
+                    let mut names: Vec<String> = Vec::new();
+                    let legacy = ["macosx64_sdk15.til", "macosx64_sdk14.til"];
+                    if major <= 10 {
+                        if minor < 15 {
+                            names.extend(legacy.iter().rev().map(|s| s.to_string()));
+                        } else {
+                            names.extend(legacy.iter().map(|s| s.to_string()));
+                        }
+                    }
+                    names.extend(
+                        by_preference(MACOS_SDKS, major.max(11))
+                            .into_iter()
+                            .map(|v| format!("macos{v}_sdk00_x64.til")),
+                    );
+                    if major > 10 {
+                        names.extend(legacy.iter().map(|s| s.to_string()));
+                    }
+                    vec![names]
+                }
+                _ => Vec::new(),
+            }
+        }
+        _ => Vec::new(),
+    }
+}
+
 impl AnalysisPass for TypeLibPass {
     fn phase(&self) -> Phase {
         Phase::P1
@@ -97,6 +248,7 @@ impl AnalysisPass for TypeLibPass {
             imports,
             named,
             subsystem,
+            til_slots: til_slots(ctx.file, ctx.bytes),
         });
         out
     }
@@ -104,7 +256,7 @@ impl AnalysisPass for TypeLibPass {
 
 #[cfg(test)]
 mod tests {
-    use super::{any_target, target};
+    use super::{any_target, target, til_slots};
 
     fn fixture(name: &str) -> Vec<u8> {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -125,6 +277,47 @@ mod tests {
         let file = object::File::parse(&*mips).unwrap();
         assert_eq!(target(&file), None);
         assert_eq!(any_target(&file), "elf mips");
+    }
+
+    #[test]
+    fn til_slots_name_the_libraries_ida_would_load() {
+        let slots = |name: &str| {
+            let bytes = fixture(name);
+            let file = object::File::parse(&*bytes).unwrap();
+            til_slots(&file, &bytes)
+        };
+        assert_eq!(
+            slots("entrymain_aarch64"),
+            [
+                vec!["arm/gnulnx_arm64.til".to_string()],
+                vec!["gnuunx64.til".to_string()]
+            ]
+        );
+        assert!(slots("libctypes_mips32_glibc_le32").is_empty());
+        assert!(slots("importcall_pe_x86_64.exe").is_empty());
+        let arm64 = slots("chkstkdarwin_macho_arm64");
+        assert_eq!(arm64.len(), 1);
+        assert!(
+            arm64[0]
+                .iter()
+                .all(|n| n.starts_with("arm/macos") || n.starts_with("arm/iphoneos64"))
+        );
+        let x64 = slots("address_taken_stack_buffers_macho");
+        assert_eq!(x64.len(), 1);
+        assert!(x64[0].iter().any(|n| n == "macos14_sdk00_x64.til"));
+    }
+
+    #[test]
+    fn sdk_libraries_prefer_the_newest_not_newer_than_the_build() {
+        assert_eq!(
+            super::by_preference(&[17, 16, 15, 14, 13, 12], 15),
+            [15, 14, 13, 12, 16, 17]
+        );
+        assert_eq!(
+            super::by_preference(&[14, 13, 12, 11], 26),
+            [14, 13, 12, 11]
+        );
+        assert_eq!(super::by_preference(&[14, 13, 12, 11], 0), [11, 12, 13, 14]);
     }
 
     #[test]

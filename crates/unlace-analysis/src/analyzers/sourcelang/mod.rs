@@ -769,10 +769,7 @@ fn swift_indicated(file: &object::File) -> bool {
 
 /// Simple substring search (`haystack.contains(needle)` over bytes).
 fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() || needle.len() > haystack.len() {
-        return needle.is_empty();
-    }
-    haystack.windows(needle.len()).any(|w| w == needle)
+    memchr::memmem::find(haystack, needle).is_some()
 }
 
 // ---------------------------------------------------------------------------

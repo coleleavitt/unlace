@@ -658,6 +658,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_symbolnamechars::NameChars>()
             .as_str(),
+        "ruststdsigs" => conf
+            .kuna_options
+            .get::<unlace_decomp::kuna_ruststdsigs::RustStdSigs>()
+            .as_str(),
         "dwarf" => on_off(
             conf.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
@@ -799,6 +803,16 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
             .kuna_options
             .get::<unlace_decomp::kuna_armconstantshift::ConstShiftMode>()
             .as_str(),
+        "fpargboxed" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_boxedcompare::FpArgBoxed>()
+                .0,
+        ),
+        "satconvert" => on_off(
+            conf.kuna_options
+                .get::<unlace_decomp::kuna_satconvert::SatConvert>()
+                .0,
+        ),
         // (PR-8) Mach-O arm64e spec selection: reflects the recorded requested
         // state (the live spec-selection gate is the load-time env var, but the
         // catalog `current` mirrors the `option macho-arm64e on|off` request).

@@ -12,7 +12,8 @@
 //! assertion no longer passes (REGRESSED), when any assertion fails, or when a test file cannot be
 //! parsed or run; assertions that pass but are not in the baseline are reported, not failed.
 //!
-//! `cargo test -p unlace-harness --test parity` runs both. `UNLACE_BLESS=1` re-records the
+//! `cargo test -p unlace-harness --test parity` runs both, each corpus across up to eight
+//! `decomp_test_dbg -worker` processes (`UNLACE_PARITY_JOBS=N`; `1` runs it in this process). `UNLACE_BLESS=1` re-records the
 //! baselines from the run (a deliberate default change, a new stage test) instead of comparing;
 //! it refuses while any assertion fails or any file errors. Never bless to absorb a regression.
 //! The corpora run from the repository root (their scripts load fixtures by relative path); each
@@ -22,6 +23,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use unlace_harness::parallel::run_test_files_parallel;
 use unlace_harness::testfunction::{describe_test_file, run_test_files_each};
 
 /// The engine keeps a few process-wide settings; the two corpora run one after the other.
@@ -163,6 +165,15 @@ fn has_slaspec(dir: &Path) -> bool {
         })
 }
 
+/// Worker processes for a corpus: `UNLACE_PARITY_JOBS` (1 runs the files in this process), else
+/// the machine's parallelism up to 8.
+fn parity_jobs() -> usize {
+    std::env::var("UNLACE_PARITY_JOBS")
+        .ok()
+        .and_then(|j| j.parse().ok())
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get().min(8)))
+}
+
 fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
     assert!(
         has_slaspec(&root.join("specs")),
@@ -176,13 +187,19 @@ fn run_corpus(root: &Path, corpus: &Path) -> DataResult {
     {
         specs.push(home);
     }
-    let runs = std::thread::Builder::new()
-        .name("parity".into())
-        .stack_size(256 << 20)
-        .spawn(move || run_test_files_each(&files, &specs))
-        .expect("spawn the corpus thread")
-        .join()
-        .unwrap_or_else(|_| panic!("the engine panicked on {}", corpus.display()));
+    let jobs = parity_jobs();
+    let runs = if jobs > 1 {
+        let exe = Path::new(env!("CARGO_BIN_EXE_decomp_test_dbg"));
+        run_test_files_parallel(&files, &specs, jobs, exe)
+    } else {
+        std::thread::Builder::new()
+            .name("parity".into())
+            .stack_size(256 << 20)
+            .spawn(move || run_test_files_each(&files, &specs))
+            .expect("spawn the corpus thread")
+            .join()
+            .unwrap_or_else(|_| panic!("the engine panicked on {}", corpus.display()))
+    };
     let mut r = DataResult::default();
     for run in runs {
         let mut text = run.output;

@@ -32,16 +32,20 @@ fn decompile(addr: &str) -> String {
 fn evm_branch_and_store_decompile() {
     let out = decompile("0x0");
     assert!(out.contains("v1 = dat_4 * 3;"), "{out}");
-    assert!(out.contains("if (v1 <= 100) {"), "{out}");
+    assert!(out.contains("if (100 < v1) {"), "{out}");
     assert!(out.contains("sstore(0,v1);"), "{out}");
     assert!(out.contains("evm_return(0,0x20);"), "{out}");
 }
 
-/// `PUSH32 0x0102..20; PUSH1 0; SSTORE; STOP`: the head and two continuations decode.
+/// `PUSH32 0x0102..20; PUSH1 0; SSTORE; STOP`: the head and two continuations decode,
+/// and the 256-bit value prints as one literal (option `wideconst`).
 #[test]
 fn evm_push32_continuations_decode() {
     let out = decompile("0x40");
-    assert!(out.contains("sstore(0,"), "{out}");
-    assert!(out.contains("0x18191a1b1c1d1e1f"), "{out}");
-    assert!(out.contains("ZEXT132(0x20)"), "{out}");
+    assert!(
+        out.contains(
+            "sstore(0,0x102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20);"
+        ),
+        "{out}"
+    );
 }

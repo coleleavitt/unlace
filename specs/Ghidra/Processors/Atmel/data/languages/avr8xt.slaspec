@@ -1,0 +1,10 @@
+# AVR8 AVRxt core (AVR-Dx): I/O at data address 0, registers outside the data space, 16-bit PC
+
+@define PCBYTESIZE "2"
+@define HASEIND "0"
+
+@define IO_START "0"
+@define REGISTER_SPACE "register"
+@define EIND "0x3c"
+
+@include "avr8.sinc"

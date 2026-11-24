@@ -4682,6 +4682,13 @@ impl Database {
         let mut curalias: uintb = 0;
         let mut i = 0usize; // alias cursor
         let mut rcur = 0usize; // range cursor
+        if crate::heritage::kuna_jt_trace() {
+            eprintln!(
+                "jt-trace mark_unaliased alias={:x?} ranges={:x?}",
+                alias,
+                ranges.iter().map(|r| (r.1, r.2)).collect::<Vec<_>>()
+            );
+        }
 
         for (sym, first, curoff) in entries {
             while i < alias.len() && alias[i] <= curoff {
@@ -4728,6 +4735,12 @@ impl Database {
             // Distance between symbol and last alias > 0xffff -> ignore alias.
             if symbol_aliased && (curoff.wrapping_sub(symbol_alias) > 0xffff) {
                 symbol_aliased = false;
+            }
+            if crate::heritage::kuna_jt_trace() {
+                eprintln!(
+                    "jt-trace mark_unaliased sym first={:#x} last={:#x} aliased={} curalias={:#x}",
+                    first, curoff, symbol_aliased, symbol_alias
+                );
             }
             if !symbol_aliased {
                 self.set_attribute(sym, varnode_flags::nolocalalias);

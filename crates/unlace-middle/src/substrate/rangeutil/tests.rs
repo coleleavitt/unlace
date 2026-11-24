@@ -917,3 +917,16 @@ fn zero_extension_constraints_preserve_both_branch_domains() {
     let strided = CircleRange::new(0x80, 6, 1, 2);
     assert!(ValueSetSolver::zext_constraint(&strided, 1, 2).is_none());
 }
+
+#[test]
+fn intersect_keeps_a_wrapping_range_whose_left_end_rounds_past_the_top() {
+    // `x + 1 < 0x1eb` pulled back to x is [-1, 0x1ea); x = 2b is even.
+    let mut r = CircleRange::new(uintb::MAX, 0x1ea, 8, 1);
+    let even = CircleRange::new(0, 0x200, 8, 2);
+    assert_eq!(r.intersect(&even), 0);
+    assert!(!r.is_empty());
+    assert_eq!((r.get_min(), r.get_end(), r.get_step()), (0, 0x1ea, 2));
+    let mut none = CircleRange::new(1, 2, 8, 1);
+    none.intersect(&even);
+    assert!(none.is_empty());
+}

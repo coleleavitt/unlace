@@ -59,23 +59,8 @@
           <pentry minsize="4" maxsize="4" metatype="ptr">
               <register name="a7"/>
           </pentry>
-          <pentry minsize="1" maxsize="4" extension="inttype">   <!-- This is the first non pointer -->
-              <register name="d4"/>
-          </pentry>
-          <pentry minsize="1" maxsize="4" extension="inttype">
-              <register name="d5"/>
-          </pentry>
-          <pentry minsize="5" maxsize="8">    <!-- This is the first >4 byte non pointer -->
-              <register name="e4"/>
-          </pentry>
-          <pentry minsize="1" maxsize="4" extension="inttype">
-              <register name="d6"/>
-          </pentry>
-          <pentry minsize="1" maxsize="4" extension="inttype">
-              <register name="d7"/>
-          </pentry>
-          <pentry minsize="5" maxsize="8">
-              <register name="e6"/>
+          <pentry minsize="1" maxsize="16" align="4" extension="inttype">   <!-- d4..d7 as four 4-byte slots; a 64-bit value takes an aligned pair -->
+              <addr space="register" offset="0xFF10"/>
           </pentry>
           <pentry minsize="1" maxsize="500" align="4">
               <addr offset="0" space="stack"/>

@@ -3479,9 +3479,11 @@ invocations must also preserve the function's existing high-level state.
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_booleanmask.rs
 (RuleBoolSignShift)`, oppool1, fires on INT_SRIGHT. Pattern:
 `(b << k) s>> k` with the same non-byte-aligned `k` on both shifts (the
-byte-aligned case already belongs to `RuleLeftRight`), where the pre-shift
-value's known-nonzero mask fits entirely below the shifted-out bits — i.e. `b`
-is a boolean being smeared across the word. Rewrite: `INT_2COMP(b)` (`0 - b`,
+byte-aligned case already belongs to `RuleLeftRight`), where `k` is one less
+than the width in bits and the pre-shift value's known-nonzero mask is within bit
+0 — i.e. `b` is a boolean being smeared across the word. A wider value in the
+low bits is sign-extended from its top bit, not negated, so the rule declines
+for it (TriCore `sha d2,d4,-3` builds its count as `(c6 << 26) s>> 26`). Rewrite: `INT_2COMP(b)` (`0 - b`,
 giving 0 or all-ones), which the surrounding compare rules then clean to a
 plain boolean test. Always on.
 
@@ -3896,15 +3898,22 @@ psABI passes and returns a float narrower than FLEN NaN-boxed. Only those
 upper bits are claimed, so a test of a float's own bits is never folded. The half-precision
 unboxing test reads exactly bits 16..63: the `fa0+2:6` piece, or a 6-byte `SUBPIECE` at byte 2
 of the whole boxed register (or at byte 0 of it shifted right by 16). Those 48 bits count as all
-ones, as the psABI boxes a half argument or result the same way. *Rewrite:* the
+ones, as the psABI boxes a half argument or result the same way. With 16-byte f registers
+(FLEN 128, `RISCV:LE:64:GQ`) the boxed bits are 64..127 and a `SUBPIECE` at byte 8 of the whole
+register (the double unboxing test) counts as all ones; the 12- and 14-byte float and half tests
+are wider than the 8-byte known-ones walk and stay. *Rewrite:* the
 compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
 unboxing dies. Exact, so always on.
 
 **maskjoin** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_maskjoin.rs (RuleMaskJoin)`, oppool1, fires on
 `INT_ADD`, `INT_OR` and `INT_XOR`. *Pattern:* both inputs are `INT_AND`s of one non-constant
-value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, at a width of at
-most eight bytes. The masked values then share no set bit, so the sum, the or and the exclusive
+value `x` (through `COPY`s) with constants `m1` and `m2` that share no bit, or a zero-extended
+piece of `x` moved back into place, which keeps the same bits: `zext(SUB(x, k)) << 8k` (no
+shift for `k` 0), the piece also read as `SUB(x >> 8k, 0)` (`kuna_maskjoin.rs (piece_of)`).
+A soft-float ARM caller that keeps a returned `double`'s high word in its own register printed
+`(unsigned long long)v1 << 0x20 | x & 0xffffffff` with `v1 = x >> 0x20`. The value is at most eight bytes
+wide. The masked values then share no set bit, so the sum, the or and the exclusive
 or are the same value. *Rewrite:* the op becomes `COPY x` when `m1 | m2` covers every bit of
 `x`, else `INT_AND x, m1 | m2`. ARM's `vmov d0, r0, r1` lifts as
 `(zext(r1) << 32) + zext(r0)`; after a call returning a `double` in r0:r1 its halves simplify to

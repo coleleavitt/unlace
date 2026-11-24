@@ -1,0 +1,20 @@
+define endian=little;
+
+# RV64GQ: FLEN 128, so F and D values are NaN-boxed into 16-byte f registers (riscv.fdq.sinc)
+# and Q (riscv.q.sinc) uses them whole. Zfh, Zfa and Zfbfmin are generated for FLEN 64 and are
+# not part of this language.
+
+@define XLEN 8
+@define XLEN2 16
+@define FLEN 16
+
+@define CONTEXTLEN 4
+
+@define ADDRSIZE "64"
+@define FPSIZE "128"
+
+@include "riscv.reg.sinc"
+@include "riscv.table.sinc"
+@include "riscv.instr.sinc"
+
+@include "riscv.custom.sinc"

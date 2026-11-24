@@ -1,0 +1,84 @@
+# #871: a switch index read from a stack struct whose address is passed to a
+# call must not be folded to the value stored before the call.
+#
+# MSVC i386 shape (PEGRP32F.dll sub_102fcc20): an SEH registration record
+# (`lea eax,[ebp-0xc]; mov fs:0,eax`), an 11-dword struct at [ebp-0x38]
+# zeroed through `xor eax,eax`, `fill(a, b, &s, &obj)`, then
+# `switch (s.f4 - 2)` through a byte index table and a jump table.
+#
+# Jump tables are recovered on a partial clone of the function. Two things let
+# the clone fold the index: it never got its local window (#918), and its
+# switch-path protection stopped at the `xor eax,eax` that zeroes the struct,
+# so with the struct's address unseen there (the calls have no inputs yet)
+# RuleIndirectCollapse dropped the INDIRECT the call puts on the field and the
+# index folded to the pre-call 0: "Switch with 1 destination removed ... 5
+# cases all go to same destination", and the cases vanished. Ghidra 12.1.4
+# recovers the switch.
+#
+# Source of the bytes (gcc -m32 -c, ld -Ttext=0x10001000
+# --section-start=.rodata=0x10002000 -Tdata=0x10003000):
+#   sub: SEH prologue; if (p == 0 && q == 0) return 0x80070057;
+#        s = {0}; init(&obj); r = fill(x, y, &s, &obj); if (r < 0) return r;
+#        switch (s.f4 - 2) via idxtbl/jtbl: 0, 0x27 -> g0 = 1; 8, 0x34 -> g1 = 2;
+#        9, 0x5b -> g2 = 3; 0x1a, 0x1b -> g3 = 4; default -> g4 = 5.
+
+[image]
+arch = 'x86:LE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x10001000', name = 'jt871' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10001000'
+readonly = true
+hex = '''
+5589e56aff685e11001064a1000000005081ec60010000a10030001031e88945bc508d45f464a300000000837d140075
+10837d1800750ab857000780e9fc000000c745c80000000031c08945cc8945d08945d48945d88945dc8945e08945e489
+45e88945ec8945f06a008d4dc4e8da000000c745fc000000008d4dc4518d55c8528b450c508b4d0851e8c200000083c4
+10894594837d94007d238b5594899528ffffffc745fcffffffff8d4dc4e89d0000008b8528ffffffe9800000008b45d8
+8985d0feffff8b8dd0feffff83e902898dd0feffff83bdd0feffff5b77448b95d0feffff0fb68214200010ff24850020
+0010c7050430001001000000eb2ec7050830001002000000eb22c7050c30001003000000eb16c7051030001004000000
+eb0ac7051430001005000000c745fcffffffff8d4dc4e81400000031c08b4df464890d000000005989ec5dc3c20400c3
+8b44240cc740100a00000031c0c3c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10002000'
+readonly = true
+hex = '''
+f2100010fe1000100a110010161100102211001000040404040404040102040404040404040404040404040404040303
+040404040404040404040400040404040404040404040404010404040404040404040404040404040404040404040404
+04040404040404040404040404040402
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10003000'
+hex = '''
+341200000000000000000000000000000000000000000000
+'''
+
+[script]
+commands = [
+    'lo fu jt871',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'JT871 #1: the switch on the struct field read after the call stands'
+count = 1
+regex = 'switch\('
+
+[[match]]
+name = 'JT871 #2: no single-destination switch is removed'
+count = 0
+literal = 'destination removed'
+
+[[match]]
+name = 'JT871 #3: every case body survives (g3 = 4 is reached only through the table)'
+count = 1
+literal = '= 4;'

@@ -2458,6 +2458,37 @@ the slot keeps the slot name. So do a read narrower than the slot and a read by 
 operator C does not apply to a pointer (a mask, a shift, a multiply or a division:
 `dat_<slot> | 1`, never `&<import> | 1`); an addition stays `&<import> + 8`.
 
+(kuna `wideconst`, default on) A constant wider than 64 bits that the lifter built from
+pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/kuna_wideconst.rs`).
+A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's
+`PUSH20`/`PUSH32` lift a 7-byte and an 8-byte immediate and shift in the continuation bytes,
+and the 160-bit address mask printed as `((ZEXT732(0xffffffffffffff) << 0x40 |
+ZEXT832(0xffffffffffffffff)) << 0x28 | ZEXT532(0xffffffffff))`. At the top of
+`op_push_ir_inner`, an `INT_LEFT` or `INT_OR` whose output is 9 to 32 bytes is evaluated
+in 256-bit arithmetic over constants, `INT_ZEXT`s, constant `INT_LEFT`s and `INT_OR`s,
+descending only through implied Varnodes (a named variable stops it), each result masked to
+its Varnode's size; when the whole tree is constant, the hexadecimal literal is pushed as one
+constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
+is a Go or Swift pair, which keeps its form (the stage corpus pins those).
+
+(kuna `selectmul`, default off) A select the lifter wrote as arithmetic prints as C's
+conditional operator (`crates/unlace-emit/src/p9_emit/kuna_selectmul.rs`). SLEIGH has no
+select, so a spec that picks one of two values without a branch computes
+`a * zext(c) + b * zext(!c)`; TriCore's `ternary` macro (behind `sel`, `min`, `max`,
+`sat`, `cmov`) does, and `min` printed `a1 * (unsigned int)(a1 < a0) + a0 * (unsigned
+int)(a1 >= a0)`. Near the top of `op_push_ir_inner`, under a language with `?:`, an
+`INT_ADD`, `INT_OR` or `INT_XOR` whose two inputs are implied `INT_MULT`s, each of a value
+by an implied `INT_ZEXT` of a one-byte boolean, is printed as a select when the two booleans
+are complements: one is the `BOOL_NEGATE` of the other, or they are `INT_EQUAL` and
+`INT_NOTEQUAL` of the same operands (either order), or `INT_LESS`/`INT_LESSEQUAL` (or the
+signed pair) with the operands swapped. Operands are the same when they are one Varnode or two
+constants of equal size and value. Exactly one product is then non-zero, so the expression is
+the value whose boolean holds. The `CONDITIONAL` token takes the condition (pushed in
+condition context, so `x != 0` prints truthy), the value of its term, then the other value;
+the condition is the strict compare or `!=` of the pair, the operand of a negation, or else
+the first input's boolean. A term in a named variable, a float compare and a single
+product (`a * zext(c)` with no complement) keep the arithmetic.
+
 (kuna `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/kuna_cstringconst.rs`). `pushConstant`
@@ -5827,7 +5858,7 @@ over the two arms' ops). `emit_block_if` asks the tree for that form
 (`ite_form`): a rewritten `if` prints as its assignment, any other as an `if`;
 without a tree it runs the two tests itself.
 
-With `option boolreturn on` (C output; default off), the same pass turns an
+With `option boolreturn on` (C output; default on since issue #9's DecBench A/B), the same pass turns an
 `if`/`else` without a goto whose body and else are each a `BlockCopy` leaf with
 no label line and no comment printing exactly one statement, a `RETURN` of the
 constant `1` in one arm and `0` in the other, into a return statement whose value
@@ -5840,7 +5871,9 @@ body's `RETURN` as the statement's markup. The option builds the tree even when
 The positive form `return ( cond );` is taken only when the condition's value is
 already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whose
 `CBRANCH` tests an op with a boolean output that is not `BOOL_NEGATE` and that the
-`truthycond` render does not print as a bare operand (`x != 0` printed as `x`).
+`truthycond` render does not print as a bare operand (`x != 0` printed as `x`); a truthy
+test that prints as `!x` (an unflipped `x == 0`, or a flipped `x != 0` whose `!` the
+comparison absorbs) is `0` or `1` and qualifies.
 
 After that statement loop, the same option folds the trailing run of each sequence
 built from a `BlockList` or a `BlockGraph` (`fold_return_run`; in a graph each folded `if`
@@ -5863,7 +5896,8 @@ folds right to left (`combine_return`): `c ? 0 : T` is `!c && T`, `c ? 1 : T`
 is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is `!c || X`, two different
 constants are `c` or `!c`, two values stop the walk. Every `if` but the first
 of the run must have a condition leaf that prints nothing before its test, with
-no label line and no comment (`clean_guard_cond`); an `if` that fails it can only
+no label line and no comment, or a `BlockCondition` (`a && b`, `a || b`) each of
+whose components is one (`clean_guard_cond`); an `if` that fails it can only
 be the first, and the walk stops there. A value that ends as the bare positive
 condition must pass `cond_is_boolean`. The first `if` of the run becomes
 `Return` with the folded value and the tail's `RETURN` as markup; the later ones

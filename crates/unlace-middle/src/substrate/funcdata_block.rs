@@ -3022,6 +3022,12 @@ impl Funcdata {
                 partial.get_func_proto_mut().set_model(Some(defaultfp));
             }
         }
+        // The ctor's `localmap->resetLocalWindow()` follows `setScope`, so the
+        // partial's local scope covers the model's stack window. Without it no
+        // stack location is in scope, every one is marked unmapped-unaliased, and
+        // RuleIndirectCollapse drops the guard a call puts on an escaped struct's
+        // fields (#871).
+        partial.reset_local_window();
         partial.truncated_flow_clone(self)?;
         *partial.kuna_extent_tables_mut() = self.kuna_extent_tables().clone();
         partial.kuna_later_tables = self.kuna_later_tables.clone();
@@ -4641,6 +4647,7 @@ impl Funcdata {
     fn protect_switch_path_indirects(&mut self, branchind: OpId) {
         use crate::op::pcodeop_flags as pf;
         let mut last_indirect: Option<OpId> = None;
+        let mut zero_idiom = false;
         let mut cur_vn = match self.obank().get(branchind).and_then(|o| o.get_in(0)) {
             Some(v) => v,
             None => return,
@@ -4671,6 +4678,16 @@ impl Funcdata {
                 }
                 None => return,
             };
+            // (kuna) `x ^ x` and `x - x` are the constant 0 before a rule folds
+            // them; MSVC zeroes a struct through `xor eax,eax` (#871).
+            if matches!(code, OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB)
+                && ninput == 2
+                && in0.is_some()
+                && in0 == in1
+            {
+                zero_idiom = true;
+                break;
+            }
             if (eval_type & (pf::binary | pf::ternary)) != 0 {
                 if ninput > 1 {
                     let i0 = match in0 {
@@ -4686,7 +4703,12 @@ impl Funcdata {
                     } else if self.switch_is_delayed_constant(i0) {
                         cur_vn = i1;
                     } else {
-                        return; // Multiple paths
+                        {
+                            if crate::heritage::kuna_jt_trace() {
+                                eprintln!("jt-trace protect stop: multiple paths at {:?}", code);
+                            }
+                            return; // Multiple paths
+                        }
                     }
                 } else {
                     cur_vn = match in0 {
@@ -4739,15 +4761,28 @@ impl Funcdata {
                 }
                 return; // Don't backtrack further
             } else {
+                if crate::heritage::kuna_jt_trace() {
+                    eprintln!("jt-trace protect stop: op {:?}", code);
+                }
                 return;
             }
         }
         // Exactly one path, from a constant to a switch.
-        if !self
-            .vbank()
-            .get(cur_vn)
-            .map(|v| v.is_constant())
-            .unwrap_or(false)
+        if crate::heritage::kuna_jt_trace() {
+            eprintln!(
+                "jt-trace protect end vn_const={:?} last_indirect={:?}",
+                self.vbank().get(cur_vn).map(|v| v.is_constant()),
+                last_indirect
+                    .and_then(|o| self.obank().get(o))
+                    .map(|o| o.get_addr().get_offset())
+            );
+        }
+        if !zero_idiom
+            && !self
+                .vbank()
+                .get(cur_vn)
+                .map(|v| v.is_constant())
+                .unwrap_or(false)
         {
             return;
         }

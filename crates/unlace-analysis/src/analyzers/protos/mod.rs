@@ -46,6 +46,7 @@ pub mod kuna_libctypes;
 pub mod kuna_libgcc;
 pub mod kuna_nameladder;
 pub mod kuna_sdkprotos;
+pub mod kuna_softfpsigs;
 pub mod kuna_til;
 pub mod kuna_typelib;
 pub mod kuna_win32sigs;
@@ -1007,10 +1008,7 @@ impl AnalysisPass for LibProtoPass {
             types,
             word_size,
             L,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
         if ctx
@@ -1026,10 +1024,7 @@ impl AnalysisPass for LibProtoPass {
                 types,
                 word_size,
                 L,
-                ctx.arch
-                    .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                    .0,
+                unlace_decomp::kuna_loadoptions::nameladder_enabled(),
             );
             seed_resolved_prototypes(&mut out, &imports, CXX_ALLOC, types, word_size, L);
         }

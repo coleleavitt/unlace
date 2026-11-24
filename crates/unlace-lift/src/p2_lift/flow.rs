@@ -115,6 +115,9 @@ enum EvmJump {
     /// not the next instruction.
     /// `true` when the callee never returns.
     Call(Address, Option<Address>, bool),
+    /// A call whose return label starts a terminal tail several calls share:
+    /// the call, then a call to the tail, which does not return.
+    CallThenTail(Address, Address),
     /// A return through the label the caller pushed.
     Return,
     /// A jump to a constant label.
@@ -1770,6 +1773,35 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
                                 }
                                 *startbasic = true;
                             }
+                            EvmJump::CallThenTail(dest, tail) => {
+                                let callee = self.data.new_code_ref(&dest);
+                                self.data.op_set_input(curop, callee, 0)?;
+                                let call = self.env.resolve_typeop(OpCode::CPUI_CALL);
+                                self.data.op_set_opcode(curop, call);
+                                if self.setup_call_specs(curop)? {
+                                    cursor = self.dead_next(curop);
+                                } else {
+                                    let at = self
+                                        .data
+                                        .obank()
+                                        .get(curop)
+                                        .expect("evmcalls: stale call")
+                                        .get_addr()
+                                        .clone();
+                                    let second = self.data.new_op(1, at.clone());
+                                    let call = self.env.resolve_typeop(OpCode::CPUI_CALL);
+                                    self.data.op_set_opcode(second, call);
+                                    let label = self.data.new_code_ref(&tail);
+                                    self.data.op_set_input(second, label, 0)?;
+                                    self.data.op_dead_insert_after(second, curop);
+                                    if !self.setup_call_specs(second)? {
+                                        let halt =
+                                            self.artificial_halt(&at, pcodeop_flags::noreturn)?;
+                                        self.data.op_dead_insert_after(halt, second);
+                                    }
+                                    cursor = self.dead_next(second);
+                                }
+                            }
                             EvmJump::Call(dest, ret, noreturn) => {
                                 let callee = self.data.new_code_ref(&dest);
                                 self.data.op_set_input(curop, callee, 0)?;
@@ -2002,7 +2034,16 @@ following this call as a branch"
         if let Some(target) = map.jumps.get(&site) {
             return Some(EvmJump::Branch(Address::new(space, *target)));
         }
+        if let Some(target) = map.tails.get(&site) {
+            return Some(EvmJump::Call(Address::new(space, *target), None, true));
+        }
         let call = map.call_at(site)?;
+        if map.ret_tails.contains(&call.ret) && !map.noreturn.contains(&call.target) {
+            return Some(EvmJump::CallThenTail(
+                Address::new(std::rc::Rc::clone(&space), call.target),
+                Address::new(space, call.ret),
+            ));
+        }
         let ret =
             (call.ret != site + 1).then(|| Address::new(std::rc::Rc::clone(&space), call.ret));
         let noreturn = map.noreturn.contains(&call.target);
@@ -5266,6 +5307,16 @@ truncating the fall-through here"
                     &mut shared_partial,
                 );
                 crate::kuna_budget::deadline_passed_in("jump-table recovery");
+                if std::env::var_os("KUNA_JUMPTABLE_TRACE").is_some() {
+                    eprintln!(
+                        "jumptable: recovery at {at:#x}: {}",
+                        match &mode {
+                            Ok(Some(_)) => "recovered".to_string(),
+                            Ok(None) => "no table".to_string(),
+                            Err(m) => format!("failed ({m:?})"),
+                        }
+                    );
+                }
                 mode
             };
             // (kuna `switchextent`) A table nothing bounded: decode the

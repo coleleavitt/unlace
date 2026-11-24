@@ -68,7 +68,10 @@ enum Specific {
     ArmBranch24,
     ArmThumbBranch24,
     ArmPrel31,
+    ArcBranch25 { word: bool },
+    ArcMiddleEndian32,
     XtensaSlot0,
+    XtensaWord,
     Or1kRel26,
     Or1kHalf { adjust: bool, high: bool },
     Or1kSplit16,
@@ -102,6 +105,8 @@ enum Specific {
     LanaiHalf { high: bool },
     CudaAbs32 { high: bool },
     CudaAbs47,
+    C28xAbs22,
+    C28xData { words: u8 },
     HexBranch { mask: u32, extended: bool },
     HexExtender { pc: bool },
     HexLow6 { form: HexLow6 },
@@ -269,6 +274,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::ArcBranch25 { .. }
                     | Specific::XtensaSlot0
                     | Specific::Or1kRel26
                     | Specific::CskyBsr26
@@ -308,9 +314,55 @@ pub fn classify_elf(
         (Architecture::Unknown, Some(EM_LANAI)) => classify_lanai(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_OPENRISC)) => classify_or1k(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_CUDA)) => classify_cuda(RelocationInfo::from(reloc)),
+        (Architecture::Unknown, Some(EM_TI_C2000)) => classify_c28x(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_AMDGPU)) => classify_amdgpu(RelocationInfo::from(reloc)),
+        (Architecture::Unknown, Some(EM_ARC_COMPACT2)) => classify_arc(RelocationInfo::from(reloc)),
         _ => classify(arch, reloc),
     }
+}
+
+/// `EM_ARC_COMPACT2` (ARC EM/HS), which the `object` crate maps to no architecture.
+pub const EM_ARC_COMPACT2: u16 = 195;
+const R_ARC_32: u32 = 4;
+const R_ARC_S25H_PCREL: u32 = 16;
+const R_ARC_S25W_PCREL: u32 = 17;
+const R_ARC_32_ME: u32 = 27;
+const R_ARC_PC32: u32 = 50;
+const R_ARC_S25H_PCREL_PLT: u32 = 61;
+const R_ARC_S25W_PCREL_PLT: u32 = 76;
+
+/// ARCv2 (little-endian data, RELA). A 32-bit instruction or long immediate is
+/// two halfwords, the high one first ("middle-endian"). `S25W_PCREL` (`bl`)
+/// and `S25H_PCREL` (`b`), with their `_PLT` spellings taken to the symbol
+/// itself, are the displacement from `P & !3` in 23 word or 24 halfword bits;
+/// `32_ME` is a middle-endian long immediate; `32` and `PC32` data words. The
+/// small-data (`SDA*`, against `_SDA_BASE_`) and GOT forms are unsupported.
+fn classify_arc(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let (specific, call) = match reloc.r_type {
+        Some(0) => return Ok(None),
+        Some(R_ARC_S25W_PCREL | R_ARC_S25W_PCREL_PLT) => {
+            (Specific::ArcBranch25 { word: true }, true)
+        }
+        Some(R_ARC_S25H_PCREL | R_ARC_S25H_PCREL_PLT) => {
+            (Specific::ArcBranch25 { word: false }, false)
+        }
+        Some(R_ARC_32_ME) => (Specific::ArcMiddleEndian32, false),
+        Some(R_ARC_32) => (
+            Specific::Data {
+                bytes: 4,
+                pc: false,
+            },
+            false,
+        ),
+        Some(R_ARC_PC32) => (Specific::Data { bytes: 4, pc: true }, false),
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width: 4,
+        call,
+        got: false,
+    }))
 }
 
 /// `EM_OPENRISC`, which the `object` crate maps to no architecture.
@@ -480,6 +532,36 @@ fn classify_amdgpu(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, Relo
         specific,
         width,
         call: false,
+        got: false,
+    }))
+}
+
+/// `EM_TI_C2000`, which the `object` crate maps to no architecture.
+pub const EM_TI_C2000: u16 = 141;
+const R_C28X_ABS16: u32 = 2;
+const R_C28X_ABS32: u32 = 3;
+const R_C28X_ABS22: u32 = 5;
+/// The type cl2000 puts on `LCR #addr` calls. TI's EABI (SPRAC71C) lists no type 20; its field is
+/// the same 22-bit absolute word address as `R_C28X_ABS22` (type 5) on `MOVL XARn, #addr`.
+const R_C28X_ABS22_CALL: u32 = 20;
+
+/// TI C28x (SPRAC71C table 11-5). Addresses are in 16-bit words, so a field holds the target's
+/// byte address halved. `ABS22` is split over a little-endian word pair: bits 21..16 in the low 6
+/// bits of the first word, bits 15..0 in the second. `ABS16`/`ABS32` are data words. REL entries
+/// keep their addend in the field.
+fn classify_c28x(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let (specific, width, call) = match reloc.r_type {
+        Some(0) => return Ok(None),
+        Some(R_C28X_ABS16) => (Specific::C28xData { words: 1 }, 2, false),
+        Some(R_C28X_ABS32) => (Specific::C28xData { words: 2 }, 4, false),
+        Some(R_C28X_ABS22) => (Specific::C28xAbs22, 4, false),
+        Some(R_C28X_ABS22_CALL) => (Specific::C28xAbs22, 4, true),
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width,
+        call,
         got: false,
     }))
 }
@@ -929,6 +1011,7 @@ fn classify_info(
         (Architecture::Xtensa, Some(elf::R_XTENSA_SLOT0_OP)) => {
             Some((Specific::XtensaSlot0, false))
         }
+        (Architecture::Xtensa, Some(elf::R_XTENSA_32)) => Some((Specific::XtensaWord, false)),
         (Architecture::Xtensa, Some(elf::R_XTENSA_32_PCREL)) => {
             Some((Specific::Data { bytes: 4, pc: true }, false))
         }
@@ -1081,7 +1164,26 @@ fn apply_info(
             target_thumb,
         ),
         Specific::ArmPrel31 => arm_prel31(field, little_endian, reloc, symbol, place),
+        Specific::ArcBranch25 { word } => arc_branch25(field, reloc, symbol, place, word),
+        Specific::ArcMiddleEndian32 => {
+            if reloc.implicit_addend {
+                return Err(RelocationFailure::InvalidEncoding);
+            }
+            let value = (symbol as i128 + reloc.addend as i128) as u32;
+            write_u16(&mut field[..2], true, (value >> 16) as u16);
+            write_u16(&mut field[2..], true, value as u16);
+            Ok(())
+        }
         Specific::XtensaSlot0 => xtensa_slot0(field, little_endian, reloc, symbol, place),
+        // `R_XTENSA_32` is partial-inplace although Xtensa objects are RELA: GNU `as`
+        // leaves part of the addend in the word (a jump table's `.text + 0` row
+        // holds the case's offset), and the linker adds both.
+        Specific::XtensaWord => {
+            let value =
+                symbol as i128 + reloc.addend as i128 + i128::from(read_u32(field, little_endian));
+            write_u32(field, little_endian, value as u32);
+            Ok(())
+        }
         Specific::Or1kRel26 => or1k_patch(field, little_endian, reloc, symbol, Some(place), |v| {
             require_aligned(v, 4)?;
             require_signed(v, 28)?;
@@ -1209,6 +1311,8 @@ fn apply_info(
             Ok(())
         }
         Specific::CudaAbs47 => cuda_abs47(field, reloc, symbol),
+        Specific::C28xAbs22 => c28x_abs22(field, reloc, symbol),
+        Specific::C28xData { words } => c28x_data(field, reloc, symbol, words),
         Specific::LanaiHalf { high } => {
             let value = symbol as i128 + reloc.addend as i128;
             let half = if high { value >> 16 } else { value };
@@ -1786,6 +1890,43 @@ fn xtensa_slot0(
     for (i, byte) in field.iter_mut().take(width).enumerate() {
         *byte = (insn >> (8 * i)) as u8;
     }
+    Ok(())
+}
+
+/// ARCv2 `bl` (`S25W`: s[10:2] at bits 26..18, s[20:11] at 15..6, s[24:21] at
+/// 3..0) and `b` (`S25H`: s[10:1] at 26..17, s[20:11] at 15..6, s[24:21] at 3..0),
+/// `s = S + A - (P & !3)`, over the middle-endian instruction word.
+fn arc_branch25(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+    word: bool,
+) -> Result<(), RelocationFailure> {
+    let insn =
+        (u32::from(read_u16(&field[..2], true)) << 16) | u32::from(read_u16(&field[2..], true));
+    let major = insn >> 27;
+    if (word && major != 1) || (!word && major != 0) || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - (place & !3) as i128;
+    require_aligned(value, if word { 4 } else { 2 })?;
+    require_signed(value, 25)?;
+    let insn = if word {
+        let s = ((value >> 2) as u32) & 0x7f_ffff;
+        (insn & !((0x1ff << 18) | (0x3ff << 6) | 0xf))
+            | ((s & 0x1ff) << 18)
+            | (((s >> 9) & 0x3ff) << 6)
+            | ((s >> 19) & 0xf)
+    } else {
+        let s = ((value >> 1) as u32) & 0xff_ffff;
+        (insn & !((0x3ff << 17) | (0x3ff << 6) | 0xf))
+            | ((s & 0x3ff) << 17)
+            | (((s >> 10) & 0x3ff) << 6)
+            | ((s >> 20) & 0xf)
+    };
+    write_u16(&mut field[..2], true, (insn >> 16) as u16);
+    write_u16(&mut field[2..], true, insn as u16);
     Ok(())
 }
 
@@ -2487,6 +2628,53 @@ fn lanai_field(
     Ok(())
 }
 
+/// C28x `ABS22`: the word address `S/2 + A` into the 6 + 16 bits of an `LCR`/`MOVL #22bit`.
+fn c28x_abs22(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+) -> Result<(), RelocationFailure> {
+    let w0 = u16::from_le_bytes([field[0], field[1]]);
+    let w1 = u16::from_le_bytes([field[2], field[3]]);
+    require_aligned(symbol as i128, 2)?;
+    let addend = if reloc.implicit_addend {
+        (i128::from(w0 & 0x3f) << 16) | i128::from(w1)
+    } else {
+        i128::from(reloc.addend)
+    };
+    let value = (symbol / 2) as i128 + addend;
+    if !(0..1i128 << 22).contains(&value) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    let value = value as u32;
+    let w0 = (w0 & !0x3f) | ((value >> 16) as u16 & 0x3f);
+    field[0..2].copy_from_slice(&w0.to_le_bytes());
+    field[2..4].copy_from_slice(&(value as u16).to_le_bytes());
+    Ok(())
+}
+
+/// C28x `ABS16`/`ABS32`: the word address `S/2 + A` as a little-endian data word.
+fn c28x_data(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    words: u8,
+) -> Result<(), RelocationFailure> {
+    require_aligned(symbol as i128, 2)?;
+    let addend = match (reloc.implicit_addend, words) {
+        (true, 1) => i128::from(i16::from_le_bytes([field[0], field[1]])),
+        (true, _) => i128::from(u32::from_le_bytes([field[0], field[1], field[2], field[3]])),
+        (false, _) => i128::from(reloc.addend),
+    };
+    let value = (symbol / 2) as i128 + addend;
+    if words == 1 {
+        field[0..2].copy_from_slice(&(value as u16).to_le_bytes());
+    } else {
+        field[0..4].copy_from_slice(&(value as u32).to_le_bytes());
+    }
+    Ok(())
+}
+
 /// CUDA `ABS47_34`: the word address `(S + A) >> 2` into bits 34..80 of a little-endian
 /// 128-bit instruction.
 fn cuda_abs47(
@@ -2555,8 +2743,8 @@ fn avr_pcrel(
     Ok(())
 }
 
-/// AVR `ldi Rd, K` (`1110 KKKK dddd KKKK`): one byte of `S + A`, of its
-/// negation, or of its word address.
+/// AVR `ldi Rd, K` (`1110 KKKK dddd KKKK`, and the other register-immediate
+/// forms): one byte of `S + A`, of its negation, or of its word address.
 fn avr_ldi(
     field: &mut [u8],
     reloc: RelocationInfo,
@@ -2566,7 +2754,10 @@ fn avr_ldi(
     pm: bool,
 ) -> Result<(), RelocationFailure> {
     let mut insn = read_u16(field, true);
-    if insn & 0xf000 != 0xe000 || reloc.implicit_addend {
+    // The register-immediate format `xxxx KKKK dddd KKKK`: `ldi` (E), and the
+    // `subi`/`sbci` (5/4) pair gcc adds a negated address with, `cpi` (3),
+    // `ori` (6) and `andi` (7).
+    if !matches!(insn >> 12, 0x3..=0x7 | 0xe) || reloc.implicit_addend {
         return Err(RelocationFailure::InvalidEncoding);
     }
     let mut value = symbol as i128 + reloc.addend as i128;
@@ -4346,6 +4537,29 @@ mod xtensa_tests {
     }
 
     #[test]
+    fn a_data_word_adds_the_addend_left_in_place() {
+        // A jump-table row `.text + 0` whose word holds the case offset 0x51, with
+        // .text at 0x10010: GNU ld writes 0x10061.
+        let info = RelocationInfo {
+            kind: RelocationKind::Absolute,
+            encoding: RelocationEncoding::Generic,
+            size: 32,
+            addend: 0,
+            implicit_addend: false,
+            r_type: Some(elf::R_XTENSA_32),
+        };
+        let spec = classify_info(Architecture::Xtensa, info).unwrap().unwrap();
+        assert_eq!(spec.width(), 4);
+        let mut field = 0x51u32.to_le_bytes();
+        apply_info(spec, info, &mut field, true, 0x1_0010, 0x1_0090, None, None).unwrap();
+        assert_eq!(field, 0x1_0061u32.to_le_bytes());
+        let mut literal = [0; 4];
+        let info = RelocationInfo { addend: 8, ..info };
+        apply_info(spec, info, &mut literal, true, 0x2_0000, 0, None, None).unwrap();
+        assert_eq!(literal, 0x2_0008u32.to_le_bytes());
+    }
+
+    #[test]
     fn literals_behind_and_out_of_range_targets_are_refused() {
         assert_eq!(
             slot0([0xa1, 0, 0], 0x1_0040, 0, 0x1_0018),
@@ -4362,6 +4576,77 @@ mod xtensa_tests {
         assert_eq!(
             slot0([0x36, 0x41, 0], 0x1_0200, 0, 0x1_0000),
             Err(RelocationFailure::InvalidEncoding)
+        );
+    }
+}
+
+#[cfg(test)]
+mod arc_tests {
+    use super::*;
+
+    fn patch(
+        r_type: u32,
+        addend: i64,
+        bytes: [u8; 4],
+        symbol: u64,
+        place: u64,
+    ) -> Result<[u8; 4], RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        };
+        let spec = classify_arc(info)?.expect("not a no-op");
+        let mut field = bytes;
+        apply_info(spec, info, &mut field, true, symbol, place, None, None)?;
+        Ok(field)
+    }
+
+    // Words as GNU ld 2.45 writes them for arc-elf-gcc 15.3 -mcpu=hs objects.
+    #[test]
+    fn calls_branches_and_long_immediates_match_the_linker() {
+        assert_eq!(
+            patch(
+                R_ARC_S25W_PCREL_PLT,
+                0,
+                [0x02, 0x08, 0, 0],
+                0x1_0000,
+                0x1_0078
+            ),
+            Ok([0x8a, 0x0f, 0xcf, 0xff])
+        );
+        assert_eq!(
+            patch(
+                R_ARC_S25H_PCREL_PLT,
+                0,
+                [0x01, 0x00, 0x20, 0x00],
+                0x1_0000,
+                0x1_0074
+            ),
+            Ok([0x8d, 0x07, 0xef, 0xff])
+        );
+        assert_eq!(
+            patch(R_ARC_32_ME, 0, [0; 4], 0x1_216c, 0x1_0020),
+            Ok([0x01, 0x00, 0x6c, 0x21])
+        );
+        assert_eq!(
+            patch(R_ARC_32, 376, [0; 4], 0x1_0000, 0x1_0274),
+            Ok([0x78, 0x01, 0x01, 0x00])
+        );
+        assert_eq!(
+            patch(R_ARC_S25W_PCREL, 0, [0x02, 0x08, 0, 0], 0x1_0002, 0x1_0078),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            patch(R_ARC_S25W_PCREL, 0, [0x01, 0x00, 0, 0], 0x1_0000, 0x1_0078),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+        assert_eq!(
+            patch(R_ARC_S25W_PCREL, 0, [0x02, 0x08, 0, 0], 0x200_0000, 0),
+            Err(RelocationFailure::OutOfRange)
         );
     }
 }
@@ -4438,6 +4723,16 @@ mod avr_amdgpu_tests {
         );
         assert_eq!(
             avr(R_AVR_13_PCREL, 0, &[0x00, 0xe0], 0x120, 0x100),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+        // `sbci r29, hi8(-(x))` and `cpi`; an `add` (0x0c00) is not an immediate form.
+        assert_eq!(avr(10, 0, &[0x10, 0x40], 0x2234, 0), Ok(vec![0x1d, 0x4d]));
+        assert_eq!(
+            avr(R_AVR_LO8_LDI, 0, &[0x80, 0x30], 0x1234, 0),
+            Ok(vec![0x84, 0x33])
+        );
+        assert_eq!(
+            avr(R_AVR_LO8_LDI, 0, &[0x00, 0x0c], 0x1234, 0),
             Err(RelocationFailure::InvalidEncoding)
         );
         assert_eq!(
@@ -4557,6 +4852,87 @@ mod hexagon_tests {
         );
         assert_eq!(scatter_bits(0x0000_0ff0, 0x5), 0x50);
         assert_eq!(scatter_bits(0x0000_1f18, 0x7f), 0x1f18);
+    }
+}
+
+#[cfg(test)]
+mod c28x_tests {
+    use super::*;
+
+    fn info(r_type: u32) -> RelocationInfo {
+        RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend: 0,
+            implicit_addend: true,
+            r_type: Some(r_type),
+        }
+    }
+
+    #[test]
+    fn calls_and_immediates_take_the_word_address() {
+        // `LCR #0` (cl2000, adc.obj ADC_setVREF) to a function at byte 0x400000.
+        let spec = classify_c28x(info(R_C28X_ABS22_CALL)).unwrap().unwrap();
+        assert!(spec.is_call());
+        let mut field = [0x40, 0x76, 0x00, 0x00];
+        apply_info(
+            spec,
+            info(R_C28X_ABS22_CALL),
+            &mut field,
+            true,
+            0x40_0000,
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(field, [0x60, 0x76, 0x00, 0x00]); // 0x200000 >> 16 = 0x20 in bits 5..0
+        // `MOVL XAR4, #0` with an in-place addend of 3 words, to byte 0x40_0010.
+        let spec = classify_c28x(info(R_C28X_ABS22)).unwrap().unwrap();
+        let mut field = [0x40, 0x8f, 0x03, 0x00];
+        apply_info(
+            spec,
+            info(R_C28X_ABS22),
+            &mut field,
+            true,
+            0x40_0010,
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(field, [0x60, 0x8f, 0x0b, 0x00]);
+        assert_eq!(
+            apply_info(
+                spec,
+                info(R_C28X_ABS22),
+                &mut [0x40, 0x8f, 0, 0],
+                true,
+                0x40_0001,
+                0,
+                None,
+                None
+            ),
+            Err(RelocationFailure::Misaligned)
+        );
+        // A data word.
+        let spec = classify_c28x(info(R_C28X_ABS32)).unwrap().unwrap();
+        let mut field = [0u8; 4];
+        apply_info(
+            spec,
+            info(R_C28X_ABS32),
+            &mut field,
+            true,
+            0x40_0020,
+            0,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(u32::from_le_bytes(field), 0x20_0010);
+        assert!(classify_c28x(info(0)).unwrap().is_none());
+        assert!(classify_c28x(info(9)).is_err(), "PCREL16");
     }
 }
 

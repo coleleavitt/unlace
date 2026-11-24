@@ -44,7 +44,7 @@
 # MULHI imm16, reg1, reg2 - rrrrr110111RRRRR|iiiiiiiiiiiiiiii
 :mulhi s1631, R0004, R1115 is op0510=0x37 & R1115 & R0004; s1631
 {
-	R1115 = R0004 * s1631;
+	R1115 = sext(R0004:2) * s1631;
 }
 
 # MULU reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww01000100010
@@ -175,7 +175,16 @@
 #####################################################
 
 
-define pcodeop __saturate;
+# Saturate a result that overflowed toward the sign of the true result; S and Z follow it
+macro __sat(res)
+{
+	local w:4 = res;
+	local o:4 = zext($(OV));
+	local neg:4 = zext(w s< 0);
+	res = (1 - o) * w + o * (neg * 0x7FFFFFFF + (1 - neg) * 0x80000000);
+	set_S(res);
+	set_Z(res);
+}
 
 # SATADD reg1, reg2 - rrrrr000110RRRRR
 :satadd R0004, R1115 is op0510=0x06 & R0004 & R1115 & op1115!=0
@@ -183,7 +192,7 @@ define pcodeop __saturate;
 	set_general_flags_pos(R1115, R0004);
 	$(SAT) = $(SAT) || $(OV);
 	R1115 = R1115 + R0004;
-	__saturate(R1115);
+	__sat(R1115);
 }
 
 #SATADD imm5, reg2 - rrrrr010001iiiii
@@ -192,7 +201,7 @@ define pcodeop __saturate;
 	set_general_flags_pos(R1115, s0004);
 	$(SAT) = $(SAT) || $(OV);
 	R1115 = R1115 + s0004;
-	__saturate(R1115);
+	__sat(R1115);
 }
 
 # SATADD reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww01110111010
@@ -201,7 +210,7 @@ define pcodeop __saturate;
 	set_general_flags_pos(R1115, R0004);
 	$(SAT) = $(SAT) || $(OV);
 	R2731 = R1115 + R0004;
-	__saturate(R2731);
+	__sat(R2731);
 }
 
 # SATSUB reg1, reg2 - rrrrr000101RRRRR
@@ -210,7 +219,7 @@ define pcodeop __saturate;
 	set_general_flags_neg(R1115, R0004);
 	$(SAT) = $(SAT) || $(OV);
 	R1115 = R1115 - R0004;
-	__saturate(R1115);
+	__sat(R1115);
 }
 
 # SATSUB reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww01110011010
@@ -219,7 +228,7 @@ define pcodeop __saturate;
 	set_general_flags_neg(R1115, R0004);
 	$(SAT) = $(SAT) || $(OV);
 	R2731 = R1115 - R0004;
-	__saturate(R2731);
+	__sat(R2731);
 }
 
 # SATSUBI imm16, reg1, reg2
@@ -228,7 +237,7 @@ define pcodeop __saturate;
 	set_general_flags_neg(R0004, s1631);
 	$(SAT) = $(SAT) || $(OV);
 	R1115 = R0004 - s1631;
-	__saturate(R1115);
+	__sat(R1115);
 }
 
 # SATSUBR reg1, reg2
@@ -237,7 +246,7 @@ define pcodeop __saturate;
 	set_general_flags_neg(R0004, R1115);
 	$(SAT) = $(SAT) || $(OV);
 	R1115 = R0004 - R1115;
-	__saturate(R1115);
+	__sat(R1115);
 }
 
 
@@ -262,8 +271,9 @@ define pcodeop __saturate;
 # DIVH reg1, reg2 - rrrrr000010RRRRR
 :divh R0004, R1115 is op0510=0x02 & R0004 & R1115
 {
-	$(OV) = ((R1115 == 0x80000000 && R0004 == 0xFFFFFFFF) || R0004 == 0x0);
-	R1115 = R1115 / R0004;
+	local d:4 = sext(R0004:2);
+	$(OV) = ((R1115 == 0x80000000 && d == 0xFFFFFFFF) || d == 0x0);
+	R1115 = R1115 s/ d;
 	set_Z(R1115);
 	set_S(R1115);
 }
@@ -271,11 +281,12 @@ define pcodeop __saturate;
 # DIVH reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww01010000000
 :divh R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op1626=0x280 & R2731
 {
-	local quot:4 = R1115 s/ sext(R0004:2);
-	local mod:4 = R1115 s% sext(R0004:2);
-	$(OV) = ((R1115 == 0x80000000 && R0004 == 0xFFFFFFFF) || R0004 == 0x0);
-	set_Z(R1115);
-	set_S(R1115);
+	local d:4 = sext(R0004:2);
+	local quot:4 = R1115 s/ d;
+	local mod:4 = R1115 s% d;
+	$(OV) = ((R1115 == 0x80000000 && d == 0xFFFFFFFF) || d == 0x0);
+	set_Z(quot);
+	set_S(quot);
 	R1115 = quot;
 	R2731 = mod;
 }
@@ -334,3 +345,41 @@ define pcodeop __saturate;
 	R2731 = mod;
 	R1115 = quot;
 }
+
+
+# Step division (V850E2): N = 32 - 2 * imm field quotient bits.  N = 32 of DIVN/DIVUN/DIVHN/DIVHUN
+# is DIV/DIVU/DIVH/DIVHU above.  The step semantics are not modelled: the quotient (reg2), the
+# remainder (reg3) and OV come from pcodeops; Z and S follow the quotient.
+# SDIVN imm5, reg1, reg2, reg3 - rrrrr111111RRRRR|wwwww0111iiii000 (DIVN 1011, DIVHN 1010, SDIVHN 0110)
+divsteps: val is op1821 [ val = 32 - op1821 * 2; ] { export *[const]:1 val; }
+
+define pcodeop step_divide_quotient;
+define pcodeop step_divide_remainder;
+define pcodeop step_divide_overflow;
+
+macro step_divide(kind, n, r1, r2, r3) {
+	local q:4 = step_divide_quotient(kind, n, r1, r2);
+	local r:4 = step_divide_remainder(kind, n, r1, r2);
+	$(OV) = step_divide_overflow(kind, n, r1, r2);
+	set_Z(q);
+	set_S(q);
+	r2 = q;
+	r3 = r;
+}
+
+:sdivn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=7 & op1617=0 & divsteps & R2731
+{ step_divide(0:1, divsteps, R0004, R1115, R2731); }
+:sdivun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=7 & op1617=2 & divsteps & R2731
+{ step_divide(1:1, divsteps, R0004, R1115, R2731); }
+:sdivhn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=6 & op1617=0 & divsteps & R2731
+{ step_divide(2:1, divsteps, R0004, R1115, R2731); }
+:sdivhun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=6 & op1617=2 & divsteps & R2731
+{ step_divide(3:1, divsteps, R0004, R1115, R2731); }
+:divn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xb & op1617=0 & op1821!=0 & op1821!=15 & divsteps & R2731
+{ step_divide(4:1, divsteps, R0004, R1115, R2731); }
+:divun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xb & op1617=2 & op1821!=0 & op1821!=15 & divsteps & R2731
+{ step_divide(5:1, divsteps, R0004, R1115, R2731); }
+:divhn divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xa & op1617=0 & op1821!=0 & divsteps & R2731
+{ step_divide(6:1, divsteps, R0004, R1115, R2731); }
+:divhun divsteps, R0004, R1115, R2731 is op0510=0x3F & R0004 & R1115; op2226=0xa & op1617=2 & op1821!=0 & divsteps & R2731
+{ step_divide(7:1, divsteps, R0004, R1115, R2731); }

@@ -457,6 +457,13 @@ languages, so a following `stdcx.` stores unconditionally rather than testing
 an uninitialized reservation flag. Encodings with the exclusive-access hint bit set remain
 undecoded there. This is a SLEIGH correctness repair, without an inference option.
 
+The generic 64-bit PowerPC languages (`PowerPC:BE:64:default`, `PowerPC:LE:64:default`)
+also decode `isel` (primary opcode 31, extended opcode 15 in bits 5:1). It is Power ISA 2.03
+and later, and until now only the e500/PowerQUICC III and ISA languages had it.
+`isel.sinc` holds the one constructor, and `quicciii.sinc` includes it at the place where it
+used to be defined. `RT` gets `RA|0` when the named CR bit is set, else `RB`. This is a
+SLEIGH correctness repair, without an inference option.
+
 Generic ARM `MCR`/`MRC` and `MCR2`/`MRC2` transfers pass the encoded
 `CRn` and `CRm` numbers to their opaque coprocessor intrinsics as four-byte
 constants. A32 and Thumb constructors use unattached numeric aliases of the token
@@ -1016,11 +1023,9 @@ every function with such a gap; the losses that already print (decode-failure
 halts, `funcboundflow`, budget and out-of-bounds truncation, unrecovered jump
 tables) are unchanged either way.
 
-When the generic `PowerPC:BE:64:default` or `PowerPC:LE:64:default` decoder
-fails on an aligned `isel` encoding, the halt also names the selected target
-and suggests an explicit `--target PowerPC:<endian>:64:A2ALT` for AltiVec code.
-The hint reads only the four bytes at the failure; an unreadable word, another
-opcode or another target adds no hint. It neither retries nor changes the ISA.
+A target may attach advice to a bad-instruction halt (`decode_failure_hint`); no
+target does today. The generic PowerPC64 `isel` hint went away once those
+languages decoded `isel`.
 ELF machine/class, ABI version flags and GNU vector calling-convention attributes
 do not identify a complete ISA: the A2 variants have conflicting vector encodings,
 and a matching `isel` word can also be data. The user must choose the variant
@@ -1287,7 +1292,7 @@ recovered switch table.
   The gate is on the install, as for `msvcftol`.
 
 - **AEABI floating-point helpers** (`crates/unlace-lift/src/p2_lift/kuna_aeabifloat.rs`,
-  option **`aeabifloat`**, default off): on 32-bit ARM the same payload list
+  option **`aeabifloat`**, default on): on 32-bit ARM the same payload list
   carries the run-time ABI's floating-point helpers (RTABI32 4.1.2), each body
   the IEEE 754 operation the helper performs on its base-standard operands.
   `__aeabi_dadd`, `dsub`, `drsub`, `dmul`, `ddiv` and the `f` forms are
@@ -1310,17 +1315,18 @@ recovered switch table.
   `__floatsidf`, `__fixdfsi`, `__fixdfdi`, ...): libgcc defines both names at
   one address, a static image may name the function by either, and newlib
   calls the libgcc names directly. The three-way `__eqdf2`/`__ltdf2` family
-  returns something else and keeps its calls. Default off: the fold takes the
-  image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
-  built for flush-to-zero or another rounding mode is not. The gate is on the
+  returns something else and keeps its calls. Default on: RTABI32 requires the
+  helpers to be round-to-nearest IEEE 754, so the fold changes no value on a
+  conforming image; flip it off for a firmware that links non-IEEE helpers
+  (flush-to-zero, a fixed-point shim) under the AEABI names. The gate is on the
   install, as for `arithhelpers`. The load-time call-fixup scan
   (`unlace_analysis::callfixup`) matches every kuna family whatever its option,
   because it runs before the run's options reach the architecture; the commit
   re-derives each fact's fixup through the gated map. Gating the scan too left a
   relocatable object's undefined `__aeabi_*` imports, which only the scan names,
-  without the fixup under `option aeabifloat on`. On a hard-float caller that moves the
-  `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
-  masked halves of a union cast joined by `+`.
+  without the fixup. On a hard-float caller that moves the `r0:r1` result into
+  `d0` (`vmov d0, r0, r1`), the two halves join back into the value through
+  `maskjoin` (chapter 3).
 
 - **Objective-C ARC bookkeeping** (`crates/unlace-lift/src/p2_lift/kuna_objcarc.rs`,
   option **`objcarc`**, default on): the second kuna-owned call-fixup family,
@@ -1688,7 +1694,7 @@ and none of them fire). Deferring the decision until the flow work-stack drains,
 and then asking whether the function decoded `dest` by another path, is the sound
 fix; it is a change to the walk's ordering rather than to this predicate.
 
-**(kuna) EVM internal calls — `option evmcalls`, default off,
+**(kuna) EVM internal calls — `option evmcalls`, default on,
 `crates/unlace-lift/src/p2_lift/kuna_evmcalls.rs (classify, ActionEvmCalls)`.** The
 EVM has no call instruction for code inside a contract: solc lowers an internal call
 to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to
@@ -1716,7 +1722,22 @@ BRANCH to the return label when that label is not the next instruction.
 `ActionEvmCalls` (protorecovery, before ActionFuncLink and ActionExtraPopSetup)
 then locks each such call spec: its arguments are the stack words from the top,
 its extrapop is the stack effect times 32, and its `args + 1 - pop` results are
-one stack-relative output at offset `32 * pop`. When the function being
+one stack-relative output at offset `32 * pop`. A callee every return of which jumps
+through a copy of its label (`DUPn; JUMP`, as solc's getters do) leaves the label in
+its slot; its results are the `args - pop` words above that slot (`pop` may then be
+negative, the output starting below the stack pointer at the call), and the store of the
+return label before the call has no reader left. A call spec already input-locked is
+left alone. A callee that never returns gets its arguments and no result. A terminal
+tail (a block from which every explored path ends in `RETURN`, `REVERT`, `STOP` or
+`INVALID` without a return jump) that two or more constant `JUMP`s or `JUMPI`s, call return
+labels or the fall-through from the instruction before it share is called rather than
+entered: the jump becomes a CALL to it followed by an artificial noreturn halt (for a
+`JUMPI`, the BRANCHIND of its taken edge does; the CBRANCH to the next instruction stays), and a call whose return label is such a tail is followed by a
+second CALL to the tail and the halt. Its arguments are the deepest stack word below its
+entry any of its instructions reads. solc's optimizer shares the ABI-encoding and `RETURN`
+tails between external functions, reaching them with different junk below the stack
+top, so without this the paths merge at different stack depths, the stack pointer
+becomes a pointer variable and every dead stack store stays. When the function being
 decompiled is itself a callee whose call sites agree on its argument count, its
 own prototype is locked the same way, so it reads its arguments as parameters and
 returns its result.
@@ -2619,7 +2640,13 @@ sub-decompilation on a clone**
 (`crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::stage_jump_table)`, C++ `stageJumpTable`): the raw ops and existing
 tables are cloned into a partial `Funcdata` (`"@@jumprecovery"`), its blocks are
-built against the parent flow's `visited` snapshot, and the reduced
+built against the parent flow's `visited` snapshot (the partial gets the
+architecture's default prototype model and then, as the C++ `Funcdata` ctor's
+`resetLocalWindow` after `setScope`, its local scope's stack window; without
+the window no stack location is in scope, `syncVarnodesWithSymbols` marks every
+one unmapped and unaliased, and `RuleIndirectCollapse` drops the guard a call
+puts on the fields of a struct whose address it receives, so a switch index
+read from such a field folds to the value stored before the call, #871), and the reduced
 `"jumptable"` action set — heritage plus the simplification core, no
 structuring — is run over it (`decompile_drive.rs (run_jumptable_pipeline)`).
 The model is then recovered against the *partial*'s BRANCHIND and the finished
@@ -2637,6 +2664,19 @@ shape is still reachable. Sharing is worth about 16% of the wall time of a
 two-table function, and on the interleaved shape `unrolledguard` was written for
 it recovers the same tables without any tolerance rule, because the shared
 partial's edge collection runs once while every sibling table is still empty.
+The protection upstream's `ActionRestructureVarnode` gives a switch path
+(`funcdata_block.rs (Funcdata::protect_switch_path_indirects)`, C++
+`protectSwitchPathIndirects`) walks back from the BRANCHIND through ops with one
+non-constant input and marks the earliest INDIRECT `noIndirectCollapse` when the
+walk ends at a constant. (kuna) An `INT_XOR` or `INT_SUB` of a varnode with
+itself also ends the walk as a constant: MSVC zeroes a struct through
+`xor eax,eax`, and in the partial the alias pass sees neither the struct's
+address nor its pushed copy (the calls have no inputs yet), so the struct's
+fields are marked unaliased and every call's INDIRECT on them would collapse
+before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
+read from such a field after a call stays an unknown value instead of folding
+to the value stored before the call (#871; Ghidra reaches the same state by
+folding the `xor` before its second restructure pass).
 (kuna) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs
@@ -2755,6 +2795,14 @@ the case targets.
    table instead of dropping its branch bodies into an unresolved interior call.
    ARM's lifted PC+8 base, the predicate's fallthrough, and actual indirect calls
    retain their existing flow semantics.
+   (kuna) When one range of an intersection has a larger step,
+   `rangeutil.rs (CircleRange::new_stride)` moves the other's ends onto that
+   phase. It reports the result empty only when the first value of the new
+   phase lies outside the old range. Upstream compares the order of the two
+   ends instead, so a wrapping range whose left end rounds past the top was
+   dropped as empty. That lost the upper check of an OCaml tagged-int match:
+   `x + 1 < 0x1eb` pulled back to the even `x` is `[-1, 0x1ea)`, which is
+   `[0, 0x1ea)` at step 2 (`tests/stages/ocaml-tagged-guard.toml`).
    `find_smallest_normal` picks the candidate with the smallest reaching range
    as the normalized variable — refusing a 1-byte, 256-value candidate unless a
    table LOAD lies between it and the branch (a bare byte is not evidence of a
@@ -2976,7 +3024,8 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound and is left as it was: an object the function merely reads
+   no such bound here (an unguarded one ends at the next function's table
+   below): an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -3012,12 +3061,18 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
-   cut leaves an unguarded table whose rows leave the function,
-   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
-   stride as above and ends it at the lowest jump table above it in the same
-   section, of this function or of the next ones, when that leaves at least
-   two rows. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
+   with no range check is the same shape on x86-64 when the rows past the
+   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
+   reads its `unsigned char` token type straight into a 37-entry table and
+   OCaml compiles an exhaustive match the same way, so the next table's
+   offsets, measured from the wrong base, became cases that land mid-instruction.
+   For every unguarded table (no guard, or guards that leave its
+   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   reads its table and stride as above and ends it at the lowest jump table
+   above it in the same section, of this function or of the next ones, when
+   that leaves at least two rows and fewer than the rows kept so far; the
+   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -3030,9 +3085,8 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A table whose rows all stay
-   inside the function costs nothing, and the decode runs only for a table
-   already unguarded and leaving the function.
+   a table unrecovered. A guarded table costs nothing; an unguarded one
+   costs the extent decodes and one more recovery, once per function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the
@@ -4405,7 +4459,14 @@ shifts `srar`/`srlr`, `ave`/`aver`, `sat_s`/`sat_u`, `max_a`/`min_a`, `hadd`/`hs
 `subsus_u`/`subsuu_s`, `bclr`/`bset`/`bneg` (each with its immediate form), `add_a`/`adds_a`,
 `bmnzi`/`bmzi`/`bseli`, `maddv`/`msubv`, `insert`/`insve` and the dot products `dotp`/`dpadd`/`dpsub`; the `bz`/`bnz` branches test the
 register directly (`.v`: all bits zero or not; `.df`: some element zero, or every element nonzero).
-The floating-point and fixed-point `q` instructions are user operations named after its mnemonic (`msa_addv_w`) with the
+The floating-point instructions are IEEE-exact in round-to-nearest (MSACSR's reset mode;
+the Cause/Flags bits are not modelled): `fadd`/`fsub`/`fmul`/`fdiv`/`fsqrt`, `fmadd`/`fmsub` (the `.w`
+forms fused through float64, the `.d` forms not fused), `fmax`/`fmin`/`fmax_a`/`fmin_a` (IEEE 754-2008
+maxNum/minNum: a signalling NaN gives it quieted), the `fc*`/`fs*` compares (the signalling forms
+give the same results), `fclass`, `ffint`, `ftint` (round to nearest even) and `ftrunc` with
+saturation and NaN to 0, `frint`, `frcp`/`frsqrt` (as the exact quotient), `fexupl`/`fexupr`/`fexdo`,
+and the Q15/Q31 forms `mul_q`/`mulr_q`/`madd_q`/`maddr_q`/`msub_q`/`msubr_q`, `ffql`/`ffqr` and `ftq`
+with QEMU's saturation. Only `fexp2` and `flog2` are user operations named after its mnemonic (`msa_addv_w`) with the
 destination as output and the read operands (and the destination, for the accumulating forms)
 as inputs.
 
@@ -5047,9 +5108,12 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `VAX` | DEC VAX (base, G/H floating and vector encodings) | `VAX:LE:32:default` | VAX Architecture Reference Manual; MAME `vax` disassembler (opcode table, length oracle) | `unlace-cli/tests/processors.toml` (`vax_*`) |
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
 | `Xtensa` (HiFi 4, NXP i.MX RT700) | Xtensa LX7 with the Cadence HiFi 4 DSP: FLIX bundles and `AE_*` operations | `Xtensa:LE:32:hifi4_rt700` | Zephyr SDK overlay `xtensa_nxp_rt700_hifi4` `xtensa-modules.c` (Cadence, generated by `tools/gen_xtensa_hifi.py`); checked against the overlay's objdump | `unlace-cli/tests/processors.toml` (`xtensa_hifi4_rt700`) |
+| `Xtensa` (HiFi 1, NXP i.MX RT700) | Xtensa LX7 with the Cadence HiFi 1 DSP: FLIX bundles and `AE_*` operations | `Xtensa:LE:32:hifi1_rt700` | Zephyr SDK overlay `xtensa_nxp_rt700_hifi1` `xtensa-modules.c` (Cadence, generated by `tools/gen_xtensa_hifi.py`); checked against the overlay's objdump | `unlace-cli/tests/processors.toml` (`xtensa_hifi1_rt700`) |
+| `Xtensa` (HiFi 3, Intel Tiger Lake) | Xtensa LX6 with the Cadence HiFi 3 DSP (cAVS 2.5): FLIX bundles and `AE_*` operations | `Xtensa:LE:32:hifi3_tgl` | Zephyr SDK overlay `xtensa_intel_tgl_adsp` `xtensa-modules.c` (Cadence, generated by `tools/gen_xtensa_hifi.py`); checked against the overlay's objdump | `unlace-cli/tests/processors.toml` (`xtensa_hifi3_tgl`) |
+| `Xtensa` (HiFi 5, MediaTek MT8196) | Xtensa LX7 with the Cadence HiFi 5 DSP: FLIX bundles and `AE_*` operations | `Xtensa:LE:32:hifi5_mt8196` | Zephyr SDK overlay `xtensa_mtk_mt8196_adsp` `xtensa-modules.c` (Cadence, generated by `tools/gen_xtensa_hifi.py`); checked against the overlay's objdump | `unlace-cli/tests/processors.toml` (`xtensa_hifi5_mt8196`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
-| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10), RDNA 3 (gfx11) and RDNA 4 (gfx12) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks; gfx11 true16 halves, VOP3P/WMMA and MIMG from generated includes) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX12`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64`, `AMDGPU:LE:64:GFX12-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`, `llvm-objdump` tables read by `tools/amdgpu_gfx11_probe.py`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx908), CDNA 2/3 (gfx90a, gfx942: MFMA and AGPRs), RDNA 1/2 (gfx10), RDNA 3 (gfx11) and RDNA 4 (gfx12) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks; gfx11 true16 halves, VOP3P/WMMA and MIMG from generated includes) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX90A`, `AMDGPU:LE:64:GFX942`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX12`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64`, `AMDGPU:LE:64:GFX12-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`, `llvm-objdump` tables read by `tools/amdgpu_gfx11_probe.py`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
@@ -5408,6 +5472,11 @@ as context (`tools/gen_rvv_groups.py` generates the tables and the constructors)
 - **Old destination.** Every user operation that writes a vector register takes the old
   destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
   when vl = 0, keep their old values.
+- **Vector crypto.** The Zvk* instructions (and Zvbb's) stay user operations. Their exact
+  semantics run over element groups up to the run-time `vl`, which p-code could only express as a
+  loop over indexed register-space accesses for every instruction. That prints as a pointer loop
+  over the register file, and heritage does not follow dynamically indexed register bytes, so
+  the data flow would be worse than the user operations give.
 - **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
   in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
   `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
@@ -5482,6 +5551,62 @@ the half load and store), with the options of the F/D generation (see
 
 Zvfh adds no encodings: the vector FP instructions in `riscv.rvv.sinc` cover SEW 16, as user
 operations. The vector accrued flags (fflags, vxsat) are not written, as in the scalar lift.
+
+### RISC-V Q (quad precision): the `RISCV:LE:64:GQ` language
+
+Q needs 128-bit f registers, so it has its own language: `riscv.lp64q.slaspec` (FLEN 16,
+FPSIZE 128), id `RISCV:LE:64:GQ`. The loader picks it for a 64-bit ELF whose
+`Tag_RISCV_arch` declares `q` (`kuna_riscvzc.rs`).
+- **F and D.** `riscv.fdq.sinc` is the F/D generation at `--flen 128`: single and double
+  values are NaN-boxed into the 16-byte registers.
+- **Q.** `riscv.q.sinc` is generated from a Q extension derived from the Sail model's D
+  extension. sail-riscv names `Ext_Q` but defines no Q instruction, so `tools/sail_d_to_q.py`
+  rewrites `dext_insts.sail`:
+  - The binary64 layout becomes binary128, the fmt field 01 becomes 11, and `riscv_f64*` becomes
+    `riscv_f128*`.
+  - `fcvt.d.q`/`fcvt.q.d` and `flq`/`fsq` are added; `fmv.x.d`/`fmv.d.x` have no Q form below
+    RV128 and are dropped.
+- **What lifts as p-code.** `rne` and `dyn` arithmetic, square root, compares, sign injection,
+  min/max, `fclass.q` and the moves are p-code on 16-byte floats. Static rounding modes, the
+  fused forms and the integer conversions other than `rtz` are user operations.
+- **Display.** The exact conversions into Q print no rounding mode, as LLVM prints them.
+- **Not in this language.** Zfh, Zfa and Zfbfmin are generated for FLEN 64 and left out.
+- **Constants.** A binary128 constant cannot be a constant varnode: they hold 64 bits. So the
+  generator writes every binary128 bound as the exact double it is, widened (`float2float(c:8)`).
+  That prints as the double, and compares against it fold back to double compares
+  (`satconvert` then prints the cast). The decompiler keeps no 16-byte float format for the same
+  reason.
+- **Argument unboxing.** `fpargboxed` folds the double unboxing test of a 16-byte argument or
+  return register. The float and half tests are 12 and 14 bytes wide and stay.
+- **Check.** QEMU has no Q, so this is checked against llvm-objdump only: every sampled word and
+  near miss of rv_q/rv64_q/F/D agrees.
+
+### RISC-V Svinval, hypervisor fences, Zalasr, Zfbfmin, Smrnmi and Ssctr
+
+These fill decode gaps that `tools/sail_sleigh_compare.py decode` against llvm-objdump showed:
+- **Svinval and hypervisor fences.** `riscv.svinval.sinc` is generated from the Sail model
+  (`extensions/H/hext_insts.sail`, `extensions/Svinval/svinval_insts.sail`). It holds
+  `hfence.vvma`/`hfence.gvma`, `sinval.vma`, `hinval.vvma`/`hinval.gvma` as user operations
+  over `rs1` and `rs2`, and `sfence.w.inval`/`sfence.inval.ir` with no effect.
+- **Hypervisor loads and stores.** In `riscv.priv.sinc` these now print as LLVM does:
+  `hlv.b rd,(rs1)` and `hsv.b rs2,(rs1)`.
+- **Zalasr.** `riscv.zalasr.sinc` adds the load-acquire forms `l{b,h,w,d}.aq`/`.aqrl` and the
+  store-release forms `s{b,h,w,d}.rl`/`.aqrl`. Each is a plain load or store; the ordering is
+  not modelled.
+- **Zfbfmin.** `riscv.zfbfmin.sinc`, also generated, holds `fcvt.bf16.s` and `fcvt.s.bf16`.
+  Both are user operations whose result is written NaN-boxed, and `fcvt.s.bf16` prints no
+  rounding mode.
+- **Smrnmi and Ssctr.** `mnret` returns to `mnepc`; `mnscratch`, `mnepc`, `mncause` and
+  `mnstatus` now have names. `sctrclr` (Ssctr) replaces the pre-1.10 `sfence.vm` on its
+  encoding.
+- **Not done.** Q (128-bit FP) stays undecoded: it needs a language with 16-byte f registers. CSR
+  operands print as numbers where LLVM prints names, and `jalr` and `fence` print in Ghidra's
+  form.
+
+The generator's opaque fallback now writes a result only to `rd`/`frd`, so a fence takes all its
+operands as inputs. It also boxes the result of a conversion to S or H by the format after
+`fcvt.`, which affects `fcvt.s.w`/`fcvt.h.l`... with a static rounding mode in `riscv.fd.sinc`
+and `riscv.zfh.sinc`.
 
 ### RISC-V F and D
 
@@ -5619,6 +5744,32 @@ replaces the control word defines it: `FLDCW`, `FLDENV`, `FRSTOR`,
 loads it from the first word of its area. `XRSTOR` and `XRSTORS` load it the
 same way when `EAX` bit 0 and the area's `XSTATE_BV` bit 0 are set, reset it
 to `0x037f` when only `EAX` bit 0 is set, and leave it unchanged otherwise.
+
+A VEX instruction that has no vvvv operand requires the field to be 1111b, as the
+processor does (anything else is #UD), and the VEX mask and AMX tile instructions
+require register operands without the R/B extensions. Outside 64-bit mode VEX.W
+is ignored by the instructions whose W1 form exists only in 64-bit mode, and the
+FMA3 tables are part of the 16- and 32-bit languages.
+
+AMD's XOP encoding (an `8F` byte whose next byte selects map 8, 9 or 0Ah) decodes
+like a 3-byte VEX prefix into map numbers 8-10, and `amd_xop.sinc` (generated by
+`tools/gen_x86_xop.py` from LLVM's TableGen records) holds the FMA4, XOP, TBM and LWP
+instructions. FMA4, `VFRCZ`, `VPPERM`, `VPERMIL2` and LWP lift to user operations;
+the XOP integer instructions and TBM lift to p-code, written from the AMD64 APM.
+Outside 64-bit mode the high bit of VEX/XOP.vvvv and of an is4 register byte is
+ignored when it names a register.
+
+The stack width of a push, pop, call, return, `ENTER`/`LEAVE` or `PUSHA`/`POPA` is
+the stack segment's, so an `0x67` prefix (which only changes how a memory operand
+is addressed) does not switch such an instruction between `SP` and `ESP`: the
+`prefix_67` context bit records the prefix and `$(STACK16)`/`$(STACK32)` undo it
+(a repeated `0x67` changes nothing). In 16-bit code, a 32-bit address (an `0x67`
+prefix, the `ESI`/`EDI` string forms, `XLAT`) still adds the segment base:
+selector*16 in real mode and selector*0x10000 in 16-bit protected mode, with `SS`
+the default for an `EBP` or `ESP` base. `AAA` adds 0x106 to `AX` and `AAS`
+subtracts 6 from `AX` and 1 from `AH`; `AAD`/`AAM` take their flags from `AL`.
+`PUSHF` stores `EFLAGS` bit 1 as 1, a segment-register push or pop follows the
+operand size, and a far `CALL` with a 32-bit operand pushes `CS` zero-extended.
 
 The x87 condition bits `C0`-`C3` are their own registers; `FSTSW`/`FNSTSW` (to
 `AX` or memory) store `FPUStatusWord` with bits 8-10 and 14 replaced by them,
@@ -5792,6 +5943,39 @@ z13+ build halted on the high-word instructions and every `isnan` halted on `tcd
 start and end positions from six bits of I3/I4 instead of bits 3-7 (a position within the word),
 so `risblg r11,r1,0xdf,0xe4,11` cleared the register instead of inserting a wrapped field.
 
+### s390x hexadecimal floating point and decimal instructions (#862)
+
+`specs/Ghidra/Processors/s390x/gen_hfpdec.py` writes `s390x_hfpdec.sinc` from
+`hfpdec_insts.json`: the LLVM SystemZ TableGen records of the hexadecimal floating-point
+instructions, packed decimal (`ap`, `cp`, `zap`, `srp`, `ed`, `pack`, `unpk`, `cvb`, `cvd`,
+...), decimal floating point (`adtr` ... `tdgxt`, `cdzt`, `cdpt`, ...), the translate and
+storage-to-storage forms the module lacked (`tr`, `trt`, `trtr`, `trte`, `mvn`, `mvz`, `mvcin`,
+`mvck`, `mvcle`, `mvcrl`, `plo`, ...) and the BFP storage multiply-adds; `mxr` and `mxd`,
+which LLVM lacks, are added by hand. The token fields it uses go to `hfpdec_fields.txt`, which
+`gen_sinc.py` adds to the three instruction tokens. Exact p-code: the HFP sign operations
+(`lpdr`, `lndr`, `lcdr`, `ltdr` and the short forms; the condition code is 0 for a zero
+fraction whatever the sign and exponent), `ts`, `mdebr`/`mdeb` (exact in long), `madb`,
+`maeb`, `msdb`, `mseb` (multiply then add, rounded twice, like `madbr`), `mxdb`, and
+`bsm`/`bassm` in the 64-bit addressing mode (an indirect branch and an indirect call to R2
+with bit 63 cleared; bit 63 of R1 is set). Every other instruction is a user operation
+`hd_<mnemonic>` over its operands (an `L`-length operand passes its byte count), with
+`hd_<mnemonic>_cc` setting the condition code. The difffuzz sweep configuration of #862
+(`--arch s390x --oracle qemu --count 200 --seed 1`) went from 97 decode findings to none; QEMU
+implements neither HFP nor `bsm`/`bassm`, so those lifts are checked against the
+architecture's definition only.
+
+The same generator now also covers the CPACF crypto instructions, the privileged and system
+instructions (with the control registers `c0`-`c15`), transactional execution, guarded
+storage, access-register moves and the remaining storage forms, so every instruction of LLVM's
+SystemZ target decodes. Their user operations take the implicit registers of the LLVM record
+(`r0l` and `r1` for CPACF) and write every output register, the condition code included.
+`lpsw`/`lpswe`/`lpswey` return to the new PSW's instruction address. Exact p-code for `lzrg`,
+`lzrf`, `llzrgf`, `lpd`, `lpdg`, `lfpc`, `stfpc` and `srnm`/`srnmb`/`srnmt`, and for the
+condition masks the hand-written rows lacked (0 and 15 of load/store/select on condition, 0, 1,
+14 and 15 of compare and trap, every mask of `locfh`, `stocfh`, `clt` and `clgt`), each its own
+constructor; mask 0 has no effect and mask 15 is unconditional. Checked against QEMU (`--oracle
+qemu`, every mask of those records plus the exact loads): no mismatch.
+
 ### s390x vector facility (#98)
 
 `specs/Ghidra/Processors/s390x/gen_vector.py` writes `s390x_vector.sinc` from
@@ -5811,6 +5995,31 @@ lengthened, which keeps the bits and clears the right half) are decoded because 
 encoding of the exact families, three per instruction): no mismatch outside the fused
 multiply-adds. A static musl image built for `-mcpu=z15` went from 49 of 113 functions
 halting to 7, all on the `0x0000` crash word.
+
+### PowerPC Power ISA 3.1 (POWER10) (#98)
+
+`specs/Ghidra/Processors/PowerPC/gen_isa31.py` writes `ppc_isa31.sinc` from `isa31_insts.json`,
+the 267 LLVM PowerPC TableGen records of Power ISA 3.1 (prefixed 8-byte instructions, MMA,
+the paired vector loads and stores, and the new fixed-point, VMX and VSX instructions) plus
+four ISA 3.0 records the vendored spec lacked. Every Power ISA language includes it except
+`PowerPC:BE:32:e200-SPE2`. A prefixed instruction is one constructor over a prefix token and
+a suffix token, with the 34-bit displacement or immediate assembled in a disassembly action;
+an `R=1` (PC-relative) address is `inst_start + D`. `acc0`-`acc7` are 64-byte registers over
+the VSRs they shadow. The generator gives exact p-code to the loads and stores (including
+the paired and the rightmost-element forms), `paddi`/`pli`, the byte reverses, `setbc`
+and its three variants, the mask moves, extracts, expands and counts, the 128-bit integer
+compares, shifts and rotate, the vector integer divides and moduli, the doubleword
+multiplies, the shift-double-by-bit-immediate, the clear-bytes, the vector string isolates,
+the blends and the immediate splats, and a user operation `p31_<mnemonic>` to the rest (MMA
+rank-k updates, permutes, inserts and extracts, bit gathers, quad-precision and BF16
+conversions). In `vsx.sinc`, the 83 VSX user operations that took their target as an
+argument now assign it, and the permutes, merges, selects, lane arithmetic and compares,
+scalar compares and data-class test, the ISA 3.0 scalar loads and stores, the direct moves
+and the byte reverses lift exactly. Decode was checked against `llvm-objdump --mcpu=pwr10`
+(every ISA 3.0/3.1 record decodes) and the p-code with `tools/difffuzz --arch ppc64le-p10` and
+`--arch ppc64-p10` against QEMU's `power10` CPU. A Lua 5.2 object built for `-mcpu=pwr10` went
+from 352 of 545 functions halting to 91, the count of its `-mcpu=pwr8` build. Details and
+gaps in `specs/Ghidra/Processors/PowerPC/README.md`.
 
 ### x86-64 lifter fixes from differential fuzzing
 
@@ -5921,6 +6130,13 @@ Found by `tools/difffuzz --oracle qemu` (`qemu-ppc`, `qemu-ppc64` and `qemu-ppc6
 - `stswi` with a byte count that is not a multiple of 4 stores only the leftmost bytes of its
   last register (`storeRegisterPartial` in `ppc_common.sinc`); it stored the whole word, so
   `stswi r23,r3,17` wrote 20 bytes.
+- `sradi.` sets CR0 from its result (`cr0flags`); it left CR0 unchanged.
+- The extended divides `divwe[u][o][.]` and `divde[u][o][.]` (`ppc_isa.sinc`) divide
+  `RA || 0` (64 bits for the word forms, 128 for the doubleword forms) by `RB`, and the `o`
+  forms set OV when the quotient does not fit. The word forms divided 0 by 0 and the
+  doubleword forms divided `RA` itself.
+- `bpermd` lifts to the bit permutation (each byte of `RS` selects a bit of `RB`) instead of
+  the `BitPermuteDoubleword` user operation, which did not write `RA`.
 
 ### AArch64 rounding, saturation and by-element operands (#546)
 

@@ -1040,6 +1040,14 @@ impl FuncdataSpacebaseExt for Funcdata {
                     } else {
                         0
                     };
+                    if crate::heritage::kuna_jt_trace() {
+                        eprintln!(
+                            "jt-trace sync unmapped off={:#x} size={} unaliased={}",
+                            ex_addr.get_offset(),
+                            ex_size,
+                            unaliased
+                        );
+                    }
                 } else {
                     fl = 0;
                 }
@@ -1899,6 +1907,25 @@ impl FuncdataAliasExt for Funcdata {
                                     && crate::kuna_calleereginputs::is_read_operand(self, op, vn));
                     }
                 }
+            }
+            if crate::heritage::kuna_jt_trace() {
+                let v = self.vbank().get(vn);
+                eprintln!(
+                    "jt-trace alias walk jt={} vn={:?} def={:?} at={:?} nonadduse={} uses={:?}",
+                    self.is_jumptable_recovery_on(),
+                    vn,
+                    v.and_then(|v| v.get_def())
+                        .and_then(|d| self.obank().get(d))
+                        .map(|o| o.code()),
+                    v.and_then(|v| v.get_def())
+                        .and_then(|d| self.obank().get(d))
+                        .map(|o| o.get_addr().get_offset()),
+                    nonadduse,
+                    v.map(|v| v
+                        .descend_iter()
+                        .filter_map(|d| self.obank().get(d).map(|o| o.code()))
+                        .collect::<Vec<_>>())
+                );
             }
             if nonadduse {
                 addbase.push(crate::varmap::AddBase::new(vn, indexvn));

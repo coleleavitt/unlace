@@ -77,7 +77,7 @@ def samples(ref, n, rng, near=True, regs=False):
     return words
 
 def norm(s):
-    s = s.strip().lower()
+    s = re.sub(r'\s*<[^>]*>\s*$', '', s.strip()).lower()
     s = re.sub(r'\s*,\s*', ',', s)
     s = re.sub(r'\s+', ' ', s)
     return s
@@ -88,26 +88,40 @@ def objdump(path, objd, mattr, aliases):
         args[2:2] = ['-M', 'no-aliases']
     out = {}
     for line in subprocess.run(args, capture_output=True, text=True).stdout.splitlines():
-        m = re.match(r'^\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+(.*)$', line)
+        m = re.match(r'^\s*([0-9a-f]+):\s+([0-9a-f]{8}|[0-9a-f]{4})\s+(.*)$', line)
         if m:
             out[int(m.group(1), 16)] = norm(m.group(3).replace('\t', ' '))
     return out
 
-def unlace_disasm(path, unl, spec, n):
-    args = [unl, 'disassemble', path, '0x%x-0x%x' % (BASE, BASE + 4 * n), '--addr', '--json']
-    if spec:
-        args += ['--sleighpath', spec]
-    d = json.loads(subprocess.run(args, capture_output=True, text=True).stdout)
+def unlace_disasm(path, unl, spec, n, target=None):
+    """{address: text or None} for the n 4-byte slots. A word the spec cannot decode prints as
+    .byte and can leave the listing out of step with the slots, so after one the listing
+    restarts at the next slot."""
     out = {}
-    for ins in d['instructions']:
-        t = ins['text']
-        out[ins['address']] = None if t.startswith('.byte') else norm(t)
+    start, end = BASE, BASE + 4 * n
+    while start < end:
+        args = [unl, 'disassemble', path, '0x%x-0x%x' % (start, end), '--addr', '--json']
+        if target:
+            args += ['--target', target]
+        if spec:
+            args += ['--sleighpath', spec]
+        d = json.loads(subprocess.run(args, capture_output=True, text=True).stdout)
+        resume = end
+        for ins in d['instructions']:
+            at, t = ins['address'], ins['text']
+            if t.startswith('.byte'):
+                out.setdefault(at - at % 4, None)
+                resume = (at - at % 4) + 4
+                break
+            out.setdefault(at, norm(t))
+        start = resume
     return out
 
 def decode(a):
     rng = random.Random(a.seed)
     ref = opcodes(a.opcodes, a.exts.split(','))
-    words = samples(ref, a.samples, rng)
+    # a compressed word (low bits not 11) takes the low half of its slot, a c.nop the high half
+    words = [(n, k, w if w & 3 == 3 else (w & 0xffff) | 0x00010000) for n, k, w in samples(ref, a.samples, rng)]
     code = b''.join(struct.pack('<I', w) for _, _, w in words)
     tmp = tempfile.mkdtemp()
     path = os.path.join(tmp, 'words.elf')
@@ -115,7 +129,7 @@ def decode(a):
     llvm_na = objdump(path, a.objdump, a.mattr, False)
     llvm_al = objdump(path, a.objdump, a.mattr, True)
     specs = dict(s.split('=', 1) for s in a.spec)
-    dec = {k: unlace_disasm(path, a.unlace, v, len(words)) for k, v in specs.items()}
+    dec = {k: unlace_disasm(path, a.unlace, v, len(words), a.target) for k, v in specs.items()}
     scope = set(ref) | {'zext.w'}
     inscope = lambda t: bool(t) and t.split(' ')[0] in scope
     res = {k: {'sample': [0, 0], 'near': [0, 0], 'outside': 0, 'disagree': []} for k in specs}
@@ -611,6 +625,7 @@ def main():
         if name == 'decode':
             p.add_argument('--objdump', required=True)
             p.add_argument('--mattr', required=True)
+            p.add_argument('--target', help='the unlace language id to disassemble with (RISCV:LE:64:GQ)')
         else:
             p.add_argument('--vectors', type=int, default=16)
             p.add_argument('--qemu')

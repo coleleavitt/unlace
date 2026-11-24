@@ -22,21 +22,33 @@ import sys
 # identical-pattern check); filled in per core by --skip.
 BASE_ALIASES = set()
 
-REG = {"AR": ("a", 4), "MR": ("M", 4), "BR": ("b", 1), "AE_DR": ("aed", 8), "AE_VALIGN": ("u", 8), "AE_EP": ("aep", 1)}
+# Register files the base module already defines, as (name prefix, byte size).
+BASE_REGFILES = {"AR": ("a", 4), "MR": ("M", 4), "BR": ("b", 1), "FR": ("f", 4)}
+REG = dict(BASE_REGFILES)
 
 
-def tok_of(fl, bit):
-    if fl == 11:
-        return ("hx0", bit) if bit < 64 else ("hx1", bit - 64)
-    if fl == 6:
-        return ("hy0", bit)
-    if fl == 2:
-        return ("hw0", bit)
-    return ("hz0", bit)
+def core_regfiles(isa):
+    """The core's own register files (not a view of another): prefix from the short name, as
+    objdump prints them, and the byte size."""
+    out = []
+    for r in isa["regfiles"]:
+        if r["name"] in BASE_REGFILES or r["parent"] != r["name"]:
+            continue
+        out.append((r["name"], r["short"].lower(), max(1, (r["bits"] + 7) // 8), r["num"]))
+    return out
 
 
 def toks(fl):
-    return {11: ["hx0", "hx1"], 6: ["hy0"], 2: ["hw0"]}.get(fl, ["hz0"])
+    """The tokens of an fl-byte format: one per 8 bytes (SLEIGH tokens are at most 64 bits)."""
+    return [f"h{fl}t{i}" for i in range((fl + 7) // 8)]
+
+
+def tok_bits(fl, i):
+    return min(64, fl * 8 - 64 * i)
+
+
+def tok_of(fl, bit):
+    return (toks(fl)[bit // 64], bit % 64)
 
 
 class Gen:
@@ -99,16 +111,21 @@ class Gen:
 
     @staticmethod
     def fit(w, vals):
+        """(wrap, m, c): value = x * m + c, where x is the field value, less 2**w from field value
+        wrap up (wrap = 2**w for unsigned, 2**(w-1) for two's complement, or the first value of an
+        asymmetric range such as -32..95)."""
         d = dict(vals)
         if 0 not in d or 1 not in d:
             return None
-        for signed in (False, True):
-            c, m = d[0], d[1] - d[0]
-            if m == 0:
-                continue
-            sv = (lambda f: f - (1 << w) if signed and f >= 1 << (w - 1) else f)
-            if all(sv(f) * m + c == v for f, v in vals):
-                return signed, m, c
+        c, m = d[0], d[1] - d[0]
+        if m == 0:
+            return None
+        if all(f * m + c == v for f, v in vals):
+            return 1 << w, m, c
+        hi = [f for f, v in vals if f * m + c != v]
+        wrap = min(hi)
+        if all(((f - (1 << w)) if f >= wrap else f) * m + c == v for f, v in vals) and len(vals) >= min(1 << w, 64):
+            return wrap, m, c
         return None
 
     def operand(self, fl, smap, o, p):
@@ -153,8 +170,12 @@ class Gen:
         if not st:
             st = f"hI{self.subn}"
             if ft:
-                signed, m, c = ft
-                sx = f"((({raw}) ^ {1 << (w - 1)}) - {1 << (w - 1)})" if signed else f"({raw})"
+                wrap, m, c = ft
+                if wrap == 1 << w:
+                    sx = f"({raw})"
+                else:
+                    k = (1 << w) - wrap
+                    sx = f"((((({raw}) + {k}) & {(1 << w) - 1})) - {k})"
                 ex = f"{sx} * {m} + {c}"
                 if p["pcrel"] and l32r:
                     line = f"{st}: rel is {self.seq(fl, bare)} [ rel = (((inst_start + 3) & ~3) + ({ex})) & 0xffffffff; ] {{ export *:4 rel; }}"
@@ -188,10 +209,11 @@ class Gen:
             fbits = [(b, 1 if b in enc else 0) for b in fmt_mask.get(f["name"], [])]
             names = [f"S_{f['name']}_{i}" for i in range(len(f["slots"]))]
             if not plain:
-                disp = '^"; "^'.join(names)
+                disp = '^"; "^'.join(names) if len(names) > 1 else None
                 head = self.seq(fl, self.constrain(fl, fbits))
                 elems = (head.split(" & ") if not head.startswith("(") else [head]) + names
-                roots.append(f':"{{" {disp} "}}" is ' + " & ".join(e + " ..." for e in elems) + " { " + " ".join(f"build {n};" for n in names) + " }")
+                shown = f'"{{" {disp} "}}"' if disp else f"^{names[0]}"
+                roots.append(f":{shown} is " + " & ".join(e + " ..." for e in elems) + " { " + " ".join(f"build {n};" for n in names) + " }")
             for si, s in enumerate(f["slots"]):
                 for o in s["ops"]:
                     if plain and not self.extra_plain(o["name"]):
@@ -300,15 +322,16 @@ class Gen:
 
 
 def format_masks(modules_c, isa):
+    """The bits format_decoder() tests for each format (its value is the format's encode bits)."""
     names = [f["name"] for f in isa["formats"]]
     masks = {}
-    pat = re.compile(r"if \(\(insn\[0\] & (\w+)\) == (\w+) && \(insn\[1\] & (\w+)\) == (\w+) && \(insn\[2\] & (\w+)\) == (\w+)\)\s*return (\d+);")
-    for m in pat.finditer(modules_c):
+    body = re.search(r"format_decoder \(const xtensa_insnbuf insn\)\s*\{(.*?)\n\}", modules_c, re.S).group(1)
+    for cond, num in re.findall(r"if \((.*?)\)\s*return (\d+);", body, re.S):
         bits = []
-        for w, mk in enumerate((m.group(1), m.group(3), m.group(5))):
+        for w, mk in re.findall(r"\(insn\[(\d+)\] & (\w+)\)", cond):
             mk = int(mk, 0)
-            bits += [w * 32 + b for b in range(32) if (mk >> b) & 1]
-        masks[names[int(m.group(7))]] = bits
+            bits += [int(w) * 32 + b for b in range(32) if (mk >> b) & 1]
+        masks[names[int(num)]] = bits
     for f in isa["formats"]:
         if len(f["slots"]) == 1 and f["len"] <= 3:
             masks[f["name"]] = []
@@ -328,21 +351,29 @@ def main():
         if a.startswith("--skip="):
             BASE_ALIASES.update(x for x in a[7:].split(",") if x)
     isa = json.load(open(probe))
+    for name, rprefix, size, num in core_regfiles(isa):
+        REG[name] = (rprefix, size)
     base_sinc = open(f"{outdir}/xtensaInstructions.sinc").read()
+    if not any(r["name"] == "FR" for r in isa["regfiles"]):
+        # an FPU-less core defines XTENSA_NO_FP, which drops the base FP constructors
+        base_sinc = re.sub(r"^@ifndef XTENSA_NO_FP\n.*?^@endif\n", "", base_sinc, flags=re.M | re.S)
     base = set(re.findall(r"^:([a-z0-9_.]+)", base_sinc, re.M))
     g = Gen(isa, base)
     modules_c = open(modules).read()
     note = notice(modules_c)
     roots, slots = g.run(format_masks(modules_c, isa))
     tokdefs = []
-    for t, bits in (("hx0", 64), ("hx1", 24), ("hy0", 48), ("hz0", 24), ("hw0", 16)):
+    lens = sorted({f["len"] for f in isa["formats"]})
+    for t, bits in [(t, tok_bits(fl, i)) for fl in lens for i, t in enumerate(toks(fl))]:
         fs = sorted((k, v) for k, v in g.fields.items() if v[0] == t)
         tokdefs.append(f"define token {t}({bits})\n  {t}v = (0,{bits - 1})\n" + "".join(f"  {k} = ({lo},{hi})\n" for k, (_, lo, hi) in fs) + ";")
     with open(f"{outdir}/{prefix}_defs.sinc", "w") as out:
         out.write(f"# {desc}\n# Generated by tools/gen_xtensa_hifi.py from the core's xtensa-modules.c; do not edit.\n#\n{note}\n")
-        out.write("define register offset=0x5000 size=8 [ " + " ".join(f"aed{i}" for i in range(16)) + " ];\n")
-        out.write("define register offset=0x5100 size=8 [ u0 u1 u2 u3 ];\n")
-        out.write("define register offset=0x5140 size=1 [ aep0 aep1 aep2 aep3 ];\n\n")
+        offset = 0x5000
+        for name, rprefix, size, num in core_regfiles(isa):
+            out.write(f"# {name}\ndefine register offset={offset:#x} size={size} [ " + " ".join(f"{rprefix}{i}" for i in range(num)) + " ];\n")
+            offset += (size * num + 0xff) & ~0xff
+        out.write("\n")
         out.write("\n\n".join(tokdefs) + "\n\n")
         out.write("".join(f"define pcodeop {n};\n" for n in sorted(g.ops)))
     with open(f"{outdir}/{prefix}.sinc", "w") as out:

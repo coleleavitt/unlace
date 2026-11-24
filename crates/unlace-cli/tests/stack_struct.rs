@@ -122,7 +122,7 @@ fn every_build_declares_the_record_and_prints_c() {
     let image = image();
     let partial = regex::Regex::new(r"\._[0-9]+_[0-9]+_").unwrap();
     let record = regex::Regex::new(r"(?m)^  struct_[0-9]+ v[0-9]+; //").unwrap();
-    for (base, memset) in BUILDS {
+    common::for_each_parallel(BUILDS, |(base, memset)| {
         let code = decompile(&image, base, memset, "aggressive");
         assert!(!partial.is_match(&code), "0x{base:x}: {code}");
         assert!(record.is_match(&code), "0x{base:x}: {code}");
@@ -146,7 +146,7 @@ fn every_build_declares_the_record_and_prints_c() {
                 String::from_utf8_lossy(&compiled.stderr)
             );
         }
-    }
+    });
 }
 
 #[test]

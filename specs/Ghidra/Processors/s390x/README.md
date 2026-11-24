@@ -23,9 +23,13 @@ taken from the binutils `s390-opc.txt` table (opcode and format only), and
   vector packed-decimal facilities), written by `gen_vector.py` into `s390x_vector.sinc`
   (below).
 
-Not yet modelled: hexadecimal and decimal floating point (except `lde`/`lder`,
-which LLVM uses to load a float), and the privileged instructions. An
-instruction outside the module does not decode.
+- Hexadecimal floating point, packed decimal, decimal floating point and the remaining
+  translate and storage-to-storage instructions, written by `gen_hfpdec.py` into
+  `s390x_hfpdec.sinc` (below).
+
+Every instruction of LLVM's SystemZ target decodes (a survey of three encodings per record
+against `llvm-objdump --mcpu=z16`); the privileged, system, transactional-execution, crypto
+and guarded-storage instructions are user operations.
 
 ## How the files are produced
 
@@ -89,3 +93,45 @@ after a compare, a test or a logical add is one relation.
 - Multiply-and-add and multiply-and-subtract (`MADBR`, `MAEBR`, ...) are a
   multiply followed by an add, so the intermediate product is rounded.
 - `POPCNT` without the z15 mask is the user operation `popcount_bytes`.
+
+## HFP, decimal and the remaining storage instructions
+
+`hfpdec_insts.json` lists the LLVM SystemZ records (release/22.x) whose mnemonic is in
+`gen_hfpdec.py`'s `WANT` set, extracted with `python3 gen_hfpdec.py --extract dump.json`
+from the same TableGen dump as the vector facility; `mxr` and `mxd` (absent from LLVM) are
+added in the generator. `gen_hfpdec.py data/languages` writes `s390x_hfpdec.sinc` and
+`hfpdec_fields.txt` (the token fields it uses, read by `gen_sinc.py`), so run it before
+`gen_sinc.py`. Operands follow the LLVM records: `D(X,B)`, `D(L,B)` (the displayed length is
+the byte count), `D(R,B)` and 20-bit `DH:DL` displacements; an extended operand is the pair
+`fN`:`fN+2`, a 128-bit general operand the pair `rN`:`rN+1`.
+
+Exact p-code: the HFP sign operations `lpdr`, `lper`, `lndr`, `lner`, `lcdr`, `lcer`,
+`ltdr`, `lter` (CC 0 for a zero fraction, 1 negative, 2 positive); `ts`; `mdebr`/`mdeb`;
+`madb`, `maeb`, `msdb`, `mseb` (rounded twice); `mxdb`; `bsm`/`bassm` in the 64-bit
+addressing mode. Everything else (HFP arithmetic, rounding, conversions and halving; the
+packed-decimal and DFP instructions; translate, edit, `plo`, `mvcle`, `cmpsc`, the Unicode
+conversions) is the user operation `hd_<mnemonic>`, plus `hd_<mnemonic>_cc` for the
+condition code. QEMU 10 implements neither HFP nor `bsm`/`bassm`, so only `ts` and the BFP
+rows were checked with `tools/difffuzz --oracle qemu` (no mismatch beyond the rounded-twice
+`maeb`).
+
+### Crypto, system and condition-mask instructions
+
+The same generator covers the CPACF instructions (`km`, `kmc`, `kmctr`, `kma`, `kmo`, `kmf`,
+`kimd`, `klmd`, `kmac`, `kdsa`, `pcc`, `prno`, `pckmo`, `cksm`, `dfltcc`, `sortl`, `nnpa`), the
+privileged and system instructions (`lctl`/`lctlg`/`stctl`/`stctg` on `c0`-`c15`, `lpsw`/`lpswe`,
+`ssm`, `stnsm`/`stosm`, `sigp`, the channel-subsystem, clock, storage-key, DAT and
+interrupt-handling instructions, `diag`, `sie`), transactional execution, guarded storage,
+access-register moves (`lam`, `stam`, `ear`-family), `mvcl`/`clcl` and the Unicode
+conversions. Their user operations take the register operands and the implicit registers of
+the LLVM record (CPACF reads `r0l` and `r1`) and write every output register, so the pairs a
+CPACF instruction advances (address and length) are redefined. Exact: `lpsw`/`lpswe`/`lpswey`
+return to the new PSW's address (the PSW switch itself is `hd_lpsw*`), `lzrg`, `lzrf`,
+`llzrgf`, `lpd`, `lpdg` (condition code 0), `lfpc`, `stfpc`, `srnm`, `srnmb`, `srnmt`.
+
+`MASKED` lists the condition-mask records whose masks the hand-written rows leave out:
+masks 0 and 15 of `loc`/`locg`/`locr`/`locgr`/`locfhr`/`lochi`/`locghi`/`lochhi`/`stoc`/
+`stocg` and the selects, masks 0, 1, 14 and 15 of the compare-and-trap instructions (whose
+rows test only the three high mask bits), every mask of `locfh`, `stocfh`, `clt` and `clgt`,
+and `bic` with mask 0. Each mask is its own constructor with the extended mnemonic `objdump`
+prints, and exact p-code (mask 0: no effect; mask 15: unconditional).

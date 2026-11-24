@@ -4594,6 +4594,34 @@ type holds and are left to `arithhelpers`; the `__aeabi_cdcmp*` and
 `__aeabi_cfcmp*` comparisons return in the flags and get no prototype. A DWARF or
 explicit declaration keeps precedence.
 
+**libgcc soft-float and integer routines on other targets.** Every other
+target calls libgcc by its own names: `__addsf3`, `__muldf3`, `__floatsisf`,
+`__fixdfsi`, `__ltdf2` (the GCC internals manual's "Soft float library
+routines"), `__mulsi3`, `__muldi3`, `__udivdi3`, `__ashldi3` ("Integer library
+routines") and Xtensa's `__umulsidi3`. Untyped, a caller whose last act is
+one came out `void` with its arguments lost (`void scale(void) { __addsf3();
+}` on C-SKY, OpenRISC, Lanai, ARC, MIPS and RISC-V `ilp32`, #864). The pass
+`softfpsigs` (`crates/unlace-analysis/src/analyzers/protos/kuna_softfpsigs.rs`)
+seeds each one an image other than 32-bit ARM defines or imports, typed by
+its machine modes as integers: an `SFmode` value is a 4-byte and a `DFmode`
+value an 8-byte integer, since the routines are integer code under the
+integer convention and a `float` declaration would be laid out in the default
+model's floating-point registers (`$f12` on MIPS, `fa0` under `ilp32d`), which
+a soft-float caller never sets; a comparison returns the word (libgcc's
+`CMPtype`). A routine with an 8-byte value is seeded only where the default
+model lays out an 8-byte integer as it lays out a 4-byte one (first argument
+both in registers or both on the stack) and returns it in registers with no
+hidden pointer (`kuna_softfpsigs.rs (wide_values_fit)`): Lanai's spec passes a
+`long long` on the stack and returns it through a hidden pointer. One with an
+8-byte result is seeded by this pass on a little-endian target only; on a
+big-endian one `libgccsigs` seeds it (`kuna_softfpsigs.rs
+(seed_big_endian_wide)`, called from `kuna_libgcc.rs`), since a locked 8-byte
+result in a big-endian pair still costs a caller that returns arithmetic on it
+a word. `float scale(float v, int n)` on MIPS prints `unsigned int
+scale(unsigned int a0,int a1) { return __addsf3(__mulsf3(a0,__floatsisf(a1)),
+0x3f000000); }`. The integer routines count as effect-free for the RETURN
+(`kuna_callresultuse.rs (libgcc_integer)`).
+
 The soft-float model is the spec's `__stdcall_softfp` with the default model's
 `extension` copied onto its core-register input entries: the base standard
 extends an argument narrower than a word as the VFP variant does, and the
@@ -5598,14 +5626,18 @@ registers, `r0:r1` or `r2:r3`. The cspec states this only in its `<rule>`
 unprototyped function recovers two `int` parameters and `pairparam`'s
 `RuleDoubleInputPair` refuses to join the registers
 (`possible_input_param` has no 8-byte slot at `r0`). With option
-`armpairparam` (default off; `pairparam` must be on),
+`armpairparam` (default on; `pairparam` must be on),
 `crates/unlace-middle/src/p4_calls/kuna_armpairparam.rs (pair_slots)` accepts a
 range that is exactly two consecutive general register entries of the input
 model in one space, the first at an even position among them (`r0` and `r2`
-on ARM; the same rule pairs `a0:a1` on MIPS o32 and `r3:r4` on 32-bit
-PowerPC, whose models list the registers in order), and
-`kuna_armpairparam.rs (joined_pair)` adds that the function's inputs are not
-locked. Three places read it:
+on ARM), and `kuna_armpairparam.rs (joined_pair)` adds that the function's
+inputs are not locked, that the pair is two 4-byte words, and that the
+language is 32-bit ARM (`kuna_armpairparam.rs (arm32)`: it names `r0`..`r3`,
+`lr` and `cpsr`). The same slot rule would pair `a0:a1` on MIPS o32, `r3:r4`
+on 32-bit PowerPC and `o0:o1` on SPARC, but there a pair's word order is
+`bejoin`'s evidence to decide (chapter 4, `bejoin`), which a joined input
+preempts: on MIPS, SPARC and PowerPC big-endian objects the join decided the
+order before the evidence did. Three places read it:
 
 - `RuleDoubleInputPair` joins such a pair when a borrow, carry or two-word
   equality links it, even though the function later writes one of the
@@ -5618,9 +5650,35 @@ locked. Three places read it:
   `kuna_armpairparam.rs (param_addr)` places the parameter at the start of the
   pair with the input's 8-byte type.
 
-Off, nothing changes. On, the joined pair prints as one `long long` and the
+On by default: over Lua 5.4 built without debug information for ARM softfp,
+Cortex-M3 and Cortex-M0, and over chibios, RIOT and libopencm3 firmware, 5 of
+2430 functions change, each a `double` or `long
+long` printed as two words that becomes one parameter (`luaV_flttointeger`,
+libgcc's `__aeabi_drsub`), with no new decompile error. Off, nothing changes. On, the joined pair prints as one `long long` and the
 double-precision forms (`kuna_borrowcompare.rs`) fold its arithmetic and
 compares, instead of an `SBORROW4`/`CONCAT44` chain.
+
+### (kuna) `retindexuse` — a return value that also indexes a load
+
+`Funcdata::onlyOpUse` walks every use of a RETURN trial's value forward and
+refuses the trial at any LOAD on the way: a register whose value addresses
+memory is read as a pointer the function was handed. A loop counter that is
+also the return register falls to that test whenever the loop indexes memory
+with it, which on BPF (`r0`) and SASS makes `while (s[n]) n++; return n;`
+print `void` (unlace#865). With option `retindexuse` (`off`, `bpf`, `on`;
+default `bpf`),
+`crates/unlace-middle/src/p4_calls/kuna_retindexuse.rs (index_only_load)`
+exempts, for a RETURN trial only, a LOAD whose address is the walked value
+plus a value the walk did not reach (a base pointer), constant offsets folded
+on the way: that LOAD is an index use, and the walk goes on without it. Every
+other LOAD, and every LOAD on an argument trial, still refuses. `bpf`, the
+default, applies this only when the language is eBPF (it names `R0`..`R10`
+and `PC`, eight bytes each, and no `R11`). On BPF, SASS, x86-64 and Thumb-2
+-O2 builds of the same C it gained two returns on BPF, both real, and changed
+nothing else there; SASS gained none and widened one `int` return to a
+register pair, and Thumb-2 widened nine `int` returns to `unsigned long long`
+and gave one `void` function a return, so the other targets keep upstream's
+test unless `on` is set.
 
 ### (kuna) `returnpair` — the register-pair return split
 
@@ -9856,6 +9914,16 @@ the return-recovery redo then decompiled the stub and every reader again
 the run. With them the readers see `double log(double)` the first time, which
 also types the arguments (`sincos` keeps libvorbis `mdct_init` from returning the
 `double` it leaves in `d0` for the next call).
+
+The same list is parked on an image that states the base standard
+(`Tag_ABI_VFP_args` 0 or absent in a relocatable object,
+`EF_ARM_ABI_FLOAT_SOFT` in a linked one), whatever the option: `armbasepcs`
+binds every import and external function there to `__stdcall_softfp`, a
+relocatable object's undefined symbols included (`kuna_armbasepcs.rs
+(base_pcs_functions)`), so `double fmod(double, double)` takes its values in
+`r0:r1` and `r2:r3` and returns one in `r0:r1`. Lua's `luaV_modf` built
+without debug information printed `fmod(a2,a3,a4,a5)` over four words and now
+takes `double a2,double a3`.
 
 On such an image each function's copy of the default model gains an 8-byte
 float entry for every `d0`-`d7` register over its two s-register entries, on

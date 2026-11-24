@@ -533,8 +533,16 @@ fn decode_ff25(
     out: &mut Vec<ImportSym>,
     mut rex_tails: Option<&mut HashSet<u64>>,
 ) {
+    let ff25 = memchr::memmem::Finder::new(b"\xFF\x25");
     let mut i = 0usize;
     while i + 6 <= data.len() {
+        let Some(at) = ff25.find(&data[i..]) else {
+            break;
+        };
+        i += at;
+        if i + 6 > data.len() {
+            break;
+        }
         if data[i] == 0xFF && data[i + 1] == 0x25 {
             let disp = i32::from_le_bytes([data[i + 2], data[i + 3], data[i + 4], data[i + 5]]);
             let insn_addr = vma + i as u64;

@@ -47,6 +47,11 @@ def from_float(x, size):
 
 
 class State:
+    # {LOAD/STORE space id: "register" or "ram"}; set from slaregs.space_names, unknown ids are ram
+    space_ids: dict = {}
+    # registers the language keeps in a RAM space (slaregs.mem_registers): get/set go to memory
+    mem_names: frozenset = frozenset()
+
     def __init__(self, big_endian, fill, regs):
         self.big = big_endian
         self.fill = fill
@@ -94,11 +99,11 @@ class State:
 
     def get(self, name):
         off, size = self.regs[name]
-        return self.read("register", off, size)
+        return self.read("ram" if name in self.mem_names else "register", off, size)
 
     def set(self, name, val):
         off, size = self.regs[name]
-        self.write("register", off, size, val)
+        self.write("ram" if name in self.mem_names else "register", off, size, val)
 
 
 def _vn(v):
@@ -136,13 +141,16 @@ def step(state, ops, addr, size, max_steps=20000):
                 state.skipped_callother = True
                 continue
             if out is not None and state.callother is not None:
-                state.write(*_vn(out), state.callother(op))
+                v = state.callother(op)
+                if v is None:
+                    raise Unmodeled("CALLOTHER")
+                state.write(*_vn(out), v)
                 continue
             raise Unmodeled("CALLOTHER")
         if opc == "STORE":
             ptr = rd(ins[1])
             v = ins[2]
-            state.write("ram", ptr, v["size"], rd(v))
+            state.write(state.space_ids.get(ins[0]["offset"], "ram"), ptr, v["size"], rd(v))
             continue
         if opc == "LOAD":
             # space id 0 is the constant space: a dynamic export into it (`export *[const]:8 tmp`)
@@ -150,7 +158,7 @@ def step(state, ops, addr, size, max_steps=20000):
             if ins[0]["offset"] == 0:
                 r = rd(ins[1]) & mask(osz)
             else:
-                r = state.read("ram", rd(ins[1]), osz)
+                r = state.read(state.space_ids.get(ins[0]["offset"], "ram"), rd(ins[1]), osz)
         else:
             r = _eval(opc, ins, rd, osz)
         state.write(*_vn(out), r)
@@ -259,6 +267,8 @@ def _float(opc, ins, a, asz, b, osz):
     if opc == "FLOAT_ABS":
         return a & ~(1 << (8 * asz - 1))
     if opc == "FLOAT2FLOAT":
+        if math.isnan(x):
+            raise Unmodeled("nan result")
         return from_float(x, osz)
     if opc in ("TRUNC", "CEIL", "FLOOR", "ROUND"):
         if math.isnan(x) or math.isinf(x):

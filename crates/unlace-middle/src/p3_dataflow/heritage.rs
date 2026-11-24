@@ -2291,6 +2291,18 @@ impl Heritage {
             // C++-faithful: emitted for EVERY address-tied range whose effect is
             // unknown/return-address (no persist restriction).
             let _ = fl;
+            if kuna_jt_trace() && spc.get_type() == spacetype::IPTR_SPACEBASE {
+                eprintln!(
+                    "jt-trace guard_calls jt={} call={:?} off={:#x} size={} effect={} pruned={} sparse={}",
+                    fd.is_jumptable_recovery_on(),
+                    fd.obank().get(op).map(|o| o.get_addr().get_offset()),
+                    addr.get_offset(),
+                    size,
+                    effecttype,
+                    live.is_some_and(|l| !l.needs(op)),
+                    sparse.is_some()
+                );
+            }
             if effecttype == effect_type::UNKNOWN_EFFECT && live.is_some_and(|l| !l.needs(op)) {
                 pruned = true;
             } else if effecttype == effect_type::UNKNOWN_EFFECT && sparse.is_some() {
@@ -7248,6 +7260,11 @@ pub struct MemoryOps {
     pub loads: Vec<crate::context::OpId>,
     pub stores: Vec<crate::context::OpId>,
     pub returns: Vec<crate::context::OpId>,
+}
+
+/// Is the jump-table-recovery alias trace on (`KUNA_JT_TRACE=1`)?
+pub fn kuna_jt_trace() -> bool {
+    std::env::var("KUNA_JT_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// The calls that keep their guard for one stack range.

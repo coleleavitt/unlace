@@ -502,17 +502,24 @@ impl PrintC {
         }) else {
             return;
         };
+        boolreturn_trace(fd, || {
+            format!("run {id:?}: {} statements, graph {graph}", list.len())
+        });
         let tail = list[list.len() - 1];
         let Some(tail_blk) = self.ctree.as_ref().and_then(|tree| {
             let blk = tree.stmt(tail).origin?;
             (tree.node_for(blk) == Some(tail)).then_some(blk)
         }) else {
+            boolreturn_trace(fd, || {
+                format!("run {id:?}: tail {tail:?} has no block of its own")
+            });
             return;
         };
         let Some((tail_op, mut value)) = self
             .return_term(fd, tail_blk)
             .or_else(|| self.folded_return(fd, tail))
         else {
+            boolreturn_trace(fd, || format!("run {id:?}: tail {tail:?} is no run value"));
             return;
         };
         let mut first = None;
@@ -608,19 +615,23 @@ impl PrintC {
             return;
         }
         let (body, other) = (block.get_block(1), block.get_block(2));
+        boolreturn_trace(fd, || format!("if/else {id:?}"));
         let Some((ret_op, yes)) = self
             .return_term(fd, body)
             .or_else(|| self.folded_return(fd, then))
         else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: body is no run value"));
             return;
         };
         let Some((_, no)) = self
             .return_term(fd, other)
             .or_else(|| self.folded_return(fd, els))
         else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: else is no run value"));
             return;
         };
         let Some(value) = combine_return(cond, &yes, &no) else {
+            boolreturn_trace(fd, || format!("if/else {id:?}: arms do not combine"));
             return;
         };
         if let RunTerm::Cond(c, false) = value
@@ -671,8 +682,12 @@ impl PrintC {
                     .iter()
                     .copied()
                     .filter(|s| !matches!(&tree.stmt(*s).kind, StmtKind::Seq(l) if l.is_empty()));
-                let one = live.next()?;
+                let Some(one) = live.next() else {
+                    boolreturn_trace(fd, || format!("folded {id:?}: empty sequence"));
+                    return None;
+                };
                 if live.next().is_some() {
+                    boolreturn_trace(fd, || format!("folded {id:?}: more than one statement"));
                     return None;
                 }
                 cur = one;
@@ -682,12 +697,14 @@ impl PrintC {
                 op: Some(op),
             } = tree.stmt(cur).kind
             else {
+                boolreturn_trace(fd, || format!("folded {id:?}: {cur:?} is no folded return"));
                 return None;
             };
             if !matches!(
                 tree.expr(value).kind,
                 ExprKind::Branch(_) | ExprKind::Not(_) | ExprKind::And(..) | ExprKind::Or(..)
             ) {
+                boolreturn_trace(fd, || format!("folded {id:?}: value is not 0 or 1"));
                 return None;
             }
             (op, value, first_branch(tree, value)?)
@@ -729,9 +746,23 @@ impl PrintC {
     }
 
     /// A condition a folded `if` after the first may have: a single leaf that prints
-    /// nothing before its test, with no label line and no comment.
+    /// nothing before its test, with no label line and no comment, or a `BlockCondition`
+    /// (`a && b`, `a || b`) every component of which is one.
     fn clean_guard_cond(&mut self, fd: &Funcdata, cond: BlockId) -> bool {
+        self.clean_guard_cond_at(fd, cond, 0)
+    }
+
+    fn clean_guard_cond_at(&mut self, fd: &Funcdata, cond: BlockId, depth: usize) -> bool {
         let sb = fd.sblocks_ref();
+        if sb.block(cond).get_type() == BlockType::Condition && depth < 64 {
+            let parts: Vec<BlockId> = (0..sb.block(cond).get_size())
+                .map(|k| sb.block(cond).get_block(k))
+                .collect();
+            return !parts.is_empty()
+                && parts
+                    .into_iter()
+                    .all(|part| self.clean_guard_cond_at(fd, part, depth + 1));
+        }
         let why = if sb.block(cond).get_type() != BlockType::Copy {
             Some("not a copy leaf")
         } else if !self.header_prints_nothing(fd, cond) {
@@ -812,8 +843,9 @@ impl PrintC {
 
     /// Does the condition block `cond`, printed alone and not negated, evaluate to `0` or
     /// `1`? A folded `&&`/`||` chain does; a leaf does when its `CBRANCH` tests a
-    /// comparison or boolean op that does not print as a bare truth test (`truthycond`
-    /// prints `x != 0` as `x`) and is not a `!` (which prints bare when the branch flips).
+    /// comparison or boolean op that is not a `!` (which prints bare when the branch flips)
+    /// and does not print as a bare truth test: `truthycond` prints `x != 0` as `x`, but
+    /// `x == 0` as `!x`, which is `0` or `1` (an unflipped `==` or a flipped `!=`).
     fn cond_is_boolean(&self, fd: &Funcdata, cond: BlockId) -> bool {
         let tail = crate::kuna_itecondlist::cond_list_tail(fd, cond);
         let sb = fd.sblocks_ref();
@@ -823,20 +855,37 @@ impl PrintC {
         let Some(bb) = sb.block(tail).get_copy() else {
             return false;
         };
-        let Some(def) = fd
-            .bb_op_tail(bb)
-            .and_then(|br| fd.obank().get(br))
-            .filter(|o| o.code() == OpCode::CPUI_CBRANCH)
-            .and_then(|o| o.get_in(1))
-            .and_then(|vn| fd.vbank().get(vn))
-            .and_then(|v| v.get_def())
-        else {
+        let Some(br) = fd.bb_op_tail(bb).filter(|br| {
+            fd.obank()
+                .get(*br)
+                .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+        }) else {
             return false;
         };
-        fd.obank()
-            .get(def)
-            .is_some_and(|d| d.is_bool_output() && d.code() != OpCode::CPUI_BOOL_NEGATE)
-            && self.truthy_other_operand(fd, def).is_none()
+        let Some(o) = fd.obank().get(br) else {
+            return false;
+        };
+        let flip = o.is_boolean_flip() ^ self.flipped_branches.contains(&br);
+        let Some(in1) = o.get_in(1) else {
+            return false;
+        };
+        let Some(def) = fd.vbank().get(in1).and_then(|v| v.get_def()) else {
+            return false;
+        };
+        let Some(d) = fd.obank().get(def) else {
+            return false;
+        };
+        if !d.is_bool_output() || d.code() == OpCode::CPUI_BOOL_NEGATE {
+            return false;
+        }
+        if self.truthy_other_operand(fd, def).is_none() {
+            return true;
+        }
+        match d.code() {
+            OpCode::CPUI_INT_EQUAL => !flip,
+            OpCode::CPUI_INT_NOTEQUAL => flip && self.check_print_negation(fd, in1),
+            _ => false,
+        }
     }
 
     /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when

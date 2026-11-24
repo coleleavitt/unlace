@@ -8170,12 +8170,38 @@ impl PrintC {
         read_op: Option<OpId>,
         opc: OpCode,
     ) {
+        if arch
+            .kuna_options
+            .get::<crate::kuna_wideconst::WideConst>()
+            .0
+        {
+            if let Some(tok) = crate::kuna_wideconst::wide_literal(fd, op) {
+                self.push_atom(&Atom::with_op(
+                    tok,
+                    TagType::Syntax,
+                    crate::printlanguage::SyntaxHighlight::const_color,
+                    op_key(op),
+                ));
+                return;
+            }
+        }
         if self.out_lang == crate::kuna_lang::OutLang::C {
             if opc == OpCode::CPUI_INT_ADD && self.op_named_pointer_add_ir(fd, arch, op, read_op) {
                 return;
             }
             if let Some(transfer) = crate::kuna_aggregatecast::storage_transfer(fd, op) {
                 self.op_aggregate_transfer_ir(fd, arch, op, transfer);
+                return;
+            }
+        }
+        if self.lang().caps.ternary
+            && arch
+                .kuna_options
+                .get::<crate::kuna_selectmul::SelectMul>()
+                .0
+        {
+            if let Some(plan) = crate::kuna_selectmul::select_plan(fd, op) {
+                self.op_select_ir(fd, arch, op, plan);
                 return;
             }
         }
@@ -8621,6 +8647,24 @@ impl PrintC {
         if let Some(output) = &plan.output {
             self.push_cast_close(output);
         }
+    }
+
+    /// (kuna `selectmul`) Emit `a * zext(c) + b * zext(!c)` as `c ? a : b`; the
+    /// condition is a boolean context, so `x != 0` prints truthy.
+    fn op_select_ir(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        plan: crate::kuna_selectmul::SelectPlan,
+    ) {
+        self.push_op(&tokens::CONDITIONAL, Some(op_key(op)));
+        self.context.push_mod();
+        self.context.set_mod(modifiers::CONDITION_CONTEXT);
+        self.push_vn_ir(fd, arch, plan.cond.0, plan.cond.1);
+        self.context.pop_mod();
+        self.push_vn_ir(fd, arch, plan.yes.0, plan.yes.1);
+        self.push_vn_ir(fd, arch, plan.no.0, plan.no.1);
     }
 
     /// Emit a planned ARM LSL as a guarded C shift. The unsigned shift avoids

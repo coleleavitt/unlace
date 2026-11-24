@@ -14,4 +14,112 @@
     <compiler name="default" spec="pic18.cspec" id="default"/>
     <external_name tool="IDA-PRO" name="pic18cxx"/>
   </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q10"
+            version="1.0"
+            slafile="pic18.sla"
+            processorspec="pic18q_q10.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q10">
+    <description>PIC18F Q10 family</description>
+    <compiler name="default" spec="pic18.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q20"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q20.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q20">
+    <description>PIC18F Q20 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q24"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q24.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q24">
+    <description>PIC18F Q24 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q35"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q35.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q35">
+    <description>PIC18F Q35 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q40"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q40.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q40">
+    <description>PIC18F Q40 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q41"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q41.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q41">
+    <description>PIC18F Q41 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q43"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q43.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q43">
+    <description>PIC18F Q43 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q83"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q83.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q83">
+    <description>PIC18F Q83 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
+  <language processor="PIC-18"
+            endian="little"
+            size="24"
+            variant="Q84"
+            version="1.0"
+            slafile="pic18q.sla"
+            processorspec="pic18q_q84.pspec"
+            manualindexfile="../manuals/PIC-18.idx"
+            id="PIC-18:LE:24:Q84">
+    <description>PIC18F Q84 family (SFRs at 0x000-0x4ff)</description>
+    <compiler name="default" spec="pic18q.cspec" id="default"/>
+  </language>
 </language_definitions>

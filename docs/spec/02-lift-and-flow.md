@@ -5247,8 +5247,8 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
   zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
   (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
   `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
-  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
-  prints no unboxing except on a call's return value.
+  `fpargboxed` it also folds the test for the FP argument registers on entry and a call's
+  `fa0`/`fa1` result, which the psABI boxes, so compiled code prints no unboxing.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a

@@ -66,6 +66,73 @@ fn computed(data: &Funcdata, return_ops: &[crate::context::OpId], slot: i32) -> 
     })
 }
 
+/// Whether every live RETURN reads, in `slot`, a constant or a COPY of one.
+fn constant_fill(data: &Funcdata, return_ops: &[crate::context::OpId], slot: i32) -> bool {
+    return_ops.iter().all(|&r| {
+        let Some(o) = data.obank().get(r) else {
+            return true;
+        };
+        if o.is_dead() || o.get_halt_type() != 0 || o.code() != OpCode::CPUI_RETURN {
+            return true;
+        }
+        let Some(v) = o.get_in(slot).and_then(|v| data.vbank().get(v)) else {
+            return false;
+        };
+        v.is_constant()
+            || v.get_def()
+                .and_then(|d| data.obank().get(d))
+                .is_some_and(|d| {
+                    d.code() == OpCode::CPUI_COPY
+                        && d.get_in(0)
+                            .and_then(|c| data.vbank().get(c))
+                            .is_some_and(|c| c.is_constant())
+                })
+    })
+}
+
+/// Retire, in each floating output entry whose first lane is active, the
+/// active trials above that lane that every RETURN reads as a constant (the
+/// zero fill of a narrow write), when two or more entries have an active first
+/// lane: the members of an aggregate returned one per register, each a scalar
+/// in its register's low lane, which the output rules join per primitive.
+fn retire_member_fill(
+    data: &Funcdata,
+    active: &mut ParamActive,
+    return_ops: &[crate::context::OpId],
+    entries: &[(u64, i32)],
+) {
+    let lane_of = |active: &ParamActive, i: usize| -> Option<(usize, bool)> {
+        let t = active.get_trial(i);
+        let off = t.get_address().get_offset();
+        entries
+            .iter()
+            .position(|(b, s)| *b <= off && off < b.saturating_add((*s).max(0) as u64))
+            .map(|e| (e, off == entries[e].0))
+    };
+    let firsts: Vec<usize> = (0..active.get_num_trials())
+        .filter(|&i| active.get_trial(i).is_active())
+        .filter_map(|i| {
+            lane_of(active, i)
+                .filter(|(_, first)| *first)
+                .map(|(e, _)| e)
+        })
+        .collect();
+    if firsts.len() < 2 {
+        return;
+    }
+    for i in 0..active.get_num_trials() {
+        let Some((e, first)) = lane_of(active, i) else {
+            continue;
+        };
+        if first || !firsts.contains(&e) || !active.get_trial(i).is_active() {
+            continue;
+        }
+        if constant_fill(data, return_ops, active.get_trial(i).get_slot()) {
+            active.get_trial_mut(i).mark_inactive();
+        }
+    }
+}
+
 /// Mark active the trial at the start of each floating output entry below the
 /// highest one an active trial lies in, when every live RETURN reads there the
 /// function's own input at that storage.
@@ -119,12 +186,12 @@ pub fn keep_lower_results(
             continue;
         }
         let Some(&(base, _)) = entries.get(lower) else {
-            return;
+            break;
         };
         let Some(&(idx, _, _)) = placed.iter().find(|(i, e, _)| {
             *e == lower && active.get_trial(*i).get_address().get_offset() == base
         }) else {
-            return;
+            break;
         };
         let slot = active.get_trial(idx).get_slot();
         let own_input = return_ops.iter().all(|&r| {
@@ -139,8 +206,9 @@ pub fn keep_lower_results(
                 .is_some_and(|v| v.is_input())
         });
         if !own_input {
-            return;
+            break;
         }
         active.get_trial_mut(idx).mark_active();
     }
+    retire_member_fill(data, active, return_ops, &entries);
 }

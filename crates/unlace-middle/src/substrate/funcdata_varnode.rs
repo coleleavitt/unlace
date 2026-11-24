@@ -2754,6 +2754,18 @@ impl Funcdata {
                         cur_flags |= traverse_flags::actionalt;
                     }
                 }
+                if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+                    eprintln!(
+                        "onlyop {} vn {:#x}+{} op {:?} res {}",
+                        self.get_name(),
+                        self.vbank()
+                            .get(vn)
+                            .map_or(0, |v| v.get_addr().get_offset()),
+                        self.vbank().get(vn).map_or(0, |v| v.get_size()),
+                        code,
+                        res
+                    );
+                }
                 if !res {
                     break;
                 }
@@ -2946,6 +2958,18 @@ impl Funcdata {
             .get(def)
             .map(|o| o.code())
             .unwrap_or(OpCode::CPUI_COPY);
+        if std::env::var_os("KUNA_RETREC_TRACE").is_some() {
+            eprintln!(
+                "ancop {} vn {:#x}+{} def {:?} offset {}",
+                self.get_name(),
+                self.vbank()
+                    .get(invn)
+                    .map_or(0, |v| v.get_addr().get_offset()),
+                self.vbank().get(invn).map_or(0, |v| v.get_size()),
+                code,
+                offset
+            );
+        }
         match code {
             OpCode::CPUI_INDIRECT => {
                 if self

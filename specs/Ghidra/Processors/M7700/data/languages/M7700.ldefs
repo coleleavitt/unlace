@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="M7700"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="m7700.sla"
+            processorspec="m7700.pspec"
+            id="M7700:LE:24:default">
+    <description>Mitsubishi/Renesas 7700 Family (M37700/M37702/M37710, 7750/7751 additions)</description>
+    <compiler name="default" spec="m7700.cspec" id="default"/>
+  </language>
+</language_definitions>

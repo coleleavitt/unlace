@@ -10,6 +10,8 @@ mod evm;
 mod hexagon_hmx;
 #[path = "huc6280.rs"]
 mod huc6280;
+#[path = "javacard_raw.rs"]
+mod javacard_raw;
 #[path = "konami.rs"]
 mod konami;
 #[path = "v8ignition_raw.rs"]

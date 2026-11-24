@@ -8710,8 +8710,11 @@ both
   `<Name>_Class`, `<Name>_ClassDescription` and `g<Name>MetaClass` (the global
   `metaPointer` points at), and names `New` `<Name>_New`, adding it as an
   entry. The names come from the records, so nothing is inferred from code.
-- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, read
-  inside the `osclassinfo` pass, default-off;
+- **DriverKit IORPC dispatch types** (kuna, `dextrpc`, arm64 dexts, run at
+  the commit point like `com`
+  (`crates/unlace-analysis/src/passes.rs (run_dextrpc)`) when `dextrpc` and `osclassinfo` are on, because the
+  load-time pass list sees the architecture's constructor defaults rather than
+  the run's options, default-off;
   `crates/unlace-analysis/src/analyzers/iokit/kuna_dextrpc.rs (emit)`):
   every symbol the dext defines or imports that names `C::_Dispatch(C *,
   IORPC)` (`_ZN<n>C9_DispatchEPS_5IORPC`), `C::Dispatch(IORPC)`
@@ -9917,8 +9920,13 @@ and every non-null word is a function-start candidate, filtered like the rest. N
 instruction calls an initializer and a PE32 has no `.pdata`, so nothing else names
 them: Holley EFI's MFC `Holley.exe` hands 2,113 entries to `_initterm`, and about
 a megabyte of `.text` behind them was folded into one function. A statically linked
-CRT's `_initterm` is an anonymous local and is not recognized; a PE32+ is skipped,
-its `.pdata` already naming every non-leaf initializer.
+CRT's `_initterm` is an anonymous local, so a direct `E8` call to code after the same
+two pushes is read too, but only for a table in the CRT's shape: in a
+non-executable section, its first word the NULL each `.CRT$X?A` section
+contributes, every word NULL or an address in an executable section, and at least
+one entry (Holley's static-CRT `USBCAN-Driver.dll` hands three such tables to its
+local `_initterm` / `_initterm_e`, 14 initializers, and an empty fourth). A PE32+ is skipped, its `.pdata` already naming
+every non-leaf initializer.
 
 (kuna) **An address-taken function is described by nothing else in a PE**, and the
 base-relocation table is what finds it

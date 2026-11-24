@@ -361,6 +361,27 @@ impl<'a> Types<'a> {
     }
 }
 
+/// The deferred `dextrpc` run (`crate::passes::run_dextrpc`): nothing for an
+/// image without `__osclassinfo`, else [`emit`] over its classes. It runs at
+/// the commit point, not inside the load-time `osclassinfo` pass, because the
+/// load-time architecture carries the constructor defaults, not the run's
+/// `--option dextrpc on`, and because it builds types.
+pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
+    let mut out = AnalysisOutput::default();
+    if ctx.file.format() != object::BinaryFormat::MachO
+        || ctx.file.section_by_name("__osclassinfo").is_none()
+    {
+        return out;
+    }
+    let img = MachoImage::with_fixups(
+        ctx.file,
+        crate::loader::format::macho::resolve_chained_fixups(ctx.file, ctx.bytes),
+    );
+    let classes = super::osclassinfo::classes(ctx.file, &img);
+    emit(ctx, &img, &classes, &mut out);
+    out
+}
+
 /// Prototypes, types and `this` hints for the IORPC symbols of a dext whose
 /// `__osclassinfo` lists `classes`.
 pub(super) fn emit(

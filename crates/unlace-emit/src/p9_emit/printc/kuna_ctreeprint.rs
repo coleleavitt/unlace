@@ -13,7 +13,17 @@ use unlace_base::types::int4;
 use super::{Architecture, Funcdata, PrintC};
 use crate::block::BlockType;
 use crate::context::BlockId;
-use crate::kuna_ctree::{StmtId, StmtKind};
+use crate::kuna_ctree::{CMaturity, ExprKind, StmtId, StmtKind};
+use crate::kuna_iteboolean::IteBoolMatch;
+use crate::kuna_iteregion::IteAssignMatch;
+
+/// The form `emit_block_if` gives a two-arm assignment diamond.
+pub(super) enum IteForm {
+    /// `dest = ( cond );` or `dest = !( cond );` (`iteboolean`).
+    Bool(IteBoolMatch),
+    /// `dest = ( cond ) ? A : B;` (`iteregion`).
+    Ternary(IteAssignMatch),
+}
 use crate::prettyprint::Emit;
 
 impl PrintC {
@@ -125,5 +135,96 @@ impl PrintC {
             },
             _ => false,
         }
+    }
+
+    /// Take the tree to `rewritten`: each `if` the `iteboolean` or `iteregion` print form
+    /// applies to (the same tests, in the same order, `emit_block_if` used to make while
+    /// printing) becomes the assignment statement it prints as.
+    pub(super) fn ctree_rewrite(&mut self, fd: &Funcdata, arch: &Architecture) {
+        let Some(ids) = self.ctree.as_ref().map(|tree| tree.stmt_ids()) else {
+            return;
+        };
+        for id in ids {
+            let Some(blk) = self.ctree.as_ref().and_then(|tree| {
+                let blk = tree.stmt(id).origin?;
+                (tree.node_for(blk) == Some(id)).then_some(blk)
+            }) else {
+                continue;
+            };
+            if fd.sblocks_ref().block(blk).get_type() != BlockType::If {
+                continue;
+            }
+            let form = match self.ite_boolean_match(fd, blk) {
+                Some(m) => Some(IteForm::Bool(m)),
+                None => self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary),
+            };
+            let (Some(form), Some(tree)) = (form, self.ctree.as_mut()) else {
+                continue;
+            };
+            let assign = match form {
+                IteForm::Bool(m) => {
+                    let branch = tree.add_expr(ExprKind::Branch(m.cond_block));
+                    let value = if m.negate {
+                        tree.add_expr(ExprKind::Not(branch))
+                    } else {
+                        branch
+                    };
+                    ExprKind::Assign {
+                        dest: m.dest,
+                        value,
+                        op: m.assign_op,
+                    }
+                }
+                IteForm::Ternary(m) => {
+                    let cond = tree.add_expr(ExprKind::Branch(m.cond_block));
+                    let yes = tree.add_expr(ExprKind::Op(m.true_op));
+                    let no = tree.add_expr(ExprKind::Op(m.else_op));
+                    let value = tree.add_expr(ExprKind::Ternary(cond, yes, no));
+                    ExprKind::Assign {
+                        dest: m.dest,
+                        value,
+                        op: m.true_op,
+                    }
+                }
+            };
+            let expr = tree.add_expr(assign);
+            tree.stmt_mut(id).kind = StmtKind::Expr(expr);
+        }
+        if let Some(tree) = self.ctree.as_mut() {
+            tree.advance(CMaturity::Rewritten);
+        }
+    }
+
+    /// The assignment form of the `BlockIf` `blk`, if any. With a tree, the tree decides: an
+    /// `if` it rewrote to an assignment prints in that form, any other statement as an `if`.
+    /// Without one, the `iteboolean` test, then the `iteregion` test.
+    pub(super) fn ite_form(
+        &self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+    ) -> Option<IteForm> {
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| Some((tree, tree.node_for(blk)?)));
+        if let Some((tree, id)) = node {
+            let StmtKind::Expr(expr) = &tree.stmt(id).kind else {
+                return None;
+            };
+            let ExprKind::Assign { value, .. } = &tree.expr(*expr).kind else {
+                return None;
+            };
+            return match &tree.expr(*value).kind {
+                ExprKind::Ternary(..) => {
+                    crate::kuna_iteregion::match_ite_assignment(fd, blk).map(IteForm::Ternary)
+                }
+                _ => crate::kuna_iteboolean::match_ite_boolean(fd, blk).map(IteForm::Bool),
+            };
+        }
+        if let Some(m) = self.ite_boolean_match(fd, blk) {
+            return Some(IteForm::Bool(m));
+        }
+        self.ite_ternary_match(fd, arch, blk).map(IteForm::Ternary)
     }
 }

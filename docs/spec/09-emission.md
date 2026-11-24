@@ -5735,7 +5735,13 @@ Nesting deeper than 2048 blocks stays opaque. `split_statements` then takes the
 tree to `statements`: each leaf holds its basic block's ops in order (a
 `BlockCopy` through the block it mirrors; a leaf of more than 2^20 ops is not
 split), and the leaf printer (`emit_basic_block_ops_in`, with the same filters
-as the block walk) prints from that list.
+as the block walk) prints from that list. `PrintC::ctree_rewrite` then takes it to `rewritten`:
+every `if` that the `iteboolean` test and then the `iteregion` test (the same
+tests, in the same order, that `emit_block_if` made while printing) accept becomes
+an assignment statement (`dest = cond`, `dest = !cond`, or `dest = cond ? A : B`
+over the two arms' ops). `emit_block_if` asks the tree for that form
+(`ite_form`): a rewritten `if` prints as its assignment, any other as an `if`;
+without a tree it runs the two tests itself.
 
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its

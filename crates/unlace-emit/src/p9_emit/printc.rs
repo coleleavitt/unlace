@@ -4867,6 +4867,7 @@ impl PrintC {
         if let Some(tree) = self.ctree.as_mut() {
             crate::kuna_ctreebuild::split_statements(fd, tree);
         }
+        self.ctree_rewrite(fd, arch);
         if !self.emit_ctree_body(fd, arch, sroot) {
             self.emit_block_graph(fd, arch, sroot);
         }
@@ -5757,13 +5758,16 @@ impl PrintC {
                 return;
             }
         }
-        if let Some(m) = self.ite_boolean_match(fd, blk) {
-            self.emit_block_if_bool(fd, arch, m);
-            return;
-        }
-        if let Some(m) = self.ite_ternary_match(fd, arch, blk) {
-            self.emit_block_if_ite(fd, arch, m);
-            return;
+        match self.ite_form(fd, arch, blk) {
+            Some(kuna_ctreeprint::IteForm::Bool(m)) => {
+                self.emit_block_if_bool(fd, arch, m);
+                return;
+            }
+            Some(kuna_ctreeprint::IteForm::Ternary(m)) => {
+                self.emit_block_if_ite(fd, arch, m);
+                return;
+            }
+            None => {}
         }
         let size = fd.sblocks_ref().block(blk).get_size();
         let cond_block = fd.sblocks_ref().block(blk).get_block(0);

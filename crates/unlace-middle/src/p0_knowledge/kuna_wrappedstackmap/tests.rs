@@ -322,7 +322,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
             .iter()
             .all(|addr| next_addr.get_offset() >= addr.get_offset() + 72)
     );
-    if let Some(path) = std::env::var_os("KUNA_WRAPPED_WIRE_DUMP") {
+    if let Some(path) = unlace_base::env::var_os("UNLACE_WRAPPED_WIRE_DUMP") {
         std::fs::write(path, wire).unwrap();
     }
     fd.clear();

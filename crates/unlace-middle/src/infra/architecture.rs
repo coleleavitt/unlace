@@ -1073,7 +1073,8 @@ impl Architecture {
             nullable_literal_values: Rc::default(),
 
             symbol_snapshots: RefCell::new(SymbolSnapshots::default()),
-            kuna_snapshot_cache: std::env::var_os("KUNA_NO_SYMBOL_SNAPSHOT_CACHE").is_none(),
+            kuna_snapshot_cache: unlace_base::env::var_os("UNLACE_NO_SYMBOL_SNAPSHOT_CACHE")
+                .is_none(),
             load_options: crate::kuna_loadoptions::LoadOptions::in_force(),
             load_options_from_env: !crate::kuna_loadoptions::options_in_force(),
 

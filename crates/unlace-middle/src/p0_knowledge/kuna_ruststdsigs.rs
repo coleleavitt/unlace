@@ -45,7 +45,7 @@ impl RustStdSigs {
 /// The choice in force for this process: [`RUSTSTDSIGS_ENV`], off when unset
 /// or unreadable.
 pub fn ruststdsigs() -> RustStdSigs {
-    std::env::var(RUSTSTDSIGS_ENV)
+    unlace_base::env::var(RUSTSTDSIGS_ENV)
         .ok()
         .and_then(|v| RustStdSigs::parse(&v))
         .unwrap_or_default()

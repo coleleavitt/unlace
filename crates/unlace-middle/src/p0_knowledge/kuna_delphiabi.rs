@@ -15,7 +15,7 @@ pub const DELPHIABI_ENV: &str = "KUNA_DELPHIABI";
 
 /// Whether Delphi compiler-spec selection is enabled for this process.
 pub fn delphiabi_enabled() -> bool {
-    match std::env::var(DELPHIABI_ENV) {
+    match unlace_base::env::var(DELPHIABI_ENV) {
         Ok(v) => !matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "off" | "0" | "false"

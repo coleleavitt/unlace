@@ -373,13 +373,13 @@ pub mod env {
     use super::*;
 
     fn path(name: &str) -> Option<PathBuf> {
-        std::env::var_os(name)
+        unlace_base::env::var_os(name)
             .filter(|p| !p.is_empty())
             .map(PathBuf::from)
     }
 
     pub fn ppc32picimports() -> Ppc32PicMode {
-        std::env::var(crate::kuna_ppc32picimports::ENV).map_or(Ppc32PicMode::Off, |value| {
+        unlace_base::env::var(crate::kuna_ppc32picimports::ENV).map_or(Ppc32PicMode::Off, |value| {
             Ppc32PicMode::from_env_value(&value)
         })
     }
@@ -409,14 +409,14 @@ pub mod env {
     }
 
     pub fn symbolnamechars() -> NameChars {
-        match std::env::var(crate::kuna_symbolnamechars::SYMBOLNAMECHARS_ENV) {
+        match unlace_base::env::var(crate::kuna_symbolnamechars::SYMBOLNAMECHARS_ENV) {
             Ok(v) => NameChars::parse(&v).unwrap_or_default(),
             Err(_) => NameChars::default(),
         }
     }
 
     pub fn libctypes() -> LibcTypesLayout {
-        match std::env::var(crate::kuna_libctypes::LIBCTYPES_ENV) {
+        match unlace_base::env::var(crate::kuna_libctypes::LIBCTYPES_ENV) {
             Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
                 "off" | "0" | "false" => LibcTypesLayout::Off,
                 "glibc" => LibcTypesLayout::Glibc,
@@ -435,7 +435,9 @@ pub mod env {
     }
 
     pub fn sourcelang() -> Option<SourceLang> {
-        SourceLang::parse_forced(&std::env::var(crate::kuna_sourcelang::SOURCELANG_ENV).ok()?)
+        SourceLang::parse_forced(
+            &unlace_base::env::var(crate::kuna_sourcelang::SOURCELANG_ENV).ok()?,
+        )
     }
 
     pub fn codestrings() -> bool {
@@ -451,7 +453,7 @@ pub mod env {
     }
 
     pub fn objcivars() -> bool {
-        match std::env::var(crate::kuna_objcivars::OBJCIVARS_ENV) {
+        match unlace_base::env::var(crate::kuna_objcivars::OBJCIVARS_ENV) {
             Ok(v) => !matches!(
                 v.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false" | "no"
@@ -465,7 +467,7 @@ pub mod env {
     }
 
     pub fn dyldimage() -> Option<String> {
-        std::env::var(crate::kuna_dyldcache::DYLDIMAGE_ENV)
+        unlace_base::env::var(crate::kuna_dyldcache::DYLDIMAGE_ENV)
             .ok()
             .and_then(|v| crate::kuna_dyldcache::image_name(&v).map(str::to_string))
     }
@@ -475,7 +477,7 @@ pub mod env {
     }
 
     pub fn macho_slice() -> Option<String> {
-        std::env::var(MACHO_SLICE_ENV)
+        unlace_base::env::var(MACHO_SLICE_ENV)
             .ok()
             .filter(|t| !t.trim().is_empty())
     }
@@ -495,13 +497,13 @@ pub mod env {
     }
 
     pub fn flirt_sigs() -> Vec<PathBuf> {
-        std::env::var_os(FLIRT_SIGS_ENV)
+        unlace_base::env::var_os(FLIRT_SIGS_ENV)
             .map(|list| std::env::split_paths(&list).collect())
             .unwrap_or_default()
     }
 
     fn load_pass(name: &str) -> bool {
-        !std::env::var(name).is_ok_and(|value| {
+        !unlace_base::env::var(name).is_ok_and(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
                 "off" | "0" | "false"
@@ -518,14 +520,14 @@ pub mod env {
     }
 
     pub fn load_mmap() -> bool {
-        !std::env::var(LOAD_MMAP_ENV)
+        !unlace_base::env::var(LOAD_MMAP_ENV)
             .is_ok_and(|value| matches!(value.as_str(), "off" | "0" | "false"))
     }
 
     /// The `"<maj>.<min>"` release in `KUNA_GOVERSION`; `None` when it is
     /// unset or unparsable.
     pub fn go_version() -> Option<(u16, u16)> {
-        let value = std::env::var(crate::architecture::GOVERSION_ENV).ok()?;
+        let value = unlace_base::env::var(crate::architecture::GOVERSION_ENV).ok()?;
         let mut parts = value.trim().split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
     }

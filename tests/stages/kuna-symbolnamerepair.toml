@@ -1,0 +1,87 @@
+# C++ anonymous namespaces survive the name-only demangling (and the
+# degenerate-component backstop behind them).
+#
+# Itanium mangles an anonymous namespace as `_GLOBAL__N_...` and the demangler
+# renders it `(anonymous namespace)`. The name-only reduction strips every
+# balanced bracket group, so it used to delete that component WHOLE and leave
+# an empty `::` piece: `outer::(anonymous namespace)::nested_helper` became
+# `outer::::nested_helper`. The scope splitter
+# (`Database::find_create_scope_from_symbol_name`) nests one Scope per `::`
+# component and `attach_scope` rejects an empty one; because the symbol table
+# is installed inside `load file`, that error escaped the architecture build
+# entirely, so EVERY command on such a binary answered `could not build an
+# architecture ... Non-global scope has empty name` and emitted nothing.
+#
+# An anonymous namespace is the ordinary way C++ gives a definition internal
+# linkage, so this was most unstripped C++, not an exotic input.
+#
+# The XML wrapper only supplies the harness architecture; the script clears it
+# and loads a real x86-64 C++ ELF fixture built by g++ -O1, whose source
+# (`anon_namespace_x86_64.cpp`) carries the three shapes that mattered: an
+# anonymous namespace nested inside a named one, a class defined inside that
+# one, and a top-level anonymous namespace (the leading-`::` case).
+#
+# The regression signal is loud rather than silent: a failed `load file`
+# makes every later command error the script out, the file applies 0
+# assertions, and the baseline comparison reports REGRESSED. The backstop's
+# own coverage lives in the Rust gate
+# `crates/unlace-console/tests/verify_symbolnamerepair.rs`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/anon_namespace_x86_64',
+    'read symbols',
+    'load function anonymous_namespace::top_helper',
+    'decompile',
+    'print C',
+    'load function outer::anonymous_namespace::nested_helper',
+    'decompile',
+    'print C',
+    'load function outer::anonymous_namespace::Widget::emit',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #1: a top-level anonymous namespace is a named scope, not a leading empty one'
+count = 1
+literal = 'int4 anonymous_namespace::top_helper(int4 a0)'
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #2: an anonymous namespace nested in a named one keeps both components'
+count = 1
+literal = 'int4 outer::anonymous_namespace::nested_helper(int4 a0)'
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #3: a class inside an anonymous namespace nests one level deeper again'
+count = 1
+literal = 'void outer::anonymous_namespace::Widget::emit('
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #4: the same scope path renders at a CALL site, not just on the declaration'
+count = 1
+literal = 'outer::anonymous_namespace::nested_helper(a1);'
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #5: no empty scope component survives anywhere in the output'
+count = 0
+literal = '::::'
+
+[[match]]
+name = 'SYMBOLNAMEREPAIR #6: the three bodies decompiled (the load did not fail)'
+count = 1
+literal = 'return a0 + 1;'

@@ -1,0 +1,105 @@
+# GH-845: a 4-byte wide string literal (wchar_t on Linux, char32_t) passed
+# to the image's own function printed as its address.
+#
+# Read 1 or 2 bytes at a time, L"hellow" (68 00 00 00 65 00 00 00 ..) is a
+# one-character string, so no string fact is planted there: operand_refs
+# declines its one-character read (#870), and the call prints the address,
+# hashw(0x402004). The widestrings32 option (stage P1, code/data
+# partition) adds the 4-byte width of the string markup and plants a
+# wchar4[7] at the literal, which the printer renders as L"hellow".
+#
+# Pass 1 (option widestrings32 off): the address (#1).
+# Pass 2 (option widestrings32 on): the literal (#2) and the L"(NULL)"
+# default of ornull (#3), while the int tables keep their names (#4).
+# Pass 3 (on, the clang build): L"hellow" follows the last unit of code's
+# switch table, 'q', which nothing names, so the operand pointing at
+# L"hellow" starts the literal (#5), and the table itself, which code
+# indexes, keeps its address although its bytes spell L"helpz" (#6).
+#
+# operand_refs is on in every pass, as in the aggressive preset that small
+# images default to.
+#
+# Source: crates/unlace-analysis/tests/fixtures/widestr32.c
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/widestr32_gcc_O2_x86_64',
+    'option operand_refs on',
+    'option widestrings32 off',
+    'read symbols',
+    'lo fu wide',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/widestr32_gcc_O2_x86_64',
+    'option operand_refs on',
+    'option widestrings32 on',
+    'read symbols',
+    'lo fu wide',
+    'decompile',
+    'print C',
+    'lo fu ornull',
+    'decompile',
+    'print C',
+    'lo fu table',
+    'decompile',
+    'print C',
+    'lo fu weekly',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/widestr32_clang_O2_x86_64',
+    'option operand_refs on',
+    'option widestrings32 on',
+    'read symbols',
+    'lo fu wide',
+    'decompile',
+    'print C',
+    'lo fu code',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #1: off, the literal prints as its address'
+count = 1
+literal = 'hashw(0x402004);'
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #2: on, the literal prints as L"hellow"'
+count = 2
+literal = 'hashw(L"hellow");'
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #3: on, the NULL default prints as a literal'
+count = 1
+literal = '= L"(NULL)";'
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #4: int tables of character codes keep their names'
+count = 2
+regex = 'sum\((codes|weeks),'
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #5: on, clang, the literal after the switch table starts at its operand'
+count = 0
+literal = 'L"qhellow"'
+
+[[match]]
+name = 'KUNA-WIDESTRINGS32 #6: on, clang, the indexed switch table keeps its address'
+count = 1
+literal = 'return dat_20a0['

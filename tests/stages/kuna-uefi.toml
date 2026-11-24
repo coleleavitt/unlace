@@ -1,0 +1,67 @@
+# UEFI module markup (`option uefi on|off`), ida95-53.
+#
+# Stage P1 external-refinement. The fixture is EDK2's DiskIoDxe.efi
+# (edk2-stable202505, OvmfX64 RELEASE_GCC5), a PE32+ boot-service driver
+# (Subsystem 11) whose entry at 0x1743 is EDK2's _ModuleEntryPoint with the
+# library constructors inlined.
+#
+# Pass 1 (`uefi off`, the bug): the entry takes two untyped words, the boot
+# services call is an offset off a raw pointer, and the protocol GUIDs are bare
+# addresses.
+# Pass 2 (default, the fix): the entry is typed from the UEFI specification,
+# the call is a member call through EFI_BOOT_SERVICES, and the GUIDs carry
+# their EDK2 names.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi',
+    'option uefi off',
+    'read symbols',
+    'load addr 0x1743',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/uefi_diskio_x64.efi',
+    'read symbols',
+    'load function _ModuleEntryPoint',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'UEFI #1: off, the boot-services call is an offset off an untyped word'
+count = 1
+literal = '(v1 + 0x140))(0x18c0,0,0x1a60)'
+
+[[match]]
+name = "UEFI #2: on, the entry carries the specification's prototype"
+count = 1
+literal = 'EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle,EFI_SYSTEM_TABLE *SystemTable)'
+
+[[match]]
+name = 'UEFI #3: on, the boot-services table is read as a member'
+count = 1
+literal = '= SystemTable->BootServices;'
+
+[[match]]
+name = 'UEFI #4: on, the service is a member call and its GUID argument is named'
+count = 1
+literal = '(*v1->LocateProtocol)(&gEfiDevicePathUtilitiesProtocolGuid,'
+
+[[match]]
+name = 'UEFI #5: on, the protocol GUIDs of the install call are named'
+count = 1
+literal = '&gEfiDriverBindingProtocolGuid,&gDriverBinding,&gEfiComponentNameProtocolGuid'

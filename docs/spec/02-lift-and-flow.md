@@ -674,7 +674,7 @@ replace its address-to-op record and make earlier return edges target the later
 predecessor's body. In a switch with a return-only entry and a last case sharing
 that `RET`, this incorrectly moves the last case's write after the switch and
 executes it for the return-only entry and out-of-range selectors as well.
-`tests/stages/kuna-switch-return-paths.xml` and the CLI native round trip pin
+`tests/stages/kuna-switch-return-paths.toml` and the CLI native round trip pin
 this join across both structurers and the return-duplication settings.
 
 Continuing quietly would be the wrong contract for a *declared* bound, because the
@@ -1553,7 +1553,7 @@ decompiles. A nested drive (a callee being decompiled for its contract),
 `protoorder off` and `tailcalljump direct|off` keep the copied-in body.
 `tests/stages/kuna-gottailcall.toml` pins the extern arm, with
 an unmapped non-function and a jump to the function's own code as controls,
-`tests/stages/kuna-xnutables.xml` (#15) and `tests/stages/kuna-veneer-tailcall.xml`
+`tests/stages/kuna-xnutables.toml` (#15) and `tests/stages/kuna-veneer-tailcall.toml`
 (#10) the single-function arm, and
 `tests/cli/gottailcall-*.json` pin the callee-first arm on an x86-64
 `-fno-plt` library and a MIPS PIC object.
@@ -1943,7 +1943,7 @@ naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
 `tests/stages/kuna-int3pad.toml`.
 
-**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
+**(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.toml`.
 
 **(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.toml`.
 
@@ -2105,7 +2105,7 @@ read and written under both: the number is in it by definition, and the output i
 the half that retires the false return. Inert on every language but x86-64 —
 `RAX` and all six argument registers must resolve at eight bytes and the default
 code space must be eight bytes wide — and on any function with no `SYSCALL`.
-Exercised by `tests/stages/kuna-x64syscall.xml`, whose functions include the
+Exercised by `tests/stages/kuna-x64syscall.toml`, whose functions include the
 register witness, a no-`SYSCALL` control, a split-block wrapper that separates
 `on` from `abi`, and a saved pointer value across a buffer-writing system call.
 `crates/unlace-cli/tests/x64_syscall_memory.rs` compares native code
@@ -2281,7 +2281,7 @@ return guards for that register. On MIPS, every call in a function with a
 caveat as for the result register.
 `option syscallregs off` restores the vendored zero-effect `CALLOTHER`.
 
-Exercised by `tests/stages/kuna-syscallregs-arm.xml`, `-aarch64.xml`,
+Exercised by `tests/stages/kuna-syscallregs-arm.toml`, `-aarch64.xml`,
 `-riscv.xml`, `-mips.xml` and `-ppc.xml`, each with the pair or number witness
 under `on`, a use of the result after the call, a barrier `CALLOTHER` as the
 control, and a pass under the default `auto` that keeps the vendored model on a
@@ -2289,7 +2289,7 @@ byte chunk. The ARM test adds a call whose result is discarded, a call followed
 by a use of the kept `r1`, and a call that writes `r1` but not `r0`; the RISC-V
 test adds a loop that passes `a1`/`a2` through and keeps scratch values in
 `a3`/`a4`, none of which takes an argument position.
-`tests/stages/kuna-syscallregs-mips-a3.xml` (a clang `movz` and a gcc branch on
+`tests/stages/kuna-syscallregs-mips-a3.toml` (a clang `movz` and a gcc branch on
 `a3`, the latter followed by a call while `a3` still holds the flag) and
 `-ppc-cr0.xml` (an `mfcr` and a `bns` test, and a compare of the result as the
 control) check the error flag under `on` and the phantom parameter or the
@@ -2299,7 +2299,7 @@ a `reboot` after a call whose `a3` is not read;
 the PowerPC test adds a flag that each branch sets and that is saved across a
 call after the join. In `-mips.xml`, `number` makes a `write` (4004) with two
 registers set, so it also passes the kernel the `a2` its caller left.
-`tests/stages/kuna-syscallregs-cortexm.xml` is the bare-metal control: FreeRTOS's
+`tests/stages/kuna-syscallregs-cortexm.toml` is the bare-metal control: FreeRTOS's
 `xPortRaisePrivilege` keeps its returned `r0` under `auto` and `off`.
 `crates/unlace-cli/tests/syscall_regs_cli.rs` loads the ARM witness as
 an object with and without a GNU ABI-tag note: the note turns the default on.
@@ -4320,6 +4320,13 @@ Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
 encodings against LLVM's syntax and a raw image with one instruction per
 packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
 
+### AArch64 RMIF
+
+`rmif xn,#shift,#mask` (`AARCH64base.sinc`) rotates `xn` right by `shift` and copies bits
+3..0 of the result into N, Z, C and V where `mask` has a 1; the `set_NZCV` macro
+(`AARCH64instructions.sinc`) now leaves the other flags unchanged (it used to copy N into
+them), and the source is rotated, not shifted. Found by `tools/difffuzz --oracle qemu`.
+
 ### AArch64 SVE matrix multiply and BFloat16 (#98)
 
 `AARCH64_svemm.sinc` decodes the SVE forms of FEAT_F64MM (`ld1ro*`, `fmmla .d`, the
@@ -5184,10 +5191,12 @@ FPSIZE 64, the only FLEN any RISC-V language uses.
 - `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
   `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
 - Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
-  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
-  as the hand-written files did. A register that does not hold a boxed value therefore reads as
-  that value instead of the canonical NaN. Compiled code never produces that state, and the
-  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+  does. That includes the user operations, whose result is the low word: `frd = 0xffffffff00000000 |
+  zext(fadd_s(...))`. Single-precision sources are NaN-unboxed as the ISA requires
+  (`--unbox exact`): a register whose upper 32 bits are not all ones reads as the canonical NaN.
+  `boxedcompare` (§3) folds the test for values written boxed or loaded boxed. Under
+  `fpargboxed` it also folds the test for the FP argument registers on entry, so compiled code
+  prints no unboxing except on a call's return value.
 
 The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
 every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
@@ -6095,7 +6104,7 @@ mask is passed at the intrinsic's width (`__mmask16`), and a following
 as `_mm512_mask_add_ps(src, k, a, b)` / `_mm512_maskz_add_ps(k, a, b)`. A
 function in which either step finds a whole-register vector run is marked
 `Funcdata::kuna_vector_code`, which `vectorabi` (chapter 04) keys on.
-Pinned by `tests/stages/kuna-vectorabi.xml`.
+Pinned by `tests/stages/kuna-vectorabi.toml`.
 
 
 ## 2.16 DEX exception edges

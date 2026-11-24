@@ -1,0 +1,74 @@
+# Swift string literals compared for equality (`option swiftstr`).
+#
+# Issue: `s == "iPod5,1"` compares the string's two words with the
+# literal's (`x0 == count && x1 == object`) before it calls the runtime
+# compare. The rule decoded the literal where the runtime call takes both
+# words, but the inline test printed the object word as a raw constant:
+# `a1 == 0xe700000000000000` beside `"iPod5,1"` in the call.
+#
+# Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
+# (`kuna-decomp/src/p5_types/kuna_swiftstr.rs`): an object word compared by
+# `INT_EQUAL` / `INT_NOTEQUAL` is paired with the count word compared in the
+# same block or in the branch of the one block that leads to it, when the
+# two compared values are one string's two words (a call takes them as
+# consecutive inputs).
+#
+# Fixture `macho_swift_strcmp_arm64` (arm64 Mach-O, swiftc 6.4.2 -O,
+# stripped; source `macho_swift_strcmp.swift`): 0x100000778 `model`, three
+# `if s == "..."` tests. Pass 1 (`swiftstr off`) shows the raw object words;
+# pass 2 (the default) shows each literal in the inline test too.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_strcmp_arm64',
+    'option swiftstr off',
+    'read symbols',
+    'load addr 0x100000778',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_strcmp_arm64',
+    'read symbols',
+    'load addr 0x100000778',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftstr off: the compared object words are constants'
+count = 2
+literal = 'a1 == -0x1900000000000000'
+
+[[match]]
+name = 'the first literal: its test and its call share a line'
+count = 1
+literal = '"iPod5,1"'
+
+[[match]]
+name = 'the 9-byte literal: its test and its call share a line'
+count = 1
+literal = '"iPhone3,1"'
+
+[[match]]
+name = 'the third literal: its test and its call'
+count = 2
+literal = '"iPad2,1"'
+
+[[match]]
+name = 'the object word compared inline is the literal'
+count = 1
+literal = 'a1 == "iPod5,1"'

@@ -1,0 +1,84 @@
+# kuna issue testcase: Thumb-1 switches through libgcc's case helpers in a
+# stripped image.
+#
+# Stage:      P0 knowledge - the call-fixup installer recognizes the helpers
+#             by their instructions
+#             (`analyzers/callfixup/kuna_thumb1casesig.rs`), so the
+#             `switch*_r0` call-fixups apply at P2 flow.
+#
+# The XML wrapper only provides the harness architecture.  The script loads
+# `thumb1case_le32` (source `thumb1case_le32.s` beside it, build commands in
+# its header): a stripped Cortex-M0 ELF whose `_start` calls five
+# dispatchers, each `cmp r0,#n; bhi default; bl helper` with the case table
+# after the call, one per libgcc helper: unsigned byte (0x200dc, five cases
+# returning 10..14), signed byte (0x20104, case 0 before the table, 20..23),
+# unsigned halfword (0x20128, 30..33), signed halfword (0x2014e, case 0
+# before the table, 40..42) and word (0x20170, 50..52).
+#
+# Before, the helpers had no name and the call read as an ordinary call that
+# returns into the table: each dispatcher decompiled to one call and the
+# first case.  Now every helper is named and tagged with its fixup, and each
+# dispatcher is a switch over all of its cases.  The word helper's fixup
+# adds the entry to the word-aligned table address (it used to scale the
+# entry by four and add it to the return address).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/thumb1case_le32',
+    'read symbols',
+    'lo fu sub_200dc',
+    'decompile',
+    'print C',
+    'lo fu sub_20104',
+    'decompile',
+    'print C',
+    'lo fu sub_20128',
+    'decompile',
+    'print C',
+    'lo fu sub_2014e',
+    'decompile',
+    'print C',
+    'lo fu sub_20170',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-THUMB1CASE #1: each dispatcher is a switch'
+count = 5
+literal = 'switch(a0)'
+
+[[match]]
+name = 'KUNA-THUMB1CASE #2: no helper call survives'
+count = 0
+regex = 'sub_20(198|1aa|1bc|1d0|1e4)\('
+
+[[match]]
+name = 'KUNA-THUMB1CASE #3: the unsigned byte table reads its last case'
+count = 1
+literal = 'return 0xe;'
+
+[[match]]
+name = 'KUNA-THUMB1CASE #4: the signed byte table reaches the case before it'
+count = 1
+literal = 'return 0x14;'
+
+[[match]]
+name = 'KUNA-THUMB1CASE #5: the unsigned halfword table reads its last case'
+count = 1
+literal = 'return 0x21;'
+
+[[match]]
+name = 'KUNA-THUMB1CASE #6: the signed halfword table reaches the case before it'
+count = 1
+literal = 'return 0x28;'
+
+[[match]]
+name = 'KUNA-THUMB1CASE #7: the word table reads its later cases'
+count = 2
+regex = 'return 0x3[34];'

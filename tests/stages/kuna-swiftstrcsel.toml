@@ -1,0 +1,146 @@
+# Swift string literals chosen by a branch or a `csel` (`option swiftstr`).
+#
+# Issue: a Swift.String literal is two words, the count word and the object
+# word, and the rule paired an object word held in a register with the
+# count word in the register numbered eight bytes below it. When the words
+# are picked per branch (`csel x8, x8, x9`, one select per register), that
+# register holds another arm's count word: `Field.hash(into:)` printed
+# "serviceIrovider" ("serviceItems"'s count word, "serviceProvider"'s
+# object word), `pick` printed "animal" where it hashes "serviceItems" or
+# "serviceDate", and the words of the other arms stayed raw.
+#
+# Stage / sub-stage: P5 const-pointer, `RuleSwiftString`
+# (`unlace-decomp/src/p5_types/kuna_swiftstr.rs`): a register-held object word
+# is paired by data flow. Every consumer that takes it beside its count word
+# (a call or return input, a `PIECE`, a store eight bytes above) names the
+# partner, which is traced back along the same `MULTIEQUAL` arms; two
+# `MULTIEQUAL`s of different blocks correspond when their branches test the
+# same condition.
+#
+# Fixture `macho_swift_strsel_arm64` (arm64 Mach-O, swiftc 6.3 -O,
+# stripped; source `macho_swift_strsel.swift`): 0x100000d30 `pick` (two
+# `csel` pairs per literal), 0x100000f1c `Field.hash(into:)` (a switch),
+# 0x100000e30 `tag` (a selected literal stored into a class field),
+# 0x100000eb0 `blank` (the empty literal stored). Pass 1 (`swiftstr off`)
+# shows the raw words; pass 2 (the default) and pass 3 (with
+# `swiftmetadata on`, whose names spell the branch conditions as separate
+# negations) show each arm's own literal.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_strsel_arm64',
+    'option swiftstr off',
+    'read symbols',
+    'load addr 0x100000d30',
+    'decompile',
+    'print C',
+    'load addr 0x100000f1c',
+    'decompile',
+    'print C',
+    'load addr 0x100000e30',
+    'decompile',
+    'print C',
+    'load addr 0x100000eb0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_strsel_arm64',
+    'read symbols',
+    'load addr 0x100000d30',
+    'decompile',
+    'print C',
+    'load addr 0x100000f1c',
+    'decompile',
+    'print C',
+    'load addr 0x100000e30',
+    'decompile',
+    'print C',
+    'load addr 0x100000eb0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_swift_strsel_arm64',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x100000d30',
+    'decompile',
+    'print C',
+    'load addr 0x100000f1c',
+    'decompile',
+    'print C',
+    'load addr 0x100000e30',
+    'decompile',
+    'print C',
+    'load addr 0x100000eb0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftstr off: the selected object words are constants'
+count = 2
+literal = '0xec000000736d6574;'
+
+[[match]]
+name = 'swiftstr off: the stored empty string is a constant'
+count = 1
+literal = '= 0xe000000000000000;'
+
+[[match]]
+name = "no literal is pieced from two arms' words"
+count = 0
+literal = 'serviceIrovider'
+
+[[match]]
+name = 'the csel-picked and switched literal of the first arm'
+count = 4
+literal = '"serviceItems"'
+
+[[match]]
+name = 'the csel-picked and switched literal of the second arm'
+count = 4
+literal = '"serviceDate"'
+
+[[match]]
+name = "the switch's 15-byte literal"
+count = 2
+literal = '"serviceProvider"'
+
+[[match]]
+name = "the switch's 8-byte literal"
+count = 2
+literal = '"odoMeter"'
+
+[[match]]
+name = "the second select's arms"
+count = 2
+literal = '"shape"'
+
+[[match]]
+name = "the second select's other arm"
+count = 2
+literal = '"animal"'
+
+[[match]]
+name = 'the stored selected literal, paired through the store beside it'
+count = 2
+literal = '"disabled"'
+
+[[match]]
+name = 'the stored empty literal'
+count = 2
+literal = '= "";'

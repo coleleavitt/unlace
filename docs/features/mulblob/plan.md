@@ -15,7 +15,7 @@ change_kind presentation-default.
 
 ## Test
 
-`tests/stages/mulblob-wide-multiply-operands.xml` — a two-pass bytechunk over
+`tests/stages/mulblob-wide-multiply-operands.toml` — a two-pass bytechunk over
 the gcc -O2 body of
 
 ```c

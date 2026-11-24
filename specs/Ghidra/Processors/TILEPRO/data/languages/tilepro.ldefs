@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="TILEPRO"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="tilepro.sla"
+            processorspec="tilepro.pspec"
+            id="TILEPRO:LE:32:default">
+    <description>Tilera TILEPro (TILEPro32, TILEPro64, TILE64)</description>
+    <compiler name="default" spec="tilepro.cspec" id="default"/>
+  </language>
+</language_definitions>

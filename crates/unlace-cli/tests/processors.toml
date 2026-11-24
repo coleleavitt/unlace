@@ -942,6 +942,39 @@ expect = [
     "10",  # the store to $10 survives
 ]
 
+# The native TILEPro language decompiles bundles built with tilepro-linux-gnu-as:
+# a load/accumulate loop closed by bnz with a store, a register swap inside one
+# bundle (parallel reads), and a jal with register arguments.
+[[family]]
+name = "tilepro"
+language = "TILEPRO:LE:32:default"
+base = "0x10000"
+fixture = "crates/unlace-cli/tests/fixtures/tilepro/sum_swap_call.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "tilepro_load_loop_decompiles"
+address = "0x10000"
+expect = [
+    "v1 += *a0++;",  # lw + add with the post-incremented pointer
+    "} while (a1);",  # bnz closes the loop
+    "dat_1000 = v1;",  # moveli + sw
+]
+
+[[family.function]]
+test = "tilepro_parallel_swap_decompiles"
+address = "0x10040"
+expect = [
+    "return a1 - a0;",  # { move r0, r1 ; move r1, r0 } swaps before the sub
+]
+
+[[family.function]]
+test = "tilepro_call_with_register_arguments_decompiles"
+address = "0x10050"
+expect = [
+    "return sub_10040(7,5) << 2;",  # r0/r1 arguments, jal, and the r0 result
+]
+
 # The native TILE-Gx language decompiles a raw image of hand-assembled bundles:
 # a counted loop, a call with register arguments, a conditional move, a register
 # swap inside one bundle (parallel reads) and a bit-field extract.

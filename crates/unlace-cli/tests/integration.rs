@@ -76,6 +76,8 @@ mod aarch64_rme;
 mod i4004_raw;
 #[path = "s2650_raw.rs"]
 mod s2650_raw;
+#[path = "cdp1802_raw.rs"]
+mod cdp1802_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

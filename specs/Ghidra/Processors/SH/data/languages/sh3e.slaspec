@@ -1,0 +1,5 @@
+@define ENDIAN "big"
+@define SH3 ""
+@define FPU ""
+@define FSQRT ""
+@include "sh.sinc"

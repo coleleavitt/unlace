@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="ESR-L"
+            endian="little"
+            size="20"
+            variant="default"
+            version="1.0"
+            slafile="ESR-L.sla"
+            processorspec="ESR-L.pspec"
+            id="ESR-L:LE:20:default">
+    <description>Sharp ESR-L</description>
+    <compiler name="default" spec="ESR-L.cspec" id="default"/>
+  </language>
+</language_definitions>

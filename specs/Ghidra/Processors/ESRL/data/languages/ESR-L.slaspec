@@ -1,0 +1,2179 @@
+# sleigh specification file for Sharp ESR-L
+
+define endian=little;
+define alignment=1;
+
+define space register  type=register_space  size=1;
+define space ram       type=ram_space       size=3 default;
+
+define register offset=0x10 size=2 [ BA I ];
+define register offset=0x10 size=1 [ B A IH IL ];
+
+define register offset=0x20 size=3 [ X Y U S ];
+
+define register offset=0x30 size=4 [ FPC ];
+define register offset=0x30 size=2 [ _ PC ];
+define register offset=0x30 size=1 [ PS _ _ ];
+
+define register offset=0x40 size=1 [ F ];
+define bitrange C = F[0,1] Z = F[1,1];
+
+define ram offset=0xEC size=1 [ BP PX PY AMC KOL KOH KI EOL EOH EIL EIH UCR USR RXD TXD IMR ISR SCR LCC SSR ];
+
+define ram offset=0xFFFFA size=3 [ INT_VECT RESET_VECT ];
+
+define token opbyte (8)
+	op0_8        = (0,7)
+	op3_5        = (3,7)
+	reg1_2       = (1,2)
+	reg2_1       = (2,2)
+	reg1_3       = (1,3)
+	reg5_3       = (5,7)
+	reg5_2       = (5,6)
+	reg0_3_r8    = (0,2)
+	reg0_3_r16   = (0,2)
+	reg0_3_r20   = (0,2)
+	reg0_3_r20_2 = (0,2)
+	reg4_3_r8    = (4,6)
+	reg4_3_r16   = (4,6)
+	reg4_3_r20   = (4,6)
+;
+
+define token data8 (8)
+	imm8  = (0,7)
+	sign8 = (7,7)
+	simm8 = (0,7) signed
+	off8  = (0,7)
+;
+
+define token data16 (16)
+	imm16  = (0,15)
+;
+
+define token data24 (24)
+	imm20  = (0,19)
+;
+
+attach variables [ reg0_3_r8 reg4_3_r8 ] [ A IL _ _ _ _ _ _ ];
+attach variables [ reg0_3_r16 reg4_3_r16 ] [ _ _ BA I _ _ _ _ ];
+attach variables [ reg0_3_r20 reg0_3_r20_2 reg4_3_r20 ] [ _ _ _ _ X Y U S ];
+
+# Registers in the low nybble
+R8L: reg0_3_r8 is reg0_3_r8 & reg1_2=0 { export reg0_3_r8; }
+R16L: reg0_3_r16 is reg0_3_r16 & reg1_2=1 { export reg0_3_r16; }
+R20L: reg0_3_r20 is reg0_3_r20 & reg1_2>1 { export reg0_3_r20; }
+XYUL: reg0_3_r20 is reg0_3_r20 & reg1_2>1 & reg0_3_r20_2 < 7 { export reg0_3_r20; }
+
+# Registers in the high nybble
+R8H: reg4_3_r8 is reg4_3_r8 & reg5_2=0 { export reg4_3_r8; }
+R16H: reg4_3_r16 is reg4_3_r16 & reg5_2=1 { export reg4_3_r16; }
+R20H: reg4_3_r20 is reg4_3_r20 & reg5_2>1 { export reg4_3_r20; }
+
+Addr16: loc is imm16 [ loc = (inst_start & 0xF0000) | imm16; ] { export *:1 loc; }
+Addr20: loc is imm20 [ loc = imm20 & 0xFFFFF; ] { export *:1 loc; }
+RelAddrFwd8: loc is imm8 [ loc = (inst_next + imm8) & 0xFFFFF; ] { export *:1 loc; }
+RelAddrBack8: loc is imm8 [ loc = (inst_next - imm8) & 0xFFFFF; ] { export *:1 loc; }
+
+# 20-bit immediate values that reference external memory directly
+Ext8:  [loc] is imm20 [ loc = imm20 & 0xFFFFF; ] { export *:1 loc; }
+Ext16: [loc] is imm20 [ loc = imm20 & 0xFFFFF; ] { export *:2 loc; }
+Ext24: [loc] is imm20 [ loc = imm20 & 0xFFFFF; ] { export *:3 loc; }
+
+# 20-bit registers (X, Y, U, S) used as pointers to external memory
+Ptr8: [R20L] is R20L { export *:1 R20L; }
+Ptr16: [R20L] is R20L { export *:2 R20L; }
+Ptr20: [R20L] is R20L { export *:3 R20L; }
+Ptr24: [R20L] is R20L { export *:3 R20L; }
+
+IntN8: (imm8) is imm8 { export *:1 imm8; }
+IntN8_2: (imm8) is imm8 { export *:1 imm8; }
+IntBP8: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:1 tmp; }
+IntBP8: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:1 tmp; }
+IntBP8_2: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:1 tmp; }
+IntBP8_2: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:1 tmp; }
+IntBPPX8: (BP+PX) is BP & PX & op0_8 { tmp = BP + PX; export *:1 tmp; }
+IntBPPY8: (BP+PY) is BP & PY & op0_8 { tmp = BP + PY; export *:1 tmp; }
+IntPX8: (PX+simm8) is PX & simm8 { tmp = PX + simm8; export *:1 tmp; }
+IntPX8: (PX-val) is PX & simm8 & sign8=1 [ val = -simm8; ] { tmp = PX + simm8; export *:1 tmp; }
+IntPY8: (PY+simm8) is PY & simm8 { tmp = PY + simm8; export *:1 tmp; }
+IntPY8: (PY-val) is PY & simm8 & sign8=1 [ val = -simm8; ] { tmp = PY + simm8; export *:1 tmp; }
+
+IntN16: (imm8) is imm8 { export *:2 imm8; }
+IntN16_2: (imm8) is imm8 { export *:2 imm8; }
+IntBP16: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:2 tmp; }
+IntBP16: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:2 tmp; }
+IntBP16_2: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:2 tmp; }
+IntBP16_2: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:2 tmp; }
+IntBPPX16: (BP+PX) is BP & PX & op0_8 { tmp = BP + PX; export *:2 tmp; }
+IntBPPY16: (BP+PY) is BP & PY & op0_8 { tmp = BP + PY; export *:2 tmp; }
+IntPX16: (PX+simm8) is PX & simm8 { tmp = PX + simm8; export *:2 tmp; }
+IntPX16: (PX-val) is PX & simm8 & sign8=1 [ val = -simm8; ] { tmp = PX + simm8; export *:2 tmp; }
+IntPY16: (PY+simm8) is PY & simm8 { tmp = PY + simm8; export *:2 tmp; }
+IntPY16: (PY-val) is PY & simm8 & sign8=1 [ val = -simm8; ] { tmp = PY + simm8; export *:2 tmp; }
+
+IntN20: (imm8) is imm8 { export *:3 imm8; }
+IntBP20: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:3 tmp; }
+IntBP20: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:3 tmp; }
+IntBPPX20: (BP+PX) is BP & PX & op0_8 { tmp = BP + PX; export *:3 tmp; }
+IntBPPY20: (BP+PY) is BP & PY & op0_8 { tmp = BP + PY; export *:3 tmp; }
+IntPX20: (PX+simm8) is PX & simm8 { tmp = PX + simm8; export *:3 tmp; }
+IntPX20: (PX-val) is PX & simm8 & sign8=1 [ val = -simm8; ] { tmp = PX + simm8; export *:3 tmp; }
+IntPY20: (PY+simm8) is PY & simm8 { tmp = PY + simm8; export *:3 tmp; }
+IntPY20: (PY-val) is PY & simm8 & sign8=1 [ val = -simm8; ] { tmp = PY + simm8; export *:3 tmp; }
+
+IntN24: (imm8) is imm8 { export *:3 imm8; }
+IntN24_2: (imm8) is imm8 { export *:3 imm8; }
+IntBP24: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:3 tmp; }
+IntBP24: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:3 tmp; }
+IntBP24_2: (BP+simm8) is BP & simm8 { tmp = BP + simm8; export *:3 tmp; }
+IntBP24_2: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp = BP + simm8; export *:3 tmp; }
+IntBPPX24: (BP+PX) is BP & PX & op0_8 { tmp = BP + PX; export *:3 tmp; }
+IntBPPY24: (BP+PY) is BP & PY & op0_8 { tmp = BP + PY; export *:3 tmp; }
+IntPX24: (PX+simm8) is PX & simm8 { tmp = PX + simm8; export *:3 tmp; }
+IntPX24: (PX-val) is PX & simm8 & sign8=1 [ val = -simm8; ] { tmp = PX + simm8; export *:3 tmp; }
+IntPY24: (PY+simm8) is PY & simm8 { tmp = PY + simm8; export *:3 tmp; }
+IntPY24: (PY-val) is PY & simm8 & sign8=1 [ val = -simm8; ] { tmp = PY + simm8; export *:3 tmp; }
+
+IntNAddr: (imm8) is imm8 { tmp:3 = imm8; export tmp; }
+IntNAddr_2: (imm8) is imm8 { tmp:3 = imm8; export tmp; }
+IntBPAddr: (BP+simm8) is BP & simm8 { tmp:3 = zext(BP + simm8) & 0xFF; export tmp; }
+IntBPAddr: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp:3 = zext(BP + simm8) & 0xFF; export tmp; }
+IntBPAddr_2: (BP+simm8) is BP & simm8 { tmp:3 = zext(BP + simm8) & 0xFF; export tmp; }
+IntBPAddr_2: (BP-val) is BP & simm8 & sign8=1 [ val = -simm8; ] { tmp:3 = zext(BP + simm8) & 0xFF; export tmp; }
+IntBPPXAddr: (BP+PX) is BP & PX & op0_8 { tmp:3 = zext(BP + PX) & 0xFF; export tmp; }
+IntBPPYAddr: (BP+PY) is BP & PY & op0_8 { tmp:3 = zext(BP + PY) & 0xFF; export tmp; }
+IntPXAddr: (PX+simm8) is PX & simm8 { tmp:3 = zext(PX + simm8) & 0xFF; export tmp; }
+IntPXAddr: (PX-val) is PX & simm8 & sign8=1 [ val = -simm8; ] { tmp:3 = zext(PX + simm8) & 0xFF; export tmp; }
+IntPYAddr: (PY+simm8) is PY & simm8 { tmp:3 = zext(PY + simm8) * 0xFF; export tmp; }
+IntPYAddr: (PY-val) is PY & simm8 & sign8=1 [ val = -simm8; ] { tmp:3 = zext(PY + simm8) & 0xFF; export tmp; }
+
+MemRegIncDec8: [reg0_3_r20++] is reg0_3_r20 & op3_5=0b00100 { tmp = reg0_3_r20; reg0_3_r20 = reg0_3_r20 + 1; export *:1 tmp; }
+MemRegIncDec8: [--reg0_3_r20] is reg0_3_r20 & op3_5=0b00110 { reg0_3_r20 = reg0_3_r20 - 1; tmp = reg0_3_r20; export *:1 tmp; }
+
+MemRegIncDec16: [reg0_3_r20++] is reg0_3_r20 & op3_5=0b00100 { tmp = reg0_3_r20; reg0_3_r20 = reg0_3_r20 + 2; export *:2 tmp; }
+MemRegIncDec16: [--reg0_3_r20] is reg0_3_r20 & op3_5=0b00110 { reg0_3_r20 = reg0_3_r20 - 2; tmp = reg0_3_r20; export *:2 tmp; }
+
+MemRegIncDec20: [reg0_3_r20++] is reg0_3_r20 & op3_5=0b00100 { tmp = reg0_3_r20; reg0_3_r20 = reg0_3_r20 + 3; export *:3 tmp; }
+MemRegIncDec20: [--reg0_3_r20] is reg0_3_r20 & op3_5=0b00110 { reg0_3_r20 = reg0_3_r20 - 3; tmp = reg0_3_r20; export *:3 tmp; }
+
+MemRegIncDec24: [reg0_3_r20++] is reg0_3_r20 & op3_5=0b00100 { tmp = reg0_3_r20; reg0_3_r20 = reg0_3_r20 + 3; export *:3 tmp; }
+MemRegIncDec24: [--reg0_3_r20] is reg0_3_r20 & op3_5=0b00110 { reg0_3_r20 = reg0_3_r20 - 3; tmp = reg0_3_r20; export *:3 tmp; }
+
+MemRegInc: [reg0_3_r20++] is reg0_3_r20 & op3_5=0b00100 { export *:3 reg0_3_r20; }
+MemRegDec: [--reg0_3_r20] is reg0_3_r20 & op3_5=0b00110 { export *:3 reg0_3_r20; }
+
+
+macro wr8(addr, val8) { ptr:3 = addr; *:1 ptr = val8; }
+macro rd8(ret8, addr) { ptr:3 = addr; ret8 = *:1 ptr; }
+
+macro wr16(addr, val16) { ptr:3 = addr; *:2 ptr = val16; }
+macro rd16(ret16, addr) { ptr:3 = addr; ret16 = *:2 ptr; }
+
+macro wr20(addr, val20) { ptr:3 = addr; *:3 ptr = val20; }
+macro rd20(ret20, addr) { ptr:3 = addr; ret20 = *:3 ptr; }
+
+macro wr24(addr, val24) { ptr:3 = addr; *:3 ptr = val24; }
+macro rd24(ret24, addr) { ptr:3 = addr; ret24 = *:3 ptr; }
+
+### 1 Byte Transmission Command No. 1
+
+# mv r8,imm8
+
+:MV R8L,imm8 is op3_5=0x01 & R8L; imm8 { R8L = imm8; }
+
+# mv (int),imm8
+
+:MV IntN8,imm8    is op0_8=0x30; op0_8=0xCC; IntN8;    imm8 { IntN8 = imm8; }
+:MV IntBP8,imm8   is             op0_8=0xCC; IntBP8;   imm8 { IntBP8 = imm8; }
+:MV IntPX8,imm8   is op0_8=0x34; op0_8=0xCC; IntPX8;   imm8 { IntPX8 = imm8; }
+:MV IntBPPX8,imm8 is op0_8=0x24; op0_8=0xCC; IntBPPX8; imm8 { IntBPPX8 = imm8; }
+
+# mv r8,r8
+
+:MV R8H,R8L is op0_8=0xFD; R8H & R8L { R8H = R8L; }
+
+# mv (int),r8
+
+:MV IntN8,R8L    is op0_8=0x30; op3_5=0b10100 & R8L; IntN8    { IntN8 = R8L; }
+:MV IntBP8,R8L   is             op3_5=0b10100 & R8L; IntBP8   { IntBP8 = R8L; }
+:MV IntPX8,R8L   is op0_8=0x34; op3_5=0b10100 & R8L; IntPX8   { IntPX8 = R8L; }
+:MV IntBPPX8,R8L is op0_8=0x24; op3_5=0b10100 & R8L; IntBPPX8 { IntBPPX8 = R8L; }
+
+# mv [imm20],r8
+
+:MV Ext8,R8L is op3_5=0b10101 & R8L; Ext8 { Ext8 = R8L; }
+
+# mv [r20],r8
+
+:MV Ptr8,R8L is op3_5=0b10110 & R8L; op3_5=0b00000 & Ptr8 { Ptr8 = R8L; }
+
+# mv [r20++],r8
+# mv [--r20],r8
+
+:MV MemRegIncDec8,R8L is op3_5=0b10110 & R8L; MemRegIncDec8 { MemRegIncDec8 = R8L; }
+
+# mv [r20+off],r8
+
+:MV [R20L+off8],R8L is op3_5=0b10110 & R8L; op3_5=0b10000 & R20L; off8 { wr8(R20L + off8, R8L); }
+:MV [R20L-off8],R8L is op3_5=0b10110 & R8L; op3_5=0b11000 & R20L; off8 { wr8(R20L - off8, R8L); }
+
+# mv [(int)],r8
+
+:MV [IntN20],R8L    is op0_8=0x30; op3_5=0b10111 & R8L; op0_8=0x00; IntN20    { wr8(IntN20, R8L);    }
+:MV [IntBP20],R8L   is             op3_5=0b10111 & R8L; op0_8=0x00; IntBP20   { wr8(IntBP20, R8L);   }
+:MV [IntPX20],R8L   is op0_8=0x34; op3_5=0b10111 & R8L; op0_8=0x00; IntPX20   { wr8(IntPX20, R8L);   }
+:MV [IntBPPX20],R8L is op0_8=0x24; op3_5=0b10111 & R8L; op0_8=0x00; IntBPPX20 { wr8(IntBPPX20, R8L); }
+
+# mv [(int)+off],r8
+
+:MV [IntN20+off8],R8L    is op0_8=0x30; op3_5=0b10111 & R8L; op0_8=0x80; IntN20;    off8 { wr8(IntN20+off8, R8L);    }
+:MV [IntBP20+off8],R8L   is             op3_5=0b10111 & R8L; op0_8=0x80; IntBP20;   off8 { wr8(IntBP20+off8, R8L);   }
+:MV [IntPX20+off8],R8L   is op0_8=0x34; op3_5=0b10111 & R8L; op0_8=0x80; IntPX20;   off8 { wr8(IntPX20+off8, R8L);   }
+:MV [IntBPPX20+off8],R8L is op0_8=0x24; op3_5=0b10111 & R8L; op0_8=0x80; IntBPPX20; off8 { wr8(IntBPPX20+off8, R8L); }
+
+:MV [IntN20-off8],R8L    is op0_8=0x30; op3_5=0b10111 & R8L; op0_8=0xC0; IntN20;    off8 { wr8(IntN20-off8, R8L);    }
+:MV [IntBP20-off8],R8L   is             op3_5=0b10111 & R8L; op0_8=0xC0; IntBP20;   off8 { wr8(IntBP20-off8, R8L);   }
+:MV [IntPX20-off8],R8L   is op0_8=0x34; op3_5=0b10111 & R8L; op0_8=0xC0; IntPX20;   off8 { wr8(IntPX20-off8, R8L);   }
+:MV [IntBPPX20-off8],R8L is op0_8=0x24; op3_5=0b10111 & R8L; op0_8=0xC0; IntBPPX20; off8 { wr8(IntBPPX20-off8, R8L); }
+
+# mv r8,(int)
+
+:MV R8L,IntN8    is op0_8=0x30; op3_5=0b10000 & R8L; IntN8    { R8L = IntN8; }
+:MV R8L,IntBP8   is             op3_5=0b10000 & R8L; IntBP8   { R8L = IntBP8; }
+:MV R8L,IntPX8   is op0_8=0x34; op3_5=0b10000 & R8L; IntPX8   { R8L = IntPX8; }
+:MV R8L,IntBPPX8 is op0_8=0x24; op3_5=0b10000 & R8L; IntBPPX8 { R8L = IntBPPX8; }
+
+# mv (int),(int)
+
+:MV IntN8,IntN8_2     is op0_8=0x32; op0_8=0xC8; IntN8;    IntN8_2  { IntN8 = IntN8_2;     }
+:MV IntBP8,IntN8      is op0_8=0x22; op0_8=0xC8; IntBP8;   IntN8    { IntBP8 = IntN8;      }
+:MV IntPX8,IntN8      is op0_8=0x36; op0_8=0xC8; IntPX8;   IntN8    { IntPX8 = IntN8;      }
+:MV IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xC8; IntBPPX8; IntN8    { IntBPPX8 = IntN8;    }
+:MV IntN8,IntBP8      is op0_8=0x30; op0_8=0xC8; IntN8;    IntBP8   { IntN8 = IntBP8;      }
+:MV IntBP8,IntBP8_2   is             op0_8=0xC8; IntBP8;   IntBP8_2 { IntBP8 = IntBP8_2;   }
+:MV IntPX8,IntBP8     is op0_8=0x34; op0_8=0xC8; IntPX8;   IntBP8   { IntPX8 = IntBP8;     }
+:MV IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xC8; IntBPPX8; IntBP8   { IntBPPX8 = IntBP8;   }
+:MV IntN8,IntPY8      is op0_8=0x33; op0_8=0xC8; IntN8;    IntPY8   { IntN8 = IntPY8;      }
+:MV IntBP8,IntPY8     is op0_8=0x23; op0_8=0xC8; IntBP8;   IntPY8   { IntBP8 = IntPY8;     }
+:MV IntPX8,IntPY8     is op0_8=0x37; op0_8=0xC8; IntPX8;   IntPY8   { IntPX8 = IntPY8;     }
+:MV IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xC8; IntBPPX8; IntPY8   { IntBPPX8 = IntPY8;   }
+:MV IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xC8; IntN8;    IntBPPY8 { IntN8 = IntBPPY8;    }
+:MV IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xC8; IntBP8;   IntBPPY8 { IntBP8 = IntBPPY8;   }
+:MV IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xC8; IntPX8;   IntBPPY8 { IntPX8 = IntBPPY8;   }
+:MV IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xC8; IntBPPX8; IntBPPY8 { IntBPPX8 = IntBPPY8; }
+
+# mv [imm20],(int)
+
+:MV Ext8,IntBP8   is             op0_8=0xD8; Ext8; IntBP8   { Ext8 = IntBP8;   }
+:MV Ext8,IntN8    is op0_8=0x30; op0_8=0xD8; Ext8; IntN8    { Ext8 = IntN8;    }
+:MV Ext8,IntPX8   is op0_8=0x34; op0_8=0xD8; Ext8; IntPX8   { Ext8 = IntPX8;   }
+:MV Ext8,IntBPPX8 is op0_8=0x24; op0_8=0xD8; Ext8; IntBPPX8 { Ext8 = IntBPPX8; }
+
+# mv [r20],(int)
+
+:MV Ptr8,IntN8    is op0_8=0x30; op0_8=0xE8; op3_5=0b00000 & Ptr8; IntN8    { Ptr8 = IntN8;    }
+:MV Ptr8,IntBP8   is             op0_8=0xE8; op3_5=0b00000 & Ptr8; IntBP8   { Ptr8 = IntBP8;   }
+:MV Ptr8,IntPX8   is op0_8=0x34; op0_8=0xE8; op3_5=0b00000 & Ptr8; IntPX8   { Ptr8 = IntPX8;   }
+:MV Ptr8,IntBPPX8 is op0_8=0x24; op0_8=0xE8; op3_5=0b00000 & Ptr8; IntBPPX8 { Ptr8 = IntBPPX8; }
+
+# mv [r20++],(int)
+# mv [--r20],(int)
+
+:MV MemRegIncDec8,IntN8    is op0_8=0x30; op0_8=0xE8; MemRegIncDec8; IntN8    { MemRegIncDec8 = IntN8;    }
+:MV MemRegIncDec8,IntBP8   is             op0_8=0xE8; MemRegIncDec8; IntBP8   { MemRegIncDec8 = IntBP8;   }
+:MV MemRegIncDec8,IntPX8   is op0_8=0x34; op0_8=0xE8; MemRegIncDec8; IntPX8   { MemRegIncDec8 = IntPX8;   }
+:MV MemRegIncDec8,IntBPPX8 is op0_8=0x24; op0_8=0xE8; MemRegIncDec8; IntBPPX8 { MemRegIncDec8 = IntBPPX8; }
+
+# mv [r20+off],(int)
+
+:MV [R20L+off8],IntN8    is op0_8=0x30; op0_8=0xE8; op3_5=0b10000 & R20L; IntN8;    off8 { tmp = R20L + off8; *:1 tmp = IntN8;    }
+:MV [R20L+off8],IntBP8   is             op0_8=0xE8; op3_5=0b10000 & R20L; IntBP8;   off8 { tmp = R20L + off8; *:1 tmp = IntBP8;   }
+:MV [R20L+off8],IntPX8   is op0_8=0x34; op0_8=0xE8; op3_5=0b10000 & R20L; IntPX8;   off8 { tmp = R20L + off8; *:1 tmp = IntPX8;   }
+:MV [R20L+off8],IntBPPX8 is op0_8=0x24; op0_8=0xE8; op3_5=0b10000 & R20L; IntBPPX8; off8 { tmp = R20L + off8; *:1 tmp = IntBPPX8; }
+
+:MV [R20L-off8],IntN8    is op0_8=0x30; op0_8=0xE8; op3_5=0b11000 & R20L; IntN8;    off8 { tmp = R20L - off8; *:1 tmp = IntN8;    }
+:MV [R20L-off8],IntBP8   is             op0_8=0xE8; op3_5=0b11000 & R20L; IntBP8;   off8 { tmp = R20L - off8; *:1 tmp = IntBP8;   }
+:MV [R20L-off8],IntPX8   is op0_8=0x34; op0_8=0xE8; op3_5=0b11000 & R20L; IntPX8;   off8 { tmp = R20L - off8; *:1 tmp = IntPX8;   }
+:MV [R20L-off8],IntBPPX8 is op0_8=0x24; op0_8=0xE8; op3_5=0b11000 & R20L; IntBPPX8; off8 { tmp = R20L - off8; *:1 tmp = IntBPPX8; }
+
+# mv [(int)],(int)
+
+:MV [IntN20],IntN8_2     is op0_8=0x32; op0_8=0xF8; op0_8=0x00; IntN20;    IntN8_2  {  wr8(IntN20, IntN8_2);     }
+:MV [IntBP20],IntN8      is op0_8=0x22; op0_8=0xF8; op0_8=0x00; IntBP20;   IntN8    {  wr8(IntBP20, IntN8);      }
+:MV [IntPX20],IntN8      is op0_8=0x36; op0_8=0xF8; op0_8=0x00; IntPX20;   IntN8    {  wr8(IntPX20, IntN8);      }
+:MV [IntBPPX20],IntN8    is op0_8=0x26; op0_8=0xF8; op0_8=0x00; IntBPPX20; IntN8    {  wr8(IntBPPX20, IntN8);    }
+:MV [IntN20],IntBP8      is op0_8=0x30; op0_8=0xF8; op0_8=0x00; IntN20;    IntBP8   {  wr8(IntN20, IntBP8);      }
+:MV [IntBP20],IntBP8_2   is             op0_8=0xF8; op0_8=0x00; IntBP20;   IntBP8_2 {  wr8(IntBP20, IntBP8_2);   }
+:MV [IntPX20],IntBP8     is op0_8=0x34; op0_8=0xF8; op0_8=0x00; IntPX20;   IntBP8   {  wr8(IntPX20, IntBP8);     }
+:MV [IntBPPX20],IntBP8   is op0_8=0x24; op0_8=0xF8; op0_8=0x00; IntBPPX20; IntBP8   {  wr8(IntBPPX20, IntBP8);   }
+:MV [IntN20],IntPY8      is op0_8=0x33; op0_8=0xF8; op0_8=0x00; IntN20;    IntPY8   {  wr8(IntN20, IntPY8);      }
+:MV [IntBP20],IntPY8     is op0_8=0x23; op0_8=0xF8; op0_8=0x00; IntBP20;   IntPY8   {  wr8(IntBP20, IntPY8);     }
+:MV [IntPX20],IntPY8     is op0_8=0x37; op0_8=0xF8; op0_8=0x00; IntPX20;   IntPY8   {  wr8(IntPX20, IntPY8);     }
+:MV [IntBPPX20],IntPY8   is op0_8=0x27; op0_8=0xF8; op0_8=0x00; IntBPPX20; IntPY8   {  wr8(IntBPPX20, IntPY8);   }
+:MV [IntN20],IntBPPY8    is op0_8=0x31; op0_8=0xF8; op0_8=0x00; IntN20;    IntBPPY8 {  wr8(IntN20, IntBPPY8);    }
+:MV [IntBP20],IntBPPY8   is op0_8=0x21; op0_8=0xF8; op0_8=0x00; IntBP20;   IntBPPY8 {  wr8(IntBP20, IntBPPY8);   }
+:MV [IntPX20],IntBPPY8   is op0_8=0x35; op0_8=0xF8; op0_8=0x00; IntPX20;   IntBPPY8 {  wr8(IntPX20, IntBPPY8);   }
+:MV [IntBPPX20],IntBPPY8 is op0_8=0x25; op0_8=0xF8; op0_8=0x00; IntBPPX20; IntBPPY8 {  wr8(IntBPPX20, IntBPPY8); }
+
+# mv [(int)+off],(int)
+
+:MV [IntN20+off8],IntN8_2     is op0_8=0x32; op0_8=0xF8; op0_8=0x80; IntN20;    IntN8_2;  off8 { wr8(IntN20+off8,IntN8_2);     }
+:MV [IntBP20+off8],IntN8      is op0_8=0x22; op0_8=0xF8; op0_8=0x80; IntBP20;   IntN8;    off8 { wr8(IntBP20+off8,IntN8);      }
+:MV [IntPX20+off8],IntN8      is op0_8=0x36; op0_8=0xF8; op0_8=0x80; IntPX20;   IntN8;    off8 { wr8(IntPX20+off8,IntN8);      }
+:MV [IntBPPX20+off8],IntN8    is op0_8=0x26; op0_8=0xF8; op0_8=0x80; IntBPPX20; IntN8;    off8 { wr8(IntBPPX20+off8,IntN8);    }
+:MV [IntN20+off8],IntBP8      is op0_8=0x30; op0_8=0xF8; op0_8=0x80; IntN20;    IntBP8;   off8 { wr8(IntN20+off8,IntBP8);      }
+:MV [IntBP20+off8],IntBP8_2   is             op0_8=0xF8; op0_8=0x80; IntBP20;   IntBP8_2; off8 { wr8(IntBP20+off8,IntBP8_2);   }
+:MV [IntPX20+off8],IntBP8     is op0_8=0x34; op0_8=0xF8; op0_8=0x80; IntPX20;   IntBP8;   off8 { wr8(IntPX20+off8,IntBP8);     }
+:MV [IntBPPX20+off8],IntBP8   is op0_8=0x24; op0_8=0xF8; op0_8=0x80; IntBPPX20; IntBP8;   off8 { wr8(IntBPPX20+off8,IntBP8);   }
+:MV [IntN20+off8],IntPY8      is op0_8=0x33; op0_8=0xF8; op0_8=0x80; IntN20;    IntPY8;   off8 { wr8(IntN20+off8,IntPY8);      }
+:MV [IntBP20+off8],IntPY8     is op0_8=0x23; op0_8=0xF8; op0_8=0x80; IntBP20;   IntPY8;   off8 { wr8(IntBP20+off8,IntPY8);     }
+:MV [IntPX20+off8],IntPY8     is op0_8=0x37; op0_8=0xF8; op0_8=0x80; IntPX20;   IntPY8;   off8 { wr8(IntPX20+off8,IntPY8);     }
+:MV [IntBPPX20+off8],IntPY8   is op0_8=0x27; op0_8=0xF8; op0_8=0x80; IntBPPX20; IntPY8;   off8 { wr8(IntBPPX20+off8,IntPY8);   }
+:MV [IntN20+off8],IntBPPY8    is op0_8=0x31; op0_8=0xF8; op0_8=0x80; IntN20;    IntBPPY8; off8 { wr8(IntN20+off8,IntBPPY8);    }
+:MV [IntBP20+off8],IntBPPY8   is op0_8=0x21; op0_8=0xF8; op0_8=0x80; IntBP20;   IntBPPY8; off8 { wr8(IntBP20+off8,IntBPPY8);   }
+:MV [IntPX20+off8],IntBPPY8   is op0_8=0x35; op0_8=0xF8; op0_8=0x80; IntPX20;   IntBPPY8; off8 { wr8(IntPX20+off8,IntBPPY8);   }
+:MV [IntBPPX20+off8],IntBPPY8 is op0_8=0x25; op0_8=0xF8; op0_8=0x80; IntBPPX20; IntBPPY8; off8 { wr8(IntBPPX20+off8,IntBPPY8); }
+
+:MV [IntN20-off8],IntN8_2     is op0_8=0x32; op0_8=0xF8; op0_8=0xC0; IntN20;    IntN8_2;  off8 { wr8(IntN20-off8, IntN8_2);     }
+:MV [IntBP20-off8],IntN8      is op0_8=0x22; op0_8=0xF8; op0_8=0xC0; IntBP20;   IntN8;    off8 { wr8(IntBP20-off8, IntN8);      }
+:MV [IntPX20-off8],IntN8      is op0_8=0x36; op0_8=0xF8; op0_8=0xC0; IntPX20;   IntN8;    off8 { wr8(IntPX20-off8, IntN8);      }
+:MV [IntBPPX20-off8],IntN8    is op0_8=0x26; op0_8=0xF8; op0_8=0xC0; IntBPPX20; IntN8;    off8 { wr8(IntBPPX20-off8, IntN8);    }
+:MV [IntN20-off8],IntBP8      is op0_8=0x30; op0_8=0xF8; op0_8=0xC0; IntN20;    IntBP8;   off8 { wr8(IntN20-off8, IntBP8);      }
+:MV [IntBP20-off8],IntBP8_2   is             op0_8=0xF8; op0_8=0xC0; IntBP20;   IntBP8_2; off8 { wr8(IntBP20-off8, IntBP8_2);   }
+:MV [IntPX20-off8],IntBP8     is op0_8=0x34; op0_8=0xF8; op0_8=0xC0; IntPX20;   IntBP8;   off8 { wr8(IntPX20-off8, IntBP8);     }
+:MV [IntBPPX20-off8],IntBP8   is op0_8=0x24; op0_8=0xF8; op0_8=0xC0; IntBPPX20; IntBP8;   off8 { wr8(IntBPPX20-off8, IntBP8);   }
+:MV [IntN20-off8],IntPY8      is op0_8=0x33; op0_8=0xF8; op0_8=0xC0; IntN20;    IntPY8;   off8 { wr8(IntN20-off8, IntPY8);      }
+:MV [IntBP20-off8],IntPY8     is op0_8=0x23; op0_8=0xF8; op0_8=0xC0; IntBP20;   IntPY8;   off8 { wr8(IntBP20-off8, IntPY8);     }
+:MV [IntPX20-off8],IntPY8     is op0_8=0x37; op0_8=0xF8; op0_8=0xC0; IntPX20;   IntPY8;   off8 { wr8(IntPX20-off8, IntPY8);     }
+:MV [IntBPPX20-off8],IntPY8   is op0_8=0x27; op0_8=0xF8; op0_8=0xC0; IntBPPX20; IntPY8;   off8 { wr8(IntBPPX20-off8, IntPY8);   }
+:MV [IntN20-off8],IntBPPY8    is op0_8=0x31; op0_8=0xF8; op0_8=0xC0; IntN20;    IntBPPY8; off8 { wr8(IntN20-off8, IntBPPY8);    }
+:MV [IntBP20-off8],IntBPPY8   is op0_8=0x21; op0_8=0xF8; op0_8=0xC0; IntBP20;   IntBPPY8; off8 { wr8(IntBP20-off8, IntBPPY8);   }
+:MV [IntPX20-off8],IntBPPY8   is op0_8=0x35; op0_8=0xF8; op0_8=0xC0; IntPX20;   IntBPPY8; off8 { wr8(IntPX20-off8, IntBPPY8);   }
+:MV [IntBPPX20-off8],IntBPPY8 is op0_8=0x25; op0_8=0xF8; op0_8=0xC0; IntBPPX20; IntBPPY8; off8 { wr8(IntBPPX20-off8, IntBPPY8); }
+
+# mv r8,[imm20]
+
+:MV R8L,Ext8 is op3_5=0x11 & R8L; Ext8 { R8L = Ext8; }
+
+# mv (int),[imm20]
+
+:MV IntN8,Ext8    is op0_8=0x30; op0_8=0xD0; IntN8;    Ext8 { IntN8 = Ext8;    }
+:MV IntBP8,Ext8   is             op0_8=0xD0; IntBP8;   Ext8 { IntBP8 = Ext8;   }
+:MV IntPX8,Ext8   is op0_8=0x34; op0_8=0xD0; IntPX8;   Ext8 { IntPX8 = Ext8;   }
+:MV IntBPPX8,Ext8 is op0_8=0x24; op0_8=0xD0; IntBPPX8; Ext8 { IntBPPX8 = Ext8; }
+
+# mv r8,[r20]
+
+:MV R8L,Ptr8 is op3_5=0b10010 & R8L; op3_5=0b00000 & Ptr8 { R8L = Ptr8; }
+
+# mv (int),[r20]
+
+:MV IntN8,Ptr8    is op0_8=0x30; op0_8=0xE0; op3_5=0b0000 & Ptr8; IntN8    { IntN8 = Ptr8;    }
+:MV IntBP8,Ptr8   is             op0_8=0xE0; op3_5=0b0000 & Ptr8; IntBP8   { IntBP8 = Ptr8;   }
+:MV IntPX8,Ptr8   is op0_8=0x34; op0_8=0xE0; op3_5=0b0000 & Ptr8; IntPX8   { IntPX8 = Ptr8;   }
+:MV IntBPPX8,Ptr8 is op0_8=0x24; op0_8=0xE0; op3_5=0b0000 & Ptr8; IntBPPX8 { IntBPPX8 = Ptr8; }
+
+### 1 Byte Transmission Command No. 2
+
+# mv r8,[r20++]
+# mv r8,[--r20]
+
+:MV R8L,MemRegIncDec8 is op3_5=0b10010 & R8L; MemRegIncDec8 { R8L = MemRegIncDec8; }
+
+# mv (int),[r20++]
+# mv (int),[--r20]
+
+:MV IntN8,MemRegIncDec8    is op0_8=0x30; op0_8=0xE0; MemRegIncDec8; IntN8    { IntN8 = MemRegIncDec8;    }
+:MV IntBP8,MemRegIncDec8   is             op0_8=0xE0; MemRegIncDec8; IntBP8   { IntBP8 = MemRegIncDec8;   }
+:MV IntPX8,MemRegIncDec8   is op0_8=0x34; op0_8=0xE0; MemRegIncDec8; IntPX8   { IntPX8 = MemRegIncDec8;   }
+:MV IntBPPX8,MemRegIncDec8 is op0_8=0x24; op0_8=0xE0; MemRegIncDec8; IntBPPX8 { IntBPPX8 = MemRegIncDec8; }
+
+# mv r8,[r20+n]
+
+:MV R8L,[R20L+off8] is op3_5=0b10010 & R8L; op3_5=0b10000 & R20L; off8 { tmp = R20L + off8; R8L = *:1 tmp; }
+:MV R8L,[R20L-off8] is op3_5=0b10010 & R8L; op3_5=0b11000 & R20L; off8 { tmp = R20L - off8; R8L = *:1 tmp; }
+
+# mv (int),[r20+n]
+
+:MV IntN8,[R20L+off8]    is op0_8=0x30; op0_8=0xE0; op3_5=0b10000 & R20L; IntN8;    off8 { tmp = R20L + off8; IntN8 = *:1 tmp;    }
+:MV IntBP8,[R20L+off8]   is             op0_8=0xE0; op3_5=0b10000 & R20L; IntBP8;   off8 { tmp = R20L + off8; IntBP8 = *:1 tmp;   }
+:MV IntPX8,[R20L+off8]   is op0_8=0x34; op0_8=0xE0; op3_5=0b10000 & R20L; IntPX8;   off8 { tmp = R20L + off8; IntPX8 = *:1 tmp;   }
+:MV IntBPPX8,[R20L+off8] is op0_8=0x24; op0_8=0xE0; op3_5=0b10000 & R20L; IntBPPX8; off8 { tmp = R20L + off8; IntBPPX8 = *:1 tmp; }
+
+:MV IntN8,[R20L-off8]    is op0_8=0x30; op0_8=0xE0; op3_5=0b11000 & R20L; IntN8;    off8 { tmp = R20L - off8; IntN8 = *:1 tmp;    }
+:MV IntBP8,[R20L-off8]   is             op0_8=0xE0; op3_5=0b11000 & R20L; IntBP8;   off8 { tmp = R20L - off8; IntBP8 = *:1 tmp;   }
+:MV IntPX8,[R20L-off8]   is op0_8=0x34; op0_8=0xE0; op3_5=0b11000 & R20L; IntPX8;   off8 { tmp = R20L - off8; IntPX8 = *:1 tmp;   }
+:MV IntBPPX8,[R20L-off8] is op0_8=0x24; op0_8=0xE0; op3_5=0b11000 & R20L; IntBPPX8; off8 { tmp = R20L - off8; IntBPPX8 = *:1 tmp; }
+
+# mv r8,[(int)]
+
+:MV R8L,[IntN20]    is op0_8=0x30; op3_5=0b10011 & R8L; op0_8=0x00; IntN20    { rd8(R8L, IntN20);    }
+:MV R8L,[IntBP20]   is             op3_5=0b10011 & R8L; op0_8=0x00; IntBP20   { rd8(R8L, IntBP20);   }
+:MV R8L,[IntPX20]   is op0_8=0x34; op3_5=0b10011 & R8L; op0_8=0x00; IntPX20   { rd8(R8L, IntPX20);   }
+:MV R8L,[IntBPPX20] is op0_8=0x24; op3_5=0b10011 & R8L; op0_8=0x00; IntBPPX20 { rd8(R8L, IntBPPX20); }
+
+# mv (int),[(int)]
+
+:MV IntN8,[IntN20]       is op0_8=0x32; op0_8=0xF0; op0_8=0x00; IntN8;    IntN20    { rd8(IntN8, IntN20);       }
+:MV IntBP8,[IntN20]      is op0_8=0x22; op0_8=0xF0; op0_8=0x00; IntBP8;   IntN20    { rd8(IntBP8, IntN20);      }
+:MV IntPX8,[IntN20]      is op0_8=0x36; op0_8=0xF0; op0_8=0x00; IntPX8;   IntN20    { rd8(IntPX8, IntN20);      }
+:MV IntBPPX8,[IntN20]    is op0_8=0x26; op0_8=0xF0; op0_8=0x00; IntBPPX8; IntN20    { rd8(IntBPPX8, IntN20);    }
+:MV IntN8,[IntBP20]      is op0_8=0x30; op0_8=0xF0; op0_8=0x00; IntN8;    IntBP20   { rd8(IntN8, IntBP20);      }
+:MV IntBP8,[IntBP20]     is             op0_8=0xF0; op0_8=0x00; IntBP8;   IntBP20   { rd8(IntBP8, IntBP20);     }
+:MV IntPX8,[IntBP20]     is op0_8=0x34; op0_8=0xF0; op0_8=0x00; IntPX8;   IntBP20   { rd8(IntPX8, IntBP20);     }
+:MV IntBPPX8,[IntBP20]   is op0_8=0x24; op0_8=0xF0; op0_8=0x00; IntBPPX8; IntBP20   { rd8(IntBPPX8, IntBP20);   }
+:MV IntN8,[IntPY20]      is op0_8=0x33; op0_8=0xF0; op0_8=0x00; IntN8;    IntPY20   { rd8(IntN8, IntPY20);      }
+:MV IntBP8,[IntPY20]     is op0_8=0x23; op0_8=0xF0; op0_8=0x00; IntBP8;   IntPY20   { rd8(IntBP8, IntPY20);     }
+:MV IntPX8,[IntPY20]     is op0_8=0x37; op0_8=0xF0; op0_8=0x00; IntPX8;   IntPY20   { rd8(IntPX8, IntPY20);     }
+:MV IntBPPX8,[IntPY20]   is op0_8=0x27; op0_8=0xF0; op0_8=0x00; IntBPPX8; IntPY20   { rd8(IntBPPX8, IntPY20);   }
+:MV IntN8,[IntBPPY20]    is op0_8=0x31; op0_8=0xF0; op0_8=0x00; IntN8;    IntBPPY20 { rd8(IntN8, IntBPPY20);    }
+:MV IntBP8,[IntBPPY20]   is op0_8=0x21; op0_8=0xF0; op0_8=0x00; IntBP8;   IntBPPY20 { rd8(IntBP8, IntBPPY20);   }
+:MV IntPX8,[IntBPPY20]   is op0_8=0x35; op0_8=0xF0; op0_8=0x00; IntPX8;   IntBPPY20 { rd8(IntPX8, IntBPPY20);   }
+:MV IntBPPX8,[IntBPPY20] is op0_8=0x25; op0_8=0xF0; op0_8=0x00; IntBPPX8; IntBPPY20 { rd8(IntBPPX8, IntBPPY20); }
+
+# mv r20,[(int)+off]
+
+:MV R8L,[IntN20+off8]    is op0_8=0x30; op3_5=0b10011 & R8L; op0_8=0x80; IntN20;    off8 { rd8(R8L, IntN20+off8);    }
+:MV R8L,[IntBP20+off8]   is             op3_5=0b10011 & R8L; op0_8=0x80; IntBP20;   off8 { rd8(R8L, IntBP20+off8);   }
+:MV R8L,[IntPX20+off8]   is op0_8=0x34; op3_5=0b10011 & R8L; op0_8=0x80; IntPX20;   off8 { rd8(R8L, IntPX20+off8);   }
+:MV R8L,[IntBPPX20+off8] is op0_8=0x24; op3_5=0b10011 & R8L; op0_8=0x80; IntBPPX20; off8 { rd8(R8L, IntBPPX20+off8); }
+
+:MV R8L,[IntN20-off8]    is op0_8=0x30; op3_5=0b10011 & R8L; op0_8=0xC0; IntN20;    off8 { rd8(R8L, IntN20-off8);    }
+:MV R8L,[IntBP20-off8]   is             op3_5=0b10011 & R8L; op0_8=0xC0; IntBP20;   off8 { rd8(R8L, IntBP20-off8);   }
+:MV R8L,[IntPX20-off8]   is op0_8=0x34; op3_5=0b10011 & R8L; op0_8=0xC0; IntPX20;   off8 { rd8(R8L, IntPX20-off8);   }
+:MV R8L,[IntBPPX20-off8] is op0_8=0x24; op3_5=0b10011 & R8L; op0_8=0xC0; IntBPPX20; off8 { rd8(R8L, IntBPPX20-off8); }
+
+# mv (int),[(int)+off]
+
+:MV IntN8,[IntN20+off8]       is op0_8=0x32; op0_8=0xF0; op0_8=0x80; IntN8;    IntN20;    off8 { rd8(IntN8, IntN20+off8);       }
+:MV IntBP8,[IntN20+off8]      is op0_8=0x22; op0_8=0xF0; op0_8=0x80; IntBP8;   IntN20;    off8 { rd8(IntBP8, IntN20+off8);      }
+:MV IntPX8,[IntN20+off8]      is op0_8=0x36; op0_8=0xF0; op0_8=0x80; IntPX8;   IntN20;    off8 { rd8(IntPX8, IntN20+off8);      }
+:MV IntBPPX8,[IntN20+off8]    is op0_8=0x26; op0_8=0xF0; op0_8=0x80; IntBPPX8; IntN20;    off8 { rd8(IntBPPX8, IntN20+off8);    }
+:MV IntN8,[IntBP20+off8]      is op0_8=0x30; op0_8=0xF0; op0_8=0x80; IntN8;    IntBP20;   off8 { rd8(IntN8, IntBP20+off8);      }
+:MV IntBP8,[IntBP20+off8]     is             op0_8=0xF0; op0_8=0x80; IntBP8;   IntBP20;   off8 { rd8(IntBP8, IntBP20+off8);     }
+:MV IntPX8,[IntBP20+off8]     is op0_8=0x34; op0_8=0xF0; op0_8=0x80; IntPX8;   IntBP20;   off8 { rd8(IntPX8, IntBP20+off8);     }
+:MV IntBPPX8,[IntBP20+off8]   is op0_8=0x24; op0_8=0xF0; op0_8=0x80; IntBPPX8; IntBP20;   off8 { rd8(IntBPPX8, IntBP20+off8);   }
+:MV IntN8,[IntPY20+off8]      is op0_8=0x33; op0_8=0xF0; op0_8=0x80; IntN8;    IntPY20;   off8 { rd8(IntN8, IntPY20+off8);      }
+:MV IntBP8,[IntPY20+off8]     is op0_8=0x23; op0_8=0xF0; op0_8=0x80; IntBP8;   IntPY20;   off8 { rd8(IntBP8, IntPY20+off8);     }
+:MV IntPX8,[IntPY20+off8]     is op0_8=0x37; op0_8=0xF0; op0_8=0x80; IntPX8;   IntPY20;   off8 { rd8(IntPX8, IntPY20+off8);     }
+:MV IntBPPX8,[IntPY20+off8]   is op0_8=0x27; op0_8=0xF0; op0_8=0x80; IntBPPX8; IntPY20;   off8 { rd8(IntBPPX8, IntPY20+off8);   }
+:MV IntN8,[IntBPPY20+off8]    is op0_8=0x31; op0_8=0xF0; op0_8=0x80; IntN8;    IntBPPY20; off8 { rd8(IntN8, IntBPPY20+off8);    }
+:MV IntBP8,[IntBPPY20+off8]   is op0_8=0x21; op0_8=0xF0; op0_8=0x80; IntBP8;   IntBPPY20; off8 { rd8(IntBP8, IntBPPY20+off8);   }
+:MV IntPX8,[IntBPPY20+off8]   is op0_8=0x35; op0_8=0xF0; op0_8=0x80; IntPX8;   IntBPPY20; off8 { rd8(IntPX8, IntBPPY20+off8);   }
+:MV IntBPPX8,[IntBPPY20+off8] is op0_8=0x25; op0_8=0xF0; op0_8=0x80; IntBPPX8; IntBPPY20; off8 { rd8(IntBPPX8, IntBPPY20+off8); }
+
+:MV IntN8,[IntN20-off8]       is op0_8=0x32; op0_8=0xF0; op0_8=0xC0; IntN8;    IntN20;    off8 { rd8(IntN8, IntN20-off8);       }
+:MV IntBP8,[IntN20-off8]      is op0_8=0x22; op0_8=0xF0; op0_8=0xC0; IntBP8;   IntN20;    off8 { rd8(IntBP8, IntN20-off8);      }
+:MV IntPX8,[IntN20-off8]      is op0_8=0x36; op0_8=0xF0; op0_8=0xC0; IntPX8;   IntN20;    off8 { rd8(IntPX8, IntN20-off8);      }
+:MV IntBPPX8,[IntN20-off8]    is op0_8=0x26; op0_8=0xF0; op0_8=0xC0; IntBPPX8; IntN20;    off8 { rd8(IntBPPX8, IntN20-off8);    }
+:MV IntN8,[IntBP20-off8]      is op0_8=0x30; op0_8=0xF0; op0_8=0xC0; IntN8;    IntBP20;   off8 { rd8(IntN8, IntBP20-off8);      }
+:MV IntBP8,[IntBP20-off8]     is             op0_8=0xF0; op0_8=0xC0; IntBP8;   IntBP20;   off8 { rd8(IntBP8, IntBP20-off8);     }
+:MV IntPX8,[IntBP20-off8]     is op0_8=0x34; op0_8=0xF0; op0_8=0xC0; IntPX8;   IntBP20;   off8 { rd8(IntPX8, IntBP20-off8);     }
+:MV IntBPPX8,[IntBP20-off8]   is op0_8=0x24; op0_8=0xF0; op0_8=0xC0; IntBPPX8; IntBP20;   off8 { rd8(IntBPPX8, IntBP20-off8);   }
+:MV IntN8,[IntPY20-off8]      is op0_8=0x33; op0_8=0xF0; op0_8=0xC0; IntN8;    IntPY20;   off8 { rd8(IntN8, IntPY20-off8);      }
+:MV IntBP8,[IntPY20-off8]     is op0_8=0x23; op0_8=0xF0; op0_8=0xC0; IntBP8;   IntPY20;   off8 { rd8(IntBP8, IntPY20-off8);     }
+:MV IntPX8,[IntPY20-off8]     is op0_8=0x37; op0_8=0xF0; op0_8=0xC0; IntPX8;   IntPY20;   off8 { rd8(IntPX8, IntPY20-off8);     }
+:MV IntBPPX8,[IntPY20-off8]   is op0_8=0x27; op0_8=0xF0; op0_8=0xC0; IntBPPX8; IntPY20;   off8 { rd8(IntBPPX8, IntPY20-off8);   }
+:MV IntN8,[IntBPPY20-off8]    is op0_8=0x31; op0_8=0xF0; op0_8=0xC0; IntN8;    IntBPPY20; off8 { rd8(IntN8, IntBPPY20-off8);    }
+:MV IntBP8,[IntBPPY20-off8]   is op0_8=0x21; op0_8=0xF0; op0_8=0xC0; IntBP8;   IntBPPY20; off8 { rd8(IntBP8, IntBPPY20-off8);   }
+:MV IntPX8,[IntBPPY20-off8]   is op0_8=0x35; op0_8=0xF0; op0_8=0xC0; IntPX8;   IntBPPY20; off8 { rd8(IntPX8, IntBPPY20-off8);   }
+:MV IntBPPX8,[IntBPPY20-off8] is op0_8=0x25; op0_8=0xF0; op0_8=0xC0; IntBPPX8; IntBPPY20; off8 { rd8(IntBPPX8, IntBPPY20-off8); }
+
+### 2 Byte Transmission Command No. 1
+
+# mv r16,imm16
+
+:MV R16L,imm16 is op3_5=0x01 & R16L; imm16 { R16L = imm16; }
+
+# mvw (int),imm16
+
+:MVW IntN16,imm16    is op0_8=0x30; op0_8=0xCD; IntN16;    imm16 { IntN16 = imm16;    }
+:MVW IntBP16,imm16   is             op0_8=0xCD; IntBP16;   imm16 { IntBP16 = imm16;   }
+:MVW IntPX16,imm16   is op0_8=0x34; op0_8=0xCD; IntPX16;   imm16 { IntPX16 = imm16;   }
+:MVW IntBPPX16,imm16 is op0_8=0x24; op0_8=0xCD; IntBPPX16; imm16 { IntBPPX16 = imm16; }
+
+# mv r16,r16
+
+:MV R16H,R16L is op0_8=0xFD; R16H & R16L { R16H = R16L; }
+
+# mv r16,r20 ???
+
+:MV R16H,R20L is op0_8=0xFD; R16H & R20L { R16H = R20L[0, 15]; }
+
+# mv (int),r16
+
+:MV IntN16,R16L    is op0_8=0x30; op3_5=0b10100 & R16L; IntN16    { IntN16 = R16L;    }
+:MV IntBP16,R16L   is             op3_5=0b10100 & R16L; IntBP16   { IntBP16 = R16L;   }
+:MV IntPX16,R16L   is op0_8=0x34; op3_5=0b10100 & R16L; IntPX16   { IntPX16 = R16L;   }
+:MV IntBPPX16,R16L is op0_8=0x24; op3_5=0b10100 & R16L; IntBPPX16 { IntBPPX16 = R16L; }
+
+# mv [imm20],r16
+
+:MV Ext16,R16L is op3_5=0b10101 & R16L; Ext16 { Ext16 = R16L; }
+
+# mv [r20],r16
+
+:MV Ptr16,R16L is op3_5=0b10110 & R16L; op3_5=0b00000 & Ptr16 { Ptr16 = R16L; }
+
+# mv [r20++],r16
+# mv [--r20],r16
+
+:MV MemRegIncDec16,R16L is op3_5=0b10110 & R16L; MemRegIncDec16 { MemRegIncDec16 = R16L; }
+
+# mv [r20+off],r16
+
+:MV [R20L+off8],R16L is op3_5=0b10110 & R16L; op3_5=0b10000 & R20L; off8 { wr16(R20L + off8, R16L); }
+:MV [R20L-off8],R16L is op3_5=0b10110 & R16L; op3_5=0b11000 & R20L; off8 { wr16(R20L - off8, R16L); }
+
+# mv [(int)],r16
+
+:MV [IntN20],R16L    is op0_8=0x30; op3_5=0b10111 & R16L; op0_8=0x00; IntN20    { wr16(IntN20, R16L);    }
+:MV [IntBP20],R16L   is             op3_5=0b10111 & R16L; op0_8=0x00; IntBP20   { wr16(IntBP20, R16L);   }
+:MV [IntPX20],R16L   is op0_8=0x34; op3_5=0b10111 & R16L; op0_8=0x00; IntPX20   { wr16(IntPX20, R16L);   }
+:MV [IntBPPX20],R16L is op0_8=0x24; op3_5=0b10111 & R16L; op0_8=0x00; IntBPPX20 { wr16(IntBPPX20, R16L); }
+
+# mv [(int)+off],r16
+
+:MV [IntN20+off8],R16L    is op0_8=0x30; op3_5=0b10111 & R16L; op0_8=0x80; IntN20;    off8 { wr16(IntN20+off8, R16L);    }
+:MV [IntBP20+off8],R16L   is             op3_5=0b10111 & R16L; op0_8=0x80; IntBP20;   off8 { wr16(IntBP20+off8, R16L);   }
+:MV [IntPX20+off8],R16L   is op0_8=0x34; op3_5=0b10111 & R16L; op0_8=0x80; IntPX20;   off8 { wr16(IntPX20+off8, R16L);   }
+:MV [IntBPPX20+off8],R16L is op0_8=0x24; op3_5=0b10111 & R16L; op0_8=0x80; IntBPPX20; off8 { wr16(IntBPPX20+off8, R16L); }
+
+:MV [IntN20-off8],R16L    is op0_8=0x30; op3_5=0b10111 & R16L; op0_8=0xC0; IntN20;    off8 { wr16(IntN20-off8, R16L);    }
+:MV [IntBP20-off8],R16L   is             op3_5=0b10111 & R16L; op0_8=0xC0; IntBP20;   off8 { wr16(IntBP20-off8, R16L);   }
+:MV [IntPX20-off8],R16L   is op0_8=0x34; op3_5=0b10111 & R16L; op0_8=0xC0; IntPX20;   off8 { wr16(IntPX20-off8, R16L);   }
+:MV [IntBPPX20-off8],R16L is op0_8=0x24; op3_5=0b10111 & R16L; op0_8=0xC0; IntBPPX20; off8 { wr16(IntBPPX20-off8, R16L); }
+
+# mv r16,(int)
+
+:MV R16L,IntN16    is op0_8=0x30; op3_5=0b10000 & R16L; IntN16    { R16L = IntN16;    }
+:MV R16L,IntBP16   is             op3_5=0b10000 & R16L; IntBP16   { R16L = IntBP16;   }
+:MV R16L,IntPX16   is op0_8=0x34; op3_5=0b10000 & R16L; IntPX16   { R16L = IntPX16;   }
+:MV R16L,IntBPPX16 is op0_8=0x24; op3_5=0b10000 & R16L; IntBPPX16 { R16L = IntBPPX16; }
+
+# mvw (int),(int)
+
+:MVW IntN16,IntN16_2     is op0_8=0x32; op0_8=0xC9; IntN16;    IntN16_2  { IntN16 = IntN16_2;     }
+:MVW IntBP16,IntN16      is op0_8=0x22; op0_8=0xC9; IntBP16;   IntN16    { IntBP16 = IntN16;      }
+:MVW IntPX16,IntN16      is op0_8=0x36; op0_8=0xC9; IntPX16;   IntN16    { IntPX16 = IntN16;      }
+:MVW IntBPPX16,IntN16    is op0_8=0x26; op0_8=0xC9; IntBPPX16; IntN16    { IntBPPX16 = IntN16;    }
+:MVW IntN16,IntBP16      is op0_8=0x30; op0_8=0xC9; IntN16;    IntBP16   { IntN16 = IntBP16;      }
+:MVW IntBP16,IntBP16_2   is             op0_8=0xC9; IntBP16;   IntBP16_2 { IntBP16 = IntBP16_2;   }
+:MVW IntPX16,IntBP16     is op0_8=0x34; op0_8=0xC9; IntPX16;   IntBP16   { IntPX16 = IntBP16;     }
+:MVW IntBPPX16,IntBP16   is op0_8=0x24; op0_8=0xC9; IntBPPX16; IntBP16   { IntBPPX16 = IntBP16;   }
+:MVW IntN16,IntPY16      is op0_8=0x33; op0_8=0xC9; IntN16;    IntPY16   { IntN16 = IntPY16;      }
+:MVW IntBP16,IntPY16     is op0_8=0x23; op0_8=0xC9; IntBP16;   IntPY16   { IntBP16 = IntPY16;     }
+:MVW IntPX16,IntPY16     is op0_8=0x37; op0_8=0xC9; IntPX16;   IntPY16   { IntPX16 = IntPY16;     }
+:MVW IntBPPX16,IntPY16   is op0_8=0x27; op0_8=0xC9; IntBPPX16; IntPY16   { IntBPPX16 = IntPY16;   }
+:MVW IntN16,IntBPPY16    is op0_8=0x31; op0_8=0xC9; IntN16;    IntBPPY16 { IntN16 = IntBPPY16;    }
+:MVW IntBP16,IntBPPY16   is op0_8=0x21; op0_8=0xC9; IntBP16;   IntBPPY16 { IntBP16 = IntBPPY16;   }
+:MVW IntPX16,IntBPPY16   is op0_8=0x35; op0_8=0xC9; IntPX16;   IntBPPY16 { IntPX16 = IntBPPY16;   }
+:MVW IntBPPX16,IntBPPY16 is op0_8=0x25; op0_8=0xC9; IntBPPX16; IntBPPY16 { IntBPPX16 = IntBPPY16; }
+
+# mvw [imm20],(int)
+
+:MVW Ext16,IntBP16   is             op0_8=0xD9; Ext16; IntBP16   { Ext16 = IntBP16;   }
+:MVW Ext16,IntN16    is op0_8=0x30; op0_8=0xD9; Ext16; IntN16    { Ext16 = IntN16;    }
+:MVW Ext16,IntPX16   is op0_8=0x34; op0_8=0xD9; Ext16; IntPX16   { Ext16 = IntPX16;   }
+:MVW Ext16,IntBPPX16 is op0_8=0x24; op0_8=0xD9; Ext16; IntBPPX16 { Ext16 = IntBPPX16; }
+
+# mvw [r20],(int)
+
+:MVW Ptr16,IntN16    is op0_8=0x30; op0_8=0xE9; op3_5=0b00000 & Ptr16; IntN16    { Ptr16 = IntN16;    }
+:MVW Ptr16,IntBP16   is             op0_8=0xE9; op3_5=0b00000 & Ptr16; IntBP16   { Ptr16 = IntBP16;   }
+:MVW Ptr16,IntPX16   is op0_8=0x34; op0_8=0xE9; op3_5=0b00000 & Ptr16; IntPX16   { Ptr16 = IntPX16;   }
+:MVW Ptr16,IntBPPX16 is op0_8=0x24; op0_8=0xE9; op3_5=0b00000 & Ptr16; IntBPPX16 { Ptr16 = IntBPPX16; }
+
+# mvw [r20++],(int)
+# mvw [--r20],(int)
+
+:MVW MemRegIncDec16,IntN16    is op0_8=0x30; op0_8=0xE9; MemRegIncDec16; IntN16    { MemRegIncDec16 = IntN16;    }
+:MVW MemRegIncDec16,IntBP16   is             op0_8=0xE9; MemRegIncDec16; IntBP16   { MemRegIncDec16 = IntBP16;   }
+:MVW MemRegIncDec16,IntPX16   is op0_8=0x34; op0_8=0xE9; MemRegIncDec16; IntPX16   { MemRegIncDec16 = IntPX16;   }
+:MVW MemRegIncDec16,IntBPPX16 is op0_8=0x24; op0_8=0xE9; MemRegIncDec16; IntBPPX16 { MemRegIncDec16 = IntBPPX16; }
+
+# mvw [r20+off],(int)
+
+:MVW [R20L+off8],IntN16    is op0_8=0x30; op0_8=0xE9; op3_5=0b10000 & R20L; IntN16;    off8 { wr16(R20L+off8, IntN16);    }
+:MVW [R20L+off8],IntBP16   is             op0_8=0xE9; op3_5=0b10000 & R20L; IntBP16;   off8 { wr16(R20L+off8, IntBP16);   }
+:MVW [R20L+off8],IntPX16   is op0_8=0x34; op0_8=0xE9; op3_5=0b10000 & R20L; IntPX16;   off8 { wr16(R20L+off8, IntPX16);   }
+:MVW [R20L+off8],IntBPPX16 is op0_8=0x24; op0_8=0xE9; op3_5=0b10000 & R20L; IntBPPX16; off8 { wr16(R20L+off8, IntBPPX16); }
+
+:MVW [R20L-off8],IntN16    is op0_8=0x30; op0_8=0xE9; op3_5=0b11000 & R20L; IntN16;    off8 { wr16(R20L-off8, IntN16);    }
+:MVW [R20L-off8],IntBP16   is             op0_8=0xE9; op3_5=0b11000 & R20L; IntBP16;   off8 { wr16(R20L-off8, IntBP16);   }
+:MVW [R20L-off8],IntPX16   is op0_8=0x34; op0_8=0xE9; op3_5=0b11000 & R20L; IntPX16;   off8 { wr16(R20L-off8, IntPX16);   }
+:MVW [R20L-off8],IntBPPX16 is op0_8=0x24; op0_8=0xE9; op3_5=0b11000 & R20L; IntBPPX16; off8 { wr16(R20L-off8, IntBPPX16); }
+
+# mvw [(int)],(int)
+
+:MVW [IntN20],IntN16_2     is op0_8=0x32; op0_8=0xF9; op0_8=0x00; IntN20;    IntN16_2  { wr16(IntN20, IntN16_2);     }
+:MVW [IntBP20],IntN16      is op0_8=0x22; op0_8=0xF9; op0_8=0x00; IntBP20;   IntN16    { wr16(IntBP20, IntN16);      }
+:MVW [IntPX20],IntN16      is op0_8=0x36; op0_8=0xF9; op0_8=0x00; IntPX20;   IntN16    { wr16(IntPX20, IntN16);      }
+:MVW [IntBPPX20],IntN16    is op0_8=0x26; op0_8=0xF9; op0_8=0x00; IntBPPX20; IntN16    { wr16(IntBPPX20, IntN16);    }
+:MVW [IntN20],IntBP16      is op0_8=0x30; op0_8=0xF9; op0_8=0x00; IntN20;    IntBP16   { wr16(IntN20, IntBP16);      }
+:MVW [IntBP20],IntBP16_2   is             op0_8=0xF9; op0_8=0x00; IntBP20;   IntBP16_2 { wr16(IntBP20, IntBP16_2);   }
+:MVW [IntPX20],IntBP16     is op0_8=0x34; op0_8=0xF9; op0_8=0x00; IntPX20;   IntBP16   { wr16(IntPX20, IntBP16);     }
+:MVW [IntBPPX20],IntBP16   is op0_8=0x24; op0_8=0xF9; op0_8=0x00; IntBPPX20; IntBP16   { wr16(IntBPPX20, IntBP16);   }
+:MVW [IntN20],IntPY16      is op0_8=0x33; op0_8=0xF9; op0_8=0x00; IntN20;    IntPY16   { wr16(IntN20, IntPY16);      }
+:MVW [IntBP20],IntPY16     is op0_8=0x23; op0_8=0xF9; op0_8=0x00; IntBP20;   IntPY16   { wr16(IntBP20, IntPY16);     }
+:MVW [IntPX20],IntPY16     is op0_8=0x37; op0_8=0xF9; op0_8=0x00; IntPX20;   IntPY16   { wr16(IntPX20, IntPY16);     }
+:MVW [IntBPPX20],IntPY16   is op0_8=0x27; op0_8=0xF9; op0_8=0x00; IntBPPX20; IntPY16   { wr16(IntBPPX20, IntPY16);   }
+:MVW [IntN20],IntBPPY16    is op0_8=0x31; op0_8=0xF9; op0_8=0x00; IntN20;    IntBPPY16 { wr16(IntN20, IntBPPY16);    }
+:MVW [IntBP20],IntBPPY16   is op0_8=0x21; op0_8=0xF9; op0_8=0x00; IntBP20;   IntBPPY16 { wr16(IntBP20, IntBPPY16);   }
+:MVW [IntPX20],IntBPPY16   is op0_8=0x35; op0_8=0xF9; op0_8=0x00; IntPX20;   IntBPPY16 { wr16(IntPX20, IntBPPY16);   }
+:MVW [IntBPPX20],IntBPPY16 is op0_8=0x25; op0_8=0xF9; op0_8=0x00; IntBPPX20; IntBPPY16 { wr16(IntBPPX20, IntBPPY16); }
+
+# mvw [(int)+off],(int)
+
+:MVW [IntN20+off8],IntN16       is op0_8=0x32; op0_8=0xF9; op0_8=0x80; IntN20;    IntN16;    off8 { wr16(IntN20+off8, IntN16);       }
+:MVW [IntBP20+off8],IntN16      is op0_8=0x22; op0_8=0xF9; op0_8=0x80; IntBP20;   IntN16;    off8 { wr16(IntBP20+off8, IntN16);      }
+:MVW [IntPX20+off8],IntN16      is op0_8=0x36; op0_8=0xF9; op0_8=0x80; IntPX20;   IntN16;    off8 { wr16(IntPX20+off8, IntN16);      }
+:MVW [IntBPPX20+off8],IntN16    is op0_8=0x26; op0_8=0xF9; op0_8=0x80; IntBPPX20; IntN16;    off8 { wr16(IntBPPX20+off8, IntN16);    }
+:MVW [IntN20+off8],IntBP16      is op0_8=0x30; op0_8=0xF9; op0_8=0x80; IntN20;    IntBP16;   off8 { wr16(IntN20+off8, IntBP16);      }
+:MVW [IntBP20+off8],IntBP16     is             op0_8=0xF9; op0_8=0x80; IntBP20;   IntBP16;   off8 { wr16(IntBP20+off8, IntBP16);     }
+:MVW [IntPX20+off8],IntBP16     is op0_8=0x34; op0_8=0xF9; op0_8=0x80; IntPX20;   IntBP16;   off8 { wr16(IntPX20+off8, IntBP16);     }
+:MVW [IntBPPX20+off8],IntBP16   is op0_8=0x24; op0_8=0xF9; op0_8=0x80; IntBPPX20; IntBP16;   off8 { wr16(IntBPPX20+off8, IntBP16);   }
+:MVW [IntN20+off8],IntPY16      is op0_8=0x33; op0_8=0xF9; op0_8=0x80; IntN20;    IntPY16;   off8 { wr16(IntN20+off8, IntPY16);      }
+:MVW [IntBP20+off8],IntPY16     is op0_8=0x23; op0_8=0xF9; op0_8=0x80; IntBP20;   IntPY16;   off8 { wr16(IntBP20+off8, IntPY16);     }
+:MVW [IntPX20+off8],IntPY16     is op0_8=0x37; op0_8=0xF9; op0_8=0x80; IntPX20;   IntPY16;   off8 { wr16(IntPX20+off8, IntPY16);     }
+:MVW [IntBPPX20+off8],IntPY16   is op0_8=0x27; op0_8=0xF9; op0_8=0x80; IntBPPX20; IntPY16;   off8 { wr16(IntBPPX20+off8, IntPY16);   }
+:MVW [IntN20+off8],IntBPPY16    is op0_8=0x31; op0_8=0xF9; op0_8=0x80; IntN20;    IntBPPY16; off8 { wr16(IntN20+off8, IntBPPY16);    }
+:MVW [IntBP20+off8],IntBPPY16   is op0_8=0x21; op0_8=0xF9; op0_8=0x80; IntBP20;   IntBPPY16; off8 { wr16(IntBP20+off8, IntBPPY16);   }
+:MVW [IntPX20+off8],IntBPPY16   is op0_8=0x35; op0_8=0xF9; op0_8=0x80; IntPX20;   IntBPPY16; off8 { wr16(IntPX20+off8, IntBPPY16);   }
+:MVW [IntBPPX20+off8],IntBPPY16 is op0_8=0x25; op0_8=0xF9; op0_8=0x80; IntBPPX20; IntBPPY16; off8 { wr16(IntBPPX20+off8, IntBPPY16); }
+
+:MVW [IntN20-off8],IntN16       is op0_8=0x32; op0_8=0xF9; op0_8=0xC0; IntN20;    IntN16;    off8 { wr16(IntN20-off8, IntN16);       }
+:MVW [IntBP20-off8],IntN16      is op0_8=0x22; op0_8=0xF9; op0_8=0xC0; IntBP20;   IntN16;    off8 { wr16(IntBP20-off8, IntN16);      }
+:MVW [IntPX20-off8],IntN16      is op0_8=0x36; op0_8=0xF9; op0_8=0xC0; IntPX20;   IntN16;    off8 { wr16(IntPX20-off8, IntN16);      }
+:MVW [IntBPPX20-off8],IntN16    is op0_8=0x26; op0_8=0xF9; op0_8=0xC0; IntBPPX20; IntN16;    off8 { wr16(IntBPPX20-off8, IntN16);    }
+:MVW [IntN20-off8],IntBP16      is op0_8=0x30; op0_8=0xF9; op0_8=0xC0; IntN20;    IntBP16;   off8 { wr16(IntN20-off8, IntBP16);      }
+:MVW [IntBP20-off8],IntBP16     is             op0_8=0xF9; op0_8=0xC0; IntBP20;   IntBP16;   off8 { wr16(IntBP20-off8, IntBP16);     }
+:MVW [IntPX20-off8],IntBP16     is op0_8=0x34; op0_8=0xF9; op0_8=0xC0; IntPX20;   IntBP16;   off8 { wr16(IntPX20-off8, IntBP16);     }
+:MVW [IntBPPX20-off8],IntBP16   is op0_8=0x24; op0_8=0xF9; op0_8=0xC0; IntBPPX20; IntBP16;   off8 { wr16(IntBPPX20-off8, IntBP16);   }
+:MVW [IntN20-off8],IntPY16      is op0_8=0x33; op0_8=0xF9; op0_8=0xC0; IntN20;    IntPY16;   off8 { wr16(IntN20-off8, IntPY16);      }
+:MVW [IntBP20-off8],IntPY16     is op0_8=0x23; op0_8=0xF9; op0_8=0xC0; IntBP20;   IntPY16;   off8 { wr16(IntBP20-off8, IntPY16);     }
+:MVW [IntPX20-off8],IntPY16     is op0_8=0x37; op0_8=0xF9; op0_8=0xC0; IntPX20;   IntPY16;   off8 { wr16(IntPX20-off8, IntPY16);     }
+:MVW [IntBPPX20-off8],IntPY16   is op0_8=0x27; op0_8=0xF9; op0_8=0xC0; IntBPPX20; IntPY16;   off8 { wr16(IntBPPX20-off8, IntPY16);   }
+:MVW [IntN20-off8],IntBPPY16    is op0_8=0x31; op0_8=0xF9; op0_8=0xC0; IntN20;    IntBPPY16; off8 { wr16(IntN20-off8, IntBPPY16);    }
+:MVW [IntBP20-off8],IntBPPY16   is op0_8=0x21; op0_8=0xF9; op0_8=0xC0; IntBP20;   IntBPPY16; off8 { wr16(IntBP20-off8, IntBPPY16);   }
+:MVW [IntPX20-off8],IntBPPY16   is op0_8=0x35; op0_8=0xF9; op0_8=0xC0; IntPX20;   IntBPPY16; off8 { wr16(IntPX20-off8, IntBPPY16);   }
+:MVW [IntBPPX20-off8],IntBPPY16 is op0_8=0x25; op0_8=0xF9; op0_8=0xC0; IntBPPX20; IntBPPY16; off8 { wr16(IntBPPX20-off8, IntBPPY16); }
+
+# mv r16,[imm20]
+
+:MV R16L,Ext16 is op3_5=0x11 & R16L; Ext16 { R16L = Ext16; }
+
+# mvw (int),[imm20]
+
+:MVW IntN16,Ext16    is op0_8=0x30; op0_8=0xD1; IntN16;    Ext16 { IntN16 = Ext16;    }
+:MVW IntBP16,Ext16   is             op0_8=0xD1; IntBP16;   Ext16 { IntBP16 = Ext16;   }
+:MVW IntPX16,Ext16   is op0_8=0x34; op0_8=0xD1; IntPX16;   Ext16 { IntPX16 = Ext16;   }
+:MVW IntBPPX16,Ext16 is op0_8=0x24; op0_8=0xD1; IntBPPX16; Ext16 { IntBPPX16 = Ext16; }
+
+# mv r16,[r20]
+
+:MV R16L,Ptr16 is op3_5=0b10010 & R16L; op3_5=0b00000 & Ptr16 { R16L = Ptr16; }
+
+# mvw (int),[r20]
+
+:MVW IntN16,Ptr16    is op0_8=0x30; op0_8=0xE1; op3_5=0b0000 & Ptr16; IntN16    { IntN16 = Ptr16;    }
+:MVW IntBP16,Ptr16   is             op0_8=0xE1; op3_5=0b0000 & Ptr16; IntBP16   { IntBP16 = Ptr16;   }
+:MVW IntPX16,Ptr16   is op0_8=0x34; op0_8=0xE1; op3_5=0b0000 & Ptr16; IntPX16   { IntPX16 = Ptr16;   }
+:MVW IntBPPX16,Ptr16 is op0_8=0x24; op0_8=0xE1; op3_5=0b0000 & Ptr16; IntBPPX16 { IntBPPX16 = Ptr16; }
+
+### 2 Byte Transmission Command No. 2
+
+# mv r16,[r20++]
+# mv r16,[--r20]
+
+:MV R16L,MemRegIncDec16 is op3_5=0b10010 & R16L; MemRegIncDec16 { R16L = MemRegIncDec16; }
+
+# mvw (int),[r20++]
+# mvw (int),[--r20]
+
+:MVW IntN16,MemRegIncDec16    is op0_8=0x30; op0_8=0xE1; MemRegIncDec16; IntN16    { IntN16 = MemRegIncDec16;    }
+:MVW IntBP16,MemRegIncDec16   is             op0_8=0xE1; MemRegIncDec16; IntBP16   { IntBP16 = MemRegIncDec16;   }
+:MVW IntPX16,MemRegIncDec16   is op0_8=0x34; op0_8=0xE1; MemRegIncDec16; IntPX16   { IntPX16 = MemRegIncDec16;   }
+:MVW IntBPPX16,MemRegIncDec16 is op0_8=0x24; op0_8=0xE1; MemRegIncDec16; IntBPPX16 { IntBPPX16 = MemRegIncDec16; }
+
+# mv r16,[r20+n]
+
+:MV R16L,[R20L+off8] is op3_5=0b10010 & R16L; op3_5=0b10000 & R20L; off8 { rd16(R16L, R20L + off8); }
+:MV R16L,[R20L-off8] is op3_5=0b10010 & R16L; op3_5=0b11000 & R20L; off8 { rd16(R16L, R20L - off8); }
+
+# mvw (int),[r20+n]
+
+:MVW IntN16,[R20L+off8]    is op0_8=0x30; op0_8=0xE1; op3_5=0b10000 & R20L; IntN16;    off8 { rd16(IntN16, R20L+off8);    }
+:MVW IntBP16,[R20L+off8]   is             op0_8=0xE1; op3_5=0b10000 & R20L; IntBP16;   off8 { rd16(IntBP16, R20L+off8);   }
+:MVW IntPX16,[R20L+off8]   is op0_8=0x34; op0_8=0xE1; op3_5=0b10000 & R20L; IntPX16;   off8 { rd16(IntPX16, R20L+off8);   }
+:MVW IntBPPX16,[R20L+off8] is op0_8=0x24; op0_8=0xE1; op3_5=0b10000 & R20L; IntBPPX16; off8 { rd16(IntBPPX16, R20L+off8); }
+
+:MVW IntN16,[R20L-off8]    is op0_8=0x30; op0_8=0xE1; op3_5=0b11000 & R20L; IntN16;    off8 { rd16(IntN16, R20L-off8);    }
+:MVW IntBP16,[R20L-off8]   is             op0_8=0xE1; op3_5=0b11000 & R20L; IntBP16;   off8 { rd16(IntBP16, R20L-off8);   }
+:MVW IntPX16,[R20L-off8]   is op0_8=0x34; op0_8=0xE1; op3_5=0b11000 & R20L; IntPX16;   off8 { rd16(IntPX16, R20L-off8);   }
+:MVW IntBPPX16,[R20L-off8] is op0_8=0x24; op0_8=0xE1; op3_5=0b11000 & R20L; IntBPPX16; off8 { rd16(IntBPPX16, R20L-off8); }
+
+# mv r16,[(int)]
+
+:MV R16L,[IntN20]    is op0_8=0x30; op3_5=0b10011 & R16L; op0_8=0x00; IntN20    { rd16(R16L, IntN20);   }
+:MV R16L,[IntBP20]   is             op3_5=0b10011 & R16L; op0_8=0x00; IntBP20   { rd16(R16L, IntBP20);  }
+:MV R16L,[IntPX20]   is op0_8=0x34; op3_5=0b10011 & R16L; op0_8=0x00; IntPX20   { rd16(R16L, IntPX20);  }
+:MV R16L,[IntBPPX20] is op0_8=0x24; op3_5=0b10011 & R16L; op0_8=0x00; IntBPPX20 { rd16(R16L, IntBPPX20); }
+
+# mvw (int),[(int)]
+
+:MVW IntN16,[IntN20]       is op0_8=0x32; op0_8=0xF1; op0_8=0x00; IntN16;    IntN20    { rd16(IntN16, IntN20);       }
+:MVW IntBP16,[IntN20]      is op0_8=0x22; op0_8=0xF1; op0_8=0x00; IntBP16;   IntN20    { rd16(IntBP16, IntN20);      }
+:MVW IntPX16,[IntN20]      is op0_8=0x36; op0_8=0xF1; op0_8=0x00; IntPX16;   IntN20    { rd16(IntPX16, IntN20);      }
+:MVW IntBPPX16,[IntN20]    is op0_8=0x26; op0_8=0xF1; op0_8=0x00; IntBPPX16; IntN20    { rd16(IntBPPX16, IntN20);    }
+:MVW IntN16,[IntBP20]      is op0_8=0x30; op0_8=0xF1; op0_8=0x00; IntN16;    IntBP20   { rd16(IntN16, IntBP20);      }
+:MVW IntBP16,[IntBP20]     is             op0_8=0xF1; op0_8=0x00; IntBP16;   IntBP20   { rd16(IntBP16, IntBP20);     }
+:MVW IntPX16,[IntBP20]     is op0_8=0x34; op0_8=0xF1; op0_8=0x00; IntPX16;   IntBP20   { rd16(IntPX16, IntBP20);     }
+:MVW IntBPPX16,[IntBP20]   is op0_8=0x24; op0_8=0xF1; op0_8=0x00; IntBPPX16; IntBP20   { rd16(IntBPPX16, IntBP20);   }
+:MVW IntN16,[IntPY20]      is op0_8=0x33; op0_8=0xF1; op0_8=0x00; IntN16;    IntPY20   { rd16(IntN16, IntPY20);      }
+:MVW IntBP16,[IntPY20]     is op0_8=0x23; op0_8=0xF1; op0_8=0x00; IntBP16;   IntPY20   { rd16(IntBP16, IntPY20);     }
+:MVW IntPX16,[IntPY20]     is op0_8=0x37; op0_8=0xF1; op0_8=0x00; IntPX16;   IntPY20   { rd16(IntPX16, IntPY20);     }
+:MVW IntBPPX16,[IntPY20]   is op0_8=0x27; op0_8=0xF1; op0_8=0x00; IntBPPX16; IntPY20   { rd16(IntBPPX16, IntPY20);   }
+:MVW IntN16,[IntBPPY20]    is op0_8=0x31; op0_8=0xF1; op0_8=0x00; IntN16;    IntBPPY20 { rd16(IntN16, IntBPPY20);    }
+:MVW IntBP16,[IntBPPY20]   is op0_8=0x21; op0_8=0xF1; op0_8=0x00; IntBP16;   IntBPPY20 { rd16(IntBP16, IntBPPY20);   }
+:MVW IntPX16,[IntBPPY20]   is op0_8=0x35; op0_8=0xF1; op0_8=0x00; IntPX16;   IntBPPY20 { rd16(IntPX16, IntBPPY20);   }
+:MVW IntBPPX16,[IntBPPY20] is op0_8=0x25; op0_8=0xF1; op0_8=0x00; IntBPPX16; IntBPPY20 { rd16(IntBPPX16, IntBPPY20); }
+
+# mv r16,[(int)+off]
+
+:MV R16L,[IntN20+off8]    is op0_8=0x30; op3_5=0b10011 & R16L; op0_8=0x80; IntN20;    off8 { rd16(R16L, IntN20+off8);    }
+:MV R16L,[IntBP20+off8]   is             op3_5=0b10011 & R16L; op0_8=0x80; IntBP20;   off8 { rd16(R16L, IntBP20+off8);   }
+:MV R16L,[IntPX20+off8]   is op0_8=0x34; op3_5=0b10011 & R16L; op0_8=0x80; IntPX20;   off8 { rd16(R16L, IntPX20+off8);   }
+:MV R16L,[IntBPPX20+off8] is op0_8=0x24; op3_5=0b10011 & R16L; op0_8=0x80; IntBPPX20; off8 { rd16(R16L, IntBPPX20+off8); }
+
+:MV R16L,[IntN20-off8]    is op0_8=0x30; op3_5=0b10011 & R16L; op0_8=0xC0; IntN20;    off8 { rd16(R16L, IntN20-off8);    }
+:MV R16L,[IntBP20-off8]   is             op3_5=0b10011 & R16L; op0_8=0xC0; IntBP20;   off8 { rd16(R16L, IntBP20-off8);   }
+:MV R16L,[IntPX20-off8]   is op0_8=0x34; op3_5=0b10011 & R16L; op0_8=0xC0; IntPX20;   off8 { rd16(R16L, IntPX20-off8);   }
+:MV R16L,[IntBPPX20-off8] is op0_8=0x24; op3_5=0b10011 & R16L; op0_8=0xC0; IntBPPX20; off8 { rd16(R16L, IntBPPX20-off8); }
+
+# mvw (int),[(int)+off]
+
+:MVW IntN16,[IntN20+off8]       is op0_8=0x32; op0_8=0xF1; op0_8=0x80; IntN16;    IntN20;    off8 { rd16(IntN16, IntN20+off8);       }
+:MVW IntBP16,[IntN20+off8]      is op0_8=0x22; op0_8=0xF1; op0_8=0x80; IntBP16;   IntN20;    off8 { rd16(IntBP16, IntN20+off8);      }
+:MVW IntPX16,[IntN20+off8]      is op0_8=0x36; op0_8=0xF1; op0_8=0x80; IntPX16;   IntN20;    off8 { rd16(IntPX16, IntN20+off8);      }
+:MVW IntBPPX16,[IntN20+off8]    is op0_8=0x26; op0_8=0xF1; op0_8=0x80; IntBPPX16; IntN20;    off8 { rd16(IntBPPX16, IntN20+off8);    }
+:MVW IntN16,[IntBP20+off8]      is op0_8=0x30; op0_8=0xF1; op0_8=0x80; IntN16;    IntBP20;   off8 { rd16(IntN16, IntBP20+off8);      }
+:MVW IntBP16,[IntBP20+off8]     is             op0_8=0xF1; op0_8=0x80; IntBP16;   IntBP20;   off8 { rd16(IntBP16, IntBP20+off8);     }
+:MVW IntPX16,[IntBP20+off8]     is op0_8=0x34; op0_8=0xF1; op0_8=0x80; IntPX16;   IntBP20;   off8 { rd16(IntPX16, IntBP20+off8);     }
+:MVW IntBPPX16,[IntBP20+off8]   is op0_8=0x24; op0_8=0xF1; op0_8=0x80; IntBPPX16; IntBP20;   off8 { rd16(IntBPPX16, IntBP20+off8);   }
+:MVW IntN16,[IntPY20+off8]      is op0_8=0x33; op0_8=0xF1; op0_8=0x80; IntN16;    IntPY20;   off8 { rd16(IntN16, IntPY20+off8);      }
+:MVW IntBP16,[IntPY20+off8]     is op0_8=0x23; op0_8=0xF1; op0_8=0x80; IntBP16;   IntPY20;   off8 { rd16(IntBP16, IntPY20+off8);     }
+:MVW IntPX16,[IntPY20+off8]     is op0_8=0x37; op0_8=0xF1; op0_8=0x80; IntPX16;   IntPY20;   off8 { rd16(IntPX16, IntPY20+off8);     }
+:MVW IntBPPX16,[IntPY20+off8]   is op0_8=0x27; op0_8=0xF1; op0_8=0x80; IntBPPX16; IntPY20;   off8 { rd16(IntBPPX16, IntPY20+off8);   }
+:MVW IntN16,[IntBPPY20+off8]    is op0_8=0x31; op0_8=0xF1; op0_8=0x80; IntN16;    IntBPPY20; off8 { rd16(IntN16, IntBPPY20+off8);    }
+:MVW IntBP16,[IntBPPY20+off8]   is op0_8=0x21; op0_8=0xF1; op0_8=0x80; IntBP16;   IntBPPY20; off8 { rd16(IntBP16, IntBPPY20+off8);   }
+:MVW IntPX16,[IntBPPY20+off8]   is op0_8=0x35; op0_8=0xF1; op0_8=0x80; IntPX16;   IntBPPY20; off8 { rd16(IntPX16, IntBPPY20+off8);   }
+:MVW IntBPPX16,[IntBPPY20+off8] is op0_8=0x25; op0_8=0xF1; op0_8=0x80; IntBPPX16; IntBPPY20; off8 { rd16(IntBPPX16, IntBPPY20+off8); }
+
+:MVW IntN16,[IntN20-off8]       is op0_8=0x32; op0_8=0xF1; op0_8=0xC0; IntN16;    IntN20;    off8 { rd16(IntN16, IntN20-off8);       }
+:MVW IntBP16,[IntN20-off8]      is op0_8=0x22; op0_8=0xF1; op0_8=0xC0; IntBP16;   IntN20;    off8 { rd16(IntBP16, IntN20-off8);      }
+:MVW IntPX16,[IntN20-off8]      is op0_8=0x36; op0_8=0xF1; op0_8=0xC0; IntPX16;   IntN20;    off8 { rd16(IntPX16, IntN20-off8);      }
+:MVW IntBPPX16,[IntN20-off8]    is op0_8=0x26; op0_8=0xF1; op0_8=0xC0; IntBPPX16; IntN20;    off8 { rd16(IntBPPX16, IntN20-off8);    }
+:MVW IntN16,[IntBP20-off8]      is op0_8=0x30; op0_8=0xF1; op0_8=0xC0; IntN16;    IntBP20;   off8 { rd16(IntN16, IntBP20-off8);      }
+:MVW IntBP16,[IntBP20-off8]     is             op0_8=0xF1; op0_8=0xC0; IntBP16;   IntBP20;   off8 { rd16(IntBP16, IntBP20-off8);     }
+:MVW IntPX16,[IntBP20-off8]     is op0_8=0x34; op0_8=0xF1; op0_8=0xC0; IntPX16;   IntBP20;   off8 { rd16(IntPX16, IntBP20-off8);     }
+:MVW IntBPPX16,[IntBP20-off8]   is op0_8=0x24; op0_8=0xF1; op0_8=0xC0; IntBPPX16; IntBP20;   off8 { rd16(IntBPPX16, IntBP20-off8);   }
+:MVW IntN16,[IntPY20-off8]      is op0_8=0x33; op0_8=0xF1; op0_8=0xC0; IntN16;    IntPY20;   off8 { rd16(IntN16, IntPY20-off8);      }
+:MVW IntBP16,[IntPY20-off8]     is op0_8=0x23; op0_8=0xF1; op0_8=0xC0; IntBP16;   IntPY20;   off8 { rd16(IntBP16, IntPY20-off8);     }
+:MVW IntPX16,[IntPY20-off8]     is op0_8=0x37; op0_8=0xF1; op0_8=0xC0; IntPX16;   IntPY20;   off8 { rd16(IntPX16, IntPY20-off8);     }
+:MVW IntBPPX16,[IntPY20-off8]   is op0_8=0x27; op0_8=0xF1; op0_8=0xC0; IntBPPX16; IntPY20;   off8 { rd16(IntBPPX16, IntPY20-off8);   }
+:MVW IntN16,[IntBPPY20-off8]    is op0_8=0x31; op0_8=0xF1; op0_8=0xC0; IntN16;    IntBPPY20; off8 { rd16(IntN16, IntBPPY20-off8);    }
+:MVW IntBP16,[IntBPPY20-off8]   is op0_8=0x21; op0_8=0xF1; op0_8=0xC0; IntBP16;   IntBPPY20; off8 { rd16(IntBP16, IntBPPY20-off8);   }
+:MVW IntPX16,[IntBPPY20-off8]   is op0_8=0x35; op0_8=0xF1; op0_8=0xC0; IntPX16;   IntBPPY20; off8 { rd16(IntPX16, IntBPPY20-off8);   }
+:MVW IntBPPX16,[IntBPPY20-off8] is op0_8=0x25; op0_8=0xF1; op0_8=0xC0; IntBPPX16; IntBPPY20; off8 { rd16(IntBPPX16, IntBPPY20-off8); }
+
+### 3 Byte Transmission Command No. 1
+
+# mv r20,imm20
+
+:MV R20L,imm20 is op3_5=0x01 & R20L; imm20 { R20L = imm20; }
+
+# mvp (int),imm20
+
+:MVP IntN24,imm20    is op0_8=0x30; op0_8=0xDC; IntN24;    imm20 { IntN24 = imm20;    }
+:MVP IntBP24,imm20   is             op0_8=0xDC; IntBP24;   imm20 { IntBP24 = imm20;   }
+:MVP IntPX24,imm20   is op0_8=0x34; op0_8=0xDC; IntPX24;   imm20 { IntPX24 = imm20;   }
+:MVP IntBPPX24,imm20 is op0_8=0x24; op0_8=0xDC; IntBPPX24; imm20 { IntBPPX24 = imm20; }
+
+# mv r20,r20
+
+:MV R20H,R20L is op0_8=0xFD; R20H & R20L { R20H = R20L; }
+
+# mv r20,r16 ???
+
+:MV R20H,R16L is op0_8=0xFD; R20H & R16L { R20H[0, 15] = R16L; }
+
+# mv (int),r20
+
+:MV IntN24,R20L    is op0_8=0x30; op3_5=0b10100 & R20L; IntN24    { IntN24 = R20L;    }
+:MV IntBP24,R20L   is             op3_5=0b10100 & R20L; IntBP24   { IntBP24 = R20L;   }
+:MV IntPX24,R20L   is op0_8=0x34; op3_5=0b10100 & R20L; IntPX24   { IntPX24 = R20L;   }
+:MV IntBPPX24,R20L is op0_8=0x24; op3_5=0b10100 & R20L; IntBPPX24 { IntBPPX24 = R20L; }
+
+# mv [imm20],r20
+
+:MV Ext24,R20L is op3_5=0b10101 & R20L; Ext24 { Ext24 = R20L; }
+
+# mv [r20],xyu
+
+:MV Ptr24,XYUL is op3_5=0b10110 & XYUL; op3_5=0b00000 & Ptr24 { Ptr24 = XYUL; }
+
+# mv [r20++],xyu
+# mv [--r20],xyu
+
+:MV MemRegIncDec24,XYUL is op3_5=0b10110 & XYUL; MemRegIncDec24 { MemRegIncDec24 = XYUL; }
+
+# mv [r20+off],xyu
+
+:MV [R20L+off8],XYUL is op3_5=0b10110 & XYUL; op3_5=0b10000 & R20L; off8 { wr20(R20L + off8, XYUL); }
+:MV [R20L-off8],XYUL is op3_5=0b10110 & XYUL; op3_5=0b11000 & R20L; off8 { wr20(R20L - off8, XYUL); }
+
+# mv [(int)],xyu
+
+:MV [IntN20],XYUL    is op0_8=0x30; op3_5=0b10111 & XYUL; op0_8=0x00; IntN20    { wr20(IntN20, XYUL);    }
+:MV [IntBP20],XYUL   is             op3_5=0b10111 & XYUL; op0_8=0x00; IntBP20   { wr20(IntBP20, XYUL);   }
+:MV [IntPX20],XYUL   is op0_8=0x34; op3_5=0b10111 & XYUL; op0_8=0x00; IntPX20   { wr20(IntPX20, XYUL);   }
+:MV [IntBPPX20],XYUL is op0_8=0x24; op3_5=0b10111 & XYUL; op0_8=0x00; IntBPPX20 { wr20(IntBPPX20, XYUL); }
+
+# mv [(int)+off],xyu
+
+:MV [IntN20+off8],XYUL    is op0_8=0x30; op3_5=0b10111 & XYUL; op0_8=0x80; IntN20;    off8 { wr20(IntN20+off8, XYUL);    }
+:MV [IntBP20+off8],XYUL   is             op3_5=0b10111 & XYUL; op0_8=0x80; IntBP20;   off8 { wr20(IntBP20+off8, XYUL);   }
+:MV [IntPX20+off8],XYUL   is op0_8=0x34; op3_5=0b10111 & XYUL; op0_8=0x80; IntPX20;   off8 { wr20(IntPX20+off8, XYUL);   }
+:MV [IntBPPX20+off8],XYUL is op0_8=0x24; op3_5=0b10111 & XYUL; op0_8=0x80; IntBPPX20; off8 { wr20(IntBPPX20+off8, XYUL); }
+
+:MV [IntN20-off8],XYUL    is op0_8=0x30; op3_5=0b10111 & XYUL; op0_8=0xC0; IntN20;    off8 { wr20(IntN20-off8, XYUL);    }
+:MV [IntBP20-off8],XYUL   is             op3_5=0b10111 & XYUL; op0_8=0xC0; IntBP20;   off8 { wr20(IntBP20-off8, XYUL);   }
+:MV [IntPX20-off8],XYUL   is op0_8=0x34; op3_5=0b10111 & XYUL; op0_8=0xC0; IntPX20;   off8 { wr20(IntPX20-off8, XYUL);   }
+:MV [IntBPPX20-off8],XYUL is op0_8=0x24; op3_5=0b10111 & XYUL; op0_8=0xC0; IntBPPX20; off8 { wr20(IntBPPX20-off8, XYUL); }
+
+# mv r20,(int)
+
+:MV R20L,IntN20    is op0_8=0x30; op3_5=0b10000 & R20L; IntN20    { R20L = IntN20;    }
+:MV R20L,IntBP20   is             op3_5=0b10000 & R20L; IntBP20   { R20L = IntBP20;   }
+:MV R20L,IntPX20   is op0_8=0x34; op3_5=0b10000 & R20L; IntPX20   { R20L = IntPX20;   }
+:MV R20L,IntBPPX20 is op0_8=0x24; op3_5=0b10000 & R20L; IntBPPX20 { R20L = IntBPPX20; }
+
+# mvp (int),(int)
+
+:MVP IntN24,IntN24_2     is op0_8=0x32; op0_8=0xCA; IntN24;    IntN24_2  { IntN24 = IntN24_2;     }
+:MVP IntBP24,IntN24      is op0_8=0x22; op0_8=0xCA; IntBP24;   IntN24    { IntBP24 = IntN24;      }
+:MVP IntPX24,IntN24      is op0_8=0x36; op0_8=0xCA; IntPX24;   IntN24    { IntPX24 = IntN24;      }
+:MVP IntBPPX24,IntN24    is op0_8=0x26; op0_8=0xCA; IntBPPX24; IntN24    { IntBPPX24 = IntN24;    }
+:MVP IntN24,IntBP24      is op0_8=0x30; op0_8=0xCA; IntN24;    IntBP24   { IntN24 = IntBP24;      }
+:MVP IntBP24,IntBP24_2   is             op0_8=0xCA; IntBP24;   IntBP24_2 { IntBP24 = IntBP24_2;   }
+:MVP IntPX24,IntBP24     is op0_8=0x34; op0_8=0xCA; IntPX24;   IntBP24   { IntPX24 = IntBP24;     }
+:MVP IntBPPX24,IntBP24   is op0_8=0x24; op0_8=0xCA; IntBPPX24; IntBP24   { IntBPPX24 = IntBP24;   }
+:MVP IntN24,IntPY24      is op0_8=0x33; op0_8=0xCA; IntN24;    IntPY24   { IntN24 = IntPY24;      }
+:MVP IntBP24,IntPY24     is op0_8=0x23; op0_8=0xCA; IntBP24;   IntPY24   { IntBP24 = IntPY24;     }
+:MVP IntPX24,IntPY24     is op0_8=0x37; op0_8=0xCA; IntPX24;   IntPY24   { IntPX24 = IntPY24;     }
+:MVP IntBPPX24,IntPY24   is op0_8=0x27; op0_8=0xCA; IntBPPX24; IntPY24   { IntBPPX24 = IntPY24;   }
+:MVP IntN24,IntBPPY24    is op0_8=0x31; op0_8=0xCA; IntN24;    IntBPPY24 { IntN24 = IntBPPY24;    }
+:MVP IntBP24,IntBPPY24   is op0_8=0x21; op0_8=0xCA; IntBP24;   IntBPPY24 { IntBP24 = IntBPPY24;   }
+:MVP IntPX24,IntBPPY24   is op0_8=0x35; op0_8=0xCA; IntPX24;   IntBPPY24 { IntPX24 = IntBPPY24;   }
+:MVP IntBPPX24,IntBPPY24 is op0_8=0x25; op0_8=0xCA; IntBPPX24; IntBPPY24 { IntBPPX24 = IntBPPY24; }
+
+# mvp [imm20],(int)
+
+:MVP Ext24,IntBP24   is             op0_8=0xDA; Ext24; IntBP24   { Ext24 = IntBP24;   }
+:MVP Ext24,IntN24    is op0_8=0x30; op0_8=0xDA; Ext24; IntN24    { Ext24 = IntN24;    }
+:MVP Ext24,IntPX24   is op0_8=0x34; op0_8=0xDA; Ext24; IntPX24   { Ext24 = IntPX24;   }
+:MVP Ext24,IntBPPX24 is op0_8=0x24; op0_8=0xDA; Ext24; IntBPPX24 { Ext24 = IntBPPX24; }
+
+# mvp [r20],(int)
+
+:MVP Ptr24,IntN24    is op0_8=0x30; op0_8=0xEA; op3_5=0b00000 & Ptr24; IntN24    { Ptr24 = IntN24;    }
+:MVP Ptr24,IntBP24   is             op0_8=0xEA; op3_5=0b00000 & Ptr24; IntBP24   { Ptr24 = IntBP24;   }
+:MVP Ptr24,IntPX24   is op0_8=0x34; op0_8=0xEA; op3_5=0b00000 & Ptr24; IntPX24   { Ptr24 = IntPX24;   }
+:MVP Ptr24,IntBPPX24 is op0_8=0x24; op0_8=0xEA; op3_5=0b00000 & Ptr24; IntBPPX24 { Ptr24 = IntBPPX24; }
+
+# mvp [r20++],(int)
+# mvp [--r20],(int)
+
+:MVP MemRegIncDec24,IntN24    is op0_8=0x30; op0_8=0xEA; MemRegIncDec24; IntN24    { MemRegIncDec24 = IntN24;    }
+:MVP MemRegIncDec24,IntBP24   is             op0_8=0xEA; MemRegIncDec24; IntBP24   { MemRegIncDec24 = IntBP24;   }
+:MVP MemRegIncDec24,IntPX24   is op0_8=0x34; op0_8=0xEA; MemRegIncDec24; IntPX24   { MemRegIncDec24 = IntPX24;   }
+:MVP MemRegIncDec24,IntBPPX24 is op0_8=0x24; op0_8=0xEA; MemRegIncDec24; IntBPPX24 { MemRegIncDec24 = IntBPPX24; }
+
+# mvp [r20+off],(int)
+
+:MVP [R20L+off8],IntN24    is op0_8=0x30; op0_8=0xEA; op3_5=0b10000 & R20L; IntN24;    off8 { wr24(R20L+off8, IntN24);    }
+:MVP [R20L+off8],IntBP24   is             op0_8=0xEA; op3_5=0b10000 & R20L; IntBP24;   off8 { wr24(R20L+off8, IntBP24);   }
+:MVP [R20L+off8],IntPX24   is op0_8=0x34; op0_8=0xEA; op3_5=0b10000 & R20L; IntPX24;   off8 { wr24(R20L+off8, IntPX24);   }
+:MVP [R20L+off8],IntBPPX24 is op0_8=0x24; op0_8=0xEA; op3_5=0b10000 & R20L; IntBPPX24; off8 { wr24(R20L+off8, IntBPPX24); }
+
+:MVP [R20L-off8],IntN24    is op0_8=0x30; op0_8=0xEA; op3_5=0b11000 & R20L; IntN24;    off8 { wr24(R20L-off8, IntN24);    }
+:MVP [R20L-off8],IntBP24   is             op0_8=0xEA; op3_5=0b11000 & R20L; IntBP24;   off8 { wr24(R20L-off8, IntBP24);   }
+:MVP [R20L-off8],IntPX24   is op0_8=0x34; op0_8=0xEA; op3_5=0b11000 & R20L; IntPX24;   off8 { wr24(R20L-off8, IntPX24);   }
+:MVP [R20L-off8],IntBPPX24 is op0_8=0x24; op0_8=0xEA; op3_5=0b11000 & R20L; IntBPPX24; off8 { wr24(R20L-off8, IntBPPX24); }
+
+# mvp [(int)],(int)
+
+:MVP [IntN20],IntN24       is op0_8=0x32; op0_8=0xFA; op0_8=0x00; IntN20;    IntN24    { wr24(IntN20, IntN24);       }
+:MVP [IntBP20],IntN24      is op0_8=0x22; op0_8=0xFA; op0_8=0x00; IntBP20;   IntN24    { wr24(IntBP20, IntN24);      }
+:MVP [IntPX20],IntN24      is op0_8=0x36; op0_8=0xFA; op0_8=0x00; IntPX20;   IntN24    { wr24(IntPX20, IntN24);      }
+:MVP [IntBPPX20],IntN24    is op0_8=0x26; op0_8=0xFA; op0_8=0x00; IntBPPX20; IntN24    { wr24(IntBPPX20, IntN24);    }
+:MVP [IntN20],IntBP24      is op0_8=0x30; op0_8=0xFA; op0_8=0x00; IntN20;    IntBP24   { wr24(IntN20, IntBP24);      }
+:MVP [IntBP20],IntBP24     is             op0_8=0xFA; op0_8=0x00; IntBP20;   IntBP24   { wr24(IntBP20, IntBP24);     }
+:MVP [IntPX20],IntBP24     is op0_8=0x34; op0_8=0xFA; op0_8=0x00; IntPX20;   IntBP24   { wr24(IntPX20, IntBP24);     }
+:MVP [IntBPPX20],IntBP24   is op0_8=0x24; op0_8=0xFA; op0_8=0x00; IntBPPX20; IntBP24   { wr24(IntBPPX20, IntBP24);   }
+:MVP [IntN20],IntPY24      is op0_8=0x33; op0_8=0xFA; op0_8=0x00; IntN20;    IntPY24   { wr24(IntN20, IntPY24);      }
+:MVP [IntBP20],IntPY24     is op0_8=0x23; op0_8=0xFA; op0_8=0x00; IntBP20;   IntPY24   { wr24(IntBP20, IntPY24);     }
+:MVP [IntPX20],IntPY24     is op0_8=0x37; op0_8=0xFA; op0_8=0x00; IntPX20;   IntPY24   { wr24(IntPX20, IntPY24);     }
+:MVP [IntBPPX20],IntPY24   is op0_8=0x27; op0_8=0xFA; op0_8=0x00; IntBPPX20; IntPY24   { wr24(IntBPPX20, IntPY24);   }
+:MVP [IntN20],IntBPPY24    is op0_8=0x31; op0_8=0xFA; op0_8=0x00; IntN20;    IntBPPY24 { wr24(IntN20, IntBPPY24);    }
+:MVP [IntBP20],IntBPPY24   is op0_8=0x21; op0_8=0xFA; op0_8=0x00; IntBP20;   IntBPPY24 { wr24(IntBP20, IntBPPY24);   }
+:MVP [IntPX20],IntBPPY24   is op0_8=0x35; op0_8=0xFA; op0_8=0x00; IntPX20;   IntBPPY24 { wr24(IntPX20, IntBPPY24);   }
+:MVP [IntBPPX20],IntBPPY24 is op0_8=0x25; op0_8=0xFA; op0_8=0x00; IntBPPX20; IntBPPY24 { wr24(IntBPPX20, IntBPPY24); }
+
+# mvp [(int)+off],(int)
+
+:MVP [IntN20+off8],IntN24       is op0_8=0x32; op0_8=0xFA; op0_8=0x80; IntN20;    IntN24;    off8 { wr24(IntN20+off8, IntN24);       }
+:MVP [IntBP20+off8],IntN24      is op0_8=0x22; op0_8=0xFA; op0_8=0x80; IntBP20;   IntN24;    off8 { wr24(IntBP20+off8, IntN24);      }
+:MVP [IntPX20+off8],IntN24      is op0_8=0x36; op0_8=0xFA; op0_8=0x80; IntPX20;   IntN24;    off8 { wr24(IntPX20+off8, IntN24);      }
+:MVP [IntBPPX20+off8],IntN24    is op0_8=0x26; op0_8=0xFA; op0_8=0x80; IntBPPX20; IntN24;    off8 { wr24(IntBPPX20+off8, IntN24);    }
+:MVP [IntN20+off8],IntBP24      is op0_8=0x30; op0_8=0xFA; op0_8=0x80; IntN20;    IntBP24;   off8 { wr24(IntN20+off8, IntBP24);      }
+:MVP [IntBP20+off8],IntBP24     is             op0_8=0xFA; op0_8=0x80; IntBP20;   IntBP24;   off8 { wr24(IntBP20+off8, IntBP24);     }
+:MVP [IntPX20+off8],IntBP24     is op0_8=0x34; op0_8=0xFA; op0_8=0x80; IntPX20;   IntBP24;   off8 { wr24(IntPX20+off8, IntBP24);     }
+:MVP [IntBPPX20+off8],IntBP24   is op0_8=0x24; op0_8=0xFA; op0_8=0x80; IntBPPX20; IntBP24;   off8 { wr24(IntBPPX20+off8, IntBP24);   }
+:MVP [IntN20+off8],IntPY24      is op0_8=0x33; op0_8=0xFA; op0_8=0x80; IntN20;    IntPY24;   off8 { wr24(IntN20+off8, IntPY24);      }
+:MVP [IntBP20+off8],IntPY24     is op0_8=0x23; op0_8=0xFA; op0_8=0x80; IntBP20;   IntPY24;   off8 { wr24(IntBP20+off8, IntPY24);     }
+:MVP [IntPX20+off8],IntPY24     is op0_8=0x37; op0_8=0xFA; op0_8=0x80; IntPX20;   IntPY24;   off8 { wr24(IntPX20+off8, IntPY24);     }
+:MVP [IntBPPX20+off8],IntPY24   is op0_8=0x27; op0_8=0xFA; op0_8=0x80; IntBPPX20; IntPY24;   off8 { wr24(IntBPPX20+off8, IntPY24);   }
+:MVP [IntN20+off8],IntBPPY24    is op0_8=0x31; op0_8=0xFA; op0_8=0x80; IntN20;    IntBPPY24; off8 { wr24(IntN20+off8, IntBPPY24);    }
+:MVP [IntBP20+off8],IntBPPY24   is op0_8=0x21; op0_8=0xFA; op0_8=0x80; IntBP20;   IntBPPY24; off8 { wr24(IntBP20+off8, IntBPPY24);   }
+:MVP [IntPX20+off8],IntBPPY24   is op0_8=0x35; op0_8=0xFA; op0_8=0x80; IntPX20;   IntBPPY24; off8 { wr24(IntPX20+off8, IntBPPY24);   }
+:MVP [IntBPPX20+off8],IntBPPY24 is op0_8=0x25; op0_8=0xFA; op0_8=0x80; IntBPPX20; IntBPPY24; off8 { wr24(IntBPPX20+off8, IntBPPY24); }
+
+:MVP [IntN20-off8],IntN24       is op0_8=0x32; op0_8=0xFA; op0_8=0xC0; IntN20;    IntN24;    off8 { wr24(IntN20-off8, IntN24);       }
+:MVP [IntBP20-off8],IntN24      is op0_8=0x22; op0_8=0xFA; op0_8=0xC0; IntBP20;   IntN24;    off8 { wr24(IntBP20-off8, IntN24);      }
+:MVP [IntPX20-off8],IntN24      is op0_8=0x36; op0_8=0xFA; op0_8=0xC0; IntPX20;   IntN24;    off8 { wr24(IntPX20-off8, IntN24);      }
+:MVP [IntBPPX20-off8],IntN24    is op0_8=0x26; op0_8=0xFA; op0_8=0xC0; IntBPPX20; IntN24;    off8 { wr24(IntBPPX20-off8, IntN24);    }
+:MVP [IntN20-off8],IntBP24      is op0_8=0x30; op0_8=0xFA; op0_8=0xC0; IntN20;    IntBP24;   off8 { wr24(IntN20-off8, IntBP24);      }
+:MVP [IntBP20-off8],IntBP24     is             op0_8=0xFA; op0_8=0xC0; IntBP20;   IntBP24;   off8 { wr24(IntBP20-off8, IntBP24);     }
+:MVP [IntPX20-off8],IntBP24     is op0_8=0x34; op0_8=0xFA; op0_8=0xC0; IntPX20;   IntBP24;   off8 { wr24(IntPX20-off8, IntBP24);     }
+:MVP [IntBPPX20-off8],IntBP24   is op0_8=0x24; op0_8=0xFA; op0_8=0xC0; IntBPPX20; IntBP24;   off8 { wr24(IntBPPX20-off8, IntBP24);   }
+:MVP [IntN20-off8],IntPY24      is op0_8=0x33; op0_8=0xFA; op0_8=0xC0; IntN20;    IntPY24;   off8 { wr24(IntN20-off8, IntPY24);      }
+:MVP [IntBP20-off8],IntPY24     is op0_8=0x23; op0_8=0xFA; op0_8=0xC0; IntBP20;   IntPY24;   off8 { wr24(IntBP20-off8, IntPY24);     }
+:MVP [IntPX20-off8],IntPY24     is op0_8=0x37; op0_8=0xFA; op0_8=0xC0; IntPX20;   IntPY24;   off8 { wr24(IntPX20-off8, IntPY24);     }
+:MVP [IntBPPX20-off8],IntPY24   is op0_8=0x27; op0_8=0xFA; op0_8=0xC0; IntBPPX20; IntPY24;   off8 { wr24(IntBPPX20-off8, IntPY24);   }
+:MVP [IntN20-off8],IntBPPY24    is op0_8=0x31; op0_8=0xFA; op0_8=0xC0; IntN20;    IntBPPY24; off8 { wr24(IntN20-off8, IntBPPY24);    }
+:MVP [IntBP20-off8],IntBPPY24   is op0_8=0x21; op0_8=0xFA; op0_8=0xC0; IntBP20;   IntBPPY24; off8 { wr24(IntBP20-off8, IntBPPY24);   }
+:MVP [IntPX20-off8],IntBPPY24   is op0_8=0x35; op0_8=0xFA; op0_8=0xC0; IntPX20;   IntBPPY24; off8 { wr24(IntPX20-off8, IntBPPY24);   }
+:MVP [IntBPPX20-off8],IntBPPY24 is op0_8=0x25; op0_8=0xFA; op0_8=0xC0; IntBPPX20; IntBPPY24; off8 { wr24(IntBPPX20-off8, IntBPPY24); }
+
+# mv r20,[imm20]
+
+:MV R20L,Ext24 is op3_5=0x11 & R20L; Ext24 { R20L = Ext24; }
+
+# mvp (int),[imm20]
+
+:MVP IntN24,Ext24    is op0_8=0x30; op0_8=0xD2; IntN24;    Ext24 { IntN24 = Ext24;    }
+:MVP IntBP24,Ext24   is             op0_8=0xD2; IntBP24;   Ext24 { IntBP24 = Ext24;   }
+:MVP IntPX24,Ext24   is op0_8=0x34; op0_8=0xD2; IntPX24;   Ext24 { IntPX24 = Ext24;   }
+:MVP IntBPPX24,Ext24 is op0_8=0x24; op0_8=0xD2; IntBPPX24; Ext24 { IntBPPX24 = Ext24; }
+
+# mv xyu,[r20]
+
+:MV XYUL,Ptr20 is op3_5=0b10010 & XYUL; op3_5=0b00000 & Ptr20 { XYUL = Ptr20; }
+
+# mvp (int),[r20]
+
+:MVP IntN24,Ptr24    is op0_8=0x30; op0_8=0xE2; op3_5=0b0000 & Ptr24; IntN24    { IntN24 = Ptr24;    }
+:MVP IntBP24,Ptr24   is             op0_8=0xE2; op3_5=0b0000 & Ptr24; IntBP24   { IntBP24 = Ptr24;   }
+:MVP IntPX24,Ptr24   is op0_8=0x34; op0_8=0xE2; op3_5=0b0000 & Ptr24; IntPX24   { IntPX24 = Ptr24;   }
+:MVP IntBPPX24,Ptr24 is op0_8=0x24; op0_8=0xE2; op3_5=0b0000 & Ptr24; IntBPPX24 { IntBPPX24 = Ptr24; }
+
+### 3 Byte Transmission Command No. 2
+
+# mv xyu,[r20++]
+# mv xyu,[--r20]
+
+:MV XYUL,MemRegIncDec20 is op3_5=0b10010 & XYUL; MemRegIncDec20 { XYUL = MemRegIncDec20; }
+
+# mvp (int),[r20++]
+# mvp (int),[--r20]
+
+:MVP IntN24,MemRegIncDec20    is op0_8=0x30; op0_8=0xE2; MemRegIncDec20; IntN24    { IntN24 = MemRegIncDec20;    }
+:MVP IntBP24,MemRegIncDec20   is             op0_8=0xE2; MemRegIncDec20; IntBP24   { IntBP24 = MemRegIncDec20;   }
+:MVP IntPX24,MemRegIncDec20   is op0_8=0x34; op0_8=0xE2; MemRegIncDec20; IntPX24   { IntPX24 = MemRegIncDec20;   }
+:MVP IntBPPX24,MemRegIncDec20 is op0_8=0x24; op0_8=0xE2; MemRegIncDec20; IntBPPX24 { IntBPPX24 = MemRegIncDec20; }
+
+# mv xyu,[r20+n]
+
+:MV XYUL,[R20L+off8] is op3_5=0b10010 & XYUL; op3_5=0b10000 & R20L; off8 { rd20(XYUL, R20L + off8); }
+:MV XYUL,[R20L-off8] is op3_5=0b10010 & XYUL; op3_5=0b11000 & R20L; off8 { rd20(XYUL, R20L - off8); }
+
+# mvp (int),[r20+n]
+
+:MVP IntN24,[R20L+off8]    is op0_8=0x30; op0_8=0xE2; op3_5=0b10000 & R20L; IntN24;    off8 { rd24(IntN24, R20L+off8);    }
+:MVP IntBP24,[R20L+off8]   is             op0_8=0xE2; op3_5=0b10000 & R20L; IntBP24;   off8 { rd24(IntBP24, R20L+off8);   }
+:MVP IntPX24,[R20L+off8]   is op0_8=0x34; op0_8=0xE2; op3_5=0b10000 & R20L; IntPX24;   off8 { rd24(IntPX24, R20L+off8);   }
+:MVP IntBPPX24,[R20L+off8] is op0_8=0x24; op0_8=0xE2; op3_5=0b10000 & R20L; IntBPPX24; off8 { rd24(IntBPPX24, R20L+off8); }
+:MVP IntN24,[R20L-off8]    is op0_8=0x30; op0_8=0xE2; op3_5=0b11000 & R20L; IntN24;    off8 { rd24(IntN24, R20L-off8);    }
+:MVP IntBP24,[R20L-off8]   is             op0_8=0xE2; op3_5=0b11000 & R20L; IntBP24;   off8 { rd24(IntBP24, R20L-off8);   }
+:MVP IntPX24,[R20L-off8]   is op0_8=0x34; op0_8=0xE2; op3_5=0b11000 & R20L; IntPX24;   off8 { rd24(IntPX24, R20L-off8);   }
+:MVP IntBPPX24,[R20L-off8] is op0_8=0x24; op0_8=0xE2; op3_5=0b11000 & R20L; IntBPPX24; off8 { rd24(IntBPPX24, R20L-off8); }
+
+# mv xyu,[(int)]
+
+:MV XYUL,[IntN20]    is op0_8=0x30; op3_5=0b10011 & XYUL; op0_8=0x00; IntN20    { rd20(XYUL, IntN20);    }
+:MV XYUL,[IntBP20]   is             op3_5=0b10011 & XYUL; op0_8=0x00; IntBP20   { rd20(XYUL, IntBP20);   }
+:MV XYUL,[IntPX20]   is op0_8=0x34; op3_5=0b10011 & XYUL; op0_8=0x00; IntPX20   { rd20(XYUL, IntPX20);   }
+:MV XYUL,[IntBPPX20] is op0_8=0x24; op3_5=0b10011 & XYUL; op0_8=0x00; IntBPPX20 { rd20(XYUL, IntBPPX20); }
+
+# mvp (int),[(int)]
+
+:MVP IntN24,[IntN20]       is op0_8=0x32; op0_8=0xF2; op0_8=0x00; IntN24;    IntN20    { rd24(IntN24, IntN20);       }
+:MVP IntBP24,[IntN20]      is op0_8=0x22; op0_8=0xF2; op0_8=0x00; IntBP24;   IntN20    { rd24(IntBP24, IntN20);      }
+:MVP IntPX24,[IntN20]      is op0_8=0x36; op0_8=0xF2; op0_8=0x00; IntPX24;   IntN20    { rd24(IntPX24, IntN20);      }
+:MVP IntBPPX24,[IntN20]    is op0_8=0x26; op0_8=0xF2; op0_8=0x00; IntBPPX24; IntN20    { rd24(IntBPPX24, IntN20);    }
+:MVP IntN24,[IntBP20]      is op0_8=0x30; op0_8=0xF2; op0_8=0x00; IntN24;    IntBP20   { rd24(IntN24, IntBP20);      }
+:MVP IntBP24,[IntBP20]     is             op0_8=0xF2; op0_8=0x00; IntBP24;   IntBP20   { rd24(IntBP24, IntBP20);     }
+:MVP IntPX24,[IntBP20]     is op0_8=0x34; op0_8=0xF2; op0_8=0x00; IntPX24;   IntBP20   { rd24(IntPX24, IntBP20);     }
+:MVP IntBPPX24,[IntBP20]   is op0_8=0x24; op0_8=0xF2; op0_8=0x00; IntBPPX24; IntBP20   { rd24(IntBPPX24, IntBP20);   }
+:MVP IntN24,[IntPY20]      is op0_8=0x33; op0_8=0xF2; op0_8=0x00; IntN24;    IntPY20   { rd24(IntN24, IntPY20);      }
+:MVP IntBP24,[IntPY20]     is op0_8=0x23; op0_8=0xF2; op0_8=0x00; IntBP24;   IntPY20   { rd24(IntBP24, IntPY20);     }
+:MVP IntPX24,[IntPY20]     is op0_8=0x37; op0_8=0xF2; op0_8=0x00; IntPX24;   IntPY20   { rd24(IntPX24, IntPY20);     }
+:MVP IntBPPX24,[IntPY20]   is op0_8=0x27; op0_8=0xF2; op0_8=0x00; IntBPPX24; IntPY20   { rd24(IntBPPX24, IntPY20);   }
+:MVP IntN24,[IntBPPY20]    is op0_8=0x31; op0_8=0xF2; op0_8=0x00; IntN24;    IntBPPY20 { rd24(IntN24, IntBPPY20);    }
+:MVP IntBP24,[IntBPPY20]   is op0_8=0x21; op0_8=0xF2; op0_8=0x00; IntBP24;   IntBPPY20 { rd24(IntBP24, IntBPPY20);   }
+:MVP IntPX24,[IntBPPY20]   is op0_8=0x35; op0_8=0xF2; op0_8=0x00; IntPX24;   IntBPPY20 { rd24(IntPX24, IntBPPY20);   }
+:MVP IntBPPX24,[IntBPPY20] is op0_8=0x25; op0_8=0xF2; op0_8=0x00; IntBPPX24; IntBPPY20 { rd24(IntBPPX24, IntBPPY20); }
+
+# mv xyu,[(int)+off]
+
+:MV XYUL,[IntN20+off8]    is op0_8=0x30; op3_5=0b10011 & XYUL; op0_8=0x80; IntN20;    off8 { rd20(XYUL, IntN20+off8);    }
+:MV XYUL,[IntBP20+off8]   is             op3_5=0b10011 & XYUL; op0_8=0x80; IntBP20;   off8 { rd20(XYUL, IntBP20+off8);   }
+:MV XYUL,[IntPX20+off8]   is op0_8=0x34; op3_5=0b10011 & XYUL; op0_8=0x80; IntPX20;   off8 { rd20(XYUL, IntPX20+off8);   }
+:MV XYUL,[IntBPPX20+off8] is op0_8=0x24; op3_5=0b10011 & XYUL; op0_8=0x80; IntBPPX20; off8 { rd20(XYUL, IntBPPX20+off8); }
+:MV XYUL,[IntN20-off8]    is op0_8=0x30; op3_5=0b10011 & XYUL; op0_8=0xC0; IntN20;    off8 { rd20(XYUL, IntN20-off8);    }
+:MV XYUL,[IntBP20-off8]   is             op3_5=0b10011 & XYUL; op0_8=0xC0; IntBP20;   off8 { rd20(XYUL, IntBP20-off8);   }
+:MV XYUL,[IntPX20-off8]   is op0_8=0x34; op3_5=0b10011 & XYUL; op0_8=0xC0; IntPX20;   off8 { rd20(XYUL, IntPX20-off8);   }
+:MV XYUL,[IntBPPX20-off8] is op0_8=0x24; op3_5=0b10011 & XYUL; op0_8=0xC0; IntBPPX20; off8 { rd20(XYUL, IntBPPX20-off8); }
+
+# mvp (int),[(int)+off]
+
+:MVP IntN24,[IntN20+off8]       is op0_8=0x32; op0_8=0xF2; op0_8=0x80; IntN24;    IntN20;    off8 { rd24(IntN24, IntN20+off8);       }
+:MVP IntBP24,[IntN20+off8]      is op0_8=0x22; op0_8=0xF2; op0_8=0x80; IntBP24;   IntN20;    off8 { rd24(IntBP24, IntN20+off8);      }
+:MVP IntPX24,[IntN20+off8]      is op0_8=0x36; op0_8=0xF2; op0_8=0x80; IntPX24;   IntN20;    off8 { rd24(IntPX24, IntN20+off8);      }
+:MVP IntBPPX24,[IntN20+off8]    is op0_8=0x26; op0_8=0xF2; op0_8=0x80; IntBPPX24; IntN20;    off8 { rd24(IntBPPX24, IntN20+off8);    }
+:MVP IntN24,[IntBP20+off8]      is op0_8=0x30; op0_8=0xF2; op0_8=0x80; IntN24;    IntBP20;   off8 { rd24(IntN24, IntBP20+off8);      }
+:MVP IntBP24,[IntBP20+off8]     is             op0_8=0xF2; op0_8=0x80; IntBP24;   IntBP20;   off8 { rd24(IntBP24, IntBP20+off8);     }
+:MVP IntPX24,[IntBP20+off8]     is op0_8=0x34; op0_8=0xF2; op0_8=0x80; IntPX24;   IntBP20;   off8 { rd24(IntPX24, IntBP20+off8);     }
+:MVP IntBPPX24,[IntBP20+off8]   is op0_8=0x24; op0_8=0xF2; op0_8=0x80; IntBPPX24; IntBP20;   off8 { rd24(IntBPPX24, IntBP20+off8);   }
+:MVP IntN24,[IntPY20+off8]      is op0_8=0x33; op0_8=0xF2; op0_8=0x80; IntN24;    IntPY20;   off8 { rd24(IntN24, IntPY20+off8);      }
+:MVP IntBP24,[IntPY20+off8]     is op0_8=0x23; op0_8=0xF2; op0_8=0x80; IntBP24;   IntPY20;   off8 { rd24(IntBP24, IntPY20+off8);     }
+:MVP IntPX24,[IntPY20+off8]     is op0_8=0x37; op0_8=0xF2; op0_8=0x80; IntPX24;   IntPY20;   off8 { rd24(IntPX24, IntPY20+off8);     }
+:MVP IntBPPX24,[IntPY20+off8]   is op0_8=0x27; op0_8=0xF2; op0_8=0x80; IntBPPX24; IntPY20;   off8 { rd24(IntBPPX24, IntPY20+off8);   }
+:MVP IntN24,[IntBPPY20+off8]    is op0_8=0x31; op0_8=0xF2; op0_8=0x80; IntN24;    IntBPPY20; off8 { rd24(IntN24, IntBPPY20+off8);    }
+:MVP IntBP24,[IntBPPY20+off8]   is op0_8=0x21; op0_8=0xF2; op0_8=0x80; IntBP24;   IntBPPY20; off8 { rd24(IntBP24, IntBPPY20+off8);   }
+:MVP IntPX24,[IntBPPY20+off8]   is op0_8=0x35; op0_8=0xF2; op0_8=0x80; IntPX24;   IntBPPY20; off8 { rd24(IntPX24, IntBPPY20+off8);   }
+:MVP IntBPPX24,[IntBPPY20+off8] is op0_8=0x25; op0_8=0xF2; op0_8=0x80; IntBPPX24; IntBPPY20; off8 { rd24(IntBPPX24, IntBPPY20+off8); }
+
+:MVP IntN24,[IntN20-off8]       is op0_8=0x32; op0_8=0xF2; op0_8=0xC0; IntN24;    IntN20;    off8 { rd24(IntN24, IntN20-off8);       }
+:MVP IntBP24,[IntN20-off8]      is op0_8=0x22; op0_8=0xF2; op0_8=0xC0; IntBP24;   IntN20;    off8 { rd24(IntBP24, IntN20-off8);      }
+:MVP IntPX24,[IntN20-off8]      is op0_8=0x36; op0_8=0xF2; op0_8=0xC0; IntPX24;   IntN20;    off8 { rd24(IntPX24, IntN20-off8);      }
+:MVP IntBPPX24,[IntN20-off8]    is op0_8=0x26; op0_8=0xF2; op0_8=0xC0; IntBPPX24; IntN20;    off8 { rd24(IntBPPX24, IntN20-off8);    }
+:MVP IntN24,[IntBP20-off8]      is op0_8=0x30; op0_8=0xF2; op0_8=0xC0; IntN24;    IntBP20;   off8 { rd24(IntN24, IntBP20-off8);      }
+:MVP IntBP24,[IntBP20-off8]     is             op0_8=0xF2; op0_8=0xC0; IntBP24;   IntBP20;   off8 { rd24(IntBP24, IntBP20-off8);     }
+:MVP IntPX24,[IntBP20-off8]     is op0_8=0x34; op0_8=0xF2; op0_8=0xC0; IntPX24;   IntBP20;   off8 { rd24(IntPX24, IntBP20-off8);     }
+:MVP IntBPPX24,[IntBP20-off8]   is op0_8=0x24; op0_8=0xF2; op0_8=0xC0; IntBPPX24; IntBP20;   off8 { rd24(IntBPPX24, IntBP20-off8);   }
+:MVP IntN24,[IntPY20-off8]      is op0_8=0x33; op0_8=0xF2; op0_8=0xC0; IntN24;    IntPY20;   off8 { rd24(IntN24, IntPY20-off8);      }
+:MVP IntBP24,[IntPY20-off8]     is op0_8=0x23; op0_8=0xF2; op0_8=0xC0; IntBP24;   IntPY20;   off8 { rd24(IntBP24, IntPY20-off8);     }
+:MVP IntPX24,[IntPY20-off8]     is op0_8=0x37; op0_8=0xF2; op0_8=0xC0; IntPX24;   IntPY20;   off8 { rd24(IntPX24, IntPY20-off8);     }
+:MVP IntBPPX24,[IntPY20-off8]   is op0_8=0x27; op0_8=0xF2; op0_8=0xC0; IntBPPX24; IntPY20;   off8 { rd24(IntBPPX24, IntPY20-off8);   }
+:MVP IntN24,[IntBPPY20-off8]    is op0_8=0x31; op0_8=0xF2; op0_8=0xC0; IntN24;    IntBPPY20; off8 { rd24(IntN24, IntBPPY20-off8);    }
+:MVP IntBP24,[IntBPPY20-off8]   is op0_8=0x21; op0_8=0xF2; op0_8=0xC0; IntBP24;   IntBPPY20; off8 { rd24(IntBP24, IntBPPY20-off8);   }
+:MVP IntPX24,[IntBPPY20-off8]   is op0_8=0x35; op0_8=0xF2; op0_8=0xC0; IntPX24;   IntBPPY20; off8 { rd24(IntPX24, IntBPPY20-off8);   }
+:MVP IntBPPX24,[IntBPPY20-off8] is op0_8=0x25; op0_8=0xF2; op0_8=0xC0; IntBPPX24; IntBPPY20; off8 { rd24(IntBPPX24, IntBPPY20-off8); }
+
+### Block Transmission Command
+
+:MVL IntN8,IntN8_2     is op0_8=0x32; op0_8=0xCB; IntN8;    IntN8_2  { }
+:MVL IntBP8,IntN8      is op0_8=0x22; op0_8=0xCB; IntBP8;   IntN8    { }
+:MVL IntPX8,IntN8      is op0_8=0x36; op0_8=0xCB; IntPX8;   IntN8    { }
+:MVL IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xCB; IntBPPX8; IntN8    { }
+:MVL IntN8,IntBP8      is op0_8=0x30; op0_8=0xCB; IntN8;    IntBP8   { }
+:MVL IntBP8,IntBP8_2   is             op0_8=0xCB; IntBP8;   IntBP8_2 { }
+:MVL IntPX8,IntBP8     is op0_8=0x34; op0_8=0xCB; IntPX8;   IntBP8   { }
+:MVL IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xCB; IntBPPX8; IntBP8   { }
+:MVL IntN8,IntPY8      is op0_8=0x33; op0_8=0xCB; IntN8;    IntPY8   { }
+:MVL IntBP8,IntPY8     is op0_8=0x23; op0_8=0xCB; IntBP8;   IntPY8   { }
+:MVL IntPX8,IntPY8     is op0_8=0x37; op0_8=0xCB; IntPX8;   IntPY8   { }
+:MVL IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xCB; IntBPPX8; IntPY8   { }
+:MVL IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xCB; IntN8;    IntBPPY8 { }
+:MVL IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xCB; IntBP8;   IntBPPY8 { }
+:MVL IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xCB; IntPX8;   IntBPPY8 { }
+:MVL IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xCB; IntBPPX8; IntBPPY8 { }
+
+:MVLD IntN8,IntN8_2     is op0_8=0x32; op0_8=0xCF; IntN8;    IntN8_2  { }
+:MVLD IntBP8,IntN8      is op0_8=0x22; op0_8=0xCF; IntBP8;   IntN8    { }
+:MVLD IntPX8,IntN8      is op0_8=0x36; op0_8=0xCF; IntPX8;   IntN8    { }
+:MVLD IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xCF; IntBPPX8; IntN8    { }
+:MVLD IntN8,IntBP8      is op0_8=0x30; op0_8=0xCF; IntN8;    IntBP8   { }
+:MVLD IntBP8,IntBP8_2   is             op0_8=0xCF; IntBP8;   IntBP8_2 { }
+:MVLD IntPX8,IntBP8     is op0_8=0x34; op0_8=0xCF; IntPX8;   IntBP8   { }
+:MVLD IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xCF; IntBPPX8; IntBP8   { }
+:MVLD IntN8,IntPY8      is op0_8=0x33; op0_8=0xCF; IntN8;    IntPY8   { }
+:MVLD IntBP8,IntPY8     is op0_8=0x23; op0_8=0xCF; IntBP8;   IntPY8   { }
+:MVLD IntPX8,IntPY8     is op0_8=0x37; op0_8=0xCF; IntPX8;   IntPY8   { }
+:MVLD IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xCF; IntBPPX8; IntPY8   { }
+:MVLD IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xCF; IntN8;    IntBPPY8 { }
+:MVLD IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xCF; IntBP8;   IntBPPY8 { }
+:MVLD IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xCF; IntPX8;   IntBPPY8 { }
+:MVLD IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xCF; IntBPPX8; IntBPPY8 { }
+
+:MVL Ext24,IntN8    is op0_8=0x30; op0_8=0xDB; Ext24; IntN8    { }
+:MVL Ext24,IntBP8   is             op0_8=0xDB; Ext24; IntBP8   { }
+:MVL Ext24,IntPX8   is op0_8=0x34; op0_8=0xDB; Ext24; IntPX8   { }
+:MVL Ext24,IntBPPX8 is op0_8=0x24; op0_8=0xDB; Ext24; IntBPPX8 { }
+
+:MVL MemRegInc,IntN8    is op0_8=0x30; op0_8=0xEB; MemRegInc; IntN8    { }
+:MVL MemRegInc,IntBP8   is             op0_8=0xEB; MemRegInc; IntBP8   { }
+:MVL MemRegInc,IntPX8   is op0_8=0x34; op0_8=0xEB; MemRegInc; IntPX8   { }
+:MVL MemRegInc,IntBPPX8 is op0_8=0x24; op0_8=0xEB; MemRegInc; IntBPPX8 { }
+
+:MVL MemRegDec,IntN8    is op0_8=0x30; op0_8=0xEB; MemRegDec; IntN8    { }
+:MVL MemRegDec,IntBP8   is             op0_8=0xEB; MemRegDec; IntBP8   { }
+:MVL MemRegDec,IntPX8   is op0_8=0x34; op0_8=0xEB; MemRegDec; IntPX8   { }
+:MVL MemRegDec,IntBPPX8 is op0_8=0x24; op0_8=0xEB; MemRegDec; IntBPPX8 { }
+
+:MVL [R20L+off8],IntN8    is op0_8=0x30; op0_8=0x5E; R20L & op3_5=0b10000; IntN8;    off8 { }
+:MVL [R20L+off8],IntBP8   is             op0_8=0x5E; R20L & op3_5=0b10000; IntBP8;   off8 { }
+:MVL [R20L+off8],IntPX8   is op0_8=0x34; op0_8=0x5E; R20L & op3_5=0b10000; IntPX8;   off8 { }
+:MVL [R20L+off8],IntBPPX8 is op0_8=0x24; op0_8=0x5E; R20L & op3_5=0b10000; IntBPPX8; off8 { }
+
+:MVL [R20L-off8],IntN8    is op0_8=0x30; op0_8=0x5E; R20L & op3_5=0b11000; IntN8;    off8 { }
+:MVL [R20L-off8],IntBP8   is             op0_8=0x5E; R20L & op3_5=0b11000; IntBP8;   off8 { }
+:MVL [R20L-off8],IntPX8   is op0_8=0x34; op0_8=0x5E; R20L & op3_5=0b11000; IntPX8;   off8 { }
+:MVL [R20L-off8],IntBPPX8 is op0_8=0x24; op0_8=0x5E; R20L & op3_5=0b11000; IntBPPX8; off8 { }
+
+:MVL [IntN8],IntN8_2     is op0_8=0x32; op0_8=0xFB; op0_8=0x00; IntN8;    IntN8_2  { }
+:MVL [IntBP8],IntN8      is op0_8=0x22; op0_8=0xFB; op0_8=0x00; IntBP8;   IntN8    { }
+:MVL [IntPX8],IntN8      is op0_8=0x36; op0_8=0xFB; op0_8=0x00; IntPX8;   IntN8    { }
+:MVL [IntBPPX8],IntN8    is op0_8=0x26; op0_8=0xFB; op0_8=0x00; IntBPPX8; IntN8    { }
+:MVL [IntN8],IntBP8      is op0_8=0x30; op0_8=0xFB; op0_8=0x00; IntN8;    IntBP8   { }
+:MVL [IntBP8],IntBP8_2   is             op0_8=0xFB; op0_8=0x00; IntBP8;   IntBP8_2 { }
+:MVL [IntPX8],IntBP8     is op0_8=0x34; op0_8=0xFB; op0_8=0x00; IntPX8;   IntBP8   { }
+:MVL [IntBPPX8],IntBP8   is op0_8=0x24; op0_8=0xFB; op0_8=0x00; IntBPPX8; IntBP8   { }
+:MVL [IntN8],IntPY8      is op0_8=0x33; op0_8=0xFB; op0_8=0x00; IntN8;    IntPY8   { }
+:MVL [IntBP8],IntPY8     is op0_8=0x23; op0_8=0xFB; op0_8=0x00; IntBP8;   IntPY8   { }
+:MVL [IntPX8],IntPY8     is op0_8=0x37; op0_8=0xFB; op0_8=0x00; IntPX8;   IntPY8   { }
+:MVL [IntBPPX8],IntPY8   is op0_8=0x27; op0_8=0xFB; op0_8=0x00; IntBPPX8; IntPY8   { }
+:MVL [IntN8],IntBPPY8    is op0_8=0x31; op0_8=0xFB; op0_8=0x00; IntN8;    IntBPPY8 { }
+:MVL [IntBP8],IntBPPY8   is op0_8=0x21; op0_8=0xFB; op0_8=0x00; IntBP8;   IntBPPY8 { }
+:MVL [IntPX8],IntBPPY8   is op0_8=0x35; op0_8=0xFB; op0_8=0x00; IntPX8;   IntBPPY8 { }
+:MVL [IntBPPX8],IntBPPY8 is op0_8=0x25; op0_8=0xFB; op0_8=0x00; IntBPPX8; IntBPPY8 { }
+ 
+:MVL [IntN8+off8],IntN8_2     is op0_8=0x32; op0_8=0xFB; op0_8=0x80; IntN8;    IntN8_2;  off8 { }
+:MVL [IntBP8+off8],IntN8      is op0_8=0x22; op0_8=0xFB; op0_8=0x80; IntBP8;   IntN8;    off8 { }
+:MVL [IntPX8+off8],IntN8      is op0_8=0x36; op0_8=0xFB; op0_8=0x80; IntPX8;   IntN8;    off8 { }
+:MVL [IntBPPX8+off8],IntN8    is op0_8=0x26; op0_8=0xFB; op0_8=0x80; IntBPPX8; IntN8;    off8 { }
+:MVL [IntN8+off8],IntBP8      is op0_8=0x30; op0_8=0xFB; op0_8=0x80; IntN8;    IntBP8;   off8 { }
+:MVL [IntBP8+off8],IntBP8_2   is             op0_8=0xFB; op0_8=0x80; IntBP8;   IntBP8_2; off8 { }
+:MVL [IntPX8+off8],IntBP8     is op0_8=0x34; op0_8=0xFB; op0_8=0x80; IntPX8;   IntBP8;   off8 { }
+:MVL [IntBPPX8+off8],IntBP8   is op0_8=0x24; op0_8=0xFB; op0_8=0x80; IntBPPX8; IntBP8;   off8 { }
+:MVL [IntN8+off8],IntPY8      is op0_8=0x33; op0_8=0xFB; op0_8=0x80; IntN8;    IntPY8;   off8 { }
+:MVL [IntBP8+off8],IntPY8     is op0_8=0x23; op0_8=0xFB; op0_8=0x80; IntBP8;   IntPY8;   off8 { }
+:MVL [IntPX8+off8],IntPY8     is op0_8=0x37; op0_8=0xFB; op0_8=0x80; IntPX8;   IntPY8;   off8 { }
+:MVL [IntBPPX8+off8],IntPY8   is op0_8=0x27; op0_8=0xFB; op0_8=0x80; IntBPPX8; IntPY8;   off8 { }
+:MVL [IntN8+off8],IntBPPY8    is op0_8=0x31; op0_8=0xFB; op0_8=0x80; IntN8;    IntBPPY8; off8 { }
+:MVL [IntBP8+off8],IntBPPY8   is op0_8=0x21; op0_8=0xFB; op0_8=0x80; IntBP8;   IntBPPY8; off8 { }
+:MVL [IntPX8+off8],IntBPPY8   is op0_8=0x35; op0_8=0xFB; op0_8=0x80; IntPX8;   IntBPPY8; off8 { }
+:MVL [IntBPPX8+off8],IntBPPY8 is op0_8=0x25; op0_8=0xFB; op0_8=0x80; IntBPPX8; IntBPPY8; off8 { }
+
+:MVL [IntN8-off8],IntN8_2 is op0_8=0x32; op0_8=0xFB; op0_8=0xC0; IntN8; IntN8_2; off8 { }
+:MVL [IntBP8-off8],IntN8 is op0_8=0x22; op0_8=0xFB; op0_8=0xC0; IntBP8; IntN8; off8 { }
+:MVL [IntPX8-off8],IntN8 is op0_8=0x36; op0_8=0xFB; op0_8=0xC0; IntPX8; IntN8; off8 { }
+:MVL [IntBPPX8-off8],IntN8 is op0_8=0x26; op0_8=0xFB; op0_8=0xC0; IntBPPX8; IntN8; off8 { }
+:MVL [IntN8-off8],IntBP8 is op0_8=0x30; op0_8=0xFB; op0_8=0xC0; IntN8; IntBP8; off8 { }
+:MVL [IntBP8-off8],IntBP8_2 is op0_8=0xFB; op0_8=0xC0; IntBP8; IntBP8_2; off8 { }
+:MVL [IntPX8-off8],IntBP8 is op0_8=0x34; op0_8=0xFB; op0_8=0xC0; IntPX8; IntBP8; off8 { }
+:MVL [IntBPPX8-off8],IntBP8 is op0_8=0x24; op0_8=0xFB; op0_8=0xC0; IntBPPX8; IntBP8; off8 { }
+:MVL [IntN8-off8],IntPY8 is op0_8=0x33; op0_8=0xFB; op0_8=0xC0; IntN8; IntPY8; off8 { }
+:MVL [IntBP8-off8],IntPY8 is op0_8=0x23; op0_8=0xFB; op0_8=0xC0; IntBP8; IntPY8; off8 { }
+:MVL [IntPX8-off8],IntPY8 is op0_8=0x37; op0_8=0xFB; op0_8=0xC0; IntPX8; IntPY8; off8 { }
+:MVL [IntBPPX8-off8],IntPY8 is op0_8=0x27; op0_8=0xFB; op0_8=0xC0; IntBPPX8; IntPY8; off8 { }
+:MVL [IntN8-off8],IntBPPY8 is op0_8=0x31; op0_8=0xFB; op0_8=0xC0; IntN8; IntBPPY8; off8 { }
+:MVL [IntBP8-off8],IntBPPY8 is op0_8=0x21; op0_8=0xFB; op0_8=0xC0; IntBP8; IntBPPY8; off8 { }
+:MVL [IntPX8-off8],IntBPPY8 is op0_8=0x35; op0_8=0xFB; op0_8=0xC0; IntPX8; IntBPPY8; off8 { }
+:MVL [IntBPPX8-off8],IntBPPY8 is op0_8=0x25; op0_8=0xFB; op0_8=0xC0; IntBPPX8; IntBPPY8; off8 { }
+
+:MVL IntN8,Ext24 is op0_8=0x30; op0_8=0xD3; IntN8; Ext24 { }
+:MVL IntBP8,Ext24 is op0_8=0xD3; IntBP8; Ext24 { }
+:MVL IntPX8,Ext24 is op0_8=0x34; op0_8=0xD3; IntPX8; Ext24 { }
+:MVL IntBPPX8,Ext24 is op0_8=0x24; op0_8=0xD3; IntBPPX8; Ext24 { }
+
+:MVL IntN8,MemRegInc is op0_8=0x30; op0_8=0xE3; MemRegInc; IntN8 { }
+:MVL IntBP8,MemRegInc is op0_8=0xE3; MemRegInc; IntBP8 { }
+:MVL IntPX8,MemRegInc is op0_8=0x34; op0_8=0xE3; MemRegInc; IntPX8 { }
+:MVL IntBPPX8,MemRegInc is op0_8=0x24; op0_8=0xE3; MemRegInc; IntBPPX8 { }
+
+:MVL IntN8,MemRegDec is op0_8=0x30; op0_8=0xE3; MemRegDec; IntN8 { }
+:MVL IntBP8,MemRegDec is op0_8=0xE3; MemRegDec; IntBP8 { }
+:MVL IntPX8,MemRegDec is op0_8=0x34; op0_8=0xE3; MemRegDec; IntPX8 { }
+:MVL IntBPPX8,MemRegDec is op0_8=0x24; op0_8=0xE3; MemRegDec; IntBPPX8 { }
+
+:MVL IntN8,[R20L+off8] is op0_8=0x30; op0_8=0x56; R20L & op3_5=0b10000; IntN8; off8 { }
+:MVL IntBP8,[R20L+off8] is op0_8=0x56; R20L & op3_5=0b10000; IntBP8; off8 { }
+:MVL IntPX8,[R20L+off8] is op0_8=0x34; op0_8=0x56; R20L & op3_5=0b10000; IntPX8; off8 { }
+:MVL IntBPPX8,[R20L+off8] is op0_8=0x24; op0_8=0x56; R20L & op3_5=0b10000; IntBPPX8; off8 { }
+
+:MVL IntN8,[R20L-off8] is op0_8=0x30; op0_8=0x56; R20L & op3_5=0b11000; IntN8; off8 { }
+:MVL IntBP8,[R20L-off8] is op0_8=0x56; R20L & op3_5=0b11000; IntBP8; off8 { }
+:MVL IntPX8,[R20L-off8] is op0_8=0x34; op0_8=0x56; R20L & op3_5=0b11000; IntPX8; off8 { }
+:MVL IntBPPX8,[R20L-off8] is op0_8=0x24; op0_8=0x56; R20L & op3_5=0b11000; IntBPPX8; off8 { }
+
+:MVL IntN8,[IntN8_2] is op0_8=0x32; op0_8=0xF3; op0_8=0x00; IntN8; IntN8_2 { }
+:MVL IntBP8,[IntN8] is op0_8=0x22; op0_8=0xF3; op0_8=0x00; IntBP8; IntN8 { }
+:MVL IntPX8,[IntN8] is op0_8=0x36; op0_8=0xF3; op0_8=0x00; IntPX8; IntN8 { }
+:MVL IntBPPX8,[IntN8] is op0_8=0x26; op0_8=0xF3; op0_8=0x00; IntBPPX8; IntN8 { }
+:MVL IntN8,[IntBP8] is op0_8=0x30; op0_8=0xF3; op0_8=0x00; IntN8; IntBP8 { }
+:MVL IntBP8,[IntBP8_2] is op0_8=0xF3; op0_8=0x00; IntBP8; IntBP8_2 { }
+:MVL IntPX8,[IntBP8] is op0_8=0x34; op0_8=0xF3; op0_8=0x00; IntPX8; IntBP8 { }
+:MVL IntBPPX8,[IntBP8] is op0_8=0x24; op0_8=0xF3; op0_8=0x00; IntBPPX8; IntBP8 { }
+:MVL IntN8,[IntPY8] is op0_8=0x33; op0_8=0xF3; op0_8=0x00; IntN8; IntPY8 { }
+:MVL IntBP8,[IntPY8] is op0_8=0x23; op0_8=0xF3; op0_8=0x00; IntBP8; IntPY8 { }
+:MVL IntPX8,[IntPY8] is op0_8=0x37; op0_8=0xF3; op0_8=0x00; IntPX8; IntPY8 { }
+:MVL IntBPPX8,[IntPY8] is op0_8=0x27; op0_8=0xF3; op0_8=0x00; IntBPPX8; IntPY8 { }
+:MVL IntN8,[IntBPPY8] is op0_8=0x31; op0_8=0xF3; op0_8=0x00; IntN8; IntBPPY8 { }
+:MVL IntBP8,[IntBPPY8] is op0_8=0x21; op0_8=0xF3; op0_8=0x00; IntBP8; IntBPPY8 { }
+:MVL IntPX8,[IntBPPY8] is op0_8=0x35; op0_8=0xF3; op0_8=0x00; IntPX8; IntBPPY8 { }
+:MVL IntBPPX8,[IntBPPY8] is op0_8=0x25; op0_8=0xF3; op0_8=0x00; IntBPPX8; IntBPPY8 { }
+
+:MVL IntN8,[IntN8_2+off8] is op0_8=0x32; op0_8=0xF3; op0_8=0x80; IntN8; IntN8_2; off8 { }
+:MVL IntBP8,[IntN8+off8] is op0_8=0x22; op0_8=0xF3; op0_8=0x80; IntBP8; IntN8; off8 { }
+:MVL IntPX8,[IntN8+off8] is op0_8=0x36; op0_8=0xF3; op0_8=0x80; IntPX8; IntN8; off8 { }
+:MVL IntBPPX8,[IntN8+off8] is op0_8=0x26; op0_8=0xF3; op0_8=0x80; IntBPPX8; IntN8; off8 { }
+:MVL IntN8,[IntBP8+off8] is op0_8=0x30; op0_8=0xF3; op0_8=0x80; IntN8; IntBP8; off8 { }
+:MVL IntBP8,[IntBP8_2+off8] is op0_8=0xF3; op0_8=0x80; IntBP8; IntBP8_2; off8 { }
+:MVL IntPX8,[IntBP8+off8] is op0_8=0x34; op0_8=0xF3; op0_8=0x80; IntPX8; IntBP8; off8 { }
+:MVL IntBPPX8,[IntBP8+off8] is op0_8=0x24; op0_8=0xF3; op0_8=0x80; IntBPPX8; IntBP8; off8 { }
+:MVL IntN8,[IntPY8+off8] is op0_8=0x33; op0_8=0xF3; op0_8=0x80; IntN8; IntPY8; off8 { }
+:MVL IntBP8,[IntPY8+off8] is op0_8=0x23; op0_8=0xF3; op0_8=0x80; IntBP8; IntPY8; off8 { }
+:MVL IntPX8,[IntPY8+off8] is op0_8=0x37; op0_8=0xF3; op0_8=0x80; IntPX8; IntPY8; off8 { }
+:MVL IntBPPX8,[IntPY8+off8] is op0_8=0x27; op0_8=0xF3; op0_8=0x80; IntBPPX8; IntPY8; off8 { }
+:MVL IntN8,[IntBPPY8+off8] is op0_8=0x31; op0_8=0xF3; op0_8=0x80; IntN8; IntBPPY8; off8 { }
+:MVL IntBP8,[IntBPPY8+off8] is op0_8=0x21; op0_8=0xF3; op0_8=0x80; IntBP8; IntBPPY8; off8 { }
+:MVL IntPX8,[IntBPPY8+off8] is op0_8=0x35; op0_8=0xF3; op0_8=0x80; IntPX8; IntBPPY8; off8 { }
+:MVL IntBPPX8,[IntBPPY8+off8] is op0_8=0x25; op0_8=0xF3; op0_8=0x80; IntBPPX8; IntBPPY8; off8 { }
+
+:MVL IntN8,[IntN8_2-off8] is op0_8=0x32; op0_8=0xF3; op0_8=0xC0; IntN8; IntN8_2; off8 { }
+:MVL IntBP8,[IntN8-off8] is op0_8=0x22; op0_8=0xF3; op0_8=0xC0; IntBP8; IntN8; off8 { }
+:MVL IntPX8,[IntN8-off8] is op0_8=0x36; op0_8=0xF3; op0_8=0xC0; IntPX8; IntN8; off8 { }
+:MVL IntBPPX8,[IntN8-off8] is op0_8=0x26; op0_8=0xF3; op0_8=0xC0; IntBPPX8; IntN8; off8 { }
+:MVL IntN8,[IntBP8-off8] is op0_8=0x30; op0_8=0xF3; op0_8=0xC0; IntN8; IntBP8; off8 { }
+:MVL IntBP8,[IntBP8_2-off8] is op0_8=0xF3; op0_8=0xC0; IntBP8; IntBP8_2; off8 { }
+:MVL IntPX8,[IntBP8-off8] is op0_8=0x34; op0_8=0xF3; op0_8=0xC0; IntPX8; IntBP8; off8 { }
+:MVL IntBPPX8,[IntBP8-off8] is op0_8=0x24; op0_8=0xF3; op0_8=0xC0; IntBPPX8; IntBP8; off8 { }
+:MVL IntN8,[IntPY8-off8] is op0_8=0x33; op0_8=0xF3; op0_8=0xC0; IntN8; IntPY8; off8 { }
+:MVL IntBP8,[IntPY8-off8] is op0_8=0x23; op0_8=0xF3; op0_8=0xC0; IntBP8; IntPY8; off8 { }
+:MVL IntPX8,[IntPY8-off8] is op0_8=0x37; op0_8=0xF3; op0_8=0xC0; IntPX8; IntPY8; off8 { }
+:MVL IntBPPX8,[IntPY8-off8] is op0_8=0x27; op0_8=0xF3; op0_8=0xC0; IntBPPX8; IntPY8; off8 { }
+:MVL IntN8,[IntBPPY8-off8] is op0_8=0x31; op0_8=0xF3; op0_8=0xC0; IntN8; IntBPPY8; off8 { }
+:MVL IntBP8,[IntBPPY8-off8] is op0_8=0x21; op0_8=0xF3; op0_8=0xC0; IntBP8; IntBPPY8; off8 { }
+:MVL IntPX8,[IntBPPY8-off8] is op0_8=0x35; op0_8=0xF3; op0_8=0xC0; IntPX8; IntBPPY8; off8 { }
+:MVL IntBPPX8,[IntBPPY8-off8] is op0_8=0x25; op0_8=0xF3; op0_8=0xC0; IntBPPX8; IntBPPY8; off8 { }
+
+### Transmission Command Between a and b
+
+:MV A,B is op0_8=0x74 & A & B { A = B; }
+:MV B,A is op0_8=0x75 & B & A { B = A; }
+
+### Exchange Command
+
+macro ex8_8(a, b) { tmp:1 = a; a = b; b = tmp; }
+macro ex16_16(a, b) { tmp:2 = a; a = b; b = tmp; }
+macro ex20_20(a, b) { tmp:3 = a; a = b; b = tmp; }
+macro ex24_24(a, b) { tmp:3 = a; a = b; b = tmp; }
+
+macro ex8_16(a, b) { tmp:1 = a; a = b[0, 7]; b = 0; b[0, 7] = tmp; }
+macro ex8_20(a, b) { tmp:1 = a; a = b[0, 7]; b = 0; b[0, 7] = tmp; }
+
+macro ex16_8(a, b) { tmp:2 = a; a = 0; a[0, 7] = b; b = tmp[0, 7]; }
+macro ex16_20(a, b) { tmp:2 = a; a = b[0, 15]; b = 0; b[0, 15] = tmp; }
+
+macro ex20_8(a, b) { tmp:3 = a; a = 0; a[0, 7] = b; b = tmp[0, 7]; }
+macro ex20_16(a, b) { tmp:3 = a; a = 0; a[0, 15] = b; b = tmp[0, 15]; }
+
+macro exl(a, b) {
+	
+	src:3 = a;
+	dst:3 = b;
+	
+<loop>
+	
+	tmp:1 = *:1 src;
+	*:1 src = *:1 dst;
+	*:1 dst = tmp;
+	
+	src = src + 1;
+	dst = dst + 1;
+	I = I - 1;
+	
+	if (I != 0) goto <loop>;
+}
+
+:EX A,B is op0_8=0xDD & A & B { ex8_8(A, B); }
+
+:EX R8H,R8L  is op0_8=0xED; R8H & R8L  { ex8_8(R8H, R8L);   }
+:EX R8H,R16L is op0_8=0xED; R8H & R16L { ex8_16(R8H, R16L); }
+:EX R8H,R20L is op0_8=0xED; R8H & R20L { ex8_20(R8H, R20L); }
+
+:EX R16H,R8L  is op0_8=0xED; R16H & R8L  { ex16_8(R16H, R8L);   }
+:EX R16H,R16L is op0_8=0xED; R16H & R16L { ex16_16(R16H, R16L); }
+:EX R16H,R20L is op0_8=0xED; R16H & R20L { ex16_20(R16H, R20L); }
+
+:EX R20H,R8L  is op0_8=0xED; R20H & R8L  { ex20_8(R20H, R8L);   }
+:EX R20H,R16L is op0_8=0xED; R20H & R16L { ex20_16(R20H, R16L); }
+:EX R20H,R20L is op0_8=0xED; R20H & R20L { ex20_20(R20H, R20L); }
+
+:EX IntN8,IntN8_2     is op0_8=0x32; op0_8=0xC0; IntN8;    IntN8_2  { ex8_8(IntN8, IntN8_2);     }
+:EX IntBP8,IntN8      is op0_8=0x22; op0_8=0xC0; IntBP8;   IntN8    { ex8_8(IntBP8, IntN8);      }
+:EX IntPX8,IntN8      is op0_8=0x36; op0_8=0xC0; IntPX8;   IntN8    { ex8_8(IntPX8, IntN8);      }
+:EX IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xC0; IntBPPX8; IntN8    { ex8_8(IntBPPX8, IntN8);    }
+:EX IntN8,IntBP8      is op0_8=0x30; op0_8=0xC0; IntN8;    IntBP8   { ex8_8(IntN8, IntBP8);      }
+:EX IntBP8,IntBP8_2   is             op0_8=0xC0; IntBP8;   IntBP8_2 { ex8_8(IntBP8, IntBP8_2);   }
+:EX IntPX8,IntBP8     is op0_8=0x34; op0_8=0xC0; IntPX8;   IntBP8   { ex8_8(IntPX8, IntBP8);     }
+:EX IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xC0; IntBPPX8; IntBP8   { ex8_8(IntBPPX8, IntBP8);   }
+:EX IntN8,IntPY8      is op0_8=0x33; op0_8=0xC0; IntN8;    IntPY8   { ex8_8(IntN8, IntPY8);      }
+:EX IntBP8,IntPY8     is op0_8=0x23; op0_8=0xC0; IntBP8;   IntPY8   { ex8_8(IntBP8, IntPY8);     }
+:EX IntPX8,IntPY8     is op0_8=0x37; op0_8=0xC0; IntPX8;   IntPY8   { ex8_8(IntPX8, IntPY8);     }
+:EX IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xC0; IntBPPX8; IntPY8   { ex8_8(IntBPPX8, IntPY8);   }
+:EX IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xC0; IntN8;    IntBPPY8 { ex8_8(IntN8, IntBPPY8);    }
+:EX IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xC0; IntBP8;   IntBPPY8 { ex8_8(IntBP8, IntBPPY8);   }
+:EX IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xC0; IntPX8;   IntBPPY8 { ex8_8(IntPX8, IntBPPY8);   }
+:EX IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xC0; IntBPPX8; IntBPPY8 { ex8_8(IntBPPX8, IntBPPY8); }
+
+:EXW IntN16,IntN16_2     is op0_8=0x32; op0_8=0xC1; IntN16;    IntN16_2  { ex16_16(IntN16, IntN16_2);     }
+:EXW IntBP16,IntN16      is op0_8=0x22; op0_8=0xC1; IntBP16;   IntN16    { ex16_16(IntBP16, IntN16);      }
+:EXW IntPX16,IntN16      is op0_8=0x36; op0_8=0xC1; IntPX16;   IntN16    { ex16_16(IntPX16, IntN16);      }
+:EXW IntBPPX16,IntN16    is op0_8=0x26; op0_8=0xC1; IntBPPX16; IntN16    { ex16_16(IntBPPX16, IntN16);    }
+:EXW IntN16,IntBP16      is op0_8=0x30; op0_8=0xC1; IntN16;    IntBP16   { ex16_16(IntN16, IntBP16);      }
+:EXW IntBP16,IntBP16_2   is             op0_8=0xC1; IntBP16;   IntBP16_2 { ex16_16(IntBP16, IntBP16_2);   }
+:EXW IntPX16,IntBP16     is op0_8=0x34; op0_8=0xC1; IntPX16;   IntBP16   { ex16_16(IntPX16, IntBP16);     }
+:EXW IntBPPX16,IntBP16   is op0_8=0x24; op0_8=0xC1; IntBPPX16; IntBP16   { ex16_16(IntBPPX16, IntBP16);   }
+:EXW IntN16,IntPY16      is op0_8=0x33; op0_8=0xC1; IntN16;    IntPY16   { ex16_16(IntN16, IntPY16);      }
+:EXW IntBP16,IntPY16     is op0_8=0x23; op0_8=0xC1; IntBP16;   IntPY16   { ex16_16(IntBP16, IntPY16);     }
+:EXW IntPX16,IntPY16     is op0_8=0x37; op0_8=0xC1; IntPX16;   IntPY16   { ex16_16(IntPX16, IntPY16);     }
+:EXW IntBPPX16,IntPY16   is op0_8=0x27; op0_8=0xC1; IntBPPX16; IntPY16   { ex16_16(IntBPPX16, IntPY16);   }
+:EXW IntN16,IntBPPY16    is op0_8=0x31; op0_8=0xC1; IntN16;    IntBPPY16 { ex16_16(IntN16, IntBPPY16);    }
+:EXW IntBP16,IntBPPY16   is op0_8=0x21; op0_8=0xC1; IntBP16;   IntBPPY16 { ex16_16(IntBP16, IntBPPY16);   }
+:EXW IntPX16,IntBPPY16   is op0_8=0x35; op0_8=0xC1; IntPX16;   IntBPPY16 { ex16_16(IntPX16, IntBPPY16);   }
+:EXW IntBPPX16,IntBPPY16 is op0_8=0x25; op0_8=0xC1; IntBPPX16; IntBPPY16 { ex16_16(IntBPPX16, IntBPPY16); }
+
+:EXP IntN24,IntN24_2     is op0_8=0x32; op0_8=0xC2; IntN24;    IntN24_2  { ex24_24(IntN24, IntN24_2);     }
+:EXP IntBP24,IntN24      is op0_8=0x22; op0_8=0xC2; IntBP24;   IntN24    { ex24_24(IntBP24, IntN24);      }
+:EXP IntPX24,IntN24      is op0_8=0x36; op0_8=0xC2; IntPX24;   IntN24    { ex24_24(IntPX24, IntN24);      }
+:EXP IntBPPX24,IntN24    is op0_8=0x26; op0_8=0xC2; IntBPPX24; IntN24    { ex24_24(IntBPPX24, IntN24);    }
+:EXP IntN24,IntBP24      is op0_8=0x30; op0_8=0xC2; IntN24;    IntBP24   { ex24_24(IntN24, IntBP24);      }
+:EXP IntBP24,IntBP24_2   is             op0_8=0xC2; IntBP24;   IntBP24_2 { ex24_24(IntBP24, IntBP24_2);   }
+:EXP IntPX24,IntBP24     is op0_8=0x34; op0_8=0xC2; IntPX24;   IntBP24   { ex24_24(IntPX24, IntBP24);     }
+:EXP IntBPPX24,IntBP24   is op0_8=0x24; op0_8=0xC2; IntBPPX24; IntBP24   { ex24_24(IntBPPX24, IntBP24);   }
+:EXP IntN24,IntPY24      is op0_8=0x33; op0_8=0xC2; IntN24;    IntPY24   { ex24_24(IntN24, IntPY24);      }
+:EXP IntBP24,IntPY24     is op0_8=0x23; op0_8=0xC2; IntBP24;   IntPY24   { ex24_24(IntBP24, IntPY24);     }
+:EXP IntPX24,IntPY24     is op0_8=0x37; op0_8=0xC2; IntPX24;   IntPY24   { ex24_24(IntPX24, IntPY24);     }
+:EXP IntBPPX24,IntPY24   is op0_8=0x27; op0_8=0xC2; IntBPPX24; IntPY24   { ex24_24(IntBPPX24, IntPY24);   }
+:EXP IntN24,IntBPPY24    is op0_8=0x31; op0_8=0xC2; IntN24;    IntBPPY24 { ex24_24(IntN24, IntBPPY24);    }
+:EXP IntBP24,IntBPPY24   is op0_8=0x21; op0_8=0xC2; IntBP24;   IntBPPY24 { ex24_24(IntBP24, IntBPPY24);   }
+:EXP IntPX24,IntBPPY24   is op0_8=0x35; op0_8=0xC2; IntPX24;   IntBPPY24 { ex24_24(IntPX24, IntBPPY24);   }
+:EXP IntBPPX24,IntBPPY24 is op0_8=0x25; op0_8=0xC2; IntBPPX24; IntBPPY24 { ex24_24(IntBPPX24, IntBPPY24); }
+
+:EXL IntNAddr,IntNAddr_2     is op0_8=0x32; op0_8=0xC3; IntNAddr;    IntNAddr_2  { exl(IntNAddr, IntNAddr_2);     }
+:EXL IntBPAddr,IntNAddr      is op0_8=0x22; op0_8=0xC3; IntBPAddr;   IntNAddr    { exl(IntBPAddr, IntNAddr);      }
+:EXL IntPXAddr,IntNAddr      is op0_8=0x36; op0_8=0xC3; IntPXAddr;   IntNAddr    { exl(IntPXAddr, IntNAddr);      }
+:EXL IntBPPXAddr,IntNAddr    is op0_8=0x26; op0_8=0xC3; IntBPPXAddr; IntNAddr    { exl(IntBPPXAddr, IntNAddr);    }
+:EXL IntNAddr,IntBPAddr      is op0_8=0x30; op0_8=0xC3; IntNAddr;    IntBPAddr   { exl(IntNAddr, IntBPAddr);      }
+:EXL IntBPAddr,IntBPAddr_2   is             op0_8=0xC3; IntBPAddr;   IntBPAddr_2 { exl(IntBPAddr, IntBPAddr_2);   }
+:EXL IntPXAddr,IntBPAddr     is op0_8=0x34; op0_8=0xC3; IntPXAddr;   IntBPAddr   { exl(IntPXAddr, IntBPAddr);     }
+:EXL IntBPPXAddr,IntBPAddr   is op0_8=0x24; op0_8=0xC3; IntBPPXAddr; IntBPAddr   { exl(IntBPPXAddr, IntBPAddr);   }
+:EXL IntNAddr,IntPYAddr      is op0_8=0x33; op0_8=0xC3; IntNAddr;    IntPYAddr   { exl(IntNAddr, IntPYAddr);      }
+:EXL IntBPAddr,IntPYAddr     is op0_8=0x23; op0_8=0xC3; IntBPAddr;   IntPYAddr   { exl(IntBPAddr, IntPYAddr);     }
+:EXL IntPXAddr,IntPYAddr     is op0_8=0x37; op0_8=0xC3; IntPXAddr;   IntPYAddr   { exl(IntPXAddr, IntPYAddr);     }
+:EXL IntBPPXAddr,IntPYAddr   is op0_8=0x27; op0_8=0xC3; IntBPPXAddr; IntPYAddr   { exl(IntBPPXAddr, IntPYAddr);   }
+:EXL IntNAddr,IntBPPYAddr    is op0_8=0x31; op0_8=0xC3; IntNAddr;    IntBPPYAddr { exl(IntNAddr, IntBPPYAddr);    }
+:EXL IntBPAddr,IntBPPYAddr   is op0_8=0x21; op0_8=0xC3; IntBPAddr;   IntBPPYAddr { exl(IntBPAddr, IntBPPYAddr);   }
+:EXL IntPXAddr,IntBPPYAddr   is op0_8=0x35; op0_8=0xC3; IntPXAddr;   IntBPPYAddr { exl(IntPXAddr, IntBPPYAddr);   }
+:EXL IntBPPXAddr,IntBPPYAddr is op0_8=0x25; op0_8=0xC3; IntBPPXAddr; IntBPPYAddr { exl(IntBPPXAddr, IntBPPYAddr); }
+
+### Dyadic Operation No.1 (Add/Subtract Command)
+
+macro add8_8(a, b) {
+	C = carry(a, b);
+	a = a + b;
+	Z = a == 0;
+}
+macro sub8_8(a, b) {
+	C = a < b;
+	a = a - b;
+	Z = a == 0;
+}
+macro adc8_8(a, b) {
+	local C_copy:1 = C;
+	C = carry(a, b);
+	a = a + b;
+	C = C || carry(a, C_copy);	
+	a = a + C_copy;
+	Z = a == 0;
+}
+macro sbc8_8(a, b) {
+	local C_copy:1 = C;
+	C = a < b;
+	a = a - b;
+	C = C || a < C_copy;
+	a = a - C_copy;
+	Z = a == 0;
+}
+macro add8_16(a, b) { add8_8(a, b:1); }
+macro sub8_16(a, b) { sub8_8(a, b:1); }
+macro add8_20(a, b) { add8_8(a, b:1); }
+macro sub8_20(a, b) { sub8_8(a, b:1); }
+
+
+macro add16_16(a, b) {
+	C = carry(a, b);
+	a = a + b;
+	Z = a == 0;
+}
+macro sub16_16(a, b) {
+	C = a < b;
+	a = a - b;
+	Z = a == 0;
+}
+macro adc16_16(a, b) {
+	local C_copy:1 = C;
+	C = carry(a, b);
+	a = a + b;
+	C = C || carry(a, C_copy);	
+	a = a + C_copy;
+	Z = a == 0;
+}
+macro sbc16_16(a, b) {
+	local C_copy:1 = C;
+	C = a < b;
+	a = a - b;
+	C = C || a < C_copy;
+	a = a - C_copy;
+	Z = a == 0;
+}
+macro add16_8(a, b) { add16_16(a, zext(b)); }
+macro sub16_8(a, b) { add16_16(a, zext(b)); }
+macro add16_20(a, b) { add16_16(a, b:2); }
+macro sub16_20(a, b) { add16_16(a, b:2); }
+
+macro add20_20(a, b) {
+	a = a & 0xFFFFF;
+	b = b & 0xFFFFF;
+	C = (a + b) > 0xFFFFF;
+	a = (a + b) & 0xFFFFF;
+	Z = a == 0;
+}
+macro sub20_20(a, b) {
+	a = a & 0xFFFFF;
+	b = b & 0xFFFFF;
+	C = a < b;
+	a = (a - b) & 0xFFFFF;
+	Z = a == 0;
+}
+macro adc20_20(a, b) {
+	a = a & 0xFFFFF;
+	b = b & 0xFFFFF;
+	local C_copy:1 = C;
+	C = (a + b) > 0xFFFFF;
+	a = (a + b) & 0xFFFFF;
+	C = C || (a + C_copy) > 0xFFFFF;
+	a = (a + C_copy) & 0xFFFFF;
+	Z = a == 0;
+}
+macro sbc20_20(a, b) {
+	a = a & 0xFFFFF;
+	b = b & 0xFFFFF;
+	local C_copy:1 = C;
+	C = a < b;
+	a = (a - b) & 0xFFFFF;
+	C = C || (a < C_copy);
+	a = (a - C_copy) & 0xFFFFF;
+	Z = a == 0;
+}
+macro add20_8(a, b) { add20_20(a, zext(b)); }
+macro sub20_8(a, b) { add20_20(a, zext(b)); }
+macro add20_16(a, b) { add20_20(a, zext(b)); }
+macro sub20_16(a, b) { add20_20(a, zext(b)); }
+
+:ADD A,imm8 is op0_8=0x40 & A; imm8 { add8_8(A, imm8); }
+:SUB A,imm8 is op0_8=0x48 & A; imm8 { sub8_8(A, imm8); }
+:ADC A,imm8 is op0_8=0x50 & A; imm8 { adc8_8(A, imm8); }
+:SBC A,imm8 is op0_8=0x58 & A; imm8 { sbc8_8(A, imm8); }
+
+:ADD IntN8,imm8    is op0_8=0x30; op0_8=0x41; IntN8;    imm8 { add8_8(IntN8, imm8);    }
+:ADD IntBP8,imm8   is             op0_8=0x41; IntBP8;   imm8 { add8_8(IntBP8, imm8);   }
+:ADD IntPX8,imm8   is op0_8=0x34; op0_8=0x41; IntPX8;   imm8 { add8_8(IntPX8, imm8);   }
+:ADD IntBPPX8,imm8 is op0_8=0x24; op0_8=0x41; IntBPPX8; imm8 { add8_8(IntBPPX8, imm8); }
+
+:SUB IntN8,imm8    is op0_8=0x30; op0_8=0x49; IntN8;    imm8 { sub8_8(IntN8, imm8);    }
+:SUB IntBP8,imm8   is             op0_8=0x49; IntBP8;   imm8 { sub8_8(IntBP8, imm8);   }
+:SUB IntPX8,imm8   is op0_8=0x34; op0_8=0x49; IntPX8;   imm8 { sub8_8(IntPX8, imm8);   }
+:SUB IntBPPX8,imm8 is op0_8=0x24; op0_8=0x49; IntBPPX8; imm8 { sub8_8(IntBPPX8, imm8); }
+
+:ADC IntN8,imm8    is op0_8=0x30; op0_8=0x51; IntN8;    imm8 { adc8_8(IntN8, imm8);    }
+:ADC IntBP8,imm8   is             op0_8=0x51; IntBP8;   imm8 { adc8_8(IntBP8, imm8);   }
+:ADC IntPX8,imm8   is op0_8=0x34; op0_8=0x51; IntPX8;   imm8 { adc8_8(IntPX8, imm8);   }
+:ADC IntBPPX8,imm8 is op0_8=0x24; op0_8=0x51; IntBPPX8; imm8 { adc8_8(IntBPPX8, imm8); }
+
+:SBC IntN8,imm8    is op0_8=0x30; op0_8=0x59; IntN8;    imm8 { sbc8_8(IntN8, imm8);    }
+:SBC IntBP8,imm8   is             op0_8=0x59; IntBP8;   imm8 { sbc8_8(IntBP8, imm8);   }
+:SBC IntPX8,imm8   is op0_8=0x34; op0_8=0x59; IntPX8;   imm8 { sbc8_8(IntPX8, imm8);   }
+:SBC IntBPPX8,imm8 is op0_8=0x24; op0_8=0x59; IntBPPX8; imm8 { sbc8_8(IntBPPX8, imm8); }
+
+:ADD R8H,R8L  is op0_8=0x46; R8H & R8L  { add8_8(R8H, R8L);   }
+:SUB R8H,R8L  is op0_8=0x4E; R8H & R8L  { sub8_8(R8H, R8L);   }
+:ADD R8H,R16L is op0_8=0x46; R8H & R16L { add8_16(R8H, R16L); } # Legal?
+:SUB R8H,R16L is op0_8=0x4E; R8H & R16L { sub8_16(R8H, R16L); } # Legal?
+:ADD R8H,R20L is op0_8=0x46; R8H & R20L { add8_20(R8H, R20L); } # Legal?
+:SUB R8H,R20L is op0_8=0x4E; R8H & R20L { sub8_20(R8H, R20L); } # Legal?
+
+:ADD R16H,R8L  is op0_8=0x44; R16H & R8L  { add16_8(R16H,R8L);  }
+:SUB R16H,R8L  is op0_8=0x4C; R16H & R8L  { sub16_8(R16H,R8L);  }
+:ADD R16H,R16L is op0_8=0x44; R16H & R16L { add16_16(R16H,R16L); }
+:SUB R16H,R16L is op0_8=0x4C; R16H & R16L { sub16_16(R16H,R16L); }
+:ADD R16H,R20L is op0_8=0x44; R16H & R20L { add16_20(R16H,R20L); } # Legal?
+:SUB R16H,R20L is op0_8=0x4C; R16H & R20L { sub16_20(R16H,R20L); } # Legal?
+
+:ADD R20H,R8L  is op0_8=0x45; R20H & R8L  { add20_8(R20H, R8L);   }
+:SUB R20H,R8L  is op0_8=0x4D; R20H & R8L  { sub20_8(R20H, R8L);   }
+:ADD R20H,R16L is op0_8=0x45; R20H & R16L { add20_16(R20H, R16L); }
+:SUB R20H,R16L is op0_8=0x4D; R20H & R16L { sub20_16(R20H, R16L); }
+:ADD R20H,R20L is op0_8=0x45; R20H & R20L { add20_20(R20H, R20L); }
+:SUB R20H,R20L is op0_8=0x4D; R20H & R20L { sub20_20(R20H, R20L); }
+
+:ADD IntN8,A    is op0_8=0x30; op0_8=0x43; IntN8    & A { add8_8(IntN8,A);    }
+:ADD IntBP8,A   is             op0_8=0x43; IntBP8   & A { add8_8(IntBP8,A);   }
+:ADD IntPX8,A   is op0_8=0x34; op0_8=0x43; IntPX8   & A { add8_8(IntPX8,A);   }
+:ADD IntBPPX8,A is op0_8=0x24; op0_8=0x43; IntBPPX8 & A { add8_8(IntBPPX8,A); }
+
+:SUB IntN8,A    is op0_8=0x30; op0_8=0x4B; IntN8    & A { sub8_8(IntN8, A);    }
+:SUB IntBP8,A   is             op0_8=0x4B; IntBP8   & A { sub8_8(IntBP8, A);   }
+:SUB IntPX8,A   is op0_8=0x34; op0_8=0x4B; IntPX8   & A { sub8_8(IntPX8, A);   }
+:SUB IntBPPX8,A is op0_8=0x24; op0_8=0x4B; IntBPPX8 & A { sub8_8(IntBPPX8, A); }
+
+:ADC IntN8,A    is op0_8=0x30; op0_8=0x53; IntN8    & A { adc8_8(IntN8, A);    }
+:ADC IntBP8,A   is             op0_8=0x53; IntBP8   & A { adc8_8(IntBP8, A);   }
+:ADC IntPX8,A   is op0_8=0x34; op0_8=0x53; IntPX8   & A { adc8_8(IntPX8, A);   }
+:ADC IntBPPX8,A is op0_8=0x24; op0_8=0x53; IntBPPX8 & A { adc8_8(IntBPPX8, A); }
+
+:SBC IntN8,A    is op0_8=0x30; op0_8=0x5B; IntN8    & A { sbc8_8(IntN8, A);    }
+:SBC IntBP8,A   is             op0_8=0x5B; IntBP8   & A { sbc8_8(IntBP8, A);   }
+:SBC IntPX8,A   is op0_8=0x34; op0_8=0x5B; IntPX8   & A { sbc8_8(IntPX8, A);   }
+:SBC IntBPPX8,A is op0_8=0x24; op0_8=0x5B; IntBPPX8 & A { sbc8_8(IntBPPX8, A); }
+
+:ADCL IntN8,A    is op0_8=0x30; op0_8=0x55; IntN8    & A { }
+:ADCL IntBP8,A   is             op0_8=0x55; IntBP8   & A { }
+:ADCL IntPX8,A   is op0_8=0x34; op0_8=0x55; IntPX8   & A { }
+:ADCL IntBPPX8,A is op0_8=0x24; op0_8=0x55; IntBPPX8 & A { }
+
+:SBCL IntN8,A    is op0_8=0x30; op0_8=0x5D; IntN8    & A { }
+:SBCL IntBP8,A   is             op0_8=0x5D; IntBP8   & A { }
+:SBCL IntPX8,A   is op0_8=0x34; op0_8=0x5D; IntPX8   & A { }
+:SBCL IntBPPX8,A is op0_8=0x24; op0_8=0x5D; IntBPPX8 & A { }
+
+:DADL IntN8,A    is op0_8=0x30; op0_8=0xC5; IntN8    & A { }
+:DADL IntBP8,A   is             op0_8=0xC5; IntBP8   & A { }
+:DADL IntPX8,A   is op0_8=0x34; op0_8=0xC5; IntPX8   & A { }
+:DADL IntBPPX8,A is op0_8=0x24; op0_8=0xC5; IntBPPX8 & A { }
+
+:DSBL IntN8,A    is op0_8=0x30; op0_8=0xD5; IntN8    & A { }
+:DSBL IntBP8,A   is             op0_8=0xD5; IntBP8   & A { }
+:DSBL IntPX8,A   is op0_8=0x34; op0_8=0xD5; IntPX8   & A { }
+:DSBL IntBPPX8,A is op0_8=0x24; op0_8=0xD5; IntBPPX8 & A { }
+
+:ADD A,IntN8    is op0_8=0x30; op0_8=0x42; A & IntN8    { add8_8(A, IntN8);    }
+:ADD A,IntBP8   is             op0_8=0x42; A & IntBP8   { add8_8(A, IntBP8);   }
+:ADD A,IntPX8   is op0_8=0x34; op0_8=0x42; A & IntPX8   { add8_8(A, IntPX8);   }
+:ADD A,IntBPPX8 is op0_8=0x24; op0_8=0x42; A & IntBPPX8 { add8_8(A, IntBPPX8); }
+
+:SUB A,IntN8    is op0_8=0x30; op0_8=0x4A; A & IntN8    { sub8_8(A, IntN8);    }
+:SUB A,IntBP8   is             op0_8=0x4A; A & IntBP8   { sub8_8(A, IntBP8);   }
+:SUB A,IntPX8   is op0_8=0x34; op0_8=0x4A; A & IntPX8   { sub8_8(A, IntPX8);   }
+:SUB A,IntBPPX8 is op0_8=0x24; op0_8=0x4A; A & IntBPPX8 { sub8_8(A, IntBPPX8); }
+
+:ADC A,IntN8    is op0_8=0x30; op0_8=0x52; A & IntN8    { adc8_8(A, IntN8);    }
+:ADC A,IntBP8   is             op0_8=0x52; A & IntBP8   { adc8_8(A, IntBP8);   }
+:ADC A,IntPX8   is op0_8=0x34; op0_8=0x52; A & IntPX8   { adc8_8(A, IntPX8);   }
+:ADC A,IntBPPX8 is op0_8=0x24; op0_8=0x52; A & IntBPPX8 { adc8_8(A, IntBPPX8); }
+
+:SBC A,IntN8    is op0_8=0x30; op0_8=0x5A; A & IntN8    { sbc8_8(A, IntN8);    }
+:SBC A,IntBP8   is             op0_8=0x5A; A & IntBP8   { sbc8_8(A, IntBP8);   }
+:SBC A,IntPX8   is op0_8=0x34; op0_8=0x5A; A & IntPX8   { sbc8_8(A, IntPX8);   }
+:SBC A,IntBPPX8 is op0_8=0x24; op0_8=0x5A; A & IntBPPX8 { sbc8_8(A, IntBPPX8); }
+
+:ADCL IntN8,IntN8_2     is op0_8=0x32; op0_8=0x54; IntN8;    IntN8_2  { }
+:ADCL IntBP8,IntN8      is op0_8=0x22; op0_8=0x54; IntBP8;   IntN8    { }
+:ADCL IntPX8,IntN8      is op0_8=0x36; op0_8=0x54; IntPX8;   IntN8    { }
+:ADCL IntBPPX8,IntN8    is op0_8=0x26; op0_8=0x54; IntBPPX8; IntN8    { }
+:ADCL IntN8,IntBP8      is op0_8=0x30; op0_8=0x54; IntN8;    IntBP8   { }
+:ADCL IntBP8,IntBP8_2   is             op0_8=0x54; IntBP8;   IntBP8_2 { }
+:ADCL IntPX8,IntBP8     is op0_8=0x34; op0_8=0x54; IntPX8;   IntBP8   { }
+:ADCL IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0x54; IntBPPX8; IntBP8   { }
+:ADCL IntN8,IntPY8      is op0_8=0x33; op0_8=0x54; IntN8;    IntPY8   { }
+:ADCL IntBP8,IntPY8     is op0_8=0x23; op0_8=0x54; IntBP8;   IntPY8   { }
+:ADCL IntPX8,IntPY8     is op0_8=0x37; op0_8=0x54; IntPX8;   IntPY8   { }
+:ADCL IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0x54; IntBPPX8; IntPY8   { }
+:ADCL IntN8,IntBPPY8    is op0_8=0x31; op0_8=0x54; IntN8;    IntBPPY8 { }
+:ADCL IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0x54; IntBP8;   IntBPPY8 { }
+:ADCL IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0x54; IntPX8;   IntBPPY8 { }
+:ADCL IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0x54; IntBPPX8; IntBPPY8 { }
+
+:SBCL IntN8,IntN8_2     is op0_8=0x32; op0_8=0x5C; IntN8;    IntN8_2  { }
+:SBCL IntBP8,IntN8      is op0_8=0x22; op0_8=0x5C; IntBP8;   IntN8    { }
+:SBCL IntPX8,IntN8      is op0_8=0x36; op0_8=0x5C; IntPX8;   IntN8    { }
+:SBCL IntBPPX8,IntN8    is op0_8=0x26; op0_8=0x5C; IntBPPX8; IntN8    { }
+:SBCL IntN8,IntBP8      is op0_8=0x30; op0_8=0x5C; IntN8;    IntBP8   { }
+:SBCL IntBP8,IntBP8_2   is             op0_8=0x5C; IntBP8;   IntBP8_2 { }
+:SBCL IntPX8,IntBP8     is op0_8=0x34; op0_8=0x5C; IntPX8;   IntBP8   { }
+:SBCL IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0x5C; IntBPPX8; IntBP8   { }
+:SBCL IntN8,IntPY8      is op0_8=0x33; op0_8=0x5C; IntN8;    IntPY8   { }
+:SBCL IntBP8,IntPY8     is op0_8=0x23; op0_8=0x5C; IntBP8;   IntPY8   { }
+:SBCL IntPX8,IntPY8     is op0_8=0x37; op0_8=0x5C; IntPX8;   IntPY8   { }
+:SBCL IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0x5C; IntBPPX8; IntPY8   { }
+:SBCL IntN8,IntBPPY8    is op0_8=0x31; op0_8=0x5C; IntN8;    IntBPPY8 { }
+:SBCL IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0x5C; IntBP8;   IntBPPY8 { }
+:SBCL IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0x5C; IntPX8;   IntBPPY8 { }
+:SBCL IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0x5C; IntBPPX8; IntBPPY8 { }
+
+:DADL IntN8,IntN8_2     is op0_8=0x32; op0_8=0xC4; IntN8;    IntN8_2  { }
+:DADL IntBP8,IntN8      is op0_8=0x22; op0_8=0xC4; IntBP8;   IntN8    { }
+:DADL IntPX8,IntN8      is op0_8=0x36; op0_8=0xC4; IntPX8;   IntN8    { }
+:DADL IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xC4; IntBPPX8; IntN8    { }
+:DADL IntN8,IntBP8      is op0_8=0x30; op0_8=0xC4; IntN8;    IntBP8   { }
+:DADL IntBP8,IntBP8_2   is             op0_8=0xC4; IntBP8;   IntBP8_2 { }
+:DADL IntPX8,IntBP8     is op0_8=0x34; op0_8=0xC4; IntPX8;   IntBP8   { }
+:DADL IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xC4; IntBPPX8; IntBP8   { }
+:DADL IntN8,IntPY8      is op0_8=0x33; op0_8=0xC4; IntN8;    IntPY8   { }
+:DADL IntBP8,IntPY8     is op0_8=0x23; op0_8=0xC4; IntBP8;   IntPY8   { }
+:DADL IntPX8,IntPY8     is op0_8=0x37; op0_8=0xC4; IntPX8;   IntPY8   { }
+:DADL IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xC4; IntBPPX8; IntPY8   { }
+:DADL IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xC4; IntN8;    IntBPPY8 { }
+:DADL IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xC4; IntBP8;   IntBPPY8 { }
+:DADL IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xC4; IntPX8;   IntBPPY8 { }
+:DADL IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xC4; IntBPPX8; IntBPPY8 { }
+
+:DSBL IntN8,IntN8_2     is op0_8=0x32; op0_8=0xD4; IntN8;    IntN8_2  { }
+:DSBL IntBP8,IntN8      is op0_8=0x22; op0_8=0xD4; IntBP8;   IntN8    { }
+:DSBL IntPX8,IntN8      is op0_8=0x36; op0_8=0xD4; IntPX8;   IntN8    { }
+:DSBL IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xD4; IntBPPX8; IntN8    { }
+:DSBL IntN8,IntBP8      is op0_8=0x30; op0_8=0xD4; IntN8;    IntBP8   { }
+:DSBL IntBP8,IntBP8_2   is             op0_8=0xD4; IntBP8;   IntBP8_2 { }
+:DSBL IntPX8,IntBP8     is op0_8=0x34; op0_8=0xD4; IntPX8;   IntBP8   { }
+:DSBL IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xD4; IntBPPX8; IntBP8   { }
+:DSBL IntN8,IntPY8      is op0_8=0x33; op0_8=0xD4; IntN8;    IntPY8   { }
+:DSBL IntBP8,IntPY8     is op0_8=0x23; op0_8=0xD4; IntBP8;   IntPY8   { }
+:DSBL IntPX8,IntPY8     is op0_8=0x37; op0_8=0xD4; IntPX8;   IntPY8   { }
+:DSBL IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xD4; IntBPPX8; IntPY8   { }
+:DSBL IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xD4; IntN8;    IntBPPY8 { }
+:DSBL IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xD4; IntBP8;   IntBPPY8 { }
+:DSBL IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xD4; IntPX8;   IntBPPY8 { }
+:DSBL IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xD4; IntBPPX8; IntBPPY8 { }
+
+### Dyadic Operation No.2 (Logical Operation Command)
+
+macro and(dst, src) {
+	dst = dst & src;
+	Z = dst == 0;
+}
+
+macro or(dst, src) {
+	dst = dst | src;
+	Z = dst == 0;
+}
+
+macro xor(dst, src) {
+	dst = dst ^ src;
+	Z = dst == 0;
+}
+
+:AND A,imm8 is op0_8=0x70 & A; imm8 { and(A, imm8); }
+:OR A,imm8  is op0_8=0x78 & A; imm8 { or(A, imm8);  }
+:XOR A,imm8 is op0_8=0x68 & A; imm8 { xor(A, imm8); }
+
+:AND IntN8,imm8    is op0_8=0x30; op0_8=0x71; IntN8;    imm8 { and(IntN8, imm8);    }
+:AND IntBP8,imm8   is             op0_8=0x71; IntBP8;   imm8 { and(IntBP8, imm8);   }
+:AND IntPX8,imm8   is op0_8=0x34; op0_8=0x71; IntPX8;   imm8 { and(IntPX8, imm8);   }
+:AND IntBPPX8,imm8 is op0_8=0x24; op0_8=0x71; IntBPPX8; imm8 { and(IntBPPX8, imm8); }
+
+:OR IntN8,imm8    is op0_8=0x30; op0_8=0x79; IntN8;    imm8 { or(IntN8, imm8);    }
+:OR IntBP8,imm8   is             op0_8=0x79; IntBP8;   imm8 { or(IntBP8, imm8);   }
+:OR IntPX8,imm8   is op0_8=0x34; op0_8=0x79; IntPX8;   imm8 { or(IntPX8, imm8);   }
+:OR IntBPPX8,imm8 is op0_8=0x24; op0_8=0x79; IntBPPX8; imm8 { or(IntBPPX8, imm8); }
+
+:XOR IntN8,imm8    is op0_8=0x30; op0_8=0x69; IntN8;    imm8 { xor(IntN8, imm8);    }
+:XOR IntBP8,imm8   is             op0_8=0x69; IntBP8;   imm8 { xor(IntBP8, imm8);   }
+:XOR IntPX8,imm8   is op0_8=0x34; op0_8=0x69; IntPX8;   imm8 { xor(IntPX8, imm8);   }
+:XOR IntBPPX8,imm8 is op0_8=0x24; op0_8=0x69; IntBPPX8; imm8 { xor(IntBPPX8, imm8); }
+
+:AND Ext8,imm8 is op0_8=0x72; Ext8; imm8 { and(Ext8, imm8); }
+:OR  Ext8,imm8 is op0_8=0x7A; Ext8; imm8 { or(Ext8, imm8);  }
+:XOR Ext8,imm8 is op0_8=0x6A; Ext8; imm8 { xor(Ext8, imm8); }
+
+:AND IntN8,A    is op0_8=0x30; op0_8=0x73; IntN8    & A { and(IntN8, A);    }
+:AND IntBP8,A   is             op0_8=0x73; IntBP8   & A { and(IntBP8, A);   }
+:AND IntPX8,A   is op0_8=0x34; op0_8=0x73; IntPX8   & A { and(IntPX8, A);   }
+:AND IntBPPX8,A is op0_8=0x24; op0_8=0x73; IntBPPX8 & A { and(IntBPPX8, A); }
+
+:OR IntN8,A    is op0_8=0x30; op0_8=0x7B; IntN8    & A { or(IntN8, A);    }
+:OR IntBP8,A   is             op0_8=0x7B; IntBP8   & A { or(IntBP8, A);   }
+:OR IntPX8,A   is op0_8=0x34; op0_8=0x7B; IntPX8   & A { or(IntPX8, A);   }
+:OR IntBPPX8,A is op0_8=0x24; op0_8=0x7B; IntBPPX8 & A { or(IntBPPX8, A); }
+
+:XOR IntN8,A    is op0_8=0x30; op0_8=0x6B; IntN8    & A { xor(IntN8, A);    }
+:XOR IntBP8,A   is             op0_8=0x6B; IntBP8   & A { xor(IntBP8, A);   }
+:XOR IntPX8,A   is op0_8=0x34; op0_8=0x6B; IntPX8   & A { xor(IntPX8, A);   }
+:XOR IntBPPX8,A is op0_8=0x24; op0_8=0x6B; IntBPPX8 & A { xor(IntBPPX8, A); }
+
+:AND A,IntN8    is op0_8=0x30; op0_8=0x77; A & IntN8    { and(A, IntN8);    }
+:AND A,IntBP8   is             op0_8=0x77; A & IntBP8   { and(A, IntBP8);   }
+:AND A,IntPX8   is op0_8=0x34; op0_8=0x77; A & IntPX8   { and(A, IntPX8);   }
+:AND A,IntBPPX8 is op0_8=0x24; op0_8=0x77; A & IntBPPX8 { and(A, IntBPPX8); }
+
+:OR A,IntN8    is op0_8=0x30; op0_8=0x7F; A & IntN8    { or(A, IntN8);    }
+:OR A,IntBP8   is             op0_8=0x7F; A & IntBP8   { or(A, IntBP8);   }
+:OR A,IntPX8   is op0_8=0x34; op0_8=0x7F; A & IntPX8   { or(A, IntPX8);   }
+:OR A,IntBPPX8 is op0_8=0x24; op0_8=0x7F; A & IntBPPX8 { or(A, IntBPPX8); }
+
+:XOR A,IntN8    is op0_8=0x30; op0_8=0x6F; A & IntN8    { xor(A, IntN8);    }
+:XOR A,IntBP8   is             op0_8=0x6F; A & IntBP8   { xor(A, IntBP8);   }
+:XOR A,IntPX8   is op0_8=0x34; op0_8=0x6F; A & IntPX8   { xor(A, IntPX8);   }
+:XOR A,IntBPPX8 is op0_8=0x24; op0_8=0x6F; A & IntBPPX8 { xor(A, IntBPPX8); }
+
+:AND IntN8,IntN8_2     is op0_8=0x32; op0_8=0x76; IntN8;    IntN8_2  { and(IntN8, IntN8_2);     }
+:AND IntBP8,IntN8      is op0_8=0x22; op0_8=0x76; IntBP8;   IntN8    { and(IntBP8, IntN8);      }
+:AND IntPX8,IntN8      is op0_8=0x36; op0_8=0x76; IntPX8;   IntN8    { and(IntPX8, IntN8);      }
+:AND IntBPPX8,IntN8    is op0_8=0x26; op0_8=0x76; IntBPPX8; IntN8    { and(IntBPPX8, IntN8);    }
+:AND IntN8,IntBP8      is op0_8=0x30; op0_8=0x76; IntN8;    IntBP8   { and(IntN8, IntBP8);      }
+:AND IntBP8,IntBP8_2   is             op0_8=0x76; IntBP8;   IntBP8_2 { and(IntBP8, IntBP8_2);   }
+:AND IntPX8,IntBP8     is op0_8=0x34; op0_8=0x76; IntPX8;   IntBP8   { and(IntPX8, IntBP8);     }
+:AND IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0x76; IntBPPX8; IntBP8   { and(IntBPPX8, IntBP8);   }
+:AND IntN8,IntPY8      is op0_8=0x33; op0_8=0x76; IntN8;    IntPY8   { and(IntN8, IntPY8);      }
+:AND IntBP8,IntPY8     is op0_8=0x23; op0_8=0x76; IntBP8;   IntPY8   { and(IntBP8, IntPY8);     }
+:AND IntPX8,IntPY8     is op0_8=0x37; op0_8=0x76; IntPX8;   IntPY8   { and(IntPX8, IntPY8);     }
+:AND IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0x76; IntBPPX8; IntPY8   { and(IntBPPX8, IntPY8);   }
+:AND IntN8,IntBPPY8    is op0_8=0x31; op0_8=0x76; IntN8;    IntBPPY8 { and(IntN8, IntBPPY8);    }
+:AND IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0x76; IntBP8;   IntBPPY8 { and(IntBP8, IntBPPY8);   }
+:AND IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0x76; IntPX8;   IntBPPY8 { and(IntPX8, IntBPPY8);   }
+:AND IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0x76; IntBPPX8; IntBPPY8 { and(IntBPPX8, IntBPPY8); }
+
+:OR IntN8,IntN8_2     is op0_8=0x32; op0_8=0x7E; IntN8;    IntN8_2  { or(IntN8, IntN8_2);     }
+:OR IntBP8,IntN8      is op0_8=0x22; op0_8=0x7E; IntBP8;   IntN8    { or(IntBP8, IntN8);      }
+:OR IntPX8,IntN8      is op0_8=0x36; op0_8=0x7E; IntPX8;   IntN8    { or(IntPX8, IntN8);      }
+:OR IntBPPX8,IntN8    is op0_8=0x26; op0_8=0x7E; IntBPPX8; IntN8    { or(IntBPPX8, IntN8);    }
+:OR IntN8,IntBP8      is op0_8=0x30; op0_8=0x7E; IntN8;    IntBP8   { or(IntN8, IntBP8);      }
+:OR IntBP8,IntBP8_2   is             op0_8=0x7E; IntBP8;   IntBP8_2 { or(IntBP8, IntBP8_2);   }
+:OR IntPX8,IntBP8     is op0_8=0x34; op0_8=0x7E; IntPX8;   IntBP8   { or(IntPX8, IntBP8);     }
+:OR IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0x7E; IntBPPX8; IntBP8   { or(IntBPPX8, IntBP8);   }
+:OR IntN8,IntPY8      is op0_8=0x33; op0_8=0x7E; IntN8;    IntPY8   { or(IntN8, IntPY8);      }
+:OR IntBP8,IntPY8     is op0_8=0x23; op0_8=0x7E; IntBP8;   IntPY8   { or(IntBP8, IntPY8);     }
+:OR IntPX8,IntPY8     is op0_8=0x37; op0_8=0x7E; IntPX8;   IntPY8   { or(IntPX8, IntPY8);     }
+:OR IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0x7E; IntBPPX8; IntPY8   { or(IntBPPX8, IntPY8);   }
+:OR IntN8,IntBPPY8    is op0_8=0x31; op0_8=0x7E; IntN8;    IntBPPY8 { or(IntN8, IntBPPY8);    }
+:OR IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0x7E; IntBP8;   IntBPPY8 { or(IntBP8, IntBPPY8);   }
+:OR IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0x7E; IntPX8;   IntBPPY8 { or(IntPX8, IntBPPY8);   }
+:OR IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0x7E; IntBPPX8; IntBPPY8 { or(IntBPPX8, IntBPPY8); }
+
+:XOR IntN8,IntN8_2     is op0_8=0x32; op0_8=0x6E; IntN8;    IntN8_2  { xor(IntN8, IntN8_2);     }
+:XOR IntBP8,IntN8      is op0_8=0x22; op0_8=0x6E; IntBP8;   IntN8    { xor(IntBP8, IntN8);      }
+:XOR IntPX8,IntN8      is op0_8=0x36; op0_8=0x6E; IntPX8;   IntN8    { xor(IntPX8, IntN8);      }
+:XOR IntBPPX8,IntN8    is op0_8=0x26; op0_8=0x6E; IntBPPX8; IntN8    { xor(IntBPPX8, IntN8);    }
+:XOR IntN8,IntBP8      is op0_8=0x30; op0_8=0x6E; IntN8;    IntBP8   { xor(IntN8, IntBP8);      }
+:XOR IntBP8,IntBP8_2   is             op0_8=0x6E; IntBP8;   IntBP8_2 { xor(IntBP8, IntBP8_2);   }
+:XOR IntPX8,IntBP8     is op0_8=0x34; op0_8=0x6E; IntPX8;   IntBP8   { xor(IntPX8, IntBP8);     }
+:XOR IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0x6E; IntBPPX8; IntBP8   { xor(IntBPPX8, IntBP8);   }
+:XOR IntN8,IntPY8      is op0_8=0x33; op0_8=0x6E; IntN8;    IntPY8   { xor(IntN8, IntPY8);      }
+:XOR IntBP8,IntPY8     is op0_8=0x23; op0_8=0x6E; IntBP8;   IntPY8   { xor(IntBP8, IntPY8);     }
+:XOR IntPX8,IntPY8     is op0_8=0x37; op0_8=0x6E; IntPX8;   IntPY8   { xor(IntPX8, IntPY8);     }
+:XOR IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0x6E; IntBPPX8; IntPY8   { xor(IntBPPX8, IntPY8);   }
+:XOR IntN8,IntBPPY8    is op0_8=0x31; op0_8=0x6E; IntN8;    IntBPPY8 { xor(IntN8, IntBPPY8);    }
+:XOR IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0x6E; IntBP8;   IntBPPY8 { xor(IntBP8, IntBPPY8);   }
+:XOR IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0x6E; IntPX8;   IntBPPY8 { xor(IntPX8, IntBPPY8);   }
+:XOR IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0x6E; IntBPPX8; IntBPPY8 { xor(IntBPPX8, IntBPPY8); }
+
+### Dyadic Operation No.3 (Pointer Add Command)
+
+# TODO: Does this affect 8 bit values or 20 bit values? Can src be signed?
+macro pmdf(dst, src) {
+	dst = dst + src;
+}
+
+:PMDF IntN8,imm8    is op0_8=0x30; op0_8=0x47; IntN8;    imm8 { pmdf(IntN8, imm8);    }
+:PMDF IntBP8,imm8   is             op0_8=0x47; IntBP8;   imm8 { pmdf(IntBP8, imm8);   }
+:PMDF IntPX8,imm8   is op0_8=0x34; op0_8=0x47; IntPX8;   imm8 { pmdf(IntPX8, imm8);   }
+:PMDF IntBPPX8,imm8 is op0_8=0x24; op0_8=0x47; IntBPPX8; imm8 { pmdf(IntBPPX8, imm8); }
+
+:PMDF IntN8,A    is op0_8=0x30; op0_8=0x57; IntN8    & A { pmdf(IntN8, A);    }
+:PMDF IntBP8,A   is             op0_8=0x57; IntBP8   & A { pmdf(IntBP8, A);   }
+:PMDF IntPX8,A   is op0_8=0x34; op0_8=0x57; IntPX8   & A { pmdf(IntPX8, A);   }
+:PMDF IntBPPX8,A is op0_8=0x24; op0_8=0x57; IntBPPX8 & A { pmdf(IntBPPX8, A); }
+
+### Dyadic Operation No.4 (Compare Command)
+
+macro cmp(dst, src) {
+	C = dst < src;
+	Z = dst == src;
+}
+
+macro cmpw(dst, src) {
+	C = dst < src;
+	Z = dst == src;
+}
+
+macro cmpp20(dst, src) {
+	# Sleigh complains if you use [0, 19]?
+	C = dst < src;
+	Z = dst == src;
+}
+
+macro cmpp24(dst, src) {
+	C = dst < src;
+	Z = dst == src;
+}
+
+:CMP A,imm8 is op0_8=0x60 & A; imm8 { }
+
+:CMP IntN8,imm8    is op0_8=0x30; op0_8=0x61; IntN8;    imm8 { cmp(IntN8, imm8);    }
+:CMP IntBP8,imm8   is             op0_8=0x61; IntBP8;   imm8 { cmp(IntBP8, imm8);   }
+:CMP IntPX8,imm8   is op0_8=0x34; op0_8=0x61; IntPX8;   imm8 { cmp(IntPX8, imm8);   }
+:CMP IntBPPX8,imm8 is op0_8=0x24; op0_8=0x61; IntBPPX8; imm8 { cmp(IntBPPX8, imm8); }
+
+:CMP Ext8,imm8 is op0_8=0x62; Ext8; imm8 { cmp(Ext8, imm8); }
+
+:CMP IntN8,A    is op0_8=0x30; op0_8=0x63; IntN8    & A { cmp(IntN8, A);    }
+:CMP IntBP8,A   is             op0_8=0x63; IntBP8   & A { cmp(IntBP8, A);   }
+:CMP IntPX8,A   is op0_8=0x34; op0_8=0x63; IntPX8   & A { cmp(IntPX8, A);   }
+:CMP IntBPPX8,A is op0_8=0x24; op0_8=0x63; IntBPPX8 & A { cmp(IntBPPX8, A); }
+
+:CMPW IntN16,R16L    is op0_8=0x30; op0_8=0xD6; op3_5=0x00 & R16L; IntN16    { cmpw(IntN16, R16L);    }
+:CMPW IntBP16,R16L   is             op0_8=0xD6; op3_5=0x00 & R16L; IntBP16   { cmpw(IntBP16, R16L);   }
+:CMPW IntPX16,R16L   is op0_8=0x34; op0_8=0xD6; op3_5=0x00 & R16L; IntPX16   { cmpw(IntPX16, R16L);   }
+:CMPW IntBPPX16,R16L is op0_8=0x24; op0_8=0xD6; op3_5=0x00 & R16L; IntBPPX16 { cmpw(IntBPPX16, R16L); }
+
+:CMPP IntN20,R20L    is op0_8=0x30; op0_8=0xD7; op3_5=0x00 & R20L; IntN20    { cmpp20(IntN20, R20L);    }
+:CMPP IntBP20,R20L   is             op0_8=0xD7; op3_5=0x00 & R20L; IntBP20   { cmpp20(IntBP20, R20L);   }
+:CMPP IntPX20,R20L   is op0_8=0x34; op0_8=0xD7; op3_5=0x00 & R20L; IntPX20   { cmpp20(IntPX20, R20L);   }
+:CMPP IntBPPX20,R20L is op0_8=0x24; op0_8=0xD7; op3_5=0x00 & R20L; IntBPPX20 { cmpp20(IntBPPX20, R20L); }
+
+:CMP IntN8,IntN8_2     is op0_8=0x32; op0_8=0xB7; IntN8;    IntN8_2  { cmp(IntN8, IntN8_2);     }
+:CMP IntBP8,IntN8      is op0_8=0x22; op0_8=0xB7; IntBP8;   IntN8    { cmp(IntBP8, IntN8);      }
+:CMP IntPX8,IntN8      is op0_8=0x36; op0_8=0xB7; IntPX8;   IntN8    { cmp(IntPX8, IntN8);      }
+:CMP IntBPPX8,IntN8    is op0_8=0x26; op0_8=0xB7; IntBPPX8; IntN8    { cmp(IntBPPX8, IntN8);    }
+:CMP IntN8,IntBP8      is op0_8=0x30; op0_8=0xB7; IntN8;    IntBP8   { cmp(IntN8, IntBP8);      }
+:CMP IntBP8,IntBP8_2   is             op0_8=0xB7; IntBP8;   IntBP8_2 { cmp(IntBP8, IntBP8_2);   }
+:CMP IntPX8,IntBP8     is op0_8=0x34; op0_8=0xB7; IntPX8;   IntBP8   { cmp(IntPX8, IntBP8);     }
+:CMP IntBPPX8,IntBP8   is op0_8=0x24; op0_8=0xB7; IntBPPX8; IntBP8   { cmp(IntBPPX8, IntBP8);   }
+:CMP IntN8,IntPY8      is op0_8=0x33; op0_8=0xB7; IntN8;    IntPY8   { cmp(IntN8, IntPY8);      }
+:CMP IntBP8,IntPY8     is op0_8=0x23; op0_8=0xB7; IntBP8;   IntPY8   { cmp(IntBP8, IntPY8);     }
+:CMP IntPX8,IntPY8     is op0_8=0x37; op0_8=0xB7; IntPX8;   IntPY8   { cmp(IntPX8, IntPY8);     }
+:CMP IntBPPX8,IntPY8   is op0_8=0x27; op0_8=0xB7; IntBPPX8; IntPY8   { cmp(IntBPPX8, IntPY8);   }
+:CMP IntN8,IntBPPY8    is op0_8=0x31; op0_8=0xB7; IntN8;    IntBPPY8 { cmp(IntN8, IntBPPY8);    }
+:CMP IntBP8,IntBPPY8   is op0_8=0x21; op0_8=0xB7; IntBP8;   IntBPPY8 { cmp(IntBP8, IntBPPY8);   }
+:CMP IntPX8,IntBPPY8   is op0_8=0x35; op0_8=0xB7; IntPX8;   IntBPPY8 { cmp(IntPX8, IntBPPY8);   }
+:CMP IntBPPX8,IntBPPY8 is op0_8=0x25; op0_8=0xB7; IntBPPX8; IntBPPY8 { cmp(IntBPPX8, IntBPPY8); }
+
+:CMPW IntN16,IntN16_2     is op0_8=0x32; op0_8=0xC6; IntN16;    IntN16_2  { cmpw(IntN16, IntN16_2);     }
+:CMPW IntBP16,IntN16      is op0_8=0x22; op0_8=0xC6; IntBP16;   IntN16    { cmpw(IntBP16, IntN16);      }
+:CMPW IntPX16,IntN16      is op0_8=0x36; op0_8=0xC6; IntPX16;   IntN16    { cmpw(IntPX16, IntN16);      }
+:CMPW IntBPPX16,IntN16    is op0_8=0x26; op0_8=0xC6; IntBPPX16; IntN16    { cmpw(IntBPPX16, IntN16);    }
+:CMPW IntN16,IntBP16      is op0_8=0x30; op0_8=0xC6; IntN16;    IntBP16   { cmpw(IntN16, IntBP16);      }
+:CMPW IntBP16,IntBP16_2   is             op0_8=0xC6; IntBP16;   IntBP16_2 { cmpw(IntBP16, IntBP16_2);   }
+:CMPW IntPX16,IntBP16     is op0_8=0x34; op0_8=0xC6; IntPX16;   IntBP16   { cmpw(IntPX16, IntBP16);     }
+:CMPW IntBPPX16,IntBP16   is op0_8=0x24; op0_8=0xC6; IntBPPX16; IntBP16   { cmpw(IntBPPX16, IntBP16);   }
+:CMPW IntN16,IntPY16      is op0_8=0x33; op0_8=0xC6; IntN16;    IntPY16   { cmpw(IntN16, IntPY16);      }
+:CMPW IntBP16,IntPY16     is op0_8=0x23; op0_8=0xC6; IntBP16;   IntPY16   { cmpw(IntBP16, IntPY16);     }
+:CMPW IntPX16,IntPY16     is op0_8=0x37; op0_8=0xC6; IntPX16;   IntPY16   { cmpw(IntPX16, IntPY16);     }
+:CMPW IntBPPX16,IntPY16   is op0_8=0x27; op0_8=0xC6; IntBPPX16; IntPY16   { cmpw(IntBPPX16, IntPY16);   }
+:CMPW IntN16,IntBPPY16    is op0_8=0x31; op0_8=0xC6; IntN16;    IntBPPY16 { cmpw(IntN16, IntBPPY16);    }
+:CMPW IntBP16,IntBPPY16   is op0_8=0x21; op0_8=0xC6; IntBP16;   IntBPPY16 { cmpw(IntBP16, IntBPPY16);   }
+:CMPW IntPX16,IntBPPY16   is op0_8=0x35; op0_8=0xC6; IntPX16;   IntBPPY16 { cmpw(IntPX16, IntBPPY16);   }
+:CMPW IntBPPX16,IntBPPY16 is op0_8=0x25; op0_8=0xC6; IntBPPX16; IntBPPY16 { cmpw(IntBPPX16, IntBPPY16); }
+
+:CMPP IntN24,IntN24_2     is op0_8=0x32; op0_8=0xC7; IntN24;    IntN24_2  { cmpp24(IntN24, IntN24_2);     }
+:CMPP IntBP24,IntN24      is op0_8=0x22; op0_8=0xC7; IntBP24;   IntN24    { cmpp24(IntBP24, IntN24);      }
+:CMPP IntPX24,IntN24      is op0_8=0x36; op0_8=0xC7; IntPX24;   IntN24    { cmpp24(IntPX24, IntN24);      }
+:CMPP IntBPPX24,IntN24    is op0_8=0x26; op0_8=0xC7; IntBPPX24; IntN24    { cmpp24(IntBPPX24, IntN24);    }
+:CMPP IntN24,IntBP24      is op0_8=0x30; op0_8=0xC7; IntN24;    IntBP24   { cmpp24(IntN24, IntBP24);      }
+:CMPP IntBP24,IntBP24_2   is             op0_8=0xC7; IntBP24;   IntBP24_2 { cmpp24(IntBP24, IntBP24_2);   }
+:CMPP IntPX24,IntBP24     is op0_8=0x34; op0_8=0xC7; IntPX24;   IntBP24   { cmpp24(IntPX24, IntBP24);     }
+:CMPP IntBPPX24,IntBP24   is op0_8=0x24; op0_8=0xC7; IntBPPX24; IntBP24   { cmpp24(IntBPPX24, IntBP24);   }
+:CMPP IntN24,IntPY24      is op0_8=0x33; op0_8=0xC7; IntN24;    IntPY24   { cmpp24(IntN24, IntPY24);      }
+:CMPP IntBP24,IntPY24     is op0_8=0x23; op0_8=0xC7; IntBP24;   IntPY24   { cmpp24(IntBP24, IntPY24);     }
+:CMPP IntPX24,IntPY24     is op0_8=0x37; op0_8=0xC7; IntPX24;   IntPY24   { cmpp24(IntPX24, IntPY24);     }
+:CMPP IntBPPX24,IntPY24   is op0_8=0x27; op0_8=0xC7; IntBPPX24; IntPY24   { cmpp24(IntBPPX24, IntPY24);   }
+:CMPP IntN24,IntBPPY24    is op0_8=0x31; op0_8=0xC7; IntN24;    IntBPPY24 { cmpp24(IntN24, IntBPPY24);    }
+:CMPP IntBP24,IntBPPY24   is op0_8=0x21; op0_8=0xC7; IntBP24;   IntBPPY24 { cmpp24(IntBP24, IntBPPY24);   }
+:CMPP IntPX24,IntBPPY24   is op0_8=0x35; op0_8=0xC7; IntPX24;   IntBPPY24 { cmpp24(IntPX24, IntBPPY24);   }
+:CMPP IntBPPX24,IntBPPY24 is op0_8=0x25; op0_8=0xC7; IntBPPX24; IntBPPY24 { cmpp24(IntBPPX24, IntBPPY24); }
+
+### Dyadic Operation No.5 (Test Command)
+
+
+macro test(dst, src) {
+	Z = (dst & src) == 0;
+}
+
+:TEST A,imm8 is op0_8=0x64 & A; imm8 { test(A, imm8); }
+
+:TEST IntN8,imm8    is op0_8=0x30; op0_8=0x65; IntN8;    imm8 { test(IntN8, imm8);    }
+:TEST IntBP8,imm8   is             op0_8=0x65; IntBP8;   imm8 { test(IntBP8, imm8);   }
+:TEST IntPX8,imm8   is op0_8=0x34; op0_8=0x65; IntPX8;   imm8 { test(IntPX8, imm8);   }
+:TEST IntBPPX8,imm8 is op0_8=0x24; op0_8=0x65; IntBPPX8; imm8 { test(IntBPPX8, imm8); }
+
+:TEST IntN8,A    is op0_8=0x30; op0_8=0x67; IntN8    & A { test(IntN8, A);    }
+:TEST IntBP8,A   is             op0_8=0x67; IntBP8   & A { test(IntBP8, A);   }
+:TEST IntPX8,A   is op0_8=0x34; op0_8=0x67; IntPX8   & A { test(IntPX8, A);   }
+:TEST IntBPPX8,A is op0_8=0x24; op0_8=0x67; IntBPPX8 & A { test(IntBPPX8, A); }
+
+:TEST Ext8,imm8 is op0_8=0x66; Ext8; imm8 { test(Ext8, imm8); }
+
+### Monadic Operation
+
+:SWAP A is A & op0_8=0xEE {
+	A = ((A & 0x0F) << 4) | ((A & 0xF0) >> 4);
+	Z = (A == 0);
+}
+
+macro inc8(dst) {
+	dst = dst + 1;
+	Z = (dst == 0);
+}
+macro inc16(dst) {
+	dst = dst + 1;
+	Z = (dst == 0);
+}
+macro inc20(dst) {
+	dst = (dst + 1) & 0xFFFFF;
+	Z = (dst == 0);
+}
+
+macro dec8(dst) {
+	dst = dst - 1;
+	Z = (dst == 0);
+}
+macro dec16(dst) {
+	dst = dst - 1;
+	Z = (dst == 0);
+}
+macro dec20(dst) {
+	dst = (dst - 1) & 0xFFFFF;
+	Z = (dst == 0);
+}
+
+:INC R8L  is op0_8=0x6C; op3_5=0x00 & R8L  { inc8(R8L);   }
+:DEC R8L  is op0_8=0x7C; op3_5=0x00 & R8L  { dec8(R8L);   }
+:INC R16L is op0_8=0x6C; op3_5=0x00 & R16L { inc16(R16L); }
+:DEC R16L is op0_8=0x7C; op3_5=0x00 & R16L { dec16(R16L); }
+:INC R20L is op0_8=0x6C; op3_5=0x00 & R20L { inc20(R20L); }
+:DEC R20L is op0_8=0x7C; op3_5=0x00 & R20L { dec20(R20L); }
+
+:INC IntN8    is op0_8=0x30; op0_8=0x6D; IntN8    { inc8(IntN8);    }
+:DEC IntN8    is op0_8=0x30; op0_8=0x7D; IntN8    { dec8(IntN8);    }
+:INC IntBP8   is             op0_8=0x6D; IntBP8   { inc8(IntBP8);   }
+:DEC IntBP8   is             op0_8=0x7D; IntBP8   { dec8(IntBP8);   }
+:INC IntPX8   is op0_8=0x34; op0_8=0x6D; IntPX8   { inc8(IntPX8);   }
+:DEC IntPX8   is op0_8=0x34; op0_8=0x7D; IntPX8   { dec8(IntPX8);   }
+:INC IntBPPX8 is op0_8=0x24; op0_8=0x6D; IntBPPX8 { inc8(IntBPPX8); }
+:DEC IntBPPX8 is op0_8=0x24; op0_8=0x7D; IntBPPX8 { dec8(IntBPPX8); }
+
+macro ror(dst) {
+	C = dst & 1;
+	dst = (dst >> 1) | (dst << 7);
+	Z = (dst == 0);
+}
+macro rol(dst) {
+	C = dst >> 7;
+	dst = (dst << 1) | (dst >> 7);
+	Z = (dst == 0);
+}
+
+:ROR A is A & op0_8=0xE4 { ror(A); }
+:ROL A is A & op0_8=0xE6 { rol(A); }
+
+:ROR IntN8    is op0_8=0x30; op0_8=0xE5; IntN8    { ror(IntN8);    }
+:ROL IntN8    is op0_8=0x30; op0_8=0xE7; IntN8    { rol(IntN8);    }
+:ROR IntBP8   is             op0_8=0xE5; IntBP8   { ror(IntBP8);   }
+:ROL IntBP8   is             op0_8=0xE7; IntBP8   { rol(IntBP8);   }
+:ROR IntPX8   is op0_8=0x34; op0_8=0xE5; IntPX8   { ror(IntPX8);   }
+:ROL IntPX8   is op0_8=0x34; op0_8=0xE7; IntPX8   { rol(IntPX8);   }
+:ROR IntBPPX8 is op0_8=0x24; op0_8=0xE5; IntBPPX8 { ror(IntBPPX8); }
+:ROL IntBPPX8 is op0_8=0x24; op0_8=0xE7; IntBPPX8 { rol(IntBPPX8); }
+
+macro shr(dst) {
+	local tmp = dst;
+	dst = (dst >> 1) | (C << 7);
+	C = tmp & 1;
+	Z = (dst == 0);
+}
+macro shl(dst) {
+	local tmp = dst;
+	dst = (dst << 1) | C;
+	C = tmp >> 7;
+	Z = (dst == 0);
+}
+
+:SHR A is A & op0_8=0xF4 { shr(A); }
+:SHL A is A & op0_8=0xF6 { shl(A); }
+
+:SHR IntN8    is op0_8=0x30; op0_8=0xF5; IntN8    { shr(IntN8);    }
+:SHL IntN8    is op0_8=0x30; op0_8=0xF7; IntN8    { shl(IntN8);    }
+:SHR IntBP8   is             op0_8=0xF5; IntBP8   { shr(IntBP8);   }
+:SHL IntBP8   is             op0_8=0xF7; IntBP8   { shl(IntBP8);   }
+:SHR IntPX8   is op0_8=0x34; op0_8=0xF5; IntPX8   { shr(IntPX8);   }
+:SHL IntPX8   is op0_8=0x34; op0_8=0xF7; IntPX8   { shl(IntPX8);   }
+:SHR IntBPPX8 is op0_8=0x24; op0_8=0xF5; IntBPPX8 { shr(IntBPPX8); }
+:SHL IntBPPX8 is op0_8=0x24; op0_8=0xF7; IntBPPX8 { shl(IntBPPX8); }
+
+macro dsrl(dst) {
+	
+	local addr:3 = dst;
+	local last:1 = 0;
+	local next:1 = 0;
+	local tmp:1 = 0;
+	
+	Z = 1;
+	
+<loop>
+	next = *:1 addr;
+	tmp = ((*:1 addr) >> 4) | (last << 4);
+	*:1 addr = tmp;
+	last = next;
+	
+	Z = Z && (tmp == 0);
+	
+	addr = (addr + 1) & 0xFF;	
+	I = I - 1;
+	
+	if (I != 0) goto <loop>;
+}
+
+macro dsll(dst) {
+	
+	local addr:3 = dst;
+	local last:1 = 0;
+	local next:1 = 0;
+	local tmp:1 = 0;
+	
+	Z = 1;
+
+<loop>
+	next = *:1 addr;
+	tmp = ((*:1 addr) << 4) | (last >> 4);
+	*:1 addr = tmp;
+	last = next;
+	
+	Z = Z && (tmp == 0);
+	
+	addr = (addr - 1) & 0xFF;	
+	I = I - 1;
+	
+	if (I != 0) goto <loop>;
+}
+
+:DSRL IntNAddr    is op0_8=0x30; op0_8=0xFC; IntNAddr    { dsrl(IntNAddr);    }
+:DSLL IntNAddr    is op0_8=0x30; op0_8=0xEC; IntNAddr    { dsll(IntNAddr);    }
+:DSRL IntBPAddr   is             op0_8=0xFC; IntBPAddr   { dsrl(IntBPAddr);   }
+:DSLL IntBPAddr   is             op0_8=0xEC; IntBPAddr   { dsll(IntBPAddr);   }
+:DSRL IntPXAddr   is op0_8=0x34; op0_8=0xFC; IntPXAddr   { dsrl(IntPXAddr);   }
+:DSLL IntPXAddr   is op0_8=0x34; op0_8=0xEC; IntPXAddr   { dsll(IntPXAddr);   }
+:DSRL IntBPPXAddr is op0_8=0x24; op0_8=0xFC; IntBPPXAddr { dsrl(IntBPPXAddr); }
+:DSLL IntBPPXAddr is op0_8=0x24; op0_8=0xEC; IntBPPXAddr { dsll(IntBPPXAddr); }
+
+### C FLAG Control Command
+
+:SC is op0_8=0x97 { C = 1; }
+:RC is op0_8=0x9F { C = 0; }
+
+### PUSH POP Command
+
+macro pushU8(val8)   { U = U - 1; ptr:3 = U; *:1 ptr = val8;  }
+macro popU8(ret8)    { ptr:3 = U; ret8 = *:1 ptr; U = U + 1; }
+macro pushU16(val16) { U = U - 2; ptr:3 = U; *:2 ptr = val16; }
+macro popU16(ret16)  { ptr:3 = U; ret16 = *:2 ptr; U = U + 2; }
+macro pushU20(val20) { U = U - 3; ptr:3 = U; *:3 ptr = val20; }
+macro popU20(ret20)  { ptr:3 = U; ret20 = *:3 ptr; U = U + 3; }
+
+macro pushS8(val8)   { S = S - 1; ptr:3 = S; *:1 ptr = val8; }
+macro popS8(ret8)    { ptr:3 = S; ret8 = *:1 ptr; S = S + 1; }
+macro pushS16(val16) { S = S - 2; ptr:3 = S; *:2 ptr = val16; }
+macro popS16(ret16)  { ptr:3 = S; ret16 = *:2 ptr; S = S + 2; }
+macro pushS20(val20) { S = S - 3; ptr:3 = S; *:3 ptr = val20; }
+macro popS20(ret20)  { ptr:3 = S; ret20 = *:3 ptr; S = S + 3; }
+
+:PUSHU F    is F   & op0_8=0x2E { pushU8(F);   }
+:POPU F     is F   & op0_8=0x3E { popU8(F);    }
+:PUSHU IMR  is IMR & op0_8=0x2F { pushU8(IMR); }
+:POPU IMR   is IMR & op0_8=0x3F { popU8(IMR);  }
+
+:PUSHU R8L  is op3_5=0x05 & R8L  { pushU8(R8L);   }
+:POPU R8L   is op3_5=0x07 & R8L  { popU8(R8L);    }
+:PUSHU R16L is op3_5=0x05 & R16L { pushU16(R16L); }
+:POPU R16L  is op3_5=0x07 & R16L { popU16(R16L);  }
+:PUSHU R20L is op3_5=0x05 & R20L { pushU20(R20L); }
+:POPU R20L  is op3_5=0x07 & R20L { popU20(R20L);  }
+
+:PUSHS F is F & op0_8=0x4F { pushS8(F); }
+:POPS F  is F & op0_8=0x5F { popS8(F);  }
+
+### JUMP Command
+
+:JR RelAddrFwd8 is op0_8=0x12; RelAddrFwd8 { goto RelAddrFwd8; }
+:JR RelAddrBack8 is op0_8=0x13; RelAddrBack8 { goto RelAddrBack8; }
+:JRZ RelAddrFwd8 is op0_8=0x18; RelAddrFwd8 { if (Z) goto RelAddrFwd8; }
+:JRZ RelAddrBack8 is op0_8=0x19; RelAddrBack8 { if (Z) goto RelAddrBack8; }
+:JRNZ RelAddrFwd8 is op0_8=0x1A; RelAddrFwd8 { if (!Z) goto RelAddrFwd8; }
+:JRNZ RelAddrBack8 is op0_8=0x1B; RelAddrBack8 { if (!Z) goto RelAddrBack8; }
+:JRC RelAddrFwd8 is op0_8=0x1C; RelAddrFwd8 { if (C) goto RelAddrFwd8; }
+:JRC RelAddrBack8 is op0_8=0x1D; RelAddrBack8 { if (C) goto RelAddrBack8; }
+:JRNC RelAddrFwd8 is op0_8=0x1E; RelAddrFwd8 { if (!C) goto RelAddrFwd8; }
+:JRNC RelAddrBack8 is op0_8=0x1F; RelAddrBack8 { if (!C) goto RelAddrBack8; }
+
+:JP Addr16 is op0_8=0x02; Addr16 { goto Addr16; }
+:JPZ Addr16 is op0_8=0x14; Addr16 { if (Z) goto Addr16; }
+:JPNZ Addr16 is op0_8=0x15; Addr16 { if (!Z) goto Addr16; }
+:JPC Addr16 is op0_8=0x16; Addr16 { if (C) goto Addr16; }
+:JPNC Addr16 is op0_8=0x17; Addr16 { if (!C) goto Addr16; }
+
+:JPF Addr20 is op0_8=0x03; Addr20 { goto Addr20; }
+:JP R20L is op0_8=0x11; op3_5=0x00 & R20L { goto [R20L]; }
+
+:JP IntBP20 is op0_8=0x10; IntBP20 { goto [IntBP20]; }
+:JP IntN20 is op0_8=0x30; op0_8=0x10; IntN20 { goto [IntN20]; }
+:JP IntPX20 is op0_8=0x34; op0_8=0x10; IntPX20 { goto [IntPX20]; }
+:JP IntBPPX20 is op0_8=0x24; op0_8=0x10; IntBPPX20 { goto [IntBPPX20]; }
+
+### CALL RETURN command
+
+:CALL Addr16 is op0_8=0x04; Addr16 { pushS16(&:2 inst_next); call Addr16; }
+:CALLF Addr20 is op0_8=0x05; Addr20 { pushS20(&:3 inst_next); call Addr20; }
+:RET is op0_8=0x06 { popS16(PC); return [FPC]; }
+:RETF is op0_8=0x07 { popS20(FPC); return [FPC]; }
+
+### RESET INTERRUPT Command
+
+:RESET is op0_8=0xFF { goto [RESET_VECT];  }
+:INT   is op0_8=0xFE { pushS20(&:3 inst_next); pushS8(F); pushS8(IMR); call [INT_VECT]; }
+:RETI  is op0_8=0x01 { popS8(IMR); popS8(F); popS20(FPC); return [FPC]; }
+
+### CPU Control Command
+
+define pcodeop nop;
+define pcodeop tcl;
+define pcodeop halt;
+define pcodeop off;
+
+:WAIT is op0_8=0xEF { I = I - 1; if (I != 0) goto inst_start; }
+:NOP  is op0_8=0x00 { nop(); }
+:TCL  is op0_8=0xCE { tcl(); }
+:HALT is op0_8=0xDE { halt(); }
+:OFF  is op0_8=0xDF { off(); }

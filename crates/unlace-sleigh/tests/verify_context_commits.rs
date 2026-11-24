@@ -7,9 +7,9 @@
 //! each way, and the agreement of the whole corpus with a `globalset` count over
 //! each language's own source closure (`.slaspec` plus every `.sinc` it
 //! `@include`s, transitively). Zero occurrences must mean `false`, and any
-//! occurrence must mean `true`, for all 339 vendored languages.
+//! occurrence must mean `true`, for all 346 vendored languages.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use unlace_base::address::Address;
@@ -69,42 +69,99 @@ fn vendored_sla() -> Vec<(String, String, PathBuf)> {
     out
 }
 
-/// The `.slaspec` of a `.sla`, plus every source it `@include`s, transitively.
-fn source_closure(slaspec: &Path) -> BTreeSet<PathBuf> {
-    let mut seen: BTreeSet<PathBuf> = BTreeSet::new();
-    let mut stack = vec![slaspec.to_path_buf()];
-    while let Some(f) = stack.pop() {
-        let f = f
-            .canonicalize()
-            .unwrap_or_else(|e| panic!("{}: {e}", f.display()));
-        if !seen.insert(f.clone()) {
-            continue;
-        }
-        let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
-        let dir = f.parent().unwrap().to_path_buf();
-        for line in text.lines() {
-            let Some(rest) = line.trim_start().strip_prefix("@include") else {
-                continue;
-            };
-            let Some(open) = rest.find('"') else { continue };
-            let Some(close) = rest[open + 1..].find('"') else {
-                continue;
-            };
-            stack.push(dir.join(&rest[open + 1..open + 1 + close]));
-        }
-    }
-    seen
+/// The `globalset` occurrences in a language's own source closure: its `.slaspec` plus every
+/// `.sinc` it `@include`s, transitively, as the SLEIGH preprocessor would read them. An
+/// `@include "$(NAME)"` takes NAME's `@define`; `@ifdef`/`@ifndef` blocks (and their `@else`)
+/// whose condition is false contribute neither text nor includes, so a `globalset` only one
+/// variant compiles counts only for that variant. An `@if` expression is not evaluated: both
+/// of its branches are read.
+fn globalset_occurrences(sla: &Path) -> usize {
+    let mut defines: BTreeMap<String, String> = BTreeMap::new();
+    let mut count = 0;
+    read_closure(&sla.with_extension("slaspec"), &mut defines, &mut count, 0);
+    count
 }
 
-/// How many times `globalset` appears in a language's own source closure.
-fn globalset_occurrences(sla: &Path) -> usize {
-    let slaspec = sla.with_extension("slaspec");
-    let mut n = 0;
-    for f in source_closure(&slaspec) {
-        let text = std::fs::read_to_string(&f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
-        n += text.matches("globalset").count();
+fn read_closure(
+    file: &Path,
+    defines: &mut BTreeMap<String, String>,
+    count: &mut usize,
+    depth: usize,
+) {
+    assert!(depth < 64, "{}: @include nesting too deep", file.display());
+    let file = file
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    let text = std::fs::read_to_string(&file).unwrap_or_else(|e| panic!("{}: {e}", file.display()));
+    let dir = file.parent().unwrap().to_path_buf();
+    // One entry per open conditional: (this branch is read, an earlier branch was taken, the
+    // condition was evaluated). An unevaluated `@if` reads every branch its parent reads.
+    let mut conds: Vec<(bool, bool, bool)> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        let parent = conds.iter().all(|(on, ..)| *on);
+        if let Some(rest) = trimmed.strip_prefix("@ifdef") {
+            let on = parent && defines.contains_key(rest.trim());
+            conds.push((on, on, true));
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("@ifndef") {
+            let on = parent && !defines.contains_key(rest.trim());
+            conds.push((on, on, true));
+            continue;
+        }
+        if trimmed.starts_with("@if") {
+            conds.push((parent, false, false));
+            continue;
+        }
+        if trimmed.starts_with("@elif") || trimmed.starts_with("@else") {
+            let outer = conds[..conds.len().saturating_sub(1)]
+                .iter()
+                .all(|(on, ..)| *on);
+            if let Some(top) = conds.last_mut() {
+                top.0 = if top.2 { outer && !top.1 } else { outer };
+                top.1 = top.1 || top.0;
+            }
+            continue;
+        }
+        if trimmed.starts_with("@endif") {
+            conds.pop();
+            continue;
+        }
+        if !conds.iter().all(|(on, ..)| *on) {
+            continue;
+        }
+        *count += line.matches("globalset").count();
+        if let Some(rest) = trimmed.strip_prefix("@define") {
+            let mut parts = rest.trim().splitn(2, char::is_whitespace);
+            if let Some(name) = parts.next() {
+                let value = parts
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('"')
+                    .to_owned();
+                defines.entry(name.to_owned()).or_insert(value);
+            }
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("@include") else {
+            continue;
+        };
+        let Some(open) = rest.find('"') else { continue };
+        let Some(close) = rest[open + 1..].find('"') else {
+            continue;
+        };
+        let name = &rest[open + 1..open + 1 + close];
+        let name = match name.strip_prefix("$(").and_then(|n| n.strip_suffix(')')) {
+            Some(macro_name) => match defines.get(macro_name) {
+                Some(value) => value.clone(),
+                None => continue,
+            },
+            None => name.to_owned(),
+        };
+        read_closure(&dir.join(name), defines, count, depth + 1);
     }
-    n
 }
 
 fn has_commits(sla: &Path) -> bool {
@@ -131,7 +188,7 @@ const SOME_TRUE: &[&str] = &["PIC", "M16C", "x86"];
 #[test]
 fn context_commits_agree_with_the_globalset_sources() {
     let corpus = vendored_sla();
-    assert_eq!(corpus.len(), 339, "the vendored language corpus changed");
+    assert_eq!(corpus.len(), 346, "the vendored language corpus changed");
 
     let mut answers: Vec<(String, String, bool, usize)> = Vec::new();
     for (processor, name, path) in &corpus {

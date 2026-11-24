@@ -9830,7 +9830,9 @@ both
   32 bytes in hex (`..` for a variable byte), the length and value of the CRC-16
   over the fixed bytes that follow (at most 255, ending at the first variable
   byte), the function length, `:0000 name` per public name, `^offset name` per
-  reference and the bytes after the CRC region; `---` closes the file.
+  reference and the bytes after the CRC region; `---` closes the file. A function the
+  `.sig` leaves out for a collision (below) is written as a `;;;` comment line ending
+  in `(collision)`, as IDA's makesig writes it, so a reader of the `.pat` skips it.
   The `.sig` is format version 10, uncompressed: the header (processor id, a
   file-type mask naming the executable format the objects link into, the library
   name) and a prefix tree over the 32 leading bytes whose leaves list their

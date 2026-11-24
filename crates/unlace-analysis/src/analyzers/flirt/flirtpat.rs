@@ -313,8 +313,11 @@ pub fn is_generated(name: &str) -> bool {
 /// Render patterns as `.pat` text: one line per function (64 hex digits of
 /// leading bytes with `..` for a variable byte, the CRC length and CRC, the
 /// function length, `:offset name` publics, `^offset name` references and the
-/// bytes after the CRC region), closed by a `---` line.
-pub fn write_pat(patterns: &[FuncPattern]) -> String {
+/// bytes after the CRC region), closed by a `---` line. A function in `excluded`
+/// (one the `.sig` leaves out for a collision) is a `;;;` comment line ending in
+/// `(collision)`, as IDA's makesig writes it, so a reader of the file skips it.
+pub fn write_pat(patterns: &[FuncPattern], excluded: &[FuncPattern]) -> String {
+    let excluded: BTreeSet<&FuncPattern> = excluded.iter().collect();
     let mut out = String::new();
     let hex = |out: &mut String, bytes: &[Option<u8>]| {
         for b in bytes {
@@ -325,6 +328,10 @@ pub fn write_pat(patterns: &[FuncPattern]) -> String {
         }
     };
     for p in patterns {
+        let left_out = excluded.contains(p);
+        if left_out {
+            out.push_str(";;; ");
+        }
         hex(&mut out, &p.head());
         write!(
             out,
@@ -343,6 +350,9 @@ pub fn write_pat(patterns: &[FuncPattern]) -> String {
         if !p.tail().is_empty() {
             out.push(' ');
             hex(&mut out, p.tail());
+        }
+        if left_out {
+            out.push_str(" (collision)");
         }
         out.push('\n');
     }

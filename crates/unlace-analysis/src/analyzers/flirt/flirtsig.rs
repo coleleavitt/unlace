@@ -33,6 +33,8 @@ pub const SIG_VERSION: u8 = 10;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Collision {
     pub names: Vec<String>,
+    /// The functions left out, which the `.pat` marks as collisions.
+    pub patterns: Vec<FuncPattern>,
 }
 
 /// A written signature file.
@@ -200,7 +202,8 @@ fn resolve<'a>(
         }
         let mut names: Vec<String> = part.iter().map(|p| p.publics[0].clone()).collect();
         names.sort();
-        collisions.push(Collision { names });
+        let patterns = part.iter().map(|p| (*p).clone()).collect();
+        collisions.push(Collision { names, patterns });
     }
 }
 
@@ -405,12 +408,9 @@ mod tests {
         ];
         let data: BTreeSet<String> = ["table".to_string()].into();
         let built = build_sig(&patterns, &data, TARGET, "round trip").unwrap();
-        assert_eq!(
-            built.collisions,
-            [Collision {
-                names: vec!["same_a".into(), "same_b".into()]
-            }]
-        );
+        assert_eq!(built.collisions.len(), 1);
+        assert_eq!(built.collisions[0].names, ["same_a", "same_b"]);
+        assert_eq!(built.collisions[0].patterns.len(), 2);
         assert_eq!(built.modules, 6);
 
         let sig = Signature::parse(&built.bytes).expect("the reader accepts the written file");

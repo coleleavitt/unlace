@@ -667,6 +667,14 @@ pub trait FlowEnvironment {
         false
     }
 
+    /// (kuna `honestgaps`) Does an instruction stepped over under the
+    /// `ignoreunimplemented` policy get a warning at its address naming it?
+    /// The default shell reports `false`.  See
+    /// [`kuna_honestgaps`](crate::kuna_honestgaps).
+    fn honest_gaps(&self) -> bool {
+        false
+    }
+
     /// Optional target-specific advice after a bad-instruction decode.
     fn decode_failure_hint(&self, _addr: &Address) -> Option<String> {
         None
@@ -2395,13 +2403,21 @@ truncating the fall-through here"
         self.overlap_cbranch_target = None; // (kuna overlapbranch) per-instruction
         let mut ends_in_call = false;
         let mut call_before_pad = false;
-        if let Some(firstop) = first_new {
+        if let Some(mut firstop) = first_new {
             // (kuna retpushedhalf) The push/pop stack-maintenance shape is only
             // visible here: copy propagation later collapses the store and the
             // load into a bare register-to-register COPY.
             let mut insn_ops = vec![firstop];
             while let Some(next) = self.dead_next(*insn_ops.last().expect("non-empty")) {
                 insn_ops.push(next);
+            }
+            if flowoverride == crate::overrides::flow_type::NONE {
+                if let Some(first) = super::kuna_atomics::rewrite(&mut self.data, &insn_ops) {
+                    if first != firstop {
+                        firstop = first;
+                        insn_ops.insert(0, first);
+                    }
+                }
             }
             (self.data.hooks().retpushedhalf_observe_instruction)(&mut self.data, &insn_ops);
             if flowoverride == crate::overrides::flow_type::NONE {
@@ -2777,11 +2793,16 @@ truncating the fall-through here"
     fn handle_decode_error(&mut self, curaddr: &Address, err: KunaError) -> KunaResult<int4> {
         match &err {
             KunaError::Unimpl {
-                instruction_length, ..
+                instruction_length,
+                explain,
             } => {
                 let reports = self.env.decode_halt_reports();
                 if (self.flags & flow_flags::ignore_unimplemented) != 0 {
                     let step = *instruction_length;
+                    if self.env.honest_gaps() {
+                        let text = crate::kuna_honestgaps::not_modelled_text(explain);
+                        self.data.warning(&text, curaddr);
+                    }
                     if !self.has_unimplemented() {
                         self.flags |= flow_flags::unimplemented_present;
                         if reports {

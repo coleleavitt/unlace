@@ -130,3 +130,17 @@
 	RESERVE = 0;
 	RESERVE_LENGTH = 0;
 }
+
+
+# Zacas (1.0): compare rd with the word at (rs1); if equal, store rs2. rd gets the old word.
+# amocas.w d,t,0(s) 2800202f fe00707f DWORD|DREF (0, 4)
+:amocas.w^aqrl rd,rs2W,(rs1) is rs1 & rs2W & rd & op0001=0x3 & op0204=0x3 & op0506=0x1 & funct3=0x2 & op2731=0x5 & aqrl
+{
+	local tmprs1 = rs1;
+	local tmprs2 = rs2W;
+	local expected:4 = rd:4;
+	local tmp:4 = *[ram]:4 tmprs1;
+	assignW(rd, tmp);
+	if (tmp != expected) goto inst_next;
+	*[ram]:4 tmprs1 = tmprs2;
+}

@@ -552,6 +552,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // and bound to the real-PE path (the XML datatest oracle is untouched).
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::rtti::RttiPass));
+        // (kuna `msvceh`) ThrowInfo/CatchableType labels and x64 throw-site
+        // comments. Commit gated, default-OFF.
+        passes.push(Box::new(crate::entry::kuna_msvceh::MsvcEhPass));
     }
 
     // S1 Mach-O Core Foundation constant strings (CFStringPass): when the binary

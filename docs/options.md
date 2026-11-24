@@ -53,6 +53,13 @@ Three tiers:
 | rep movsq / rep stosd from -Os code printed as a loop instead of memcpy/memset | [`repstring`](#repstring----on--off-default-on) |
 | a struct copy prints as a 16-iteration word loop | [`repstring`](#repstring----on--off-default-on) |
 | a strcmp against a short constant prints as a do/while over two byte pointers and a count | [`repstring`](#repstring----on--off-default-on) |
+| LOCK(); and UNLOCK(); around a plain load and store | [`atomics`](#atomics----on--off-default-off) |
+| a lock xadd, lock cmpxchg or lock inc prints as an ordinary update | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity | [`atomics`](#atomics----on--off-default-off) |
+| a compare-exchange retry loop whose compare and store moved out of the loop | [`atomics`](#atomics----on--off-default-off) |
+| an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus | [`llscfold`](#llscfold----on--off-default-off) |
+| a shared_ptr or Arc reference count update prints as a loop with a char status variable | [`llscfold`](#llscfold----on--off-default-off) |
+| `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop | [`llscfold`](#llscfold----on--off-default-off) |
 | a struct copy prints as eight paired assignments through a register | [`copyrun`](#copyrun----on--off-default-on) |
 | *a0 = *a1; a0[1] = v1; ... for a fixed-size memcpy | [`copyrun`](#copyrun----on--off-default-on) |
 | SSE xmm0 lanes shuttle a buffer one word at a time | [`copyrun`](#copyrun----on--off-default-on) |
@@ -236,6 +243,7 @@ Three tiers:
 | a byte loaded with ldrb is declared unsigned int and used as an index | [`regnarrow`](#regnarrow----on--off-default-on) |
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
+| a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -530,6 +538,10 @@ Three tiers:
 | a declared local is never written and never read anywhere in the function | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a `vN = slot;` ... `slot = vN;` round-trip copy pair around a loop that only reads the slot | [`indirectonly`](#indirectonly----on--off-default-off) |
 | a call result assigned to a temporary that is immediately assigned to a stack slot | [`indirectonly`](#indirectonly----on--off-default-off) |
+| one local is assigned unrelated values in different parts of the function | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a loop counter reused later as an unrelated result or return code | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| two source variables of the same type print as one name | [`typemerge`](#typemerge----on--storage--off-default-on) |
+| a saved argument and a later call result share one declared local | [`typemerge`](#typemerge----on--storage--off-default-on) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -775,6 +787,9 @@ Three tiers:
 | code after a call to a renamed library abort is decompiled as reachable | [`fidproto`](#fidproto----on--off-default-on) |
 | msvc c++ class names missing and vftables left as unnamed data | [`rtti`](#rtti----on--off-default-on) |
 | no Class::vftable or RTTI_ labels in a windows pe with polymorphic classes | [`rtti`](#rtti----on--off-default-on) |
+| _CxxThrowException(&v1, &dat_<addr>) with no thrown type | [`msvceh`](#msvceh----on--off-default-off) |
+| nothing says what an msvc c++ function throws | [`msvceh`](#msvceh----on--off-default-off) |
+| _CxxThrowException(0, 0) with no hint that it rethrows | [`msvceh`](#msvceh----on--off-default-off) |
 | an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | a call to a fixed 0x4000xxxx address in an Espressif image has no name | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | sub_40000xxx callees in an ESP32-C3 image that have no body | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
@@ -1135,6 +1150,10 @@ Three tiers:
 | v10 and v11 declared between v1 and v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | local declarations in string order v1, v10, v11, v2 | [`declorder`](#declorder----natural--name-default-natural) |
 | a numbered local hard to find among ten or more declarations | [`declorder`](#declorder----natural--name-default-natural) |
+| std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| a std::vector or std::map type spelled with its allocator and comparator | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| __cxx11 or __1 in front of a std function name | [`cppshortnames`](#cppshortnames----on--off-default-off) |
+| C++ type names too long to read | [`cppshortnames`](#cppshortnames----on--off-default-off) |
 | a local holding open()'s result named v1 | [`libcnames`](#libcnames----on--off-default-on) |
 | read's byte count kept as a vN | [`libcnames`](#libcnames----on--off-default-on) |
 | a stack buffer passed to read() or ReadFile() named vN | [`libcnames`](#libcnames----on--off-default-on) |
@@ -1146,6 +1165,10 @@ Three tiers:
 | loop counters print as v5, v3, v1 instead of i, j, k | [`contextnames`](#contextnames----on--off-default-off) |
 | the accumulator a function returns keeps a vN name | [`contextnames`](#contextnames----on--off-default-off) |
 | nested loops are hard to tell apart in stripped code | [`contextnames`](#contextnames----on--off-default-off) |
+| a local loaded from a struct field keeps a vN name | [`flownames`](#flownames----on--off-default-off) |
+| v3 = p->len instead of len = p->len | [`flownames`](#flownames----on--off-default-off) |
+| a char pointer local named vN | [`flownames`](#flownames----on--off-default-off) |
+| a pointer to a named struct named vN | [`flownames`](#flownames----on--off-default-off) |
 | a double parameter stored into a global prints as unsigned long and moves ahead of the integer parameters | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a float parameter copied into a global prints as unsigned int | [`floatglobals`](#floatglobals----on--off-default-on) |
 | a global passed to a float parameter prints as a union reinterpretation ((union { unsigned int from; float to; }){ .from = dat_10001d78 }).to | [`floatglobals`](#floatglobals----on--off-default-on) |
@@ -1244,6 +1267,9 @@ Three tiers:
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
 | output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
 | a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
+| a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
+| the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -1344,6 +1370,22 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default. Flip off when a `rep movsb` copies forward over its own output on purpose -- an LZ77 decoder's overlapping match copy is defined for the instruction and not for memcpy -- or to see the instruction's loop.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · GH-1650
 - **Example:** `option repstring off`
+
+### `atomics` -- on | off, default `off`
+
+- **Symptoms:** LOCK(); and UNLOCK(); around a plain load and store; a lock xadd, lock cmpxchg or lock inc prints as an ordinary update; an AArch64 ldaddal, swpal or casal prints as a plain load and store with no sign of atomicity; a compare-exchange retry loop whose compare and store moved out of the loop.
+- **What it does:** Print an atomic read-modify-write instruction as the GCC/Clang `__sync_*` builtin it performs. SLEIGH lifts an x86 `lock`-prefixed instruction as `LOCK()`, a load, an update, a store and `UNLOCK()`, and an AArch64 LSE atomic (`ldadd`, `ldclr`, `ldeor`, `ldset`, `swp`, `cas` and their `a`/`l`/`al` and `st` forms) or a RISC-V AMO as the same load and store with nothing marking it, so the C showed a plain update between `LOCK();` and `UNLOCK();` or no sign of atomicity at all. `kuna_atomics` evaluates each instruction's p-code right after it is lifted, over every path through its internal branches (at most four), with `Old` for the value the location holds when the instruction starts, and rewrites it in place when the value it writes is `Old + X`, `Old - X`, `Old & X`, `Old | X`, `Old ^ X` or `~Old` (`__sync_fetch_and_add/sub/and/or/xor`), `X` (`__sync_lock_test_and_set`), or `N` on exactly the path where `Old == E` (`__sync_val_compare_and_swap(p, E, N)`), with `X`, `E` and `N` independent of `Old`; the builtin's result is `Old`. Declined: another user operation inside the lock envelope (an HLE hint), an update that leaves the location unchanged (`lock orq $0, (%rsp)`, the fence compilers emit), `lock neg`, `cmpxchg8b`/`cmpxchg16b`, `casp`, the min/max forms, an unlocked x86 update and every instruction of a Go image (`goatomicreturn` owns those). The builtins carry the call flag and guard writable memory across themselves like a call (`kuna_memoryguard`). Inert off x86, AArch64 and RISC-V.
+- **When to flip:** Off by default. Turn on to read lock-free code (reference counts, spin locks, lock-free queues) as the atomic operations it performs instead of LOCK()/UNLOCK() envelopes or plain loads and stores. The `__sync` names do not encode a memory order: the AArch64 acquire/release markers stay as `LOAcquire()`/`LORelease()`.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option atomics on`
+
+### `llscfold` -- on | off, default `off`
+
+- **Symptoms:** an AArch64 do/while loop around ExclusiveMonitorPass and ExclusiveMonitorsStatus; a shared_ptr or Arc reference count update prints as a loop with a char status variable; `if ((bool)ExclusiveMonitorPass(p,0x10))` in a loop.
+- **What it does:** AArch64: fold a load-exclusive/store-exclusive retry loop into the `__sync_*` builtin its successful iteration performs, as option `atomics` names the single-instruction LSE forms: `ldaxr; add; stlxr; cbnz` becomes `__sync_fetch_and_add(p, x)` and a compare-exchange loop (`ldaxr; cmp; b.ne fail; stlxr; cbnz`) becomes `__sync_val_compare_and_swap(p, e, n)`. Pre-SSA, the loop head (holding the load), the store-exclusive's blocks (a branch on `ExclusiveMonitorPass`, then the STORE and `ExclusiveMonitorsStatus`) and the status test are evaluated symbolically as one atomic update with the monitor passing and the status 0: one LOAD and one STORE through one pointer register that the monitor also checks, the status test leaving the loop, and a stored value `Old op X` or `X` (`op` one of `+ - & | ^`), or, for a compare-exchange, a value independent of `Old` stored only when the head finds `Old == E`. Any value the loop reads from a register or temporary it also writes refuses the fold, because a retry would see a different value; so does a compare's exit that does more than `clrex` before branching back. The load becomes the builtin, the pass and status become the constants 1 and 0 and the store a dead copy, so dead-branch removal deletes the back edge. The builtin guards memory like a call. Inert off AArch64 (only AArch64 declares the monitor user operations).
+- **When to flip:** Off by default. Turn on with `atomics` to read AArch64 code built without LSE (shared_ptr and Arc reference counts, std::atomic updates) as the atomic operations it performs; leave off when the loop's failure path or its exact instruction sequence matters.
+- **Where / provenance:** P2/flow-classification · kuna · presentation-default · unlace-19
+- **Example:** `option llscfold on`
 
 ### `copyrun` -- on | off, default `on`
 
@@ -1787,8 +1829,8 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `pairparam` -- on | off, default `on`
 
-- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow or carry links them.
+- **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`
@@ -2409,6 +2451,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · ghidra · presentation-default · kuna-indirectonly
 - **Example:** `option indirectonly on`
 
+### `typemerge` -- on | storage | off, default `on`
+
+- **Symptoms:** one local is assigned unrelated values in different parts of the function; a loop counter reused later as an unrelated result or return code; two source variables of the same type print as one name; a saved argument and a later call result share one declared local.
+- **What it does:** Narrow which variables ActionMergeType joins. Merge::mergeByDatatype (merge.cc:359-401) gathers every HighVariable of the function, groups them by identical data-type, and lets mergeLinear join any two in a group whose lifetimes do not overlap, wherever each is stored: two distinct source variables that only share a type (two `int` counters of two loops, a saved argument and a later result) print as one reused local, and a value that crossed a call or a phi in another register becomes the same name as an unrelated one. `on` is that upstream pass byte-for-byte. `storage` keeps the type grouping but lets a high join a group only when every instance of it and every instance of the group's first high sit in one and the same storage (same space, offset and size; kuna_typemerge.rs (single_storage)), so a register or stack slot that the compiler reused for one variable still reads as one variable while values held in different registers stay apart. `off` skips the type grouping entirely. Both narrower modes leave the required merges, ActionMergeCopy, ActionMergeAdjacent, ActionDominantCopy and the prior-decompile variable groups (kuna_stablenames.rs (variable_groups)) untouched; they only drop speculative joins, so every variable they keep apart is one upstream would have printed as the same name.
+- **When to flip:** ON (upstream) by default: it is the pass that folds dozens of same-typed temporaries into a handful of reused locals, and the narrower modes print more declarations. Flip to `storage` when one local is assigned values that clearly mean different things in different parts of the function (a loop counter reused as a return code, a saved argument overwritten by an unrelated result) and you want the variables the machine kept in different places printed apart; it keeps a variable the compiler spilled to one slot or held in one register whole. Flip to `off` to see every speculative same-type join undone, at the cost of the most declarations. The narrower modes have not yet been measured against DWARF variable boundaries on a corpus, which is what a default change would need.
+- **Where / provenance:** P6/merge-aggressiveness · kuna · presentation-default · unlace-20
+- **Example:** `option typemerge storage`
+
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
 - **Symptoms:** an inlined callee body is spliced into the caller and should read as a call; want to pull a chosen region out of a function into a named pseudofunction; acting on an almostregion inline-candidate report by hand or with an llm.
@@ -2956,6 +3006,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** On by default: a Windows PE built by MSVC (or clang -target ...-windows-msvc) carrying polymorphic C++ classes gets its C++ class names recovered and the RTTI/vftable metadata graph labelled (the raw .rdata bytes / unnamed DAT_* vtable become `Box`/`Shape` class names + `<Class>::vftable` / `<Class>::RTTI_*` labels). Inert on every non-PE image and on a PE with no shared type_info vftable. Flip off to see the raw .rdata without the recovered labels.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-analysis-rtti
 - **Example:** `option rtti on`
+
+### `msvceh` -- on | off, default `off`
+
+- **Symptoms:** _CxxThrowException(&v1, &dat_<addr>) with no thrown type; nothing says what an msvc c++ function throws; _CxxThrowException(0, 0) with no hint that it rethrows.
+- **What it does:** On an MSVC PE, label the C++ throw metadata and say what each x64 throw site throws. An MSVC `throw e;` is `_CxxThrowException(&e, &ThrowInfo)`, and a `throw;` is `_CxxThrowException(0, 0)`; stripped, the call reads `_CxxThrowException(&v1, &dat_140004a10)`. The pass finds the type_info vftable the `.?A` type descriptors share, every TypeDescriptor that points at it (built-in types such as `.H` included), and walks the image's references back from each: TypeDescriptor -> CatchableType (pType at +4, properties, object size and copy constructor checked) -> CatchableTypeArray (first entry at +4, every entry a CatchableType) -> ThrowInfo (array at +12, attributes, destructor and forward-compat routine checked). Each record is labelled with its type: `ThrowInfo<std::runtime_error>`, `ThrowInfo<int const>` (from TI_IsConst), `CatchableTypeArray<T>`, `CatchableType<T>` for the thrown type and each public base. Class names come from the MSVC demangler, built-in and pointer types from their type codes. On x64, a call of the imported `_CxxThrowException` (call through its IAT slot or its jump thunk) whose rdx is loaded by a `lea rdx, [rip+d]` of a labelled ThrowInfo in the 32 bytes before it gets the comment `throw T`, and one right after `xor edx, edx; xor ecx, ecx` gets `rethrow`; the comment goes to the function whose `.pdata` record (followed through chained unwind info) covers the call. x86 references are absolute addresses and are labelled the same way; x86 has no `.pdata`, so its throw sites get no comment. Catch-side metadata (FuncInfo, FH4, catch funclets) and x86 SEH scope tables are not read.
+- **When to flip:** Off by default. Turn it on for an MSVC or clang-cl C++ PE to see what each throw throws: the second argument of `_CxxThrowException` reads `&ThrowInfo<std::out_of_range>` instead of `&dat_<addr>`, and on x64 the call carries a `throw std::out_of_range` or `rethrow` comment. Inert on any other image.
+- **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-31
+- **Example:** `--option msvceh on`
 
 ### `esprom` -- auto | off | esp32 | esp32s2 | esp32s3 | esp32c2 | esp32c3 | esp32c6 | esp32h2 | esp8266, default `auto`
 
@@ -3681,6 +3739,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-declorder
 - **Example:** `option declorder name`
 
+### `cppshortnames` -- on | off, default `off`
+
+- **Symptoms:** std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > instead of std::string; a std::vector or std::map type spelled with its allocator and comparator; __cxx11 or __1 in front of a std function name; C++ type names too long to read.
+- **What it does:** Print a standard C++ name the way a C++ programmer writes it. A demangler and DWARF spell `std::string` as `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >`. With the option on, `kuna_cppshortnames` shortens the name where the printer writes it, and the type, its Symbol and every directive keep the full name. An inline namespace right after `std` (`__cxx11`, `__1`, `__2`, `__ndk1`) is dropped from a type name and from the namespaces printed in front of a declared or called function (`std::basic_string::_M_append`). A character template whose other arguments are its defaults prints as its standard alias: `basic_string`, `basic_string_view` over `char`, `wchar_t`, `char8_t`, `char16_t` and `char32_t` (`std::string`, `std::wstring`, `std::u16string_view`), and the stream and buffer templates over `char` and `wchar_t` (`std::ostream`, `std::wistream`, `std::ostringstream`, `std::filebuf`). A DWARF name without its namespace (`basic_string<char, std::char_traits<char>, std::allocator<char> >`) counts when a default argument shows it is the standard one. A standard container loses its trailing default arguments when they name its own element, or for a map its own key and value pair: `std::vector<int, std::allocator<int> >` prints `std::vector<int>`, `std::map<int, std::string, std::less<int>, std::allocator<std::pair<int const, std::string> > >` prints `std::map<int, std::string>`, and `std::unique_ptr<Foo, std::default_delete<Foo> >` prints `std::unique_ptr<Foo>`. Any other argument stays (`std::vector<int, std::allocator<long>>`, `std::set<int, std::greater<int>>`). MSVC's `class`/`struct` argument tags are dropped. A rewritten name closes nested argument lists as `>>`. A name more than 32 template levels deep, longer than 4 KiB, or with unbalanced brackets prints as it is. The scope name of a member of the C++11-ABI string stays `basic_string`: the demangled symbol has lost its template arguments, so `char` and `wchar_t` cannot be told apart.
+- **When to flip:** Turn on for C++ binaries: `std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > *` prints `std::string *`, and `std::__cxx11::basic_string::_M_append` prints `std::basic_string::_M_append`. Off by default because it respells names that stage assertions and CLI tests spell in full.
+- **Where / provenance:** P9/naming-policy · ida · presentation-default · kuna-cppshortnames
+- **Example:** `option cppshortnames on`
+
 ### `libcnames` -- on | off, default `on`
 
 - **Symptoms:** a local holding open()'s result named v1; read's byte count kept as a vN; a stack buffer passed to read() or ReadFile() named vN; a struct stat or a DWORD whose address a library call takes named vN; a buffer length from strlen named vN; a local passed to a libc function keeps a vN name; a handle from CreateFileW or LoadLibraryW named vN; kuna names fewer locals than IDA on libc-heavy code.
@@ -3696,6 +3762,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`.
 - **Where / provenance:** P6/naming-policy · kuna · presentation-default · kuna-contextnames
 - **Example:** `option contextnames on`
+
+### `flownames` -- on | off, default `off`
+
+- **Symptoms:** a local loaded from a struct field keeps a vN name; v3 = p->len instead of len = p->len; a char pointer local named vN; a pointer to a named struct named vN.
+- **What it does:** Name a numbered local from the structure fields and the type it meets when no declaration or library call names it. `kuna_flownames` reads two kinds of evidence for the `libcnames` alias walk: a named field the value is loaded from or stored to through a typed pointer (`len = p->len`, `p->len = len`), or copied out of or into a member of a stack structure (`size = st.st_size`), counted only when every field the local meets has the same name, leading underscores dropped (`_flags` gives `flags`); and the local's own type, `str` for a `char` pointer, `wstr` for a wide-character pointer and `p_<name>` for a pointer to a named structure (`p_passwd`, the last `::` component without template arguments for a C++ type). A field the analysis made up (`field_0x10`), padding (`__pad0`, `__glibc_reserved`, `unused`), and a structure it synthesized (`struct_3`, `astruct_1`) name nothing. A field name ranks below a library argument and above a role name (`dest`/`src`) and `result`; a type name is the weakest evidence of all. The walk numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order, and no spelling repeats a name another variable, the scope or a callee holds. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype and `libcnames` for the built-in library tables; this option adds the evidence neither has.
+- **When to flip:** Turn on for stripped code that works through typed structures: `v3 = a0->st_size;` prints `st_size = a0->st_size;`, a `char *` local prints `str` and a `struct passwd *` local `p_passwd`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`, and because a type name says less than the name a reader would choose.
+- **Where / provenance:** P6/naming-policy · ida · presentation-default · kuna-flownames
+- **Example:** `option flownames on`
 
 ### `floatglobals` -- on | off, default `on`
 
@@ -3920,6 +3994,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
 - **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
 - **Example:** `option ctree on`
+
+### `honestgaps` -- on | off, default `off`
+
+- **Symptoms:** a debug build shows a generic register name where the DWARF information names a local; a function with unimplemented instructions says so in its header but not where; the real-binary harness cannot tell which functions lost information.
+- **What it does:** Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local that no write of its register reaching its range can carry, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register reaches it`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged.
+- **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
+- **Where / provenance:** P2/decode-error-policy · kuna · opt-in-tool · unlace-33-honestgaps
+- **Example:** `option honestgaps on`
 
 ## Programmatic use
 

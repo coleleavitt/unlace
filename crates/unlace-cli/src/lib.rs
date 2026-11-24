@@ -31,6 +31,7 @@ mod flirt;
 mod followimages;
 mod funcdecl;
 mod function_info;
+mod idb;
 mod image;
 mod interior;
 mod jobs;
@@ -85,6 +86,7 @@ const COMMANDS: &[(&str, CommandHandler)] = &[
     ("rust-signatures", rust_signatures::run),
     ("sbom", sbom::run),
     ("project", project::run),
+    ("idb", idb::run),
 ];
 
 /// Run the `unlace` command line over this process's arguments.
@@ -203,6 +205,7 @@ fn usage() {
          unlace lumina hash|pull|push <binary> [--server HOST:PORT] [--json] ...   unlace lumina serve --db FILE [--bind ADDR]\n\
          unlace sbom <binary> [--json] [--format cyclonedx|spdx] [-o FILE] [--slice ARCH]\n\
          unlace project <init|schema|set|unset|get|list|query|export|import> ... [--json|--jsonl]   # the SQLite project file of overrides\n\
+         unlace idb <info|list|import> <db.i64|db.idb> [--json|--jsonl] ...   # an IDA database: its knowledge into a project\n\
          unlace --version\n\
          \n\
          --image NAME[+NAME...] (any subcommand): load those images of a dyld shared cache\n\

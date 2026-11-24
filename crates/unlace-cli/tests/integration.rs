@@ -6,6 +6,12 @@ mod common;
 mod mips_elf_selection;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
+#[path = "riscv_bitmanip.rs"]
+mod riscv_bitmanip;
+#[path = "riscv_crypto.rs"]
+mod riscv_crypto;
+#[path = "riscv_zcb.rs"]
+mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
 #[path = "rust_signature_summary.rs"]
@@ -409,6 +415,8 @@ mod overlapbranch_cli;
 #[path = "own_register_returns.rs"]
 mod own_register_returns;
 
+#[path = "pair_equality_compares.rs"]
+mod pair_equality_compares;
 #[path = "pair_return_halves.rs"]
 mod pair_return_halves;
 

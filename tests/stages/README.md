@@ -43,6 +43,22 @@ no-return analysis disabled.
 switch, independent terminal propagation through a lookalike wrapper, and
 explicit function and call-site overrides.
 
+`kuna-atomics-x86.xml` checks, under option `atomics`, that locked x86-64
+read-modify-writes (`xadd`, `add`, `dec`, `or`, `xchg`, `cmpxchg` at 4, 8 and 1
+bytes, `inc` of a RIP-relative global) print as `__sync_*` builtins, that a
+compare-exchange retry loop keeps the builtin inside the loop, and that an HLE
+hint, `lock neg`, an unlocked add and a `lock or $0` fence keep their p-code.
+
+`kuna-atomics-a64.xml` checks the AArch64 LSE forms (`ldaddal`, `ldsetal`,
+`swpal`, `casal`, `ldclral`, `stadd`) and, under option `llscfold`, the
+`ldaxr`/`stlxr` retry loops of the same source: update and exchange loops and
+compare-exchange loops fold into the builtins, a byte compare-exchange (whose
+compare reads a zero-extended byte) and a nested max loop stay loops, and
+`llscfold off` keeps the monitor calls.
+
+`kuna-atomics-riscv.xml` checks hand-encoded RV64A `amoadd.w`, `amoswap.d` and
+`amoor.w` against the builtins, and that `amomax.w` is declined.
+
 `kuna-go-atomic-return.xml` checks exact AMD64 Go direct-return atomic additions,
 including old-value, flag, branch, memory-effect and width refusals. The same
 bytes retain C/Rust rendering and the non-Go source control.
@@ -307,6 +323,7 @@ writeup, not here.
 | `kuna-aifnoppad.xml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (no AIF gap entry starts on nop padding: padding in front of a known function is not probed, and an accept behind padding moves to the code after it) | always on with `option aif on` |
 | `kuna-condcall.xml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (a predicated call's skip to the next instruction is its fall-through, not a second call target, so the next instruction is not a function and the callee is not no-return) | default correctness fix (no option) |
 | `kuna-thumbswitch.xml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (the Listing walk reads a range-checked Thumb `tbb`/`tbh` offset table and decodes the case bodies as the dispatcher's own code, so no gap entry lands on a case) | always on |
+| `kuna-thumb1case.xml` | A stripped Cortex-M0 image dispatches its switches through libgcc's `__gnu_thumb1_case_*` helpers; with no names the call read as an ordinary call returning into the table, and only the first case printed | P0 knowledge (`unlace-analysis` `callfixup/kuna_thumb1casesig.rs` recognizes the helpers by their instructions, so the `switch*_r0` call-fixups apply; the word helper's fixup now adds the entry to the aligned table address) | none (strict fix): one pass at the default |
 | `kuna-x86listingswitch.xml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (a locally proved i386 switch decodes exactly four cases before the gap walk; the independent function between cases remains and a case's real callee is recovered) | `option x86listingswitch off\|on` |
 | `kuna-aifpoolslide.xml` | [Kuna #299](https://github.com/Noelo-Lab/kuna/issues/299) | P1 code/data partition (an AIF gap candidate on a word a PC-relative load reads is pool data: its accept moves to the code after the pool) | `option aifpoolslide on\|off` |
 | `kuna-pushimmediateret.xml` | RE-friction duplicate needs `entry-point-push-return` + `push-immediate-ret-transfer` | S2 flow classification (a proven one-store `push immediate; ret` becomes a terminal branch; no target function is synthesized) | always on (P2 `flow-classification`, `kuna_pushimmediateret.rs`) |

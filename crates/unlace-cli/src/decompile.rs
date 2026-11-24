@@ -1196,6 +1196,15 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         unsafe { std::env::set_var("KUNA_ENGINE", e) };
     }
     addr |= looks_like_addr(&target);
+    // An IDA database (`crate::idb`) loads in-process as its segments, and a name
+    // selects through the database's own function list: a raw load selects by address.
+    let idb = raw_image && crate::idb::is_database_file(&binary);
+    let target = if idb && !addr {
+        addr = true;
+        crate::idb::function_address(&binary, &target)?
+    } else {
+        target
+    };
 
     if raw_image {
         if bfd_target
@@ -1218,7 +1227,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         return Err("--base requires --raw-image".into());
     }
 
-    if json || apply_rust_signatures.is_some() {
+    if json || idb || apply_rust_signatures.is_some() {
         if !json && record_flag.is_some() {
             return Err("--omit and --no-vars require --json".into());
         }
@@ -1235,8 +1244,10 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             if requested {
                 let request = if apply_rust_signatures.is_some() {
                     "--apply-rust-signatures"
-                } else {
+                } else if json {
                     "--json"
+                } else {
+                    "an IDA database"
                 };
                 return Err(format!("{flag} is not supported with {request}"));
             }

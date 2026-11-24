@@ -4255,6 +4255,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                 .get::<unlace_decomp::kuna_analysisgates::Rtti>()
                 .0
         }
+        "msvceh" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Msvceh>()
+                .0
+        }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
         // names, typeinfo/vtable labels and per-slot virtual-method names are
         // computed at LOAD but COMMITTED only when this gate is on. Default-OFF

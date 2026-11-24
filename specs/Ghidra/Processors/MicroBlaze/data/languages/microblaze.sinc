@@ -544,11 +544,12 @@ CC: "ge" is cond=5 & RA { local c:1 = RA s>= 0; export c; }
 ################################################################
 
 :lbu  rd, RA, RB is op=0x30 & rd & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; rd = zext(*:1 a); }
-:lbur rd, RA, RB is op=0x30 & rd & RA & RB & RAX & RBX & low11=0x200 { local a = RAX + RBX; rd = zext(*:1 a); }
+# Reversed byte and halfword accesses also flip the low address bits (address ^ 3, ^ 2), as QEMU does
+:lbur rd, RA, RB is op=0x30 & rd & RA & RB & RAX & RBX & low11=0x200 { local a = (RAX + RBX) ^ 3; rd = zext(*:1 a); }
 :lbuea rd, RA, RB is op=0x30 & rd & RA & RB & low11=0x080 { local v:1 = extLoad8(RA, RB); rd = zext(v); }
 :lhu  rd, RA, RB is op=0x31 & rd & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; rd = zext(*:2 a); }
 :lhur rd, RA, RB is op=0x31 & rd & RA & RB & RAX & RBX & low11=0x200 {
-	local a = RAX + RBX; local v:2 = *:2 a; rd = zext((v << 8) | (v >> 8));
+	local a = (RAX + RBX) ^ 2; local v:2 = *:2 a; rd = zext((v << 8) | (v >> 8));
 }
 :lhuea rd, RA, RB is op=0x31 & rd & RA & RB & low11=0x080 { local v:2 = extLoad16(RA, RB); rd = zext(v); }
 :lw   rd, RA, RB is op=0x32 & rd & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; W32(rd, *:4 a); }
@@ -560,11 +561,11 @@ CC: "ge" is cond=5 & RA { local c:1 = RA s>= 0; export c; }
 :lwea rd, RA, RB is op=0x32 & rd & RA & RB & low11=0x080 { local v:4 = extLoad32(RA, RB); W32(rd, v); }
 
 :sb   rd, RA, RB is op=0x34 & rd & RDV & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; *:1 a = RDV:1; }
-:sbr  rd, RA, RB is op=0x34 & rd & RDV & RA & RB & RAX & RBX & low11=0x200 { local a = RAX + RBX; *:1 a = RDV:1; }
+:sbr  rd, RA, RB is op=0x34 & rd & RDV & RA & RB & RAX & RBX & low11=0x200 { local a = (RAX + RBX) ^ 3; *:1 a = RDV:1; }
 :sbea rd, RA, RB is op=0x34 & rd & RDV & RA & RB & low11=0x080 { extStore8(RA, RB, RDV:1); }
 :sh   rd, RA, RB is op=0x35 & rd & RDV & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; *:2 a = RDV:2; }
 :shr  rd, RA, RB is op=0x35 & rd & RDV & RA & RB & RAX & RBX & low11=0x200 {
-	local a = RAX + RBX; local v:2 = RDV:2; *:2 a = (v << 8) | (v >> 8);
+	local a = (RAX + RBX) ^ 2; local v:2 = RDV:2; *:2 a = (v << 8) | (v >> 8);
 }
 :shea rd, RA, RB is op=0x35 & rd & RDV & RA & RB & low11=0x080 { extStore16(RA, RB, RDV:2); }
 :sw   rd, RA, RB is op=0x36 & rd & RDV & RA & RB & RAX & RBX & low11=0x000 { local a = RAX + RBX; *:4 a = RDV; }

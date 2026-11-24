@@ -638,3 +638,20 @@ fn a_pop_restores_from_the_slot_its_push_saved() {
     assert_eq!(sp(&s), Val::exact(0));
     assert!(!s.unplaced);
 }
+
+#[test]
+fn a_push_through_a_temporary_names_its_register() {
+    let mut f = fx();
+    f.regs.fs = Some(0x40);
+    let save = vn(&f.tmp, 0x300, 4);
+    let ops = vec![
+        (OpCode::CPUI_COPY, Some(save.clone()), vec![f.r(6)]),
+        f.add(SP, SP, -4),
+        (
+            OpCode::CPUI_STORE,
+            None,
+            vec![vn(&f.cst, 3, 8), f.r(SP), save],
+        ),
+    ];
+    assert_eq!(step(&ops, &f.regs, State::at_entry()).state.4[2], Some(-4));
+}

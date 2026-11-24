@@ -326,7 +326,99 @@ pub const MSVC_ATOMIC_BUILTINS: [(uint4, uint4, i32, &[u8]); 24] = [
     ),
 ];
 
-/// (kuna) The name of atomic builtin `id`, in either spelling.
+/// (kuna) The C11 `<stdatomic.h>` spelling of the atomic builtins (option
+/// `atomics c11`): id, the `__sync` builtin it stands for, whether it is the
+/// `_explicit` form (whose last operand is the `memory_order`) and the name.
+/// C11 has no value-returning compare-and-swap, so that one keeps its `__sync`
+/// name.
+pub const C11_ATOMIC_BUILTINS: [(uint4, uint4, bool, &[u8]); 12] = [
+    (
+        0x10000070,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        false,
+        b"atomic_fetch_add",
+    ),
+    (
+        0x10000071,
+        BUILTIN_ATOMIC_FETCH_SUB,
+        false,
+        b"atomic_fetch_sub",
+    ),
+    (
+        0x10000072,
+        BUILTIN_ATOMIC_FETCH_AND,
+        false,
+        b"atomic_fetch_and",
+    ),
+    (
+        0x10000073,
+        BUILTIN_ATOMIC_FETCH_OR,
+        false,
+        b"atomic_fetch_or",
+    ),
+    (
+        0x10000074,
+        BUILTIN_ATOMIC_FETCH_XOR,
+        false,
+        b"atomic_fetch_xor",
+    ),
+    (
+        0x10000075,
+        BUILTIN_ATOMIC_EXCHANGE,
+        false,
+        b"atomic_exchange",
+    ),
+    (
+        0x10000076,
+        BUILTIN_ATOMIC_FETCH_ADD,
+        true,
+        b"atomic_fetch_add_explicit",
+    ),
+    (
+        0x10000077,
+        BUILTIN_ATOMIC_FETCH_SUB,
+        true,
+        b"atomic_fetch_sub_explicit",
+    ),
+    (
+        0x10000078,
+        BUILTIN_ATOMIC_FETCH_AND,
+        true,
+        b"atomic_fetch_and_explicit",
+    ),
+    (
+        0x10000079,
+        BUILTIN_ATOMIC_FETCH_OR,
+        true,
+        b"atomic_fetch_or_explicit",
+    ),
+    (
+        0x1000007a,
+        BUILTIN_ATOMIC_FETCH_XOR,
+        true,
+        b"atomic_fetch_xor_explicit",
+    ),
+    (
+        0x1000007b,
+        BUILTIN_ATOMIC_EXCHANGE,
+        true,
+        b"atomic_exchange_explicit",
+    ),
+];
+
+/// (kuna) The C11 `memory_order` values, as `<stdatomic.h>` numbers them.
+pub const MEMORY_ORDERS: [(u64, &str); 6] = [
+    (0, "memory_order_relaxed"),
+    (1, "memory_order_consume"),
+    (2, "memory_order_acquire"),
+    (3, "memory_order_release"),
+    (4, "memory_order_acq_rel"),
+    (5, "memory_order_seq_cst"),
+];
+/// `memory_order_seq_cst`: the order the non-`_explicit` forms imply.
+pub const MEMORY_ORDER_SEQ_CST: u8 = 5;
+
+/// (kuna) The name of atomic builtin `id`, in any spelling.
 pub fn atomic_builtin_name(id: uint4) -> Option<&'static [u8]> {
     ATOMIC_BUILTINS
         .iter()
@@ -338,6 +430,29 @@ pub fn atomic_builtin_name(id: uint4) -> Option<&'static [u8]> {
                 .find(|(b, ..)| *b == id)
                 .map(|(.., n)| *n)
         })
+        .or_else(|| {
+            C11_ATOMIC_BUILTINS
+                .iter()
+                .find(|(b, ..)| *b == id)
+                .map(|(.., n)| *n)
+        })
+}
+
+/// (kuna) The C11 builtin for `__sync` builtin `generic`, `_explicit` or not;
+/// `None` for the compare-and-swap.
+pub fn c11_atomic_builtin(generic: uint4, explicit: bool) -> Option<uint4> {
+    C11_ATOMIC_BUILTINS
+        .iter()
+        .find(|(_, g, e, _)| *g == generic && *e == explicit)
+        .map(|(b, ..)| *b)
+}
+
+/// (kuna) Whether builtin `id` is a C11 `_explicit` form, whose last operand is
+/// its `memory_order`.
+pub fn atomic_builtin_explicit(id: uint4) -> bool {
+    C11_ATOMIC_BUILTINS
+        .iter()
+        .any(|(b, _, e, _)| *b == id && *e)
 }
 
 /// (kuna) The `__sync` builtin atomic builtin `id` performs: itself, or the one
@@ -350,6 +465,12 @@ pub fn atomic_builtin_generic(id: uint4) -> Option<uint4> {
         .iter()
         .find(|(b, ..)| *b == id)
         .map(|(_, g, ..)| *g)
+        .or_else(|| {
+            C11_ATOMIC_BUILTINS
+                .iter()
+                .find(|(b, ..)| *b == id)
+                .map(|(_, g, ..)| *g)
+        })
 }
 
 /// (kuna) The MSVC intrinsic for `__sync` builtin `generic` at `width` bytes;

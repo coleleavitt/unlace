@@ -215,6 +215,7 @@ fn spelled_swaps_compare_exchange_and_negates_subtraction() {
         &[e.clone(), n.clone()],
         8,
         true,
+        None,
         |_| true,
     );
     assert_eq!(
@@ -227,6 +228,7 @@ fn spelled_swaps_compare_exchange_and_negates_subtraction() {
         &[Expr::Const(1, 2)],
         2,
         true,
+        None,
         |_| true,
     );
     assert_eq!(
@@ -239,16 +241,63 @@ fn spelled_swaps_compare_exchange_and_negates_subtraction() {
         offset: 24,
         size: 1,
     });
-    let (id, ops) = spelled(BUILTIN_ATOMIC_FETCH_SUB, &[x.clone()], 1, true, |_| false);
+    let (id, ops) = spelled(
+        BUILTIN_ATOMIC_FETCH_SUB,
+        &[x.clone()],
+        1,
+        true,
+        None,
+        |_| false,
+    );
     assert_eq!(id, BUILTIN_ATOMIC_FETCH_SUB);
     assert_eq!(ops, vec![x.clone()]);
-    let (id, _) = spelled(BUILTIN_ATOMIC_FETCH_SUB, &[x], 1, false, |_| true);
+    let (id, _) = spelled(BUILTIN_ATOMIC_FETCH_SUB, &[x], 1, false, None, |_| true);
     assert_eq!(id, BUILTIN_ATOMIC_FETCH_SUB);
     for (id, generic, width, _) in MSVC_ATOMIC_BUILTINS {
         assert_eq!(atomic_builtin_generic(id), Some(generic));
         assert_eq!(msvc_atomic_builtin(generic, width), Some(id));
     }
     assert_eq!(msvc_atomic_builtin(BUILTIN_ATOMIC_FETCH_SUB, 4), None);
+}
+
+#[test]
+fn c11_spelling_adds_the_order_unless_sequentially_consistent() {
+    let v = Expr::Const(1, 8);
+    let (id, ops) = spelled(
+        BUILTIN_ATOMIC_FETCH_ADD,
+        &[v.clone()],
+        8,
+        false,
+        Some(0),
+        |_| true,
+    );
+    assert_eq!(
+        atomic_builtin_name(id),
+        Some(&b"atomic_fetch_add_explicit"[..])
+    );
+    assert!(crate::userop::atomic_builtin_explicit(id));
+    assert_eq!(ops, vec![v.clone(), Expr::Const(0, 4)]);
+    let (id, ops) = spelled(
+        BUILTIN_ATOMIC_EXCHANGE,
+        &[v.clone()],
+        8,
+        false,
+        Some(crate::userop::MEMORY_ORDER_SEQ_CST),
+        |_| true,
+    );
+    assert_eq!(atomic_builtin_name(id), Some(&b"atomic_exchange"[..]));
+    assert_eq!(ops, vec![v.clone()]);
+    assert_eq!(atomic_builtin_generic(id), Some(BUILTIN_ATOMIC_EXCHANGE));
+    // C11 has no value-returning compare-and-swap
+    let (id, _) = spelled(
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        &[v.clone(), v.clone()],
+        8,
+        false,
+        Some(0),
+        |_| true,
+    );
+    assert_eq!(id, BUILTIN_ATOMIC_COMPARE_SWAP);
 }
 
 #[test]

@@ -15,8 +15,15 @@
 //! `fs:[0x28]` stack canary keeps its form), the register input gets a type-locked Symbol `tls`: a pointer RELATIVE to
 //! a `__tls_block` structure (the TLS symbols at their values, the rest holes),
 //! pointing at the block's end. The thread pointer is one past the block, so
-//! the access renders `tls[-1].counter`. Only x86 ELF images; an image with no
-//! TLS symbols has no layout.
+//! the access renders `tls[-1].counter`.
+//!
+//! AArch64 uses TLS variant I: `tpidr_el0` points at a 16-byte thread control
+//! block and the executable's block follows it at `align_up(16, p_align)`
+//! (`TlsLayout::tcb`), so a variable is at `tp + tcb + value`. There the
+//! symbol's type is a plain pointer to a `__tls_block` that starts with the
+//! control block, and the access renders `tls->counter`. A relocatable
+//! object's block is its `SHF_TLS` sections in order, the layout the loader
+//! uses for the TLSLE relocations. An image with no TLS symbols has no layout.
 
 use std::rc::Rc;
 
@@ -40,6 +47,10 @@ pub struct TlsLayout {
     pub block_size: u64,
     /// `(offset in the block, size, name)`, sorted, non-overlapping.
     pub vars: Vec<(u64, u64, String)>,
+    /// TLS variant I (AArch64): the block's distance above the thread pointer,
+    /// `align_up(16, p_align)`; 0 for variant II (x86), where the block sits
+    /// below it.
+    pub tcb: u64,
 }
 
 impl TlsLayout {
@@ -61,19 +72,42 @@ impl TlsLayout {
             }
             vars.push((off, size, name));
         }
-        (block_size > 0 && !vars.is_empty() && block_size <= 1 << 24)
-            .then_some(TlsLayout { block_size, vars })
+        (block_size > 0 && !vars.is_empty() && block_size <= 1 << 24).then_some(TlsLayout {
+            block_size,
+            vars,
+            tcb: 0,
+        })
+    }
+
+    /// The variant I layout (AArch64): the block follows a 16-byte thread
+    /// control block, at the block's alignment.
+    pub fn variant1(memsz: u64, align: u64, symbols: Vec<(u64, u64, String)>) -> Option<Self> {
+        let mut layout = TlsLayout::new(memsz, align, symbols)?;
+        layout.tcb = 16u64.div_ceil(align.max(1)) * align.max(1);
+        Some(layout)
+    }
+
+    /// The thread-pointer offsets the block's variables live at:
+    /// `[-block_size, 0)` below the pointer (variant II) or
+    /// `[tcb, tcb + block_size)` above it (variant I).
+    fn offsets(&self) -> (i64, i64) {
+        if self.tcb == 0 {
+            (-(self.block_size as i64), 0)
+        } else {
+            (self.tcb as i64, (self.tcb + self.block_size) as i64)
+        }
     }
 }
 
-/// The thread-pointer register for an x86 language: `FS_OFFSET` on x86-64,
-/// `GS_OFFSET` on x86.
-fn thread_pointer(data: &Funcdata) -> Option<(Address, int4)> {
+/// The thread-pointer register: `tpidr_el0` on AArch64 (a variant I
+/// layout), `FS_OFFSET` on x86-64, `GS_OFFSET` on x86.
+fn thread_pointer(data: &Funcdata, variant1: bool) -> Option<(Address, int4)> {
     let manage = data.get_arch().manage();
     let addr_size = manage.get_default_code_space()?.get_addr_size() as int4;
-    let name = match addr_size {
-        8 => "FS_OFFSET",
-        4 => "GS_OFFSET",
+    let name = match (variant1, addr_size) {
+        (true, 8) => "tpidr_el0",
+        (false, 8) => "FS_OFFSET",
+        (false, 4) => "GS_OFFSET",
         _ => return None,
     };
     let st = manage.register_lookup()?.probe_register(name)?;
@@ -84,10 +118,10 @@ fn thread_pointer(data: &Funcdata) -> Option<(Address, int4)> {
 }
 
 /// Does the function reach the register only at constant offsets inside the
-/// TLS block, `[-block_size, 0)`? A read of the thread control block above the
-/// pointer (the `fs:[0x28]` stack canary, `fs:[0]` self pointer) or any other
-/// use declines.
-fn only_block_offsets(data: &Funcdata, reg: &Address, size: int4, block_size: i64) -> bool {
+/// TLS block (`TlsLayout::offsets`)? A read of the thread control block (the
+/// `fs:[0x28]` stack canary, `fs:[0]` self pointer, AArch64's `tp[0..16)`) or
+/// any other use declines.
+fn only_block_offsets(data: &Funcdata, reg: &Address, size: int4, (lo, hi): (i64, i64)) -> bool {
     let end = reg + size as i64;
     let mut read = false;
     for vn in data.vbank().iter_loc_addr_range(reg, &end) {
@@ -112,7 +146,7 @@ fn only_block_offsets(data: &Funcdata, reg: &Address, size: int4, block_size: i6
             if size == 4 {
                 off = i64::from(off as i32);
             }
-            if off >= 0 || off < -block_size {
+            if off < lo || off >= hi {
                 return false;
             }
         }
@@ -121,8 +155,17 @@ fn only_block_offsets(data: &Funcdata, reg: &Address, size: int4, block_size: i6
 }
 
 fn block_type(types: &dyn TypeFactory, layout: &TlsLayout, ptr: int4) -> Option<Rc<Datatype>> {
-    let size = layout.block_size as int4;
+    // variant I: the block starts with the thread control block and the
+    // pointer points at its start
+    let size = (layout.tcb + layout.block_size) as int4;
+    let plain = |block: Rc<Datatype>| types.get_type_pointer(ptr, block, 1).ok();
     if let Some(existing) = types.find_by_name(BLOCK_NAME).ok()? {
+        if layout.tcb != 0 {
+            return (existing.get_metatype() == type_metatype::TYPE_STRUCT
+                && existing.get_size() == size)
+                .then(|| plain(existing))
+                .flatten();
+        }
         return (existing.get_metatype() == type_metatype::TYPE_STRUCT
             && existing.get_size() == size)
             .then(|| {
@@ -152,13 +195,21 @@ fn block_type(types: &dyn TypeFactory, layout: &TlsLayout, ptr: int4) -> Option<
                     )
                     .ok()?,
             };
-            Some(TypeField::new(i as int4, *off as int4, name.as_str(), ty))
+            Some(TypeField::new(
+                i as int4,
+                (layout.tcb + *off) as int4,
+                name.as_str(),
+                ty,
+            ))
         })
         .collect();
     let shell = types.get_type_struct(BLOCK_NAME).ok()?;
     let block = types
         .set_fields_struct_raw(&shell, fields, Vec::new(), size, 1, 0)
         .ok()?;
+    if layout.tcb != 0 {
+        return plain(block);
+    }
     let parent = types.get_type_pointer(ptr, Rc::clone(&block), 1).ok()?;
     types.get_type_pointer_rel(parent, block, size).ok()
 }
@@ -196,10 +247,10 @@ impl Action for ActionTlsNames {
         let Some(layout) = data.get_arch().kuna_states.get_rc::<TlsLayout>() else {
             return 0;
         };
-        let Some((reg, size)) = thread_pointer(data) else {
+        let Some((reg, size)) = thread_pointer(data, layout.tcb != 0) else {
             return 0;
         };
-        if !only_block_offsets(data, &reg, size, layout.block_size as i64) {
+        if !only_block_offsets(data, &reg, size, layout.offsets()) {
             return 0;
         }
         let mapped = data
@@ -268,5 +319,15 @@ mod tests {
         assert_eq!(l.block_size, 0x60);
         let names: Vec<&str> = l.vars.iter().map(|v| v.2.as_str()).collect();
         assert_eq!(names, ["hits", "buf", "counter"]);
+    }
+
+    #[test]
+    fn variant1_puts_the_block_after_the_control_block() {
+        let l =
+            TlsLayout::variant1(0xc, 8, vec![(0, 8, "tl2".into()), (8, 4, "tl".into())]).unwrap();
+        assert_eq!((l.tcb, l.block_size), (16, 16));
+        assert_eq!(l.offsets(), (16, 32));
+        let l = TlsLayout::variant1(4, 64, vec![(0, 4, "x".into())]).unwrap();
+        assert_eq!(l.tcb, 64);
     }
 }

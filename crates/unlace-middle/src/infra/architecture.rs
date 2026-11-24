@@ -3506,6 +3506,9 @@ impl Architecture {
             for (id, ..) in crate::userop::MSVC_ATOMIC_BUILTINS {
                 userops.register_builtin(id, &adapter)?;
             }
+            for (id, ..) in crate::userop::C11_ATOMIC_BUILTINS {
+                userops.register_builtin(id, &adapter)?;
+            }
             Ok(())
         })();
         self.userops = userops;

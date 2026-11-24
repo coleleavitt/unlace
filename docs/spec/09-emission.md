@@ -2458,6 +2458,19 @@ the slot keeps the slot name. So do a read narrower than the slot and a read by 
 operator C does not apply to a pointer (a mask, a shift, a multiply or a division:
 `dat_<slot> | 1`, never `&<import> | 1`); an addition stays `&<import> + 8`.
 
+(kuna `wideconst`, default on) A constant wider than 64 bits that the lifter built from
+pieces prints as one hexadecimal literal (`crates/unlace-emit/src/p9_emit/kuna_wideconst.rs`).
+A Varnode constant holds at most 64 bits, so a wider value stays an expression tree; EVM's
+`PUSH20`/`PUSH32` lift a 7-byte and an 8-byte immediate and shift in the continuation bytes,
+and the 160-bit address mask printed as `((ZEXT732(0xffffffffffffff) << 0x40 |
+ZEXT832(0xffffffffffffffff)) << 0x28 | ZEXT532(0xffffffffff))`. At the top of
+`op_push_ir_inner`, an `INT_LEFT` or `INT_OR` whose output is 9 to 32 bytes is evaluated
+in 256-bit arithmetic over constants, `INT_ZEXT`s, constant `INT_LEFT`s and `INT_OR`s,
+descending only through implied Varnodes (a named variable stops it), each result masked to
+its Varnode's size; when the whole tree is constant, the hexadecimal literal is pushed as one
+constant atom in place of the tree. `PIECE` is not folded: a two-word `CONCAT` of constants
+is a Go or Swift pair, which keeps its form (the stage corpus pins those).
+
 (kuna `cstringconst`, default on) A pointer-wide constant inside a string-literal
 section prints as the literal there, whatever type it reaches the printer with
 (`crates/unlace-emit/src/p9_emit/kuna_cstringconst.rs`). `pushConstant`

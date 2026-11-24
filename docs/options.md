@@ -1142,6 +1142,10 @@ Three tiers:
 | stg, st2g or stzg leave no trace in the output of MTE-hardened AArch64 code | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | DataMemoryBarrier(2,3) or DataSynchronizationBarrier(3,3,0) where the source called __dmb or __dsb | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
 | WaitForInterrupt() or Yield() where the source called __wfi or __yield | [`acleintrinsics`](#acleintrinsics----on--off-default-on) |
+| a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors | [`wideconst`](#wideconst----on--off-default-on) |
+| an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40  | [`wideconst`](#wideconst----on--off-default-on) |
+|  ...) | [`wideconst`](#wideconst----on--off-default-on) |
+| an event topic hash spans several lines of shifted pieces | [`wideconst`](#wideconst----on--off-default-on) |
 | invalidInstructionException() after a call in a stripped rust or clang binary | [`trapaftercall`](#trapaftercall----on--off-default-on) |
 | a panic helper call is not marked no-return | [`trapaftercall`](#trapaftercall----on--off-default-on) |
 | ud2 after a call is printed as a jump-as-call | [`trapaftercall`](#trapaftercall----on--off-default-on) |
@@ -3878,6 +3882,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default on AArch64 and inert on every other target: the output names the intrinsic the source called, and a pointer that was tagged is the result of a call instead of an unchanged copy. Flip off to read barriers and hints under their SLEIGH instruction names with the domain and type operands separate, or to read MTE-hardened code (for example a stack-tagging build, which tags every address-taken local) as if the core had no tags.
 - **Where / provenance:** P9/naming-policy · kuna · correctness-fix · kuna-acleintrinsics
 - **Example:** `option acleintrinsics off`
+
+### `wideconst` -- on | off, default `on`
+
+- **Symptoms:** a 160-bit or 256-bit constant prints as a chain of zext732/zext832 shifts and ors; an evm address mask prints as ((zext732(0xffffffffffffff) << 0x40 ;  ...); an event topic hash spans several lines of shifted pieces.
+- **What it does:** Print a constant wider than 64 bits that the lifter assembled from pieces as one hexadecimal literal. A Varnode constant holds at most 64 bits, so a wider value stays an expression tree: EVM's `PUSH20`/`PUSH32` lift as a 7-byte and an 8-byte immediate plus continuation bytes, and the 160-bit address mask printed as `((ZEXT732(0xffffffffffffff) << 0x40 | ZEXT832(0xffffffffffffffff)) << 0x28 | ZEXT532(0xffffffffff))` and an event topic as a four-line chain. `kuna_wideconst.rs` evaluates, at a `<<` or `|` whose output is wider than eight bytes (up to 32), the tree of constants, `ZEXT`s, constant left shifts and `|`s below it, through implied Varnodes only, exactly in 256-bit arithmetic, and the printer emits `0xffffffffffffffffffffffffffffffffffffffff` in its place. A `CONCAT` of two words (a Go or Swift pair) is a pair, not a number, and keeps its form.
+- **When to flip:** On by default: 0/675 datatest assertions and 0 stage assertions move (no other corpus builds a constant wider than 64 bits from shifts). Flip off to see the pieces the lifter built the constant from.
+- **Where / provenance:** P9/literal-format · kuna · presentation-default · unlace-wide-constant-literal
+- **Example:** `option wideconst off`
 
 ### `trapaftercall` -- on | off, default `on`
 

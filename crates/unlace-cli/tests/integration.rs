@@ -8,6 +8,9 @@ mod chip8;
 mod common;
 #[path = "evm.rs"]
 mod evm;
+#[path = "ez80_raw.rs"]
+mod ez80_raw;
+
 #[path = "hexagon_hmx.rs"]
 mod hexagon_hmx;
 #[path = "huc6280.rs"]

@@ -4517,6 +4517,20 @@ with an EGPR was a bad instruction. Exercised by `x86_apx.rs` (an
 `evex_probe` against `llvm-objdump`, and an EVEX ANDN/SHRX routine that
 decompiles to `(~a1 & a0) >> (a2 & 0x3f)`).
 
+### x86 ENQCMD and CMPccXADD (#98)
+
+`ia.sinc` decodes ENQCMD and ENQCMDS (F2/F3 0F 38 F8) in every x86 language:
+the 64-byte enqueue store is a user operation whose result is ZF (the retry
+status), with OF SF AF PF CF cleared. `cmpccxadd.sinc` adds CMPccXADD to
+`x86:LE:64:*` (VEX E0+cc, and its APX EVEX form in `apx_evex.sinc`): the old
+memory value is compared with the first register as CMP does, the sum with the
+second register is stored only when the condition holds, and the first register
+gets the old value, so a `cmpexadd` decompiles to the compare-and-add it is.
+Before, each was a bad instruction. The EVEX-promoted GPR forms in
+`apx_evex.sinc` now also leave a disp8 uncompressed (N=1); before, they took
+the AVX-512 scaling of whatever tuple context was current. Exercised by the
+`x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
+
 ### x86-64 AVX10.2 (#98)
 
 `specs/Ghidra/Processors/x86/data/languages/avx10_2.sinc` decodes AVX10.2 in
@@ -4593,6 +4607,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Z380` | Zilog Z380 (Native/Extended, Word/Long Word, DDIR W/LW/IB/IW) | `Z380:LE:32:default` | Zilog Z380 User's Manual DC-8297-03 (Appendix C opcode tables); flag macros adapted from the in-repo Z80 module | `unlace-cli/tests/z380_raw.rs` |
 | `VAX` | DEC VAX (base, G/H floating and vector encodings) | `VAX:LE:32:default` | VAX Architecture Reference Manual; MAME `vax` disassembler (opcode table, length oracle) | `unlace-cli/tests/vax.rs` |
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
+| `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
 | `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
 <!-- native-rows -->
 

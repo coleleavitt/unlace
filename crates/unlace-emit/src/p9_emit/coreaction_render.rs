@@ -120,6 +120,7 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::subflow::LaneDivide;
 use crate::transform::{LaneDescription, LanedRegister};
+use unlace_num::pcoderaw::VarnodeData;
 
 // =============================================================================
 // ActionStackPtrFlow (coreaction.hh:89, coreaction.cc:496)
@@ -1906,6 +1907,226 @@ impl ActionLikelyTrash {
             base: ActionBase::new(0, "likelytrash", g),
         })
     }
+
+    /// Count the marked inputs of a MULTIEQUAL/PIECE `op` (C++ `ActionLikelyTrash::countMarks`,
+    /// `coreaction.cc:2147`).
+    fn count_marks(data: &Funcdata, op: OpId) -> u32 {
+        let mut res = 0;
+        let num_in = data
+            .obank()
+            .get(op)
+            .expect("likelytrash: stale op")
+            .num_input();
+        for slot in 0..num_in {
+            let mut vn = data
+                .obank()
+                .get(op)
+                .expect("likelytrash: stale op")
+                .get_in(slot)
+                .expect("likelytrash: missing input");
+            loop {
+                let vb = data.vbank().get(vn).expect("likelytrash: stale vn");
+                if vb.is_mark() {
+                    res += 1;
+                    break;
+                }
+                if !vb.is_written() {
+                    break;
+                }
+                let def_op = vb.get_def().expect("written varnode has no defining op");
+                if def_op == op {
+                    res += 1;
+                    break;
+                }
+                let def = data.obank().get(def_op).expect("likelytrash: stale def op");
+                if def.code() != OpCode::CPUI_INDIRECT {
+                    break;
+                }
+                vn = def.get_in(0).expect("INDIRECT missing in0");
+            }
+        }
+        res
+    }
+
+    /// Walk the descendants of the likely-trash input `vn`, collecting the
+    /// INDIRECT and INT_AND ops that absorb the trash value into `indlist`.
+    /// Returns `true` only when every route from `vn` stays trash (C++
+    /// `ActionLikelyTrash::traceTrash`, `coreaction.cc:2147-2196`).
+    fn trace_trash(data: &mut Funcdata, vn: VarnodeId, indlist: &mut Vec<OpId>) -> bool {
+        let mut allroutes: Vec<OpId> = Vec::new();
+        let mut markedlist: Vec<VarnodeId> = Vec::new();
+        let mut traced = 0;
+        data.vbank_mut()
+            .get_mut(vn)
+            .expect("likelytrash: stale vn")
+            .set_mark();
+        markedlist.push(vn);
+        let mut istrash = true;
+        while traced < markedlist.len() {
+            let curvn = markedlist[traced];
+            traced += 1;
+            let descend: Vec<OpId> = data
+                .vbank()
+                .get(curvn)
+                .expect("likelytrash: stale vn")
+                .descend_iter()
+                .collect();
+            for op in descend {
+                let (code, outvn, num_in, is_store) = {
+                    let o = data.obank().get(op).expect("likelytrash: stale op");
+                    (o.code(), o.get_out(), o.num_input(), o.is_indirect_store())
+                };
+                match code {
+                    OpCode::CPUI_INDIRECT => {
+                        let outvn = outvn.expect("INDIRECT has no output");
+                        if data
+                            .vbank()
+                            .get(outvn)
+                            .expect("likelytrash: stale vn")
+                            .is_persist()
+                        {
+                            istrash = false;
+                        } else if is_store {
+                            if !data
+                                .vbank()
+                                .get(outvn)
+                                .expect("likelytrash: stale vn")
+                                .is_mark()
+                            {
+                                data.vbank_mut()
+                                    .get_mut(outvn)
+                                    .expect("likelytrash: stale vn")
+                                    .set_mark();
+                                markedlist.push(outvn);
+                            }
+                        } else {
+                            indlist.push(op);
+                        }
+                    }
+                    OpCode::CPUI_SUBPIECE => {
+                        let outvn = outvn.expect("SUBPIECE has no output");
+                        if data
+                            .vbank()
+                            .get(outvn)
+                            .expect("likelytrash: stale vn")
+                            .is_persist()
+                        {
+                            istrash = false;
+                        } else if !data
+                            .vbank()
+                            .get(outvn)
+                            .expect("likelytrash: stale vn")
+                            .is_mark()
+                        {
+                            data.vbank_mut()
+                                .get_mut(outvn)
+                                .expect("likelytrash: stale vn")
+                                .set_mark();
+                            markedlist.push(outvn);
+                        }
+                    }
+                    OpCode::CPUI_MULTIEQUAL | OpCode::CPUI_PIECE => {
+                        let outvn = outvn.expect("op has no output");
+                        if data
+                            .vbank()
+                            .get(outvn)
+                            .expect("likelytrash: stale vn")
+                            .is_persist()
+                        {
+                            istrash = false;
+                        } else {
+                            if !data
+                                .obank()
+                                .get(op)
+                                .expect("likelytrash: stale op")
+                                .is_mark()
+                            {
+                                data.obank_mut()
+                                    .get_mut(op)
+                                    .expect("likelytrash: stale op")
+                                    .set_mark();
+                                allroutes.push(op);
+                            }
+                            let nummark = ActionLikelyTrash::count_marks(data, op);
+                            if nummark == num_in as u32
+                                && !data
+                                    .vbank()
+                                    .get(outvn)
+                                    .expect("likelytrash: stale vn")
+                                    .is_mark()
+                            {
+                                data.vbank_mut()
+                                    .get_mut(outvn)
+                                    .expect("likelytrash: stale vn")
+                                    .set_mark();
+                                markedlist.push(outvn);
+                            }
+                        }
+                    }
+                    OpCode::CPUI_INT_AND => {
+                        let constvn = data
+                            .obank()
+                            .get(op)
+                            .expect("likelytrash: stale op")
+                            .get_in(1)
+                            .expect("INT_AND has no second input");
+                        let mut matched = false;
+                        let cvn = data.vbank().get(constvn).expect("likelytrash: stale vn");
+                        if cvn.is_constant() {
+                            let val = cvn.get_offset();
+                            let mask = calc_mask(cvn.get_size());
+                            if val == (mask.wrapping_shl(8) & mask)
+                                || val == (mask.wrapping_shl(16) & mask)
+                                || val == (mask.wrapping_shl(32) & mask)
+                            {
+                                indlist.push(op);
+                                matched = true;
+                            }
+                        }
+                        if !matched {
+                            istrash = false;
+                        }
+                    }
+                    _ => {
+                        istrash = false;
+                    }
+                }
+                if !istrash {
+                    break;
+                }
+            }
+            if !istrash {
+                break;
+            }
+        }
+        for &op in allroutes.iter() {
+            let outvn = data
+                .obank()
+                .get(op)
+                .expect("likelytrash: stale op")
+                .get_out()
+                .expect("op has no output");
+            if !data
+                .vbank()
+                .get(outvn)
+                .expect("likelytrash: stale vn")
+                .is_mark()
+            {
+                istrash = false;
+            }
+            data.obank_mut()
+                .get_mut(op)
+                .expect("likelytrash: stale op")
+                .clear_mark();
+        }
+        for &markedvn in markedlist.iter() {
+            data.vbank_mut()
+                .get_mut(markedvn)
+                .expect("likelytrash: stale vn")
+                .clear_mark();
+        }
+        istrash
+    }
 }
 
 impl Action for ActionLikelyTrash {
@@ -1923,27 +2144,69 @@ impl Action for ActionLikelyTrash {
             base: self.base.clone(),
         }))
     }
-    fn apply(&mut self, _data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        // C++ coreaction.cc:2198 — ActionLikelyTrash::apply
-        //   for (vdata in proto.trashBegin()..trashEnd()):
-        //       vn = data.findCoveredInput(vdata.size, vdata.getAddr());
-        //       if (!vn) continue;
-        //       if (vn->isTypeLock() || vn->isNameLock()) continue;
-        //       indlist.clear();
-        //       if (!traceTrash(vn, indlist)) continue;
-        //       for (op in indlist):
-        //           if (op->code() == CPUI_INDIRECT):
-        //               data.opSetInput(op, newConstant(out->getSize(),0), 0);  // truncate -> indirect creation
-        //               data.markIndirectCreation(op, false);
-        //           else if (op->code() == CPUI_INT_AND):
-        //               data.opSetInput(op, newConstant(in1->getSize(),0), 1);
-        //           count += 1;
-        //   return 0;
-        //
-        // STUB(W8-funcdata): the proto trash list (`proto.trashBegin`),
-        // `findCoveredInput`, `traceTrash` (coreaction.cc:2147-2196, the
-        // COPY/AND/INDIRECT trash-flow walk), and `markIndirectCreation` are not in
-        // the merged tree.  Body transcribed; no change applied (count stays 0).
+    fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
+        let trash: Vec<VarnodeData> = data.get_func_proto().trash_list().to_vec();
+        let mut indlist: Vec<OpId> = Vec::new();
+        for vdata in trash.iter() {
+            let vn = match data.find_covered_input(vdata.size as int4, &vdata.get_addr()) {
+                Ok(Some(vn)) => vn,
+                _ => continue,
+            };
+            if data
+                .vbank()
+                .get(vn)
+                .expect("likelytrash: stale vn")
+                .is_type_lock()
+                || data
+                    .vbank()
+                    .get(vn)
+                    .expect("likelytrash: stale vn")
+                    .is_name_lock()
+            {
+                continue;
+            }
+            indlist.clear();
+            if !ActionLikelyTrash::trace_trash(data, vn, &mut indlist) {
+                continue;
+            }
+            for &op in indlist.iter() {
+                let code = data.obank().get(op).expect("likelytrash: stale op").code();
+                if code == OpCode::CPUI_INDIRECT {
+                    let outvn = data
+                        .obank()
+                        .get(op)
+                        .expect("likelytrash: stale op")
+                        .get_out()
+                        .expect("INDIRECT has no output");
+                    let size = data
+                        .vbank()
+                        .get(outvn)
+                        .expect("likelytrash: stale vn")
+                        .get_size();
+                    let constvn = data.new_constant(size, 0);
+                    data.op_set_input(op, constvn, 0)
+                        .expect("likelytrash: opSetInput");
+                    data.mark_indirect_creation(op, false)
+                        .expect("likelytrash: markIndirectCreation");
+                } else if code == OpCode::CPUI_INT_AND {
+                    let in1 = data
+                        .obank()
+                        .get(op)
+                        .expect("likelytrash: stale op")
+                        .get_in(1)
+                        .expect("INT_AND has no second input");
+                    let size = data
+                        .vbank()
+                        .get(in1)
+                        .expect("likelytrash: stale vn")
+                        .get_size();
+                    let constvn = data.new_constant(size, 0);
+                    data.op_set_input(op, constvn, 1)
+                        .expect("likelytrash: opSetInput");
+                }
+                self.base.count += 1;
+            }
+        }
         0
     }
 }

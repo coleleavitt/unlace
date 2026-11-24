@@ -4151,7 +4151,8 @@ were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
 LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
-issue also lists are not decoded; Zicond is in the next section.
+issue also lists are not decoded here; Zicond and Zcb have their own sections
+below.
 
 ### RISC-V ratified bit manipulation and Zicond (#98)
 
@@ -4200,6 +4201,33 @@ or draft instruction in these languages shares their encodings. Exercised by
 RV64, against `llvm-objdump`'s names, and LLVM-selected `max`, `minu`,
 `cpop`, `clz`, `ctz`, `czero.eqz`, `rev8`, `andn`, `bset` and
 `sh3add.uw` functions that decompile with no unimplemented instruction.
+
+### RISC-V Zcb and Zacas (#98)
+
+`riscv.zcb.sinc` decodes the Zcb code-size extension (Zc* 1.0.0) in every
+RISC-V language: `c.lbu`, `c.lhu`, `c.lh`, `c.sb`, `c.sh` (quadrant 0,
+funct3 100; the byte forms take a 2-bit offset with bit 6 as offset bit 0 and
+bit 5 as bit 1, the halfword forms a 1-bit offset in bit 5 scaled by 2, bit 6
+choosing `c.lh` over `c.lhu`), and `c.zext.b`, `c.sext.b`, `c.zext.h`,
+`c.sext.h`, `c.zext.w` (RV64), `c.not` and `c.mul` (quadrant 1, funct6
+100111, bits 6:5 = 11 with the operation in bits 4:2, or 10 for `c.mul`).
+Those encodings are reserved in the C extension, so no other instruction
+shares them and no language variant is needed; before, a Zcb build's byte and
+halfword accesses decoded as bad instructions. The loads zero- or
+sign-extend into the register, the stores write its low byte or halfword,
+the extensions and `c.not` rewrite `rd'` in place and `c.mul` is
+`rd' = rd' * rs2'`.
+
+The Zacas compare-and-swap (Zacas 1.0, AMO funct5 00101) lifts like the other
+AMOs: `amocas.w` (`riscv.rv32a.sinc`, RV32 and RV64) reads the word at
+`(rs1)` into `rd` (sign-extended on RV64) and stores `rs2` there only when
+the word equals the old `rd`; `amocas.d` (`riscv.rv64a.sinc`) does the same
+on RV64 doublewords. The register-pair forms (RV32 `amocas.d`, RV64
+`amocas.q`) are not decoded. Exercised by `unlace-cli/tests/riscv_zcb.rs`:
+one probe row per encoding against LLVM's names, RV32 and RV64, and
+LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
+`cmpxchg`-lowered `amocas` functions that decompile with no bad or
+unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

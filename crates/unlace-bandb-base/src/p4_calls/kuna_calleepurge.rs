@@ -1061,6 +1061,13 @@ fn restore_slot(
     })
 }
 
+/// (`calleeargsmsvc`) Is the instruction at `at` a one-byte software
+/// interrupt (`int3`)?
+fn trap_follows(arch: &Architecture, space: &Rc<AddrSpace>, regs: &Regs, at: uintb) -> bool {
+    decode(arch, space, at)
+        .is_some_and(|insn| insn.1 == 1 && step(&insn.0, regs, State::at_entry()).interrupt)
+}
+
 fn saved_bit(r: usize) -> u8 {
     CALLEE_SAVED
         .iter()
@@ -1589,6 +1596,23 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
                         }
                     }
                 }
+            }
+            // (kuna `calleeargsmsvc`) MSVC follows a call that does not return
+            // (`_CxxThrowException`, `__report_rangecheckfailure`) with `int3`;
+            // the path ends at the call instead of falling into the padding and
+            // the function after it.
+            if regs.fs.is_some()
+                && s.falls_through
+                && matches!(call, Call::Direct(_))
+                && trap_follows(arch, &space, &regs, at.wrapping_add(*len))
+            {
+                trace(|| {
+                    format!(
+                        "walk 0x{:x}: 0x{at:x} call followed by int3 ends the path",
+                        entry.get_offset()
+                    )
+                });
+                s.falls_through = false;
             }
         }
         if debug_on() {

@@ -2016,6 +2016,35 @@ pub fn run_uefi(
     out
 }
 
+/// (kuna `vtabletypes`) Run the **deferred** MSVC constructor/destructor
+/// recovery ([`crate::rtti::kuna_msvcctors`]) at the commit point: it walks
+/// candidate functions through the engine `Translate`, which has the image
+/// only after the load-time list ran. It declines every image that is not an
+/// x86 or x86-64 PE.
+pub fn run_msvc_ctors(
+    bytes: &[u8],
+    arch: &Architecture,
+    image_path: Option<&std::path::Path>,
+) -> AnalysisOutput {
+    let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
+        return AnalysisOutput::default();
+    };
+    if file.format() != object::BinaryFormat::Pe {
+        return AnalysisOutput::default();
+    }
+    let ctx = AnalysisCtx {
+        file: &file,
+        bytes,
+        image: None,
+        arch,
+        listing: None,
+        image_path,
+    };
+    let mut out = crate::rtti::kuna_msvcctors::run(&ctx);
+    out.sanitize_names(symbolnamechars_mode());
+    out
+}
+
 /// Build an [`AnalysisCtx`] and run the **deferred** scalar/operand reference-markup
 /// pass ([`crate::operand_refs::OperandRefsPass`]), returning its output keyed by
 /// the pass id (`"operand_refs"`).

@@ -6941,9 +6941,20 @@ every other binary's pass list is byte-identical to before the pass existed):
   CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
   serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
   displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
-  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
-  the non-virtual bases at that displacement, the most derived of them first; one
-  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  not -1, and `pdisp`/`vdisp` name its vbtable entry). A vftable at offset 0 is
+  the class's own; one at a nonzero offset serves the non-virtual bases at that
+  displacement, the most derived of them first. One no non-virtual base accounts
+  for serves a virtual base, placed by the vbtable order
+  (`kuna_msvcvtabletypes.rs (vbase_offsets)`): the virtual bases follow the
+  non-virtual part in the order of their vbtable entries, so taken in
+  `(pdisp, vdisp)` order (one base reached through two vbtable pointers counted
+  once) each that keeps a vftable takes the lowest such vftable left, and the
+  bases inside it at a nonzero displacement the vftables at that displacement
+  from it. A virtual base keeps a vftable when one of its own or a non-virtual
+  subobject vftable shows it does; when that leaves a vftable over, every virtual
+  base is taken to keep one. A leftover vftable, a virtual base finding none, or
+  a slot count differing from the virtual base's own vftable drops the reading,
+  and such vftables serve none. A
   class is typed with the slots of its own vftable, and for each slot the function
   there and every function the vftables serving it in derived classes hold at the
   same slot; a class the image never instantiates (an abstract base) has no vftable
@@ -6958,10 +6969,14 @@ every other binary's pass list is byte-identical to before the pass existed):
   vftable takes the base's subobject), so it is the first class that vftable
   serves; a function several vftables hold takes the nearest class that is, in
   every one of them, that class or one of its bases at offset 0, and a function
-  that also sits in a vftable serving a virtual base, or whose holders share no
+  that also sits in a vftable no base accounts for, or whose holders share no
   such class (identical-code folding, `_purecall`), is left untyped. Finally it
   reports each vftable whose first class was typed, with the `rtti` label of
-  that address, and every vftable's slot words.
+  that address, and every vftable's slot words. At the analysis commit a third
+  pass (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcctors.rs (run)`,
+  x86 and x86-64 only) names the constructors and destructors that store a
+  class's vftable through `this` and reports their `this` class too (chapter
+  05).
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra

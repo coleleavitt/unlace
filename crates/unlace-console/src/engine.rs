@@ -3598,6 +3598,15 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `vtabletypes`) MSVC constructors and destructors are
+                // walked through the decoder, so they are found here too.
+                if analysis_pass_enabled(self.arch(), "vtabletypes") {
+                    merged.merge(unlace_analysis::passes::run_msvc_ctors(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
                 // Deferred Listing build + consumer/fast-inventory run, gated
                 // on the matching option. The call-fixup seed list is the names
                 // the load-time pass flagged resolved to addresses via the

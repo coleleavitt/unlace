@@ -75,10 +75,12 @@ pub(super) struct Base {
     /// The base's TypeDescriptor.
     pub td: u64,
     /// Its displacement in the class (relative to its virtual base when
-    /// `virtual_`).
+    /// `vbase` is set).
     pub mdisp: i64,
-    /// It is, or lies inside, a virtual base.
-    pub virtual_: bool,
+    /// When it is, or lies inside, a virtual base: that base's `(pdisp, vdisp)`,
+    /// the vbtable pointer's offset and the base's entry in that vbtable, which
+    /// every base inside the same virtual base shares.
+    pub vbase: Option<(i32, i32)>,
 }
 
 /// One vftable a class keeps, and the offset of the subobject it serves.
@@ -126,7 +128,7 @@ pub(super) fn recover(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> BTre
             let Some(bcd) = BaseClassDescriptor::read(img, rk, r1) else {
                 continue;
             };
-            let Some((mdisp, pdisp)) = bcd.pmd else {
+            let Some((mdisp, pdisp, vdisp)) = bcd.pmd else {
                 continue;
             };
             if bcd.p_type_descriptor == col.p_type_descriptor {
@@ -147,7 +149,7 @@ pub(super) fn recover(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> BTre
             bases.push(Base {
                 td: bcd.p_type_descriptor,
                 mdisp: i64::from(mdisp),
-                virtual_: pdisp != -1,
+                vbase: (pdisp != -1).then_some((pdisp, vdisp)),
             });
         }
         let class = classes.entry(col.p_type_descriptor).or_default();
@@ -178,19 +180,126 @@ fn class_name(img: &ImageBytes, rk: &RefKind, td: u64) -> Option<String> {
 
 /// The classes whose subobject a vftable of `class` at `offset` serves, most
 /// derived first: the class itself at 0, and every non-virtual base at that
-/// displacement (the hierarchy lists a base before its own bases). Empty for
-/// a vftable serving a virtual base.
-fn served(td: u64, class: &Class, offset: i64) -> Vec<u64> {
+/// displacement (the hierarchy lists a base before its own bases). Failing
+/// those, the bases of the virtual base `vbases` places so that they sit at
+/// `offset`. Empty for a vftable no base accounts for.
+fn served(td: u64, class: &Class, offset: i64, vbases: &[((i32, i32), i64)]) -> Vec<u64> {
     let mut out: Vec<u64> = Vec::new();
     if offset == 0 {
         out.push(td);
     }
     for b in &class.bases {
-        if !b.virtual_ && b.mdisp == offset && !out.contains(&b.td) {
+        if b.vbase.is_none() && b.mdisp == offset && !out.contains(&b.td) {
             out.push(b.td);
         }
     }
+    if out.is_empty() {
+        for b in &class.bases {
+            let Some(group) = b.vbase else { continue };
+            let placed = vbases
+                .iter()
+                .find(|(g, _)| *g == group)
+                .is_some_and(|&(_, at)| at.saturating_add(b.mdisp) == offset);
+            if placed && !out.contains(&b.td) {
+                out.push(b.td);
+            }
+        }
+    }
     out
+}
+
+/// Every class known to keep a vftable: one with a vftable of its own, or one
+/// a non-virtual subobject vftable serves.
+fn polymorphic_classes(classes: &BTreeMap<u64, Class>) -> BTreeSet<u64> {
+    let mut out = BTreeSet::new();
+    for (&td, c) in classes {
+        if !c.tables.is_empty() {
+            out.insert(td);
+        }
+        for t in &c.tables {
+            out.extend(served(td, c, t.offset, &[]));
+        }
+    }
+    out
+}
+
+/// Where each virtual base of `class` sits in it, as `((pdisp, vdisp), offset)`,
+/// read from the vftables no non-virtual base accounts for. MSVC lays the
+/// virtual bases out after the non-virtual part, in the order of their vbtable
+/// entries, so taken in `(pdisp, vdisp)` order each virtual base that keeps a
+/// vftable takes the lowest such vftable left, and the bases inside it at a
+/// nonzero displacement take the vftables at that displacement from it. A
+/// virtual base keeps a vftable when it is known to (it has one of its own, or
+/// a non-virtual subobject vftable serves it); failing a reading on that, every
+/// virtual base is taken to keep one. The reading is dropped (every such vftable
+/// stays unaccounted for) when a vftable is left over, a virtual base finds
+/// none, or one's slot count differs from the virtual base's own vftable.
+fn vbase_offsets(
+    td: u64,
+    class: &Class,
+    polymorphic: &BTreeSet<u64>,
+    classes: &BTreeMap<u64, Class>,
+) -> Vec<((i32, i32), i64)> {
+    let mut unplaced: Vec<&Table> = class
+        .tables
+        .iter()
+        .filter(|t| served(td, class, t.offset, &[]).is_empty())
+        .collect();
+    if unplaced.is_empty() {
+        return Vec::new();
+    }
+    unplaced.sort_by_key(|t| t.offset);
+    let mut groups: Vec<(i32, i32)> = class.bases.iter().filter_map(|b| b.vbase).collect();
+    groups.sort_unstable();
+    groups.dedup();
+    let place = |strict: bool| -> Option<Vec<((i32, i32), i64)>> {
+        let mut taken = vec![false; unplaced.len()];
+        let mut heads: BTreeSet<u64> = BTreeSet::new();
+        let mut out = Vec::new();
+        for &group in &groups {
+            let members: Vec<&Base> = class
+                .bases
+                .iter()
+                .filter(|b| b.vbase == Some(group))
+                .collect();
+            let Some(head) = members.iter().find(|b| b.mdisp == 0) else {
+                continue;
+            };
+            if !heads.insert(head.td) {
+                continue;
+            }
+            if strict
+                && !members
+                    .iter()
+                    .any(|b| b.mdisp == 0 && polymorphic.contains(&b.td))
+            {
+                continue;
+            }
+            let i = taken.iter().position(|t| !t)?;
+            taken[i] = true;
+            let table = unplaced[i];
+            if let Some(own) = classes
+                .get(&head.td)
+                .and_then(|h| h.tables.iter().find(|t| t.offset == 0))
+                && own.vt.slots.len() != table.vt.slots.len()
+            {
+                return None;
+            }
+            let at = table.offset;
+            for (j, t) in unplaced.iter().enumerate() {
+                if !taken[j]
+                    && members
+                        .iter()
+                        .any(|b| b.mdisp > 0 && at.saturating_add(b.mdisp) == t.offset)
+                {
+                    taken[j] = true;
+                }
+            }
+            out.push((group, at));
+        }
+        (!taken.iter().any(|t| !t)).then_some(out)
+    };
+    place(true).or_else(|| place(false)).unwrap_or_default()
 }
 
 /// `td`, then each of its bases at offset 0, nearest first.
@@ -200,7 +309,7 @@ fn primary_chain(td: u64, classes: &BTreeMap<u64, Class>) -> Vec<u64> {
         chain.extend(
             c.bases
                 .iter()
-                .filter(|b| !b.virtual_ && b.mdisp == 0)
+                .filter(|b| b.vbase.is_none() && b.mdisp == 0)
                 .map(|b| b.td),
         );
     }
@@ -232,13 +341,18 @@ pub(super) fn facts(
     let mut held: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
     let mut unheld: BTreeSet<u64> = BTreeSet::new();
     let mut tables: Vec<(u64, &Class, &Table)> = Vec::new();
+    let polymorphic = polymorphic_classes(classes);
+    let vbase_at: BTreeMap<u64, Vec<((i32, i32), i64)>> = classes
+        .iter()
+        .map(|(&td, c)| (td, vbase_offsets(td, c, &polymorphic, classes)))
+        .collect();
     for (&td, c) in classes {
         for t in &c.tables {
             let slots = t.vt.slots.as_slice();
             let bytes = (slots.len() as u64).saturating_mul(ptr);
             out.slot_ranges
                 .push((t.vt.base, t.vt.base.saturating_add(bytes.saturating_sub(1))));
-            let serves = served(td, c, t.offset);
+            let serves = served(td, c, t.offset, &vbase_at[&td]);
             let Some(&h) = serves.first() else {
                 unheld.extend(slots.iter().copied());
                 continue;
@@ -295,7 +409,7 @@ pub(super) fn facts(
         }
         let mut bases: Vec<(String, i64)> = Vec::new();
         for b in &c.bases {
-            if b.virtual_ || b.mdisp <= 0 || !unique(&b.td) {
+            if b.vbase.is_some() || b.mdisp <= 0 || !unique(&b.td) {
                 continue;
             }
             let name = structs[&b.td].clone();
@@ -396,7 +510,7 @@ mod tests {
         Base {
             td,
             mdisp,
-            virtual_: false,
+            vbase: None,
         }
     }
 
@@ -524,6 +638,88 @@ mod tests {
                 .any(|(f, _)| *f == 0x1170 || *f == 0x1160)
         );
         assert!(facts.slot_ranges.contains(&(0x2300, 0x230f)));
+    }
+
+    /// `msvc_vbases.cpp`: Base is a virtual base of Left and Right, Both derives
+    /// from both. Both's vftable at 0 serves Both and Right; the one at 0x38
+    /// serves the virtual base, which only the vbtable places. Base and Left
+    /// keep no vftable of their own.
+    fn virtual_hierarchy() -> BTreeMap<u64, Class> {
+        const BASE: u64 = 0x60;
+        const LEFT: u64 = 0x70;
+        const RIGHT: u64 = 0x80;
+        const BOTH: u64 = 0x90;
+        let vbase = |td: u64| Base {
+            td,
+            mdisp: 0,
+            vbase: Some((24, 4)),
+        };
+        BTreeMap::from([
+            (
+                BASE,
+                Class {
+                    name: "Base".to_string(),
+                    ..Class::default()
+                },
+            ),
+            (
+                LEFT,
+                Class {
+                    name: "Left".to_string(),
+                    ..Class::default()
+                },
+            ),
+            (
+                RIGHT,
+                Class {
+                    name: "Right".to_string(),
+                    ..Class::default()
+                },
+            ),
+            (
+                BOTH,
+                Class {
+                    name: "Both".to_string(),
+                    bases: vec![base(LEFT, 24), vbase(BASE), base(RIGHT, 0), vbase(BASE)],
+                    tables: vec![
+                        table(0, 0x2020, &[0x10b0]),
+                        table(0x38, 0x2038, &[0x1090, 0x10a0]),
+                    ],
+                },
+            ),
+        ])
+    }
+
+    #[test]
+    fn a_vftable_serving_a_virtual_base_is_placed_by_the_vbtable_order() {
+        let facts = facts(&virtual_hierarchy(), &HashMap::new(), 8);
+        let class = |n: &str| facts.classes.iter().find(|c| c.class == n);
+        let base = class("Base").expect("the virtual base is typed");
+        assert_eq!(base.slots[0].targets, vec![0x1090]);
+        assert_eq!(base.slots[1].targets, vec![0x10a0]);
+        assert!(facts.this_types.contains(&(0x1090, "Base".to_string())));
+        assert!(facts.this_types.contains(&(0x10a0, "Base".to_string())));
+        assert!(facts.this_types.contains(&(0x10b0, "Both".to_string())));
+        assert!(class("Left").is_none(), "Left keeps no vftable");
+        assert_eq!(
+            class("Both").unwrap().bases,
+            vec![("Left".to_string(), 24)],
+            "a virtual base is not embedded"
+        );
+        let t = facts.tables.iter().find(|t| t.addr == 0x2038).unwrap();
+        assert_eq!((t.class.as_str(), t.slots), ("Base", 2));
+    }
+
+    #[test]
+    fn a_virtual_base_whose_own_vftable_disagrees_is_not_placed() {
+        let mut classes = virtual_hierarchy();
+        classes
+            .get_mut(&0x60)
+            .unwrap()
+            .tables
+            .push(table(0, 0x2300, &[0x1300, 0x1310, 0x1320]));
+        let facts = facts(&classes, &HashMap::new(), 8);
+        assert!(!facts.this_types.iter().any(|(f, _)| *f == 0x1090));
     }
 
     #[test]

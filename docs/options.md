@@ -153,6 +153,9 @@ Three tiers:
 | solidity internal functions are inlined into every caller | [`evmcalls`](#evmcalls----on--off-default-on) |
 | evm return labels such as 0x91 are assigned to stack slots instead of calls | [`evmcalls`](#evmcalls----on--off-default-on) |
 | every evm internal function return is a switch on a stack value | [`evmcalls`](#evmcalls----on--off-default-on) |
+| a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0) | [`selectmul`](#selectmul----on--off-default-off) |
+| a select prints as a sum of two products with (unsigned int) casts of complementary compares | [`selectmul`](#selectmul----on--off-default-off) |
+| tricore sel or sat prints as multiplications by booleans | [`selectmul`](#selectmul----on--off-default-off) |
 | several near-identical if/else blocks in a row, each comparing two adjacent stack slots and either calling a helper with the same object or storing one character through a 16-byte-threshold pointer select | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
 | an msvc c++ function whose string-building code shows a `0x10 <= v` buffer select before every character store | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
 | a loop body that is a whole capacity check plus a grow call to append one byte to a std::string | [`msvcstrappend`](#msvcstrappend----on--off-default-off-destructive-opt-in) |
@@ -741,12 +744,12 @@ Three tiers:
 | many sub_<addr> functions that end in _Unwind_Resume() | [`ehcold`](#ehcold----on--off-default-on) |
 | a stripped c++ binary's function list is full of cleanup fragments from .text.unlikely | [`ehcold`](#ehcold----on--off-default-on) |
 | a function that starts by reading an undefined rbx and frees buffers before _Unwind_Resume | [`ehcold`](#ehcold----on--off-default-on) |
-| an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
-| a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
-| IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-off) |
-| an msvc i386 image lists far fewer functions than IDA | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
-| a function in an msvc i386 c++ image spans several of IDA's functions | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
-| a vtable slot or callback in a 32-bit dll is not in the function list | [`msvcptrentry`](#msvcptrentry----on--off-default-off) |
+| an mfc window class's message handlers are missing from the function list | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
+| a function in an mfc image spans several handlers that a message map names | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
+| IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour | [`mfcmsgmap`](#mfcmsgmap----on--off-default-on) |
+| an msvc i386 image lists far fewer functions than IDA | [`msvcptrentry`](#msvcptrentry----on--off-default-on) |
+| a function in an msvc i386 c++ image spans several of IDA's functions | [`msvcptrentry`](#msvcptrentry----on--off-default-on) |
+| a vtable slot or callback in a 32-bit dll is not in the function list | [`msvcptrentry`](#msvcptrentry----on--off-default-on) |
 | a tail jump to an undeclared import drops an argument the function passes through | [`importvote`](#importvote----on--off-default-on) |
 | a forwarder to a library function prints void and no return | [`importvote`](#importvote----on--off-default-on) |
 | return helper() with fewer arguments than the other calls to helper pass | [`importvote`](#importvote----on--off-default-on) |
@@ -850,6 +853,8 @@ Three tiers:
 | a stripped static binary lists libc functions as sub_<addr> | [`flirt`](#flirt----on--off-default-off) |
 | kuna cannot use flirt .sig signatures | [`flirt`](#flirt----on--off-default-off) |
 | memcpy and printf in a static binary have no names | [`flirt`](#flirt----on--off-default-off) |
+| a stripped rust binary lists core and std functions as sub_<addr> | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
+| rust panic and allocation helpers have no names in a stripped binary | [`ruststdsigs`](#ruststdsigs----off--exact--nearest-default-off) |
 | a function fid or flirt named memcpy keeps its recovered parameters | [`fidproto`](#fidproto----on--off-default-on) |
 | a flirt-named exit or abort is not treated as no-return | [`fidproto`](#fidproto----on--off-default-on) |
 | code after a call to a renamed library abort is decompiled as reachable | [`fidproto`](#fidproto----on--off-default-on) |
@@ -1454,7 +1459,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `fpargboxed` -- on | off, default `on`
 
 - **Symptoms:** v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V; a RISC-V float function starts with one NAN test per float argument; an unused int variable named after fa0 or fa1 beside a float parameter; v = NAN; if ((int)(r >> 0x20) == -1) v = r; after a RISC-V call that returns a float.
-- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry, and of `fa0`/`fa1` written by a call, as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes and returns a floating-point value narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input, and a call's `fa0`/`fa1` output, as boxed, so a function's own float parameters and the float results of its calls lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded. The exception is the half-precision unboxing test, which reads exactly bits 16..63 (the `fa0+2:6` piece, or a 6-byte `SUBPIECE` at byte 2 of the whole register or of it shifted right by 16): those 48 bits count as all ones, as the psABI boxes a half argument or result the same way. Inert on every other processor.
+- **What it does:** On RISC-V, take the upper 32 bits of an FP argument register (`fa0`..`fa7`) on entry, and of `fa0`/`fa1` written by a call, as all ones: a NaN-boxed value. The RISC-V psABI's hardware floating-point calling convention passes and returns a floating-point value narrower than FLEN NaN-boxed, and every F/D/Zfh instruction that writes a single or half writes it boxed. A single- or half-precision read of an f register NaN-unboxes it: when the upper bits are not all ones the instruction reads the canonical NaN, so an exact lift (`riscv.zfa.sinc`, and `riscv.fd.sinc` with `--unbox exact`) prints `v = NAN; if ((int)(x >> 0x20) == -1) v = x;` around each read. `RuleBoxedCompare` (oppool1, `kuna_boxedcompare.rs`) folds that test whenever its known-ones walk proves the upper half all ones (a boxed write, a boxed load, a constant, a join of them); with this option the walk also counts an FP argument register input, and a call's `fa0`/`fa1` output, as boxed, so a function's own float parameters and the float results of its calls lose the test too. Only the 32 upper bits are claimed, so a test of a float's own bits (its exponent, a sign) is never folded. The exception is the half-precision unboxing test, which reads exactly bits 16..63 (the `fa0+2:6` piece, or a 6-byte `SUBPIECE` at byte 2 of the whole register or of it shifted right by 16): those 48 bits count as all ones, as the psABI boxes a half argument or result the same way. With 16-byte f registers (FLEN 128, `RISCV:LE:64:GQ`) the boxed bits are 64..127 and the double unboxing test (bytes 8..16) folds too. Inert on every other processor.
 - **When to flip:** On by default: the psABI guarantees it and compiled code never passes an unboxed float, so it only removes NaN-unboxing tests no ABI-conforming caller or callee can fail. Flip off for hand-written assembly, or a caller or callee that may pass or return a raw bit pattern in an f register, to see every unboxing test of a parameter or call result.
 - **Where / provenance:** P3/simplification-quiescence · kuna · presentation-default · unlace-fpargboxed
 - **Example:** `option fpargboxed off`
@@ -1682,6 +1687,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default; inert on every language without an `evmstack` space, so 0/675 datatest and 0 stage assertions move. On EVM runtime bytecode compiled by solc the dispatcher prints as an if-chain on the selector calling `sub_<addr>(...)` for each internal function (ABI decoding, checked arithmetic, the function bodies), and each internal function decompiles on its own with its stack arguments and result (`undefined32 sub_61c(a0,a1) { if (a0 < a0 - a1) sub_608(0x260); return a0 - a1; }`). Measured on 22 solc 0.8.24 runtimes (ERC-20, vault, math library, registry, staking; legacy and `--via-ir` codegen, optimizer off and on; 610 dispatchers and internal-function entries): 0 units fail either way; across the 22 dispatchers bare JUMPI-condition statements go from 449 to 0, `if` statements from 27 to 321, indirect-jump warnings from 209 to 0, `switch` from 238 to 0, `goto` from 14 to 0, references to the stack pointer as a pointer from 660 to 2, lines from 5,831 to 1,802, and decompiling all 610 units takes 58 s instead of 107 s. Against solc's own jump annotations (srcmap jump types) the classification finds 421 of 425 calls and 216 of 220 returns, and reads 5 of 57 plain jumps as calls. Flip off for hand-written EVM that does not follow solc's return-label convention, or to see every internal function inlined.
 - **Where / provenance:** P2/flow-classification · kuna · transform · unlace-evm-internal-calls
 - **Example:** `option evmcalls on`
+
+### `selectmul` -- on | off, default `off`
+
+- **Symptoms:** a min or max prints as a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0); a select prints as a sum of two products with (unsigned int) casts of complementary compares; tricore sel or sat prints as multiplications by booleans.
+- **What it does:** Print a select the lifter wrote as arithmetic, `a * zext(c) + b * zext(!c)`, as C's conditional operator `c ? a : b`. SLEIGH has no select operator, so a spec that picks one of two values without a branch multiplies each by the zero-extension of a boolean and adds (or ors) the products: TriCore's `ternary` macro behind `sel`, `seln`, `min`, `max`, `sat` and `cmov` does, and `min %d2,%d5,%d4` printed `a1 * (unsigned int)(a1 < a0) + a0 * (unsigned int)(a1 >= a0)`. `kuna_selectmul.rs` matches, at print time, an `INT_ADD`, `INT_OR` or `INT_XOR` of two implied `INT_MULT`s, each of a value by an implied `INT_ZEXT` of a one-byte boolean, whose booleans are complements: one the `BOOL_NEGATE` of the other, `==` and `!=` of the same operands in either order, or `x < y` and `y <= x` (both signed or both unsigned). Exactly one term is then non-zero, so the expression equals the value whose boolean holds, and it prints `a1 < a0 ? a1 : a0`. The condition printed is the strict compare or `!=` of the pair, and a negation's operand; it is a boolean context, so `x != 0` prints as `x`. A term held in a named variable, a float compare and a language without `?:` keep the arithmetic.
+- **When to flip:** Turn on to read a branch-free select as the conditional it computes (TriCore `sel`/`min`/`max`/`sat`, any spec that lifts a select as multiply-by-boolean). Leave off to see the arithmetic the lift performs; both evaluate to the same value.
+- **Where / provenance:** P9/condition-form · kuna · presentation-default · unlace-selectmul
+- **Example:** `option selectmul on`
 
 ### `msvcstrappend` -- on | off, default `off` (destructive opt-in)
 
@@ -3031,21 +3044,21 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · ida95-22-ehcold
 - **Example:** `--option ehcold off`
 
-### `mfcmsgmap` -- on | off, default `off`
+### `mfcmsgmap` -- on | off, default `on`
 
 - **Symptoms:** an mfc window class's message handlers are missing from the function list; a function in an mfc image spans several handlers that a message map names; IDA lists functions at the pfn addresses of an AFX_MSGMAP_ENTRY array that unlace folds into a neighbour.
 - **What it does:** On a 32-bit PE, list the handlers of every MFC message map as functions. An MFC window class routes messages through a static AFX_MSGMAP in .rdata (pfnGetBaseMap, lpEntries) whose AFX_MSGMAP_ENTRY array (nMessage, nCode, nID, nLastID, nSig, pfn; 24 bytes each, ending in an all-zero entry) names each handler. The handlers are reached only through that table, so no entry oracle or direct-call walk finds them and each was folded into the function before it. A table is read only where the base relocations vouch for it: lpEntries and the pfnGetBaseMap word before it are relocated, pfnGetBaseMap points into code, the entries lie in a non-executable section, and every entry's pfn is a relocated pointer into code with nMessage below 0x10000 and nSig below 0x100. The handlers are walked as roots, so their callees are found too.
-- **When to flip:** Off by default. Turn it on for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll: 29 maps, 198 handlers, every one an IDA 9.5 function start, 194 of them missing before.
+- **When to flip:** On by default. It matters for MFC applications and DLLs built with MSVC for i386, where window-message handlers (OnPaint, OnCommand handlers) are otherwise missing from the function list and their code is folded into the function before them. Measured on PEGRP32F.dll against IDA 9.5: 29 maps, 198 handlers, every one an IDA function start; on its own it brings the missing IDA starts from 1,437 to 1,194 with no extra function. Flip OFF to compare with the inventory before it.
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
-- **Example:** `--option mfcmsgmap on`
+- **Example:** `--option mfcmsgmap off`
 
-### `msvcptrentry` -- on | off, default `off`
+### `msvcptrentry` -- on | off, default `on`
 
 - **Symptoms:** an msvc i386 image lists far fewer functions than IDA; a function in an msvc i386 c++ image spans several of IDA's functions; a vtable slot or callback in a 32-bit dll is not in the function list.
 - **What it does:** On a 32-bit PE, make every executable address a base-relocated word points at a function entry when its bytes are an MSVC frame prologue (push ebp; mov ebp,esp as 55 8B EC, or 8B FF 55 8B EC with the hot-patch prefix). Vtable slots, MFC tables, callbacks pushed for the Win32 API and thread procedures are reached only through such pointers, so the walk never found them and each was folded into the function before it. The relocation table lists every pointer word in code and data. The prologue test keeps out the address-taken labels that are not functions: MSVC's own (switch targets, catch continuations, SEH handlers) start with no frame, and GCC/MinGW encode mov ebp,esp as 89 E5, so their SJLJ landing pads never match. Code built with frame-pointer omission has no prologue to test, so the relocated immediate of a mov r/m32, imm32 (C7 /0, memory operand) in code whose target follows a ret (C3, or C2 iw below 256) is read as well: a function pointer stored into a structure; mov eax, imm32 and push imm32, the forms MSVC uses for its mid-function labels, are not. The targets are walked as roots, so their callees are found too.
-- **When to flip:** Off by default. Turn it on for MSVC-built 32-bit C++ and MFC images with frame pointers, where many functions IDA lists are missing and a function spans several of IDA's. Measured on PEGRP32F.dll: 1,255 targets, all IDA 9.5 function starts, 452 missing before; walked as roots they reach 2,082 of the 2,455 starts that were missing. No false start on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission.
+- **When to flip:** On by default. It matters for MSVC-built 32-bit C++ and MFC images with frame pointers, where functions IDA lists are otherwise missing and one function spans several of IDA's. Measured on PEGRP32F.dll against IDA 9.5 (6,255 functions): with mfcmsgmap the inventory misses 544 IDA starts instead of 1,437 and lists 2 more functions IDA does not, and 226 of IDA's 277 switch tables are recovered instead of 195; whole-binary decompilation is no slower. No change on USBCAN-Driver, CP210xManufacturing or SLABHIDDevice. It finds nothing in code built with frame-pointer omission. Flip OFF to compare with the inventory before it.
 - **Where / provenance:** P1/code-data-partition · kuna · analysis-enablement · holley-i386-ptrdisc
-- **Example:** `--option msvcptrentry on`
+- **Example:** `--option msvcptrentry off`
 
 ### `importvote` -- on | off, default `on`
 
@@ -3270,6 +3283,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off (default). Flip on with listing on and KUNA_FLIRT_SIGS pointing at .sig files (for example IDA's sig/pc/glibc_amd64.sig for a static x86-64 glibc binary) when a stripped statically linked binary shows hundreds of sub_ functions that are library code.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · kuna-flirt
 - **Example:** `KUNA_FLIRT_SIGS=$IDADIR/sig/pc/glibc_amd64.sig unlace functions ./static-stripped --option listing on --option flirt on`
+
+### `ruststdsigs` -- off | exact | nearest, default `off`
+
+- **Symptoms:** a stripped rust binary lists core and std functions as sub_<addr>; rust panic and allocation helpers have no names in a stripped binary.
+- **What it does:** Rust images only: add FLIRT signatures for the Rust standard library to the flirt pass, built from an installed rustup toolchain and cached. A Rust binary links the precompiled std, core and alloc of its rustc, so their functions match the toolchain's rlibs up to relocations. The image's .comment names its compiler (rustc version 1.94.0-nightly (b68e16cfc 2026-01-11)); each toolchain under the rustup home (RUSTUP_HOME, else ~/.rustup) names its own in the .comment of its libstd objects. exact takes the toolchain whose record equals the image's; nearest takes it, else the toolchain released nearest to the image's compiler (by the record's date, then by version). Its libstd, libcore and liballoc rlibs go through the unlace flirt make pattern and .sig writers once, and the .sig is cached under the user cache directory (XDG_CACHE_HOME, else ~/.cache, at unlace/ruststdsigs/<version>-<target>.sig). x86-64 and AArch64 Linux ELF only. Matching is the flirt pass's own, so it needs --option flirt on and the Listing (--option listing on). Measured on stripped release binaries against their symbol tables: a probe built by 1.95.0 or 1.100.0 with its own toolchain gets 140 and 150 names (135 and 145 right, 3 jump stubs named j_ for their target, 2 wrong each); three cargo-installed nightly binaries with the nearest toolchain get 239 (233 right), 67 (66) and 137 (132), and a toolchain a further release away names about half as many at the same precision.
+- **When to flip:** Off by default. On a stripped Rust binary whose std functions are sub_<addr>, install the toolchain its .comment names (rustup toolchain install) and use exact; nearest takes a toolchain close in release date when the exact one is not installed, with fewer names but nearly the same precision. Needs flirt on and listing on.
+- **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-ruststdsigs
+- **Example:** `unlace functions ./stripped-rust --option listing on --option flirt on --option ruststdsigs nearest`
 
 ### `fidproto` -- on | off, default `on`
 

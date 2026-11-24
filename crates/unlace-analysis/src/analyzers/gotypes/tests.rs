@@ -920,7 +920,8 @@ fn interface_methods_follow_the_descriptor_order() {
     );
     let sets = super::kuna_itabtypes::interface_method_sets(&img, &meta, &[]);
     assert_eq!(
-        sets.get("main.Shape").map(Vec::as_slice),
+        sets.get("main.Shape")
+            .map(|(methods, _)| methods.as_slice()),
         Some(["Area".to_string(), "Name".to_string()].as_slice())
     );
 }
@@ -1064,4 +1065,48 @@ fn interface_fields_name_their_interface() {
         super::kuna_ifacefields::interface_fields(&img, &meta, &holder, false),
         None
     );
+}
+
+#[test]
+fn method_pieces_read_one_register_scalars() {
+    let (mut spans, types, etypes) = synth_interface(&["Area"]);
+    let blob = &mut spans[0].1;
+    // int @ +0x000: size 8, kind INT.
+    blob[0..8].copy_from_slice(&8u64.to_le_bytes());
+    blob[23] = KIND_INT;
+    blob[40..44].copy_from_slice(&0x220i32.to_le_bytes());
+    // func(int) int @ +0x1a0: InCount 1, OutCount 1, params after the counts word.
+    let f = 0x1a0usize;
+    blob[f + 23] = KIND_FUNC;
+    blob[f + 40..f + 44].copy_from_slice(&0x220i32.to_le_bytes());
+    blob[f + 48..f + 50].copy_from_slice(&1u16.to_le_bytes());
+    blob[f + 50..f + 52].copy_from_slice(&1u16.to_le_bytes());
+    blob[f + 56..f + 64].copy_from_slice(&types.to_le_bytes());
+    blob[f + 64..f + 72].copy_from_slice(&types.to_le_bytes());
+    blob[0x304..0x308].copy_from_slice(&(f as i32).to_le_bytes());
+    let img = img_of(&spans);
+    let meta = interface_meta(types, etypes);
+    let inter = read_type(&img, types, etypes, 0x100).unwrap();
+    let tf = unlace_decomp::dtype::TypeFactoryImpl::new();
+    tf.set_default_alignment_map();
+    tf.set_max_basetype_size(8);
+    tf.setup_sizes(Some(8), 8, 8);
+    tf.cache_core_types().unwrap();
+    let pieces = super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0)
+        .expect("a one-register signature");
+    assert_eq!(pieces.intypes.len(), 2, "receiver then the int");
+    assert_eq!(pieces.intypes[0].get_metatype(), type_metatype::TYPE_PTR);
+    assert_eq!(pieces.intypes[1].get_metatype(), type_metatype::TYPE_INT);
+    assert_eq!(pieces.innames, ["receiver", "a1"]);
+    let out = pieces.outtype.expect("one result");
+    assert_eq!(
+        (out.get_metatype(), out.get_size()),
+        (type_metatype::TYPE_INT, 8)
+    );
+    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 1).is_none());
+
+    let mut variadic = spans.clone();
+    variadic[0].1[f + 50..f + 52].copy_from_slice(&0x8001u16.to_le_bytes());
+    let img = img_of(&variadic);
+    assert!(super::kuna_itabtypes::method_pieces(&tf, &img, &meta, &inter, 0).is_none());
 }

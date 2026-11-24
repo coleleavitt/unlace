@@ -6033,7 +6033,7 @@ impl PrintC {
             self.emit_eh_try(fd, arch, cond, Some(normal), pad, &list[k + 1..], spine);
             return;
         }
-        if self.java_catches.is_some() && self.list_has_java_try(fd, list) {
+        if self.list_java_try(fd, blk, list) {
             self.emit_block_ls_java_try(fd, arch, list);
             return;
         }
@@ -6077,9 +6077,8 @@ impl PrintC {
     fn emit_block_if(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
         use crate::prettyprint::Emit;
         // (unlace `javatry`) A DEX try dispatch prints as `try { } catch`.
-        if let Some(shape) = self
-            .java_try_shape(fd, blk, &[])
-            .filter(Self::java_try_standalone)
+        if self.is_java_try(fd, blk)
+            && let Some(shape) = self.java_try_shape(fd, blk, &[])
         {
             self.emit_java_try(fd, arch, shape, &[]);
             return;

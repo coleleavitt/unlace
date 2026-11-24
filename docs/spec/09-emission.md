@@ -5927,7 +5927,11 @@ rewrite, `ctree_rewrite` turns each `if` on an `eh_unwinding()` exceptional edge
 that prints as `try { ... } catch (..) { ... }` (`itaniumeh`: one arm starts at a
 landing pad, or the call the edge follows names the pad) into a `Try` statement
 holding the condition block, the arm inside the `try`, the pad and the handler arm;
-`emit_block_if` prints that statement, and no later rewrite folds it. A list's `try` form (an exceptional-edge `if` whose normal path never
+`emit_block_if` prints that statement, and no later rewrite folds it. The DEX `try` forms are decided the same way: an `if` that opens a `try` on its
+own (`java_try_shape` with `java_try_standalone`) becomes a `JavaTry` statement
+before any other rewrite, and a list holding a `try` dispatch is recorded on its
+sequence (`CTree::set_java_list`); `emit_block_if` and `emit_list_items` read
+those (`is_java_try`, `list_java_try`). A list's `try` form (an exceptional-edge `if` whose normal path never
 falls through, followed by the landing pad that starts the rest of the list) is
 recorded on the list's sequence as a `ListTry` (`eh_list_try_match`); only part
 of a list (the rest of a switch arm or goto block) is matched while printing. The

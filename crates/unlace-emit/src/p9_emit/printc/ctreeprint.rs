@@ -207,6 +207,16 @@ impl PrintC {
             }) else {
                 continue;
             };
+            if self
+                .java_try_shape(fd, blk, &[])
+                .filter(Self::java_try_standalone)
+                .is_some()
+            {
+                if let Some(tree) = self.ctree.as_mut() {
+                    tree.stmt_mut(id).kind = StmtKind::JavaTry;
+                }
+                continue;
+            }
             if let Some((cond, normal, pad, handler)) = self.eh_try_match(fd, blk)
                 && let Some(tree) = self.ctree.as_mut()
             {
@@ -236,10 +246,9 @@ impl PrintC {
                 continue;
             };
             if fd.sblocks_ref().block(blk).get_type() != BlockType::If
-                || self
-                    .ctree
-                    .as_ref()
-                    .is_some_and(|tree| matches!(tree.stmt(id).kind, StmtKind::Try { .. }))
+                || self.ctree.as_ref().is_some_and(|tree| {
+                    matches!(tree.stmt(id).kind, StmtKind::Try { .. } | StmtKind::JavaTry)
+                })
             {
                 continue;
             }
@@ -393,6 +402,47 @@ impl PrintC {
             {
                 tree.set_list_try(id, found);
             }
+            if self.java_catches.is_some()
+                && self.list_has_java_try(fd, &list)
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.set_java_list(id);
+            }
+        }
+    }
+
+    /// (unlace `javatry`) Does the `BlockIf` `blk` print as a DEX `try` on its own? The
+    /// tree's `JavaTry` statement (`ctree_rewrite`); for an `if` the tree holds no
+    /// statement for, the match itself.
+    pub(super) fn is_java_try(&self, fd: &Funcdata, blk: BlockId) -> bool {
+        match self.ctree.as_ref().and_then(|tree| tree.node_for(blk)) {
+            Some(id) => self
+                .ctree
+                .as_ref()
+                .is_some_and(|tree| matches!(tree.stmt(id).kind, StmtKind::JavaTry)),
+            None => self
+                .java_try_shape(fd, blk, &[])
+                .filter(Self::java_try_standalone)
+                .is_some(),
+        }
+    }
+
+    /// (unlace `javatry`) Do the blocks `list` of `blk` print through the Java `try` list
+    /// printer? What the tree recorded for `blk`'s sequence when `list` is all of it, else
+    /// the match itself.
+    pub(super) fn list_java_try(&self, fd: &Funcdata, blk: BlockId, list: &[BlockId]) -> bool {
+        if self.java_catches.is_none() {
+            return false;
+        }
+        let whole = fd.sblocks_ref().block(blk).get_list().len() == list.len();
+        let node = self
+            .ctree
+            .as_ref()
+            .and_then(|tree| tree.node_for(blk))
+            .filter(|_| whole);
+        match (self.ctree.as_ref(), node) {
+            (Some(tree), Some(id)) => tree.is_java_list(id),
+            _ => self.list_has_java_try(fd, list),
         }
     }
 
@@ -418,10 +468,7 @@ impl PrintC {
                     // own edge prints its arms without opening a `try`: either way the
                     // enclosing pad stays open.
                     let outer = self.open_try_pad(fd, parent);
-                    let java = self
-                        .java_try_shape(fd, parent, &[])
-                        .filter(Self::java_try_standalone)
-                        .is_some();
+                    let java = self.is_java_try(fd, parent);
                     if java || (outer.is_some() && self.eh_if_target(fd, parent) == outer) {
                         return outer;
                     }

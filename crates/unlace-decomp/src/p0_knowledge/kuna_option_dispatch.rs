@@ -347,6 +347,7 @@ kuna_options! { self, p1;
     "jumpassist" => registered!(crate::kuna_coreoptions::JumpAssist),
     "javanew" => registered!(crate::kuna_javanew::JavaNew),
     "javatry" => registered!(crate::kuna_coreoptions::JavaTry),
+    "javasync" => registered!(crate::kuna_javasync::JavaSync),
     "voidtailreturn" => registered!(crate::printc::Voidtailreturn),
     "dirtypool" => registered!(crate::action::DirtyPool),
     "latecse" => registered!(crate::kuna_latecse::LateCse),

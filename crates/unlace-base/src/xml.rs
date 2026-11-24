@@ -2335,7 +2335,8 @@ mod tests {
         // and kuna-thumb1case / stripped Thumb-1 switches through libgcc's case helpers
         // and kuna-atomics-x86 + kuna-atomics-a64 + kuna-atomics-riscv / locked x86, AArch64 LSE and
         // RISC-V AMO read-modify-writes print as __sync builtins (options atomics, llscfold)
-        assert_eq!(count, 1006, "corpus file count drifted");
+        // and kuna-dex-javasync / DEX synchronized blocks and finally clauses (option javasync)
+        assert_eq!(count, 1007, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

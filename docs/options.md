@@ -173,6 +173,8 @@ Three tiers:
 | the body behind a conditional indirect branch is never decoded | [`constselectjump`](#constselectjump----off--reentry--on-default-reentry-destructive-opt-in) |
 | a Dalvik sparse-switch prints as switchAssist(...) followed by a computed call | [`jumpassist`](#jumpassist----on--off-default-on) |
 | 'jump-as-call' on a switchAssist or lookupswitch user-op | [`jumpassist`](#jumpassist----on--off-default-on) |
+| monitorEnter(x) before a try whose catch (Throwable) calls monitorExit(x) and rethrows | [`javasync`](#javasync----on--off-default-off) |
+| a catch (Throwable) clause that runs the same code as the statements after the try and rethrows | [`javasync`](#javasync----on--off-default-off) |
 | 'Too many branches' jumptable failure where a cbranch range guard bounds the index | [`switchguardbound`](#switchguardbound----on--off-default-off-destructive-opt-in) |
 | computed (code *)() call at a gcc sub/ja guarded dispatch with the index spilled to the stack | [`switchguardbound`](#switchguardbound----on--off-default-off-destructive-opt-in) |
 | a switch with a far outlier case prints as if (x <= N) { switch } if (x == C) ... | [`switchguardmerge`](#switchguardmerge----on--off-default-on) |
@@ -1658,6 +1660,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default; only the Dalvik and JVM processor specs declare a `<jumpassist>`. Turn OFF to see the indirect jump through the user-op, rendered as a call.
 - **Where / provenance:** P2/switch-model · ghidra-upstream · structure-recovery · kuna-dex-loader
 - **Example:** `option jumpassist off`
+
+### `javasync` -- on | off, default `off`
+
+- **Symptoms:** monitorEnter(x) before a try whose catch (Throwable) calls monitorExit(x) and rethrows; a catch (Throwable) clause that runs the same code as the statements after the try and rethrows.
+- **What it does:** In java-language output with javatry on, print a DEX catch-all handler as the Java construct it was compiled from. javac and D8 compile synchronized (x) { body } to monitor-enter x before the protected code, monitor-exit x on each normal way out, and a catch-all whose handler is move-exception e; monitor-exit x; throw e: that try prints as synchronized (x) { body }, without the monitorEnter and monitorExit calls and without the catch clause. They compile try { body } finally { F } to a catch-all whose handler is move-exception e; F; throw e, with a copy of F where each protected range ends: that clause prints as finally { F }, without the rethrow, and the copies on the normal paths are left out. Both are read from the instruction bytes and the try table and decline on any doubt: the handler must be exactly that shape, F straight-line code, the monitor-enter of the same register just before the first range, every range must end in a byte-equal copy of F (or run on into the next range through instructions that cannot throw), and no branch from outside the protected code may enter a copy. A typed catch keeps its own copy of the finally code.
+- **When to flip:** Off by default: a try whose catch-all only looks like the compiler's pattern (hand-written smali, an obfuscator) would lose the statements the idiom stands for. Turn ON for javac or D8 output, where synchronized blocks print as a try with a catch (Throwable) that calls monitorExit and rethrows, and a finally clause prints as a catch (Throwable) plus a second copy of its code after the try.
+- **Where / provenance:** P9/readability-rewrites · kuna · presentation-default · kuna-dex-loader
+- **Example:** `option javasync on`
 
 ### `switchguardbound` -- on | off, default `off` (destructive opt-in)
 

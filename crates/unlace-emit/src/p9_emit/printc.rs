@@ -1728,6 +1728,14 @@ pub struct PrintC {
     java_block_filters: std::collections::HashMap<BlockId, Vec<(u64, bool)>>,
     /// (kuna `javatry`) Handlers already printed as a `catch` clause.
     java_caught_shown: std::collections::HashSet<u64>,
+    /// (kuna `javasync`) This function's catch-all idioms, by handler.
+    java_idioms: std::collections::BTreeMap<u64, crate::kuna_javasync::JavaIdiom>,
+    /// (kuna `javasync`) Statements a printed `synchronized` or `finally`
+    /// stands for.
+    java_hidden: std::collections::HashSet<OpId>,
+    /// (kuna `javasync`) The `try`s marked to print as `synchronized`: the
+    /// handler and the `monitorEnter` op left out for it.
+    java_sync_enters: std::collections::BTreeMap<u64, OpId>,
     /// (kuna `gotonext`) The gotos left out or printed as `break;`, and the labels
     /// only they reached.  Computed per function at the top of
     /// [`emit_function_body`](PrintC::emit_function_body).
@@ -1844,6 +1852,9 @@ impl PrintC {
             java_ctor_calls: std::collections::HashMap::new(),
             java_catches: None,
             java_caught_shown: std::collections::HashSet::new(),
+            java_idioms: std::collections::BTreeMap::new(),
+            java_hidden: std::collections::HashSet::new(),
+            java_sync_enters: std::collections::BTreeMap::new(),
             java_throw_userop: None,
             java_block_filters: std::collections::HashMap::new(),
             goto_rewrites: Default::default(),
@@ -3094,6 +3105,13 @@ impl PrintC {
             None
         };
         self.java_caught_shown.clear();
+        self.java_idioms = if self.java_catches.is_some() {
+            crate::kuna_javasync::method_idioms(fd)
+        } else {
+            std::collections::BTreeMap::new()
+        };
+        self.java_hidden.clear();
+        self.java_sync_enters.clear();
         self.java_throw_userop = (self.out_lang == crate::kuna_lang::OutLang::Java
             && arch
                 .kuna_options
@@ -6341,6 +6359,7 @@ impl PrintC {
             }
         }
         let list = flat.as_slice();
+        self.java_prepare_synchronized(fd, list);
         let n = list.len();
         let mut k = 0;
         while k < n {
@@ -6366,6 +6385,9 @@ impl PrintC {
         let Some(operation) = fd.obank().get(op) else {
             return true;
         };
+        if self.java_hidden.contains(&op) {
+            return true;
+        }
         if operation.not_printed()
             && !(self.out_lang == crate::kuna_lang::OutLang::C
                 && crate::kuna_stackbytes::assignment(fd, op).is_some())
@@ -17578,6 +17600,7 @@ fn to_emit_hl(hl: crate::printlanguage::SyntaxHighlight) -> SyntaxHighlight {
 
 mod kuna_cpoolprint;
 mod kuna_ctreeprint;
+mod kuna_javasyncprint;
 mod kuna_javatryprint;
 
 #[path = "kuna_rustarrayinit.rs"]

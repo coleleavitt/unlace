@@ -12,6 +12,7 @@
 
 use unlace_num::opcodes::OpCode;
 
+use super::kuna_javasyncprint::TryForm;
 use super::{Architecture, Funcdata, OpId, PrintC, modifiers, to_emit_brace};
 use crate::block::BlockType;
 use crate::context::BlockId;
@@ -47,6 +48,13 @@ pub struct TryShape {
     body: Part,
     /// Siblings consumed by the clauses (the body's out-of-range tail is not).
     consumed: usize,
+}
+
+impl TryShape {
+    /// The handlers of its clauses, in order.
+    pub(super) fn handlers(&self) -> Vec<u64> {
+        self.catches.iter().map(|c| c.0).collect()
+    }
 }
 
 fn front_addr(fd: &Funcdata, blk: BlockId) -> Option<u64> {
@@ -417,6 +425,16 @@ impl PrintC {
             }
         }
 
+        let handlers = shape.handlers();
+        let last_is_code = matches!(
+            shape.catches.last().map(|c| c.1),
+            Some(Part::Block(_) | Part::Siblings(_))
+        );
+        let form = self.java_try_form(&handlers, last_is_code, loose_from.is_some());
+        if let Some(form) = form {
+            self.java_hide_form(fd, form);
+        }
+
         let mut registered_pending = false;
         let mut my_pending_gen = 0u64;
         if self.context.is_set(modifiers::PENDING_BRACE) {
@@ -435,25 +453,38 @@ impl PrintC {
         self.context.pop_mod();
         self.emit_comment_block_tree(fd, shape.cond);
 
+        if !matches!(form, Some(TryForm::Synchronized { .. })) {
+            self.java_restore_monitor_enter(fd, arch, &handlers);
+        }
         self.emit.tag_line();
         let my_pending_indent = if registered_pending {
             self.emit.pending_fired_indent(my_pending_gen)
         } else {
             -1
         };
-        self.emit.print("try", SyntaxHighlight::KeywordColor);
+        if let Some(TryForm::Synchronized { enter, .. }) = form {
+            self.emit_java_synchronized_head(fd, arch, enter);
+        } else {
+            self.emit.print("try", SyntaxHighlight::KeywordColor);
+        }
         self.emit_java_try_part(fd, arch, &inside, first, loose_from);
-        for &(handler, arm) in &shape.catches {
-            let name = self.java_caught_name(fd, handler, &self.part_elements(fd, arm, siblings));
+        let synchronized = matches!(form, Some(TryForm::Synchronized { .. }));
+        for &(handler, arm) in shape.catches.iter().filter(|_| !synchronized) {
             self.emit.tag_line();
-            self.emit.print("catch", SyntaxHighlight::KeywordColor);
-            self.emit.spaces(1, 0);
-            self.emit.print("(", SyntaxHighlight::NoColor);
-            self.emit
-                .print(&table.type_text(handler), SyntaxHighlight::TypeColor);
-            self.emit.spaces(1, 0);
-            self.emit.print(&name, SyntaxHighlight::VarColor);
-            self.emit.print(")", SyntaxHighlight::NoColor);
+            if form == Some(TryForm::Finally { handler }) {
+                self.emit.print("finally", SyntaxHighlight::KeywordColor);
+            } else {
+                let name =
+                    self.java_caught_name(fd, handler, &self.part_elements(fd, arm, siblings));
+                self.emit.print("catch", SyntaxHighlight::KeywordColor);
+                self.emit.spaces(1, 0);
+                self.emit.print("(", SyntaxHighlight::NoColor);
+                self.emit
+                    .print(&table.type_text(handler), SyntaxHighlight::TypeColor);
+                self.emit.spaces(1, 0);
+                self.emit.print(&name, SyntaxHighlight::VarColor);
+                self.emit.print(")", SyntaxHighlight::NoColor);
+            }
             self.java_caught_shown.insert(handler);
             if let Part::Goto(blk) = arm {
                 self.emit_java_catch_goto(fd, blk);

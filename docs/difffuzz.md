@@ -69,6 +69,41 @@ afterwards. The register file is unchanged.
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
 
+### RISC-V vector (`--arch riscv64v`)
+
+`--arch riscv64v --oracle qemu --vlen 128|256` (`tools/difffuzz/rvv_backend.py`) fuzzes the
+vector instructions: random OP-V, OP-VE and vector load/store words that llvm-objdump decodes
+(`--objdump`, an llvm-objdump with the RISC-V vector extensions; `--only REGEX` picks
+mnemonics). Capstone 5 does not decode them. QEMU runs with
+`-cpu max,v=true,vlen=N,elen=64,rvv_ta_all_1s=true,rvv_ma_all_1s=true`.
+
+- **Harness.** v0..v31 are loaded with `vl1re8.v`, then `vsetvl` sets a random legal vtype
+  (SEW 8..64, LMUL mf8..m8, random vta/vma) and a random AVL. vxrm and fcsr are set, then the
+  f and x registers. The epilogue stores the registers back with `vs1r.v`, together with vl,
+  vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
+  region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
+  or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
+  so element values cannot be compared. The p-code runs twice, each time with different
+  random user-operation results. A byte written the same way in both runs must equal QEMU's
+  value (`mismatch`). Any other byte QEMU changes must be one the p-code writes
+  (`missing-output`: a register, a CSR, or `mem` when there is no store). A second QEMU run
+  gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
+  fcsr. If a byte the p-code writes through a user operation changes, the result is
+  `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
+  - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
+    SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
+    reserved at every vtype.
+  - VLEN 256: 154 match, 110 with findings, 136 reference exceptions.
+  - The findings fall into four classes:
+    - `vset{i}vl{i}` do not write vl and vtype (61-79).
+    - A register group is written past vd (44-51): segment loads (`nf`), widening results,
+      and LMUL > 1.
+    - The old vd is read under a tail- or mask-undisturbed policy, or when vl is 0 (29-35).
+    - FP ops do not write fflags and fixed-point ops do not write vxsat (17-19), as the scalar
+      F/D lift also leaves the accrued flags out.
+
 On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and

@@ -4240,6 +4240,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `SH4ALDSP` | Renesas SH4AL-DSP | `SH4ALDSP:BE:32:default`, `SH4ALDSP:LE:32:default` | aleph-void/Ghidra-Rare (SH4ALDSP) @ `87cc554e33`, MIT |
 | `TC32` | Telink TC32 (TLSR82xx/8x5x BLE SoCs) | `TC32:LE:32:default` | aleph-void/Ghidra-Rare (TC32) @ `87cc554e33`, MIT |
 | `PXF` | Cisco PXF "Toaster" microcode (NSE-100) | `PXF:BE:16:NSE-100` | aleph-void/Ghidra-Rare (PXF) @ `87cc554e33`, MIT |
+| `ESRL` | Sharp ESR-L | `ESR-L:LE:20:default` | benryves/GhidraESRL @ `baa1b81512`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

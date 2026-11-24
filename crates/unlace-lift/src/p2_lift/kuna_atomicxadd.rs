@@ -79,6 +79,13 @@ fn instruction(fd: &Funcdata, ops: &[OpId]) -> Option<Instruction> {
             | OpCode::CPUI_INT_EQUAL
             | OpCode::CPUI_INT_AND
             | OpCode::CPUI_POPCOUNT => (),
+            OpCode::CPUI_INT_ZEXT
+                if op.num_input() == 1
+                    && op.get_out().is_some_and(|o| {
+                        fd.vbank()
+                            .get(o)
+                            .is_some_and(|v| v.get_space().get_name() == "register")
+                    }) => {}
             _ => return None,
         }
     }

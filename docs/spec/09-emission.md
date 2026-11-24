@@ -2701,8 +2701,8 @@ the guard off it would let a 2-byte local be re-signed on those targets and turn
 an emitted `if (v1 != -1)` into a constant-true test. The floor is therefore
 `max(4, TypeFactory::get_size_of_int())`
 (`crates/unlace-emit/src/p9_emit/kuna_typeround.rs
-(MIN_PROMOTION_SIZE)`), pinned on x86-64 by `tests/stages/kuna-signedness.xml`
-and on a 2-byte-`int` target by `tests/stages/kuna-signedness-int16.xml`. A width change
+(MIN_PROMOTION_SIZE)`), pinned on x86-64 by `tests/stages/kuna-signedness.toml`
+and on a 2-byte-`int` target by `tests/stages/kuna-signedness-int16.toml`. A width change
 *between* two integers is an explicit `INT_SEXT`/`INT_ZEXT` in p-code, so a
 mixed-width expression is constrained by the extension op rather than slipping
 through as neutral.
@@ -5709,7 +5709,7 @@ the access is not a stack byte copy, and the statement holding the access is
 the one printed right before the step in the same block. `v = *p; p = &p[1];`
 prints `v = *p++;`, `*d = c; d = &d[1];` prints `*d++ = c;`. A step that goes
 through a copy the loop also compares (`v2 = &a0[1]; v1 += *a0; a0 = v2;`) is
-left as it is (`tests/stages/kuna-postinc.xml`).
+left as it is (`tests/stages/kuna-postinc.toml`).
 
 ### MSVC throws (`msvceh`)
 
@@ -5879,7 +5879,7 @@ its negation) and `x` (`c ? 1 : x` is `c || x`, `c ? x : 1` is `!c || x`,
 its `ONLY_BRANCH` render, an arm as its `RETURN`'s value, and `?`/`:`/`&&`/`||`
 between operands.
 
-With `option noretfirst on` (C output; default off; the option also breaks
+With `option noretfirst on` (C output; default on; the option also breaks
 P8's terminal-arm tie toward the no-return arm, `docs/spec/08-structuring.md`),
 the pass then takes an
 `if`/`else` without a goto, neither rewritten above, whose structured arms

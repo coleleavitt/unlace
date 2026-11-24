@@ -1,0 +1,82 @@
+# A byte array in a SPARC V9 64-bit frame at stack 0x7f5..0x7f6 (bias
+# 0x7ff - 10) is passed to a call that may write it, then read back:
+#
+#     unsigned char delim(unsigned char c) {
+#       unsigned char buf[1];  // fp+0x7f5
+#       buf[0] = c;
+#       mutate(buf);
+#       return buf[0];
+#     }
+#
+# SparcV9_64.cspec declares the hidden struct-return pointer as a stack
+# entry at 0x7ef..0x7f6. Clearing that entry's storage out of the local
+# range in a function with no hidden return dropped every local there:
+# the address printed as an undeclared Stack location and the reload read
+# the stale argument. Hand-assembled; mutate is a retl stub.
+#
+# Control: fill_raw has no prototype and reads its hidden return pointer
+# from that slot (ldx [%fp+0x7ef]; stx 5 through it; return it). The read
+# keeps the slot a parameter; released, the store went through an
+# uninitialized local instead.
+
+[image]
+arch = 'sparc:BE:64:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'delim' },
+    { space = 'ram', offset = '0x100040', name = 'mutate' },
+    { space = 'ram', offset = '0x100080', name = 'fill_raw' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '9de3bf50f02fa7f59007a7f54000000d01000000f00fa7f581c7e00881e80000010000000100000001000000010000000100000001000000010000000100000081c3e00801000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = '9de3bf50c25fa7ef84102005c4704000b010000181c7e00881e80000'
+
+[script]
+commands = [
+    'map prototype mutate void mutate(unsigned char *p);',
+    'lo fu delim',
+    'decompile',
+    'print C',
+    'lo fu fill_raw',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #1: the argument is stored into the buffer'
+count = 1
+literal = 'v1[0] = a0;'
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #2: the call receives the declared buffer'
+count = 1
+literal = 'mutate(v1);'
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #3: the result is reloaded after the call'
+count = 1
+literal = 'return v1[0];'
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #4: no undeclared stack location'
+count = 0
+literal = 'Stack0'
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #5: fill_raw stores through its incoming hidden pointer'
+count = 1
+literal = '*a0 = 5;'
+
+[[match]]
+name = 'sparc64-hiddenret-slot-locals #6: fill_raw returns that pointer'
+count = 1
+literal = 'return a0;'

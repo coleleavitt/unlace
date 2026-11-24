@@ -1,0 +1,239 @@
+# arm64e pointer-auth failure checks (`option ptrauthtrap on|off`).
+#
+# Issue: Apple's clang checks an authenticated pointer inline because a CPU
+# without FEAT_FPAC does not trap on a failed aut*. Before a tail call it
+# tests bits 62 and 61 of the authenticated x30 and traps with
+# `brk #0xc471`. SLEIGH hides the autibsp, so the bit test reads the incoming
+# return address and every such function of an arm64e iOS system daemon
+# (205 of them) printed
+# `if ((v1 ^ v1 << 1) >> 0x3e & 1) { (*SoftwareBreakpoint(0xc471,..))(); }`
+# ahead of its tail call.
+#
+# Stage / sub-stage: P2 flow-classification. `p2_lift/kuna_ptrauthtrap.rs`
+# anchors on the trap block (one brk whose SoftwareBreakpoint immediate is
+# 0xc470..0xc473) and removes pre-SSA each CBRANCH edge into it whose guard
+# is the bit test of the return address (x30 reloaded from the frame or
+# unwritten in the function) and that is taken when the bits disagree. The
+# shape is the evidence; no image format is consulted, so the bytechunks
+# below exercise it through the XML path too.
+#
+# P0 assertion: `option ptrauthtrap on|off`.
+#
+# The XML wrapper only supplies the harness architecture; every pass loads
+# the `macho_arm64e_auth` fixture (an arm64e PAC00 image, see the fixtures
+# README) through the object bootstrap.
+#
+# The bytechunk `x30check` is the real LLVM check on plain AArch64 code
+# (`ldp x29, x30, [sp], #0x10; autibsp; eor x16, x30, x30, lsl #1;
+# tbz x16, #62, 1f; brk #0xc471; 1: ret`): the check is cut. The bytechunk
+# `x30forged` is the same bit test on a value the code moved into x30
+# (`mov x30, x0`): that check stays. So do `x30forgedearlier` (the
+# `mov x30, x1` sits in the block before the test), `x30loaded`
+# (`ldr x30, [x0]`, not a frame reload) and `x30inverted` (the real
+# reload and test, but `tbz` branches to the trap when the bits agree, so
+# every authentic return address traps).
+#
+# The bytechunk `both` is a guard whose two arms are both traps
+# (`tbz x0, #62, 1f; brk #0xc471; 1: brk #0xc472`). No arm survives to fall
+# through to, so the fold leaves it whole. The bytechunk `plain` is a plain
+# AArch64 compare guarding a pointer-auth immediate (`cmp w0, #0x2a; b.ne 1f;
+# mov w0, #1; ret; 1: brk #0xc470`): the immediate alone is no evidence, so
+# the check stays. The last pass loads `macho_arm64e_brk`, an arm64e image
+# whose `_check` is the same compare and whose `_check_x0` is the bit test of
+# x0 rather than x30 (`eor x16, x0, x0, lsl #1; tbz x16, #62; brk #0xc472`):
+# both checks stay on arm64e too.
+#
+# Pass 1 (`option ptrauthtrap off`) reproduces the BUG: `_tail_auth` carries
+# the bit test, the trap call and a variable for the incoming x30.
+# Pass 2 (`option ptrauthtrap on`, the shipped default) is the FIX:
+# `_tail_auth` is the call to `_helper` and the tail call to `_helper2`.
+# `_strip_check`'s xpacd/cmp form folds without the option, so its body is
+# the same plain load in both passes.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'both' },
+    { space = 'ram', offset = '0x100010', name = 'plain' },
+    { space = 'ram', offset = '0x100040', name = 'x30check' },
+    { space = 'ram', offset = '0x100080', name = 'x30forged' },
+    { space = 'ram', offset = '0x1000c0', name = 'x30inverted' },
+    { space = 'ram', offset = '0x100100', name = 'x30forgedearlier' },
+    { space = 'ram', offset = '0x100140', name = 'x30loaded' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4000f0b6208e38d4408e38d4'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100010'
+readonly = true
+hex = '1fa800716100005420008052c0035fd6008e38d4'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = 'fd7bbfa9fd030091fd7bc1a8ff2303d5d0071eca5000f0b6208e38d4c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = 'fe0300aad0071eca5000f0b6208e38d4c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000c0'
+readonly = true
+hex = 'fd7bc1a8d0071eca7000f0b6e0008052c0035fd6208e38d4'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = 'fe0301aa400000b4220080d2d0071eca5000f0b6208e38d4e00302aac0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100140'
+readonly = true
+hex = '1e0040f9d0071eca5000f0b6208e38d4c0035fd6'
+
+[script]
+commands = [
+    'lo fu both',
+    'decompile',
+    'print C',
+    'lo fu plain',
+    'decompile',
+    'print C',
+    'lo fu x30check',
+    'decompile',
+    'print C',
+    'lo fu x30forged',
+    'decompile',
+    'print C',
+    'lo fu x30inverted',
+    'decompile',
+    'print C',
+    'lo fu x30forgedearlier',
+    'decompile',
+    'print C',
+    'lo fu x30loaded',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64e_auth',
+    'option ptrauthtrap off',
+    'read symbols',
+    'load function _tail_auth',
+    'decompile',
+    'print C',
+    'load function _strip_check',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64e_auth',
+    'read symbols',
+    'load function _tail_auth',
+    'decompile',
+    'print C',
+    'load function _strip_check',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_arm64e_brk',
+    'read symbols',
+    'load function _check',
+    'decompile',
+    'print C',
+    'load function _check_x0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PTRAUTHTRAP #1: off keeps the bit test on the incoming return address (and x30inverted keeps it in both)'
+count = 2
+literal = 'if ((v1 ^ v1 << 1) >> 0x3e & 1)'
+
+[[match]]
+name = 'PTRAUTHTRAP #2: off keeps the trap call'
+count = 1
+literal = 'SoftwareBreakpoint(0xc471,0x100000444)'
+
+[[match]]
+name = 'PTRAUTHTRAP #3: the tail call survives in both passes'
+count = 2
+literal = '_helper2(); // tail-call'
+
+[[match]]
+name = 'PTRAUTHTRAP #4: only off declares a variable for the incoming x30'
+count = 1
+literal = 'v1; // stack - 0x8 | x30'
+
+[[match]]
+name = 'PTRAUTHTRAP #5: the call to _helper survives in both passes'
+count = 2
+literal = '_helper();'
+
+[[match]]
+name = 'PTRAUTHTRAP #6: the xpacd compare folds in both passes'
+count = 2
+literal = 'return *(unsigned int *)*a0;'
+
+[[match]]
+name = 'PTRAUTHTRAP #7: a guard whose both arms trap is left whole'
+count = 1
+literal = 'SoftwareBreakpoint(0xc472,0x10000c'
+
+[[match]]
+name = 'PTRAUTHTRAP #8: a compare guarding brk #0xc470 keeps its check, plain AArch64 and arm64e'
+count = 2
+literal = 'if (a0 == 0x2a)'
+
+[[match]]
+name = 'PTRAUTHTRAP #9: both brk #0xc470 traps stay'
+count = 2
+literal = 'SoftwareBreakpoint(0xc470,'
+
+[[match]]
+name = 'PTRAUTHTRAP #10: an x0 bit test (arm64e image and the x30 forgery, which reads a0) is not the return-address check'
+count = 2
+literal = 'if ((a0 ^ a0 << 1) >> 0x3e & 1)'
+
+[[match]]
+name = 'PTRAUTHTRAP #11: the x0 bit test keeps its brk #0xc472 trap'
+count = 1
+literal = 'SoftwareBreakpoint(0xc472,0x1000002b0)'
+
+[[match]]
+name = 'PTRAUTHTRAP #12: the real check on plain AArch64 is cut'
+count = 0
+literal = 'SoftwareBreakpoint(0xc471,0x10005c)'
+
+[[match]]
+name = 'PTRAUTHTRAP #13: the bit test of a value moved into x30 keeps its trap'
+count = 1
+literal = 'SoftwareBreakpoint(0xc471,0x100090)'
+
+[[match]]
+name = 'PTRAUTHTRAP #14: a guard that traps when the bits agree keeps its trap'
+count = 1
+literal = 'SoftwareBreakpoint(0xc471,0x1000d8)'
+
+[[match]]
+name = 'PTRAUTHTRAP #15: a value moved into x30 in an earlier block keeps its trap'
+count = 1
+literal = 'SoftwareBreakpoint(0xc471,0x100118)'
+
+[[match]]
+name = 'PTRAUTHTRAP #16: x30 loaded from a non-frame address keeps its trap'
+count = 1
+literal = 'SoftwareBreakpoint(0xc471,0x100150)'

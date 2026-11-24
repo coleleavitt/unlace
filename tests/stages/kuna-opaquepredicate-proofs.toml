@@ -1,0 +1,226 @@
+# P3 simplification quiescence, P0 option opaquepredicate (default off):
+# the proofs beyond low bits and bitwise identities, and the value
+# `globals`. The script loads an in-tree linked image of opaqueglobal.c
+# (source beside it): clang -O0, x86-64, freestanding and static.
+#
+# Narrow inputs (kuna_opaquedomain.rs): (v * v * v - v) % 3 is zero and
+# v * v is not negative for every byte v, so cube and square lose their
+# dead arm; cubewide tests a 32-bit v, for which the product wraps, and
+# stays.
+#
+# Implied (kuna_opaqueimplied.rs): inside `if (v > 5)` the test `v <= 5` is
+# false (again), inside `if (v < 5)` so is `v > 10` (range); `v > 2` is
+# still open there (rangekeep).
+#
+# Identical arms (kuna_opaquearms.rs): same and samecall run the same
+# operations whichever way their branch goes, so one copy remains; differ
+# multiplies by another constant in one arm and keeps both.
+#
+# Never-written globals (kuna_opaqueglobals.rs, value `globals` only): no
+# instruction stores to y, seven or next and no code holds their address,
+# so `y >= 10` (bogus), `seven != 7` (init) and `next != 0` (afterarr) are
+# decided by the image's bytes. `on` leaves bogus and init alone. live is
+# stored to by set_live and esc has its address passed to take: written
+# and taken keep their branch under `globals`.
+#
+# rangefold (default on) also folds the dominated tests of again and range,
+# so the script pins it off to show what opaquepredicate proves alone.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/opaqueglobal_x86_64_clang_O0',
+    'read symbols',
+    'option ctypes on',
+    'option rangefold off',
+    'option opaquepredicate off',
+    'load function bogus',
+    'decompile',
+    'print C',
+    'load function cube',
+    'decompile',
+    'print C',
+    'load function square',
+    'decompile',
+    'print C',
+    'load function again',
+    'decompile',
+    'print C',
+    'load function range',
+    'decompile',
+    'print C',
+    'load function same',
+    'decompile',
+    'print C',
+    'load function samecall',
+    'decompile',
+    'print C',
+    'option opaquepredicate on',
+    'load function bogus',
+    'decompile',
+    'print C',
+    'load function init',
+    'decompile',
+    'print C',
+    'load function cube',
+    'decompile',
+    'print C',
+    'load function square',
+    'decompile',
+    'print C',
+    'load function cubewide',
+    'decompile',
+    'print C',
+    'load function again',
+    'decompile',
+    'print C',
+    'load function range',
+    'decompile',
+    'print C',
+    'load function rangekeep',
+    'decompile',
+    'print C',
+    'load function same',
+    'decompile',
+    'print C',
+    'load function samecall',
+    'decompile',
+    'print C',
+    'load function differ',
+    'decompile',
+    'print C',
+    'option opaquepredicate globals',
+    'load function bogus',
+    'decompile',
+    'print C',
+    'load function init',
+    'decompile',
+    'print C',
+    'load function afterarr',
+    'decompile',
+    'print C',
+    'load function written',
+    'decompile',
+    'print C',
+    'load function taken',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'off and on keep the test of a global nothing writes'
+count = 2
+literal = '10 <= y'
+
+[[match]]
+name = 'globals returns the only value bogus can reach'
+count = 1
+regex = '^  return a0 \+ 1;'
+
+[[match]]
+name = 'on keeps the test of an initialized global'
+count = 1
+literal = 'seven != 7'
+
+[[match]]
+name = 'globals reads the initialized global as its image value'
+count = 1
+regex = '^  return a0 \+ 2;'
+
+[[match]]
+name = 'globals reads a zero-filled global beside an indexed array'
+count = 1
+regex = '^  return a0 \+ 6;'
+
+[[match]]
+name = 'the arm behind the zero-filled global is gone'
+count = 0
+literal = 'a0 * 6'
+
+[[match]]
+name = 'a global another function stores to keeps its test'
+count = 1
+literal = '3 <= live'
+
+[[match]]
+name = 'a global whose address is passed on keeps its test'
+count = 1
+literal = '3 <= esc'
+
+[[match]]
+name = "off keeps the remainder of a byte's cube"
+count = 1
+literal = 'v1 * v1 * v1 - v1) % 3'
+
+[[match]]
+name = 'on folds the remainder for every byte'
+count = 1
+regex = '^  return a1 \+ 5;'
+
+[[match]]
+name = 'the same test over 32 bits stays'
+count = 1
+literal = 'a0 * a0 * a0 - a0) % 3'
+
+[[match]]
+name = "off keeps the sign test of a byte's square"
+count = 1
+literal = '0 <= (int)a0 * (int)a0'
+
+[[match]]
+name = 'on folds the sign test'
+count = 1
+regex = '^  return a1 \+ 7;'
+
+[[match]]
+name = 'the contradicting test prints only when off'
+count = 1
+literal = 'a0 <= 5)'
+
+[[match]]
+name = 'its arm prints only when off'
+count = 1
+literal = 'v1 *= 0xf;'
+
+[[match]]
+name = 'a test outside the dominating range prints only when off'
+count = 1
+literal = 'v1 *= 0x11;'
+
+[[match]]
+name = 'a test the dominating range leaves open stays'
+count = 1
+literal = 'v1 *= 0x13;'
+
+[[match]]
+name = 'identical arms print twice off, once on, once in differ'
+count = 4
+literal = '*a1 = *a1 * 0x15 + a0;'
+
+[[match]]
+name = 'arms that differ both stay'
+count = 1
+literal = '*a1 = *a1 * 0x19 + a0;'
+
+[[match]]
+name = 'off selects between two identical calls'
+count = 1
+literal = '? sink(a1 * 0x17 + 1) : sink(a1 * 0x17 + 1)'
+
+[[match]]
+name = 'on makes the call once'
+count = 1
+regex = '^  return sink\(a1 \* 0x17 \+ 1\);'

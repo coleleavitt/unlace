@@ -1862,8 +1862,11 @@ at the match (01 §1.4).
   itself is not recorded as stack-moving. Every reachable return
   has to agree. An indirect jump, an undecodable instruction, a call target
   that is an import's address-table slot, or a walk past its
-  2048-instruction budget states nothing. `int3` falls through and `ud2` ends
-  its path. Walks are cached on the architecture: one whose nested calls fit
+  2048-instruction budget states nothing. `int3` and `int1` end their path,
+  as their p-code does (`return [0:1]`): the walk never runs from the `int3`
+  padding after a call that does not return (MSVC's
+  `call _CxxThrowException; int3`) into the next function. `int imm8` falls
+  through, and `ud2` ends its path. Walks are cached on the architecture: one whose nested calls fit
   within the depth it was asked for is the answer at every greater depth, and
   one the depth limit cut short is kept per depth, so the answer never depends
   on which function asked first. The walks are dropped when an option they
@@ -2737,7 +2740,7 @@ classified:
   tagged address and is left to the other rules, as is one made of the
   storage address alone. The rule is not applied to other AArch64 languages,
   where a 52-bit address space gives bits 48..51 to the address.
-  `tests/stages/kuna-pacmodifier-arg-a64e.xml` covers both forms of the
+  `tests/stages/kuna-pacmodifier-arg-a64e.toml` covers both forms of the
   modifier and the two controls.
 
   Dropping the entry leaves no hole in `x0..x7`. Only a register entry is
@@ -4983,7 +4986,7 @@ the extrapop unknown: there the callee's purge is read by `kuna_calleepurge.rs`
 `objc_msgSendSuper2_stret` senders are imports with no body to probe; on i386
 they pop the hidden result pointer like any struct-returning function, so a
 call to one (also through an `__imp_` slot) records 8, as IDA special-cases them
-(`kuna_calleeretpurge.rs (stret_purge)`, `tests/stages/kuna-objcstret-x86.xml`).
+(`kuna_calleeretpurge.rs (stret_purge)`, `tests/stages/kuna-objcstret-x86.toml`).
 `option calleeretpurge off` restores the model's extrapop.
 
 ### (kuna) `importvote` — an undeclared import takes what its callers pass
@@ -5145,13 +5148,13 @@ is `async`, as is one whose body reads the `swiftasync` register (below),
 and the metadata's binding is upgraded to the matching model —
 `__swiftasynccall` with a nameless `async_context` hint on the `swiftasync`
 register — so a stripped image's resume partials take their context
-(`tests/stages/kuna-swiftasync.xml`, the stripped `swift_sigs_elf`). Only the
+(`tests/stages/kuna-swiftasync.toml`, the stripped `swift_sigs_elf`). Only the
 calls inside the function's own extent count, from its entry up to the next
 known entry (`Architecture::function_entry_after`): a flow that ran on into
 another function's body — an unchecked jump table read past its last case, a
 branch into a neighbour's shared tail — holds that function's calls, which say
 nothing about this one's convention, and a plain function would otherwise take
-the neighbour's `async_context` (`tests/stages/kuna-swiftasyncextent.xml`,
+the neighbour's `async_context` (`tests/stages/kuna-swiftasyncextent.toml`,
 `swift_runon_elf`).
 
 The concurrency runtime itself is declared
@@ -5203,7 +5206,7 @@ argument (`passes_context`, in `check_input_trial_use`) — a callee's context
 is the one thing every `async` call passes, and the caller's own, handed on
 without a write, would otherwise read as a preserved register — and the
 scratch register the indirect jump goes through is not
-(`carries_async_target`). The stage test `tests/stages/kuna-swiftconcurrency.xml`
+(`carries_async_target`). The stage test `tests/stages/kuna-swiftconcurrency.toml`
 runs the stripped `swift_async_elf` with `swiftcall` off and on.
 
 Two call-site rules read the image's Swift registers
@@ -5315,7 +5318,7 @@ context (`opaque() &+ b.v`, a type's metadata accessor first) reads the
 value it was called with; a call that does not return is followed by a trap
 on Apple targets. A path also ends where it leaves the function's extent, its
 entry up to the next known entry: a flow that runs on into a neighbour's body
-(`tests/stages/kuna-swiftasyncextent.xml`) reads that body's registers, not
+(`tests/stages/kuna-swiftasyncextent.toml`) reads that body's registers, not
 this function's. A read of the register on such a path is evidence unless it only
 stores the register: a `STORE` of it, or of the temporary its own instruction
 copied it into (an AArch64 `stp x20, x19`, an x86 `push %r13`). No C or
@@ -5747,7 +5750,7 @@ a pair `bejoin` does not prove to be one value is joined first register low
 this repair drops, so there a global in the second register stays uncomputed:
 SPARC's `restore` copies `%i1` into `%o1` whatever it holds, and an `int` that
 read a global into `%i1` for a store would otherwise come back as a swapped
-`CONCAT44` (`tests/stages/kuna-returnglobal-sparc.xml`). Anything the walk cannot
+`CONCAT44` (`tests/stages/kuna-returnglobal-sparc.toml`). Anything the walk cannot
 classify is computed, so an unfamiliar shape keeps today's answer. The RETURN is
 then rewritten to the surviving half and the dead concatenation destroyed.
 
@@ -5843,7 +5846,7 @@ phantom, and lost the half — and then the argument, which had no reader left,
 disappeared from the recovered signature too. Two functions differing only in
 whether the second returned half is `x` or `x*3+7` came out with different
 arities: `unsigned long wide(long a0)` against `undefined16 w2(long a0,long a1)`,
-for the same two-argument source (`tests/stages/kuna-retinputhalf.xml`).
+for the same two-argument source (`tests/stages/kuna-retinputhalf.toml`).
 
 kuna (DIV-85, always on) supplies the missing exception, on
 storage evidence the prototype model already holds. An unwritten terminal is a
@@ -5929,7 +5932,7 @@ needs no such rule: the repair keeps the low half whenever the high one is not
 real anyway.
 
 `tests/stages/gh6990-returnpair.xml` keeps the SPARC function returning one
-register, and `tests/stages/kuna-ownreturn.xml` pins the ARM shapes, the `svc`
+register, and `tests/stages/kuna-ownreturn.toml` pins the ARM shapes, the `svc`
 control and a hand-written `__ashrdi3` shape; `unlace-cli/tests/own_register_returns.rs`
 compiles the ARM, Thumb and RISC-V 32 output back and runs it against the
 source. The same functions on a big-endian target keep both halves, in the
@@ -5989,7 +5992,7 @@ A high half that really is leftover still goes: the upper half of RAX after a
 callee that returns `int` in EAX sits at its own slot and carries nothing the
 function computed, and the return narrows to EAX exactly as before. Over the
 castbench corpus and 98 further binaries (60,037 functions) the change moves no
-function; the shape it corrects is pinned by `tests/stages/kuna-returnpiece.xml`
+function; the shape it corrects is pinned by `tests/stages/kuna-returnpiece.toml`
 and by the compiled round trip over the `piecehi_*` fixtures in
 `unlace-cli/tests/decompile_all_cli.rs`.
 
@@ -6063,7 +6066,7 @@ output: when it is computed from a narrower piece of the call's second register,
 as a Cortex-M `uxtb r1,r1` is, the call can still lose that register and leave it
 an uninitialized local (GH-851).
 
-`tests/stages/kuna-retcallhalf.xml` pins the ARM callers and the four controls
+`tests/stages/kuna-retcallhalf.toml` pins the ARM callers and the four controls
 (the `smull` word, the hardening zero, the dummy pop and the `svc` argument) in
 single-function mode, and `unlace-cli/tests/call_result_pair_returns.rs` compiles
 the ARM, MIPS and i386 output of `decompile-all` back with gcc and clang and runs
@@ -6238,7 +6241,7 @@ and keeps upstream's answer. gcc `-O0` leaves the sign of a 64-bit intermediate 
 same low word where it printed `void`. On 64-bit targets the same shapes make a
 16-byte pair, printed `undefined16` (`SEXT816(a0 + 3)`) where it printed `void`.
 
-`tests/stages/kuna-retpairhalf.xml` pins seven ARM functions (`sx`, `zx`, `sxa`,
+`tests/stages/kuna-retpairhalf.toml` pins seven ARM functions (`sx`, `zx`, `sxa`,
 `kc`, `dupc`, `sxsel` and the spilled `kc0`) and seven controls (`int div7`, a
 stored sign word, a scrubbed `r1` the body used, an `svc` argument, and an `r1`
 written to `fpscr` or `cpsr`), and
@@ -6346,15 +6349,15 @@ functions) one function changes, ChibiOS's `chEvtGetAndClearEvents` (`movs
 r1,#0; msr basepri,r1` before the return), to the 32-bit result it has, and its
 four callers' result variables follow.
 
-`tests/stages/kuna-retsysreg.xml` pins ARM `vmsr fpscr`, `msr cpsr_c` and an
+`tests/stages/kuna-retsysreg.toml` pins ARM `vmsr fpscr`, `msr cpsr_c` and an
 SCTLR write beside a call's result and a computed `r0`, Thumb
 `ulPortRaiseBASEPRI` and `msr primask`, the `g64` high word and `mcrr` controls,
 `pld`, `pli` and CP15 cache-line controls that keep their pair, and the pair
 again with the option off, in single-function mode;
-`tests/stages/kuna-retsysreg-a64.xml` does the same for AArch64 `msr
+`tests/stages/kuna-retsysreg-a64.toml` does the same for AArch64 `msr
 ICC_PMR_EL1`, `msr fpcr` and `msr daif` against `prfm`, `dc cvau`, `dc civac`,
 `tlbi` and `ic ivau` controls (a 16-byte struct and an `__int128`), and
-`tests/stages/kuna-retsysreg-mips.xml` for MIPS `mtc0` against `pref`, `cache`,
+`tests/stages/kuna-retsysreg-mips.toml` for MIPS `mtc0` against `pref`, `cache`,
 `synci` and `mtc2` controls. `unlace-cli/tests/sysreg_return_halves.rs`
 decompiles the ARM and Thumb issue shape whole-binary.
 
@@ -6520,7 +6523,7 @@ detection reported as rustc-produced (`Compiler::Rustc`, recorded on the
 `Architecture` at `load file` and copied into the per-function snapshot per 00
 §0.5); the XML `<binaryimage>` bootstrap never runs the analyzer tier, so `auto`
 is inert on the datatest corpus **by construction**, not by luck. `always` drops
-the language test, which is what `tests/stages/kuna-rustabi.xml` needs — a
+the language test, which is what `tests/stages/kuna-rustabi.toml` needs — a
 `<bytechunk>` carries no `.comment` record to detect. The shipped default is
 `auto`: the pair this keeps alive is rendered as a raw fixed-size container until
 a later pass gives it an enum type, so on a Rust image the option buys
@@ -7980,11 +7983,11 @@ functions, most of them by inventing arguments. Each call site gets a
   what refuses the slot. A constant stack slot after an active register is
   unaffected (bzip2's `BZ2_bzWriteClose64(a,b,c,d,NULL,e,NULL)`).
 
-`tests/stages/kuna-passthrough-fwdchain-arm.xml` pins both ARM shapes and the
-`i9` case of `tests/stages/kuna-passthrough-fwdchain.xml` the IPA shape, each
-printing the empty call in both passes. `tests/stages/kuna-passthrough-anchor-arm.xml`
+`tests/stages/kuna-passthrough-fwdchain-arm.toml` pins both ARM shapes and the
+`i9` case of `tests/stages/kuna-passthrough-fwdchain.toml` the IPA shape, each
+printing the empty call in both passes. `tests/stages/kuna-passthrough-anchor-arm.toml`
 pins the canary wipe, the restored alignment slot and the floats kept across
-the call, and `tests/stages/kuna-passthrough-anchor-x86.xml` the frame locals.
+the call, and `tests/stages/kuna-passthrough-anchor-x86.toml` the frame locals.
 
 One trial is scored inactive before any of this, with the option on or off: the
 register an indirect call jumps through (`kuna_passthrough::is_call_target`:
@@ -8001,9 +8004,9 @@ hid the first. Inactive, it never anchors a hole fill and is dropped from the
 end of a list, but is still filled below a later argument, where the ABI's
 order makes it an argument: `fp(fp,x+1)` is `inc %rsi; jmp *%rdi`, and
 definitely-not-used would make `forceNoUse` drop the `x+1` with it
-(`tests/stages/kuna-passthrough-calltarget.xml`). An AArch64 `br`/`blr` reads
+(`tests/stages/kuna-passthrough-calltarget.toml`). An AArch64 `br`/`blr` reads
 its target through a copy into `pc`, so the rule does not arise there.
-`tests/stages/kuna-passthrough-fwdchain.xml` pins the four-argument tail jump
+`tests/stages/kuna-passthrough-fwdchain.toml` pins the four-argument tail jump
 and the `blr` form beside it, with the option off reproducing the empty call,
 and the three-argument control and the trailing-register control that move in
 neither pass.
@@ -8014,7 +8017,7 @@ import, `--option protoorder off`, and under `--option protoorder types` a
 callee in a recursive component, leave every call as the option-off run renders
 it. Under the default
 `cycles` a recursive callee states its list like any other, and this rule reads
-it on the same terms. `tests/stages/kuna-passthrough.xml` is the negative
+it on the same terms. `tests/stages/kuna-passthrough.toml` is the negative
 control for that clause (the console states no prototype); the positive witness
 is `crates/unlace-analysis/tests/fixtures/passthrough_x86_64` under
 `tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json`, with a

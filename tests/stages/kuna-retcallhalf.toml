@@ -1,0 +1,140 @@
+# kuna: a caller that hands back a callee's 64-bit result with only the
+# high word changed returns all eight bytes, not void.
+#
+# Stage / sub-stage: P4 return recovery, the output trials of the
+# function's own RETURN (ActionReturnRecovery, p4_calls/kuna_retcallhalf.rs).
+# A strict fix: no option.
+#
+# Source (clang -target arm-linux-gnueabi -O2, bytes verbatim below; the
+# last three functions are hand-written controls):
+#
+#     typedef unsigned long long u64;
+#     typedef long long s64;
+#     u64 full(unsigned a) { return ((u64)(a + 1) << 32) | (a * 3u); }
+#     int g32s(int a) { return a * 7 - 100; }
+#     u64 full_or(unsigned a) { return full(a) | 0xff00000000ULL; }
+#     u64 full_add(unsigned a) { return full(a) + (1ULL << 32); }
+#     u64 hi_const(unsigned a) { return (7ULL << 32) | (unsigned)g32s(a); }
+#     s64 sext(int a) { return g32s(a); }
+#     u64 lo_or(unsigned a) { return full(a) | 0xff; }
+#
+#     vdiv:  push {r4,lr}; mov r4,r1; bl g32s; ldr r2,=0x51eb851f;
+#            smull r1,r3,r2,r4; asr r3,r3,#5; sub r3,r3,r4,asr #31;
+#            ldr r2,=0x2000; str r3,[r2]; pop {r4,pc}
+#     keepz: push {r11,lr}; bl g32s; mov r1,#0; mov r2,#0; mov r3,#0;
+#            pop {r11,pc}
+#     popd:  push {r0,r1,r4,lr}; mov r0,sp; bl g32s; pop {r1,r2,r4,pc}
+#     sysafter: push {r7,lr}; bl g32s; mov r1,#5; mov r7,#4; svc #0;
+#            pop {r7,lr}; bx lr
+#
+# full_or is bl full ; orr r1,r1,#255 ; pop {r11,lr} ; bx lr.
+#
+# The bug: r0 reaches the RETURN as the call's untouched result, an
+# INDIRECT creation that return recovery refuses, and the output model
+# never returns r1 without r0, so the four callers printed as void.
+#
+# The fix: when the second register of a pair is computed and handed only
+# to the RETURN, and the first is a call's untouched result, the function
+# returns the pair.  vdiv (the dead low word of an smull), keepz (the zero
+# -fzero-call-used-regs leaves in r1), popd (gcc's pop of a dummy register
+# into r1) and sysafter (r1 set up for an svc whose p-code does not read
+# it) write r1 too and stay void; lo_or, which changes only the low word,
+# is byte for byte a 32-bit function as well and keeps its int.
+
+[image]
+arch = 'ARM:LE:32:v8:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'full' },
+    { space = 'ram', offset = '0x1010', name = 'g32s' },
+    { space = 'ram', offset = '0x101c', name = 'full_or' },
+    { space = 'ram', offset = '0x1030', name = 'full_add' },
+    { space = 'ram', offset = '0x1044', name = 'hi_const' },
+    { space = 'ram', offset = '0x1058', name = 'sext' },
+    { space = 'ram', offset = '0x106c', name = 'lo_or' },
+    { space = 'ram', offset = '0x1080', name = 'vdiv' },
+    { space = 'ram', offset = '0x10b0', name = 'keepz' },
+    { space = 'ram', offset = '0x10c8', name = 'popd' },
+    { space = 'ram', offset = '0x10d8', name = 'sysafter' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '''
+802080e0011080e20200a0e11eff2fe1800160e0640040e21eff2fe100482de9
+f6ffffebff1081e30048bde81eff2fe100482de9f1ffffeb011081e20048bde8
+1eff2fe100482de9f0ffffeb0710a0e30048bde81eff2fe100482de9ebffffeb
+c01fa0e10048bde81eff2fe100482de9e2ffffebff0080e30048bde81eff2fe1
+10402de90140a0e1e0ffffeb14209fe59214c3e0c332a0e1c43f43e008209fe5
+003082e51080bde81f85eb510020000000482de9d5ffffeb0010a0e30020a0e3
+0030a0e30088bde813402de90d00a0e1ceffffeb1680bde880402de9cbffffeb
+0510a0e30470a0e3000000ef8040bde81eff2fe1
+'''
+
+[script]
+commands = [
+    'lo fu full_or',
+    'decompile',
+    'print C',
+    'lo fu full_add',
+    'decompile',
+    'print C',
+    'lo fu hi_const',
+    'decompile',
+    'print C',
+    'lo fu sext',
+    'decompile',
+    'print C',
+    'lo fu lo_or',
+    'decompile',
+    'print C',
+    'lo fu vdiv',
+    'decompile',
+    'print C',
+    'lo fu keepz',
+    'decompile',
+    'print C',
+    'lo fu popd',
+    'decompile',
+    'print C',
+    'lo fu sysafter',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "RETCALLHALF #1: the caller hands back the callee's whole result"
+count = 1
+literal = 'return full(a0) | 0xff00000000;'
+
+[[match]]
+name = 'RETCALLHALF #2: every caller that changes only the high word returns eight bytes'
+count = 3
+regex = '(uint8|unsigned long long) (full_or|full_add|hi_const)\('
+
+[[match]]
+name = 'RETCALLHALF #3: a sign-extended call result is a long long'
+count = 1
+regex = '(int8|long long) sext\('
+
+[[match]]
+name = "RETCALLHALF #4: a constant high word beside the call's result"
+count = 1
+literal = 'return CONCAT44(7,g32s(a0));'
+
+[[match]]
+name = 'RETCALLHALF #5: no caller prints as void'
+count = 0
+regex = 'void (full_or|full_add|hi_const|sext)\('
+
+[[match]]
+name = 'RETCALLHALF #6: a dead smull word, a hardening zero, a dummy pop and an svc argument stay void'
+count = 4
+regex = 'void (vdiv|keepz|popd|sysafter)\('
+
+[[match]]
+name = 'RETCALLHALF #7: a caller that changes only the low word keeps its int'
+count = 1
+regex = '(uint4|unsigned int) lo_or\('

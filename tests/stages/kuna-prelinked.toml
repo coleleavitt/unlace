@@ -1,0 +1,78 @@
+# Kuna `kernelcache` option on pre-fileset (prelinked) kernelcaches (P1
+# code-data partition). The fixtures come from gen_prelinked.py.
+#
+# prelinked_merged.macho is an iOS 12-14 style kernel whose pointers are
+# threaded through __TEXT,__thread_starts, among them the four handlers of
+# a kext's IOExternalMethodDispatch table. Pass 1 (`option kernelcache off`)
+# is the bug: the table holds packed chain words, so nothing finds it and
+# its handlers stay unnamed. Pass 2 (`auto`) rebases every pointer first.
+#
+# prelinked_split.macho is an iOS 11 style kernel whose stripped kext lives
+# in __PRELINK_TEXT with untyped __stubs / __got. Off, the kext's stub call
+# is an unnamed function; `option kernelcache Widget` cuts the kext out and
+# binds the kernel's kernel_add to its __got slot and stub.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'option kernelcache off',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho',
+    'read symbols',
+    'load addr 0xfffffff007006920',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho',
+    'read symbols',
+    'load addr 0xfffffff00700d000',
+    'decompile',
+    'print C',
+    'option kernelcache auto',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_merged.macho',
+    'read symbols',
+    'load addr 0xfffffff007006920',
+    'decompile',
+    'print C',
+    'option kernelcache Widget',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/prelinked_split.macho',
+    'read symbols',
+    'load addr 0xfffffff00700d000',
+    'decompile',
+    'print C',
+    'option kernelcache auto',
+    'quit',
+]
+
+[[match]]
+name = 'PRELINKED #1: off leaves the threaded dispatch table unread'
+count = 1
+regex = '^[a-z ]+ sub_fffffff007006920\('
+
+[[match]]
+name = "PRELINKED #2: off leaves the split kext's stub call unnamed"
+count = 1
+regex = '^  sub_fffffff00700d100\(a0,8\);'
+
+[[match]]
+name = 'PRELINKED #3: auto rebases the threaded pointers and names the handler'
+count = 1
+literal = 'IOExternalMethods_fffffff007008040::externalMethod_1('
+
+[[match]]
+name = "PRELINKED #4: the cut-out kext's stub call names the kernel function"
+count = 1
+regex = '^  kernel_add\(a0,8\);'

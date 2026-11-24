@@ -1,0 +1,105 @@
+# PE load configuration.
+#
+# `IMAGE_LOAD_CONFIG_DIRECTORY` (data directory 10) was never read, and the
+# delay-load import directory (13) was not walked. Stage / sub-stage: P1
+# function discovery (`kuna-analysis` `loader/kuna_peloadconfig.rs` feeds the
+# PE entry oracles), P1 external refinement (`loader/pe_iat.rs` names the delay
+# IAT slots and their load thunks) and P2 flow classification (option
+# `guarddispatch`, `p2_lift/kuna_guarddispatch.rs`).
+#
+# The XML wrapper only supplies the harness architecture; each pass clears it
+# and loads a fixture built from source in the fixtures directory (README).
+#
+# `pe_safeseh_i386.exe`: the SafeSEH handler table lists `handler_a`@0x401000
+# and `handler_b`@0x401010, which nothing calls; before, neither was a
+# function. The load configuration also names the security cookie slot.
+#
+# `pe_guardcf_x86_64.exe` (`/guard:cf`, `/delayload:dl.dll`): `apply`@0x140001030
+# calls its function pointer as `call [__guard_dispatch_icall_fptr]` with the
+# target in `rax`. Before, the call printed as `(*dat_140003008)(a1,a2)` and
+# the pointer parameter was dropped; now it calls `a0`. `mainCRTStartup`
+# calls `dl_add`/`dl_mul` through their delay IAT slots, which printed as
+# `(*dat_140003020)(5,6)`; now they are named, as are the load thunks
+# `__imp_load_dl_add`/`__imp_load_dl_mul`. `option guarddispatch off` keeps
+# the call through the (now named) slot.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pe_safeseh_i386.exe',
+    'read symbols',
+    'functions',
+    'load function sub_401020',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pe_guardcf_x86_64.exe',
+    'read symbols',
+    'functions',
+    'load function sub_140001030',
+    'decompile',
+    'print C',
+    'load function sub_140001090',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pe_guardcf_x86_64.exe',
+    'option guarddispatch off',
+    'read symbols',
+    'load function sub_140001030',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #1: the SafeSEH handlers are functions'
+count = 2
+regex = '0x4010[01]0 sub_4010[01]0'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #2: the security cookie slot is named'
+count = 1
+literal = 'return __security_cookie;'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #3: the guard stubs and op_shl, listed only by the guard function table, are functions'
+count = 3
+regex = '0x1400010[01]0 sub_1400010[01]0|0x140001120 sub_140001120'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #4: the delay-load thunks are named'
+count = 2
+regex = '0x1400011(56 __imp_load_dl_add|62 __imp_load_dl_mul)'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #5: the guarded call calls the function pointer'
+count = 1
+literal = 'return (*a0)(a1,a2) * 2;'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #6: the delay-loaded calls are named'
+count = 2
+regex = 'v3 = dl_add\(5,6\);|v4 = dl_mul\(7,8\);'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #7: no guard or delay IAT slot is left anonymous'
+count = 0
+regex = 'dat_1400030(08|20|28)'
+
+[[match]]
+name = 'KUNA-PELOADCONFIG #8: option guarddispatch off keeps the call through the named slot'
+count = 1
+literal = 'v1 = (*__guard_dispatch_icall_fptr)(a1,a2);'

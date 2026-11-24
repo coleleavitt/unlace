@@ -5,7 +5,7 @@
 //!
 //! The end-to-end recovery (the `builtin_strncpy` build and the COPY teardown,
 //! both inherited from `StringSequence`) needs a load image, a global symbol
-//! table and a type factory, so it is proven by `tests/stages/kuna-rodatastring.xml`
+//! table and a type factory, so it is proven by `tests/stages/kuna-rodatastring.toml`
 //! rather than here.
 
 use super::*;

@@ -478,6 +478,8 @@ define context contextreg
   apxND=(52,52)         # map-4 EVEX.ND: new data destination (ZU for IMUL 69/6B and SETcc)
   apxNF=(53,53)         # map-4 EVEX.NF: no flags update (direction bit of CFCMOVcc)
   apxSCC=(54,57)        # CCMP/CTEST source condition code EVEX.[SC3..SC0]
+  evexRcOn=(54,54)      # EVEX (vexMode=2) register form with EVEX.b=1: {sae}/{rc}, see the pre-parse below
+  evexRcMode=(55,56)    # its rounding mode, the original EVEX.L'L
   apxDFV=(58,61)        # CCMP/CTEST default flags value EVEX.[OF,SF,ZF,CF]
     apxDfvOF=(58,58)
     apxDfvSF=(59,59)
@@ -490,6 +492,8 @@ define context contextreg
 @else
 @ifndef IA16
   rexX4=(49,49)         # EVEX.U inverted (P1 bit 2): 1 selects the 256-bit AVX10.2 {sae} forms
+  evexRcOn=(54,54)      # EVEX register form with EVEX.b=1: {sae}/{rc}, see the pre-parse below
+  evexRcMode=(55,56)    # its rounding mode, the original EVEX.L'L
 @endif
 @endif
 
@@ -2668,6 +2672,17 @@ Suffix3D: imm8        is imm8 [ suffix3D=imm8; ] { }
 
 :^instruction is instrPhase=0 & (byte=0x0f; byte=0x0f; XmmReg ... & m64; Suffix3D) ... & instruction ... [ instrPhase=1; ] { }
 :^instruction is instrPhase=0 & (byte=0x0f; byte=0x0f; mmxmod=3; Suffix3D) ... & instruction ...         [ instrPhase=1; ] { }
+@ifndef IA16
+# EVEX register form with EVEX.b=1 ({sae} or embedded rounding): L'L holds the rounding mode and the
+# vector length is 512 bits. Record the mode and run the decode again with L'L=10 (once: evexRcOn=1),
+# so the 512-bit constructors match; the {sae}/{rc} constructors (avx512_round.sinc) key on evexRcOn.
+# EVEX.U=0 (rexX4=1) keeps L'L for AVX10.2's 256-bit {sae} forms.
+:^instruction is instrPhase=1 & vexMode=2 & evexB=1 & rexX4=0 & evexRcOn=0 & (byte; mod=3) ... & instruction ... [ evexRcOn=1; evexRcMode=evexL; evexL=2; ] { }
+avx512Rc: "{rn-sae}" is evexRcMode=0 { }
+avx512Rc: "{rd-sae}" is evexRcMode=1 { }
+avx512Rc: "{ru-sae}" is evexRcMode=2 { }
+avx512Rc: "{rz-sae}" is evexRcMode=3 { }
+@endif
 @ifdef IA64
 # After a REX prefix (which 3DNow! ignores): suffix3D=0 until the pre-parse has run, so it runs once.
 :^instruction is instrPhase=1 & rexprefix=1 & vexMode=0 & suffix3D=0 & (byte=0x0f; byte=0x0f; XmmReg ... & m64; Suffix3D) ... & instruction ... [ ] { }

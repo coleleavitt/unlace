@@ -19,6 +19,7 @@ with : lockprefx=0 {
 @include "avx512.sinc"
 @include "avx512_manual.sinc"
 @include "avx10_2.sinc"
+@include "avx512_round.sinc"
 @include "adx.sinc"
 @include "clwb.sinc"
 @include "pclmulqdq.sinc"

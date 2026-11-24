@@ -103,7 +103,7 @@ beside it) reproduces the `simdlane` arm exactly — 32 `SUB161` with the option
 it on — and `tests/cli/simd-constant-string-initializer.json` is pinned to it. The
 `retsplitglobal` arm needs the witness's three-predecessor CFG, so **both** options are pinned
 two-pass on the **real witness bytes** by `tests/stages/kuna-simdlane.xml` and
-`tests/stages/kuna-retsplitglobal.xml`.
+`tests/stages/kuna-retsplitglobal.toml`.
 
 ## Residue
 

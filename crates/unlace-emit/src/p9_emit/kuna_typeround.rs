@@ -113,8 +113,8 @@
 //! `max(4, TypeFactory::get_size_of_int())` - see [`MIN_PROMOTION_SIZE`].
 //! (Reduced from `findutils` `find -O2` `sub_bac0`, where re-declaring a `short`
 //! unsigned left `if ((v2 == v8) || (v8 == -1)) break;` in place and made the
-//! `break` dead; `tests/stages/kuna-signedness.xml` pins that case on x86-64 and
-//! `tests/stages/kuna-signedness-int16.xml` pins it on a target whose own `int`
+//! `break` dead; `tests/stages/kuna-signedness.toml` pins that case on x86-64 and
+//! `tests/stages/kuna-signedness-int16.toml` pins it on a target whose own `int`
 //! is 2 bytes.)
 //!
 //! At and above the promotion width the neutral list is where the argument is

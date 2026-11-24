@@ -4110,7 +4110,7 @@ The always-on core, in pass order (`passes.rs (passes_for)`):
   last two path components and the position (`panic_loc_src_main_rs_10_5`),
   so the call prints `&panic_loc_tiny_rs_15_9`. The file name is also a
   bounded string fact of exact length. Pinned by
-  `tests/stages/kuna-panicloc.xml`.
+  `tests/stages/kuna-panicloc.toml`.
 - **Wide strings** (`widestrings`, the `StringsAnalyzer` `allCharWidths` arm,
   `crates/unlace-analysis/src/analyzers/strings/kuna_widestrings.rs
   (scan_wide_strings)`): the same matcher over 2-byte little-endian code units —
@@ -7569,7 +7569,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     takes only the arguments the call site shows, so a receiver the caller
     never moved (its own incoming `x0`) is not listed:
     `v1 = objc_msgSend$length();`. A strict fix, no option;
-    `tests/stages/kuna-objcstubagree.xml` pins it.
+    `tests/stages/kuna-objcstubagree.toml` pins it.
 
   The rebase slots of the three ref sections are also reported constant
   (`AnalysisOutput::const_ranges`). dyld fills them once before any code runs
@@ -7839,7 +7839,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     of the selector's stub and then of `objc_msgSend` (at most 512), reading the
     retargets back. A method's `self`/`_cmd` parameter names are never adopted
     for the caller's variables. A selector no class of the chain declares keeps
-    the runtime entry point. The stage test `tests/stages/kuna-objcresolve.xml`
+    the runtime entry point. The stage test `tests/stages/kuna-objcresolve.toml`
     runs both fixtures with the options off and on; `unlace-cli`'s
     `xrefs_objc_resolved` test asks both directions.
 
@@ -7879,7 +7879,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     init…]` returns that class, and a super send is never retargeted either,
     since its first argument is the `objc_super`. On a 390-function sample of
     a 72 MB iOS app this resolves 88 more sends (64 to 152) and types 13 more
-    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.xml`
+    locals as class pointers (108 to 121); `tests/stages/kuna-objcsdksend.toml`
     runs a fixture that sends to an imported class with `objcresolve` and
     `objcrettype` off and on.
 
@@ -8431,7 +8431,7 @@ both
   pass one fewer, and the functions that test a call's error by releasing it
   grow from 84 to 235. It adds no measurable load time and about 8 MB, and the
   42,240 decompiles take 2.5% longer. The
-  stage test `tests/stages/kuna-swiftcall.xml` runs the stripped
+  stage test `tests/stages/kuna-swiftcall.toml` runs the stripped
   `swift_call_elf` with the arm off and on, and its unstripped twin
   `swift_call_syms_elf` on.
 - **Swift runtime prototypes** (`swiftruntime`, Swift-detected Mach-O and
@@ -12424,7 +12424,7 @@ so an AArch64 `adrp x17, P; add x17, x17, #o; ldrsw x16, [x17, x16, lsl #2]`
 reads its jump table at `P + o`. Apple's linker lists such an inline `__text`
 table in `LC_FUNCTION_STARTS`, where it decodes as a `sub_` entry the dispatch
 then indexes (`sub_4060[a0 * 4]`), and the veto removes it
-(`tests/stages/kuna-relswitch-a64.xml`). On a Thumb literal-pool image an
+(`tests/stages/kuna-relswitch-a64.toml`). On a Thumb literal-pool image an
 AIF-only entry whose first word a literal load reads is dropped too (the
 `poolentry` fixture's `F`, the split shape its corpus measurement disclosed). On the stripped
 Lua (x86-64, AArch64), ld.so, llvm-nm and llvm-objdump images it removes

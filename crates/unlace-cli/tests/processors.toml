@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+m7700 = """
+c964009003a9640060eaeaeaeaeaeaeaa934122000001869010060eaeaeaeaea89c200f8a97f8d4000d860eaeaeaeaea
+"""
 s1c88 = """
 31e502cc11f8ffffb005b103f0f380f8b0000391f5fdf8ff
 """
@@ -107,6 +110,9 @@ ppc_xenon_vmx128 = """
 """
 x86_64_avx512_disp8 = """
 62f27d4878470162f17e487f06c5f877c3
+"""
+x86_64_avx512_round = """
+62f17c7858c1c3
 """
 
 [[family]]
@@ -2001,3 +2007,136 @@ expect = [
     "if (a0 < a1)",
     "a0 = a1;",
 ]
+
+# AVX-512 embedded rounding: vaddps zmm0, zmm0, zmm1, {rz-sae} is a 512-bit add (EVEX.b=1 makes L'L the
+# rounding mode); before, L'L=11 decoded it as a 256-bit vaddps.
+[[family]]
+name = "x86_64_avx512_round"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_avx512_round"
+
+[[family.function]]
+test = "x86_rounding_form_keeps_512_bits"
+address = "0x0"
+expect = ["_mm512_add_ps(a0,a1)"]
+
+[[family]]
+name = "lua51_loop"
+language = "Lua:LE:32:5.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_51.bin"
+
+# `fixtures/lua5x/loop.lua` main chunk from luac 5.1.5: FORPREP/FORLOOP, MOD + EQ + JMP,
+# CONCAT, SETTABLE, GETGLOBAL and CALL.
+[[family.function]]
+test = "lua51_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetGlobal(K5);",
+]
+
+[[family]]
+name = "lua51_loadnil"
+language = "Lua:LE:32:5.1"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loadnil_51.bin"
+
+# `fixtures/lua5x/loadnil.lua` (luac 5.1.5): LOADNIL 1 3 clears r1..r3 (5.1 counts to
+# register B), then LT + JMP.
+[[family.function]]
+test = "lua51_loadnil_decompiles"
+address = "0x0"
+expect = [
+    "v2 = luaNil();",
+    "v3 = luaNil();",
+    "v2 = luaMul(v1,K1);",
+]
+
+[[family]]
+name = "lua52_loop"
+language = "Lua:LE:32:5.2"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_52.bin"
+
+# `fixtures/lua5x/loop.lua` from luac 5.2.4: as 5.1 with GETTABUP on _ENV and JMP A.
+[[family.function]]
+test = "lua52_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetTable(U0,K5);",
+]
+
+[[family]]
+name = "lua53_loop"
+language = "Lua:LE:32:5.3"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/loop_53.bin"
+
+# `fixtures/lua5x/loop.lua` from luac 5.3.6 (5.3 opcode numbering).
+[[family.function]]
+test = "lua53_loop_decompiles"
+address = "0x0"
+expect = [
+    "v4 = luaForStep(v4,K1);",
+    "if (!luaForLoop(v4,v1,K1)) break;",
+    "v3 = luaAdd(v3,v4);",
+    "luaSetTable(v2,K3,luaConcat(v3,K4));",
+    "return v3;",
+    "v1 = luaGetTable(U0,K5);",
+]
+
+[[family]]
+name = "lua53_bitops"
+language = "Lua:LE:32:5.3"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/lua5x/bitops_53.bin"
+
+# `fixtures/lua5x/bitops.lua` (luac 5.3.6): BAND, BOR, SHL, SHR, BXOR, IDIV and BNOT.
+[[family.function]]
+test = "lua53_bitops_decompile"
+address = "0x0"
+expect = [
+    "v1 & K0",
+    "luaIDiv(",
+    "return ~(",
+]
+
+# The 7700 Family language decompiles routines hand-assembled from the software manual's
+# instruction pages: a 16-bit compare and BCC clamp, a JSR caller, and an 8-bit store
+# after SEM and LDT (data bank 0).
+[[family]]
+name = "m7700"
+language = "M7700:LE:24:default"
+base = "0x0"
+image = "m7700"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "m7700_compare_and_branch_clamps"
+address = "0x0"
+expect = [
+    "if (a0 <= 99)",  # CMP A,#100 then BCC skips LDA A,#100
+    "return 100;",
+]
+
+[[family.function]]
+test = "m7700_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(0x1234) + 1;"]
+
+[[family.function]]
+test = "m7700_sem_store_is_one_byte"
+address = "0x20"
+expect = ["dat_40 = 0x7f;"]

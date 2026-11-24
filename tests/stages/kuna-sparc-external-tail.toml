@@ -1,0 +1,43 @@
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '81c3e00801000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/sparc_external_tail.o',
+    'read symbols',
+    'parse line extern int external_tail(short value);',
+    'parse line extern int provider(short value);',
+    'option tailcalljump off',
+    'load function external_tail',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/sparc_external_tail.o',
+    'read symbols',
+    'parse line extern int external_tail(short value);',
+    'parse line extern int provider(short value);',
+    'load function external_tail',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'SPARC-EXTERNAL-TAIL #1: off still follows the jump into missing extern bytes'
+count = 1
+literal = 'halt_missing();'
+
+[[match]]
+name = 'SPARC-EXTERNAL-TAIL #2: default recovers the named tail call and delay-slot argument'
+count = 1
+literal = 'return provider(value + 1);'

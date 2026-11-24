@@ -1,0 +1,63 @@
+# Kuna `osclassinfo` option (P1 external refinement): DriverKit class
+# records.
+#
+# The fixture (gen_dext.py) is a stripped arm64 executable whose
+# __osclassinfo section points at one OSClassLoadInformation record for
+# MyDriver: its metaPointer is a global in __DATA and its New an unnamed
+# function. get_meta reads the global and make tail-calls New.
+#
+# Pass 1 (`option osclassinfo off`) is the bug: the global is dat_<addr> and
+# make's tail call is folded away into New's body. Pass 2 (`on`) names the
+# global gMyDriverMetaClass and the function MyDriver_New.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho',
+    'option osclassinfo off',
+    'read symbols',
+    'load function get_meta',
+    'decompile',
+    'print C',
+    'load function make',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/kernelcache/dext_osclassinfo.macho',
+    'option osclassinfo on',
+    'read symbols',
+    'load function get_meta',
+    'decompile',
+    'print C',
+    'load function make',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OSCLASSINFO #1: off leaves the metaclass global unnamed'
+count = 1
+literal = 'return dat_100008000;'
+
+[[match]]
+name = 'OSCLASSINFO #2: on names the metaclass global from the class record'
+count = 1
+literal = 'return gMyDriverMetaClass;'
+
+[[match]]
+name = "OSCLASSINFO #3: on names the class's New function"
+count = 1
+literal = 'MyDriver_New(); // tail-call'

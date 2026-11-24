@@ -1,0 +1,38 @@
+# Synthetic fadd f1,f1,f2; blr. The e500mc model passes and returns doubles
+# in FPRs, unlike the SPE model used by e500.
+
+[image]
+arch = 'PowerPC:BE:32:e500mc:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'add' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = 'fc21102a4e800020'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu add',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'e500mc ABI: double arguments and result'
+count = 1
+literal = 'double add(double a0,double a1)'
+
+[[match]]
+name = 'e500mc ABI: recovered floating-point addition'
+count = 1
+literal = 'return a0 + a1;'
+
+[[match]]
+name = 'e500mc ABI: no unassigned FPR inputs'
+count = 0
+regex = 'unaff_|in_f[0-9]|halt_baddata'

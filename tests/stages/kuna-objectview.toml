@@ -1,0 +1,83 @@
+# A UEFI TE image and a headerless raw image ran none of the object-file
+# analysis passes: every pass starts from an object::File and neither
+# container has one. Their strings were bare addresses, the TE entry kept
+# no UEFI prototype, and the deferred Listing tier never ran.
+#
+# Stage model: P1 program-prep, code-data-partition
+# (loader/kuna_objectview.rs rebuilds a PE view of the TE and an ELF view of
+# the raw image; engine.rs run_object_view_passes runs the pass list over it
+# at the commit).
+#
+# Option: objectview (default on). Pass 1 of each container is the option
+# off (the bug), pass 2 the default.
+#
+# Fixtures: tests/stages/fixtures/objectview, the same linked .text/.rodata
+# of objectview.c as a flat image and as a TE (gen_objectview.py). The
+# 20-character string at 0x402000 is read at entry+4.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/objectview/objectview.te',
+    'option objectview off',
+    'read symbols',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/objectview/objectview.te',
+    'read symbols',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw x86:LE:64:default:gcc 0x401000 0x401020 tests/stages/fixtures/objectview/objectview.bin',
+    'option objectview off',
+    'read symbols',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load raw x86:LE:64:default:gcc 0x401000 0x401020 tests/stages/fixtures/objectview/objectview.bin',
+    'read symbols',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'OBJECTVIEW #1: off, the TE entry keeps a bare address and no UEFI prototype'
+count = 1
+literal = 'v1 = *(char *)(v2 + 0x402000LL);'
+
+[[match]]
+name = 'OBJECTVIEW #2: on, the TE string is a literal'
+count = 1
+literal = 'v1 = "hello from a TE image"[v2];'
+
+[[match]]
+name = 'OBJECTVIEW #3: on, the TE entry takes the UEFI entry prototype'
+count = 1
+literal = 'EFI_STATUS _ModuleEntryPoint(EFI_HANDLE ImageHandle,EFI_SYSTEM_TABLE *SystemTable)'
+
+[[match]]
+name = 'OBJECTVIEW #4: off, the raw image keeps a bare address'
+count = 1
+literal = 'v1 = *(char *)(a0 + 0x402000L);'
+
+[[match]]
+name = 'OBJECTVIEW #5: on, the raw image names the detected string'
+count = 1
+literal = 'v1 = s_402000[a0];'

@@ -1,0 +1,155 @@
+# kuna #1288: every memory access, call and return of x86 real-mode code
+# printed through a bare segment() call. The SLEIGH spec computes each
+# effective address with the user-op segment(seg,off), and the pspec names
+# it in a <segmentop> with the p-code res = (zext(base) << 4) + zext(inner).
+# Upstream's ActionSegmentize, RuleSegment, SegmentOp and SegmentedResolver
+# were never ported, so the op stayed an opaque CALLOTHER: pushes and pops
+# were stores through segment(SS,v), no parameter was recovered, a RET
+# printed as segment(CS,*(unsigned short *)segment(SS,&Stack0000)), and the
+# cs-relative jump table could not be emulated.
+#
+# Independently assembled (nasm -f bin, org 0):
+#   0x00 addtwo: push bp; mov bp,sp; mov ax,[bp+4]; add ax,[bp+6]; pop bp; ret
+#   0x10 video:  mov ax,0xb800; mov es,ax; mov word [es:0x10],0x741; ret
+#   0x20 farsum: push bp; mov bp,sp; les bx,[bp+4]; mov ax,[es:bx];
+#                add ax,[es:bx+2]; pop bp; ret
+#   0x30 pick:   n = [bp+4]; if n > 3 return 0; jmp [cs:bx+0x42] over a
+#                four-entry table returning 10/20/30/40
+#   0x70 farlong: mov ax,[cs:0x80]; mov dx,[cs:0x82]; ret (the long at 0x80)
+#   0x11030 pickfar: pick's bytes again, in code segment 0x1100
+#
+# Stage: P3 dataflow (segment ops, always on). Asserts 1-2 and 4 pin that
+# the bare return statement and the segment() store and jump-as-call never
+# appear. The rest: the frame parameters, the constant segment folded to the linear global
+# 0xb8010, the far pointer read through LES as one parameter, and the
+# recovered switch.
+#
+# farlong returns a long read out of global memory in DX:AX. Once the reads
+# resolve to globals, the return-pair repair took an unwritten global for a
+# leftover and kept AX alone (`return dat_80;`); a global read is a value the
+# function computed, so both halves are returned (assert 10).
+#
+# pickfar sits in code segment 0x1100, but the spec's CS is the instruction
+# address rounded down to 64 KiB, 0x1000, so its jmp [cs:bx+0x42] reads the
+# table at 0x10042 instead of 0x11042. The words there send control to
+# 0x1fff0, outside the image. Such a table is rejected and the jump stays a
+# call (asserts 11-12), where following it decoded junk or failed the
+# function on the deark-unpacked DAZZLE.EXE.
+
+[image]
+arch = 'x86:LE:16:Real Mode'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'addtwo' },
+    { space = 'ram', offset = '0x10', name = 'video' },
+    { space = 'ram', offset = '0x20', name = 'farsum' },
+    { space = 'ram', offset = '0x30', name = 'pick' },
+    { space = 'ram', offset = '0x70', name = 'farlong' },
+    { space = 'ram', offset = '0x11030', name = 'pickfar' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+hex = '''
+5589e58b46040346065dc39090909090b800b88ec026c70610004107c3909090
+5589e5c45e04268b07260347025dc3905589e58b5e0483fb037723d1e32effa7
+42004a004f0054005900b80a00eb11b81400eb0cb81e00eb07b82800eb0231c0
+5dc390909090909090909090909090902ea180002e8b168200c3909090909090
+34127856
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10040'
+hex = '9090f0fff0fff0fff0ff'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x11030'
+hex = '''
+5589e58b5e0483fb037723d1e32effa742004a004f0054005900b80a00eb11b8
+1400eb0cb81e00eb07b82800eb0231c05dc3
+'''
+
+[script]
+commands = [
+    'lo fu addtwo',
+    'decompile',
+    'print C',
+    'lo fu video',
+    'decompile',
+    'print C',
+    'lo fu farsum',
+    'decompile',
+    'print C',
+    'lo fu pick',
+    'decompile',
+    'print C',
+    'lo fu farlong',
+    'decompile',
+    'print C',
+    'lo fu pickfar',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'segmentize #1: no RET is a bare segment() statement'
+count = 0
+regex = '^  segment\(v\d+,\*\(unsigned short \*\)segment\(v\d+,&Stack0000\)\);$'
+
+[[match]]
+name = 'segmentize #2: the video store never goes through segment(0xb800,0x10)'
+count = 0
+regex = '^  \*\(unsigned short \*\)segment\(0xb800,0x10\) = 0x741;$'
+
+[[match]]
+name = 'segmentize #3: the stack is seen through the segment op, so the frame parameters are recovered'
+count = 1
+regex = '^int2 addtwo\(int2 a0,int2 a1\)$'
+
+[[match]]
+name = 'segmentize #4: the jump table is never a call through segment()'
+count = 0
+regex = 'segment\(0,\*\(unsigned short \*\)segment\(0,v\d+ \* 2 \+ 0x42\)\); // jump-as-call$'
+
+[[match]]
+name = 'segmentize #5: the near-pointer arithmetic prints alone'
+count = 1
+regex = '^  return a0 \+ a1;$'
+
+[[match]]
+name = 'segmentize #6: a constant segment and offset fold through the snippet to the linear address'
+count = 1
+regex = '^  dat_b8010 = 0x741;$'
+
+[[match]]
+name = 'segmentize #7: LES reads one far pointer, the parameter both halves came from'
+count = 1
+regex = '^int2 farsum\(int2 \*a0\)$'
+
+[[match]]
+name = 'segmentize #8: the far pointer is dereferenced directly'
+count = 1
+regex = '^  return \*a0 \+ \(\(int2 \*\)a0\)\[1\];$'
+
+[[match]]
+name = 'segmentize #9: the cs-relative jump table is emulated through the snippet and recovered'
+count = 1
+regex = '^  switch\(a0\) '
+
+[[match]]
+name = 'segmentize #10: a long read out of global memory is returned whole in DX:AX'
+count = 1
+regex = '^  return CONCAT22\(dat_82,dat_80\);$'
+
+[[match]]
+name = 'segmentize #11: a cs-relative table read from the wrong segment, whose words leave the image, is not followed'
+count = 1
+regex = '^    v\d+ = \(code \*\)\*\(unsigned short \*\)\(\w+ \* 2 \+ 0x42\); // jump-as-call$'
+
+[[match]]
+name = "segmentize #12: no flow reaches the table's out-of-image targets"
+count = 0
+literal = 'unmapped memory'

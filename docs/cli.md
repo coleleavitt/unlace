@@ -1997,8 +1997,9 @@ when it is asked for explicitly, rather than accepting it silently.
 
 `decompile-project --per-file` writes one file per function instead of the four
 whole-program artifacts: `functions/<addr:08x>_<name>.c` (the `decompile-all`
-rendering, or a `/* FAILED: ... */` stub) and `manifest.json`, which lists `addr`,
-`name`, `file` and `status` (`ok` or `failed`) for each function. Each file is written
+rendering, or a `/* FAILED: ... */` stub) and `manifest.toml`, with one `[[function]]`
+table per function listing `addr` (a `"0x..."` string), `name`, `file` and `status`
+(`ok` or `failed`). Each file is written
 as its function lands, so an interrupted export keeps the functions it finished. A
 rerun reads the manifest and decompiles only the functions that are not complete on
 disk: a missing or empty file, a failed stub and a function recorded as `failed` are

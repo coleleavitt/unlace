@@ -29,6 +29,7 @@ memchr.workspace = true
 regex.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
+toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std", "display"] }
 sha2 = "0.11"
 tempfile = "3.27"
 unlace-decomp-dylib = { workspace = true, optional = true }
@@ -45,7 +46,6 @@ unlace-stagefile.workspace = true
 flirt-sig.workspace = true
 object = { workspace = true, features = ["write"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 
 [build-dependencies]
 unlace-slacomp.workspace = true

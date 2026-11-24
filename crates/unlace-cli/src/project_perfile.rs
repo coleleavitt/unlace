@@ -6,10 +6,11 @@
 //!
 //! Writes one file per decompiled function to `<DIR>/functions/<addr:08x>_<name>.c`
 //! (the `decompile-all` rendering of that function, or a `/* FAILED: .. */` stub) and
-//! `<DIR>/manifest.json`, which lists `addr`, `name`, `file` and `status` (`ok` or
-//! `failed`) for every function the folder holds. A rerun reads the manifest and
-//! decompiles only the functions that are not complete on disk: one whose file is
-//! missing, empty, a failed stub or recorded as `failed` is decompiled again.
+//! `<DIR>/manifest.toml`, with one `[[function]]` table per function holding `addr`,
+//! `name`, `file` and `status` (`ok` or `failed`) for every function the folder holds.
+//! A rerun reads the manifest and decompiles only the functions that are not complete
+//! on disk: one whose file is missing, empty, a failed stub or recorded as `failed` is
+//! decompiled again.
 //!
 //! Each file is written as its function lands, so an interrupted run keeps the
 //! functions it finished; the manifest is replaced in one step at the end. A function
@@ -28,14 +29,15 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use unlace_console::project::{FuncResult, render_c};
 
-const MANIFEST_FILE: &str = "manifest.json";
+const MANIFEST_FILE: &str = "manifest.toml";
 const FUNCTIONS_DIR: &str = "functions";
 const STUB_PREFIX: &[u8] = b"/* FAILED:";
 const MANIFEST_VERSION: u8 = 1;
 
-/// One function's line in `manifest.json`.
+/// One `[[function]]` table in `manifest.toml`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ManifestEntry {
+    #[serde(with = "hex_addr")]
     pub(crate) addr: u64,
     pub(crate) name: String,
     pub(crate) file: String,
@@ -47,7 +49,23 @@ struct Manifest {
     #[serde(default = "default_version")]
     version: u8,
     #[serde(default)]
-    functions: Vec<ManifestEntry>,
+    function: Vec<ManifestEntry>,
+}
+
+/// `addr` is written as a `"0x..."` string: a TOML integer is signed 64-bit, and a
+/// kernel address above `i64::MAX` would not fit.
+mod hex_addr {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub(super) fn serialize<S: Serializer>(addr: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&format!("0x{addr:x}"))
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        let digits = text.strip_prefix("0x").unwrap_or(text.as_str());
+        u64::from_str_radix(digits, 16).map_err(<D::Error as serde::de::Error>::custom)
+    }
 }
 
 fn default_version() -> u8 {
@@ -126,13 +144,13 @@ impl PerFileExport {
         }
         let manifest = Manifest {
             version: MANIFEST_VERSION,
-            functions: by_addr.into_values().collect(),
+            function: by_addr.into_values().collect(),
         };
-        let json = serde_json::to_string_pretty(&manifest)
-            .map_err(|e| format!("cannot encode the manifest: {e}"))?;
+        let text =
+            toml::to_string(&manifest).map_err(|e| format!("cannot encode the manifest: {e}"))?;
         let path = self.root.join(MANIFEST_FILE);
         let temp = self.root.join(format!("{MANIFEST_FILE}.tmp"));
-        std::fs::write(&temp, json).map_err(|e| format!("cannot write {}: {e}", temp.display()))?;
+        std::fs::write(&temp, text).map_err(|e| format!("cannot write {}: {e}", temp.display()))?;
         std::fs::rename(&temp, &path).map_err(|e| {
             let _ = std::fs::remove_file(&temp);
             format!("cannot replace {}: {e}", path.display())
@@ -173,8 +191,8 @@ fn read_manifest(root: &Path) -> Vec<ManifestEntry> {
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    match serde_json::from_str::<Manifest>(&text) {
-        Ok(manifest) => manifest.functions,
+    match toml::from_str::<Manifest>(&text) {
+        Ok(manifest) => manifest.function,
         Err(e) => {
             eprintln!(
                 "warning: {} is not a readable manifest ({e}); continuing from the function files on disk",
@@ -187,11 +205,31 @@ fn read_manifest(root: &Path) -> Vec<ManifestEntry> {
 
 #[cfg(test)]
 mod tests {
-    use super::file_name;
+    use super::{MANIFEST_VERSION, Manifest, ManifestEntry, file_name};
 
     #[test]
     fn function_files_are_address_prefixed_and_stay_in_the_folder() {
         assert_eq!(file_name(0x401000, "main"), "00401000_main.c");
         assert_eq!(file_name(0x10, "../etc/x y"), "00000010_.._etc_x_y.c");
+    }
+
+    #[test]
+    fn manifest_is_toml_with_a_table_per_function_and_round_trips() {
+        let addr = 0xffff_fff0_0700_4000_u64;
+        let entry = ManifestEntry {
+            addr,
+            name: "f".to_string(),
+            file: file_name(addr, "f"),
+            status: "ok".to_string(),
+        };
+        let manifest = Manifest {
+            version: MANIFEST_VERSION,
+            function: vec![entry.clone()],
+        };
+        let text = toml::to_string(&manifest).expect("encode");
+        assert!(text.contains("[[function]]"), "{text}");
+        assert!(text.contains("addr = \"0xfffffff007004000\""), "{text}");
+        let back: Manifest = toml::from_str(&text).expect("decode");
+        assert_eq!(back.function, vec![entry]);
     }
 }

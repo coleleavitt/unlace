@@ -90,7 +90,7 @@ fn inventory_size_is_the_chunk_body() {
     assert_eq!(body[&G], 12 + 6);
 }
 
-/// Measurement: `KUNA_FUNCCHUNKS_BINS=a:b:c cargo test ... -- --ignored --nocapture`
+/// Measurement: `UNLACE_FUNCCHUNKS_BINS=a:b:c cargo test ... -- --ignored --nocapture`
 /// prints functions, tails, shared instructions and how many function bodies
 /// differ from the `[entry, next)` clip.
 #[test]

@@ -19,7 +19,7 @@
 //! to one slice's bytes *before* the loader runs — the single, canonical
 //! slice-selection point. With no override the default preference (x86-64 →
 //! arm64 → first) picks the **x86-64** slice; `--slice arm64` (env
-//! `KUNA_MACHO_SLICE`) picks the **arm64** slice instead. Both slices are the
+//! `UNLACE_MACHO_SLICE`) picks the **arm64** slice instead. Both slices are the
 //! same `_main` calling `printf`, so each decompiles with a named `printf(`.
 //!
 //! ## Default-on multi-format dispatch
@@ -38,7 +38,7 @@ use unlace_console::ifacedecomp::{
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 
-/// `KUNA_MACHO_SLICE` / `KUNA_MACHO_ARM64E` are process-global env vars these
+/// `UNLACE_MACHO_SLICE` / `UNLACE_MACHO_ARM64E` are process-global env vars these
 /// tests toggle; serialize their bodies so a slice/arm64e override in one never
 /// races the default-slice bootstrap in another (cargo runs tests in parallel
 /// within one process).
@@ -84,13 +84,13 @@ fn boot_fat(slice: Option<&str>) -> ConsoleProgram {
 
     match slice {
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        Some(s) => unsafe { std::env::set_var("KUNA_MACHO_SLICE", s) },
+        Some(s) => unsafe { std::env::set_var("UNLACE_MACHO_SLICE", s) },
         // FIXME: Audit that the environment access only happens in single-threaded code.
-        None => unsafe { std::env::remove_var("KUNA_MACHO_SLICE") },
+        None => unsafe { std::env::remove_var("UNLACE_MACHO_SLICE") },
     }
     let result = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots);
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var("KUNA_MACHO_SLICE") };
+    unsafe { std::env::remove_var("UNLACE_MACHO_SLICE") };
     result.expect("bootstrap fixture with built processor specs")
 }
 
@@ -136,7 +136,7 @@ fn fat_default_slice_is_x86_64_and_names_printf() {
     );
 }
 
-/// The override: `--slice arm64` (env `KUNA_MACHO_SLICE`) selects the *other*
+/// The override: `--slice arm64` (env `UNLACE_MACHO_SLICE`) selects the *other*
 /// slice — the same fat binary now loads with the AArch64 spec and still names
 /// `printf` (arch-independent `__stubs` naming).
 #[test]
@@ -180,10 +180,10 @@ fn boot_arm64e(gate: bool) -> ConsoleProgram {
     assert!(path.exists(), "missing fixture {path:?}");
 
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var("KUNA_MACHO_ARM64E", if gate { "on" } else { "off" }) };
+    unsafe { std::env::set_var("UNLACE_MACHO_ARM64E", if gate { "on" } else { "off" }) };
     let result = bootstrap_from_object(path.to_str().unwrap(), "", &spec_roots);
     // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::remove_var("KUNA_MACHO_ARM64E") };
+    unsafe { std::env::remove_var("UNLACE_MACHO_ARM64E") };
     result.expect("bootstrap fixture with built processor specs")
 }
 

@@ -259,7 +259,7 @@ fn comment_instr_records_a_comment() {
 // 4. HONEST METRIC GUARD (w10-setup-integration, REJECT round 1 -> re-land).
 //
 // The verifier REJECTed the round-1 *metric framing*, not the port code: the
-// commit reported "passing 3/675 -> 19/675" datatests under `KUNA_ENGINE=rust`,
+// commit reported "passing 3/675 -> 19/675" datatests under `UNLACE_ENGINE=rust`,
 // but every one of those 19 passes is a `min="0" max="0"` NEGATIVE match that
 // the empty-body PrintC stub satisfies vacuously — the W9-emit RPN/Emit seam
 // (`printc.rs` emits `/* WARNING: body emission is the W9-emit RPN/Emit seam */`
@@ -281,7 +281,7 @@ fn comment_instr_records_a_comment() {
 /// parity gap is no longer the printer but the still-stubbed analysis passes feeding it
 /// raw lifted p-code (LOSS-131): the function reaches `print C` and emits C
 /// through the real driver, but it does not byte-match the C++ oracle yet.  The
-/// authoritative parity measure is the `KUNA_ENGINE=rust run_tests --datatests`
+/// authoritative parity measure is the `UNLACE_ENGINE=rust run_tests --datatests`
 /// X/675 number, not this guard.
 #[test]
 fn printc_body_driver_landed_function_reaches_print_c() {

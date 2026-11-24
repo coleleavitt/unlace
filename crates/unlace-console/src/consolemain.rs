@@ -14,7 +14,7 @@
 //! exactly the surface the Python tools (`kuna/decompile.py`, which feeds
 //! `load file`/`read symbols`/`option`/`load function`/`decompile`/`openfile
 //! write`/`print C`/`closefile`/`quit` over stdin and reads the captured C file)
-//! drive when `KUNA_ENGINE=rust`.
+//! drive when `UNLACE_ENGINE=rust`.
 //!
 //! [`main`] is the whole program, so the `decomp_dbg` binary and `unlace`'s own
 //! `decomp_dbg` subcommand run the identical console.

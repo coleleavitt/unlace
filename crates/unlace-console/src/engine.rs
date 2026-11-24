@@ -4517,7 +4517,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
                     .0
         }
         // (kuna) `libctypes` has NO arm on purpose and reaches this fail-open
-        // default. Its gate is the load-time `KUNA_LIBCTYPES` env bridge read
+        // default. Its gate is the load-time `UNLACE_LIBCTYPES` env bridge read
         // inside the pass itself, because the pass interns its named type shells
         // into the type factory as it builds the signatures, so `off` must not let
         // it run at all — which means an arm here would be at best redundant. It
@@ -5085,7 +5085,7 @@ pub(crate) fn bootstrap_xml_image(
 }
 
 /// Environment bridge for the CLI's explicit ARM decode-mode override.
-pub const ARM_ISA_ENV: &str = "KUNA_ARM_ISA";
+pub const ARM_ISA_ENV: &str = "UNLACE_ARM_ISA";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArmIsa {
@@ -5981,7 +5981,7 @@ pub(crate) fn bootstrap_mz_bytes(
 }
 
 /// [`bootstrap_from_image_with_isa`] with the ARM decode mode read from the
-/// `KUNA_ARM_ISA` environment bridge, as [`bootstrap_from_object`] reads it.
+/// `UNLACE_ARM_ISA` environment bridge, as [`bootstrap_from_object`] reads it.
 pub fn bootstrap_from_image(
     path: &str,
     target: &str,
@@ -6403,7 +6403,7 @@ pub(crate) fn bootstrap_object(
             // slice-selection point (design §3.4). Everything downstream (the loader, the
             // analysis passes, the deferred-Listing stash) then sees the SAME thin slice,
             // exactly as for a thin Mach-O. The slice preference is `--slice` (env
-            // `KUNA_MACHO_SLICE`) or the `--target` stem, else x86-64 → arm64 → first.
+            // `UNLACE_MACHO_SLICE`) or the `--target` stem, else x86-64 → arm64 → first.
             // Non-fat input is untouched (the peel returns the bytes verbatim).
             let bytes = select_macho_slice(bytes, options.macho_slice.as_deref(), target);
             // (kuna) ELF section-table tolerance: the second normalization at this same
@@ -6459,7 +6459,7 @@ pub(crate) fn bootstrap_object(
     // on the load options, which every gate below reads; this scope replaces the
     // caller's until the load returns.
     // An environment-reading load takes the version from the image alone: a
-    // stale `KUNA_GOVERSION` must not outlive a non-Go image.
+    // stale `UNLACE_GOVERSION` must not outlive a non-Go image.
     let mut options = options.clone();
     let stated = if from_env { None } else { options.go_version };
     options.go_version =
@@ -6744,7 +6744,7 @@ pub(crate) fn bootstrap_object(
     // a one-value property of the image, and it has to reach the ENGINE (the
     // per-function rules in `kuna_rustabi` / `kuna_reloadarg`) rather than the
     // Listing, so it is written straight onto the arch here at load, upstream of
-    // every `option` command (the `KUNA_SOURCELANG` loadtime override is already
+    // every `option` command (the `UNLACE_SOURCELANG` loadtime override is already
     // applied by `effective_compiler_bytes`; the later `option sourcelang` arm
     // layers the per-run force on top). The XML `<binaryimage>` bootstrap never
     // reaches this line, which is why `option rustabi auto` is inert on the
@@ -9440,7 +9440,7 @@ fn is_object_binary(bytes: &[u8]) -> bool {
 /// move), so the ELF / thin-Mach-O / PE / COFF paths are byte-identical.
 ///
 /// The slice preference is, in order: an explicit `--slice <arch>` (the
-/// `KUNA_MACHO_SLICE` env var the CLI exports), then the `--target` token's
+/// `UNLACE_MACHO_SLICE` env var the CLI exports), then the `--target` token's
 /// leading arch stem (so the existing language-override flag also steers the
 /// slice), else the deterministic default (x86-64 → arm64 → first arch present).
 /// A fat header that cannot be peeled (unparsable, or no usable slice) is left
@@ -10083,7 +10083,7 @@ mod symbolstream_tests {
     }
 }
 
-/// (kuna) `KUNA_ENTRY_TRACE`: print on stderr each function entry, and each
+/// (kuna) `UNLACE_ENTRY_TRACE`: print on stderr each function entry, and each
 /// function symbol, a load-time or Listing-consumer pass commits, with the pass
 /// id, so an inventory entry can be traced to its source. A value that parses
 /// as a hex address (`0x4024d0`) restricts the trace to that address.

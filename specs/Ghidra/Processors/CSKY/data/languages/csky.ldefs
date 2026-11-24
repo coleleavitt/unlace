@@ -49,4 +49,26 @@
     <compiler name="default" spec="csky.cspec" id="default"/>
     <external_name tool="gnu" name="csky"/>
   </language>
+  <language processor="CSKY"
+            endian="little"
+            size="32"
+            variant="v1"
+            version="1.0"
+            slafile="csky_v1_le.sla"
+            processorspec="csky.pspec"
+            id="CSKY:LE:32:v1">
+    <description>C-SKY ABIv1 (CK510, CK610), little endian</description>
+    <compiler name="default" spec="csky_v1.cspec" id="default"/>
+  </language>
+  <language processor="CSKY"
+            endian="big"
+            size="32"
+            variant="v1"
+            version="1.0"
+            slafile="csky_v1_be.sla"
+            processorspec="csky.pspec"
+            id="CSKY:BE:32:v1">
+    <description>C-SKY ABIv1 (CK510, CK610), big endian</description>
+    <compiler name="default" spec="csky_v1.cspec" id="default"/>
+  </language>
 </language_definitions>

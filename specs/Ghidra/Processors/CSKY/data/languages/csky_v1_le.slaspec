@@ -1,0 +1,2 @@
+# C-SKY ABIv1 (CK510, CK610), little endian.
+@include "csky_v1.sinc"

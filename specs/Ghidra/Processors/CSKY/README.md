@@ -14,12 +14,12 @@ Languages (each `.slaspec` includes `csky.sinc` with a set of `@define`s):
 | `CSKY:BE:32:v2` | CK801-CK810, big endian | FPUv2 | `csky_be.slaspec` |
 | `CSKY:LE:32:ck810v` | CK810v | FPUv2, VDSP (v1) | `csky_810v.slaspec` |
 | `CSKY:LE:32:ck860` | CK860 | FPUv3 | `csky_860.slaspec` |
+| `CSKY:LE:32:v1`, `CSKY:BE:32:v1` | CK510, CK610 (ABIv1) | coprocessor interface, CK610 DSP multiplies | `csky_v1_le.slaspec`, `csky_v1_be.slaspec` (`csky_v1.sinc`, `csky_v1.cspec`) |
 
 One integer decoder serves every ABIv2 core: CK801 code uses the 16-bit set and a
 few 32-bit instructions, CK802-CK860 add the rest. FPUv2 and FPUv3 reuse the same
 opcode space with different meanings (`0xf4001c00` is `fmovis` on FPUv2 and
-`fhtosi.rn` on FPUv3), so they are separate languages. ABIv1 cores (CK510, CK610)
-are not covered.
+`fhtosi.rn` on FPUv3), so they are separate languages.
 
 ABI: arguments in r0-r3 then the stack, result in r0 or r1:r0, sp is r14, the
 return address is r15 (lr), r4-r11, r16, r17 and r28 (gb) are callee-saved.
@@ -60,6 +60,26 @@ return address is r15 (lr), r4-r11, r16, r17 and r28 (gb) are callee-saved.
   patterns). VDSP vector loads and stores (64-bit `d` and 128-bit `q` forms) and
   `vmov` are p-code.
 
+## ABIv1 (CK510, CK610)
+
+A separate 16-bit ISA in `csky_v1.sinc`, hand-written from the binutils
+`csky_v1_opcodes` table (encodings) and the CK610 manual (semantics). r0 is the stack
+pointer and r15 the link register. The ABI (`csky_v1.cspec`) passes arguments in
+r2-r7 and returns in r2 (r3:r2 for 64-bit values).
+- All of the E1 integer set: C-flag compares and tests, conditional
+  `inct`/`incf`/`dect`/`decf`/`movt`/`movf`/`clrt`/`clrf`, the `dec*` counters,
+  `xtrb0-3` into r1, `ff1`, `brev`, the extends, register and immediate shifts
+  (including the carry forms and `xsr`), `divu`/`divs` by r1, `ixh`/`ixw`, `bmaski`
+  (0 meaning 32), `ldm`/`stm` (rN-r15 from r0), `ldq`/`stq`, `lrw`/`jmpi`/`jsri`
+  through the literal pool, and the 11-bit branches.
+- The CK610 DSP `mulu`/`muls`/`mulsh` accumulate forms on hi:lo.
+- `mfcr`/`mtcr`, `psrset`/`psrclr` and the coprocessor instructions are named
+  user ops.
+- Not decoded: the MP `ldex`/`stex` and the CK620 MAC `omflip`. They share
+  encodings with each other and with the DSP set, and CK610 has neither.
+- The CK610 floating point is reached through the coprocessor instructions, not
+  separate encodings.
+
 ## Gaps
 
 - 31 named user operations: control registers (`mfcr`/`mtcr` read and write
@@ -87,6 +107,10 @@ listing prints as data:
 - VDSP: `ck810v`.
 `fmovi`, `fmovis`/`fmovid` and `flrw` are compared by mnemonic, because objdump
 prints the decoded float.
+
+ABIv1: every random 16-bit word `csky-elf-objdump -mcpu=ck610e` decodes (about
+27,000, both byte orders) decodes here the same, apart from words the listing
+prints as data because a random `lrw` points at them.
 
 Test images in `crates/unlace-cli/tests/fixtures/csky/` are the `.text` of the
 `.s` files next to them, assembled with `csky-elf-as` (`-mcpu` as named in

@@ -32,6 +32,7 @@
 
 pub mod arm_markers;
 pub(crate) mod kuna_arctarget;
+pub(crate) mod kuna_elfmachinetarget;
 pub(crate) mod kuna_mipstarget;
 pub(crate) mod kuna_ppc64elfv2target;
 pub(crate) mod kuna_ppcaputarget;

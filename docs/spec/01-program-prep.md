@@ -366,6 +366,21 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#676) Six more ELF machines are read from the header
+(`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
+object reader either has no language stem for them or no architecture at all:
+`EM_AVR` (83) selects `avr8:LE:16:default` (`gcc` model), `EF_AVR_ARCH_AVR6`
+the ATmega256 language and `EF_AVR_ARCH_XMEGA1`..`7` `avr8:LE:24:xmega`;
+`EM_MSP430` (105) `TI_MSP430:LE:16:default`; `EM_HEXAGON` (164)
+`Hexagon:LE:32:default`; `EM_LANAI` (244) `lanai:BE:32:default`; `EM_LOONGARCH`
+(258) the ilp32 or lp64 language of the ELF class, single-float when the
+`e_flags` ABI is single-float and double otherwise (soft-float has no language
+of its own); `EM_AMDGPU` (224) the GFX9, GFX10 or GFX11 language of
+`EF_AMDGPU_MACH` (gfx900-gfx90c and gfx90a; gfx101x/103x; gfx11xx; and the
+matching generic targets). RDNA images take the wave32 language, because the
+wave size is in the kernel descriptor, not the ELF header; wave64 code and
+GFX9.4, GCN 1-4 and GFX12 images still need an explicit `--target`.
+
 (kuna) PowerPC32 ELF APU requirements are read by
 `crates/unlace-analysis/src/loader/kuna_ppcaputarget.rs` when the
 default-off `ppcapu` load-time option is on. SPE and embedded floating-point APUs

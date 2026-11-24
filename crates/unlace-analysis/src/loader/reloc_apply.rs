@@ -69,6 +69,7 @@ enum Specific {
     ArmThumbBranch24,
     ArmPrel31,
     XtensaSlot0,
+    XtensaWord,
     Or1kRel26,
     Or1kHalf { adjust: bool, high: bool },
     Or1kSplit16,
@@ -929,6 +930,7 @@ fn classify_info(
         (Architecture::Xtensa, Some(elf::R_XTENSA_SLOT0_OP)) => {
             Some((Specific::XtensaSlot0, false))
         }
+        (Architecture::Xtensa, Some(elf::R_XTENSA_32)) => Some((Specific::XtensaWord, false)),
         (Architecture::Xtensa, Some(elf::R_XTENSA_32_PCREL)) => {
             Some((Specific::Data { bytes: 4, pc: true }, false))
         }
@@ -1082,6 +1084,15 @@ fn apply_info(
         ),
         Specific::ArmPrel31 => arm_prel31(field, little_endian, reloc, symbol, place),
         Specific::XtensaSlot0 => xtensa_slot0(field, little_endian, reloc, symbol, place),
+        // `R_XTENSA_32` is partial-inplace although Xtensa objects are RELA: GNU `as`
+        // leaves part of the addend in the word (a jump table's `.text + 0` row
+        // holds the case's offset), and the linker adds both.
+        Specific::XtensaWord => {
+            let value =
+                symbol as i128 + reloc.addend as i128 + i128::from(read_u32(field, little_endian));
+            write_u32(field, little_endian, value as u32);
+            Ok(())
+        }
         Specific::Or1kRel26 => or1k_patch(field, little_endian, reloc, symbol, Some(place), |v| {
             require_aligned(v, 4)?;
             require_signed(v, 28)?;
@@ -4343,6 +4354,29 @@ mod xtensa_tests {
             slot0([0x8c, 0x08, 0xee], 0x1_0000, 136, 0x1_007d),
             Ok([0x8c, 0x78, 0xee])
         );
+    }
+
+    #[test]
+    fn a_data_word_adds_the_addend_left_in_place() {
+        // A jump-table row `.text + 0` whose word holds the case offset 0x51, with
+        // .text at 0x10010: GNU ld writes 0x10061.
+        let info = RelocationInfo {
+            kind: RelocationKind::Absolute,
+            encoding: RelocationEncoding::Generic,
+            size: 32,
+            addend: 0,
+            implicit_addend: false,
+            r_type: Some(elf::R_XTENSA_32),
+        };
+        let spec = classify_info(Architecture::Xtensa, info).unwrap().unwrap();
+        assert_eq!(spec.width(), 4);
+        let mut field = 0x51u32.to_le_bytes();
+        apply_info(spec, info, &mut field, true, 0x1_0010, 0x1_0090, None, None).unwrap();
+        assert_eq!(field, 0x1_0061u32.to_le_bytes());
+        let mut literal = [0; 4];
+        let info = RelocationInfo { addend: 8, ..info };
+        apply_info(spec, info, &mut literal, true, 0x2_0000, 0, None, None).unwrap();
+        assert_eq!(literal, 0x2_0008u32.to_le_bytes());
     }
 
     #[test]

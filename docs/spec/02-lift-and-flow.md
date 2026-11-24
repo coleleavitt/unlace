@@ -16,7 +16,7 @@ and effects refuse. Flow overrides do not acquire a record. The record is
 cleared on restart and cannot authorize a later rendering without the final
 whole-function SSA proof described in chapter 09.
 
-**(kuna) Atomic instructions — `option atomics`, default off,
+**(kuna) Atomic instructions — `option atomics auto|msvc|gcc|off`, default off,
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rewrite)`.**
 SLEIGH lifts an x86 `lock`-prefixed read-modify-write as `LOCK()`, a load, an
 update, a store and `UNLOCK()`; an AArch64 LSE atomic (`ldadd`, `ldclr`,
@@ -80,6 +80,23 @@ points to, or else an integer of its width (unsigned for `and`/`or`/`xor`,
 signed otherwise); the address operand points to it, the result and the other
 operands have it, and a constant address operand may become an address
 reference.
+
+The option's value chooses the spelling (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (spelled)`).
+`gcc` prints the `__sync` builtins above; `msvc` prints the MSVC intrinsics
+Hex-Rays prints: `_InterlockedExchangeAdd`, `_InterlockedAnd`,
+`_InterlockedOr`, `_InterlockedXor`, `_InterlockedExchange` and
+`_InterlockedCompareExchange`, suffixed `8`, `16`, nothing or `64` by the
+location's width; `auto` prints the MSVC ones on a Windows image (a Windows
+compiler spec, or a PE the loader identified as Windows user mode) and the GCC
+ones elsewhere. Each intrinsic returns the old value, as its builtin does.
+MSVC has no fetch-and-subtract: a subtraction of a constant becomes
+`_InterlockedExchangeAdd` of its negation, a subtraction of a value becomes
+`_InterlockedExchangeAdd` of its two's complement where that operand can be
+built in front of the instruction, and otherwise keeps
+`__sync_fetch_and_sub`. `_InterlockedCompareExchange(p, N, E)` takes the new
+value before the expected one, as MSVC declares it. The same spelling applies
+to the builtins `llscfold` produces. The 128-bit pairs (`cmpxchg16b`, `casp`)
+stay declined: the evaluation tracks values of at most 8 bytes.
 
 **(kuna) Load/store-exclusive loops — `option llscfold`, default off,
 `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (ActionLlscLoop)`.**

@@ -1,6 +1,7 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
 use crate::kuna_sourcelang::SourceLang;
+use crate::userop::{ATOMIC_BUILTINS, MSVC_ATOMIC_BUILTINS};
 use unlace_base::space::{
     AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
@@ -11,7 +12,11 @@ const UNLOCK: u64 = 20;
 #[derive(Clone, Copy)]
 struct Loc(i32, u64, i32);
 
-fn function(lang: SourceLang, on: bool) -> Funcdata {
+fn function(lang: SourceLang, mode: Atomics) -> Funcdata {
+    function_on(lang, mode, false)
+}
+
+fn function_on(lang: SourceLang, mode: Atomics, windows: bool) -> Funcdata {
     let mut manage = AddrSpaceManager::new();
     manage.insert_space(Rc::new(ConstantSpace::new())).unwrap();
     manage
@@ -38,7 +43,8 @@ fn function(lang: SourceLang, on: bool) -> Funcdata {
         lock: Some((LOCK as u32, UNLOCK as u32)),
         ..AtomicUserops::default()
     };
-    arch.kuna_options.set(Atomics(on));
+    arch.kuna_options.set(mode);
+    arch.windows_cspec = windows;
     let entry = Address::new(arch.manage().get_space(3).unwrap().clone(), 0x1000);
     Funcdata::new("probe", "probe", Rc::new(arch), entry, 0x1000_0000, 0x40).unwrap()
 }
@@ -107,7 +113,7 @@ fn callother_id(fd: &Funcdata, op: OpId) -> Option<u64> {
 
 #[test]
 fn locked_xadd_becomes_fetch_and_add() {
-    let mut fd = function(SourceLang::C, true);
+    let mut fd = function(SourceLang::C, Atomics::Gcc);
     let ops = lock_xadd(&mut fd, false);
     assert_eq!(rewrite(&mut fd, &ops), Some(ops[0]));
     assert_eq!(
@@ -122,12 +128,12 @@ fn locked_xadd_becomes_fetch_and_add() {
 
 #[test]
 fn option_off_go_and_hle_hint_decline() {
-    for (lang, on, hint) in [
-        (SourceLang::C, false, false),
-        (SourceLang::Go, true, false),
-        (SourceLang::C, true, true),
+    for (lang, mode, hint) in [
+        (SourceLang::C, Atomics::Off, false),
+        (SourceLang::Go, Atomics::Auto, false),
+        (SourceLang::C, Atomics::Gcc, true),
     ] {
-        let mut fd = function(lang, on);
+        let mut fd = function(lang, mode);
         let ops = lock_xadd(&mut fd, hint);
         assert_eq!(rewrite(&mut fd, &ops), None);
         assert_eq!(code(&fd, ops[ops.len() - 1]), OpCode::CPUI_CALLOTHER);
@@ -138,7 +144,7 @@ fn option_off_go_and_hle_hint_decline() {
 
 #[test]
 fn builtins_keep_the_address_operand() {
-    let mut fd = function(SourceLang::C, true);
+    let mut fd = function(SourceLang::C, Atomics::Gcc);
     let ops = lock_xadd(&mut fd, false);
     rewrite(&mut fd, &ops).unwrap();
     let o = fd.obank().get(ops[1]).unwrap();
@@ -174,4 +180,73 @@ fn update_classifies_written_values() {
         Some((BUILTIN_ATOMIC_FETCH_SUB, Expr::Const(1, 4)))
     );
     assert!(identity(BUILTIN_ATOMIC_FETCH_OR, &Expr::Const(0, 8)));
+}
+
+#[test]
+fn msvc_spelling_names_the_interlocked_intrinsic() {
+    for (mode, windows, msvc) in [
+        (Atomics::Msvc, false, true),
+        (Atomics::Auto, true, true),
+        (Atomics::Auto, false, false),
+        (Atomics::Gcc, true, false),
+    ] {
+        let mut fd = function_on(SourceLang::C, mode, windows);
+        let ops = lock_xadd(&mut fd, false);
+        assert_eq!(rewrite(&mut fd, &ops), Some(ops[0]));
+        let want = if msvc {
+            msvc_atomic_builtin(BUILTIN_ATOMIC_FETCH_ADD, 4).unwrap()
+        } else {
+            BUILTIN_ATOMIC_FETCH_ADD
+        };
+        assert_eq!(callother_id(&fd, ops[1]), Some(u64::from(want)));
+    }
+    assert_eq!(
+        atomic_builtin_name(msvc_atomic_builtin(BUILTIN_ATOMIC_FETCH_ADD, 4).unwrap()),
+        Some(&b"_InterlockedExchangeAdd"[..])
+    );
+}
+
+#[test]
+fn spelled_swaps_compare_exchange_and_negates_subtraction() {
+    let e = Expr::Const(1, 8);
+    let n = Expr::Const(2, 8);
+    let (id, ops) = spelled(
+        BUILTIN_ATOMIC_COMPARE_SWAP,
+        &[e.clone(), n.clone()],
+        8,
+        true,
+        |_| true,
+    );
+    assert_eq!(
+        atomic_builtin_name(id),
+        Some(&b"_InterlockedCompareExchange64"[..])
+    );
+    assert_eq!(ops, vec![n.clone(), e.clone()]);
+    let (id, ops) = spelled(
+        BUILTIN_ATOMIC_FETCH_SUB,
+        &[Expr::Const(1, 2)],
+        2,
+        true,
+        |_| true,
+    );
+    assert_eq!(
+        atomic_builtin_name(id),
+        Some(&b"_InterlockedExchangeAdd16"[..])
+    );
+    assert_eq!(ops, vec![Expr::Const(0xffff, 2)]);
+    let x = Expr::Start(Storage {
+        space: 2,
+        offset: 24,
+        size: 1,
+    });
+    let (id, ops) = spelled(BUILTIN_ATOMIC_FETCH_SUB, &[x.clone()], 1, true, |_| false);
+    assert_eq!(id, BUILTIN_ATOMIC_FETCH_SUB);
+    assert_eq!(ops, vec![x.clone()]);
+    let (id, _) = spelled(BUILTIN_ATOMIC_FETCH_SUB, &[x], 1, false, |_| true);
+    assert_eq!(id, BUILTIN_ATOMIC_FETCH_SUB);
+    for (id, generic, width, _) in MSVC_ATOMIC_BUILTINS {
+        assert_eq!(atomic_builtin_generic(id), Some(generic));
+        assert_eq!(msvc_atomic_builtin(generic, width), Some(id));
+    }
+    assert_eq!(msvc_atomic_builtin(BUILTIN_ATOMIC_FETCH_SUB, 4), None);
 }

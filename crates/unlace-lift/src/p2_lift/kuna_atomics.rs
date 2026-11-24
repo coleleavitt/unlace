@@ -22,10 +22,11 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use crate::kuna_atomicops::{AtomicUserops, Atomics, LlscFold};
 use crate::userop::{
-    ATOMIC_BUILTINS, BUILTIN_ATOMIC_COMPARE_SWAP, BUILTIN_ATOMIC_EXCHANGE,
-    BUILTIN_ATOMIC_FETCH_ADD, BUILTIN_ATOMIC_FETCH_AND, BUILTIN_ATOMIC_FETCH_OR,
-    BUILTIN_ATOMIC_FETCH_SUB, BUILTIN_ATOMIC_FETCH_XOR,
+    BUILTIN_ATOMIC_COMPARE_SWAP, BUILTIN_ATOMIC_EXCHANGE, BUILTIN_ATOMIC_FETCH_ADD,
+    BUILTIN_ATOMIC_FETCH_AND, BUILTIN_ATOMIC_FETCH_OR, BUILTIN_ATOMIC_FETCH_SUB,
+    BUILTIN_ATOMIC_FETCH_XOR,
 };
+use crate::userop::{atomic_builtin_generic, atomic_builtin_name, msvc_atomic_builtin};
 
 const MAX_OPS: usize = 64;
 const MAX_PATHS: usize = 4;
@@ -729,7 +730,7 @@ fn access(fd: &Funcdata, ops: &[OpId], envelope: bool) -> Option<(Access, usize,
 /// when an operand had to be rebuilt in front of it.
 pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
     let arch = fd.get_arch();
-    if !arch.kuna_options.get::<Atomics>().0
+    if !arch.kuna_options.get::<Atomics>().on()
         || !arch.atomic_userops.enabled()
         || arch.source_lang.is_go()
         || ops.len() > MAX_OPS
@@ -790,7 +791,7 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
         old_home,
         value_home,
     };
-    let plan = plan(&eval)?;
+    let mut plan = plan(&eval)?;
     let state = prefix_state(&eval, first_load)?;
     let branches = ops.iter().any(|&id| {
         fd.obank()
@@ -798,6 +799,13 @@ pub fn rewrite(fd: &mut Funcdata, ops: &[OpId]) -> Option<OpId> {
             .is_some_and(|o| matches!(o.code(), OpCode::CPUI_BRANCH | OpCode::CPUI_CBRANCH))
     });
     let new_ops = !branches && matches!(access, Access::Pointer(_));
+    (plan.builtin, plan.operands) = spelled(
+        plan.builtin,
+        &plan.operands,
+        width,
+        msvc_spelling(fd),
+        |e| buildable(&state, e, new_ops),
+    );
     if !plan.operands.iter().all(|e| buildable(&state, e, new_ops)) {
         return None;
     }
@@ -916,10 +924,53 @@ fn builtin(data: &Funcdata, op: OpId) -> Option<u32> {
         .get(op)
         .filter(|o| o.code() == OpCode::CPUI_CALLOTHER && !o.is_dead())?;
     let (id, _) = is_constant(data, o.get_in(0)?)?;
-    ATOMIC_BUILTINS
-        .iter()
-        .map(|(b, _)| *b)
-        .find(|b| u64::from(*b) == id)
+    let id = u32::try_from(id).ok()?;
+    atomic_builtin_name(id).map(|_| id)
+}
+
+/// Whether the builtins take their MSVC spelling: option `atomics msvc`, or
+/// `auto` on a Windows image.
+fn msvc_spelling(fd: &Funcdata) -> bool {
+    let arch = fd.get_arch();
+    arch.kuna_options
+        .get::<Atomics>()
+        .msvc(arch.windows_cspec || arch.image_windows_user)
+}
+
+/// `builtin` and its `operands` (after the address) in the MSVC spelling when
+/// `msvc` is set and every operand passes `buildable`, else as they are.
+/// MSVC has no fetch-and-subtract, so a subtraction becomes
+/// `_InterlockedExchangeAdd` of the negated operand, and
+/// `_InterlockedCompareExchange` takes the new value before the expected one.
+fn spelled(
+    builtin: u32,
+    operands: &[Expr],
+    width: i32,
+    msvc: bool,
+    buildable: impl Fn(&Expr) -> bool,
+) -> (u32, Vec<Expr>) {
+    let keep = (builtin, operands.to_vec());
+    if !msvc {
+        return keep;
+    }
+    let (generic, spelled) = match (builtin, operands) {
+        (BUILTIN_ATOMIC_FETCH_SUB, [Expr::Const(c, size)]) => (
+            BUILTIN_ATOMIC_FETCH_ADD,
+            vec![Expr::Const(c.wrapping_neg() & mask(*size), *size)],
+        ),
+        (BUILTIN_ATOMIC_FETCH_SUB, [x]) => (
+            BUILTIN_ATOMIC_FETCH_ADD,
+            vec![Expr::Op(OpCode::CPUI_INT_2COMP, width, vec![x.clone()])],
+        ),
+        (BUILTIN_ATOMIC_COMPARE_SWAP, [expected, new]) => {
+            (builtin, vec![new.clone(), expected.clone()])
+        }
+        _ => keep.clone(),
+    };
+    match msvc_atomic_builtin(generic, width) {
+        Some(id) if spelled.iter().all(buildable) => (id, spelled),
+        _ => keep,
+    }
 }
 
 /// The atomic builtins of `data`, which access memory through their address
@@ -938,7 +989,7 @@ pub fn memory_ops(data: &Funcdata) -> Vec<OpId> {
 /// already points to, else unsigned for the bitwise updates and signed for the
 /// rest.
 fn value_type(data: &Funcdata, op: OpId, size: int4) -> Option<Rc<Datatype>> {
-    let meta = match builtin(data, op)? {
+    let meta = match atomic_builtin_generic(builtin(data, op)?)? {
         BUILTIN_ATOMIC_FETCH_AND | BUILTIN_ATOMIC_FETCH_OR | BUILTIN_ATOMIC_FETCH_XOR => {
             type_metatype::TYPE_UINT
         }
@@ -1320,6 +1371,9 @@ fn fold_loop(data: &mut Funcdata, p: BlockId) -> Option<()> {
         return None;
     }
     let at_load = at_load?;
+    let (builtin, operands) = spelled(builtin, &operands, width, msvc_spelling(data), |e| {
+        buildable(&at_load, e, false)
+    });
     if !operands.iter().all(|e| buildable(&at_load, e, false))
         || reads
             .iter()

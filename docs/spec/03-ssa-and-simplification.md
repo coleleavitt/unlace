@@ -4780,6 +4780,15 @@ the pool revisits the op. On d963789525, with that memo, the patchelf run
 executes 7.6% more instructions with the option on (122.6G vs 114.0G),
 and the corpus results and the outputs above are the same as without it.
 
+**Budgets.** Saturation runs in two rounds. The first stops at 500 e-nodes or
+5 iterations; a replacement it finds stands. When it finds nothing, the tree
+is left if the e-graph saturated (no rule adds anything, so a bigger budget
+finds nothing more) or if the tree has fewer than three bitwise ops; otherwise
+the second round continues on the same e-graph up to 4000 e-nodes and 12
+iterations. A tree with a single bitwise op gets no e-graph at all: it has no
+MBA identity to compose, and only `mba`'s closed form of the whole tree is
+tried.
+
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the
 inner `(x & ~y) + y` to `x | y`, and the outer `(t ^ z) + 2*(t & z)` rule then

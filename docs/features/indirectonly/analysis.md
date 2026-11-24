@@ -258,10 +258,10 @@ Turn it on to reproduce Ghidra variable partitioning exactly, or for the
 
 Pinned:
 
-* `tests/stages/kuna-indirectonly-escape.xml` — the counterexample as a
+* `tests/stages/kuna-indirectonly-escape.toml` — the counterexample as a
   bytechunk. Its first pass runs the **default**, so flipping the shipped default
   to on turns the test red.
-* `tests/stages/kuna-indirectonly.xml` — the sound direction, both arms explicit.
+* `tests/stages/kuna-indirectonly.toml` — the sound direction, both arms explicit.
 * `kuna_indirectonly/tests.rs` — eight unit tests over `check_indirect_use`,
   including the direct-read counterexample that must not be marked.
 * `p0_knowledge/modes.rs` `EXCLUDED_ON_PURPOSE` — the option is deliberately out

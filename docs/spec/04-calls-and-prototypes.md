@@ -872,7 +872,7 @@ but are no C variadics: past the receiver and selector they carry the method's
 arguments in registers exactly as the method takes them, so a call to one keeps
 its register trials (`[super greet:x]` passes `x` in `w2`).
 `tests/stages/kuna-darwinvarargs.toml` pins both targets, and
-`tests/stages/kuna-objcrefs.xml` the super send.
+`tests/stages/kuna-objcrefs.toml` the super send.
 
 The same two rules are also what `ActionInputPrototype` runs the function's
 **own** input Varnodes through, and there the premise behind step 4 does not

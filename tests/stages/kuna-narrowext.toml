@@ -1,0 +1,194 @@
+# kuna: a declared integer argument or return value narrower than its
+# register is extended as the RISC-V procedure-call standard states: by the
+# sign of its type up to 32 bits, then sign-extended to the register.
+#
+# Stage / sub-stage: P4 calls, the call-output and entry-input extension
+# (p4_calls/kuna_narrowext.rs, option narrowext).  Two passes: off is the
+# compiler spec's zero extension (the bug), the default abi is the fix.
+#
+# Source (clang -target riscv64 -march=rv64gc -O2, bytes verbatim below):
+#
+#     signed char rsc(int k) { return k - 100; }
+#     unsigned short rus(int k) { return k * 300; }
+#     int ri(int k) { return k * 0x10001 - 7; }
+#     unsigned ru(int k) { return k * 0x10001u - 7; }
+#     long csc(int k) { return rsc(k) * 3L; }
+#     long cus(int k) { return rus(k) + 1L; }
+#     long ci(int k) { return ri(k); }
+#     long cu(int k) { return (int)ru(k); }
+#     long pi(int x) { return x * 2L; }
+#     long pus(unsigned short x) { return x + 1L; }
+#     long pu(unsigned x) { return (int)x; }
+#     long psc(signed char x) { return x * 3L; }
+#
+# The callers use the callee's register as it is and the callees use their
+# argument register as it is: rsc ends srai a0,a0,56 and ri ends addiw, and
+# pi is slli a0,a0,1 on the incoming a0.  The spec's extension="zero" made
+# ci print (unsigned long)(unsigned int)ri(k) and pi
+# (unsigned long)(unsigned int)x << 1, both wrong for a negative int.
+
+[image]
+arch = 'RISCV:LE:64:RV64GC:gcc'
+symbols = [
+    { space = 'ram', offset = '0x10000', name = 'rsc' },
+    { space = 'ram', offset = '0x1000a', name = 'rus' },
+    { space = 'ram', offset = '0x1001a', name = 'ri' },
+    { space = 'ram', offset = '0x10024', name = 'ru' },
+    { space = 'ram', offset = '0x1002e', name = 'csc' },
+    { space = 'ram', offset = '0x10046', name = 'cus' },
+    { space = 'ram', offset = '0x1005a', name = 'ci' },
+    { space = 'ram', offset = '0x1006c', name = 'cu' },
+    { space = 'ram', offset = '0x1007e', name = 'pi' },
+    { space = 'ram', offset = '0x10082', name = 'pus' },
+    { space = 'ram', offset = '0x10086', name = 'pu' },
+    { space = 'ram', offset = '0x10088', name = 'psc' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '''
+1b05c5f96215619582809305c0123305b502c165f1356d8d82809b1505012d9d
+653582809b1505012d9d65358280411106e497000000e780e0fc931515002e95
+a26041018280411106e497000000e78000fc0505a26041018280411106e49700
+0000e780c0fba26041018280411106e497000000e78040fba260410182800605
+8280050582808280931515002e958280
+'''
+
+[script]
+commands = [
+    'parse line extern int1 rsc(int4 k);',
+    'parse line extern uint2 rus(int4 k);',
+    'parse line extern int4 ri(int4 k);',
+    'parse line extern uint4 ru(int4 k);',
+    'parse line extern int8 csc(int4 k);',
+    'parse line extern int8 cus(int4 k);',
+    'parse line extern int8 ci(int4 k);',
+    'parse line extern int8 cu(int4 k);',
+    'parse line extern int8 pi(int4 x);',
+    'parse line extern int8 pus(uint2 x);',
+    'parse line extern int8 pu(uint4 x);',
+    'parse line extern int8 psc(int1 x);',
+    'option narrowext off',
+    'lo fu csc',
+    'decompile',
+    'print C',
+    'lo fu cus',
+    'decompile',
+    'print C',
+    'lo fu ci',
+    'decompile',
+    'print C',
+    'lo fu cu',
+    'decompile',
+    'print C',
+    'lo fu pi',
+    'decompile',
+    'print C',
+    'lo fu pus',
+    'decompile',
+    'print C',
+    'lo fu pu',
+    'decompile',
+    'print C',
+    'lo fu psc',
+    'decompile',
+    'print C',
+    'option narrowext abi',
+    'lo fu csc',
+    'decompile',
+    'print C',
+    'lo fu cus',
+    'decompile',
+    'print C',
+    'lo fu ci',
+    'decompile',
+    'print C',
+    'lo fu cu',
+    'decompile',
+    'print C',
+    'lo fu pi',
+    'decompile',
+    'print C',
+    'lo fu pus',
+    'decompile',
+    'print C',
+    'lo fu pu',
+    'decompile',
+    'print C',
+    'lo fu psc',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'NARROWEXT #1: off, an int result is zero-extended'
+count = 1
+literal = 'return (uint8)(uint4)ri(k);'
+
+[[match]]
+name = 'NARROWEXT #2: abi, an int result is sign-extended'
+count = 1
+literal = 'return ri(k);'
+
+[[match]]
+name = 'NARROWEXT #3: off, a signed char result is zero-extended'
+count = 1
+literal = 'return (uint1)rsc(k) * 3UL;'
+
+[[match]]
+name = 'NARROWEXT #4: abi, a signed char result is sign-extended'
+count = 1
+literal = 'return (int8)rsc(k) * 3;'
+
+[[match]]
+name = 'NARROWEXT #5: off, an unsigned int result is zero-extended'
+count = 1
+literal = 'return (uint8)ru(k);'
+
+[[match]]
+name = 'NARROWEXT #6: abi, an unsigned int result is sign-extended'
+count = 1
+literal = 'return (int4)ru(k);'
+
+[[match]]
+name = 'NARROWEXT #7: off, an int parameter is zero-extended'
+count = 1
+literal = 'return (uint8)(uint4)x << 1;'
+
+[[match]]
+name = 'NARROWEXT #8: abi, an int parameter is sign-extended'
+count = 1
+literal = 'return (int8)x << 1;'
+
+[[match]]
+name = 'NARROWEXT #9: off, an unsigned int parameter is zero-extended'
+count = 1
+literal = 'return (uint8)x;'
+
+[[match]]
+name = 'NARROWEXT #10: abi, an unsigned int parameter is sign-extended'
+count = 1
+literal = 'return (int4)x;'
+
+[[match]]
+name = 'NARROWEXT #11: off, a signed char parameter is zero-extended'
+count = 1
+literal = 'return (uint1)x * 3UL;'
+
+[[match]]
+name = 'NARROWEXT #12: abi, a signed char parameter is sign-extended'
+count = 1
+literal = 'return x * 3L;'
+
+[[match]]
+name = 'NARROWEXT #13: an unsigned short result is zero-extended either way'
+count = 2
+literal = 'return (uint8)rus(k) + 1;'
+
+[[match]]
+name = 'NARROWEXT #14: an unsigned short parameter is zero-extended either way'
+count = 2
+literal = 'return x + 1UL;'

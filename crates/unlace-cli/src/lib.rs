@@ -45,6 +45,7 @@ mod optname;
 mod output;
 mod paths;
 mod project;
+mod project_perfile;
 mod project_stream;
 mod rawfront;
 mod runtime_hints;

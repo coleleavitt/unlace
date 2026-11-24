@@ -23,6 +23,10 @@ define register offset=0x300 size=4 [ TXSTAT TXMASK TXSTATI TXMASKI TXPOLL TXGPI
 define register offset=0x380 size=4 [ TTEXEC TTCTRL TTMARK TTREC GTEXEC ];
 define register offset=0x400 size=4 [ FX.0 FX.1 FX.2 FX.3 FX.4 FX.5 FX.6 FX.7 FX.8 FX.9 FX.10 FX.11 FX.12 FX.13 FX.14 FX.15 ];
 define register offset=0x500 size=1 [ NF ZF VF CF ];
+define register offset=0x400 size=8 [ FXD.0 FXD.2 FXD.4 FXD.6 FXD.8 FXD.10 FXD.12 FXD.14 ];
+define register offset=0x404 size=8 [ FXD.1 FXD.3 FXD.5 FXD.7 FXD.9 FXD.11 FXD.13 FXD.15 ];
+define register offset=0x700 size=8 [ ACF ];
+define register offset=0x708 size=4 [ DSPRAM ];
 define register offset=0x600 size=8 [ contextreg ];
 define context contextreg
   md0_1 = (0,4)
@@ -139,6 +143,38 @@ define token instr(32)
   a1_9 = (9,13)
   pc_19 = (19,23)
   pc_14 = (14,18)
+  fb0 = (0,0)
+  fb1 = (1,1)
+  fb2 = (2,2)
+  fb3 = (3,3)
+  fb4 = (4,4)
+  fb5 = (5,5)
+  fb6 = (6,6)
+  fb7 = (7,7)
+  fb8 = (8,8)
+  fb9 = (9,9)
+  fb10 = (10,10)
+  fb11 = (11,11)
+  fb12 = (12,12)
+  fb13 = (13,13)
+  fb14 = (14,14)
+  fb15 = (15,15)
+  fb16 = (16,16)
+  fb17 = (17,17)
+  fb18 = (18,18)
+  fb19 = (19,19)
+  fb20 = (20,20)
+  fb21 = (21,21)
+  fb22 = (22,22)
+  fb23 = (23,23)
+  fb24 = (24,24)
+  fb25 = (25,25)
+  fb26 = (26,26)
+  fb27 = (27,27)
+  fb28 = (28,28)
+  fb29 = (29,29)
+  fb30 = (30,30)
+  fb31 = (31,31)
   pc_9 = (9,13)
   tr_19 = (19,23)
   tr_14 = (14,18)
@@ -398,11 +434,11 @@ SBo9: a0_9 is su5=3 & a0_9 { export a0_9; }
 # 16-bit immediates: bit 1 sign-extends, bit 0 (T) places the value in the top half.
 I16A: "#"simm16 is b0=0 & b1=1 & simm16 { export *[const]:4 simm16; }
 I16A: "#"imm16  is b0=0 & b1=0 & imm16  { export *[const]:4 imm16; }
-I16A: "#"tv     is b0=1 & imm16 [ tv = imm16 << 16; ] { export *[const]:4 tv; }
+I16A: "#"tv     is b0=1 & b1=0 & imm16 [ tv = imm16 << 16; ] { export *[const]:4 tv; }
 # Logic and compare immediates: bit 2 (M) fills the other half with ones (MB, MT).
 I16L: I16A      is b2=0 & I16A { export I16A; }
-I16L: "#"tv     is b2=1 & b0=0 & imm16 [ tv = imm16 | 0xffff0000; ] { export *[const]:4 tv; }
-I16L: "#"tv     is b2=1 & b0=1 & imm16 [ tv = (imm16 << 16) | 0xffff; ] { export *[const]:4 tv; }
+I16L: "#"tv     is b2=1 & b0=0 & b1=0 & imm16 [ tv = imm16 | 0xffff0000; ] { export *[const]:4 tv; }
+I16L: "#"tv     is b2=1 & b0=1 & b1=0 & imm16 [ tv = (imm16 << 16) | 0xffff; ] { export *[const]:4 tv; }
 I8: "#"imm8 is imm8 { export *[const]:4 imm8; }
 REL: dest is boff19 [ dest = inst_start + boff19 * 4; ] { export *:4 dest; }
 
@@ -1205,3 +1241,5 @@ CSB: "["SB"]" is SB { export SB; }
   v:8 = (zext(P10r19) << 32) | zext(U10r19); *:8 CSB = v;
 }
 
+@include "metag_fpu.sinc"
+@include "metag_dsp.sinc"

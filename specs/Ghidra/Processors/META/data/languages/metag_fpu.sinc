@@ -1,0 +1,421 @@
+# META FPU (FX unit) instructions, written from the binutils metag opcode table and the
+# FPU operand layouts of its disassembler. FX.0..FX.15 are single-precision registers; a
+# double (D) or a pair of singles (L) uses the even/odd pair FXD.n.
+
+
+# FPU execution conditions (binutils enum fcond_code, first names), read from the flags FCMP
+# sets: Z = equal, N = less than, V = unordered.
+FCC: "" is cc=0 { }
+FCC: "FEQ" is cc=1 { if (!(ZF)) goto inst_next; }
+FCC: "UNE" is cc=2 { if (!(!ZF)) goto inst_next; }
+FCC: "FLO" is cc=3 { if (!(NF)) goto inst_next; }
+FCC: "UHS" is cc=4 { if (!(!NF)) goto inst_next; }
+FCC: "MI" is cc=5 { if (!(NF)) goto inst_next; }
+FCC: "PL" is cc=6 { if (!(!NF)) goto inst_next; }
+FCC: "UVS" is cc=7 { if (!(VF)) goto inst_next; }
+FCC: "FVC" is cc=8 { if (!(!VF)) goto inst_next; }
+FCC: "UHI" is cc=9 { if (!(!NF && !ZF)) goto inst_next; }
+FCC: "FLE" is cc=10 { if (!(NF || ZF)) goto inst_next; }
+FCC: "FGE" is cc=11 { if (!(!NF && !VF)) goto inst_next; }
+FCC: "ULT" is cc=12 { if (!(NF || VF)) goto inst_next; }
+FCC: "FGT" is cc=13 { if (!(!NF && !ZF && !VF)) goto inst_next; }
+FCC: "ULE" is cc=14 { if (!(NF || ZF || VF)) goto inst_next; }
+FCC: "NV" is cc=15 { goto inst_next; }
+FD19: "FX.0" is fx_19=0 { export FXD.0; }
+FD19: "FX.1" is fx_19=1 { export FXD.1; }
+FD19: "FX.2" is fx_19=2 { export FXD.2; }
+FD19: "FX.3" is fx_19=3 { export FXD.3; }
+FD19: "FX.4" is fx_19=4 { export FXD.4; }
+FD19: "FX.5" is fx_19=5 { export FXD.5; }
+FD19: "FX.6" is fx_19=6 { export FXD.6; }
+FD19: "FX.7" is fx_19=7 { export FXD.7; }
+FD19: "FX.8" is fx_19=8 { export FXD.8; }
+FD19: "FX.9" is fx_19=9 { export FXD.9; }
+FD19: "FX.10" is fx_19=10 { export FXD.10; }
+FD19: "FX.11" is fx_19=11 { export FXD.11; }
+FD19: "FX.12" is fx_19=12 { export FXD.12; }
+FD19: "FX.13" is fx_19=13 { export FXD.13; }
+FD19: "FX.14" is fx_19=14 { export FXD.14; }
+FD19: "FX.15" is fx_19=15 { export FXD.15; }
+FD14: "FX.0" is fx_14=0 { export FXD.0; }
+FD14: "FX.1" is fx_14=1 { export FXD.1; }
+FD14: "FX.2" is fx_14=2 { export FXD.2; }
+FD14: "FX.3" is fx_14=3 { export FXD.3; }
+FD14: "FX.4" is fx_14=4 { export FXD.4; }
+FD14: "FX.5" is fx_14=5 { export FXD.5; }
+FD14: "FX.6" is fx_14=6 { export FXD.6; }
+FD14: "FX.7" is fx_14=7 { export FXD.7; }
+FD14: "FX.8" is fx_14=8 { export FXD.8; }
+FD14: "FX.9" is fx_14=9 { export FXD.9; }
+FD14: "FX.10" is fx_14=10 { export FXD.10; }
+FD14: "FX.11" is fx_14=11 { export FXD.11; }
+FD14: "FX.12" is fx_14=12 { export FXD.12; }
+FD14: "FX.13" is fx_14=13 { export FXD.13; }
+FD14: "FX.14" is fx_14=14 { export FXD.14; }
+FD14: "FX.15" is fx_14=15 { export FXD.15; }
+FD9: "FX.0" is fx_9=0 { export FXD.0; }
+FD9: "FX.1" is fx_9=1 { export FXD.1; }
+FD9: "FX.2" is fx_9=2 { export FXD.2; }
+FD9: "FX.3" is fx_9=3 { export FXD.3; }
+FD9: "FX.4" is fx_9=4 { export FXD.4; }
+FD9: "FX.5" is fx_9=5 { export FXD.5; }
+FD9: "FX.6" is fx_9=6 { export FXD.6; }
+FD9: "FX.7" is fx_9=7 { export FXD.7; }
+FD9: "FX.8" is fx_9=8 { export FXD.8; }
+FD9: "FX.9" is fx_9=9 { export FXD.9; }
+FD9: "FX.10" is fx_9=10 { export FXD.10; }
+FD9: "FX.11" is fx_9=11 { export FXD.11; }
+FD9: "FX.12" is fx_9=12 { export FXD.12; }
+FD9: "FX.13" is fx_9=13 { export FXD.13; }
+FD9: "FX.14" is fx_9=14 { export FXD.14; }
+FD9: "FX.15" is fx_9=15 { export FXD.15; }
+
+define pcodeop fpu_ld_abs;
+define pcodeop fpu_ld_mov;
+define pcodeop fpu_ld_neg;
+define pcodeop fpu_ld_cmp;
+define pcodeop fpu_ld_max;
+define pcodeop fpu_ld_min;
+define pcodeop fpu_ld_add;
+define pcodeop fpu_ld_iadd;
+define pcodeop fpu_ld_mul;
+define pcodeop fpu_ld_imul;
+define pcodeop fpu_ld_sub;
+define pcodeop fpu_ld_isub;
+define pcodeop fpu_ld_mac;
+define pcodeop fpu_ld_macs;
+define pcodeop fpu_ld_mar;
+define pcodeop fpu_ld_imar;
+define pcodeop fpu_ld_mars;
+define pcodeop fpu_ld_imars;
+define pcodeop fpu_ld_maw;
+define pcodeop fpu_ld_maws;
+define pcodeop fpu_ld_maw1;
+define pcodeop fpu_ld_maws1;
+define pcodeop fpu_ld_mxa;
+define pcodeop fpu_ld_imxa;
+define pcodeop fpu_ld_mxas;
+define pcodeop fpu_ld_imxas;
+define pcodeop fpu_ld_mxa1;
+define pcodeop fpu_ld_imxa1;
+define pcodeop fpu_ld_mxas1;
+define pcodeop fpu_ld_imxas1;
+define pcodeop fpu_ld_muz;
+define pcodeop fpu_ld_imuz;
+define pcodeop fpu_ld_muzs;
+define pcodeop fpu_ld_imuzs;
+define pcodeop fpu_ld_muz1;
+define pcodeop fpu_ld_imuz1;
+define pcodeop fpu_ld_muzs1;
+define pcodeop fpu_ld_imuzs1;
+define pcodeop fpu_ld_rcp;
+define pcodeop fpu_ld_ircp;
+define pcodeop fpu_ld_rsq;
+define pcodeop fpu_ld_irsq;
+define pcodeop fpu_addre;
+define pcodeop fpu_addrei;
+define pcodeop fpu_dtoh;
+define pcodeop fpu_dtox;
+define pcodeop fpu_dtox_pair;
+define pcodeop fpu_dtoxl;
+define pcodeop fpu_ftoh;
+define pcodeop fpu_ftoh_pair;
+define pcodeop fpu_ftoi_pair;
+define pcodeop fpu_ftox;
+define pcodeop fpu_ftox_pair;
+define pcodeop fpu_getl_fget_set_acf;
+define pcodeop fpu_htod;
+define pcodeop fpu_htof;
+define pcodeop fpu_htof_pair;
+define pcodeop fpu_imm16_double;
+define pcodeop fpu_imm16_pair;
+define pcodeop fpu_imm16_single;
+define pcodeop fpu_itof_pair;
+define pcodeop fpu_mac;
+define pcodeop fpu_macs;
+define pcodeop fpu_mar;
+define pcodeop fpu_mar_neg;
+define pcodeop fpu_mars;
+define pcodeop fpu_mars_neg;
+define pcodeop fpu_maw;
+define pcodeop fpu_maw1;
+define pcodeop fpu_maws;
+define pcodeop fpu_maws1;
+define pcodeop fpu_max_pair;
+define pcodeop fpu_mget_mget_mset;
+define pcodeop fpu_mgetd_mget_mset;
+define pcodeop fpu_mgetl_mget_mset;
+define pcodeop fpu_min_pair;
+define pcodeop fpu_mmovd_fmmov;
+define pcodeop fpu_mmovd_mmov;
+define pcodeop fpu_mmovl_fmmov;
+define pcodeop fpu_mmovl_mmov;
+define pcodeop fpu_movl_from_data;
+define pcodeop fpu_movl_mov_port;
+define pcodeop fpu_movl_to_data;
+define pcodeop fpu_mset_mget_mset;
+define pcodeop fpu_msetd_mget_mset;
+define pcodeop fpu_msetl_mget_mset;
+define pcodeop fpu_mulre;
+define pcodeop fpu_mulrei;
+define pcodeop fpu_muz;
+define pcodeop fpu_muz1;
+define pcodeop fpu_muz1_neg;
+define pcodeop fpu_muz_neg;
+define pcodeop fpu_muzs;
+define pcodeop fpu_muzs1;
+define pcodeop fpu_muzs1_neg;
+define pcodeop fpu_muzs_neg;
+define pcodeop fpu_mxa;
+define pcodeop fpu_mxa1;
+define pcodeop fpu_mxa1_neg;
+define pcodeop fpu_mxa_neg;
+define pcodeop fpu_mxas;
+define pcodeop fpu_mxas1;
+define pcodeop fpu_mxas1_neg;
+define pcodeop fpu_mxas_neg;
+define pcodeop fpu_setl_fget_set_acf;
+define pcodeop fpu_subre;
+define pcodeop fpu_subrei;
+define pcodeop fpu_xltod;
+define pcodeop fpu_xtod;
+define pcodeop fpu_xtod_pair;
+define pcodeop fpu_xtof;
+define pcodeop fpu_xtof_pair;
+
+:MOVL is fb0=1 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=1 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=0 & fb29=1 & fb30=0 & fb31=1 { fpu_movl_mov_port(); }
+:FMMOVD is fb0=0 & fb1=1 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mmovd_mmov(); }
+:FMMOVL is fb0=0 & fb1=1 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mmovl_mmov(); }
+:FABS^FCC fx_19, fx_14 is fb0=0 & fb7=1 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = abs(fx_14); }
+:FDABS^FCC FD19, FD14 is fb0=0 & fb7=1 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = abs(FD14); }
+:FLABS^FCC FD19, FD14 is fb0=0 & fb7=1 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & FD19 & FD14 { build FCC; local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = abs(s0); local r1:4 = abs(s1); FD19 = (zext(r1) << 32) | zext(r0); }
+:FMMOVD is fb1=1 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=1 { fpu_mmovd_fmmov(); }
+:FMMOVL is fb1=1 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=1 { fpu_mmovl_fmmov(); }
+:FMMOVD is fb1=1 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mmovd_fmmov(); }
+:FMMOVL is fb1=1 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mmovl_fmmov(); }
+:FMOVD d0_19, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb13=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=0 & d0_19 & fx_9 { d0_19 = fx_9; }
+:FMOVD d1_19, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb13=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=1 & d1_19 & fx_9 { d1_19 = fx_9; }
+:FMOVD fx_19, d0_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb23=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=0 & fx_19 & d0_9 { fx_19 = d0_9; }
+:FMOVD fx_19, d1_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb23=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=1 & fx_19 & d1_9 { fx_19 = d1_9; }
+:FMOVL d0_19, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=1 & fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb13=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=0 & d0_19 & FD9 { d0_19 = fpu_movl_to_data(FD9); }
+:FMOVL d1_19, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=1 & fb5=0 & fb6=1 & fb7=0 & fb8=1 & fb13=0 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=1 & d1_19 & FD9 { d1_19 = fpu_movl_to_data(FD9); }
+:FMOVL FD19, d0_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=1 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb23=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=0 & FD19 & d0_9 { FD19 = fpu_movl_from_data(d0_9); }
+:FMOVL FD19, d1_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=1 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb14=0 & fb15=0 & fb16=0 & fb17=0 & fb23=0 & fb25=0 & fb26=0 & fb27=1 & fb28=0 & fb29=0 & fb30=0 & fb31=0 & fb24=1 & FD19 & d1_9 { FD19 = fpu_movl_from_data(d1_9); }
+:FMOV^FCC fx_19, fx_14 is fb0=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = fx_14; }
+:FDMOV^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = FD14; }
+:FLMOV^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & FD19 & FD14 { build FCC; local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = s0; local r1:4 = s1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FMOV fx_19, imm16 is fb0=1 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b2=0 & b1=0 & fx_19 & imm16 { fx_19 = fpu_imm16_single(imm16:2); }
+:FDMOV FD19, imm16 is fb0=1 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b2=0 & b1=1 & FD19 & imm16 { FD19 = fpu_imm16_double(imm16:2); }
+:FLMOV FD19, imm16 is fb0=1 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b2=1 & b1=0 & FD19 & imm16 { FD19 = fpu_imm16_pair(imm16:2); }
+:FNEG^FCC fx_19, fx_14 is fb0=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = f- fx_14; }
+:FDNEG^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = f- FD14; }
+:FLNEG^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & FD19 & FD14 { build FCC; local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = f- s0; local r1:4 = f- s1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FPACK FD19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb7=1 & fb8=1 & fb13=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FD19 & fx_14 & fx_9 { FD19 = (zext(fx_9) << 32) | zext(fx_14); }
+:FSWAP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=1 & fb7=1 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FD19 & FD14 { local s:8 = FD14; FD19 = (s >> 32) | (s << 32); }
+:FCMP^FCC fx_14, fx_9 is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & b8=0 & fx_14 & fx_9 { build FCC; NF = fx_14 f< fx_9; ZF = fx_14 f== fx_9; VF = nan(fx_14) || nan(fx_9); CF = NF; }
+:FCMP^FCC fx_14, "#0" is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & b8=1 & fx_14 { build FCC; local zf4:4 = int2float(0:4); NF = fx_14 f< zf4; ZF = fx_14 f== zf4; VF = nan(fx_14) || nan(zf4); CF = NF; }
+:FDCMP^FCC FD14, FD9 is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & b8=0 & FD14 & FD9 { build FCC; NF = FD14 f< FD9; ZF = FD14 f== FD9; VF = nan(FD14) || nan(FD9); CF = NF; }
+:FDCMP^FCC FD14, "#0" is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & b8=1 & FD14 { build FCC; local zf8:8 = int2float(0:8); NF = FD14 f< zf8; ZF = FD14 f== zf8; VF = nan(FD14) || nan(zf8); CF = NF; }
+:FLCMP^FCC FD14, FD9 is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & b8=0 & FD14 & FD9 { build FCC; local a:8 = FD14; local x0:4 = a:4; local y0:4 = FD9:4; NF = x0 f< y0; ZF = x0 f== y0; VF = nan(x0) || nan(y0); CF = NF; }
+:FLCMP^FCC FD14, "#0" is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & b8=1 & FD14 { build FCC; local a:8 = FD14; local x0:4 = a:4; local y0:4 = int2float(0:4); NF = x0 f< y0; ZF = x0 f== y0; VF = nan(x0) || nan(y0); CF = NF; }
+:FMAX^FCC fx_19, fx_14, fx_9 is fb0=1 & fb7=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local a:4 = fx_14; local b:4 = fx_9; local r:4 = a; if (a f>= b) goto <k>; r = b; <k> fx_19 = r; }
+:FDMAX^FCC FD19, FD14, FD9 is fb0=1 & fb7=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local r:8 = a; if (a f>= b) goto <k>; r = b; <k> FD19 = r; }
+:FLMAX^FCC FD19, FD14, FD9 is fb0=1 & fb7=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; FD19 = fpu_max_pair(a, b); }
+:FMIN^FCC fx_19, fx_14, fx_9 is fb0=1 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local a:4 = fx_14; local b:4 = fx_9; local r:4 = a; if (a f<= b) goto <k>; r = b; <k> fx_19 = r; }
+:FDMIN^FCC FD19, FD14, FD9 is fb0=1 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local r:8 = a; if (a f<= b) goto <k>; r = b; <k> FD19 = r; }
+:FLMIN^FCC FD19, FD14, FD9 is fb0=1 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; FD19 = fpu_min_pair(a, b); }
+:FDTOF^FCC fx_19, FD14 is fb0=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & fx_19 & FD14 { build FCC; fx_19 = float2float(FD14); }
+:FFTOD^FCC FD19, fx_14 is fb0=1 & fb5=0 & fb6=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & fx_14 { build FCC; FD19 = float2float(fx_14); }
+:FDTOH^FCC fx_19, FD14 is fb0=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & fx_19 & FD14 { build FCC; fx_19 = fpu_dtoh(FD14); }
+:FFTOH^FCC fx_19, fx_14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = fpu_ftoh(fx_14); }
+:FLFTOH^FCC FD19, FD14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ftoh_pair(FD14); }
+:FDTOI^FCC fx_19, FD14 is fb0=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & fb12=0 & FCC & fx_19 & FD14 { build FCC; fx_19 = trunc(FD14); }
+:FZDTOI^FCC fx_19, FD14 is fb0=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & fb12=1 & FCC & fx_19 & FD14 { build FCC; fx_19 = trunc(FD14); }
+:FFTOI^FCC fx_19, fx_14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & fb12=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = trunc(fx_14); }
+:FLFTOI^FCC FD19, FD14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & fb12=0 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ftoi_pair(FD14); }
+:FZFTOI^FCC fx_19, fx_14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & fb12=1 & FCC & fx_19 & fx_14 { build FCC; fx_19 = trunc(fx_14); }
+:FLZFTOI^FCC FD19, FD14 is fb0=0 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & fb12=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ftoi_pair(FD14); }
+:FDTOL^FCC FD19, FD14 is fb0=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb13=1 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & fb12=0 & FCC & FD19 & FD14 { build FCC; FD19 = trunc(FD14); }
+:FZDTOL^FCC FD19, FD14 is fb0=0 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb13=1 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & fb12=1 & FCC & FD19 & FD14 { build FCC; FD19 = trunc(FD14); }
+:FDTOX^FCC fx_19, FD14, imm5 is fb0=0 & fb5=1 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & FD14 & imm5 { build FCC; fx_19 = fpu_dtox(FD14, imm5:1); }
+:FLDTOX^FCC FD19, FD14 is fb0=0 & fb5=1 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_dtox_pair(FD14); }
+:FFTOX^FCC fx_19, fx_14, imm5 is fb0=0 & fb5=0 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & fx_14 & imm5 { build FCC; fx_19 = fpu_ftox(fx_14, imm5:1); }
+:FLFTOX^FCC FD19, FD14 is fb0=0 & fb5=0 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ftox_pair(FD14); }
+:FDTOXL^FCC FD19, FD14, gsimm6u is fb0=0 & fb5=1 & fb6=0 & fb7=1 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & FD14 & gsimm6u { build FCC; FD19 = fpu_dtoxl(FD14, gsimm6u:1); }
+:FHTOD^FCC FD19, fx_14 is fb0=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & fx_14 { build FCC; FD19 = fpu_htod(fx_14); }
+:FHTOF^FCC fx_19, fx_14 is fb0=1 & fb5=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = fpu_htof(fx_14); }
+:FLHTOF^FCC FD19, FD14 is fb0=1 & fb5=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_htof_pair(FD14); }
+:FITOD^FCC FD19, fx_14 is fb0=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & fx_14 { build FCC; FD19 = int2float(fx_14); }
+:FITOF^FCC fx_19, fx_14 is fb0=1 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & fx_14 { build FCC; fx_19 = int2float(fx_14); }
+:FLITOF^FCC FD19, FD14 is fb0=1 & fb5=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=1 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_itof_pair(FD14); }
+:FLTOD^FCC FD19, FD14 is fb0=1 & fb5=1 & fb6=0 & fb7=0 & fb8=1 & fb9=1 & fb10=0 & fb11=0 & fb12=0 & fb13=1 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & FD14 { build FCC; FD19 = int2float(FD14); }
+:FXTOD^FCC FD19, fx_14, imm5 is fb0=1 & fb5=1 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & FD19 & fx_14 & imm5 { build FCC; FD19 = fpu_xtod(fx_14, imm5:1); }
+:FLXTOD^FCC FD19, FD14 is fb0=1 & fb5=1 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_xtod_pair(FD14); }
+:FXTOF^FCC fx_19, fx_14, imm5 is fb0=1 & fb5=0 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & FCC & fx_19 & fx_14 & imm5 { build FCC; fx_19 = fpu_xtof(fx_14, imm5:1); }
+:FLXTOF^FCC FD19, FD14 is fb0=1 & fb5=0 & fb7=0 & fb8=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_xtof_pair(FD14); }
+:FXLTOD^FCC FD19, FD14, gsimm6u is fb0=1 & fb5=1 & fb6=0 & fb7=1 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & FCC & FD19 & FD14 & gsimm6u { build FCC; FD19 = fpu_xltod(FD14, gsimm6u:1); }
+:FADD^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f+ fx_9;  fx_19 = r; }
+:FIADD^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f+ fx_9; r = f- r; fx_19 = r; }
+:FDADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f+ FD9;  FD19 = r; }
+:FDIADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f+ FD9; r = f- r; FD19 = r; }
+:FLADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f+ y0; local r1:4 = x1 f+ y1;  FD19 = (zext(r1) << 32) | zext(r0); }
+:FLIADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f+ y0; local r1:4 = x1 f+ y1; r0 = f- r0; r1 = f- r1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FMUL^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f* fx_9;  fx_19 = r; }
+:FIMUL^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f* fx_9; r = f- r; fx_19 = r; }
+:FDMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f* FD9;  FD19 = r; }
+:FDIMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f* FD9; r = f- r; FD19 = r; }
+:FLMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f* y0; local r1:4 = x1 f* y1;  FD19 = (zext(r1) << 32) | zext(r0); }
+:FLIMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f* y0; local r1:4 = x1 f* y1; r0 = f- r0; r1 = f- r1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FSUB^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f- fx_9;  fx_19 = r; }
+:FISUB^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; local r:4 = fx_14 f- fx_9; r = f- r; fx_19 = r; }
+:FDSUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f- FD9;  FD19 = r; }
+:FDISUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local r:8 = FD14 f- FD9; r = f- r; FD19 = r; }
+:FLSUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f- y0; local r1:4 = x1 f- y1;  FD19 = (zext(r1) << 32) | zext(r0); }
+:FLISUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; local a:8 = FD14; local b:8 = FD9; local x0:4 = a:4; local x1:4 = a(4); local y0:4 = b:4; local y1:4 = b(4); local r0:4 = x0 f- y0; local r1:4 = x1 f- y1; r0 = f- r0; r1 = f- r1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FMAC "ACF.0", fx_14, fx_9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_14 & fx_9 { ACF = fpu_mac(ACF, fx_14, fx_9); }
+:FDMAC "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD14 & FD9 { ACF = fpu_mac(ACF, FD14, FD9); }
+:FLMAC "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD14 & FD9 { ACF = fpu_mac(ACF, FD14, FD9); }
+:FMACS "ACF.0", fx_14, fx_9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_14 & fx_9 { ACF = fpu_macs(ACF, fx_14, fx_9); }
+:FDMACS "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD14 & FD9 { ACF = fpu_macs(ACF, FD14, FD9); }
+:FLMACS "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD14 & FD9 { ACF = fpu_macs(ACF, FD14, FD9); }
+:FMAR fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_mar(fx_14, fx_9); }
+:FIMAR fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_mar_neg(fx_14, fx_9); }
+:FDMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_mar(FD14, FD9); }
+:FDIMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_mar_neg(FD14, FD9); }
+:FLMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_mar(FD14, FD9); }
+:FLIMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_mar_neg(FD14, FD9); }
+:FMARS fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_mars(fx_14, fx_9); }
+:FIMARS fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_mars_neg(fx_14, fx_9); }
+:FDMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_mars(FD14, FD9); }
+:FDIMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_mars_neg(FD14, FD9); }
+:FLMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_mars(FD14, FD9); }
+:FLIMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_mars_neg(FD14, FD9); }
+:FMAW fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_maw(fx_14, fx_9); }
+:FDMAW FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD19 & FD14 & FD9 { FD19 = fpu_maw(FD14, FD9); }
+:FLMAW FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD19 & FD14 & FD9 { FD19 = fpu_maw(FD14, FD9); }
+:FMAWS fx_19, fx_14, fx_9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_maws(fx_14, fx_9); }
+:FDMAWS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD19 & FD14 & FD9 { FD19 = fpu_maws(FD14, FD9); }
+:FLMAWS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD19 & FD14 & FD9 { FD19 = fpu_maws(FD14, FD9); }
+:FMAW1 fx_14, fx_9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_14 & fx_9 { ACF = fpu_maw1(ACF, fx_14, fx_9); }
+:FDMAW1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD14 & FD9 { ACF = fpu_maw1(ACF, FD14, FD9); }
+:FLMAW1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD14 & FD9 { ACF = fpu_maw1(ACF, FD14, FD9); }
+:FMAWS1 fx_14, fx_9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & fx_14 & fx_9 { ACF = fpu_maws1(ACF, fx_14, fx_9); }
+:FDMAWS1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & FD14 & FD9 { ACF = fpu_maws1(ACF, FD14, FD9); }
+:FLMAWS1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & FD14 & FD9 { ACF = fpu_maws1(ACF, FD14, FD9); }
+:FMXA^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxa(fx_14, fx_9); }
+:FIMXA^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxa_neg(fx_14, fx_9); }
+:FDMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa(FD14, FD9); }
+:FDIMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa_neg(FD14, FD9); }
+:FLMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa(FD14, FD9); }
+:FLIMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa_neg(FD14, FD9); }
+:FMXAS^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxas(fx_14, fx_9); }
+:FIMXAS^FCC fx_19, fx_14, fx_9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxas_neg(fx_14, fx_9); }
+:FDMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas(FD14, FD9); }
+:FDIMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas_neg(FD14, FD9); }
+:FLMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas(FD14, FD9); }
+:FLIMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas_neg(FD14, FD9); }
+:FMXA1^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxa1(fx_14, fx_9); }
+:FIMXA1^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxa1_neg(fx_14, fx_9); }
+:FDMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa1(FD14, FD9); }
+:FDIMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa1_neg(FD14, FD9); }
+:FLMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa1(FD14, FD9); }
+:FLIMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxa1_neg(FD14, FD9); }
+:FMXAS1^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxas1(fx_14, fx_9); }
+:FIMXAS1^FCC fx_19, fx_14, fx_9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & FCC & fx_19 & fx_14 & fx_9 { build FCC; fx_19 = fpu_mxas1_neg(fx_14, fx_9); }
+:FDMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas1(FD14, FD9); }
+:FDIMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas1_neg(FD14, FD9); }
+:FLMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas1(FD14, FD9); }
+:FLIMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_mxas1_neg(FD14, FD9); }
+:FMUZ fx_19, fx_14, fx_9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muz(fx_14, fx_9); }
+:FIMUZ fx_19, fx_14, fx_9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muz_neg(fx_14, fx_9); }
+:FDMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muz(FD14, FD9); }
+:FDIMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muz_neg(FD14, FD9); }
+:FLMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muz(FD14, FD9); }
+:FLIMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muz_neg(FD14, FD9); }
+:FMUZS fx_19, fx_14, fx_9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muzs(fx_14, fx_9); }
+:FIMUZS fx_19, fx_14, fx_9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muzs_neg(fx_14, fx_9); }
+:FDMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muzs(FD14, FD9); }
+:FDIMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muzs_neg(FD14, FD9); }
+:FLMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muzs(FD14, FD9); }
+:FLIMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muzs_neg(FD14, FD9); }
+:FMUZ1 fx_19, fx_14, fx_9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muz1(fx_14, fx_9); }
+:FIMUZ1 fx_19, fx_14, fx_9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muz1_neg(fx_14, fx_9); }
+:FDMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muz1(FD14, FD9); }
+:FDIMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muz1_neg(FD14, FD9); }
+:FLMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muz1(FD14, FD9); }
+:FLIMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muz1_neg(FD14, FD9); }
+:FMUZS1 fx_19, fx_14, fx_9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muzs1(fx_14, fx_9); }
+:FIMUZS1 fx_19, fx_14, fx_9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 & fx_9 { fx_19 = fpu_muzs1_neg(fx_14, fx_9); }
+:FDMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muzs1(FD14, FD9); }
+:FDIMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muzs1_neg(FD14, FD9); }
+:FLMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_muzs1(FD14, FD9); }
+:FLIMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_muzs1_neg(FD14, FD9); }
+:FRCP fx_19, fx_14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 { local r:4 = int2float(1:4) f/ fx_14;  fx_19 = r; }
+:FIRCP fx_19, fx_14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 { local r:4 = int2float(1:4) f/ fx_14; r = f- r; fx_19 = r; }
+:FDRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 { local r:8 = int2float(1:8) f/ FD14;  FD19 = r; }
+:FDIRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 { local r:8 = int2float(1:8) f/ FD14; r = f- r; FD19 = r; }
+:FLRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 { local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = int2float(1:4) f/ s0; local r1:4 = int2float(1:4) f/ s1;  FD19 = (zext(r1) << 32) | zext(r0); }
+:FLIRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 { local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = int2float(1:4) f/ s0; local r1:4 = int2float(1:4) f/ s1; r0 = f- r0; r1 = f- r1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FRSQ fx_19, fx_14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=0 & fx_19 & fx_14 { local r:4 = int2float(1:4) f/ sqrt(fx_14);  fx_19 = r; }
+:FIRSQ fx_19, fx_14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=0 & b7=1 & fx_19 & fx_14 { local r:4 = int2float(1:4) f/ sqrt(fx_14); r = f- r; fx_19 = r; }
+:FDRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=0 & FD19 & FD14 { local r:8 = int2float(1:8) f/ sqrt(FD14);  FD19 = r; }
+:FDIRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=0 & b5=1 & b7=1 & FD19 & FD14 { local r:8 = int2float(1:8) f/ sqrt(FD14); r = f- r; FD19 = r; }
+:FLRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=0 & FD19 & FD14 { local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = int2float(1:4) f/ sqrt(s0); local r1:4 = int2float(1:4) f/ sqrt(s1);  FD19 = (zext(r1) << 32) | zext(r0); }
+:FLIRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=0 & b7=1 & FD19 & FD14 { local s:8 = FD14; local s0:4 = s:4; local s1:4 = s(4); local r0:4 = int2float(1:4) f/ sqrt(s0); local r1:4 = int2float(1:4) f/ sqrt(s1); r0 = f- r0; r1 = f- r1; FD19 = (zext(r1) << 32) | zext(r0); }
+:FLADDRE FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=0 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_addre(FD14, FD9); }
+:FLIADDRE FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=0 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_addrei(FD14, FD9); }
+:FLMULRE FD19, FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=0 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_mulre(FD14, FD9); }
+:FLIMULRE FD19, FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=0 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_mulrei(FD14, FD9); }
+:FLSUBRE FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=1 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_subre(FD14, FD9); }
+:FLISUBRE FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb5=0 & fb6=0 & fb8=1 & fb9=0 & fb13=0 & fb14=0 & fb18=0 & fb19=0 & fb23=0 & fb24=0 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_subrei(FD14, FD9); }
+:FMGETD is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=0 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mgetd_mget_mset(); }
+:FMGETL is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_mgetl_mget_mset(); }
+:FMSETD is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=0 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=1 { fpu_msetd_mget_mset(); }
+:FMSETL is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=1 { fpu_msetl_mget_mset(); }
+:FGETL is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=0 & fb29=0 & fb30=1 & fb31=1 { fpu_getl_fget_set_acf(); }
+:FSETL is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=1 & fb28=1 & fb29=1 & fb30=0 & fb31=1 { fpu_setl_fget_set_acf(); }
+
+:FLDABS^FCC FD19, FD14 is fb0=0 & fb7=1 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ld_abs(FD14); }
+:FLDMOV^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=0 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ld_mov(FD14); }
+:FLDNEG^FCC FD19, FD14 is fb0=0 & fb7=0 & fb8=1 & fb9=0 & fb10=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & FD19 & FD14 { build FCC; FD19 = fpu_ld_neg(FD14); }
+:FLDCMP^FCC FD14, FD9 is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & b8=0 & FD14 & FD9 { build FCC; FD14 = fpu_ld_cmp(FD9); }
+:FLDCMP^FCC FD14, "#0" is fb0=0 & fb13=0 & fb18=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & b8=1 & FD14 { build FCC; FD14 = fpu_ld_cmp(); }
+:FLDMAX^FCC FD19, FD14, FD9 is fb0=1 & fb7=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_max(FD14, FD9); }
+:FLDMIN^FCC FD19, FD14, FD9 is fb0=1 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_min(FD14, FD9); }
+:FLDADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_add(FD14, FD9); }
+:FLDIADD^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_iadd(FD14, FD9); }
+:FLDMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_mul(FD14, FD9); }
+:FLDIMUL^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_imul(FD14, FD9); }
+:FLDSUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_sub(FD14, FD9); }
+:FLDISUB^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_isub(FD14, FD9); }
+:FLDMAC "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD14 & FD9 { FD14 = fpu_ld_mac(FD9); }
+:FLDMACS "ACF.0", FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb19=0 & fb20=0 & fb21=0 & fb22=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD14 & FD9 { FD14 = fpu_ld_macs(FD9); }
+:FLDMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_mar(FD14, FD9); }
+:FLDIMAR FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imar(FD14, FD9); }
+:FLDMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_mars(FD14, FD9); }
+:FLDIMARS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=1 & fb3=0 & fb4=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imars(FD14, FD9); }
+:FLDMAW FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_maw(FD14, FD9); }
+:FLDMAWS FD19, FD14, FD9 is fb0=0 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_maws(FD14, FD9); }
+:FLDMAW1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD14 & FD9 { FD14 = fpu_ld_maw1(FD9); }
+:FLDMAWS1 FD14, FD9 is fb0=1 & fb1=0 & fb2=0 & fb3=1 & fb4=0 & fb7=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & FD14 & FD9 { FD14 = fpu_ld_maws1(FD9); }
+:FLDMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_mxa(FD14, FD9); }
+:FLDIMXA^FCC FD19, FD14, FD9 is fb0=0 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_imxa(FD14, FD9); }
+:FLDMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_mxas(FD14, FD9); }
+:FLDIMXAS^FCC FD19, FD14, FD9 is fb0=0 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_imxas(FD14, FD9); }
+:FLDMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_mxa1(FD14, FD9); }
+:FLDIMXA1^FCC FD19, FD14, FD9 is fb0=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_imxa1(FD14, FD9); }
+:FLDMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_mxas1(FD14, FD9); }
+:FLDIMXAS1^FCC FD19, FD14, FD9 is fb0=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=0 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FCC & FD19 & FD14 & FD9 { build FCC; FD19 = fpu_ld_imxas1(FD14, FD9); }
+:FLDMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_muz(FD14, FD9); }
+:FLDIMUZ FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imuz(FD14, FD9); }
+:FLDMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_muzs(FD14, FD9); }
+:FLDIMUZS FD19, FD14, FD9 is fb0=0 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imuzs(FD14, FD9); }
+:FLDMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_muz1(FD14, FD9); }
+:FLDIMUZ1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=0 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imuz1(FD14, FD9); }
+:FLDMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 & FD9 { FD19 = fpu_ld_muzs1(FD14, FD9); }
+:FLDIMUZS1 FD19, FD14, FD9 is fb0=1 & fb2=0 & fb3=0 & fb4=1 & fb8=1 & fb13=0 & fb18=0 & fb23=0 & fb24=0 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 & FD9 { FD19 = fpu_ld_imuzs1(FD14, FD9); }
+:FLDRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 { FD19 = fpu_ld_rcp(FD14); }
+:FLDIRCP FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=0 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 { FD19 = fpu_ld_ircp(FD14); }
+:FLDRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=0 & FD19 & FD14 { FD19 = fpu_ld_rsq(FD14); }
+:FLDIRSQ FD19, FD14 is fb0=0 & fb1=0 & fb2=0 & fb3=0 & fb4=0 & fb8=1 & fb11=0 & fb12=0 & fb13=0 & fb18=0 & fb23=0 & fb24=1 & fb25=1 & fb26=1 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b6=1 & b5=1 & b7=1 & FD19 & FD14 { FD19 = fpu_ld_irsq(FD14); }
+:FLMOV FD19, imm16 is fb0=1 & fb23=0 & fb24=0 & fb25=0 & fb26=0 & fb27=0 & fb28=1 & fb29=1 & fb30=1 & fb31=1 & b2=1 & b1=1 & FD19 & imm16 { FD19 = fpu_imm16_pair(imm16:2); }

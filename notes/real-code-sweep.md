@@ -122,11 +122,12 @@ Real artifacts decompiled one function or code object at a time with the pinned
 | `Lua:LE:32:5.3` | Lua 5.3.4 test suite, luac 5.3.6 | 666 | 666 | none | none |
 | `Lua:LE:32:5.4` | Lua 5.4.6 test suite, luac 5.4.8 | 1034 | 1033 | none | #688 (kuna_selectdiv overflow on bitwise.lua's main chunk) |
 | `V8Ignition:LE:32:13.6` | `node --no-lazy --print-bytecode` of npm's semver package and the Node internals it loads | 682 | 682 | none | none |
-| `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes) |
+| `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes, fixed by #709); readability: option `evmcalls` (see below) |
 | `AMDGPU:LE:64:GFX9/10/11` | 8 OpenCL kernels (matmul, tiled matmul, histogram, LDS scan, float4 saxpy, clamp, f64 math, string scan) at -O2/-O3 for gfx900, gfx1030, gfx1100 | 96 | 82, then 96 after #685 | #685: v_div_scale/fmas/fixup_f64, v_cmp_class_f64/f32, gfx11 s_sendmsg_rtn_b32; f64 literals are the high half on GFX10/11. #702: RDNA v_cmpx writes only EXEC (it also wrote VCC), and restores #663's aperture operands and `v_swap_b32`, which #685 had dropped; the same 96 functions pass on GFX10-W64/GFX11-W64 | none |
 
 Notes:
 - Lua and V8 warnings are informational only (`iteboolean` re-rolls in Lua; none in V8).
+- EVM, option `evmcalls` (default off): internal calls, returns and constant jumps are recovered from the bytecode, so the dispatcher is an if-chain of selector compares calling the internal functions, and each function decompiles with its stack arguments and result. On 10 solc 0.8.24 runtimes (Token, Vault, Calc, Registry, Staking; optimizer off and on) bare JUMPI conditions go from 209 to 0, if statements from 1 to 109, indirect-jump warnings from 42 to 0, dispatcher lines from 2,423 to 844, and all 260 internal functions decompile. Without it:
 - EVM: the two contracts that decompile are hard to read. Internal Solidity functions return
   through a JUMP to an address on the stack, so the dispatcher becomes indirect jumps
   ("Re-entered indirect jump"), and many JUMPI conditions print as bare expression

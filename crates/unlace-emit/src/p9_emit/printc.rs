@@ -5138,7 +5138,7 @@ impl PrintC {
             }
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let and = matches!(kind, ExprKind::And(..));
-                self.emit_return_value(fd, arch, left);
+                self.emit_return_operand(fd, arch, left, and);
                 token(
                     &mut self.emit,
                     if and {
@@ -5147,10 +5147,38 @@ impl PrintC {
                         tokens::BOOLEAN_OR.print1
                     },
                 );
-                self.emit_return_value(fd, arch, right);
+                self.emit_return_operand(fd, arch, right, and);
             }
             _ => {}
         }
+    }
+
+    /// An operand of a returned `&&` (`and`) or `||`: parenthesized when it is a `||` under
+    /// a `&&` or a `?:`, which bind looser.
+    fn emit_return_operand(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        expr: crate::kuna_ctree::ExprId,
+        and: bool,
+    ) {
+        use crate::kuna_ctree::ExprKind;
+        use crate::prettyprint::Emit;
+        let wrap = self
+            .ctree
+            .as_ref()
+            .is_some_and(|tree| match tree.expr(expr).kind {
+                ExprKind::Or(..) => and,
+                ExprKind::Ternary(..) => true,
+                _ => false,
+            });
+        if !wrap {
+            self.emit_return_value(fd, arch, expr);
+            return;
+        }
+        let id = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
+        self.emit_return_value(fd, arch, expr);
+        self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, id);
     }
 
     /// (kuna `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:

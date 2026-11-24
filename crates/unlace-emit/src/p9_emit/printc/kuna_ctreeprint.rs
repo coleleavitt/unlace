@@ -259,6 +259,11 @@ impl PrintC {
             let expr = tree.add_expr(assign);
             tree.stmt_mut(id).kind = StmtKind::Expr(expr);
         }
+        if bool_return {
+            for id in ids_rev(self.ctree.as_ref()) {
+                self.fold_return_run(fd, id);
+            }
+        }
         if or_exit {
             for id in ids_rev(self.ctree.as_ref()) {
                 self.fold_equal_exits(fd, id);
@@ -334,7 +339,7 @@ impl PrintC {
         let (ret_op, body_value) = self.single_const_return(fd, body)?;
         let (_, other_value) = self.single_const_return(fd, other)?;
         match (body_value, other_value) {
-            (1, 0) => Some((cond_block, ret_op, false)),
+            (1, 0) if self.cond_is_boolean(fd, cond_block) => Some((cond_block, ret_op, false)),
             (0, 1) => Some((cond_block, ret_op, true)),
             _ => None,
         }
@@ -466,6 +471,212 @@ impl PrintC {
             },
         };
         Some((cond_block, yes_op, value))
+    }
+
+    /// (kuna `boolreturn`) In the sequence `id` (a `BlockList`), fold the trailing run of
+    /// `if`s without else whose body only returns `0`, `1` or a comparison, ending in such a
+    /// `return`, into one `return` of a short-circuit expression: `if (!a) return 0;
+    /// return b < c;` becomes `return a && b < c;`. Folding right to left, `c ? 0 : T` is
+    /// `!c && T`, `c ? 1 : T` is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is
+    /// `!c || X`, and two different constants are `c` or `!c`. Only the first folded `if`
+    /// may print statements before its test; the others print nothing before it, carry no
+    /// label and no comment. The first folded `if` becomes the `return`, the later ones and
+    /// the tail become empty sequences.
+    fn fold_return_run(&mut self, fd: &Funcdata, id: StmtId) {
+        let Some(list) = self.ctree.as_ref().and_then(|tree| {
+            let stmt = tree.stmt(id);
+            match &stmt.kind {
+                StmtKind::Seq(list) if list.len() > 1 => {
+                    let origin = stmt.origin?;
+                    (fd.sblocks_ref().block(origin).get_type() == BlockType::Ls)
+                        .then(|| list.clone())
+                }
+                _ => None,
+            }
+        }) else {
+            return;
+        };
+        let tail = list[list.len() - 1];
+        let Some(tail_blk) = self.ctree.as_ref().and_then(|tree| {
+            let blk = tree.stmt(tail).origin?;
+            (tree.node_for(blk) == Some(tail)).then_some(blk)
+        }) else {
+            return;
+        };
+        let Some((tail_op, mut value)) = self.return_term(fd, tail_blk) else {
+            return;
+        };
+        let mut first = None;
+        let mut folded = vec![tail];
+        for &sid in list[..list.len() - 1].iter().rev() {
+            let Some((cond, clause)) = self.return_guard(fd, sid) else {
+                break;
+            };
+            let Some((_, arm)) = self.return_term(fd, clause) else {
+                break;
+            };
+            let Some(next) = combine_return(cond, &arm, &value) else {
+                break;
+            };
+            value = next;
+            folded.extend(first);
+            first = Some(sid);
+            if !self.clean_guard_cond(fd, cond) {
+                break;
+            }
+        }
+        let Some(first) = first else {
+            return;
+        };
+        if let RunTerm::Cond(cond, false) = value
+            && !self.cond_is_boolean(fd, cond)
+        {
+            return;
+        }
+        let Some(tree) = self.ctree.as_mut() else {
+            return;
+        };
+        let Some(expr) = add_run_term(tree, &value) else {
+            return;
+        };
+        tree.stmt_mut(first).kind = StmtKind::Return {
+            value: Some(expr),
+            op: Some(tail_op),
+        };
+        for sid in folded {
+            tree.stmt_mut(sid).kind = StmtKind::Seq(Vec::new());
+        }
+    }
+
+    /// The `if` statement `id` as a guard of a return run: an `if` without else and without
+    /// goto, built from its own block, not a switch-merge or exception `if`, whose condition
+    /// is still its block's condition. Its condition block and its body block.
+    fn return_guard(&self, fd: &Funcdata, id: StmtId) -> Option<(BlockId, BlockId)> {
+        let tree = self.ctree.as_ref()?;
+        let stmt = tree.stmt(id);
+        let StmtKind::If {
+            cond, els: None, ..
+        } = &stmt.kind
+        else {
+            return None;
+        };
+        let ExprKind::Branch(cond) = tree.expr(*cond).kind else {
+            return None;
+        };
+        let blk = stmt.origin?;
+        if tree.node_for(blk) != Some(id) {
+            return None;
+        }
+        let block = fd.sblocks_ref().block(blk);
+        if block.get_type() != BlockType::If
+            || block.get_size() != 2
+            || block.get_if_goto_target().is_some()
+            || block.get_block(0) != cond
+            || self.switch_plans.ifs.contains_key(&blk)
+            || self.is_eh_if(fd, blk)
+        {
+            return None;
+        }
+        Some((cond, block.get_block(1)))
+    }
+
+    /// A condition a folded `if` after the first may have: a single leaf that prints
+    /// nothing before its test, with no label line and no comment.
+    fn clean_guard_cond(&mut self, fd: &Funcdata, cond: BlockId) -> bool {
+        let sb = fd.sblocks_ref();
+        if sb.block(cond).get_type() != BlockType::Copy
+            || !self.header_prints_nothing(fd, cond)
+            || (sb.block(cond).is_unstructured_target()
+                && !self.goto_rewrites.labels.contains(&cond))
+        {
+            return false;
+        }
+        let Some(under) = sb.block(cond).get_copy() else {
+            return false;
+        };
+        let bb_index = fd.bblocks_ref().block(under).get_index();
+        self.commsorter.setup_block_list(bb_index);
+        self.commsorter.setup_op_list(None);
+        !self.commsorter.has_next()
+    }
+
+    /// The leaf `leaf` as one value of a return run: a [`single_return`](Self::single_return)
+    /// of an integer or boolean type whose value is the constant `0` or `1` (directly or
+    /// through an implied `COPY`), or a comparison or boolean value that binds tighter than
+    /// `&&` (through copies and zero extensions), or a variable holding one.
+    fn return_term(&mut self, fd: &Funcdata, leaf: BlockId) -> Option<(OpId, RunTerm)> {
+        let (ret, vn) = self.single_return(fd, leaf)?;
+        let v = fd.vbank().get(vn)?;
+        if !matches!(
+            v.get_type().get_metatype(),
+            crate::dtype::type_metatype::TYPE_UNKNOWN
+                | crate::dtype::type_metatype::TYPE_INT
+                | crate::dtype::type_metatype::TYPE_UINT
+                | crate::dtype::type_metatype::TYPE_BOOL
+        ) {
+            return None;
+        }
+        let constant = if v.is_constant() {
+            Some(v.get_offset())
+        } else if v.is_implied() {
+            v.get_def()
+                .and_then(|d| fd.obank().get(d))
+                .filter(|d| d.code() == OpCode::CPUI_COPY)
+                .and_then(|d| d.get_in(0))
+                .and_then(|i| fd.vbank().get(i))
+                .filter(|i| i.is_constant())
+                .map(|i| i.get_offset())
+        } else {
+            None
+        };
+        if let Some(c) = constant {
+            return (c <= 1).then_some((ret, RunTerm::Const(c == 1)));
+        }
+        let mut cur = vn;
+        for _ in 0..4 {
+            let def = fd.obank().get(fd.vbank().get(cur)?.get_def()?)?;
+            if def.is_bool_output() {
+                let loose = matches!(
+                    def.code(),
+                    OpCode::CPUI_BOOL_AND | OpCode::CPUI_BOOL_OR | OpCode::CPUI_BOOL_XOR
+                );
+                return (!loose || !v.is_implied()).then_some((ret, RunTerm::Value(ret)));
+            }
+            if !matches!(def.code(), OpCode::CPUI_COPY | OpCode::CPUI_INT_ZEXT) {
+                return None;
+            }
+            cur = def.get_in(0)?;
+        }
+        None
+    }
+
+    /// Does the condition block `cond`, printed alone and not negated, evaluate to `0` or
+    /// `1`? A folded `&&`/`||` chain does; a leaf does when its `CBRANCH` tests a
+    /// comparison or boolean op that does not print as a bare truth test (`truthycond`
+    /// prints `x != 0` as `x`) and is not a `!` (which prints bare when the branch flips).
+    fn cond_is_boolean(&self, fd: &Funcdata, cond: BlockId) -> bool {
+        let tail = crate::kuna_itecondlist::cond_list_tail(fd, cond);
+        let sb = fd.sblocks_ref();
+        if sb.block(tail).get_type() == BlockType::Condition {
+            return true;
+        }
+        let Some(bb) = sb.block(tail).get_copy() else {
+            return false;
+        };
+        let Some(def) = fd
+            .bb_op_tail(bb)
+            .and_then(|br| fd.obank().get(br))
+            .filter(|o| o.code() == OpCode::CPUI_CBRANCH)
+            .and_then(|o| o.get_in(1))
+            .and_then(|vn| fd.vbank().get(vn))
+            .and_then(|v| v.get_def())
+        else {
+            return false;
+        };
+        fd.obank()
+            .get(def)
+            .is_some_and(|d| d.is_bool_output() && d.code() != OpCode::CPUI_BOOL_NEGATE)
+            && self.truthy_other_operand(fd, def).is_none()
     }
 
     /// (kuna `noretfirst`) Rewrite the `if`/`else` statement `id` (built from `blk`) when
@@ -921,6 +1132,58 @@ enum ReturnValue {
         and: bool,
         other: OpId,
     },
+}
+
+/// One value of a `boolreturn` return run, folded right to left.
+#[derive(Clone)]
+enum RunTerm {
+    /// A returned constant: `true` for `1`.
+    Const(bool),
+    /// The condition of a condition block, negated when the flag is set.
+    Cond(BlockId, bool),
+    /// The value a `RETURN` returns.
+    Value(OpId),
+    And(Box<RunTerm>, Box<RunTerm>),
+    Or(Box<RunTerm>, Box<RunTerm>),
+}
+
+/// `cond ? arm : rest` as a short-circuit value, when it has one.
+fn combine_return(cond: BlockId, arm: &RunTerm, rest: &RunTerm) -> Option<RunTerm> {
+    let test = |negate| Box::new(RunTerm::Cond(cond, negate));
+    Some(match (arm, rest) {
+        (RunTerm::Const(a), RunTerm::Const(b)) if a != b => RunTerm::Cond(cond, !a),
+        (RunTerm::Const(_), RunTerm::Const(_)) => return None,
+        (RunTerm::Const(false), rest) => RunTerm::And(test(true), Box::new(rest.clone())),
+        (RunTerm::Const(true), rest) => RunTerm::Or(test(false), Box::new(rest.clone())),
+        (arm, RunTerm::Const(false)) => RunTerm::And(test(false), Box::new(arm.clone())),
+        (arm, RunTerm::Const(true)) => RunTerm::Or(test(true), Box::new(arm.clone())),
+        _ => return None,
+    })
+}
+
+/// The tree expression of a folded run value; `None` for a bare constant.
+fn add_run_term(tree: &mut crate::kuna_ctree::CTree, term: &RunTerm) -> Option<ExprId> {
+    Some(match term {
+        RunTerm::Const(_) => return None,
+        RunTerm::Cond(block, negate) => {
+            let branch = tree.add_expr(ExprKind::Branch(*block));
+            if *negate {
+                tree.add_expr(ExprKind::Not(branch))
+            } else {
+                branch
+            }
+        }
+        RunTerm::Value(op) => tree.add_expr(ExprKind::Op(*op)),
+        RunTerm::And(left, right) | RunTerm::Or(left, right) => {
+            let l = add_run_term(tree, left)?;
+            let r = add_run_term(tree, right)?;
+            tree.add_expr(if matches!(term, RunTerm::And(..)) {
+                ExprKind::And(l, r)
+            } else {
+                ExprKind::Or(l, r)
+            })
+        }
+    })
 }
 
 /// The first condition block a returned value names.

@@ -5822,6 +5822,35 @@ condition block's statements above it as for an `if`, then `return ( cond );` or
 `return !( cond );` through the `ONLY_BRANCH` render of the header, with the
 body's `RETURN` as the statement's markup. The option builds the tree even when
 `ctree` is off.
+The positive form `return ( cond );` is taken only when the condition's value is
+already `0` or `1` (`cond_is_boolean`): a `BlockCondition` chain, or a leaf whose
+`CBRANCH` tests an op with a boolean output that is not `BOOL_NEGATE` and that the
+`truthycond` render does not print as a bare operand (`x != 0` printed as `x`).
+
+After that statement loop, the same option folds the trailing run of each sequence
+built from a `BlockList` (`fold_return_run`). The tail is a leaf that
+`return_term` accepts: one `RETURN` of an integer or boolean type whose value is
+the constant `0` or `1` (directly or through an implied `COPY`), or a value
+defined by an op with a boolean output (through `COPY` and `INT_ZEXT`) that binds
+tighter than `&&` (an implied `BOOL_AND`, `BOOL_OR` or `BOOL_XOR` is refused, a
+variable holding one is kept). Walking back from the tail, each `if` without else
+and without goto whose body leaf `return_term` accepts joins the run
+(`return_guard`: built from its own block, condition still a `Branch` of the
+block's condition, not a switch-merge or exception `if`), and the run's value
+folds right to left (`combine_return`): `c ? 0 : T` is `!c && T`, `c ? 1 : T`
+is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is `!c || X`, two different
+constants are `c` or `!c`, two values stop the walk. Every `if` but the first
+of the run must have a condition leaf that prints nothing before its test, with
+no label line and no comment (`clean_guard_cond`); an `if` that fails it can only
+be the first, and the walk stops there. A value that ends as the bare positive
+condition must pass `cond_is_boolean`. The first `if` of the run becomes
+`Return` with the folded value and the tail's `RETURN` as markup; the later ones
+and the tail become empty sequences. `emit_block_if` prints the first through the
+same `return_form` path, so its condition block's statements print above the
+`return`; `emit_return_value` parenthesizes a `||` operand of `&&` and a `?:`
+operand (`emit_return_operand`). The run is contiguous and every folded body is a
+bare `return`, so C's own short-circuit evaluation runs the same tests in the
+same order and evaluates nothing the binary skips.
 
 With `option retternary on` (C output; default off), an `if`/`else` the forms
 above leave, whose arms are such leaves each printing one `RETURN` of a constant

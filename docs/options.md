@@ -618,6 +618,7 @@ Three tiers:
 | a parameter read after a call through a function pointer prints as an unassigned local | [`spsolve`](#spsolve----on--off-default-on-destructive-opt-in) |
 | if (c) { return 1; } else { return 0; } where the source returns the comparison | [`boolreturn`](#boolreturn----on--off-default-off) |
 | a predicate function prints as an if/else of two constant returns | [`boolreturn`](#boolreturn----on--off-default-off) |
+| if (c) return 0; ... return 1; where the source has return a && b; | [`boolreturn`](#boolreturn----on--off-default-off) |
 | if (c) { ...long body... } else { abort(); } with the error path last | [`noretfirst`](#noretfirst----on--off-default-off) |
 | the main path of a function is nested in an if whose else only exits | [`noretfirst`](#noretfirst----on--off-default-off) |
 | if (a) { if (b) { ... } } where the source wrote one if (a && b) | [`nestedand`](#nestedand----on--off-default-off) |
@@ -2674,8 +2675,8 @@ The control surface: each of these can make output worse on the wrong source sha
 
 ### `boolreturn` -- on | off, default `off`
 
-- **Symptoms:** if (c) { return 1; } else { return 0; } where the source returns the comparison; a predicate function prints as an if/else of two constant returns.
-- **What it does:** C output only: print an if/else whose body and else each print one statement, `return 1;` and `return 0;` in either order, as the one statement `return (cond);`, or `return !(cond);` when the body returns 0. Each arm must be a basic-block leaf with no label line and no comment whose only printed statement is a RETURN of the constant 0 or 1; the condition prints through the same render as the if header, and the statements in front of the test print above it as before. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function, as `option ctree on` does.
+- **Symptoms:** if (c) { return 1; } else { return 0; } where the source returns the comparison; a predicate function prints as an if/else of two constant returns; if (c) return 0; ... return 1; where the source has return a && b;.
+- **What it does:** C output only: print an if/else whose body and else each print one statement, `return 1;` and `return 0;` in either order, as the one statement `return (cond);`, or `return !(cond);` when the body returns 0; `return (cond);` only when the condition is a `&&`/`||` chain or a comparison that does not print as a bare truth test, so the value stays 0 or 1. Also fold the trailing run of a list: ifs without else whose body only returns 0, 1 or a comparison, ending in such a return, print as one return of a short-circuit expression that keeps the tests in order (`if (!a) return 0; return b < c;` prints `return (a) && b < c;`; `c ? 0 : T` is `!c && T`, `c ? 1 : T` is `c || T`, `c ? X : 0` is `c && X`, `c ? X : 1` is `!c || X`). Each arm must be a basic-block leaf with no label line and no comment whose only printed statement is a RETURN of an integer value; only the first folded if may print statements before its test, and the condition prints through the same render as the if header. A rewrite of the C syntax tree (`docs/architecture/ctree.md`): turning it on builds the tree for every printed function, as `option ctree on` does.
 - **When to flip:** Turn on when the source likely returned a comparison directly (predicates, `is_x` helpers, comparison callbacks), which compilers lower to two constant returns. Leave off to keep the if/else the binary literally has: the same object code comes from a source that wrote the if/else.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-boolreturn
 - **Example:** `option boolreturn on`

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright 2019-2020 Joonas Javanainen <joonas.javanainen@gmail.com>
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<processor_spec>
+  <properties>
+    <property key="pcodeInjectLibraryClass" value="fi.gekkio.ghidraboy.PcodeInjectLibrarySm83"/>
+    <!-- calls falling into the next routine are not evidence of non-returning callees -->
+    <property key="Analyzers.Non-Returning Functions - Discovered" value="false"/>
+  </properties>
+  <programcounter register="PC"/>
+  <!-- I/O registers whose value changes without CPU writes -->
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="ram" first="0xff00" last="0xff02"/> <!-- P1 SB SC -->
+    <range space="ram" first="0xff04" last="0xff05"/> <!-- DIV TIMA -->
+    <range space="ram" first="0xff0f" last="0xff0f"/> <!-- IF -->
+    <range space="ram" first="0xff26" last="0xff26"/> <!-- NR52 -->
+    <range space="ram" first="0xff41" last="0xff41"/> <!-- STAT -->
+    <range space="ram" first="0xff44" last="0xff44"/> <!-- LY -->
+    <range space="ram" first="0xff4d" last="0xff4d"/> <!-- KEY1 -->
+    <range space="ram" first="0xff55" last="0xff56"/> <!-- HDMA5 RP -->
+    <!-- BCPS BCPD OCPS OCPD: palette index auto-increments on data writes -->
+    <range space="ram" first="0xff68" last="0xff6b"/>
+    <range space="ram" first="0xff76" last="0xff77"/> <!-- PCM12 PCM34 -->
+  </volatile>
+</processor_spec>

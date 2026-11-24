@@ -4024,6 +4024,20 @@ x87 converts to the integer indefinite value when invalid is masked, take
 `FLOAT_TRUNC`'s unspecified result, as for `FISTTP`. Not settable: the rewrite
 is the conversion the instruction performs under that control word.
 
+**opaqueoffset** —
+`crates/unlace-bandb/src/p3_dataflow/opaqueoffset.rs` (`prove`), called from
+RuleOpaquePredicate after the `opaquepredicate` proofs. With `option
+opaqueoffset on` (default off, in no preset) an `INT_EQUAL` or `INT_NOTEQUAL`
+whose two sides are one opaque value plus constants is replaced by a `COPY` of
+its result. Each side is read as `base + offset` at its own width: `COPY`,
+`INT_ADD` and `INT_SUB` with a constant move the offset, `INT_SUB` of two values
+with the same base cancels it, and `INT_AND` of two constants folds; any other
+definition makes the side a base of its own, and a walk deeper than 48
+definitions gives up the same way. Two sides with the same base decide `==` and
+`!=` exactly by their offset difference. Ordering comparisons are never folded.
+The rule runs when either this option or `opaquepredicate` is on; the
+`CBRANCH` identical-arms proof still needs `opaquepredicate`.
+
 **opaquepredicate** —
 `crates/unlace-bandb/src/p3_dataflow/opaquepredicate.rs
 (RuleOpaquePredicate)`, oppool1, fires on INT_EQUAL, INT_NOTEQUAL, INT_LESS,

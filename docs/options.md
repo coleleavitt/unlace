@@ -662,6 +662,9 @@ Three tiers:
 | dead arm guarded by an arithmetic identity is still printed | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
 | obfuscated function has bogus control flow behind always-true conditions | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
 | condition compares an OR minus an AND of two values with their XOR | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
+| a peel check compares sp + N with sp + M | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
+| a goto into a loop whose guard compares two stack-relative addresses | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
+| a compare of two stack-relative addresses is printed as a test | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
 | callee result handed to the next call as its argument is lost | [`callresultuse`](#callresultuse----off--on--all-default-off) |
 | objective-c receiver or argument that is the previous message's result is dropped | [`callresultuse`](#callresultuse----off--on--all-default-off) |
 | retained object passed to a message and then released loses the message's receiver | [`callresultuse`](#callresultuse----off--on--all-default-off) |
@@ -3000,6 +3003,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Enable on obfuscated code whose branches test arithmetic that looks input-dependent but is not, to see the code that actually runs. Leave off to keep the predicate visible, for example when identifying the obfuscator or matching the binary's control-flow graph block for block. Use `globals` when the predicates read globals that nothing assigns (bogus control flow keyed on two zero globals); it costs one decode of the whole program on the first function that asks (about 0.65 s per MiB of code), and it is only as good as the scan, so check a surprising fold against the cross-references of the global. `aggressive` enables `on`, never `globals`, and `auto` picks `aggressive` for inputs under 500 KiB, so a no-flag decompile of a small binary folds; `--mode reliable` or `--option opaquepredicate off` keeps the predicates.
 - **Where / provenance:** P3/simplification-quiescence · unlace · structure-recovery · unlace-opaque-predicate
 - **Example:** `option opaquepredicate globals`
+
+### `opaqueoffset` -- off | on, default `off`
+
+- **Symptoms:** a peel check compares sp + N with sp + M; a goto into a loop whose guard compares two stack-relative addresses; a compare of two stack-relative addresses is printed as a test.
+- **What it does:** Fold an `==` or `!=` between two values that are one opaque value plus different constants, so a peel check or loop guard over stack-relative addresses loses the arm that never runs. `sp + 0x40 == sp + 8` is never true and `((sp + 0x40) - (sp + 4)) & 4` is always 4 for every value of `sp`. Each side is read as a base plus a constant through COPY, INT_ADD and INT_SUB with a constant (and INT_SUB of two values with the same base), and through INT_AND of two constants; any other definition makes the side a base of its own. Two sides with the same base differ by a constant, which decides the comparison exactly at the width of the operands. Ordering comparisons are not folded, since `sp + 0x40 < sp + 8` depends on `sp`. It runs with `opaquepredicate` on or off, and it adds to `opaquepredicate`'s proofs rather than replacing them. The proven comparison becomes its constant and ordinary constant-branch removal deletes the dead arm.
+- **When to flip:** Enable on compiled code whose loop guards or peel checks compare two stack-relative addresses, when a peeled loop prints as a goto into the loop. Leave off to keep the comparison visible, or to match the binary's control-flow graph block for block.
+- **Where / provenance:** P3/simplification-quiescence · unlace · structure-recovery · unlace-opaque-offset
+- **Example:** `option opaqueoffset on`
 
 ### `callresultuse` -- off | on | all, default `off`
 

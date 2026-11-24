@@ -8727,6 +8727,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "opaqueoffset"
+values = "off|on"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-opaque-offset"
+summary = "Fold an `==` or `!=` between two values that are one opaque value plus different constants, so a peel check or loop guard over stack-relative addresses loses the arm that never runs. `sp + 0x40 == sp + 8` is never true and `((sp + 0x40) - (sp + 4)) & 4` is always 4 for every value of `sp`. Each side is read as a base plus a constant through COPY, INT_ADD and INT_SUB with a constant (and INT_SUB of two values with the same base), and through INT_AND of two constants; any other definition makes the side a base of its own. Two sides with the same base differ by a constant, which decides the comparison exactly at the width of the operands. Ordering comparisons are not folded, since `sp + 0x40 < sp + 8` depends on `sp`. It runs with `opaquepredicate` on or off, and it adds to `opaquepredicate`'s proofs rather than replacing them. The proven comparison becomes its constant and ordinary constant-branch removal deletes the dead arm."
+use_when = "Enable on compiled code whose loop guards or peel checks compare two stack-relative addresses, when a peeled loop prints as a goto into the loop. Leave off to keep the comparison visible, or to match the binary's control-flow graph block for block."
+example = "option opaqueoffset on"
+source_decompiler = "unlace"
+inspiration = "Constant branch folding over symbolic base+offset values in the original unlace ConstBranchFoldPass (origin/master, crates/unlace-passes/src/branch_fold.rs)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "a peel check compares sp + N with sp + M|a goto into a loop whose guard compares two stack-relative addresses|a compare of two stack-relative addresses is printed as a test"
+
+[[settable]]
 option = "callresultuse"
 values = "off|on|all"
 default = "off"

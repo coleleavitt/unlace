@@ -548,7 +548,7 @@ fn install_on_idle_workers(
         .partition(|w| w.synth == SynthWorker::Force && w.table == id);
     if ready.is_empty() && stale.is_empty() && !session.holds_table(table) {
         let exe =
-            std::env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
+            std::env::current_exe().map_err(|e| format!("cannot locate the unlace binary: {e}"))?;
         let mut w = Worker::spawn(cfg, SynthWorker::Force, &exe, session.path())
             .map_err(|e| format!("{SPAWN_FAILED}: {e}"))?;
         w.table = id;

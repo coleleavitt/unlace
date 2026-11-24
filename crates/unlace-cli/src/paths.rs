@@ -156,7 +156,7 @@ pub fn require_specs_dir() -> Result<PathBuf, String> {
         }
     }
     let unpack = match crate::embedded_specs::tree() {
-        Some(Err(e)) => format!(" (the SLEIGH tree built into kuna could not be unpacked: {e})"),
+        Some(Err(e)) => format!(" (the SLEIGH tree built into unlace could not be unpacked: {e})"),
         _ => String::new(),
     };
     Err(format!(
@@ -222,7 +222,7 @@ fn builtin(env_var: &str, subcommand: &'static str) -> Result<Program, String> {
             subcommand: None,
         });
     }
-    let path = env::current_exe().map_err(|e| format!("cannot locate the kuna binary: {e}"))?;
+    let path = env::current_exe().map_err(|e| format!("cannot locate the unlace binary: {e}"))?;
     Ok(Program {
         path,
         subcommand: Some(subcommand),

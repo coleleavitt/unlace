@@ -149,7 +149,10 @@ fn svd_names_a_bundled_device() {
     let hex = common::fixture("cortexm3_raw.hex");
     let (out, err, code) = common::run_kuna(&["decompile-all", &hex, "--svd", "STM32F401CC"]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("bundled description STM32F401 for STM32F401CC"), "{err}");
+    assert!(
+        err.contains("bundled description STM32F401 for STM32F401CC"),
+        "{err}"
+    );
     assert!(out.contains("void USART1_IRQHandler(void)"), "{out}");
     assert!(out.contains("USART1.DR = 0x78;"), "{out}");
     assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"), "{out}");

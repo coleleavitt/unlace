@@ -1226,12 +1226,12 @@ pub struct ActionPool {
     base: ActionBase,
     /// (unlace `dirtypool`) The ops a repeated sweep visits: the neighbourhood of
     /// every op a rule changed in the previous sweep.  `None` = visit every op.
-    focus: Option<std::collections::HashSet<OpId>>,
+    focus: Option<crate::fasthash::FxHashSet<OpId>>,
     /// (unlace `dirtypool`) The newest op creation time when the previous sweep
     /// started; a newer op is always visited.
     focus_time: u32,
     /// (unlace `dirtypool`) The focus the current sweep is building.
-    touched: std::collections::HashSet<OpId>,
+    touched: crate::fasthash::FxHashSet<OpId>,
     /// The set of rules in this pool, in insertion order (C++ `allrules`).
     allrules: Vec<RuleEntry>,
     /// Rules associated with each OpCode, in insertion order — a flat
@@ -1636,7 +1636,7 @@ pub fn add_wave_ops(
 }
 
 /// (unlace `dirtypool`) Add `op` and the ops within two def-use steps of it.
-fn touch_neighbourhood(set: &mut std::collections::HashSet<OpId>, data: &Funcdata, op: OpId) {
+fn touch_neighbourhood(set: &mut crate::fasthash::FxHashSet<OpId>, data: &Funcdata, op: OpId) {
     let mut frontier = vec![op];
     set.insert(op);
     for _ in 0..2 {

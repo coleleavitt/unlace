@@ -4670,8 +4670,11 @@ proof gives up). Both sides are built into one circuit, equal gates over equal
 operands built once so shared terms share their state, and run from bit 0 to
 the root's width: at each bit every reachable state is stepped with every
 combination of the leaves' bits, and the set of next states is kept. Two
-outputs that differ at a reachable state are a counterexample; none differing
-at any bit is a proof at that width. More than 1024 states, a product, or a
+outputs that differ at a reachable state are a counterexample: the input is the
+prefix of bits that first reached that state (kept with each state) plus the
+inputs of the current bit, so the refuting leaves are reported with the bits
+above the differing one zero. None differing at any bit is a proof at that
+width. More than 1024 states, a product, or a
 multiplier too wide means no proof and no rewrite.
 
 The replacement is applied only when it has fewer ops than the tree and 64
@@ -4804,8 +4807,10 @@ function, `WARNING: egraph: an MBA expression in this function was simplified
 without a full-width proof ...`, which the comment database keeps once per
 function. The marks report the checks; acceptance is unchanged. With
 `UNLACE_EGRAPH_TRACE` set, each refused candidate is printed to stderr with
-the input that refutes it (the random or small-width check); a refused full-width
-proof has no input to name and is reported as such.
+the input that refutes it: the random check, the small-width check, or the
+full-width proof, whose refuting input is the state-path witness above. A proof
+refutation whose witness does not re-evaluate to a difference is printed without
+an input.
 
 **Measured** (pinned build 54380310a5, with the once-per-tree-value
 regrouping). The corpus: functions whose return value is a 1-4 variable

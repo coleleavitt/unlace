@@ -281,6 +281,10 @@ specs/Ghidra/Processors/TMS320C2x vendors the TI TMS320C2x / C5x SLEIGH module T
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/RX vendors the Renesas RX (RXv1-v3) SLEIGH module RX of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

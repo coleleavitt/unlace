@@ -317,6 +317,10 @@ specs/Ghidra/Processors/ESRL vendors the Sharp ESR-L SLEIGH specification of
 benryves/GhidraESRL (https://github.com/benryves/GhidraESRL), released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/TopSM vendors the TI TopSM RF core SLEIGH specification of
+antoniovazquezblanco/GhidraTopSM (https://github.com/antoniovazquezblanco/GhidraTopSM), released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

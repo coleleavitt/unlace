@@ -156,7 +156,7 @@ before it calls, returns or jumps away
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (dead_after)`). ARM's `add`
 without `s` copies the carry into a scratch flag the next `mov` overwrites,
 which is the case this admits; and so does a compare's exit that branches back to the head after doing
-anything but `clrex`. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
+anything but `clrex`. An operand no storage holds at the load (`~x` for an outline `ldclr` helper's `bic`) is built with new ops in front of it. The LOAD becomes `__sync_fetch_and_<op>(p, X)`,
 `__sync_lock_test_and_set(p, X)` or `__sync_val_compare_and_swap(p, E, N)`, the
 monitor's pass and status become the constants 1 and 0, and the STORE a dead
 copy; dead-branch removal then deletes the back edge. A compare-exchange that

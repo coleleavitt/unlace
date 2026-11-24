@@ -1,0 +1,23 @@
+Ghidra R8C processor module
+Copyright 2026 AlexDev and contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+data/languages/R8C.slaspec is a derivative work of Ghidra's
+Ghidra/Processors/M16C/data/languages/M16C_60.slaspec, developed by the
+National Security Agency (NSA) and released under the Apache License 2.0
+(https://github.com/NationalSecurityAgency/ghidra). Every change relative to
+that file is marked with "[R8C fix]" / "[R8C]" comments and listed in
+docs/TECHNICAL.md.
+
+Instruction semantics were checked against the Renesas "R8C/Tiny Series
+Software Manual" (REJ09B0001-0200 Rev.2.00) and the calling convention against
+the Renesas "M16C Series, R8C Family C Compiler Package V.5.45 C Compiler
+User's Manual" (REJ10J1995-0300). The manuals are NOT redistributed here.
+
+The differential test (tests/difftest) downloads the GNU simulator sources
+(binutils-gdb sim/m32c, GPL-3.0-or-later) at test time; they are not part of
+this distribution. tests/difftest/sim/harness.c and
+tests/difftest/sim/manual_fixes.py are GPL-3.0-or-later because they are built
+together with those sources. Nothing from the test directory is included in
+the extension zip.

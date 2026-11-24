@@ -4185,6 +4185,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `NS32000` | National Semiconductor NS32000 | `NS32016:LE:32:default`, `NS32016:LE:32:NS32532` | aleph-void/ghidra-NS32016 (fork of raybellis/ghidra-NS32016) @ `de87d2c093`, Apache-2.0 |
 | `A29K` | AMD Am29000 | `a29k:LE:32:default`, `a29k:BE:32:default` | aleph-void/ghidra_a29k (fork of mumbel/ghidra_a29k) @ `f3b6ab7373`, Apache-2.0 |
 | `uPD78xx` | NEC 78K0 / 78K0S / 78K4 (uPD78xx) | `upd78:LE:16:default` | aleph-void/ghidra-upd78xx @ `036419037e`, Apache-2.0 |
+| `R8C` | Renesas M16C/20 and R8C/Tiny | `R8C:LE:16:default` | AlexDev-TH/ghidra-r8c @ `6484b9470a`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

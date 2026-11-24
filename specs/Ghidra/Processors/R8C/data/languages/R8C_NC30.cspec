@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Renesas NC30 / NC8C calling convention for the R8C core.
+  Source: "M16C Series, R8C Family C Compiler Package V.5.45 C Compiler User's Manual"
+          REJ10J1995-0300, Appendix D.1 (types), D.3 (function call rules), 3.3.3 (registers).
+
+  Arguments (prototyped, non-variadic):
+    1st  char/_Bool            -> R1L
+         int/short/near ptr    -> R1
+    2nd  int/short/near ptr    -> R2      (a char 2nd argument goes on the stack!)
+    rest / other types         -> stack, starting right after the 3-byte return address
+  Return:
+    char/_Bool -> R0L, int/near ptr -> R0, long/float/far ptr -> R2:R0,
+    double -> R3:R2:R1:R0, long long -> R3:R1:R2:R0, struct -> caller supplied buffer
+  Registers R0-R3, A0, A1 may be destroyed by a call; SB and FB are preserved.
+  The caller removes stack arguments (RTS pops only the 3-byte return address).
+-->
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="1"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="1"/>
+    <pointer_size value="2"/>
+    <wchar_size value="2"/>
+    <short_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="1"/>
+      <entry size="4" alignment="1"/>
+      <entry size="8" alignment="1"/>
+    </size_alignment_map>
+  </data_organization>
+
+  <global>
+    <range space="RAM"/>
+  </global>
+  <stackpointer register="SP" space="RAM"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="3"/>
+  </returnaddress>
+
+  <default_proto>
+    <prototype name="__nc30" extrapop="3" stackshift="3">
+      <input>
+        <!-- Ghidra requires entries in descending storage-class order; the classes are only
+             used by the rules below to pin "argument 1 -> R1" and "argument 2 -> R2". -->
+        <pentry minsize="1" maxsize="2" storage="class2">
+          <register name="R1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="2" storage="class1">
+          <register name="R2"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500" align="1">
+          <addr offset="3" space="stack"/>
+        </pentry>
+        <!-- structures / unions are always passed on the stack -->
+        <rule>
+          <datatype name="struct"/>
+          <goto_stack/>
+        </rule>
+        <rule>
+          <datatype name="union"/>
+          <goto_stack/>
+        </rule>
+        <!-- variadic arguments are always passed on the stack -->
+        <rule>
+          <datatype name="any"/>
+          <varargs first="0"/>
+          <goto_stack/>
+        </rule>
+        <!-- 1st argument: char -> R1L, int / near pointer -> R1 -->
+        <rule>
+          <datatype name="any" minsize="1" maxsize="2"/>
+          <position index="0"/>
+          <consume storage="class2"/>
+        </rule>
+        <!-- 2nd argument: int / near pointer (exactly 2 bytes) -> R2 -->
+        <rule>
+          <datatype name="any" minsize="2" maxsize="2"/>
+          <position index="1"/>
+          <consume storage="class1"/>
+        </rule>
+        <!-- everything else -->
+        <rule>
+          <datatype name="any"/>
+          <goto_stack/>
+        </rule>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="2">
+          <register name="R0"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="R2R0"/>
+        </pentry>
+        <pentry minsize="5" maxsize="8">
+          <addr space="join" piece1="R3" piece2="R2" piece3="R1" piece4="R0"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="SP"/>
+        <register name="FB"/>
+        <register name="SB"/>
+        <register name="ISP"/>
+        <register name="INTB"/>
+      </unaffected>
+      <killedbycall>
+        <register name="R0"/>
+        <register name="R1"/>
+        <register name="R2"/>
+        <register name="R3"/>
+        <register name="A0"/>
+        <register name="A1"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+
+  <!-- Functions compiled without a prototype (K&R style, label prefix "_"): every argument on the stack -->
+  <prototype name="__nc30_stackargs" extrapop="3" stackshift="3">
+    <input>
+      <pentry minsize="1" maxsize="500" align="1">
+        <addr offset="3" space="stack"/>
+      </pentry>
+    </input>
+    <output>
+      <pentry minsize="1" maxsize="2">
+        <register name="R0"/>
+      </pentry>
+      <pentry minsize="3" maxsize="4">
+        <register name="R2R0"/>
+      </pentry>
+      <pentry minsize="5" maxsize="8">
+        <addr space="join" piece1="R3" piece2="R2" piece3="R1" piece4="R0"/>
+      </pentry>
+    </output>
+    <unaffected>
+      <register name="SP"/>
+      <register name="FB"/>
+      <register name="SB"/>
+      <register name="ISP"/>
+      <register name="INTB"/>
+    </unaffected>
+    <killedbycall>
+      <register name="R0"/>
+      <register name="R1"/>
+      <register name="R2"/>
+      <register name="R3"/>
+      <register name="A0"/>
+      <register name="A1"/>
+    </killedbycall>
+  </prototype>
+
+  <!-- Interrupt handlers (#pragma INTERRUPT): no arguments, return with REIT (pops 4 bytes),
+       every register is preserved. -->
+  <prototype name="__interrupt" extrapop="4" stackshift="4">
+    <input>
+    </input>
+    <output>
+    </output>
+    <unaffected>
+      <register name="R0"/>
+      <register name="R1"/>
+      <register name="R2"/>
+      <register name="R3"/>
+      <register name="A0"/>
+      <register name="A1"/>
+      <register name="SP"/>
+      <register name="FB"/>
+      <register name="SB"/>
+      <register name="ISP"/>
+      <register name="INTB"/>
+      <register name="FLG"/>
+    </unaffected>
+  </prototype>
+</compiler_spec>

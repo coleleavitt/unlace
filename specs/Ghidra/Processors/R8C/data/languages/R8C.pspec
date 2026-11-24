@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  R8C/Tiny processor specification.
+  Only CPU-core facts that hold for every R8C/Tiny device are encoded here
+  (R8C/Tiny Series Software Manual REJ09B0001-0200, sections 1.2 and 1.10).
+  Device-specific SFR names and RAM/ROM sizes differ between groups and are
+  intentionally NOT hard-coded; use ghidra_scripts/R8C_LoadSfrLabels.java with a
+  CSV taken from your device's hardware manual.
+-->
+<processor_spec>
+  <programcounter register="PC"/>
+
+  <!-- SFR area 00000h-002FFh: every access is a hardware access, never cache/merge it -->
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="RAM" first="0x0" last="0x2ff"/>
+  </volatile>
+
+  <default_symbols>
+    <!-- Fixed vector table 0FFDCh-0FFFFh (4 bytes each: 20-bit address + ID/OFS byte).
+         The R8C analyzer turns these into 3-byte pointers and disassembles the targets. -->
+    <symbol name="VECTOR_UNDEFINED_INSTRUCTION" address="RAM:0FFDC"/>
+    <symbol name="VECTOR_OVERFLOW"              address="RAM:0FFE0"/>
+    <symbol name="VECTOR_BRK"                   address="RAM:0FFE4"/>
+    <symbol name="VECTOR_ADDRESS_MATCH"         address="RAM:0FFE8"/>
+    <symbol name="VECTOR_SINGLE_STEP"           address="RAM:0FFEC"/>
+    <symbol name="VECTOR_WDT_OSC_STOP_VDET"     address="RAM:0FFF0"/>
+    <symbol name="VECTOR_RESERVED_FFF4"         address="RAM:0FFF4"/>
+    <symbol name="VECTOR_RESERVED_FFF8"         address="RAM:0FFF8"/>
+    <symbol name="VECTOR_RESET"                 address="RAM:0FFFC"/>
+  </default_symbols>
+
+  <default_memory_blocks>
+    <memory_block name="SFR" start_address="RAM:0000" mode="rwv" length="0x300" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

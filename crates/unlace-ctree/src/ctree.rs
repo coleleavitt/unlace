@@ -233,6 +233,7 @@ pub struct CTree {
     list_tries: BTreeMap<StmtId, ListTry>,
     java_lists: BTreeSet<StmtId>,
     rest_tries: BTreeMap<StmtId, Vec<Option<ListTry>>>,
+    switch_exits: BTreeMap<StmtId, Vec<bool>>,
 }
 
 impl CTree {
@@ -293,6 +294,17 @@ impl CTree {
     /// takes (`list_try_form`).
     pub fn set_rest_tries(&mut self, id: StmtId, rests: Vec<Option<ListTry>>) {
         self.rest_tries.insert(id, rests);
+    }
+
+    /// Record, for the switch `id`, whether each printed arm ends in a `break` on its own
+    /// account: its case exits the switch and it is not the last arm.
+    pub fn set_switch_exits(&mut self, id: StmtId, exits: Vec<bool>) {
+        self.switch_exits.insert(id, exits);
+    }
+
+    /// The recorded exit flag of arm `index` of the switch `id`, when one was recorded.
+    pub fn switch_exit(&self, id: StmtId, index: usize) -> Option<bool> {
+        self.switch_exits.get(&id)?.get(index).copied()
     }
 
     /// The `try` form recorded for the rest of the list sequence `id` from `skip` on. The

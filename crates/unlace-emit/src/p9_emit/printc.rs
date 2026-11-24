@@ -6980,9 +6980,11 @@ impl PrintC {
                 }
                 // Blocks that formally exit the switch need an explicit `break;`
                 // (unless it is the last case, whose fall-through is the close).
-                let isexit = case.isexit;
                 let last = i == ncase - 1;
-                if (isexit && !last) || (last && self.emit.label_dangling()) {
+                let exits_here = self
+                    .tree_switch_exit(blk, i)
+                    .unwrap_or(case.isexit && !last);
+                if exits_here || (last && self.emit.label_dangling()) {
                     self.emit.tag_line();
                     self.emit_goto_statement(
                         fd,

@@ -373,6 +373,7 @@ impl PrintC {
         }
         self.ctree_list_tries(fd);
         self.ctree_rest_tries(fd);
+        self.ctree_switch_exits(fd);
         if let Some(tree) = self.ctree.as_mut() {
             tree.advance(CMaturity::Rewritten);
         }
@@ -410,6 +411,56 @@ impl PrintC {
                 tree.set_java_list(id);
             }
         }
+    }
+
+    /// Record on each switch the arms that end in a `break` of their own (`isexit` and not the
+    /// last arm): the flag `emit_block_switch_c` reads. The arms are `switch_arms`, the same list
+    /// the printer walks, and the flag is that list's own test, so the printer's `break` is the
+    /// same. A case the arm list names but the switch does not hold leaves no record.
+    fn ctree_switch_exits(&mut self, fd: &Funcdata) {
+        let switches: Vec<(StmtId, BlockId)> = match self.ctree.as_ref() {
+            Some(tree) => tree
+                .stmt_ids()
+                .into_iter()
+                .filter_map(|id| {
+                    let stmt = tree.stmt(id);
+                    let blk = stmt.origin?;
+                    (tree.node_for(blk) == Some(id)
+                        && matches!(stmt.kind, StmtKind::Switch { .. })
+                        && fd.sblocks_ref().block(blk).get_type() == BlockType::Switch)
+                        .then_some((id, blk))
+                })
+                .collect(),
+            None => return,
+        };
+        for (id, blk) in switches {
+            let arms = self.switch_arms(fd, blk);
+            let last = arms.len().checked_sub(1);
+            let exits: Option<Vec<bool>> = arms
+                .iter()
+                .enumerate()
+                .map(|(i, arm)| {
+                    let case = fd
+                        .sblocks_ref()
+                        .block(arm.owner)
+                        .switch_caseblocks()
+                        .get(arm.index)?;
+                    Some(case.isexit && Some(i) != last)
+                })
+                .collect();
+            if let Some(exits) = exits
+                && let Some(tree) = self.ctree.as_mut()
+            {
+                tree.set_switch_exits(id, exits);
+            }
+        }
+    }
+
+    /// The `break` flag the tree recorded for arm `index` of the switch `blk` (`ctree_switch_exits`),
+    /// when it holds one for that switch.
+    pub(super) fn tree_switch_exit(&self, blk: BlockId, index: usize) -> Option<bool> {
+        let tree = self.ctree.as_ref()?;
+        tree.switch_exit(tree.node_for(blk)?, index)
     }
 
     /// (unlace `itaniumeh`) Record on each list and graph sequence the `try` form of every rest

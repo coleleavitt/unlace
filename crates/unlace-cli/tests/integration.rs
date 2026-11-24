@@ -44,6 +44,8 @@ mod stm8_raw;
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
+#[path = "aarch64_rme.rs"]
+mod aarch64_rme;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

@@ -4164,6 +4164,19 @@ used. Before, the C2000 family had no language. Exercised by
 `unlace-cli/tests/c28x_raw.rs` (a word-addressed `ADDB ACC,#5; LRET` image
 decompiles with no bad or unimplemented instruction).
 
+### AArch64 RME and ATS1A system instructions (#98)
+
+`specs/Ghidra/Processors/AARCH64/data/languages/AARCH64_rme.sinc` names the
+Armv9 Realm Management Extension maintenance instructions, which the base spec
+decoded only as a generic `sys`: `TLBI RPAOS`, `RPALOS`, `PAALLOS`,
+`PAALL` (and their FEAT_XS `nXS` forms), `DC CIPAPA` and `DC CIGDPAPA`, plus
+the FEAT_ATS1A translations `AT S1E1A`, `S1E2A` and `S1E3A`. Each lifts to a
+user operation named after it (`TLBI_RPAOS(Xt)`, `DC_CIPAPA(Xt)`); the AT
+forms write `par_el1`, as the base spec's AT instructions do. The register-less
+TLBI forms match only Rt=31 (as in LLVM); another Rt stays `sys`. Exercised by
+`unlace-cli/tests/aarch64_rme.rs` (a raw image decompiles to the user
+operations).
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its

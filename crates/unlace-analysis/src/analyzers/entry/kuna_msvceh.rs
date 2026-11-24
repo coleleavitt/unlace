@@ -16,10 +16,14 @@
 //! type it describes (`ThrowInfo<std::runtime_error>`), and on x64 each call of
 //! the imported `_CxxThrowException` whose `rdx` is loaded with a known
 //! `ThrowInfo` (or zeroed with `rcx`, a rethrow) gets an instruction comment in
-//! the function `.pdata` places it in. References are image-relative on x64 and
+//! the function `.pdata` places it in. A `CatchableType`'s `copyFunction` is
+//! named as its class's copy constructor and a `ThrowInfo`'s `pmfnUnwind` as
+//! the thrown class's destructor ([`member_symbols`]). References are image-relative on x64 and
 //! absolute on x86 ([`RefKind`]). The x64 catch side (`FuncInfo`, FH4,
 //! funclets) is [`super::kuna_msvcfuncinfo`], SEH scope tables and x86 C++
 //! `FuncInfo` are [`super::kuna_msvcseh`], all run from the same pass.
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use object::{BinaryFormat, Object, ObjectSection, SectionKind};
 use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
@@ -72,6 +76,11 @@ pub struct CatchableType {
     pub type_descriptor: u64,
     /// The type, demangled (`std::runtime_error`, `int`, `char const *`).
     pub name: String,
+    /// The class as the `rtti` pass names it (templates dropped), or `None`
+    /// for a built-in or pointer type.
+    pub class: Option<String>,
+    /// `copyFunction`: the type's copy constructor, 0 for a bitwise copy.
+    pub copy_function: u64,
 }
 
 /// One `ThrowInfo` with the types its `CatchableTypeArray` lists, thrown type first.
@@ -80,6 +89,8 @@ pub struct ThrowInfo {
     pub addr: u64,
     /// `TI_IsConst` (1), `TI_IsVolatile` (2), `TI_IsUnaligned` (4), ...
     pub attributes: u32,
+    /// `pmfnUnwind`: the thrown object's destructor, 0 when it has none.
+    pub unwind: u64,
     pub catchable_type_array: u64,
     pub types: Vec<CatchableType>,
 }
@@ -133,6 +144,7 @@ pub fn collect<'a>(file: &'a object::File<'a>, bytes: &[u8]) -> AnalysisOutput {
         return out;
     }
     out.symbols.extend(label_symbols(&infos));
+    out.symbols.extend(member_symbols(&infos));
     if file.architecture() == object::Architecture::X86_64 && !targets.is_empty() {
         let by_addr: FxHashMap<u64, &ThrowInfo> = infos.iter().map(|ti| (ti.addr, ti)).collect();
         let sites = find_throw_sites(&code, true, &targets, &by_addr.keys().copied().collect());
@@ -243,7 +255,7 @@ pub fn find_throw_infos(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> Ve
             if !seen.insert(addr) {
                 continue;
             }
-            let Some((attributes, cta)) = read_throw_info_head(img, rk, text, addr) else {
+            let Some((attributes, unwind, cta)) = read_throw_info_head(img, rk, text, addr) else {
                 continue;
             };
             let Some(list) = ctas.get(&cta) else {
@@ -252,6 +264,7 @@ pub fn find_throw_infos(img: &ImageBytes, rk: &RefKind, text: &TextRanges) -> Ve
             out.push(ThrowInfo {
                 addr,
                 attributes,
+                unwind,
                 catchable_type_array: cta,
                 types: list.iter().filter_map(|a| cts.get(a).cloned()).collect(),
             });
@@ -322,6 +335,8 @@ fn read_catchable_type(
         properties,
         type_descriptor: td,
         name: type_name(mangled),
+        class: crate::demangle::demangle_rtti_class_name(mangled),
+        copy_function: rk.resolve_ref(&b[24..28]).unwrap_or(0),
     })
 }
 
@@ -348,13 +363,13 @@ fn read_catchable_type_array(
     Some(list)
 }
 
-/// The attributes and array of the 16-byte `ThrowInfo` at `addr`.
+/// The attributes, destructor and array of the 16-byte `ThrowInfo` at `addr`.
 fn read_throw_info_head(
     img: &ImageBytes,
     rk: &RefKind,
     text: &TextRanges,
     addr: u64,
-) -> Option<(u32, u64)> {
+) -> Option<(u32, u64, u64)> {
     let b = img.read(addr, 16)?;
     let attributes = u32_at(b, 0);
     if attributes > 0x1f
@@ -363,7 +378,11 @@ fn read_throw_info_head(
     {
         return None;
     }
-    Some((attributes, rk.resolve_ref(&b[12..16])?))
+    Some((
+        attributes,
+        rk.resolve_ref(&b[4..8]).unwrap_or(0),
+        rk.resolve_ref(&b[12..16])?,
+    ))
 }
 
 /// A `TypeDescriptor` name as C++: a class through the MSVC demangler, a
@@ -467,6 +486,44 @@ pub fn label_symbols(infos: &[ThrowInfo]) -> Vec<SymFact> {
         }
     }
     out
+}
+
+/// The constructors and destructors the exception metadata names: a
+/// `CatchableType`'s `copyFunction` is its class's copy constructor
+/// (`C::C`), and a `ThrowInfo`'s `pmfnUnwind` the thrown class's destructor
+/// (`C::~C`). An address two classes claim (an identical-code fold of two
+/// copy constructors) is left unnamed.
+pub fn member_symbols(infos: &[ThrowInfo]) -> Vec<SymFact> {
+    use crate::rtti::kuna_itaniumctors::{ctor_name, dtor_name};
+    let mut named: BTreeMap<u64, BTreeSet<String>> = BTreeMap::new();
+    for ti in infos {
+        if let Some(class) = ti.types.first().and_then(|c| c.class.as_deref())
+            && ti.unwind != 0
+        {
+            named.entry(ti.unwind).or_default().insert(dtor_name(class));
+        }
+        for ct in &ti.types {
+            if let Some(class) = ct.class.as_deref()
+                && ct.copy_function != 0
+            {
+                named
+                    .entry(ct.copy_function)
+                    .or_default()
+                    .insert(ctor_name(class));
+            }
+        }
+    }
+    named
+        .into_iter()
+        .filter(|(_, names)| names.len() == 1)
+        .filter_map(|(addr, names)| {
+            Some(SymFact {
+                addr,
+                name: names.into_iter().next()?,
+                kind: SymKind::Function,
+            })
+        })
+        .collect()
 }
 
 /// The calls of a throw target in `code` and what each throws: the `ThrowInfo`
@@ -690,6 +747,41 @@ mod tests {
         assert!(names.contains(&"ThrowInfo<int const>".to_string()));
         assert!(names.contains(&"CatchableType<std::exception>".to_string()));
         assert!(names.contains(&"CatchableTypeArray<int>".to_string()));
+    }
+
+    /// A `CatchableType`'s copy function is its class's copy constructor and
+    /// a `ThrowInfo`'s unwind function the thrown class's destructor; one
+    /// address two classes claim is left alone.
+    #[test]
+    fn copy_constructors_and_destructors_are_named() {
+        let mut data = rdata();
+        put(&mut data, RDATA + 0x100 + 24, &rva(TEXT + 0x100));
+        put(&mut data, RDATA + 0x120 + 24, &rva(TEXT + 0x140));
+        put(&mut data, RDATA + 0x154, &rva(TEXT + 0x200));
+        let names: Vec<(u64, String)> = member_symbols(&infos(&data))
+            .into_iter()
+            .map(|s| (s.addr, s.name))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                (
+                    TEXT + 0x100,
+                    "std::runtime_error::runtime_error".to_string()
+                ),
+                (TEXT + 0x140, "std::exception::exception".to_string()),
+                (
+                    TEXT + 0x200,
+                    "std::runtime_error::~runtime_error".to_string()
+                ),
+            ]
+        );
+        put(&mut data, RDATA + 0x120 + 24, &rva(TEXT + 0x100));
+        let folded: Vec<u64> = member_symbols(&infos(&data))
+            .into_iter()
+            .map(|s| s.addr)
+            .collect();
+        assert_eq!(folded, [TEXT + 0x200]);
     }
 
     #[test]

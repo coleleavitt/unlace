@@ -408,11 +408,11 @@ fn leaf(class: &str) -> &str {
     class.rsplit("::").next().unwrap_or(class)
 }
 
-pub(super) fn ctor_name(class: &str) -> String {
+pub(crate) fn ctor_name(class: &str) -> String {
     format!("{class}::{}", leaf(class))
 }
 
-pub(super) fn dtor_name(class: &str) -> String {
+pub(crate) fn dtor_name(class: &str) -> String {
     format!("{class}::~{}", leaf(class))
 }
 

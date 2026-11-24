@@ -146,7 +146,7 @@ AARCH64, MIPS, Loongarch) into the bit position, `:3902` calls it during
 reads (`substrate/context.rs:797`). Two other consumers already read it live —
 `p2_lift/jumptable.rs:3661` and `p9_emit/coreaction_render.rs:1190`.
 
-Proved live at runtime rather than by reading: `tests/stages/gh8471-thumbfuncptr.xml`
+Proved live at runtime rather than by reading: `tests/stages/gh8471-thumbfuncptr.toml`
 runs on `ARM:LE:32:v8:default` and its assertion #2 (`call_function(&fn[1])`, the
 default/`thumbfuncptr on` pass) is reachable only through
 `RulePtrsubUndo::preserve_thumb_funcptr`, which short-circuits on
@@ -226,7 +226,7 @@ corpus is untouched except for its ARM/MIPS/AARCH64 members.
    integer elsewhere keeps its value (COPY is transparent) — but check that
    `RulePtrsubUndo::preserve_thumb_funcptr` (GH-8471/DIV-2) still sees the shape it
    expects; the two features touch the same low bit from opposite ends, and
-   `tests/stages/gh8471-thumbfuncptr.xml` is the guard.
+   `tests/stages/gh8471-thumbfuncptr.toml` is the guard.
 3. MIPS/AARCH64/Loongarch/8051 also declare `<funcptr>`; the rule becomes live there too.
    Corpus has no such target, so measure separately before claiming coverage.
 

@@ -1,0 +1,105 @@
+# angr StackCanarySimplifier, surfaced by angr's
+# test_ite_region_converter_missing_break_statement::authenticate
+# (binaries/tests/x86_64/ite_region_converter_missing_breaks, x86-64 GCC,
+# -fstack-protector).
+#
+# A function compiled with -fstack-protector saves the TLS canary at entry
+# (canary = *(fs:0x28), stored to a stack slot) and, at every exit, reloads
+# fs:0x28 and compares:
+#
+#     if (canary_slot != *(fs:0x28)) __stack_chk_fail();   // no-return handler
+#     return v;
+#
+# The canary check is a SHARED single return point, so a return deep inside
+# the loop (the `Authenticated!` path) cannot return directly - Ghidra's
+# structurer routes it through a `goto` to the shared tail (plus a `label:`).
+# Ghidra keeps the check verbatim; angr's StackCanarySimplifier strips it,
+# after which the bare-return tail is duplicated by ActionReturnSplit into
+# each predecessor and the goto disappears.  (angr renders the unrelated
+# trailing if/else as a ternary `c ? 1 : 0`; Ghidra's C printer has no
+# ternary operator, so that exact rendering is out of scope - the canary
+# strip is the reproducible win.)
+#
+# Stage model: S7 region/structure recovery, "edge-virtualization" sub-stage
+# (the goto is a forced edge).  The kuna Action runs late on the simplified
+# post-SSA CFG, immediately before ActionReturnSplit; it removes the
+# corrupted-canary branch with the stock Funcdata::removeBranch primitive and
+# lets removeUnreachableBlocks collect the orphaned __stack_chk_fail block.
+# Detection is purely structural (the canary compare: both CBRANCH operands
+# derive from a LOAD of base+0x28, with a handler CALL on the corrupted
+# branch) because kuna's BFD console loader does not resolve the PLT stub to
+# its __stack_chk_fail name (it renders as sub_<addr>).
+#
+# P0 assertion: `option stackguard on|off` (default off = upstream
+# byte-identical).  Only `authenticate` is decompiled; its bytes are
+# self-contained (callees resolve to unnamed sub_<addr>, exactly as in the
+# full ELF).
+#
+# Pass 1 (option stackguard off): assertions prove the bug - the
+# __stack_chk_fail call (sub_10e0) is rendered AND a goto/label is emitted.
+# Pass 2 (option stackguard on): assertions prove the fix - no
+# __stack_chk_fail call, no goto, and the deep match path returns directly.
+#
+# GH-183 (entry-side canary init): stripping the check must also remove the
+# entry-side canary init store (canary_slot = *(fs:0x28)) and its TLS-base
+# residue - angr's StackCanarySimplifier pops exactly that statement.
+# Assertions 5 and 6 span BOTH passes' concatenated output: the two fs+0x28
+# accesses (entry init + epilogue reload) and the one fs_offset declaration
+# all belong to the option-off pass; the option-on pass renders no canary
+# residue at all (before GH-183 the counts were 3 and 2).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x22e5', name = 'authenticate' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x22e5'
+hex = 'f30f1efa554889e54883ec4048897dc8488975c064488b042528000000488945f831c0488b45c8ba07000000488d0d340e00004889ce4889c7e8ededffff85c0740ab800000000e9e6000000488b4dc0488d45e0ba640000004889ce4889c7e8c3feffffc745dc00000000e98d0000008b45dc489848c1e0044889c2488d05b80c0000488d0c02488b45c0ba100000004889ce4889c7e80fffffff8b45dc489848c1e0044889c2488d058d0c0000488d0c02488d45e0ba100000004889c64889cfe865edffff85c0752f488d059d0d00004889c7e812edffffbf01000000e888edffff488d05960d00004889c7e8f9ecffffb801000000eb398345dc01837ddc0f0f8e69ffffff488b45c0ba10000000488d0d240d00004889ce4889c7e809edffff85c07507b801000000eb05b800000000488b55f864482b1425280000007405e8b5ecffffc9c3'
+
+[script]
+commands = [
+    # returndup (DIV-54 default-on) also inlines the deep match path as a direct
+    # return, so turn it off to keep stackguard the only difference between passes.
+    'option returndup off',
+    'option stackguard off',
+    'lo fu authenticate',
+    'decompile',
+    'print C',
+    'option stackguard on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'angr-StackGuard #1: bug -- __stack_chk_fail call (sub_10e0) rendered only with option off'
+count = 1
+literal = 'sub_10e0()'
+
+[[match]]
+name = 'angr-StackGuard #2: bug -- a goto is emitted only with option off'
+count = 1
+literal = 'goto '
+
+[[match]]
+name = 'angr-StackGuard #3: bug -- label (goto target + definition) emitted only with option off'
+count = 2
+literal = 'label_'
+
+[[match]]
+name = 'angr-StackGuard #4: fix -- only the option-on pass inlines the deep match path as a direct return 1'
+count = 1
+literal = 'return 1;'
+
+[[match]]
+name = 'angr-StackGuard #5: fix (GH-183) -- the fs+0x28 canary accesses (entry init + reload) survive only in the option-off pass'
+count = 2
+literal = '+ 0x28)'
+
+[[match]]
+name = 'angr-StackGuard #6: fix (GH-183) -- the TLS-base fs_offset declaration survives only in the option-off pass'
+count = 1
+literal = 'fs_offset'

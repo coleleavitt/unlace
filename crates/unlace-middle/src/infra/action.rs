@@ -551,6 +551,9 @@ pub trait Action {
             if ctx.deadline_expired_at(|| format!("action {}", self.get_name())) {
                 break;
             }
+            if ctx.repeat_cap_reached(data) {
+                break;
+            }
         }
 
         if (self.base().flags & (ruleflags::rule_onceperfunc | ruleflags::rule_oneactperfunc)) != 0
@@ -617,7 +620,16 @@ pub struct ActionContext {
     pub restart_early: bool,
     /// (kuna `earlyrestart`) Set when the pass stopped for that restart.
     pub abandoned_for_restart: bool,
+    /// (unlace) Repeat passes the `rule_repeatapply` actions of this run have
+    /// made ([`ActionContext::repeat_cap_reached`]).
+    pub repeats: u64,
 }
+
+/// (unlace) Most repeat passes of `rule_repeatapply` actions one run makes. A
+/// pair of transforms that keep undoing each other never reaches a fixpoint, so
+/// without a bound such a function only ends at its time budget. The largest
+/// bash functions use a few thousand action applications in all.
+pub const MAX_REPEATS: u64 = 100_000;
 
 /// How many [`ActionPool`] op visits between deadline probes (the tight rule
 /// loop only pays an `Instant::now()` every this-many ops).
@@ -644,6 +656,19 @@ impl ActionContext {
     #[inline]
     pub fn deadline_expired(&self) -> bool {
         self.abandon || self.deadline.is_some_and(crate::kuna_budget::budget_spent)
+    }
+
+    /// (unlace) Count one repeat pass of a `rule_repeatapply` action; `true`
+    /// once the run has made [`MAX_REPEATS`] of them, the first time with a
+    /// header warning on `data`.
+    pub fn repeat_cap_reached(&mut self, data: &mut Funcdata) -> bool {
+        self.repeats += 1;
+        if self.repeats == MAX_REPEATS + 1 {
+            data.warning_header(&format!(
+                "Stopped repeating after {MAX_REPEATS} passes that kept changing the function"
+            ));
+        }
+        self.repeats > MAX_REPEATS
     }
 
     /// [`deadline_expired`](Self::deadline_expired), naming `site` as where the

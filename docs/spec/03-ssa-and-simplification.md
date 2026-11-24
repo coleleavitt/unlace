@@ -3901,7 +3901,8 @@ unboxing dies. Exact, so always on.
 **satconvert** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
 on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
-joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+joins, each taking a constant (through the `COPY` that writes it, since a `MULTIEQUAL` never
+reads a constant) on one out-edge of its immediate dominator's branch (the select
 test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
 low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
 `riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,
@@ -4732,10 +4733,11 @@ each leaf takes a value hashed from its varnode, the same for every spelling
 and leaf order) and refuses a tree whose fingerprint it has seen, until the
 next function. A rewrite that removes a bitwise op always stands; the
 arithmetic core rules add none back, so those cannot cycle either. The result agrees with the tree on 64
-pseudo-random full-width inputs, agrees on every input at the widest width
-(at most 8 bits) where the leaves take at most `2^16` combinations, and is not
-refuted by `mba`'s bit-serial proof, which runs for at most three leaves and
-proves equality at the full width when it finishes. Truncation to a narrower
+pseudo-random full-width inputs, and is either proven equal at the full width
+by `mba`'s bit-serial proof (run for at most three leaves) or, when the proof
+does not run or gives up, agrees on every input at the widest width (at most
+8 bits) where the leaves take at most `2^12` combinations; a refutation rejects
+it. Truncation to a narrower
 width commutes with every op of the tree, so the small-width check is a
 necessary condition. Equality itself follows from the rules being identities;
 the checks guard the lowering into and out of the e-graph. A unit test
@@ -4787,7 +4789,10 @@ finds nothing more) or if the tree has fewer than three bitwise ops; otherwise
 the second round continues on the same e-graph up to 4000 e-nodes and 12
 iterations. A tree with a single bitwise op gets no e-graph at all: it has no
 MBA identity to compose, and only `mba`'s closed form of the whole tree is
-tried.
+tried. A subterm is seeded with `mba`'s closed form only when it has
+at least two bitwise ops. A tree the rule has already regrouped once in the
+function goes into saturation with the bitwise-op cap, so a regrouping
+extraction is rejected before any evaluation.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

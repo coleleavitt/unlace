@@ -5875,6 +5875,20 @@ prefix with the precedence of an assignment. Any other call shape prints as a
 call. The thrown type is not printed here; it stays on the `ThrowInfo<T>` label
 of the second argument and, on x64, on the call-site comment.
 
+### Itanium throws (`itaniumeh`)
+
+Under `itaniumeh` (default on, see the option row in `phases.toml`) a direct
+C-output call of `__cxa_throw` (leading underscores and any `@plt` suffix) with
+its three arguments (object, `typeinfo`, destructor) prints as `throw *p`,
+where `p` is the object the first argument points to, read the way a load
+through that pointer is printed (`printc.rs (push_throw_call)`). A call of
+`__cxa_rethrow` with no argument prints as a bare `throw`. The module is
+`crates/unlace-emit/src/p9_emit/itaniumthrow.rs` and reuses the `msvceh`
+throw token and argument printing. The allocate and construct calls that
+precede the throw still print as calls: the `throw T(...)` form that folds them
+into the throw is not done, so the thrown type stays in the `typeinfo` argument.
+With `itaniumeh` off the calls print as calls.
+
 ### Apple unified-logging calls (`oslog`)
 
 `oslog` (default on) uses

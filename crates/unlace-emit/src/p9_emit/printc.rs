@@ -11441,7 +11441,19 @@ impl PrintC {
         {
             let callee = self.call_callee_name(fd, op);
             if let Some(throw) = super::msvcthrow::recover(fd, arch, op, &callee) {
-                self.push_msvc_throw(fd, arch, op, throw);
+                self.push_throw_call(fd, arch, op, throw);
+                return;
+            }
+        }
+        if self.out_lang == crate::lang::OutLang::C
+            && arch
+                .unlace_options
+                .get::<crate::coreoptions::ItaniumEh>()
+                .on
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some(throw) = super::itaniumthrow::recover(fd, arch, op, &callee) {
+                self.push_throw_call(fd, arch, op, throw);
                 return;
             }
         }
@@ -11712,7 +11724,7 @@ impl PrintC {
     /// (unlace `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
     /// object is printed as a load through the first argument would be, so
     /// `&local` reads as `local`.
-    fn push_msvc_throw(
+    fn push_throw_call(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,

@@ -1,0 +1,52 @@
+# OCaml tagged-int match: a range check of the tagged value bounds the table.
+#
+# OCaml native code matches on a tagged int r = 2n+1: it checks the range of r,
+# then indexes the table with (r - C) >> 1 (coqtop camlStdlib__Bytes__get_utf_8_uchar,
+# issue #923). Synthetic x86-64 copy of the shape:
+#
+#     1000  movzbl (%rdi),%eax ; lea 0x1(%rax,%rax,1),%r8
+#           cmp $0x1c1,%r8 ; jl low ; cmp $0x1db,%r8 ; jl mid
+#           cmp $0x1eb,%r8 ; jge default
+#           mov %r8,%rax ; add $-0x1da,%rax ; sar $1,%rax
+#           lea table(%rip),%rdx ; movslq (%rdx,%rax,4),%rax ; add %rax,%rdx ; jmp *%rdx
+#     table: 8 rows (cases returning 10..17), then 8 words that point one byte into
+#     those cases, as the rows after an OCaml table land mid-instruction
+#
+# The upper check, x + 1 < 0x1eb pulled back to the even x = 2b, is the range
+# [-1, 0x1ea); intersecting it with x's stride-2 range wrapped its left end onto
+# the new phase and CircleRange::intersect called it empty, so only the lower
+# check bounded the table and its rows ran into the words after it. Stage: P2
+# switch-model.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [ { space = 'ram', offset = '0x1000', name = 'tagged' } ]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '0fb6074c8d4400014981f8c10100007c5e4981f8db0100007c5b4981f8eb0100007d584c89c0480526feffff48d1f8488d154e000000486304824801c2ffe2b80a000000c3b80b000000c3b80c000000c3b80d000000c3b80e000000c3b80f000000c3b810000000c3b811000000c3b864000000c3b865000000c3b866000000c30f1f00bbffffffc1ffffffc7ffffffcdffffffd3ffffffd9ffffffdfffffffe5ffffffbcffffffc2ffffffc8ffffffceffffffd4ffffffdaffffffe0ffffffe6ffffff'
+
+[script]
+commands = [
+    'lo fu tagged',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'OCAML-TAGGED #1: the table is bounded by both checks: its last row is case 0x1e8'
+count = 1
+regex = 'case 0x1e8:'
+
+[[match]]
+name = 'OCAML-TAGGED #2: no row past the upper check'
+count = 0
+regex = 'case 0x1e[a-f]:|case 0x1f'
+
+[[match]]
+name = 'OCAML-TAGGED #3: no row lands mid-instruction'
+count = 0
+literal = 'halt_baddata'

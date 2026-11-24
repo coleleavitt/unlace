@@ -4293,7 +4293,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
+| `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 <!-- vendor-rows -->
+
+### CLIPPER (#98)
+
+`specs/Ghidra/Processors/Clipper` is a SLEIGH module written for unlace from the
+CLIPPER C300 data book (no prior SLEIGH existed): `clipper:LE:32:default`. An
+instruction is one to four 16-bit parcels; the eight address modes put the
+data register (or branch condition) in the first or second parcel, which the
+`gd`, `fsr`, `fdr` and `ec` subtables follow. `call` pushes the return
+address on the named stack register (r15 under CLIX) and `ret` pops it; the
+cspec passes the first two arguments in r0/r1 (f0/f1) and returns in r0/f0.
+Exercised by `unlace-cli/tests/clipper_raw.rs` (hand-assembled add, signed
+max, absolute load and call routines decompile to the expected C).
+
 
 ### Motorola 88000 (#98)
 

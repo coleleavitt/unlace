@@ -2195,7 +2195,13 @@ classified:
   in a `stream << text << value` chain, where `operator<<(const char *)` takes
   the stream in ECX and the text in EDX, the `value` pushed before it for the
   `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
-  and the second printed without it.
+  and the second printed without it. Under the same option a direct call
+  followed by a one-byte `int3` ends its path in the walk: MSVC places `int3`
+  after a call that does not return (`_CxxThrowException`, which the walk cannot
+  see does not return), and falling through it ran into the next function, whose
+  return left the stack unbalanced, so every caller of a stream inserter that can
+  throw (`basic_ios::setstate`) lost its extent (`KUNA_CALLEEPURGE_DEBUG` on
+  Holley `USBCAN-Driver.dll`: `0x10001eb0` falls from `0x10001f1f` into `0x10001f20`).
   A third piece places the stack pointer again in the epilogue
   (`kuna_calleepurge.rs (msvc_saved_sp)`). An EH prologue saves the exact
   stack pointer for its catch funclets (`mov [ebp-0x10],esp`, after the

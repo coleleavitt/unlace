@@ -10,22 +10,9 @@ use crate::rangeutil::CircleRange;
 pub fn intersect(fd: &Funcdata, guards: &[GuardRecord], vn: VarnodeId, range: &mut CircleRange) {
     let mut bits_preserved = 0;
     let base_vn = GuardRecord::quasi_copy(fd, vn, &mut bits_preserved);
-    let trace = std::env::var_os("UNLACE_JT_TRACE").is_some();
     for guard in guards {
-        let m = guard.value_match(fd, vn, base_vn, bits_preserved);
-        if m != 0 {
-            let r = range.intersect(guard.get_range());
-            if trace {
-                eprintln!(
-                    "JT     match {:?} guard={:?} ret={} now={:?}",
-                    vn,
-                    guard.get_range(),
-                    r,
-                    range
-                );
-            }
-        } else if trace {
-            eprintln!("JT     nomatch {:?} guard={:?}", vn, guard.get_range());
+        if guard.value_match(fd, vn, base_vn, bits_preserved) != 0 {
+            range.intersect(guard.get_range());
         }
     }
 }

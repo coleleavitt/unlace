@@ -2493,18 +2493,6 @@ impl JumpBasicModel {
             let vni = self.path_meld.get_varnode(i as int4);
             self.calc_range(fd, vni, &mut rng);
             let sz = rng.get_size();
-            if std::env::var_os("UNLACE_JT_TRACE").is_some() {
-                let def = fd
-                    .vbank()
-                    .get(vni)
-                    .and_then(|v| v.get_def())
-                    .and_then(|o| fd.obank().get(o))
-                    .map(|o| o.code());
-                eprintln!(
-                    "JT cand {} vn={:?} def={:?} size={} rng={:?}",
-                    i, vni, def, sz, rng
-                );
-            }
             if sz < maxsize {
                 // Don't accept a 1-byte switch var unless there is an explicit
                 // guard or table lookup between the byte and the indirect jump.
@@ -2557,11 +2545,7 @@ impl JumpBasicModel {
         indirect: OpId,
     ) {
         let maxbranch = 2; // Maximum number of CBRANCHs to consider
-        let maxpullback: int4 = std::env::var("UNLACE_JT_PULLBACK")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(2);
-        let jt_trace = std::env::var_os("UNLACE_JT_TRACE").is_some();
+        let maxpullback = 2;
         let usenzmask = !self.is_partial;
         self.selectguards.clear();
 
@@ -2640,38 +2624,17 @@ impl JumpBasicModel {
                 vn,
                 false,
             ));
-            if jt_trace {
-                eprintln!(
-                    "JT guard cbranch@{:#x} indpath={} vn={:?} rng={:?}",
-                    fd.obank().get(cbranch).unwrap().get_addr().get_offset(),
-                    indpath,
-                    vn,
-                    rng
-                );
-            }
             for _j in 0..maxpullback {
                 if !fd.vbank().get(vn).unwrap().is_written() {
                     break;
                 }
                 let read_op = fd.vbank().get(vn).unwrap().get_def().unwrap();
-                if jt_trace {
-                    let o = fd.obank().get(read_op).unwrap();
-                    eprintln!(
-                        "JT   pull through {:?} ninput={} out={:?}",
-                        o.code(),
-                        o.num_input(),
-                        vn
-                    );
-                }
                 match circlerange_pull_back(fd, &mut rng, read_op, usenzmask) {
                     None => break,
                     Some(newvn) => vn = newvn,
                 }
                 if rng.is_empty() {
                     break;
-                }
-                if jt_trace {
-                    eprintln!("JT   -> vn={:?} rng={:?}", vn, rng);
                 }
                 self.selectguards.push(GuardRecord::new(
                     fd,

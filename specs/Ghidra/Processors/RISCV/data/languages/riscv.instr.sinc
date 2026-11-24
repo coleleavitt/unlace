@@ -46,6 +46,9 @@
 @include "riscv.rvc.sinc"
 @include "riscv.zc.sinc"
 @include "riscv.zcb.sinc"
+@if FPSIZE == "32" || FPSIZE == "64" || FPSIZE == "128"
+@include "riscv.zfh.sinc"
+@endif
 @include "riscv.rvv.sinc"
 @include "riscv.zi.sinc"
 

@@ -14,6 +14,8 @@ mod riscv_crypto;
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]
 mod riscv_zcmp;
+#[path = "riscv_zfh.rs"]
+mod riscv_zfh;
 #[path = "rust_signature_summary.rs"]
 mod rust_signature_summary;
 #[path = "sparc_prologue_start.rs"]

@@ -1115,7 +1115,12 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
   the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
   16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
-  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, OpenRISC (`EM_OPENRISC`,
+  `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, Xtensa `SLOT0_OP` on
+  little-endian cores (the operand of the relocated instruction by its opcode:
+  `L32R`'s negative literal word offset from `(P + 3) & !3`, `CALLn`'s word
+  offset from `(P & !3) + 4`, and the `J`, `BRI12`, `BRI8`/`RRI8`, `LOOP` and
+  narrow `beqz.n`/`bnez.n` byte offsets from `P + 4`; `ASM_EXPAND`,
+  `ASM_SIMPLIFY` and the `DIFF*` relaxation records are no-ops), OpenRISC (`EM_OPENRISC`,
   told apart by `e_machine`) `INSN_REL_26`/`PLT26` jumps and calls, the
   `HI_16_IN_INSN`/`AHI16`/`LO_16_IN_INSN` halves, the split `SLO16` store
   immediate and the `32`/`32_PCREL` words, C-SKY `bsr32`
@@ -7500,7 +7505,25 @@ every other binary's pass list is byte-identical to before the pass existed):
   or two that are not neighbours — and none of that class's slots is named. A
   deleting destructor that only tail-calls `operator delete` (clang drops a
   complete destructor's dead stores from it) cannot be told from an ordinary method,
-  so such a class keeps its slot names. A destructor takes only `this`, while a
+  so such a class keeps its slot names, unless its base says where they are. GCC
+  writes the destructor slots of an abstract class as two null words: its vtable is
+  only installed while a derived object is built or destroyed, when neither is called
+  through it. A primary vtable that walks to no slot because its first two words are
+  0, neither covered by a dynamic relocation, followed by a method (code, or an
+  imported slot such as `__cxa_pure_virtual`), is such a class's
+  (`kuna_itaniumrtti.rs (null_dtor_pair)`); the class keeps that vptr and has a
+  virtual destructor at slot 0. Under single inheritance a class's primary vtable
+  extends its base's, so a class whose own slots show no destructor, on a single
+  inheritance chain (every two ancestors one the other's), takes its `D1` and `D0`
+  from the slots of the nearest ancestor whose destructors are known (from the null
+  pair or the shapes above): both slots its own, not the ancestor's entries, holding
+  two different functions no other class's slots hold
+  (`kuna_itaniumctors.rs (inherited_destructor_slots)`). That names the destructors a
+  GCC `-O2` build drops every vptr store from (a final class whose destructor only
+  frees members) and those that store only the vptr of the base destructor they
+  inlined: apfs-fuse's `PLString`, `PLInteger`, `PLData`, `PLDict` and `PLArray`
+  under the abstract `PLObject`, and `BTreeNodeVar`/`BTreeNodeFix` under `BTreeNode`.
+  A destructor takes only `this`, while a
   virtual method returning its own class by value builds the result in a return
   slot passed as its first parameter, reads its own `this` from the second, and
   hands the slot's address back, so its first store is the class's vptr through

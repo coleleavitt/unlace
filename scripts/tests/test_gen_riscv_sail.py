@@ -187,5 +187,15 @@ class FloatAndMemoryTests(unittest.TestCase):
         self.assertIn("sext(", text)
 
 
+class HalfConstants(unittest.TestCase):
+    def test_a_half_bound_past_the_range_is_infinity(self):
+        c = g.Compiler.__new__(g.Compiler)
+        self.assertEqual(c.fconst(-1.0, 16), "0xbc00:2")
+        self.assertEqual(c.fconst(2.0 ** 31, 16), "0x7c00:2")
+        self.assertEqual(c.fconst(-2.0 ** 63, 16), "0xfc00:2")
+        self.assertEqual(c.fconst(-65504.0, 16), "0xfbff:2")
+        self.assertEqual(c.fconst(-1.0, 32), "0xbf800000:4")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@
 //!
 //! Supported instruction families are ARM `CALL`/`JUMP24`, Thumb call/jump,
 //! `REL32`, `PREL31`, and the A32/Thumb-2 `MOVW`/`MOVT` pairs; C-SKY `bsr32`;
+//! Xtensa `SLOT0_OP` operands;
 //! OpenRISC jumps, address halves and split store immediates; AArch64 branch, ADRP page, ADD low-12, and scaled load/
 //! store low-12 forms; PowerPC (32- and 64-bit) `REL24`/`PLTREL24`/`LOCAL24PC`
 //! and `ADDR24` branches, the 14-bit conditional-branch forms, the absolute,
@@ -67,6 +68,7 @@ enum Specific {
     ArmBranch24,
     ArmThumbBranch24,
     ArmPrel31,
+    XtensaSlot0,
     Or1kRel26,
     Or1kHalf { adjust: bool, high: bool },
     Or1kSplit16,
@@ -267,6 +269,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::XtensaSlot0
                     | Specific::Or1kRel26
                     | Specific::CskyBsr26
                     | Specific::AvrPcrel { bits: 12 }
@@ -912,6 +915,23 @@ fn classify_info(
         (Architecture::Csky, Some(elf::R_CKCORE_PCREL_IMM26BY2)) => {
             Some((Specific::CskyBsr26, true))
         }
+        (
+            Architecture::Xtensa,
+            Some(
+                elf::R_XTENSA_NONE
+                | elf::R_XTENSA_ASM_EXPAND
+                | elf::R_XTENSA_ASM_SIMPLIFY
+                | elf::R_XTENSA_DIFF8
+                | elf::R_XTENSA_DIFF16
+                | elf::R_XTENSA_DIFF32,
+            ),
+        ) => return Ok(None),
+        (Architecture::Xtensa, Some(elf::R_XTENSA_SLOT0_OP)) => {
+            Some((Specific::XtensaSlot0, false))
+        }
+        (Architecture::Xtensa, Some(elf::R_XTENSA_32_PCREL)) => {
+            Some((Specific::Data { bytes: 4, pc: true }, false))
+        }
         (Architecture::Bpf, Some(elf::R_BPF_NONE)) => return Ok(None),
         (Architecture::Bpf, Some(elf::R_BPF_64_64)) => Some((Specific::BpfImm64, false)),
         (Architecture::Bpf, Some(elf::R_BPF_64_32)) => Some((Specific::BpfCall, true)),
@@ -961,6 +981,7 @@ fn classify_info(
         let width = match specific {
             Specific::Ppc64Toc16 { .. } | Specific::PpcHalf16 { .. } => 2,
             Specific::RiscvRvcBranch | Specific::RiscvRvcJump => 2,
+            Specific::XtensaSlot0 => 3,
             Specific::AvrPcrel { .. } | Specific::AvrLdi { .. } | Specific::AvrWordPm => 2,
             Specific::Ppc64Toc64
             | Specific::RiscvCall
@@ -1060,6 +1081,7 @@ fn apply_info(
             target_thumb,
         ),
         Specific::ArmPrel31 => arm_prel31(field, little_endian, reloc, symbol, place),
+        Specific::XtensaSlot0 => xtensa_slot0(field, little_endian, reloc, symbol, place),
         Specific::Or1kRel26 => or1k_patch(field, little_endian, reloc, symbol, Some(place), |v| {
             require_aligned(v, 4)?;
             require_signed(v, 28)?;
@@ -1674,6 +1696,96 @@ fn or1k_patch(
     let (mask, bits) = fields(value)?;
     let insn = read_u32(field, le);
     write_u32(field, le, (insn & !mask) | (bits & mask));
+    Ok(())
+}
+
+/// Xtensa `SLOT0_OP` (little-endian cores): the operand of the relocated
+/// instruction, chosen by its opcode. `L32R` takes the (negative) word offset of
+/// the literal from `(P + 3) & !3`; `CALLn` the word offset from
+/// `(P & !3) + 4`; `J` the 18-bit, `BRI12` (`beqz`..) the 12-bit and `BRI8`/`RRI8`
+/// branches the 8-bit byte offset from `P + 4`, unsigned for `LOOP`/`LOOPNEZ`/
+/// `LOOPGTZ`; the narrow `beqz.n`/`bnez.n` the unsigned 6-bit one. The field
+/// is three bytes; a narrow instruction uses the first two. GNU `as` already
+/// writes local displacements, which this reproduces.
+fn xtensa_slot0(
+    field: &mut [u8],
+    le: bool,
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+) -> Result<(), RelocationFailure> {
+    if !le {
+        return Err(RelocationFailure::Unsupported);
+    }
+    if reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let insn = u32::from(field[0]) | (u32::from(field[1]) << 8) | (u32::from(field[2]) << 16);
+    let target = symbol as i128 + reloc.addend as i128;
+    let p = place as i128;
+    let next = p + 4;
+    let signed = |d: i128, bits: u8| require_signed(d, bits).map(|()| d as u32);
+    let unsigned = |d: i128, bits: u8| {
+        if (0..1 << bits).contains(&d) {
+            Ok(d as u32)
+        } else {
+            Err(RelocationFailure::OutOfRange)
+        }
+    };
+    let op0 = insn & 0xf;
+    let (n, m) = ((insn >> 4) & 3, (insn >> 6) & 3);
+    let (insn, width) = match op0 {
+        0x1 => {
+            let d = target - ((p + 3) & !3);
+            require_aligned(d, 4)?;
+            if !(-(1 << 18)..0).contains(&d) {
+                return Err(RelocationFailure::OutOfRange);
+            }
+            ((insn & 0xff) | ((((d >> 2) as u32) & 0xffff) << 8), 3)
+        }
+        0x5 => {
+            let d = target - ((p & !3) + 4);
+            require_aligned(d, 4)?;
+            let w = signed(d >> 2, 18)?;
+            ((insn & 0x3f) | ((w & 0x3_ffff) << 6), 3)
+        }
+        0x6 if n == 0 => (
+            (insn & 0x3f) | ((signed(target - next, 18)? & 0x3_ffff) << 6),
+            3,
+        ),
+        0x6 if n == 1 => (
+            (insn & 0xfff) | ((signed(target - next, 12)? & 0xfff) << 12),
+            3,
+        ),
+        0x6 if n == 2 || (n == 3 && m >= 2) => (
+            (insn & 0xffff) | ((signed(target - next, 8)? & 0xff) << 16),
+            3,
+        ),
+        0x6 if n == 3 && m == 1 => {
+            let r = (insn >> 12) & 0xf;
+            let d = match r {
+                8..=10 => unsigned(target - next, 8)?,
+                0 | 1 => signed(target - next, 8)?,
+                _ => return Err(RelocationFailure::InvalidEncoding),
+            };
+            ((insn & 0xffff) | ((d & 0xff) << 16), 3)
+        }
+        0x7 => (
+            (insn & 0xffff) | ((signed(target - next, 8)? & 0xff) << 16),
+            3,
+        ),
+        0xc if m >= 2 => {
+            let d = unsigned(target - next, 6)?;
+            (
+                (insn & 0x0fcf) | ((d & 0xf) << 12) | (((d >> 4) & 3) << 4),
+                2,
+            )
+        }
+        _ => return Err(RelocationFailure::InvalidEncoding),
+    };
+    for (i, byte) in field.iter_mut().take(width).enumerate() {
+        *byte = (insn >> (8 * i)) as u8;
+    }
     Ok(())
 }
 
@@ -4166,6 +4278,90 @@ mod or1k_tests {
             })
             .is_err(),
             "GOT16"
+        );
+    }
+}
+
+#[cfg(test)]
+mod xtensa_tests {
+    use super::*;
+
+    fn slot0(
+        bytes: [u8; 3],
+        symbol: u64,
+        addend: i64,
+        place: u64,
+    ) -> Result<[u8; 3], RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(elf::R_XTENSA_SLOT0_OP),
+        };
+        let spec = classify_info(Architecture::Xtensa, info)?.expect("not a no-op");
+        assert_eq!(spec.width(), 3);
+        let mut field = bytes;
+        apply_info(spec, info, &mut field, true, symbol, place, None, None)?;
+        Ok(field)
+    }
+
+    // Words as GNU ld 2.45 (--no-relax) writes them for xtensa-elf-gcc 15.3
+    // (XCHAL_HAVE_BE 0, windowed ABI, -mtext-section-literals) objects.
+    #[test]
+    fn every_operand_form_matches_the_linker() {
+        // l32r a10, literal
+        assert_eq!(
+            slot0([0xa1, 0, 0], 0x1_0000, 0, 0x1_0018),
+            Ok([0xa1, 0xfa, 0xff])
+        );
+        // call8 to an extern slot
+        assert_eq!(slot0([0x25, 0, 0], 0, 0, 0x1_0035), Ok([0xa5, 0xfc, 0xef]));
+        // j, beqi (BRI8), loop, bnez (BRI12), blt (RRI8), beqz.n
+        assert_eq!(
+            slot0([0x46, 0, 0], 0x1_0000, 196, 0x1_009f),
+            Ok([0x46, 0x08, 0x00])
+        );
+        assert_eq!(
+            slot0([0xa6, 0x12, 0], 0x1_0000, 156, 0x1_0081),
+            Ok([0xa6, 0x12, 0x17])
+        );
+        assert_eq!(
+            slot0([0x76, 0x88, 0], 0x1_0000, 153, 0x1_008d),
+            Ok([0x76, 0x88, 0x08])
+        );
+        assert_eq!(
+            slot0([0x56, 0x08, 0], 0x1_0000, 574, 0x1_0250),
+            Ok([0x56, 0xa8, 0xfe])
+        );
+        assert_eq!(
+            slot0([0x87, 0x29, 0], 0x1_0000, 206, 0x1_00bb),
+            Ok([0x87, 0x29, 0x0f])
+        );
+        assert_eq!(
+            slot0([0x8c, 0x08, 0xee], 0x1_0000, 136, 0x1_007d),
+            Ok([0x8c, 0x78, 0xee])
+        );
+    }
+
+    #[test]
+    fn literals_behind_and_out_of_range_targets_are_refused() {
+        assert_eq!(
+            slot0([0xa1, 0, 0], 0x1_0040, 0, 0x1_0018),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert_eq!(
+            slot0([0xa1, 0, 0], 0x1_0002, 0, 0x1_0018),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            slot0([0x87, 0x29, 0], 0x1_0200, 0, 0x1_0000),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert_eq!(
+            slot0([0x36, 0x41, 0], 0x1_0200, 0, 0x1_0000),
+            Err(RelocationFailure::InvalidEncoding)
         );
     }
 }

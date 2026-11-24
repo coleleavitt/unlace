@@ -64,6 +64,8 @@ struct ArchFlowEnv {
     /// pipeline (`allacts`) concurrently: the env's reads (`translate`/`inst`/
     /// `symboltab`) never alias the `allacts` mutation, so the access is sound.
     arch: *const Architecture,
+    /// (kuna `evmcalls`) The image's EVM call classification, read once.
+    evm_calls: std::cell::OnceCell<Option<Rc<crate::kuna_evmcalls::EvmCallMap>>>,
 }
 
 impl ArchFlowEnv {
@@ -78,6 +80,15 @@ impl ArchFlowEnv {
 }
 
 impl FlowEnvironment for ArchFlowEnv {
+    fn evm_calls(&self) -> Option<Rc<crate::kuna_evmcalls::EvmCallMap>> {
+        self.evm_calls
+            .get_or_init(|| {
+                let arch = self.arch();
+                let loader = arch.translate().loader_rc();
+                crate::kuna_evmcalls::image_map(&arch.kuna_options, arch.manage(), &loader)
+            })
+            .clone()
+    }
     fn is_isa_mode_switch(&self, index: u64) -> bool {
         self.arch()
             .userops
@@ -1393,6 +1404,7 @@ fn generate_flow(arch: &mut Architecture, fd: Funcdata) -> KunaResult<Funcdata> 
         },
         arch: arch as *const Architecture,
         return_discard_memo: Default::default(),
+        evm_calls: Default::default(),
     };
     let mut flow = FlowInfo::new(fd, &env);
     if let Some((baddr, eaddr)) = range {
@@ -1512,6 +1524,7 @@ fn run_jumptable_pipeline(
         mapped_image: None,
         arch: arch as *const Architecture,
         return_discard_memo: Default::default(),
+        evm_calls: Default::default(),
     };
     crate::flow::build_partial_blocks(partial, &env, visited)?;
     // startProcessing prerequisites for heritage (forward dominators + RPO).

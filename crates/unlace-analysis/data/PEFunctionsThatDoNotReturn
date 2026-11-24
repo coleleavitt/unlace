@@ -116,3 +116,15 @@ RtlRestoreContext
 unexpected
 ?__scrt_throw_std_bad_array_new_length@@*
 scrt_throw_std_bad_array_new_length
+
+# (kuna) ATL/MFC throw routines IDA 9.5's FLIRT names no-return on Holley EFI's
+# statically linked PEGRP32F.dll: ATL's `AtlThrowImpl` / `AtlThrowLastWin32`
+# (atlexcept.h, `ATL_NORETURN`) and `CSimpleStringT::ThrowMemoryException`, MFC's
+# `AfxThrowInternetException`, `AfxThrowLastCleanup` and `CDataExchange::Fail`
+# (each throws).
+?AtlThrowImpl@ATL@@*
+?AtlThrowLastWin32@ATL@@*
+?ThrowMemoryException@?$CSimpleStringT@*
+?AfxThrowInternetException@@*
+?AfxThrowLastCleanup@@*
+?Fail@CDataExchange@@QAEXXZ

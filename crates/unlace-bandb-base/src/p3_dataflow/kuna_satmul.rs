@@ -149,7 +149,10 @@ fn low_half(data: &Funcdata, lo: VarnodeId) -> Option<(Factor, Factor, int4)> {
         OpCode::CPUI_INT_MULT => Some((factor(data, o.get_in(0)?), factor(data, o.get_in(1)?), w)),
         OpCode::CPUI_INT_LEFT => {
             let k = constant(data, o.get_in(1)?)?;
-            (k < 8 * w as u64).then(|| (factor(data, o.get_in(0)?), Factor::Const(1u64 << k), w))
+            if k >= 8 * w as u64 {
+                return None;
+            }
+            Some((factor(data, o.get_in(0)?), Factor::Const(1u64 << k), w))
         }
         _ => None,
     }

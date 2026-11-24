@@ -38,11 +38,6 @@ impl Mode {
         self == Self::On
     }
 
-    pub fn set_env(self) {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        unsafe { std::env::set_var(ENV, self.as_str()) };
-    }
-
     /// The environment vocabulary of the other default-off load-time gates,
     /// plus `abi`; an unrecognized value is `off`.
     pub fn from_env_value(value: &str) -> Self {

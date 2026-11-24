@@ -262,46 +262,6 @@ impl LoadOptions {
     pub fn enter(&self) -> LoadScope {
         enter(Rc::new(self.clone()))
     }
-
-    /// Write the named option's value to the environment variable a later
-    /// `load file` in this process reads. `Architecture::set_unlace_option`
-    /// already does this for the option it sets; this serves a caller that
-    /// changed the options through `Architecture::load_options_mut`. A load
-    /// with explicit options never needs it. A name that is not a load-time
-    /// option is ignored.
-    pub fn export_env(&self, option: &str) {
-        use crate::*;
-        match option {
-            "ppc32picimports" => self.ppc32picimports.set_env(),
-            "ifuncfpret" => ifuncfpret::set_ifuncfpret_env(self.ifuncfpret),
-            "ppcapu" => ppcapu::set_ppcapu_env(self.ppcapu),
-            "kernelcache" => kernelcache::set_kernelcache_env(&self.kernelcache),
-            "kernelcache-boot" => kernelcacheboot::set_kernelcache_boot_env(&self.kernelcache_boot),
-            "goabi" => goabi::set_goabi_env(self.goabi),
-            "cil" => cil::set_cil_env(self.cil),
-            "symbolnamechars" => symbolnamechars::set_symbolnamechars_env(self.symbolnamechars),
-            "libctypes" => libctypes::set_libctypes_env_layout(self.libctypes),
-            // FIXME: Audit that the environment access only happens in single-threaded code.
-            "calltargettype" => unsafe {
-                std::env::set_var(
-                    CALLTARGETTYPE_ENV,
-                    if self.calltargettype { "on" } else { "off" },
-                )
-            },
-            "macho-arm64e" => macho_arm64e::set_macho_arm64e_env(self.macho_arm64e),
-            "sourcelang" => sourcelang::set_sourcelang_env(self.sourcelang),
-            "objcivars" => objcivars::set_objcivars_env(self.objcivars),
-            "objcsdk" => objcsdk::set_objcsdk_env(self.objcsdk.as_deref().and_then(|p| p.to_str())),
-            "dyldimage" => {
-                dyldcache::set_dyldimage_env(self.dyldimage.as_deref().unwrap_or("none"))
-            }
-            "dyldcrossrefs" => dyldcache::set_dyldcrossrefs_env(self.dyldcrossrefs),
-            "codestrings" => set_toggle_env(CODESTRINGS_ENV, self.codestrings),
-            "nameladder" => set_toggle_env(NAMELADDER_ENV, self.nameladder),
-            "swifttypes" => set_toggle_env(SWIFTTYPES_ENV, self.swifttypes),
-            _ => {}
-        }
-    }
 }
 
 thread_local! {
@@ -378,11 +338,6 @@ pub fn nameladder_enabled() -> bool {
 /// The load-time half of `swifttypes` ([`SWIFTTYPES_ENV`]).
 pub fn swifttypes_enabled() -> bool {
     scoped(|o| o.swifttypes).unwrap_or_else(env::swifttypes)
-}
-
-fn set_toggle_env(name: &str, on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(name, if on { "on" } else { "off" }) };
 }
 
 /// How many reads of the options on this thread found no scope in force and

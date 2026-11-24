@@ -107,17 +107,6 @@ pub fn forced_from_env() -> Option<SourceLang> {
     crate::loadoptions::env::sourcelang()
 }
 
-/// Export a `set_unlace_option("sourcelang", val)` choice to [`SOURCELANG_ENV`]
-/// so a later `load file` in the same process sees it (`auto` clears it).
-pub fn set_sourcelang_env(forced: Option<SourceLang>) {
-    match forced {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        Some(lang) => unsafe { std::env::set_var(SOURCELANG_ENV, lang.as_str()) },
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        None => unsafe { std::env::remove_var(SOURCELANG_ENV) },
-    }
-}
-
 /// Parse a `sourcelang` option value: `auto` (and empty) clear the override,
 /// a language token forces it, anything else is refused with the vocabulary.
 pub fn parse_option_value(value: &str) -> Result<Option<SourceLang>, String> {

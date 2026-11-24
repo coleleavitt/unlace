@@ -4059,8 +4059,56 @@ through whatever `ra` held, so the saves, the stack adjustment and the return
 were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
-LLVM's names, RV32 and RV64). Zcb, Zicond and the T-Head vendor extensions
-the issue also lists are not decoded.
+LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the
+issue also lists are not decoded; Zicond is in the next section.
+
+### RISC-V ratified bit manipulation and Zicond (#98)
+
+`riscv.rv32b.sinc` (forms common to RV32 and RV64) and `riscv.rv64b.sinc`
+(RV64-only forms) decode the ratified Zba, Zbb, Zbc and Zbs extensions
+(Bitmanip 1.0.0), Zbkb and Zbkx (Scalar Crypto 1.0.1) and Zicond (1.0). They
+replace the 0.92 bitmanip draft those files carried, whose constructors were
+all `unimpl` and whose names and encodings differ from the ratified ones: the
+RVA22 profile's `cpop` decoded as the draft `pcnt`, `bset` as `sbset`,
+`rev8` and `orc.b` as `grevi`/`gorci`, and Zicond's `czero.eqz` as the
+draft `cmov`, each an unimplemented instruction that cut the function's
+data flow. The draft-only instructions (`bdep`, `bfp`, `cmix`, `fsl`,
+`shfl`, `slo`, `crc32.*`, `bmat*`, `addwu` and the rest) were never
+ratified and no longer decode.
+
+Each instruction lifts to ordinary p-code where p-code has the operation:
+`sh1add`/`sh2add`/`sh3add` (and the `.uw` forms, which zero-extend the
+low word of `rs1` first) are a shift and an add, `add.uw`/`zext.w`,
+`slli.uw`, `sext.b`, `sext.h` and `zext.h` are extensions, `andn`, `orn`
+and `xnor` are their bitwise forms, `clz` is LZCOUNT, `cpop` is POPCOUNT,
+and `ctz` is `POPCOUNT((x & -x) - 1)`, which is the register width for
+`x = 0` as the ISA requires; the `w` forms work on the low 32 bits and
+sign-extend (`clzw`, `ctzw`, `cpopw` produce a count, which is never
+negative). `rol`, `ror`, `rori` and their `w` forms are the shift pair
+`(x << n) | (x >> (W - n))`, `rev8` is the byte-reversing shift-and-mask
+tree, the shapes `bitidioms` folds to `bswap` (and, for a constant amount,
+to a rotate) on other architectures. The Zbs single-bit operations mask the register shift amount
+to the register width. `pack`, `packh` and `packw` concatenate the low
+halves (bytes for `packh`; `packw` sign-extends its 32-bit result).
+`max`, `maxu`, `min`, `minu` and Zicond's `czero.eqz`/`czero.nez` lift
+as a write of one operand and a conditional branch to the next instruction
+around a write of the other, the shape x86 `cmov` lifts to, so the
+structurer prints a conditional assignment. Operations p-code cannot state in
+a few operators are user operations that keep the data flow:
+`clmul`, `clmulh`, `clmulr` (carry-less multiply), `orc_b`, `brev8`,
+`zip`, `unzip` (RV32 only), `xperm4` and `xperm8`.
+
+The encodings that depend on XLEN are guarded by `ADDRSIZE`: `rev8` is
+`0x698` on RV32 and `0x6b8` on RV64, `zext.h` is `pack rd, rs1, x0` on
+RV32 (OP) and `packw rd, rs1, x0` on RV64 (OP-32), and the immediate shifts
+take a 6-bit amount whose top bit must be clear on RV32 (`shamt6`). The
+default RISC-V languages decode all of them, as the GNU and LLVM
+disassemblers do without an `-march` restriction, because no other standard
+or draft instruction in these languages shares their encodings. Exercised by
+`unlace-cli/tests/riscv_bitmanip.rs`: one probe row per encoding, RV32 and
+RV64, against `llvm-objdump`'s names, and LLVM-selected `max`, `minu`,
+`cpop`, `clz`, `ctz`, `czero.eqz`, `rev8`, `andn`, `bset` and
+`sh3add.uw` functions that decompile with no unimplemented instruction.
 
 ### RISC-V moves and conversions from FP to integer registers (GH-831)
 

@@ -448,6 +448,74 @@ mod tests {
         }
     }
 
+    /// The #28 additions, one name per source family, in the spelling each
+    /// symbol table carries.
+    #[test]
+    fn documented_no_return_additions_are_listed() {
+        let (exact, wildcard) = sets();
+        for name in [
+            "__cxa_call_terminate",
+            "_ZN10__cxxabiv112__unexpectedEPFvvE",
+            "_Unwind_SjLj_Resume",
+            "_ZSt20__throw_bad_weak_ptrv",
+            "_ZSt20__throw_bad_any_castv",
+            "_ZSt21__glibcxx_assert_failPKciS0_S0_",
+            "__assert_func",
+            "__android_log_assert",
+            "__stack_smash_handler",
+            "xexit",
+            "xmalloc_failed",
+            "Py_FatalError",
+            "_Py_FatalErrorFunc",
+            "Py_Exit",
+            "__ubsan_handle_builtin_unreachable",
+            "make_task_dead",
+            "kthread_exit",
+            "__module_put_and_kthread_exit",
+            "start_kernel",
+        ] {
+            assert!(name_matches(name, &exact, &wildcard), "{name}");
+        }
+        for name in [
+            "do_exit",
+            "rest_init",
+            "_Unwind_Resume_or_Rethrow",
+            "__GI_abort",
+        ] {
+            assert!(!name_matches(name, &exact, &wildcard), "{name}");
+        }
+        let (exact, wildcard) = parse_list(PE_MAC_NORETURN_LIST);
+        for name in [
+            "__Unwind_Resume",
+            "__Unwind_SjLj_Resume",
+            "___cxa_call_unexpected",
+            "___cxa_call_terminate",
+            "___stack_chk_fail",
+            "_abort_with_reason",
+            "_abort_with_payload",
+            "_Py_FatalError",
+        ] {
+            assert!(name_matches(name, &exact, &wildcard), "{name}");
+        }
+        let (exact, wildcard) = parse_list(crate::sourcelang::golang_noreturn_list());
+        for name in [
+            "runtime.goexit",
+            "runtime.morestackc",
+            "runtime.dieFromException",
+        ] {
+            assert!(name_matches(name, &exact, &wildcard), "{name}");
+        }
+        assert!(!name_matches("runtime.morestack", &exact, &wildcard));
+        let (exact, wildcard) = parse_list(crate::sourcelang::rust_noreturn_list());
+        for name in ["__rust_alloc_error_handler", "__rdl_alloc_error_handler"] {
+            assert!(name_matches(name, &exact, &wildcard), "{name}");
+        }
+        assert!(
+            rust_path("_ZN4core9panicking19assert_failed_inner17h0123456789abcdefE")
+                .is_some_and(|p| path_matches(&p, &exact, &wildcard))
+        );
+    }
+
     #[test]
     fn rust_paths_match_either_mangling_and_drop_generic_arguments() {
         let (exact, wildcard) = parse_list(crate::sourcelang::rust_noreturn_list());

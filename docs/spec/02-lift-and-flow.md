@@ -4716,6 +4716,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
 | `PowerPC` (Xenon VMX128) | Xbox 360 Xenon (64-bit PowerPC, AltiVec, VMX128) | `PowerPC:BE:64:Xenon` | Xenia emulator `ppc-instructions.xml` and VX128 decode formats (BSD-3) | `unlace-cli/tests/processors.toml` (`ppc_xenon_vmx128`) |
 | `S1C6200` | Seiko Epson S1C6200 / E0C6200 / E0C6200A 4-bit core | `S1C6200:BE:16:default` | Epson E0C6200/6200A Core CPU Manual (MF297-06a); checked against MAME `e0c6200` on all 4,096 encodings | `unlace-cli/tests/processors.toml` (`s1c6200`) |
+| `Propeller` (P2) | Parallax Propeller 2 (P2X8C4M64P), hub execution | `propeller2:LE:32:default` | Parallax "Propeller 2 Instructions" table v35 (encodings, operations, flags); checked against the flexspin assembler | `unlace-cli/tests/processors.toml` (`propeller2`) |
 | `S1C88` | Seiko Epson S1C88 8-bit core (Pokemon mini CPU) | `S1C88:LE:16:default` | Epson S1C88 Core CPU Manual (MF658-05); checked against MAME `minx` on all 768 opcode slots | `unlace-cli/tests/processors.toml` (`s1c88`) |
 <!-- native-rows -->
 
@@ -5096,6 +5097,44 @@ names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
 
+
+### RISC-V F and D
+
+`riscv.fd.sinc` decodes the F and D extensions. It is generated from the Sail model's
+`fext_insts.sail` and `dext_insts.sail` by `tools/gen_riscv_sail.py`
+(`docs/sleigh-from-isa-specs.md` has the command). It replaces the hand-written
+`riscv.rv32f.sinc`, `riscv.rv64f.sinc`, `riscv.rv32d.sinc` and `riscv.rv64d.sinc`; `riscv.rv32f.sinc`
+now holds only the `fliConstS` table that `riscv.zfa.sinc` displays through. It is included for
+FPSIZE 64, the only FLEN any RISC-V language uses.
+
+- Arithmetic, square root and conversions lift to `f+`/`f-`/`f*`/`f/`/`sqrt`/`int2float`/
+  `float2float` when the rounding mode is `rne`, or `dyn` (read as the `rne` a program starts with).
+  Conversions that are always exact (`fcvt.d.s`, `fcvt.d.w`, `fcvt.d.wu`) lift this way under every
+  mode. With a static `rtz`/`rdn`/`rup`/`rmm`, where p-code has no operation that rounds that way,
+  an inexact operation is a user operation named after the mnemonic (`fadd_s`). The exception is
+  float-to-integer conversion with `rtz`, the C cast: it truncates and saturates as the ISA does.
+  NaN and values above the range give the maximum, values below it the minimum (0 for the
+  unsigned forms). `fcvt.lu` handles values of 2^63 and above by subtracting 2^63 first.
+  Unsigned 64-bit integer-to-float conversion halves the value, keeping a sticky bit, when the top
+  bit is set.
+- The fused multiply-adds are user operations (`fmadd_d(a, b, c)`): p-code has no fused operation,
+  and `a * b + c` rounds twice. Exception flags are not modelled.
+- `fclass` builds its one-hot mask from the sign, exponent and mantissa. `fmin`/`fmax` return the
+  other operand for one NaN and the canonical NaN for two, and order -0 below +0. `feq`/`flt`/`fle`
+  are the p-code compares.
+- `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
+  `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
+- Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
+  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
+  as the hand-written files did. A register that does not hold a boxed value therefore reads as
+  that value instead of the canonical NaN. Compiled code never produces that state, and the
+  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+
+The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
+every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
+static rounding mode. Against QEMU (`tools/sail_sleigh_compare.py --fp`), the generated file
+differs only on unboxed sources. The hand-written one differed on 109 of 251 sampled words:
+rounding, saturation, `fclass` (unimplemented) and the fused multiply-adds.
 
 ### RISC-V Zfa (#98)
 

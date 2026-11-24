@@ -3901,7 +3901,8 @@ unboxing dies. Exact, so always on.
 **satconvert** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_satconvert.rs (RuleSatConvert)`, oppool1, fires
 on `MULTIEQUAL`, option `satconvert` (default on). *Pattern:* the outermost of three two-input
-joins, each taking a constant on one out-edge of its immediate dominator's branch (the select
+joins, each taking a constant (through the `COPY` that writes it, since a `MULTIEQUAL` never
+reads a constant) on one out-edge of its immediate dominator's branch (the select
 test `pow2select` uses), whose innermost input is `FLOAT_TRUNC(x)` at the join's width or the
 low word of a 64-bit one. The branches test `x` against float constants or `NAN(x)`. This is how
 `riscv.fd.sinc` lifts an `rtz` `fcvt.w*`/`fcvt.l*`. *Proof:* the ladder is evaluated at NaN,

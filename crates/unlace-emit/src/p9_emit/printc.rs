@@ -9125,6 +9125,48 @@ impl PrintC {
         true
     }
 
+    /// (kuna `neonintrin`) Render `SUBPIECE(v, off)` of an ACLE vector `v` that
+    /// reads exactly one lane as `vgetq_lane_s32(v, n)`.
+    fn push_neon_lane(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
+        if !arch
+            .kuna_options
+            .get::<crate::kuna_neonintrin::NeonIntrin>()
+            .on
+        {
+            return false;
+        }
+        let Some(o) = fd.obank().get(op) else {
+            return false;
+        };
+        let (Some(src), Some(off), Some(out)) = (o.get_in(0), o.get_in(1), o.get_out()) else {
+            return false;
+        };
+        let (Some(sv), Some(offv), Some(outv)) = (
+            fd.vbank().get(src),
+            fd.vbank().get(off),
+            fd.vbank().get(out),
+        ) else {
+            return false;
+        };
+        let ty = sv.get_type_def_facing().get_name().to_string();
+        let Some((name, index)) =
+            crate::kuna_neonintrin::lane_getter(&ty, offv.get_offset(), outv.get_size())
+        else {
+            return false;
+        };
+        self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
+        self.push_atom(&Atom::with_op(
+            name,
+            TagType::OpToken,
+            crate::printlanguage::SyntaxHighlight::funcname_color,
+            op_key(op),
+        ));
+        self.push_op(&tokens::COMMA, Some(op_key(op)));
+        self.push_vn_ir(fd, arch, src, op);
+        self.push_constant_ir_fmt_sign(index, 4, op, display_format::FORCE_DEC, false);
+        true
+    }
+
     /// (kuna `acleintrinsics`) Render a user op under its ACLE spelling.
     fn push_acle_intrinsic(
         &mut self,
@@ -9205,6 +9247,32 @@ impl PrintC {
             return;
         }
         if display == 0 {
+            if let Some((name, args)) =
+                userop.and_then(|u| neon_spelling(fd, arch, op, u.get_name()))
+            {
+                self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
+                self.push_atom(&Atom::with_op(
+                    name,
+                    TagType::OpToken,
+                    crate::printlanguage::SyntaxHighlight::funcname_color,
+                    op_key(op),
+                ));
+                if args.is_empty() {
+                    self.push_atom(&Atom::syntax(
+                        "",
+                        TagType::BlankToken,
+                        crate::printlanguage::SyntaxHighlight::no_color,
+                    ));
+                } else {
+                    for _ in 1..args.len() {
+                        self.push_op(&tokens::COMMA, Some(op_key(op)));
+                    }
+                    for vn in args {
+                        self.push_vn_ir(fd, arch, vn, op);
+                    }
+                }
+                return;
+            }
             let acle = userop
                 .and_then(|u| crate::kuna_acleintrinsics::intrinsic(fd, arch, op, u.get_name()));
             if let Some(call) = acle {
@@ -18237,4 +18305,54 @@ fn scaled_index(fd: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
         }
         _ => false,
     }
+}
+
+/// (kuna `neonintrin`) The ACLE spelling of the AArch64 NEON user op `op` named
+/// `name`, and the operands it prints (the element-size immediate dropped).
+fn neon_spelling(
+    fd: &Funcdata,
+    arch: &Architecture,
+    op: OpId,
+    name: &[u8],
+) -> Option<(String, Vec<VarnodeId>)> {
+    if !arch
+        .kuna_options
+        .get::<crate::kuna_neonintrin::NeonIntrin>()
+        .on
+        || !arch.archid.starts_with("AARCH64:")
+    {
+        return None;
+    }
+    let name = std::str::from_utf8(name).ok()?;
+    let o = fd.obank().get(op)?;
+    let inputs: Vec<VarnodeId> = (1..o.num_input()).filter_map(|i| o.get_in(i)).collect();
+    let sizes: Vec<i32> = inputs
+        .iter()
+        .map(|&v| fd.vbank().get(v).map_or(0, |v| v.get_size()))
+        .collect();
+    let consts: Vec<Option<u64>> = inputs.iter().map(|&v| neon_constant(fd, v)).collect();
+    let out = o
+        .get_out()
+        .and_then(|v| fd.vbank().get(v))
+        .map_or(0, |v| v.get_size());
+    let (intr, order, _) = crate::kuna_neonintrin::userop_name(name, &sizes, &consts, out)?;
+    let args = order
+        .iter()
+        .map(|&i| inputs.get(i).copied())
+        .collect::<Option<Vec<_>>>()?;
+    Some((intr, args))
+}
+
+/// The value of `vn` when it is a constant or a zero-extension or copy of one.
+fn neon_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
+    let v = fd.vbank().get(vn)?;
+    if v.is_constant() {
+        return Some(v.get_offset());
+    }
+    let def = fd.obank().get(v.get_def().filter(|_| v.is_written())?)?;
+    if !matches!(def.code(), OpCode::CPUI_INT_ZEXT | OpCode::CPUI_COPY) {
+        return None;
+    }
+    let src = fd.vbank().get(def.get_in(0)?)?;
+    src.is_constant().then(|| src.get_offset())
 }

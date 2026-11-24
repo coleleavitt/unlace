@@ -144,7 +144,7 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
             }
         }
         // (kuna vectorabi) a vector user-op's result is an Intel vector type.
-        if let Some(t) = vector_userop_type(&arch, in0_off, out_size) {
+        if let Some(t) = vector_userop_type_at(&arch, data, op, in0_off, out_size) {
             return t;
         }
         // (kuna javatry) the try dispatch and the exceptional-edge test are
@@ -305,12 +305,48 @@ pub fn vector_result_type(data: &Funcdata, vn: crate::context::VarnodeId) -> Opt
             OpCode::CPUI_COPY => vn = def.get_in(0)?,
             OpCode::CPUI_CALLOTHER => {
                 let id = data.vbank().get(def.get_in(0)?)?.get_offset();
-                return vector_userop_type(data.get_arch(), id, v.get_size());
+                return vector_userop_type_at(
+                    data.get_arch(),
+                    data,
+                    v.get_def()?,
+                    id,
+                    v.get_size(),
+                );
             }
             _ => return None,
         }
     }
     None
+}
+
+/// [`vector_userop_type`] for the user-op call `op`: a NEON op whose lane width is
+/// its trailing element-size immediate reads that immediate.
+fn vector_userop_type_at(
+    arch: &crate::context::ArchHandle,
+    data: &Funcdata,
+    op: OpId,
+    id: u64,
+    size: int4,
+) -> Option<Rc<Datatype>> {
+    let uid = unlace_base::types::uint4::try_from(id).ok()?;
+    let at = arch
+        .vector_userops
+        .binary_search_by_key(&uid, |(i, _)| *i)
+        .ok()?;
+    let kind = arch.vector_userops[at].1;
+    let Some(elem) = crate::kuna_neonintrin::variable_elem(kind) else {
+        return vector_userop_type(arch, id, size);
+    };
+    let o = data.obank().get(op)?;
+    let last = data.vbank().get(o.get_in(o.num_input() - 1)?)?;
+    if !last.is_constant() || last.get_size() != 1 {
+        return None;
+    }
+    let lane = u32::try_from(last.get_offset()).ok()?;
+    let name = crate::kuna_neonintrin::vector_type_name(size, elem, lane)?;
+    arch.types()?
+        .get_base_named(size, type_metatype::TYPE_UNKNOWN, &name)
+        .ok()
 }
 
 /// The Intel vector type of a `size`-byte operand of the vector user-op `id`.
@@ -370,7 +406,7 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_offset())
             .unwrap_or(0);
-        if let Some(t) = vector_userop_type(&arch, id, in_size) {
+        if let Some(t) = vector_userop_type_at(&arch, data, op, id, in_size) {
             return t;
         }
     }

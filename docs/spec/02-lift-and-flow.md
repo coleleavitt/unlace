@@ -1305,10 +1305,20 @@ recovered switch table.
   `return a + b;` and `dscale`'s `__aeabi_dmul(v, __aeabi_i2d(n))` prints
   `return v * (double)n;`. `d2ulz`, `f2ulz`, `ul2d` and `ul2f` have no exact
   p-code reading and keep their calls, typed by `aeabisigs`, as do the
-  flag-returning `cdcmp`/`cfcmp` comparisons. Default off: the fold takes the
+  flag-returning `cdcmp`/`cfcmp` comparisons. Each payload also targets the
+  libgcc routine the helper is (`__adddf3`, `__muldf3`, `__extendsfdf2`,
+  `__floatsidf`, `__fixdfsi`, `__fixdfdi`, ...): libgcc defines both names at
+  one address, a static image may name the function by either, and newlib
+  calls the libgcc names directly. The three-way `__eqdf2`/`__ltdf2` family
+  returns something else and keeps its calls. Default off: the fold takes the
   image's helpers to be RTABI32's round-to-nearest IEEE ones, which a library
   built for flush-to-zero or another rounding mode is not. The gate is on the
-  install, as for `arithhelpers`. On a hard-float caller that moves the
+  install, as for `arithhelpers`. The load-time call-fixup scan
+  (`unlace_analysis::callfixup`) matches every kuna family whatever its option,
+  because it runs before the run's options reach the architecture; the commit
+  re-derives each fact's fixup through the gated map. Gating the scan too left a
+  relocatable object's undefined `__aeabi_*` imports, which only the scan names,
+  without the fixup under `option aeabifloat on`. On a hard-float caller that moves the
   `r0:r1` result into `d0` (`vmov d0, r0, r1`), the result still prints as two
   masked halves of a union cast joined by `+`.
 

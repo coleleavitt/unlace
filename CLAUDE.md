@@ -175,5 +175,6 @@ it until the label is gone.
 | `docs/missing-ghidra-analyses.md` | The `unlace-analysis` tier: analyzer gap vs Ghidra. |
 | `docs/ghidra-integration.md` | unlace as Ghidra's decompiler core (architecture + wire protocol). |
 | `docs/web-integration.md` | The WASM/browser front-end and the project site. |
+| `docs/sleigh-from-isa-specs.md` | Generating SLEIGH from Sail and other machine-readable ISA specs (`tools/gen_riscv_sail.py`) and checking it against LLVM and QEMU. |
 | `docs/history.md` | Rarely needed: the C++→Rust port, verification, vendored-tree provenance. |
 | `notes/apple-port-from-unlace.md`, `notes/proposal-dyld-cache.md` | Fork Apple-port plans. |

@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_360() {
-    assert_eq!(kuna_num_settables(), 360);
-    assert_eq!(SETTABLE_TABLE.len(), 360);
+fn settable_count_is_361() {
+    assert_eq!(kuna_num_settables(), 361);
+    assert_eq!(SETTABLE_TABLE.len(), 361);
 }
 
 #[test]
-fn tier_counts_are_70_core_180_transform_110_analysis() {
+fn tier_counts_are_70_core_180_transform_111_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_180_transform_110_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 180, 110));
+    assert_eq!((core, transform, analysis), (70, 180, 111));
 }
 
 #[test]
@@ -426,6 +426,9 @@ fn option_values_live_value_present_for_129() {
         "msvceh",
         // (kuna) Borland/Delphi RTTI, the same PE-only analysis-pass gate. Default-off.
         "delphi",
+        // (kuna) Delphi register-convention language selection: a load-time gate
+        // read via the `KUNA_DELPHIABI` env var, like `ppcapu`.
+        "delphiabi",
         // (kuna) ELF libc-start `main` naming + prototype -- the ELF counterpart of
         // `machomain` above and the same seam: an analysis-tier gate with no
         // codegen live reader, read console-side via kuna_live_value. Default-ON.
@@ -1336,8 +1339,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `orchainbool`: 356 rows, 355 commas.
     // Recounted from phases.toml with `delphi` (its P1 row follows `msvceh`): 358 rows, 357 commas.
     // +1 for `dextrpc`; its P1 row sits after `osclassinfo`: 359 rows, 358 commas.
-    // +1 for `delphiabi`; its P1 row sits before `esprom`: 360 rows, 359 commas.
-    assert_eq!(json.matches("},\n").count(), 359);
+    // Recounted from phases.toml with `delphiabi` (its P1 row precedes `esprom`): 361 rows, 360 commas.
+    assert_eq!(json.matches("},\n").count(), 360);
 }
 
 #[test]

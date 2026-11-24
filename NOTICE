@@ -229,6 +229,10 @@ specs/Ghidra/Processors/Falcon vendors the NVIDIA Falcon SLEIGH specification of
 aleph-void/ghidra_falcon (https://github.com/aleph-void/ghidra_falcon), a fork of marysaka/ghidra_falcon, released under the
 ISC License (its license file is in that directory).
 
+specs/Ghidra/Processors/TMS34010 vendors the TI TMS34010 (GSP) SLEIGH specification of
+aleph-void/Ghidra_TMS34010 (https://github.com/aleph-void/Ghidra_TMS34010), a fork of ZPaul2Fresh8/Ghidra_TMS34010, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

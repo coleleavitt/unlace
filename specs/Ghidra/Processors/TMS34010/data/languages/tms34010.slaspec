@@ -1,0 +1,63 @@
+# Texas Instruments TMS34010 Graphics System Processor
+#
+# Original module by ZPaul2Fresh8 (https://github.com/ZPaul2Fresh8/Ghidra_TMS34010).
+# Instruction set rewritten for Ghidra-Rare against MAME's TMS34010 disassembler and core and the
+# TMS34010 User's Guide (SPVU001A, 1988); see CREDITS.md and GHIDRA-RARE.md.
+#
+# Memory model
+#   The TMS34010 addresses memory in bits: every address register, the PC and the stack pointer
+#   hold 32-bit bit addresses. Ghidra cannot address bits, so the single "ram" space is byte
+#   addressed and a Ghidra address is the bit address divided by 8 (MAME's PC display, which is
+#   a bit address, is 8 times the Ghidra address). Instructions are 16-bit aligned (bit
+#   addresses with the low 4 bits clear).
+#   Branch and call targets are shown as Ghidra addresses (so labels work). Absolute data
+#   operands (MOVE @addr) are shown as the bit address the instruction holds, as TI's
+#   assembler and MAME print them. Registers keep bit addresses at all times; the p-code
+#   converts them (address >> 3, plus a bit shift for fields that do not start on a byte).
+#   Field moves read and write exactly the bits of the field at any bit address. Stack
+#   accesses (PUSHST/POPST, MMTM/MMFM, CALL/RETS/RETI/TRAP) assume the pointer register is a
+#   multiple of 8 bits, as every TMS340 toolchain keeps it (see GHIDRA-RARE.md).
+#
+# I/O registers are memory mapped at bit address C0000000h (Ghidra address 18000000h).
+
+define endian=little;
+define alignment=2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+# Register files A and B. A15 and B15 are the same register, SP.
+define register offset=0x00 size=4 [ A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 SP ];
+define register offset=0x40 size=4 [ B0 B1 B2 B3 B4 B5 B6 B7 B8 B9 B10 B11 B12 B13 B14 _B15 ];
+
+# Program counter (holds the Ghidra/byte address; GETPC and friends convert to bits).
+define register offset=0x80 size=4 [ PC ];
+
+# Status register ST, kept as separate fields so the decompiler can track the flags.
+#   31 N, 30 C, 29 Z, 28 V, 25 PBX, 21 IE, 11 FE1, 10-6 FS1, 5 FE0, 4-0 FS0.
+# STX keeps the reserved bits, so GETST returns what PUTST wrote (as MAME does).
+define register offset=0x90 size=1 [ N C Z V PBX IE FE0 FE1 FS0 FS1 ];
+define register offset=0xa0 size=4 [ STX MMP ];
+@ifdef TMS34020
+# TMS34020: VCOLOR stands for the colour registers of the external VRAMs (loaded by VLCOL, used by
+# the VRAM block-write instructions VFILL and VBLT).
+define register offset=0xb0 size=4 [ VCOLOR ];
+@endif
+
+# Graphics instructions that update registers while they run (PIXBLT/FILL/LINE) keep their
+# loop state in the registers themselves; no other hidden state is needed.
+
+@define IOBASE   "0x18000000:4"
+# I/O register byte offsets (bit address C00000x0h -> 18000000h + x0h/8)
+@define CONTROL  "0x18000016:4"
+@define CONVSP   "0x18000026:4"
+@define CONVDP   "0x18000028:4"
+@define PSIZE    "0x1800002a:4"
+@define PMASK    "0x1800002c:4"
+@ifdef TMS34020
+# TMS34020 additions: PMASK is 32 bits (PMASKL, PMASKH), mask-array pitch conversion, CONFIG
+@define CONVMP   "0x18000030:4"
+@define CONFIG   "0x18000034:4"
+@endif
+
+@include "tms34010.sinc"

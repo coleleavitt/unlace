@@ -4219,6 +4219,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `XaviX` | XaviX | `XaviX:LE:24:default` | aleph-void/ghidra-xavix @ `8a94e7953b`, MIT |
 | `CellSPU` | Cell SPU (PS3) | `SPU:BE:32:default` | aleph-void/GhidraSPU (fork of aerosoul94/GhidraSPU) @ `a2efc11569`, Apache-2.0 |
 | `Falcon` | NVIDIA Falcon | `falcon:LE:32:v0`, `falcon:LE:32:v3`, `falcon:LE:32:v4`, `falcon:LE:32:v5`, `falcon:LE:32:v6` | aleph-void/ghidra_falcon (fork of marysaka/ghidra_falcon) @ `d835a7c618`, ISC |
+| `TMS34010` | TI TMS34010 (GSP) | `tms34010:LE:32:default`, `tms34020:LE:32:default` | aleph-void/Ghidra_TMS34010 (fork of ZPaul2Fresh8/Ghidra_TMS34010) @ `271d988289`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

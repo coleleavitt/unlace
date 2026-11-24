@@ -2051,6 +2051,11 @@ a narrowed run, `decompile-project --stream`, under `--option protoorder off`,
 and on a `--jobs N` run that does not name it; naming it alongside `--jobs N` is
 refused. `KUNA_CALLBACKTYPE_TRACE=1` prints each park or refusal and its reason.
 
+`KUNA_ENTRY_TRACE=1` prints on stderr every function entry and function symbol a
+load-time or Listing-consumer analysis pass commits, with the pass id
+(`entry-source: <pass> entry 0x...`); `KUNA_ENTRY_TRACE=0x4024d0` prints only that
+address. It says which source put a function in the inventory.
+
 On x86-32 Windows, `KUNA_CALLEEPURGE_DEBUG=1` traces the callee walk behind
 `calleeargs` and the proven callee pops on stderr. Each walk prints the address
 where it first gives up on a property (a budget, an undecodable or computed

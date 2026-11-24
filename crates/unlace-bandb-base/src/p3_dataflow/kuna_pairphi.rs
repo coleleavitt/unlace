@@ -38,6 +38,11 @@ enum Whole {
     Own,
 }
 
+/// Is the decline trace on (`KUNA_PAIRLOCAL_TRACE=1`)?
+fn trace() -> bool {
+    std::env::var("KUNA_PAIRLOCAL_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+}
+
 fn def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank()
         .get(vn)
@@ -61,7 +66,26 @@ fn subpiece(data: &Funcdata, vn: VarnodeId) -> Option<(VarnodeId, uintb)> {
     (data.vbank().get(w)?.get_size() == 8).then_some((w, constant(data, o.get_in(1)?)?))
 }
 
-/// The value of the edge with inputs `hi` and `lo`.
+/// `vn` with the COPYs that define it skipped.
+fn through_copy(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+    for _ in 0..8 {
+        let Some(o) = def(data, vn).and_then(|d| data.obank().get(d)) else {
+            break;
+        };
+        if o.code() != OpCode::CPUI_COPY {
+            break;
+        }
+        let Some(next) = o.get_in(0) else {
+            break;
+        };
+        vn = next;
+    }
+    vn
+}
+
+/// The value of the edge with inputs `hi` and `lo`, the phi inputs (live at
+/// the end of the edge's predecessor); the COPYs heritage leaves above them are
+/// looked through.
 fn whole(
     data: &Funcdata,
     hi: VarnodeId,
@@ -71,21 +95,35 @@ fn whole(
     if (hi, lo) == own {
         return Some(Whole::Own);
     }
-    match (constant(data, hi), constant(data, lo)) {
+    let (rh, rl) = (through_copy(data, hi), through_copy(data, lo));
+    let same_lo = |v: Option<VarnodeId>| v.is_some_and(|v| through_copy(data, v) == rl);
+    match (constant(data, rh), constant(data, rl)) {
         (Some(h), Some(l)) => return Some(Whole::Const((h << 32) | (l & 0xffff_ffff))),
         (Some(0), None) => return Some(Whole::Zext(lo)),
         (Some(_), None) | (None, Some(_)) => return None,
         (None, None) => {}
     }
-    if let Some(o) = def(data, hi).and_then(|d| data.obank().get(d)) {
+    if let Some(o) = def(data, rh).and_then(|d| data.obank().get(d)) {
         if o.code() == OpCode::CPUI_INT_SRIGHT
-            && o.get_in(0) == Some(lo)
+            && same_lo(o.get_in(0))
             && o.get_in(1).and_then(|c| constant(data, c)) == Some(31)
         {
             return Some(Whole::Sext(lo));
         }
     }
-    match (subpiece(data, hi), subpiece(data, lo)) {
+    // x86 `cdq` lifts as `EDX = SUBPIECE(SEXT(EAX), 4)`.
+    if let Some((w, 4)) = subpiece(data, rh) {
+        if let Some(o) = def(data, w).and_then(|d| data.obank().get(d)) {
+            if same_lo(o.get_in(0)) {
+                match o.code() {
+                    OpCode::CPUI_INT_SEXT => return Some(Whole::Sext(lo)),
+                    OpCode::CPUI_INT_ZEXT => return Some(Whole::Zext(lo)),
+                    _ => {}
+                }
+            }
+        }
+    }
+    match (subpiece(data, rh), subpiece(data, rl)) {
         (Some((wh, 4)), Some((wl, 0))) if wh == wl => Some(Whole::Vn(wh)),
         _ => None,
     }
@@ -145,6 +183,20 @@ impl Rule for RulePairPhi {
             return 0;
         }
         let Some((hp, lp, bl)) = half_phis(data, op) else {
+            if trace() {
+                let o = data.obank().get(op);
+                let code = |v: Option<VarnodeId>| {
+                    v.and_then(|v| def(data, v))
+                        .and_then(|d| data.obank().get(d))
+                        .map(|o| o.code())
+                };
+                eprintln!(
+                    "pairlocal: PIECE at {:?}: halves not same-block phis (hi {:?}, lo {:?})",
+                    o.map(|o| o.get_addr().get_offset()),
+                    code(o.and_then(|o| o.get_in(0))),
+                    code(o.and_then(|o| o.get_in(1)))
+                );
+            }
             return 0;
         };
         let (Some(hout), Some(lout)) = (
@@ -163,6 +215,20 @@ impl Rule for RulePairPhi {
                 return 0;
             };
             let Some(w) = whole(data, h, l, (hout, lout)) else {
+                if trace() {
+                    let code = |v: VarnodeId| {
+                        def(data, through_copy(data, v))
+                            .and_then(|d| data.obank().get(d))
+                            .map(|o| o.code())
+                    };
+                    eprintln!(
+                        "pairlocal: edge {i}: no whole for hi {:?} {:?} lo {:?} {:?}",
+                        code(h),
+                        constant(data, h),
+                        code(l),
+                        constant(data, l)
+                    );
+                }
                 return 0;
             };
             wholes.push(w);

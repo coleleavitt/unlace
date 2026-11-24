@@ -241,6 +241,17 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) Keep every single-owner `.cold` part out of the function list, as IDA
+    /// keeps a function tail (option `functails`). See
+    /// `unlace_analysis::entry::kuna_ehcold::cold_tails`.
+    Functails,
+    "functails",
+    "Single-owner .cold parts kept as their owner's tails",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Note a function's hidden landing pads in its header (option `ehnote`).
     Ehnote,
     "ehnote",
@@ -738,6 +749,16 @@ crate::kuna_flag!(
     "Placeholder jump thunks named j_<target>",
     unset: false,
     shipped: true
+);
+
+crate::kuna_flag!(
+    /// (kuna) Name a placeholder function whose body is a bare return
+    /// `nullsub_<addr>` (`nullsubs`). Default off.
+    Nullsubs,
+    "nullsubs",
+    "Placeholder empty functions named nullsub_<addr>",
+    unset: false,
+    shipped: false
 );
 
 crate::kuna_flag!(

@@ -3536,7 +3536,7 @@ first. `LZCOUNT(bitreverse(x))`, AArch64's `rbit` + `clz` spelling of
 `x` and `-x` into `abs(x)` (`labs` at 8 bytes) when the branch that picks between
 them is a signed compare of `x` or `-x` with constants that chooses `-x` at
 `x = -5` and `x` at `x = 5`: the `neg; cmovs` and `cmp; cneg` lowerings of
-`x < 0 ? -x : x`. `ActionBitScanLoop` (group `returnsplit`, next to `strlenscan`)
+`x < 0 ? -x : x`. The same rule turns the branch-free form, `INT_SUB(INT_XOR(x, s), s)` with `s = INT_SRIGHT(x, W - 1)`, into `abs(x)`, since `(x ^ s) - s` equals `abs(x)` for every `x` (the xor and sub lowering of `x < 0 ? -x : x`). `ActionBitScanLoop` (group `returnsplit`, next to `strlenscan`)
 takes the one-instruction loop SLEIGH lifts x86 `bsf`/`tzcnt`/`bsr` to (a head and
 a body whose ops all carry one instruction address), runs it on every single-bit
 source and several mixed ones, and when the counter it hands to the exit is the

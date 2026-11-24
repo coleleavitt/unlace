@@ -923,7 +923,9 @@ load-time partition, a declared libc function, the ARM list `armfloatreturn`
 does not apply), and a DWARF signature `build_pieces` could not type. The
 decompile's seed (`kuna_honestgaps.rs (seed)`) names it as
 `withheldproto: ...; not applied` in the header of the function it belongs to
-and at each call whose callee it is. The tags are lowercase, so the printer's warning
+and at each call whose callee it is, skipping a warning already buffered with
+the same type, address and text (a re-flow also drops the function's analysis
+warnings before it seeds again, and the commit adds each comment once). The tags are lowercase, so the printer's warning
 records file them under the kinds `notmodelled`, `debuginfo` and `withheldproto`, and the CLI's
 `--json` lists them with the rest and totals every kind in `warning_kinds`
 (`docs/cli.md`). Off by default because the extra comments change the text of

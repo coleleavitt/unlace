@@ -121,6 +121,10 @@ baseline by name and skips the check for baseline keys of files it did not run; 
 assertion must pass, and a corpus none of whose files match is skipped. `UNLACE_BLESS=1` refuses
 a selected run.
 
+Each run writes `target/parity-times.json`: per corpus, every file it ran with its wall time in
+milliseconds and its outcome (`pass`, `fail` or `error`), slowest first. CI uploads it as the
+`parity-times` artifact of the parity gates job.
+
 Other one-liners: `cargo test --release -p unlace-ghidra -- --include-ignored` (the ghidra-mode
 differential harness with its heavier breadth test), `bash scripts/version.sh` (the version CI
 tags with), `PYTHONPATH=. python3 -m scripts.observatory.generate --out observatory --kuna

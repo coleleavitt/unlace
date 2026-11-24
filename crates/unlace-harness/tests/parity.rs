@@ -50,6 +50,8 @@ struct DataResult {
     errors: Vec<String>,
     applied: i64,
     succeeded: i64,
+    /// Each file's repository-relative path, wall time in ms and outcome (pass, fail, error).
+    times: Vec<(String, u64, &'static str)>,
 }
 
 fn parse_data(stdout: &str) -> DataResult {
@@ -279,6 +281,17 @@ fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<D
             text.push('\n');
         }
         let d = parse_data(&text);
+        let outcome = if !d.errors.is_empty() {
+            "error"
+        } else if !d.failing.is_empty() {
+            "fail"
+        } else {
+            "pass"
+        };
+        let rel = Path::new(&run.file)
+            .strip_prefix(root)
+            .map_or_else(|_| run.file.clone(), |p| p.to_string_lossy().into_owned());
+        r.times.push((rel, run.wall_ms, outcome));
         if run.file.ends_with(".toml") {
             r.in_toml
                 .extend(r.passing.len()..r.passing.len() + d.passing.len());
@@ -294,6 +307,31 @@ fn run_corpus(root: &Path, corpus: &Path, select: Option<&[String]>) -> Option<D
         r.succeeded += i64::from(run.succeeded);
     }
     Some(r)
+}
+
+/// `target/parity-times.json`: per corpus, each file's wall time and outcome, slowest first. A
+/// run replaces its own corpus's entry and keeps the other's; a write failure only warns.
+fn write_parity_times(corpus: &str, r: &DataResult) {
+    let Some(target) = Path::new(env!("CARGO_TARGET_TMPDIR")).parent() else {
+        return;
+    };
+    let path = target.join("parity-times.json");
+    let mut doc: serde_json::Map<String, serde_json::Value> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    let mut times = r.times.clone();
+    times.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let rows: Vec<serde_json::Value> = times
+        .iter()
+        .map(|(file, ms, outcome)| serde_json::json!({"file": file, "ms": ms, "outcome": outcome}))
+        .collect();
+    doc.insert(corpus.to_string(), serde_json::Value::Array(rows));
+    let text = serde_json::to_string_pretty(&serde_json::Value::Object(doc))
+        .expect("serialize the parity times");
+    if let Err(e) = std::fs::create_dir_all(target).and_then(|()| std::fs::write(&path, text)) {
+        eprintln!("warning: could not write {}: {e}", path.display());
+    }
 }
 
 /// A baseline key's assertion name: `data:<name>` without its ` @dupN` suffix.
@@ -404,6 +442,7 @@ fn parity(corpus: &str, baseline: &str) {
         println!("{corpus}: UNLACE_PARITY_FILES selects none of its files, skipped");
         return;
     };
+    write_parity_times(corpus, &r);
     let (in_toml, now): (Vec<_>, Vec<_>) = dedup_list("data:", &r.passing)
         .into_iter()
         .enumerate()

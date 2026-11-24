@@ -867,6 +867,8 @@ pub struct FileRun {
     pub failures: Vec<String>,
     pub applied: int4,
     pub succeeded: int4,
+    /// The file's wall time in milliseconds (in a worker run, as its parent measured it).
+    pub wall_ms: u64,
 }
 
 /// Run each file in turn through one collection (the loop of [`run_test_files_with_specs`]),
@@ -878,6 +880,7 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
     for file in test_files {
         restore_option_env(&env);
         collection.clear();
+        let started = std::time::Instant::now();
         let mut run = FileRun {
             file: file.clone(),
             ..FileRun::default()
@@ -901,6 +904,7 @@ pub fn run_test_files_each(test_files: &[String], spec_roots: &[String]) -> Vec<
                 run.failures.push(fs);
             }
         }
+        run.wall_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
         runs.push(run);
     }
     restore_option_env(&env);

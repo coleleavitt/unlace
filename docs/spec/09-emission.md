@@ -2345,7 +2345,10 @@ a width above `double` with no exact match spells `long double`, which is how th
 x87 `float10` is reached. No target has a 10-byte `sizeof` — the x86 cspecs
 record 10 as the *value* width and annotate the storage in a comment — so that
 spelling is an approximation of storage, deliberately the same one the recompile
-prelude already makes, since the emitted `.c` and `.h` must not disagree.
+prelude already makes, since the emitted `.c` and `.h` must not disagree. Below
+`float`, the 2-byte binary16 `float2` spells `_Float16` (ISO TS 18661-3, C23;
+GCC and Clang); the recompile prelude does not typedef `float2`, since compilers
+without `_Float16` would reject the whole prelude.
 
 Integer widths with no C type at all (3, 5, 6, 7, and 16-byte integers) keep
 their `undefined<N>` form. They are **not** widened: `(undefined3)x` is a 24-bit

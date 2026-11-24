@@ -3020,8 +3020,8 @@ one operand of a CALLOTHER whose user op has one of these names the float of
 the Varnode's width, as they do for `FLOAT_ROUND`
 (`crates/unlace-bandb-base/src/p5_types/kuna_roundingops.rs
 (output_type, input_type)`). The user-op ids are resolved by name once per
-program, and a width the processor has no float format for (AArch64 half
-precision) keeps the untyped default. Such a CALLOTHER is a pure function of
+program, and a width the processor has no float format for (by default anything but
+the 2-, 4- and 8-byte IEEE formats) keeps the untyped default. Such a CALLOTHER is a pure function of
 its operand, so dead-code removal deletes it once its result is unused
 instead of keeping it as a call statement (`is_pure_call`, read by
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs

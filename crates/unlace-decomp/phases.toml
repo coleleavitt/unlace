@@ -1743,6 +1743,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "minmax"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-minmax"
+summary = "Print a branch-free min or max, written as arithmetic on the sign of a difference, as min(a, b) or max(a, b). With d = a - b and s = d >> (W - 1) (arithmetic), b + (d & s) is min(a, b) and a - (d & s) is max(a, b): a compiler lowers `a < b ? a : b` without a branch to that form. The rule matches an INT_ADD of b and d & s, or an INT_SUB of a and d & s, where d is the INT_SUB of a and b and s is the sign of d, and rewrites the op in place into the builtin call min(a, b) or max(a, b) (signed). It is exact only when a - b does not overflow, the case the sign of d assumes, so it is a judgement call and off by default."
+use_when = "Off by default: the sign-of-difference form is exact only without signed overflow in a - b, and the call is not C. Turn it on to read branch-free selects of the smaller or larger of two signed values as min and max, the way the source wrote them."
+example = "option minmax on"
+live_field = "min"
+live_true = "on"
+live_false = "off"
+source_decompiler = "unlace"
+inspiration = "unlace idiom_recognition try_min_idiom and try_max_idiom (the archived master pass, passes-idioms)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31))|a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31))|a cmov-style min or max of two ints prints as a shift, a mask and an add"
+
+[[settable]]
 option = "bitfieldarith"
 values = "on|off"
 default = "off"
@@ -4623,6 +4645,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "gotochain"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "goto-chain-coalesce"
+summary = "Retarget a goto to a label whose block is only an unconditional goto. When a label leaf holds no statement (its block only branches) and is immediately followed in its statement list by `goto L2;`, every unstructured `goto L1;` and `if (c) goto L1;` that names it is rewritten to `goto L2;` (chains followed transitively, with a cycle guard). The new target is labelled, and the old label is released once no goto, switch case or multi-goto edge still names it. Only plain gotos are retargeted: switch-case and multi-goto edges keep their label, so the output stays valid C."
+use_when = "Off by default: the goto-to-goto rendering is upstream's. Set `on` when a function prints `label_A: goto label_B;` and several gotos reach `label_A` only to fall through to `label_B`; each such jump then names `label_B` directly and the middle label disappears. The original unlace `goto_coalesce` pass ran this on its HIR; this is the structured-tree port. Not yet measured on the datatest corpus: flip to `on` only after `make test` shows 0/675 movement for the default and a stage run confirms the labels it removes."
+example = "option gotochain on"
+source_decompiler = "unlace"
+inspiration = "original unlace goto_coalesce.rs (coalesce_goto_chains, run on the HIR); IDA Hex-Rays sample vds11 (goto L1 => goto L2)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "goto label_A where label_A: is followed directly by goto label_B;|a label whose only statement is a goto to another label|two labels in a row, the first holding only a jump"
+
+[[settable]]
 option = "gotoreduce"
 values = "off|return|on"
 default = "on"
@@ -5609,6 +5650,25 @@ inspiration = "angr's pointer-arithmetic type closure (`analyses/typehoon/simple
 change_kind = "opt-in-tool"
 tier = "transform"
 symptoms = "a parameter is declared long or unsigned long and is only ever dereferenced|every use of an argument is *(T *)(a0 + k) but the argument is not a pointer|one function takes T *a0 and its sibling takes long a0 for the same kind of argument|an argument dereferenced at offset 0 gets a pointer type but one dereferenced at +8 does not"
+
+[[settable]]
+option = "lvarvote"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P5"
+subphase = "type-propagation"
+strength = "HARD"
+rewind = "P5"
+issue = "unlace-lvarvote"
+summary = "Type a local whose reads and writes disagree by a weighted vote instead of the most specific type: each op that writes or reads the Varnode votes for its own type; an unknown type ranks behind a known one; the type most of the votes support wins (same-width integers support each other, signedness being decided separately), then the most votes, then the first vote seen. A local whose votes all agree keeps the type it had."
+use_when = "Off by default (byte-identical output). Turn on to see whether a local should take the type most of its uses agree on rather than the most specific one a single stray use proposes. Only locals whose votes conflict change. Measure on decbench before any default change."
+example = "option lvarvote on"
+source_decompiler = "unlace"
+inspiration = "Hex-Rays type ballot: lowest unknownness first, then most support (notes/orig-unlace/research-type-recovery.md row 2)"
+change_kind = "type-inference"
+tier = "transform"
+symptoms = "a local is declared with a type most of its uses contradict|a local takes the most specific type one stray use proposes"
 
 [[settable]]
 option = "ptrfromlocal"
@@ -8320,6 +8380,25 @@ change_kind = "presentation-default"
 tier = "transform"
 symptoms = "one local in a callee-saved register holds unrelated values around different calls|a variable kept across one call is reused for a different value kept across a later call|a pointer and a count share one declared local in rbx or x19"
 
+[[settable]]
+option = "coalescecap"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P6"
+subphase = "merge-aggressiveness"
+strength = "HARD"
+rewind = "P6"
+issue = "unlace-1225"
+summary = "Stop the variable merge on a very large function. Merge::mergeByDatatype (merge.cc:359-401) runs mergeLinear over each type group, and mergeLinear tests every high against the accepted stack of its group, so one pass is quadratic in the number of HighVariables and a function with thousands of locals spends minutes in it. ON compares the number of HighVariables the merge gathers in the function with a fixed limit of 5000 (coalescecap.rs (MAX_COALESCIBLE_HIGHS)); above the limit the type-group merge and the stable-name merge are skipped and every high keeps its own variable, the same fallback the original unlace cross-base coalescing took (variable_merge.rs, max_coalescible_vars). A function under the limit merges exactly as before. OFF, the default, is upstream byte-for-byte."
+use_when = "OFF by default: above the limit the merge is skipped on purpose, so the variable count of that function rises even though no merge is wrong. Turn it ON when one function takes minutes in variable merging or hits the decompile-all watchdog, or on a generated or obfuscated function with thousands of locals whose merged output is unreadable anyway. The limit is not yet measured on a corpus; a default change needs the 675 datatest assertions, the speed budget and the DecBench variable-match numbers."
+example = "option coalescecap on"
+source_decompiler = "unlace"
+inspiration = "variable_merge.rs max_coalescible_vars fallback (origin/master); Merge::mergeLinear (merge.cc:272-292)"
+change_kind = "speed"
+tier = "transform"
+symptoms = "one function takes minutes in variable merging|a decompile of one very large function hits the watchdog in the variable merge|a generated function with thousands of locals prints as a flood of one-use variables"
+
 # ---------------------------------------------------------------------------
 # (unlace) Loader-tier capability (1 row): arm64e Mach-O spec selection. Like
 # `relocobjects` above, this gates a LOAD-time decision (language_id_for), so the
@@ -8684,6 +8763,25 @@ symptoms = "branch tests a global that no code ever writes|same condition tested
 live_field = "opaque_predicate"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "opaqueoffset"
+values = "off|on"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-opaque-offset"
+summary = "Fold an `==` or `!=` between two values that are one opaque value plus different constants, so a peel check or loop guard over stack-relative addresses loses the arm that never runs. `sp + 0x40 == sp + 8` is never true and `((sp + 0x40) - (sp + 4)) & 4` is always 4 for every value of `sp`. Each side is read as a base plus a constant through COPY, INT_ADD and INT_SUB with a constant (and INT_SUB of two values with the same base), and through INT_AND of two constants; any other definition makes the side a base of its own. Two sides with the same base differ by a constant, which decides the comparison exactly at the width of the operands. Ordering comparisons are not folded, since `sp + 0x40 < sp + 8` depends on `sp`. It runs with `opaquepredicate` on or off, and it adds to `opaquepredicate`'s proofs rather than replacing them. The proven comparison becomes its constant and ordinary constant-branch removal deletes the dead arm."
+use_when = "Enable on compiled code whose loop guards or peel checks compare two stack-relative addresses, when a peeled loop prints as a goto into the loop. Leave off to keep the comparison visible, or to match the binary's control-flow graph block for block."
+example = "option opaqueoffset on"
+source_decompiler = "unlace"
+inspiration = "Constant branch folding over symbolic base+offset values in the original unlace ConstBranchFoldPass (origin/master, crates/unlace-passes/src/branch_fold.rs)"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "a peel check compares sp + N with sp + M|a goto into a loop whose guard compares two stack-relative addresses|a compare of two stack-relative addresses is printed as a test"
 
 [[settable]]
 option = "callresultuse"

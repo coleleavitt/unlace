@@ -3577,6 +3577,21 @@ outcome reaches. A `CALLOTHER` is inserted after the merge block's
 no-overflow outcome, a threshold that is not `(2^W - 1) / c`, or a guard over
 other factors is left alone.
 
+**minmax** (unlace) —
+`crates/unlace-bandb-base/src/p3_dataflow/minmax.rs (RuleMinMax)`, group `analysis`
+(`option minmax`, default off). A compiler lowers `a < b ? a : b` without a branch
+to the sign of `d = a - b`: `s = d >> (W - 1)` is arithmetic, all ones when `d` is
+negative, so `b + (d & s)` is `min(a, b)` and `a - (d & s)` is `max(a, b)`. The rule
+fires on an `INT_ADD` with one input `d & s` (either order) whose other input is the
+subtrahend `b` of `d = a - b`, and on an `INT_SUB` whose second input is `d & s` and
+whose first input is the minuend `a`. `s` must be `INT_SRIGHT(d, W - 1)` of the same
+`d` with a constant amount. The op becomes `CALLOTHER(BUILTIN_MIN or BUILTIN_MAX, a, b)`
+in place, so every reader of its output keeps its value; `d` and `s` are left to
+dead-code removal. The builtins are signed (`BUILTIN_MIN` / `BUILTIN_MAX`, printed as
+`min` / `max`): the sign of `d` decides the choice, so the result is the signed min or
+max only when `a - b` does not overflow, which is why the option defaults off. Not yet
+exercised by a stage test.
+
 **bitfieldarith** (unlace) —
 `crates/unlace-bandb-base/src/p3_dataflow/bitfieldarith.rs (RuleBitFieldArith)`,
 group `analysis` (`option bitfieldarith`, default off). Main recovers a bitfield
@@ -4019,6 +4034,20 @@ upward rounding keeps the opaque operation; out-of-range and NaN operands, which
 x87 converts to the integer indefinite value when invalid is masked, take
 `FLOAT_TRUNC`'s unspecified result, as for `FISTTP`. Not settable: the rewrite
 is the conversion the instruction performs under that control word.
+
+**opaqueoffset** —
+`crates/unlace-bandb/src/p3_dataflow/opaqueoffset.rs` (`prove`), called from
+RuleOpaquePredicate after the `opaquepredicate` proofs. With `option
+opaqueoffset on` (default off, in no preset) an `INT_EQUAL` or `INT_NOTEQUAL`
+whose two sides are one opaque value plus constants is replaced by a `COPY` of
+its result. Each side is read as `base + offset` at its own width: `COPY`,
+`INT_ADD` and `INT_SUB` with a constant move the offset, `INT_SUB` of two values
+with the same base cancels it, and `INT_AND` of two constants folds; any other
+definition makes the side a base of its own, and a walk deeper than 48
+definitions gives up the same way. Two sides with the same base decide `==` and
+`!=` exactly by their offset difference. Ordering comparisons are never folded.
+The rule runs when either this option or `opaquepredicate` is on; the
+`CBRANCH` identical-arms proof still needs `opaquepredicate`.
 
 **opaquepredicate** —
 `crates/unlace-bandb/src/p3_dataflow/opaquepredicate.rs

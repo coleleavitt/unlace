@@ -3648,4 +3648,187 @@ mod tests {
             .insert(0x2000, [0x1000].into_iter().collect());
         assert!(!st.has_stranded_component());
     }
+
+    /// (unlace, #1298) Ground-truth source shape for the structurer survey: sequences, if/else
+    /// and while loops. `lower_root` turns it into the same abstract edge list `graph` takes.
+    #[derive(Clone, Debug)]
+    enum SrcShape {
+        Basic,
+        Seq(Vec<SrcShape>),
+        If(Box<SrcShape>, Box<SrcShape>),
+        While(Box<SrcShape>),
+    }
+
+    /// Deterministic xorshift64 so a failing seed reproduces exactly.
+    struct ShapeRng(u64);
+
+    impl ShapeRng {
+        fn step(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
+        }
+
+        fn below(&mut self, n: u64) -> u64 {
+            self.step() % n
+        }
+    }
+
+    fn seeded_rng(seed: u64) -> ShapeRng {
+        ShapeRng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1)
+    }
+
+    fn gen_shape(rng: &mut ShapeRng, depth: u32) -> SrcShape {
+        if depth == 0 || rng.below(4) == 0 {
+            return SrcShape::Basic;
+        }
+        match rng.below(3) {
+            0 => {
+                let n = 2 + rng.below(2);
+                SrcShape::Seq((0..n).map(|_| gen_shape(rng, depth - 1)).collect())
+            }
+            1 => SrcShape::If(
+                Box::new(gen_shape(rng, depth - 1)),
+                Box::new(gen_shape(rng, depth - 1)),
+            ),
+            _ => SrcShape::While(Box::new(gen_shape(rng, depth - 1))),
+        }
+    }
+
+    /// Block 0 is the entry. Every block is fresh when it is created, so each branch and loop
+    /// body starts in its own block, and a conditional block gets out 0 (then or body) before
+    /// out 1 (else or exit), in the order `add_edge` is called.
+    struct ShapeCfg {
+        blocks: usize,
+        edges: Vec<(usize, usize)>,
+    }
+
+    impl ShapeCfg {
+        fn lower_root(shape: &SrcShape) -> ShapeCfg {
+            let mut cfg = ShapeCfg {
+                blocks: 1,
+                edges: Vec::new(),
+            };
+            cfg.lower(shape, 0);
+            cfg
+        }
+
+        fn fresh(&mut self) -> usize {
+            self.blocks += 1;
+            self.blocks - 1
+        }
+
+        /// Lowers `shape` after block `cur` (which has no successor yet) and returns the block
+        /// control leaves through.
+        fn lower(&mut self, shape: &SrcShape, cur: usize) -> usize {
+            match shape {
+                SrcShape::Basic => {
+                    let next = self.fresh();
+                    self.edges.push((cur, next));
+                    next
+                }
+                SrcShape::Seq(items) => items.iter().fold(cur, |at, item| self.lower(item, at)),
+                SrcShape::If(then_s, else_s) => {
+                    let then_entry = self.fresh();
+                    self.edges.push((cur, then_entry));
+                    let then_end = self.lower(then_s, then_entry);
+                    let else_entry = self.fresh();
+                    self.edges.push((cur, else_entry));
+                    let else_end = self.lower(else_s, else_entry);
+                    let join = self.fresh();
+                    self.edges.push((then_end, join));
+                    self.edges.push((else_end, join));
+                    join
+                }
+                SrcShape::While(body) => {
+                    let header = self.fresh();
+                    self.edges.push((cur, header));
+                    let body_entry = self.fresh();
+                    self.edges.push((header, body_entry));
+                    let body_end = self.lower(body, body_entry);
+                    self.edges.push((body_end, header));
+                    let exit = self.fresh();
+                    self.edges.push((header, exit));
+                    exit
+                }
+            }
+        }
+    }
+
+    /// Goto edges (unstructured or irreducible out-edges) of every block still reachable under
+    /// `root` after structuring.
+    fn count_goto_edges(g: &BlockGraph, root: BlockId) -> usize {
+        let mut stack = vec![root];
+        let mut total = 0;
+        while let Some(id) = stack.pop() {
+            let blk = g.block(id);
+            total += (0..blk.size_out()).filter(|&i| blk.is_goto_out(i)).count();
+            stack.extend((0..blk.get_size()).map(|i| blk.get_block(i)));
+        }
+        total
+    }
+
+    /// Structures the shape for each seed. Returns the goto count per accepted seed and the
+    /// number of seeds the structurer declined.
+    fn structure_shape_seeds(seeds: std::ops::Range<u64>) -> (Vec<(u64, usize)>, usize) {
+        let mut accepted = Vec::new();
+        let mut declined = 0;
+        for seed in seeds {
+            let shape = gen_shape(&mut seeded_rng(seed), 4);
+            let cfg = ShapeCfg::lower_root(&shape);
+            let (mut g, root, _) = graph(cfg.blocks, &cfg.edges);
+            let ok = {
+                let mut st = RegionStructurer::new(&mut g, root);
+                st.structure(None).unwrap()
+            };
+            if ok {
+                accepted.push((seed, count_goto_edges(&g, root)));
+            } else {
+                declined += 1;
+            }
+        }
+        (accepted, declined)
+    }
+
+    #[test]
+    fn shape_lowering_reaches_every_block_with_at_most_two_exits() {
+        for seed in 0u64..64 {
+            let cfg = ShapeCfg::lower_root(&gen_shape(&mut seeded_rng(seed), 4));
+            let mut seen = vec![false; cfg.blocks];
+            seen[0] = true;
+            let mut stack = vec![0usize];
+            while let Some(at) = stack.pop() {
+                for &(_, d) in cfg.edges.iter().filter(|e| e.0 == at) {
+                    if !seen[d] {
+                        seen[d] = true;
+                        stack.push(d);
+                    }
+                }
+            }
+            assert!(seen.iter().all(|&s| s), "seed {seed}: unreachable block");
+            for b in 0..cfg.blocks {
+                let outs = cfg.edges.iter().filter(|e| e.0 == b).count();
+                assert!(outs <= 2, "seed {seed}: block {b} has {outs} exits");
+            }
+        }
+    }
+
+    /// Survey, run by hand: `cargo test -p unlace-structure --lib structured_shape_goto_survey
+    /// -- --ignored --nocapture`. Prints how many gotos the structurer leaves per shape.
+    #[test]
+    #[ignore = "survey: prints the goto histogram over generated shapes"]
+    fn structured_shape_goto_survey() {
+        let (accepted, declined) = structure_shape_seeds(0..500);
+        let mut hist = std::collections::BTreeMap::new();
+        for (_, gotos) in &accepted {
+            *hist.entry(*gotos).or_insert(0usize) += 1;
+        }
+        eprintln!(
+            "goto histogram over {} accepted, {declined} declined: {hist:?}",
+            accepted.len()
+        );
+    }
 }

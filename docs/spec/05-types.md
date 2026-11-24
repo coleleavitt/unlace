@@ -526,6 +526,17 @@ walk (`unlace_ptrfromuse::pointer_from_local_use`) to a pointer-width value a `C
 and the walk finds a memory-base use and no refusing use, a `void *` candidate is folded by
 `type_order` (`folds_over`). A pointer, float or composite vote keeps its type.
 
+With `option lvarvote on` (default off), a local whose votes disagree is decided by a weighted
+ballot instead of the `type_order` fold. `get_local_type` collects one vote per op that writes the
+Varnode (its output type) and one per op that reads it (its `input_type_local`). When every vote is
+`type_order`-equal the fold's type stands. Otherwise `lvarvote::weighted_pick`
+(`crates/unlace-bandb-core/src/p5_types/lvarvote.rs`) groups equal votes and ranks the groups: an
+unknown type loses to a known one; then the group the most votes support (a vote supports the groups it
+converts to without loss, so two integers of one width support each other); then the group's own vote
+count; then the first vote seen. The winner seeds the local's type and propagation runs unchanged. The
+signed/unsigned majority and the pointer-first preference of the original ballot are not ported, so
+signedness stays with `typevote` and propagation.
+
 When `ptrfromuse` is `byte` or `void` (shipped `void`),
 `crates/unlace-bandb-core/src/p5_types/ptrfromuse.rs
 (pointer_from_use)` supplies the missing candidate directly. For each function

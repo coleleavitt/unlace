@@ -396,6 +396,9 @@ Three tiers:
 | if (c) goto label_N; ... label_N: where an if around the skipped statements would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... if (c) goto label_N; where a do-while would do | [`gotosink`](#gotosink----on--off-default-on) |
 | label_N: ... goto label_N; at the end of a statement run instead of a loop | [`gotosink`](#gotosink----on--off-default-on) |
+| a goto label_A where label_A: is followed directly by goto label_B; | [`gotochain`](#gotochain----on--off-default-off) |
+| a label whose only statement is a goto to another label | [`gotochain`](#gotochain----on--off-default-off) |
+| two labels in a row, the first holding only a jump | [`gotochain`](#gotochain----on--off-default-off) |
 | goto to a label that only returns | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
 | label_N: return; shared tail after an if | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
 | more gotos than angr for the same function | [`gotoreduce`](#gotoreduce----off--return--on-default-on) |
@@ -641,6 +644,9 @@ Three tiers:
 | one local in a callee-saved register holds unrelated values around different calls | [`calleesaved`](#calleesaved----on--off-default-off) |
 | a variable kept across one call is reused for a different value kept across a later call | [`calleesaved`](#calleesaved----on--off-default-off) |
 | a pointer and a count share one declared local in rbx or x19 | [`calleesaved`](#calleesaved----on--off-default-off) |
+| one function takes minutes in variable merging | [`coalescecap`](#coalescecap----on--off-default-off) |
+| a decompile of one very large function hits the watchdog in the variable merge | [`coalescecap`](#coalescecap----on--off-default-off) |
+| a generated function with thousands of locals prints as a flood of one-use variables | [`coalescecap`](#coalescecap----on--off-default-off) |
 | an inlined callee body is spliced into the caller and should read as a call | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | want to pull a chosen region out of a function into a named pseudofunction | [`outline`](#outline----off----default-off-destructive-opt-in) |
 | acting on an almostregion inline-candidate report by hand or with an llm | [`outline`](#outline----off----default-off-destructive-opt-in) |
@@ -662,6 +668,9 @@ Three tiers:
 | dead arm guarded by an arithmetic identity is still printed | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
 | obfuscated function has bogus control flow behind always-true conditions | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
 | condition compares an OR minus an AND of two values with their XOR | [`opaquepredicate`](#opaquepredicate----off--on--globals-default-off) |
+| a peel check compares sp + N with sp + M | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
+| a goto into a loop whose guard compares two stack-relative addresses | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
+| a compare of two stack-relative addresses is printed as a test | [`opaqueoffset`](#opaqueoffset----off--on-default-off) |
 | callee result handed to the next call as its argument is lost | [`callresultuse`](#callresultuse----off--on--all-default-off) |
 | objective-c receiver or argument that is the previous message's result is dropped | [`callresultuse`](#callresultuse----off--on--all-default-off) |
 | retained object passed to a message and then released loses the message's receiver | [`callresultuse`](#callresultuse----off--on--all-default-off) |
@@ -688,6 +697,8 @@ Three tiers:
 | stack-probe calls obscure a known constant frame allocation | [`rustprobestack`](#rustprobestack----off--auto--always-default-off-destructive-opt-in) |
 | a variable declared undefined4/undefined8 although it is shifted, masked or compared | [`typevote`](#typevote----on--off-default-on) |
 | a cast back to a variable's own declared type at each read | [`typevote`](#typevote----on--off-default-on) |
+| a local is declared with a type most of its uses contradict | [`lvarvote`](#lvarvote----on--off-default-off) |
+| a local takes the most specific type one stray use proposes | [`lvarvote`](#lvarvote----on--off-default-off) |
 | an os_log call prints a stack buffer address and a byte count instead of its arguments | [`oslog`](#oslog----on--off-default-on) |
 | _os_log_impl(0x100000000,...,&v1,8) with v1 = 0x4000100 before it | [`oslog`](#oslog----on--off-default-on) |
 | the first argument of _os_log_impl or _os_log_internal is a raw image address | [`oslog`](#oslog----on--off-default-on) |
@@ -1533,6 +1544,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (default). Flip off to see the raw shift-and-mask expressions, the cmov/cneg abs diamond and the one-instruction bsf/bsr loops, for example to check which bits a hand-written partial swap moves.
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · bitidioms
 - **Example:** `--option bitidioms off`
+
+### `minmax` -- on | off, default `off`
+
+- **Symptoms:** a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31)); a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31)); a cmov-style min or max of two ints prints as a shift, a mask and an add.
+- **What it does:** Print a branch-free min or max, written as arithmetic on the sign of a difference, as min(a, b) or max(a, b). With d = a - b and s = d >> (W - 1) (arithmetic), b + (d & s) is min(a, b) and a - (d & s) is max(a, b): a compiler lowers `a < b ? a : b` without a branch to that form. The rule matches an INT_ADD of b and d & s, or an INT_SUB of a and d & s, where d is the INT_SUB of a and b and s is the sign of d, and rewrites the op in place into the builtin call min(a, b) or max(a, b) (signed). It is exact only when a - b does not overflow, the case the sign of d assumes, so it is a judgement call and off by default.
+- **When to flip:** Off by default: the sign-of-difference form is exact only without signed overflow in a - b, and the call is not C. Turn it on to read branch-free selects of the smaller or larger of two signed values as min and max, the way the source wrote them.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-minmax
+- **Example:** `option minmax on`
 
 ### `satmul` -- on | off, default `off`
 
@@ -2407,6 +2426,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · unlace · structure-recovery · gotosink
 - **Example:** `option gotosink off`
 
+### `gotochain` -- on | off, default `off`
+
+- **Symptoms:** a goto label_A where label_A: is followed directly by goto label_B; a label whose only statement is a goto to another label; two labels in a row, the first holding only a jump.
+- **What it does:** Retarget a goto to a label whose block is only an unconditional goto. When a label leaf holds no statement (its block only branches) and is immediately followed in its statement list by `goto L2;`, every unstructured `goto L1;` and `if (c) goto L1;` that names it is rewritten to `goto L2;` (chains followed transitively, with a cycle guard). The new target is labelled, and the old label is released once no goto, switch case or multi-goto edge still names it. Only plain gotos are retargeted: switch-case and multi-goto edges keep their label, so the output stays valid C.
+- **When to flip:** Off by default: the goto-to-goto rendering is upstream's. Set `on` when a function prints `label_A: goto label_B;` and several gotos reach `label_A` only to fall through to `label_B`; each such jump then names `label_B` directly and the middle label disappears. The original unlace `goto_coalesce` pass ran this on its HIR; this is the structured-tree port. Not yet measured on the datatest corpus: flip to `on` only after `make test` shows 0/675 movement for the default and a stage run confirms the labels it removes.
+- **Where / provenance:** P8/goto-quality · unlace · structure-recovery · gotochain
+- **Example:** `option gotochain on`
+
 ### `gotoreduce` -- off | return | on, default `on`
 
 - **Symptoms:** goto to a label that only returns; label_N: return; shared tail after an if; more gotos than angr for the same function; goto to a shared free(p); return; style epilogue; cleanup-call return tail reached via label instead of duplicated inline; many error checks share one cleanup block (the goto out; idiom) and it is printed once per check.
@@ -2943,6 +2970,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P6/merge-aggressiveness · unlace · presentation-default · unlace-20
 - **Example:** `option calleesaved on`
 
+### `coalescecap` -- on | off, default `off`
+
+- **Symptoms:** one function takes minutes in variable merging; a decompile of one very large function hits the watchdog in the variable merge; a generated function with thousands of locals prints as a flood of one-use variables.
+- **What it does:** Stop the variable merge on a very large function. Merge::mergeByDatatype (merge.cc:359-401) runs mergeLinear over each type group, and mergeLinear tests every high against the accepted stack of its group, so one pass is quadratic in the number of HighVariables and a function with thousands of locals spends minutes in it. ON compares the number of HighVariables the merge gathers in the function with a fixed limit of 5000 (coalescecap.rs (MAX_COALESCIBLE_HIGHS)); above the limit the type-group merge and the stable-name merge are skipped and every high keeps its own variable, the same fallback the original unlace cross-base coalescing took (variable_merge.rs, max_coalescible_vars). A function under the limit merges exactly as before. OFF, the default, is upstream byte-for-byte.
+- **When to flip:** OFF by default: above the limit the merge is skipped on purpose, so the variable count of that function rises even though no merge is wrong. Turn it ON when one function takes minutes in variable merging or hits the decompile-all watchdog, or on a generated or obfuscated function with thousands of locals whose merged output is unreadable anyway. The limit is not yet measured on a corpus; a default change needs the 675 datatest assertions, the speed budget and the DecBench variable-match numbers.
+- **Where / provenance:** P6/merge-aggressiveness · unlace · speed · unlace-1225
+- **Example:** `option coalescecap on`
+
 ### `outline` -- off | <fn>:<head>-<exit>[;...], default `off` (destructive opt-in)
 
 - **Symptoms:** an inlined callee body is spliced into the caller and should read as a call; want to pull a chosen region out of a function into a named pseudofunction; acting on an almostregion inline-candidate report by hand or with an llm.
@@ -2990,6 +3025,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Enable on obfuscated code whose branches test arithmetic that looks input-dependent but is not, to see the code that actually runs. Leave off to keep the predicate visible, for example when identifying the obfuscator or matching the binary's control-flow graph block for block. Use `globals` when the predicates read globals that nothing assigns (bogus control flow keyed on two zero globals); it costs one decode of the whole program on the first function that asks (about 0.65 s per MiB of code), and it is only as good as the scan, so check a surprising fold against the cross-references of the global. `aggressive` enables `on`, never `globals`, and `auto` picks `aggressive` for inputs under 500 KiB, so a no-flag decompile of a small binary folds; `--mode reliable` or `--option opaquepredicate off` keeps the predicates.
 - **Where / provenance:** P3/simplification-quiescence · unlace · structure-recovery · unlace-opaque-predicate
 - **Example:** `option opaquepredicate globals`
+
+### `opaqueoffset` -- off | on, default `off`
+
+- **Symptoms:** a peel check compares sp + N with sp + M; a goto into a loop whose guard compares two stack-relative addresses; a compare of two stack-relative addresses is printed as a test.
+- **What it does:** Fold an `==` or `!=` between two values that are one opaque value plus different constants, so a peel check or loop guard over stack-relative addresses loses the arm that never runs. `sp + 0x40 == sp + 8` is never true and `((sp + 0x40) - (sp + 4)) & 4` is always 4 for every value of `sp`. Each side is read as a base plus a constant through COPY, INT_ADD and INT_SUB with a constant (and INT_SUB of two values with the same base), and through INT_AND of two constants; any other definition makes the side a base of its own. Two sides with the same base differ by a constant, which decides the comparison exactly at the width of the operands. Ordering comparisons are not folded, since `sp + 0x40 < sp + 8` depends on `sp`. It runs with `opaquepredicate` on or off, and it adds to `opaquepredicate`'s proofs rather than replacing them. The proven comparison becomes its constant and ordinary constant-branch removal deletes the dead arm.
+- **When to flip:** Enable on compiled code whose loop guards or peel checks compare two stack-relative addresses, when a peeled loop prints as a goto into the loop. Leave off to keep the comparison visible, or to match the binary's control-flow graph block for block.
+- **Where / provenance:** P3/simplification-quiescence · unlace · structure-recovery · unlace-opaque-offset
+- **Example:** `option opaqueoffset on`
 
 ### `callresultuse` -- off | on | all, default `off`
 
@@ -3046,6 +3089,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (default). Flip off to see which values type inference left undefined.
 - **Where / provenance:** P5/type-propagation · unlace · presentation-default · typevote
 - **Example:** `option typevote off`
+
+### `lvarvote` -- on | off, default `off`
+
+- **Symptoms:** a local is declared with a type most of its uses contradict; a local takes the most specific type one stray use proposes.
+- **What it does:** Type a local whose reads and writes disagree by a weighted vote instead of the most specific type: each op that writes or reads the Varnode votes for its own type; an unknown type ranks behind a known one; the type most of the votes support wins (same-width integers support each other, signedness being decided separately), then the most votes, then the first vote seen. A local whose votes all agree keeps the type it had.
+- **When to flip:** Off by default (byte-identical output). Turn on to see whether a local should take the type most of its uses agree on rather than the most specific one a single stray use proposes. Only locals whose votes conflict change. Measure on decbench before any default change.
+- **Where / provenance:** P5/type-propagation · unlace · type-inference · unlace-lvarvote
+- **Example:** `option lvarvote on`
 
 ### `oslog` -- on | off, default `on`
 

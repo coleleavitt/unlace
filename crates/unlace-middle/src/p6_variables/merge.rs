@@ -1267,6 +1267,9 @@ pub struct Merge {
     phi_arm_split: bool,
     /// (unlace) Option `calleesaved` ([`crate::calleesaved`]).
     callee_saved_split: bool,
+    /// (unlace) Option `coalescecap` ([`crate::coalescecap`]): skip the merge on a
+    /// function with more gathered highs than the cap.
+    coalesce_cap: bool,
     /// (unlace) Each arm value `unlace_phiarm` trimmed, with the MULTIEQUAL output
     /// it was trimmed from.
     phi_arms: Vec<(VarnodeId, VarnodeId)>,
@@ -1294,6 +1297,7 @@ impl Merge {
             tied_phis: Vec::new(),
             phi_arm_split: false,
             callee_saved_split: false,
+            coalesce_cap: false,
             phi_arms: Vec::new(),
             probes: 0,
             spent: false,
@@ -1331,6 +1335,12 @@ impl Merge {
     /// `merge_by_datatype`.
     pub fn set_callee_saved_split(&mut self, on: bool) {
         self.callee_saved_split = on;
+    }
+
+    /// (unlace) Turn option `coalescecap` on or off for the next
+    /// `merge_by_datatype`.
+    pub fn set_coalesce_cap(&mut self, on: bool) {
+        self.coalesce_cap = on;
     }
 
     /// Borrow the intersection-test cache.
@@ -1738,6 +1748,9 @@ impl Merge {
             ctx.bank_clear_mark(h);
         }
         let gathered = highlist.clone();
+        if self.coalesce_cap && crate::coalescecap::exceeds_cap(gathered.len()) {
+            return Ok(());
+        }
 
         // Group by exact type (Rc identity) preserving order; each group -> mergeLinear.
         if mode == crate::typemerge::TypeMergeMode::Off {

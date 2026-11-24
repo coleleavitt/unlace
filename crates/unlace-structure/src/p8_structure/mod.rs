@@ -12,6 +12,7 @@ pub mod crossjumptail;
 pub mod dedupitetail;
 mod domindex;
 pub mod earlyreturn;
+pub mod gotochain;
 pub mod gotolabel;
 pub mod gotonext;
 pub mod gotoreduce;

@@ -776,8 +776,17 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
     }
     let mut ct: Option<Rc<Datatype>> = None;
     let mut blockup = false;
+    let weighted = data
+        .get_arch()
+        .unlace_options
+        .get::<crate::lvarvote::LvarVote>()
+        .0;
+    let mut votes: Vec<Rc<Datatype>> = Vec::new();
     if let Some(def) = v.get_def() {
         ct = Some(output_type_local(data, def));
+        if weighted {
+            votes.extend(ct.clone());
+        }
         let stops = data
             .obank()
             .get(def)
@@ -793,6 +802,9 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
     for op in descend {
         let slot = data.obank().get(op).map(|o| o.get_slot(vn)).unwrap_or(0);
         let newct = input_type_local(data, op, slot);
+        if weighted {
+            votes.push(Rc::clone(&newct));
+        }
         ct = Some(match ct {
             None => newct,
             Some(cur) => {
@@ -803,6 +815,11 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
                 }
             }
         });
+    }
+    if weighted {
+        if let Some(best) = crate::lvarvote::weighted_pick(&votes) {
+            ct = Some(best);
+        }
     }
     // C++ throws on a null local type; a live Varnode always has a def or a
     // descendant, but guard with a size-correct UNKNOWN to avoid a panic.

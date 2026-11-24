@@ -558,6 +558,14 @@ marking (below), three passes fuse variables to reduce clutter:
   compiler kept in one callee-saved register across different calls stay two
   variables. Highs without a key group as before.
 
+  Option `coalescecap` (`coalescecap.rs (MAX_COALESCIBLE_HIGHS)`, default off,
+  read by `coreaction_cleanup.rs (ActionMergeType)` and set on the merge by
+  `Merge::set_coalesce_cap`) bounds the quadratic type-group merge on a very
+  large function. When it is on and the merge gathers more than 5000 HighVariables
+  in the function, `merge_by_datatype` returns before any `merge_linear` or
+  stable-name merge runs, so every high keeps its own variable. A function at or
+  under the limit merges as upstream does.
+
 **Explicit vs implied** — which values get a named token at all. Between the
 required and speculative groups, `coreaction_cleanup.rs (ActionMarkExplicit)`
 decides per Varnode via `coreaction_cleanup.rs (base_explicit)`: explicit

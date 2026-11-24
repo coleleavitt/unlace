@@ -115,6 +115,7 @@ unlace_options! { self, p1;
     "returnpair" => registered!(crate::returnpair::ReturnSingle),
     "retpairpaths" => registered!(crate::returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::bitidioms::BitIdioms),
+    "minmax" => registered!(crate::minmax::MinMax),
     "satmul" => registered!(crate::satmul::SatMul),
     "floatidentity" => registered!(crate::floatidentity::FloatIdentity),
     "bitfieldarith" => registered!(crate::bitfieldarith::BitFieldArith),
@@ -131,6 +132,7 @@ unlace_options! { self, p1;
     "returnbranch" => registered!(crate::returnbranch::ReturnBranch),
     "globalarrayanchor" => registered!(crate::globalarrayanchor::GlobalArrayAnchor),
     "opaquepredicate" => registered!(crate::coreoptions::OpaquePredicate),
+    "opaqueoffset" => registered!(crate::coreoptions::OpaqueOffset),
     "callresultuse" => registered!(crate::callresultuse::CallResultUse),
     "signedness" => registered!(crate::typeround::SignPolicy),
     "retsplitglobal" => registered!(crate::coreoptions::RetSplitGlobal),
@@ -171,6 +173,7 @@ unlace_options! { self, p1;
     "objcrettype" => registered!(crate::objcrettype::ObjcRettype),
     "objcresolve" => registered!(crate::objcrettype::ObjcResolve),
     "typevote" => registered!(crate::typevote::TypeVote),
+    "lvarvote" => registered!(crate::lvarvote::LvarVote),
     "oslog" => registered!(crate::oslog::OsLogArgs),
     "tailcalljump" => registered!(crate::tailcalljump::TailCallJump),
     "tailcallframe" => registered!(crate::tailcallframe::TailCallFrame),
@@ -322,6 +325,7 @@ unlace_options! { self, p1;
     "typemerge" => registered!(crate::typemerge::TypeMergeMode),
     "phiarm" => registered!(crate::phiarm::PhiArmSplit),
     "calleesaved" => registered!(crate::calleesaved::CalleeSavedSplit),
+    "coalescecap" => registered!(crate::coalescecap::CoalesceCap),
     "impliedrefs" => {
         let (val, msg) = crate::impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -368,6 +372,7 @@ unlace_options! { self, p1;
     "latecse" => registered!(crate::latecse::LateCse),
     "phithread" => registered!(crate::phithread::PhiThread),
     "gotosink" => registered!(crate::gotosink::GotoSink),
+    "gotochain" => registered!(crate::gotochain::GotoChain),
     "cmpmerge" => registered!(crate::cmpmerge::CmpMerge),
     "switchmerge" => registered!(crate::switchmerge::Switchmerge),
     "gotonext" => registered!(crate::funcdata_block::GotoNext),

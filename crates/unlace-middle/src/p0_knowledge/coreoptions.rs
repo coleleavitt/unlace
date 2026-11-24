@@ -13,6 +13,17 @@ crate::unlace_flag!(
 );
 
 crate::unlace_flag!(
+    /// (unlace `opaqueoffset`) Fold an `INT_EQUAL`/`INT_NOTEQUAL` between two
+    /// values that share one opaque base plus constants, the stack-relative
+    /// guards a peel check leaves (`unlace-bandb`, `p3_dataflow/opaqueoffset.rs`).
+    OpaqueOffset,
+    "opaqueoffset",
+    "Constant comparisons over base plus offset values",
+    unset: false,
+    shipped: false
+);
+
+crate::unlace_flag!(
     /// (unlace) `option ptrauthtrap`: cut the branch into each arm64e
     /// pointer-auth failure trap whose guard is the return-address bit test.
     /// Default on.

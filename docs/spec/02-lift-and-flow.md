@@ -5519,6 +5519,31 @@ the half load and store), with the options of the F/D generation (see
 Zvfh adds no encodings: the vector FP instructions in `riscv.rvv.sinc` cover SEW 16, as user
 operations. The vector accrued flags (fflags, vxsat) are not written, as in the scalar lift.
 
+### RISC-V Q (quad precision): the `RISCV:LE:64:GQ` language
+
+Q needs 128-bit f registers, so it has its own language: `riscv.lp64q.slaspec` (FLEN 16,
+FPSIZE 128), id `RISCV:LE:64:GQ`. The loader picks it for a 64-bit ELF whose
+`Tag_RISCV_arch` declares `q` (`kuna_riscvzc.rs`).
+- **F and D.** `riscv.fdq.sinc` is the F/D generation at `--flen 128`: single and double
+  values are NaN-boxed into the 16-byte registers.
+- **Q.** `riscv.q.sinc` is generated from a Q extension derived from the Sail model's D
+  extension. sail-riscv names `Ext_Q` but defines no Q instruction, so `tools/sail_d_to_q.py`
+  rewrites `dext_insts.sail`:
+  - The binary64 layout becomes binary128, the fmt field 01 becomes 11, and `riscv_f64*` becomes
+    `riscv_f128*`.
+  - `fcvt.d.q`/`fcvt.q.d` and `flq`/`fsq` are added; `fmv.x.d`/`fmv.d.x` have no Q form below
+    RV128 and are dropped.
+- **What lifts as p-code.** `rne` and `dyn` arithmetic, square root, compares, sign injection,
+  min/max, `fclass.q` and the moves are p-code on 16-byte floats. Static rounding modes, the
+  fused forms and the integer conversions other than `rtz` are user operations.
+- **Display.** The exact conversions into Q print no rounding mode, as LLVM prints them.
+- **Not in this language.** Zfh, Zfa and Zfbfmin are generated for FLEN 64 and left out.
+- **Decompiler gaps.** The decompiler has no 16-byte float format, so quad constants print as
+  `FLOAT_UNKNOWN`. `fpargboxed` claims only 8-byte argument registers, so a narrower argument
+  keeps its NaN-unboxing test in this language.
+- **Check.** QEMU has no Q, so this is checked against llvm-objdump only: every sampled word and
+  near miss of rv_q/rv64_q/F/D agrees.
+
 ### RISC-V Svinval, hypervisor fences, Zalasr, Zfbfmin, Smrnmi and Ssctr
 
 These fill decode gaps that `tools/sail_sleigh_compare.py decode` against llvm-objdump showed:

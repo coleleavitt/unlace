@@ -17,7 +17,8 @@
 @endif
 
 @if FPSIZE == "128"
-@include "riscv.rv32q.sinc"
+@include "riscv.fdq.sinc"
+@include "riscv.q.sinc"
 @endif
 @endif
 
@@ -27,9 +28,6 @@
 @include "riscv.rv64m.sinc"
 @include "riscv.rv64p.sinc"
 
-@if FPSIZE == "128"
-@include "riscv.rv64q.sinc"
-@endif
 @endif
 
 @include "riscv.csr.sinc"
@@ -40,7 +38,7 @@
 @include "riscv.hints.sinc"
 @include "riscv.zabha.sinc"
 @include "riscv.zacas.sinc"
-@if FPSIZE == "32" || FPSIZE == "64" || FPSIZE == "128"
+@if FPSIZE == "32" || FPSIZE == "64"
 @include "riscv.zfh.sinc"
 @include "riscv.zfa.sinc"
 @include "riscv.zfbfmin.sinc"

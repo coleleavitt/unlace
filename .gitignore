@@ -60,3 +60,4 @@ private/
 # Test fixtures are committed binaries (.o, .exe, .so, ...); keep them visible even
 # where a global excludes file ignores those extensions.
 !**/tests/fixtures/**
+rustc-ice-*.txt

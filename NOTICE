@@ -265,6 +265,10 @@ specs/Ghidra/Processors/SASS vendors the NVIDIA GPU SASS SLEIGH module SASS of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/Z8 vendors the Zilog Z8 SLEIGH module Z8 of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

@@ -644,7 +644,7 @@ fn die_ref(
     match value {
         gimli::AttributeValue::UnitRef(o) => Some(o.0),
         gimli::AttributeValue::DebugInfoRef(o) => {
-            let base = unit.header.offset().as_debug_info_offset()?.0;
+            let base = unit.header.offset().0;
             let end = base.checked_add(unit.header.length_including_self())?;
             if (base..end).contains(&o.0) {
                 Some(o.0 - base)
@@ -671,10 +671,9 @@ impl ForeignUnits {
         let mut out = Vec::new();
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
-            if let Some(base) = header.offset().as_debug_info_offset() {
-                if let Some(end) = base.0.checked_add(header.length_including_self()) {
-                    out.push((base.0, end));
-                }
+            let base = header.offset().0;
+            if let Some(end) = base.checked_add(header.length_including_self()) {
+                out.push((base, end));
             }
         }
         out

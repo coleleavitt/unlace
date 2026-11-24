@@ -108,6 +108,37 @@ Follow-ups from the re-run:
 - Issues: #756 (linked SPARC64 marks a leaf no-return), #757 (AVR and AMDGPU ET_REL relocations), #765 (SPARC64 float result returned in `fs0`).
 - Regression rows: `processors.toml` `elfroute_*` (#760) loads ET_REL and ET_EXEC builds of every routed or relocated machine through auto-detection.
 
+## Re-run on `unlace-5dac424f4f` (2026-11-24)
+
+Every object was run with no `--target`. That covers the 66 objects of the first sweep and the families added since:
+- C-SKY, m68k, OpenRISC, ARCv2 (`-mcpu=hs`) and Xtensa, from GNU gcc 15.3, as .o and linked;
+- Xtensa HiFi 4, the gcc output assembled with the HiFi 4 `xtensa-elf-as`, also run with `--target Xtensa:LE:32:hifi4_rt700`;
+- CUDA `sm_80`, clang `-S` then `ptxas`;
+- AVR and MSP430 as .o and linked.
+
+All 98 runs load, and every function is found: 13/13, with 10/10 for BPF. VE still has no spec.
+
+| family | O0 | O2 | new since the last run | fixed by / filed as |
+|---|---|---|---|---|
+| x86, x86_64, aarch64(_be), arm, armeb, armv7a, thumb, thumbv7m, mips*, powerpc*, riscv32/64, s390x, sparc, sparc64, hexagon, lanai, loongarch64, wasm32, AMDGPU | 13/13 | 13/13 | clean. thumbv7m/armeb soft-float `scale` returns `__aeabi_fadd(...)` (#840). sparc64 `scale` is right (#799) | |
+| x86 -O0 | 13/13 | | every UBSan check is `sub_403030(...)`: the extern called through `R_386_PC32` was not named | #861 |
+| MSP430 -O0 | 13/13 | | the same through `R_MSP430_16_BYTE` on `call #imm` (`sub_3030`) | #861 |
+| AVR (.o) | 13/13 | 13/13 | `rcall` to libcalls out of range (externs a page past 4 KiB), `subi`/`sbci` `LDI_NEG` refused | #856 |
+| ARCv2 (.o) | 13/13 | 13/13 | `bl`, `b` and long immediates unrelocated | #857 |
+| C-SKY, OpenRISC, Lanai, ARC (no `-g`) | 13/13 | 13/13 | `scale` is `void`: its `__addsf3` tail result is lost | #864 |
+| Xtensa, Xtensa HiFi 4 | 13/13 | 13/13 | -O2 `mul_wide` is `void` (`__umulsidi3`) | #864 |
+| m68k | 13/13 | 13/13 | -O2 `str_len`'s self tail call to `str_len` is named `sub_402000` | |
+| BPF, CUDA sm_80 | 10/10, 13/13 | 10/10, 13/13 | -O2 `str_len` is `void`, its loop counter already in the return register | #865 |
+| CUDA sm_80 (cubin) | 13/13 | 13/13 | relocation type 66 (`CONST_FIELD21_38`) still skipped, as noted in the earlier row | |
+
+Also fixed in this round, before the re-run:
+- #827 ARM/Thumb-2 `MOVW`/`MOVT`;
+- #830 C-SKY `bsr32`;
+- #834 OpenRISC;
+- #839 and #848 Xtensa `SLOT0_OP` and partial-inplace `R_XTENSA_32`.
+
+The `elfroute_*` rows cover these.
+
 ## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
 
 Real artifacts decompiled one function or code object at a time with the pinned

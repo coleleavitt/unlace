@@ -14,6 +14,13 @@
 //! still creates the call's output (prototype recovery has not settled it yet;
 //! a later pass of the loop retries).  Each predecessor runs exactly one copy,
 //! so the split preserves behaviour.
+//!
+//! A call block that falls through to one successor instead of returning
+//! qualifies on the same terms (Hex-Rays `UNMERGE_CALLS`, hexx64
+//! `sub_191D80`) and is split with [`Funcdata::node_split_through`]: when the
+//! successor has no other predecessor, each value the block defines that is read
+//! beyond it (the call's result) is merged back in a MULTIEQUAL there; otherwise
+//! the block's values may be read only by the successor's MULTIEQUALs.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -76,7 +83,11 @@ fn reads_merge(data: &Funcdata, ops: &[OpId], op: OpId, depth: u32) -> bool {
 fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
     let blk = data.bblocks_ref().block(b);
     let size_in = blk.size_in();
-    if blk.size_out() != 0 || !(2..=4).contains(&size_in) {
+    let size_out = blk.size_out();
+    if size_out > 1 || !(2..=4).contains(&size_in) {
+        return false;
+    }
+    if size_out == 1 && blk.get_out(0) == b {
         return false;
     }
     let mut preds: Vec<BlockId> = (0..size_in).map(|i| blk.get_in(i)).collect();
@@ -94,7 +105,12 @@ fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
         let Some(o) = data.obank().get(op) else {
             return false;
         };
-        if (o.is_branch() && o.code() != OpCode::CPUI_RETURN) || o.is_indirect_creation() {
+        let allowed_branch = if size_out == 0 {
+            OpCode::CPUI_RETURN
+        } else {
+            OpCode::CPUI_BRANCH
+        };
+        if (o.is_branch() && o.code() != allowed_branch) || o.is_indirect_creation() {
             return false;
         }
         if o.is_call() {
@@ -117,7 +133,9 @@ fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
         .last()
         .and_then(|&op| data.obank().get(op))
         .is_some_and(|o| o.code() == OpCode::CPUI_RETURN);
-    ends_in_return && data.get_call_specs_index(call).is_some() && reads_merge(data, &ops, call, 0)
+    (size_out == 1 || ends_in_return)
+        && data.get_call_specs_index(call).is_some()
+        && reads_merge(data, &ops, call, 0)
 }
 
 impl Action for ActionReturnDupCalls {
@@ -157,7 +175,12 @@ impl Action for ActionReturnDupCalls {
         for b in cands {
             while count < MAX_SPLITS && data.bblocks_ref().block(b).size_in() > 1 {
                 let last = data.bblocks_ref().block(b).size_in() - 1;
-                if data.node_split_calls(b, last).is_err() {
+                let split = if data.bblocks_ref().block(b).size_out() == 0 {
+                    data.node_split_calls(b, last)
+                } else {
+                    data.node_split_through(b, last, true)
+                };
+                if split.is_err() {
                     break;
                 }
                 count += 1;

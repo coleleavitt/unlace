@@ -1196,13 +1196,14 @@
     build unlock; 
 }
 
-:XADD^lockx m32,Reg32	is vexMode=0 & lockx & unlock & opsize=1 & byte=0x0F; byte=0xC1; m32 & Reg32 ... 
+:XADD^lockx m32,Reg32	is vexMode=0 & lockx & unlock & opsize=1 & byte=0x0F; byte=0xC1; m32 & Reg32 ... & check_Reg32_dest ... 
 {
     build lockx;
     build m32;
     addflags(m32,Reg32);
     local tmp = m32 + Reg32;
     Reg32 = m32;
+    build check_Reg32_dest;
     m32 = tmp;
     resultflags(tmp);
     build unlock; 
@@ -1245,7 +1246,7 @@
    UNLOCK();
 }
 
-:XCHG^xacq_xrel_prefx^alwaysLock  m32,Reg32   is vexMode=0 & xacq_xrel_prefx & alwaysLock & opsize=1 & byte=0x87; m32 & Reg32 ...        
+:XCHG^xacq_xrel_prefx^alwaysLock  m32,Reg32   is vexMode=0 & xacq_xrel_prefx & alwaysLock & opsize=1 & byte=0x87; m32 & Reg32 ... & check_Reg32_dest ...        
 { 
   build xacq_xrel_prefx;
   build alwaysLock;
@@ -1253,6 +1254,7 @@
   local tmp = m32; 
   m32 = Reg32; 
   Reg32 = tmp; 
+  build check_Reg32_dest;
   UNLOCK(); 
 }
 

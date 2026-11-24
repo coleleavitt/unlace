@@ -602,7 +602,11 @@ take the first unconsumed entry of that class (or a general one) that fits
 list, drawn from the dedicated hidden-return class or the normal pointer slots
 (`assign_map_standard_out`, response codes `hiddenret_*`). A `__thiscall`-style
 model then marks the right input as the `this` pointer, swapping markup when
-the hidden-return pointer bumped it. Failure mode: an unassignable *input*
+the hidden-return pointer bumped it. A prototype parked with no return type
+(the DWARF reader leaves it empty when it cannot build the declared type, as for
+Zig's zero-size `void` base type) is an unassignable output, not an assertion:
+both output lists report `ParamUnassigned`, which a caller that ignores output
+errors reads as a `void` return. Failure mode: an unassignable *input*
 raises a hard error; an unassignable *output* is only survivable where the
 caller opted into `ignore_output_error`, which degrades the return to `void`.
 
@@ -2165,6 +2169,21 @@ classified:
   the walk cannot place leaves the extent unstated as well, except the
   caller's frame pointer, which the CRT's `_NLG_Notify` records in a global; a
   local's address handed to a call is still taken to stay among the locals.
+  (kuna `calleeargsmsvc`, default off, with `calleeargs` on) Two more pieces
+  of the MSVC frame boilerplate are read as no escape
+  (`kuna_calleepurge.rs (from_fs, scrambles)`). A local's address stored
+  through the FS segment base is the SEH registration (`lea eax,[ebp-0xc];
+  mov fs:[0],eax`): only the exception dispatcher reads the TEB's exception
+  list. An `INT_XOR` of a stack address with a value that is neither one nor a
+  constant is the `/GS` scramble (`xor eax,ebp` on the loaded cookie): its
+  result is data, which only the same address undoes, yielding the cookie.
+  Without it every MSVC C++ function with an exception frame or a cookie
+  states no extent, so a call to such a register-only helper keeps the
+  upstream test and takes the pushes the compiler made early for a later call:
+  in a `stream << text << value` chain, where `operator<<(const char *)` takes
+  the stream in ECX and the text in EDX, the `value` pushed before it for the
+  `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
+  and the second printed without it.
   This bookkeeping runs only with the option on and never changes
   a value the pop proof reads; turning the option on or off drops the walks
   already taken, so a walk is never reused with the other setting. A nested call to a function recorded as
@@ -9653,7 +9672,7 @@ single `double` and leaves that value unused (an asm-forced evaluation, as in
 `k(x, y) { math_force_eval(y * y); return x * 3; }`). No other compiler spec has
 a floating output entry that a narrow write fills, so the rule changes nothing
 elsewhere. The stage test
-`tests/stages/gh873-zerofillreturn-a64.xml` runs clang and gcc AArch64 code.
+`tests/stages/gh873-zerofillreturn-a64.toml` runs clang and gcc AArch64 code.
 
 ### (kuna) The registers a zeroing epilogue clears (`kuna_zerocallregs.rs`)
 
@@ -9718,7 +9737,7 @@ a `return 0` whose `xor %eax,%eax` the compiler places right before the run
 reads the same as the run's own first clear, so such a function returns `void`
 unless a caller reads its result. Under `=all` the x87 block separates the two,
 and a `void` function's `rax` is cleared after it. The stage test
-`tests/stages/gh847-zerocallregs.xml` decompiles gcc 11 `-O2
+`tests/stages/gh847-zerocallregs.toml` decompiles gcc 11 `-O2
 -fzero-call-used-regs=all` code, two of its functions cleared `=all-gpr`.
 
 ### ARM scalar VFP contracts

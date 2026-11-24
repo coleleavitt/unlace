@@ -1,0 +1,285 @@
+# Go DWARF signature import: compressed cross-CU types, result formals,
+# caller contracts and an incompatible location that retains inference.
+# The status-only receive uses a compiler-owned result and a private
+# word destination proven by its channel's DWARF element type.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/compressed',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.fromWord',
+    'decompile',
+    'print C',
+    'load function main.narrow',
+    'decompile',
+    'print C',
+    'load function main.badReg',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-signatures/compressed',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.fromWord',
+    'decompile',
+    'print C',
+    'load function main.narrow',
+    'decompile',
+    'print C',
+    'load function main.boolNot',
+    'decompile',
+    'print C',
+    'load function main.mix',
+    'decompile',
+    'print C',
+    'load function main.scale',
+    'decompile',
+    'print C',
+    'load function main.callIdentity',
+    'decompile',
+    'print C',
+    'load function main.abstractIdentity',
+    'decompile',
+    'print C',
+    'load function main.badReg',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-entry-ranges/entry-ranges',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.identity',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-entry-ranges/entry-ranges',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.identity',
+    'decompile',
+    'print C',
+    'load function main.wrongRegister',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-entry-ranges/entry-ranges-plain',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang go',
+    'load function main.identity',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-dwarf-entry-ranges/entry-ranges-plain',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.identity',
+    'decompile',
+    'print C',
+    'load function main.wrongRegister',
+    'decompile',
+    'print C',
+    'echo godwarfsig result outputs begin',
+    'load function main.resultRange',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-channel-status/status-elf',
+    'option godwarfsig off',
+    'read symbols',
+    'option outlang c',
+    'load function main.recvStatus',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-channel-status/status-elf',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'load function main.recvStatus',
+    'decompile',
+    'print C',
+    'load function main.discardStatus',
+    'decompile',
+    'print C',
+    'load function main.otherSlot',
+    'decompile',
+    'print C',
+    'load function main.widerElement',
+    'decompile',
+    'print C',
+    'load function main.otherCallee',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-channel-status/status-elf',
+    'option godwarfsig on',
+    'read symbols',
+    'option outlang go',
+    'map prototype runtime.chanrecv2 bool receive(void *channel, int8 *scratch);',
+    'map prototype main.recvStatus bool recvStatus(void *overrideChannel);',
+    'load function main.recvStatus',
+    'decompile',
+    'print C',
+    'echo godwarfsig result outputs end',
+]
+
+[[match]]
+name = 'off loses an untouched pointer result'
+count = 1
+literal = 'func fromWord() {'
+
+[[match]]
+name = 'off loses a narrowing result'
+count = 1
+literal = 'func narrow() {'
+
+[[match]]
+name = 'on recovers input name and pointer result'
+count = 1
+literal = 'func fromWord(p uint64) *int32'
+
+[[match]]
+name = 'on recovers exact-width result'
+count = 1
+literal = 'func narrow(a uint64) uint32'
+
+[[match]]
+name = 'boolean result preserves logical negation'
+count = 1
+literal = 'return !x'
+
+[[match]]
+name = 'float and integer register banks stay independent'
+count = 1
+literal = 'func mix(x float64, n int64, y float64) float64'
+
+[[match]]
+name = 'flat record pointee recovers field names'
+count = 1
+regex = '\(\*p\).x = \(\*p\).x \* k'
+
+[[match]]
+name = 'callers receive the imported contract'
+count = 1
+literal = 'return fromWord(p)'
+
+[[match]]
+name = 'concrete origin keeps input and result roles'
+count = 1
+literal = 'func abstractIdentity(p uint64) *int32'
+
+[[match]]
+name = 'wrong entry register remains uninferred'
+count = 2
+literal = 'func badReg() {'
+
+[[match]]
+name = 'empty entry range off retains inference'
+count = 2
+literal = 'func identity() {'
+
+[[match]]
+name = 'empty entry range on recovers a proven RET identity'
+count = 2
+literal = 'func identity(p uint64) *int32'
+
+[[match]]
+name = 'empty entry range wrong register stays uninferred'
+count = 2
+literal = 'func wrongRegister() {'
+
+# Match the original invalid result and every receive body inside the
+# markers. The owned result keeps the full channel and word destination.
+# The raw, discarded, different-slot, wider and different-callee cases
+# retain their calls. Explicit declarations keep their signed scratch.
+[[match]]
+name = 'uncompressed invalid result stays uninferred'
+count = 1
+regex = [
+    '^\s*godwarfsig result outputs begin$',
+    '^\s*$',
+    '^// main\.resultRange$',
+    '^func resultRange\(\) \{$',
+    '^  return$',
+    '^\}$',
+    '^\s*$',
+    '^void main\.recvStatus\(unsigned long a0\)$',
+    '^\{$',
+    '^  char v1 \[8\];(?: // [^()]*)?$',
+    '^\s*$',
+    '^  runtime\.chanrecv2\(a0,v1\);$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.recvStatus$',
+    '^func recvStatus\(c unsafe\.Pointer\) bool \{$',
+    '^  var v1 uint64(?: // [^()]*)?$',
+    '^\s*$',
+    '^  return runtime\.chanrecv2\(c,&v1\)$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.discardStatus$',
+    '^func discardStatus\(a0 uint64\) \{$',
+    '^  var v1 \[8\]byte(?: // [^()]*)?$',
+    '^\s*$',
+    '^  runtime\.chanrecv2\(a0,v1\)$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.otherSlot$',
+    '^func otherSlot\(a0 uint64\) \{$',
+    '^  var v1 \[16\]byte(?: // [^()]*)?$',
+    '^\s*$',
+    '^  runtime\.chanrecv2\(a0,v1\)$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.widerElement$',
+    '^func widerElement\(a0 uint64\) \{$',
+    '^  var v1 \[8\]byte(?: // [^()]*)?$',
+    '^\s*$',
+    '^  runtime\.chanrecv2\(a0,v1\)$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.otherCallee$',
+    '^func otherCallee\(a0 uint64\) \{$',
+    '^  var v1 \[8\]byte(?: // [^()]*)?$',
+    '^\s*$',
+    '^  localReceive\(a0,v1\)$',
+    '^\}$',
+    '^\s*$',
+    '^// main\.recvStatus$',
+    '^func recvStatus\(overrideChannel unsafe\.Pointer\) bool \{$',
+    '^  var v1 int64(?: // [^()]*)?$',
+    '^\s*$',
+    '^  return runtime\.chanrecv2\(overrideChannel,&v1\)$',
+    '^\}$',
+    '^\s*godwarfsig result outputs end$',
+]
+
+[[match]]
+name = 'Go result formals never become generic inputs'
+count = 0
+literal = '_kuna_ident_7e7230'
+
+[[match]]
+name = 'Go record type in its own package is unqualified'
+count = 1
+literal = 'func scale(p *point, k int64)'

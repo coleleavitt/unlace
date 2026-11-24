@@ -1385,6 +1385,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "toml",
  "unlace-analysis",
  "unlace-base",
  "unlace-console",
@@ -1492,6 +1493,7 @@ version = "0.1.0"
 dependencies = [
  "regex",
  "serde_json",
+ "toml",
  "unlace-base",
  "unlace-console",
  "unlace-decomp",

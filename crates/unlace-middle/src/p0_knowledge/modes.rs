@@ -662,6 +662,8 @@ mod tests {
             "phiarm",
             // `calleesaved` (issue #20) landed without a corpus sweep.
             "calleesaved",
+            // `calleeargsmsvc` landed on hand-built MSVC-shape fixtures only.
+            "calleeargsmsvc",
             // Landed with fixture measurements only: `funcchunks` changes only FID's
             // input, `tailcallentryall` was measured on Lua and the LLVM tools, and
             "funcchunks",
@@ -669,10 +671,6 @@ mod tests {
             // `dwarfglobaltypes` was turned off by default in its own branch after
             // landing; it has no preset sweep yet.
             "dwarfglobaltypes",
-            // `dwarfdecls` lands as an opt-in with its decbench sweep in its catalog row.
-            "dwarfdecls",
-            // `dwarfenumtypedef` lands as an opt-in beside it.
-            "dwarfenumtypedef",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

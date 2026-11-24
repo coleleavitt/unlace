@@ -1,0 +1,238 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/integer_field_extract_x86_64',
+    'read symbols',
+    'option ctypes off',
+    'option realtypes off',
+    'option outlang c',
+    'option nocastprinting off',
+    'map prototype make_pair struct Pair make_pair(int8 a,int8 b);',
+    'map prototype make_unsigned struct UPair make_unsigned(int8 a,int8 b);',
+    'map prototype signed_int8 int1 signed_int8(int8 a,int8 b);',
+    'map prototype signed_int8_wide int8 signed_int8_wide(int8 a,int8 b);',
+    'map prototype signed_uint8 uint1 signed_uint8(int8 a,int8 b);',
+    'map prototype signed_uint8_wide uint8 signed_uint8_wide(int8 a,int8 b);',
+    'map prototype signed_int16 int2 signed_int16(int8 a,int8 b);',
+    'map prototype signed_int16_wide int8 signed_int16_wide(int8 a,int8 b);',
+    'map prototype signed_uint16 uint2 signed_uint16(int8 a,int8 b);',
+    'map prototype signed_uint16_wide uint8 signed_uint16_wide(int8 a,int8 b);',
+    'map prototype signed_int32 int4 signed_int32(int8 a,int8 b);',
+    'map prototype signed_int32_wide int8 signed_int32_wide(int8 a,int8 b);',
+    'map prototype signed_uint32 uint4 signed_uint32(int8 a,int8 b);',
+    'map prototype signed_uint32_wide uint8 signed_uint32_wide(int8 a,int8 b);',
+    'map prototype unsigned_int8 int1 unsigned_int8(int8 a,int8 b);',
+    'map prototype unsigned_uint8 uint1 unsigned_uint8(int8 a,int8 b);',
+    'map prototype unsigned_int16 int2 unsigned_int16(int8 a,int8 b);',
+    'map prototype unsigned_uint16 uint2 unsigned_uint16(int8 a,int8 b);',
+    'map prototype unsigned_int32 int4 unsigned_int32(int8 a,int8 b);',
+    'map prototype unsigned_uint32 uint4 unsigned_uint32(int8 a,int8 b);',
+    'map prototype first_narrow int4 first_narrow(int8 a,int8 b);',
+    'map prototype shift8 uint1 shift8(int8 a,int8 b);',
+    'map prototype shift32 uint4 shift32(int8 a,int8 b);',
+    'map prototype signed_high int8 signed_high(int8 a,int8 b);',
+    'map prototype signed_as_unsigned uint8 signed_as_unsigned(int8 a,int8 b);',
+    'map prototype unsigned_as_signed int8 unsigned_as_signed(int8 a,int8 b);',
+    'map prototype exact_signed int8 exact_signed(int8 a,int8 b);',
+    'map prototype exact_unsigned uint8 exact_unsigned(int8 a,int8 b);',
+    'load function signed_int8',
+    'decompile',
+    'print C',
+    'load function signed_int16',
+    'decompile',
+    'print C',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+    'load function shift32',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/integer_field_extract_x86_64',
+    'read symbols',
+    'option ctypes off',
+    'option realtypes off',
+    'option outlang go',
+    'option nocastprinting off',
+    'map prototype make_pair struct Pair make_pair(int8 a,int8 b);',
+    'map prototype make_unsigned struct UPair make_unsigned(int8 a,int8 b);',
+    'map prototype signed_int8 int1 signed_int8(int8 a,int8 b);',
+    'map prototype signed_int8_wide int8 signed_int8_wide(int8 a,int8 b);',
+    'map prototype signed_uint8 uint1 signed_uint8(int8 a,int8 b);',
+    'map prototype signed_uint8_wide uint8 signed_uint8_wide(int8 a,int8 b);',
+    'map prototype signed_int16 int2 signed_int16(int8 a,int8 b);',
+    'map prototype signed_int16_wide int8 signed_int16_wide(int8 a,int8 b);',
+    'map prototype signed_uint16 uint2 signed_uint16(int8 a,int8 b);',
+    'map prototype signed_uint16_wide uint8 signed_uint16_wide(int8 a,int8 b);',
+    'map prototype signed_int32 int4 signed_int32(int8 a,int8 b);',
+    'map prototype signed_int32_wide int8 signed_int32_wide(int8 a,int8 b);',
+    'map prototype signed_uint32 uint4 signed_uint32(int8 a,int8 b);',
+    'map prototype signed_uint32_wide uint8 signed_uint32_wide(int8 a,int8 b);',
+    'map prototype unsigned_int8 int1 unsigned_int8(int8 a,int8 b);',
+    'map prototype unsigned_uint8 uint1 unsigned_uint8(int8 a,int8 b);',
+    'map prototype unsigned_int16 int2 unsigned_int16(int8 a,int8 b);',
+    'map prototype unsigned_uint16 uint2 unsigned_uint16(int8 a,int8 b);',
+    'map prototype unsigned_int32 int4 unsigned_int32(int8 a,int8 b);',
+    'map prototype unsigned_uint32 uint4 unsigned_uint32(int8 a,int8 b);',
+    'map prototype first_narrow int4 first_narrow(int8 a,int8 b);',
+    'map prototype shift8 uint1 shift8(int8 a,int8 b);',
+    'map prototype shift32 uint4 shift32(int8 a,int8 b);',
+    'map prototype signed_high int8 signed_high(int8 a,int8 b);',
+    'map prototype signed_as_unsigned uint8 signed_as_unsigned(int8 a,int8 b);',
+    'map prototype unsigned_as_signed int8 unsigned_as_signed(int8 a,int8 b);',
+    'map prototype exact_signed int8 exact_signed(int8 a,int8 b);',
+    'map prototype exact_unsigned uint8 exact_unsigned(int8 a,int8 b);',
+    'load function signed_int8',
+    'decompile',
+    'print C',
+    'load function signed_int16',
+    'decompile',
+    'print C',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+    'load function shift32',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/integer_field_extract_x86_64',
+    'read symbols',
+    'option ctypes off',
+    'option realtypes off',
+    'option outlang rust',
+    'option nocastprinting off',
+    'map prototype make_pair struct Pair make_pair(int8 a,int8 b);',
+    'map prototype make_unsigned struct UPair make_unsigned(int8 a,int8 b);',
+    'map prototype signed_int8 int1 signed_int8(int8 a,int8 b);',
+    'map prototype signed_int8_wide int8 signed_int8_wide(int8 a,int8 b);',
+    'map prototype signed_uint8 uint1 signed_uint8(int8 a,int8 b);',
+    'map prototype signed_uint8_wide uint8 signed_uint8_wide(int8 a,int8 b);',
+    'map prototype signed_int16 int2 signed_int16(int8 a,int8 b);',
+    'map prototype signed_int16_wide int8 signed_int16_wide(int8 a,int8 b);',
+    'map prototype signed_uint16 uint2 signed_uint16(int8 a,int8 b);',
+    'map prototype signed_uint16_wide uint8 signed_uint16_wide(int8 a,int8 b);',
+    'map prototype signed_int32 int4 signed_int32(int8 a,int8 b);',
+    'map prototype signed_int32_wide int8 signed_int32_wide(int8 a,int8 b);',
+    'map prototype signed_uint32 uint4 signed_uint32(int8 a,int8 b);',
+    'map prototype signed_uint32_wide uint8 signed_uint32_wide(int8 a,int8 b);',
+    'map prototype unsigned_int8 int1 unsigned_int8(int8 a,int8 b);',
+    'map prototype unsigned_uint8 uint1 unsigned_uint8(int8 a,int8 b);',
+    'map prototype unsigned_int16 int2 unsigned_int16(int8 a,int8 b);',
+    'map prototype unsigned_uint16 uint2 unsigned_uint16(int8 a,int8 b);',
+    'map prototype unsigned_int32 int4 unsigned_int32(int8 a,int8 b);',
+    'map prototype unsigned_uint32 uint4 unsigned_uint32(int8 a,int8 b);',
+    'map prototype first_narrow int4 first_narrow(int8 a,int8 b);',
+    'map prototype shift8 uint1 shift8(int8 a,int8 b);',
+    'map prototype shift32 uint4 shift32(int8 a,int8 b);',
+    'map prototype signed_high int8 signed_high(int8 a,int8 b);',
+    'map prototype signed_as_unsigned uint8 signed_as_unsigned(int8 a,int8 b);',
+    'map prototype unsigned_as_signed int8 unsigned_as_signed(int8 a,int8 b);',
+    'map prototype exact_signed int8 exact_signed(int8 a,int8 b);',
+    'map prototype exact_unsigned uint8 exact_unsigned(int8 a,int8 b);',
+    'load function signed_int8',
+    'decompile',
+    'print C',
+    'load function signed_int16',
+    'decompile',
+    'print C',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+    'load function shift32',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function signed_int32_wide',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'c preserves signed_int8 extraction'
+count = 1
+literal = 'return (int1)make_pair(a,b).second;'
+
+[[match]]
+name = 'c preserves signed_int16 extraction'
+count = 1
+literal = 'return (int2)make_pair(a,b).second;'
+
+[[match]]
+name = 'c preserves signed_int32_wide extraction'
+count = 1
+literal = 'return (int4)make_pair(a,b).second;'
+
+[[match]]
+name = 'c preserves shift32 extraction'
+count = 1
+literal = 'return (uint4)(make_unsigned(a,b).second >> 0x20);'
+
+[[match]]
+name = 'go preserves signed_int8 extraction'
+count = 1
+literal = 'return int8(make_pair(a,b).second)'
+
+[[match]]
+name = 'go preserves signed_int16 extraction'
+count = 1
+literal = 'return int16(make_pair(a,b).second)'
+
+[[match]]
+name = 'go preserves signed_int32_wide extraction'
+count = 1
+literal = 'return int64(int32(make_pair(a,b).second))'
+
+[[match]]
+name = 'go preserves shift32 extraction'
+count = 1
+literal = 'return uint32(make_unsigned(a,b).second >> 0x20)'
+
+[[match]]
+name = 'rust preserves signed_int8 extraction'
+count = 1
+literal = 'return make_pair(a,b).second as i8;'
+
+[[match]]
+name = 'rust preserves signed_int16 extraction'
+count = 1
+literal = 'return make_pair(a,b).second as i16;'
+
+[[match]]
+name = 'rust preserves signed_int32_wide extraction'
+count = 1
+literal = 'return (make_pair(a,b).second as i32) as i64;'
+
+[[match]]
+name = 'rust preserves shift32 extraction'
+count = 1
+literal = 'return (make_unsigned(a,b).second >> 0x20) as u32;'
+
+[[match]]
+name = 'C and Rust field casts respect diagnostic suppression'
+count = 2
+regex = '^  return make_pair\(a,b\)\.second;'
+
+[[match]]
+name = 'Go field conversions respect diagnostic suppression'
+count = 1
+regex = '^  return int64\(make_pair\(a,b\)\.second\)$'

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="Propeller"
+    endian="little"
+    size="16"
+    variant="default"
+    version="1.0"
+    slafile="propeller.sla"
+    processorspec="propeller.pspec"
+    id="propeller:LE:16:default">
+    <description>Parallax Propeller 1 (P8X32A) cog</description>
+    <compiler name="default" spec="propeller.cspec" id="default"/>
+  </language>
+</language_definitions>

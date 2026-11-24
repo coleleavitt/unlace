@@ -33,4 +33,17 @@
     <external_name tool="qemu" name="qemu-xtensaeb"/>
     <external_name tool="qemu_system" name="qemu-system-xtensaeb"/>
   </language>
+  <language processor="Xtensa"
+            endian="little"
+            size="32"
+            variant="esp32s3"
+            version="4.1"
+            slafile="xtensa_esp32s3.sla"
+            processorspec="xtensa.pspec"
+            manualindexfile="../manuals/xtensa.idx"
+            id="Xtensa:LE:32:esp32s3">
+    <description>Tensilica Xtensa LX7 little-endian with the ESP32-S3 PIE (EE.*) instructions</description>
+    <compiler name="default" spec="xtensa.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
+  </language>
 </language_definitions>

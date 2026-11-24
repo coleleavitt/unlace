@@ -3,6 +3,7 @@
 
 # The VEX instructions with GPR operands, promoted to EVEX (3.1.4.1): EVEX.R4/X4/B4/V4 reach the
 # EGPRs, P2 is 000 0 V4 NF 00 (z, L'L and b zero), and the flag-writing BMI forms take EVEX.NF.
+# A disp8 is not compressed (N=1, Tuple1 8-bit).
 
 @define APX_EVEX_GPR "vexMode=2 & evexLp=0 & evexZ=0 & evexB=0"
 
@@ -10,6 +11,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 
 # bmi1.sinc:13
 :ANDN Reg32, apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf2; Reg32 ... & check_Reg32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg32 = ~(apxNDD32) & rm32;
   resultflags(Reg32);
@@ -19,6 +21,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:13
 :ANDN^".NF" Reg32, apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf2; Reg32 ... & check_Reg32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg32 = ~(apxNDD32) & rm32;
   resultflags(Reg32);
@@ -26,6 +29,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:24
 :ANDN Reg64, apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf2; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg64 = ~(apxNDD64) & rm64;
   resultflags(Reg64);
@@ -34,12 +38,14 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:24
 :ANDN^".NF" Reg64, apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf2; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg64 = ~(apxNDD64) & rm64;
   resultflags(Reg64);
 }
 # bmi1.sinc:34
 :BEXTR Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf7; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:1 = apxNDD32[0,8];
   lengthTmp:1 = apxNDD32[8,8];
@@ -54,6 +60,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:34
 :BEXTR^".NF" Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf7; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:1 = apxNDD32[0,8];
   lengthTmp:1 = apxNDD32[8,8];
@@ -63,6 +70,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:49
 :BEXTR Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf7; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:1 = apxNDD64[0,8];
   lengthTmp:1 = apxNDD64[8,8];
@@ -76,6 +84,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:49
 :BEXTR^".NF" Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf7; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:1 = apxNDD64[0,8];
   lengthTmp:1 = apxNDD64[8,8];
@@ -84,6 +93,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:64
 :BLSI apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=3 ... & check_apxNDD32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD32 = -rm32 & rm32;
   build check_apxNDD32_dest;
@@ -96,6 +106,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:64
 :BLSI^".NF" apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=3 ... & check_apxNDD32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD32 = -rm32 & rm32;
   build check_apxNDD32_dest;
@@ -103,6 +114,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:77
 :BLSI apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=3 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD64 = -rm64 & rm64;
 
@@ -114,12 +126,14 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:77
 :BLSI^".NF" apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=3 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD64 = -rm64 & rm64;
   # AF and PF are undefined
 }
 # bmi1.sinc:90
 :BLSMSK apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=2 ... & check_apxNDD32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   CF = (rm32 == 0);
   apxNDD32 = (rm32 - 1) ^ rm32;
@@ -132,6 +146,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:90
 :BLSMSK^".NF" apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=2 ... & check_apxNDD32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD32 = (rm32 - 1) ^ rm32;
   build check_apxNDD32_dest;
@@ -139,6 +154,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:103
 :BLSMSK apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=2 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   CF = (rm64 == 0);
   apxNDD64 = (rm64 - 1) ^ rm64;
@@ -150,12 +166,14 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:103
 :BLSMSK^".NF" apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=2 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD64 = (rm64 - 1) ^ rm64;
   # AF and PF are undefined
 }
 # bmi1.sinc:116
 :BLSR apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=1 ... & check_apxNDD32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   CF = (rm32 == 0);
   apxNDD32 = (rm32 - 1) & rm32;
@@ -168,6 +186,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:116
 :BLSR^".NF" apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf3; reg_opcode=1 ... & check_apxNDD32_dest ... &rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD32 = (rm32 - 1) & rm32;
   build check_apxNDD32_dest;
@@ -175,6 +194,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:129
 :BLSR apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=1 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   CF = (rm64 == 0);
   apxNDD64 = (rm64 - 1) & rm64;
@@ -186,12 +206,14 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi1.sinc:129
 :BLSR^".NF" apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf3; reg_opcode=1 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   apxNDD64 = (rm64 - 1) & rm64;
   # AF and PF are undefined
 }
 # bmi2.sinc:6
 :BZHI Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf5; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:1 = apxNDD32:1;
 
@@ -210,6 +232,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:6
 :BZHI^".NF" Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf5; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:1 = apxNDD32:1;
   # saturate index amount to 32; operand size or higher does not clear any bits
@@ -221,6 +244,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:25
 :BZHI Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf5; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:1 = apxNDD64:1;
 
@@ -238,6 +262,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:25
 :BZHI^".NF" Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=4 & $(VEX_LZ) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf5; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:1 = apxNDD64:1;
   # saturate index amount to 64; operand size or higher does not clear any bits
@@ -248,6 +273,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:44
 :MULX Reg32, apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf6; Reg32 ... & check_Reg32_dest ... &  check_apxNDD32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   temp:8 = zext(EDX) * zext(rm32);
 
@@ -258,6 +284,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:55
 :MULX Reg64, apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf6; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   temp:16 = zext(RDX) * zext(rm64);
 
@@ -266,6 +293,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:65
 :PDEP Reg32, apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf5; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:4 = apxNDD32;
 
@@ -288,6 +316,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:88
 :PDEP Reg64, apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf5; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   sourceTmp:8 = apxNDD64;
 
@@ -309,6 +338,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:111
 :PEXT Reg32, apxNDD32, rm32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf5; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:4 = 0x80000000;
   resultTmp:4 = 0;
@@ -328,6 +358,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:131
 :PEXT Reg64, apxNDD64, rm64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf5; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   indexTmp:8 = 0x8000000000000000;
   resultTmp:8 = 0;
@@ -346,6 +377,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:151
 :RORX Reg32, rm32, imm8 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F3A) & $(VEX_W0); byte=0xf0; Reg32 ... & check_Reg32_dest ... & rm32; imm8
+[ evexD8Type = 1; evexTType = 1; ]
 {
   shiftTmp:1 = (imm8:1 & 0x1F);
 
@@ -354,6 +386,7 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:160
 :RORX Reg64, rm64, imm8 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F3A) & $(VEX_W1); byte=0xf0; Reg64 ... & rm64; imm8
+[ evexD8Type = 1; evexTType = 1; ]
 {
   shiftTmp:1 = (imm8:1 & 0x3F);
 
@@ -361,139 +394,200 @@ check_apxNDD32_dest: is apxNDD32 & apxNDD64 { apxNDD64 = zext(apxNDD32); }
 }
 # bmi2.sinc:169
 :SARX Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf7; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg32 = rm32 s>> (apxNDD32 & 0x0000001F);
   build check_Reg32_dest;
 }
 # bmi2.sinc:176
 :SARX Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf7; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg64 = rm64 s>> (apxNDD64 & 0x000000000000003F);
 }
 # bmi2.sinc:183
 :SHLX Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf7; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg32 = rm32 << (apxNDD32 & 0x0000001F);
   build check_Reg32_dest;
 }
 # bmi2.sinc:190
 :SHLX Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf7; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg64 = rm64 << (apxNDD64 & 0x000000000000003F);
 }
 # bmi2.sinc:197
 :SHRX Reg32, rm32, apxNDD32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; byte=0xf7; Reg32 ... & check_Reg32_dest ... & rm32
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg32 = rm32 >> (apxNDD32 & 0x0000001F);
   build check_Reg32_dest;
 }
 # bmi2.sinc:204
 :SHRX Reg64, rm64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_LZ) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; byte=0xf7; Reg64 ... & rm64
+[ evexD8Type = 1; evexTType = 1; ]
 {
   Reg64 = rm64 >> (apxNDD64 & 0x000000000000003F);
 }
 # avx512_manual.sinc:88
 :KMOVW KReg_reg, RegK_m16 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m16
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(RegK_m16);
 }
 # avx512_manual.sinc:94
 :KMOVB KReg_reg, RegK_m8 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m8
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(RegK_m8);
 }
 # avx512_manual.sinc:100
 :KMOVQ KReg_reg, RegK_m64 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m64
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(RegK_m64);
 }
 # avx512_manual.sinc:106
 :KMOVD KReg_reg, RegK_m32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m32
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(RegK_m32);
 }
 # avx512_manual.sinc:112
 :KMOVW m16, KReg_reg is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x91; KReg_reg ... & m16
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	m16 = KReg_reg[0,16];
 }
 # avx512_manual.sinc:118
 :KMOVB m8, KReg_reg is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x91; KReg_reg ... & m8
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	m8 = KReg_reg[0,8];
 }
 # avx512_manual.sinc:124
 :KMOVQ m64, KReg_reg is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x91; KReg_reg ... & m64
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	m64 = KReg_reg[0,64];
 }
 # avx512_manual.sinc:130
 :KMOVD m32, KReg_reg is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x91; KReg_reg ... & m32
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	m32 = KReg_reg[0,32];
 }
 # avx512_manual.sinc:136
 :KMOVW KReg_reg, Rmr32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 &KReg_reg
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(Rmr32[0,16]);
 }
 # avx512_manual.sinc:142
 :KMOVB KReg_reg, Rmr32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(Rmr32[0,8]);
 }
 # avx512_manual.sinc:149
 :KMOVQ KReg_reg, Rmr64 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x92; mod=3 & Rmr64 & KReg_reg
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(Rmr64);
 }
 # avx512_manual.sinc:156
 :KMOVD KReg_reg, Rmr32 is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	KReg_reg = zext(Rmr32);
 }
 # avx512_manual.sinc:162
-:KMOVW Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & KReg_rm
+:KMOVW Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	Reg32 = zext(KReg_rm[0,16]);
+	build check_Reg32_dest;
 }
-# avx512_manual.sinc:168
-:KMOVB Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & KReg_rm
+# avx512_manual.sinc:169
+:KMOVB Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	Reg32 = zext(KReg_rm[0,8]);
+	build check_Reg32_dest;
 }
-# avx512_manual.sinc:175
+# avx512_manual.sinc:177
 :KMOVQ Reg64, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x93; Reg64 & KReg_rm
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	Reg64 = KReg_rm[0,64];
 }
-# avx512_manual.sinc:182
-:KMOVD Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & KReg_rm
+# avx512_manual.sinc:184
+:KMOVD Reg32, KReg_rm is $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	Reg32 = KReg_rm[0,32];
+	build check_Reg32_dest;
 }
 # amx.sinc:51
 :LDTILECFG m512 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	ldtilecfg(m512);
 }
 # amx.sinc:56
 :STTILECFG m512 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x49; (mod != 0b11 & reg_opcode=0) ... & m512
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	m512 = sttilecfg();
 }
 # amx.sinc:71
 :TILELOADD amxTreg, Mem is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	tileloadd(amxTreg, Mem);
 }
 # amx.sinc:76
 :TILELOADDT1 amxTreg, Mem is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	tileloaddt1(amxTreg, Mem);
 }
 # amx.sinc:81
 :TILESTORED Mem, amxTreg is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_F3) & $(VEX_0F38) & $(VEX_W0); byte=0x4b; (mod != 0b11 & r_m=4 & amxTreg) ... & Mem
+[ evexD8Type = 1; evexTType = 1; ]
 {
 	tilestored(Mem, amxTreg);
+}
+# cmpccxadd.sinc:23
+:CMP^cmpxaddCC^"XADD" m32, Reg32, apxNDD32 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W0) & apxNDD32; row=0xe & cmpxaddCC; (mod != 3 & Reg32 & check_Reg32_dest ...) ... & m32
+[ evexD8Type = 1; evexTType = 1; ]
+{
+	local old:4 = m32;
+	local sum:4 = old + apxNDD32;
+	subflags(old, Reg32);
+	local d:4 = old - Reg32;
+	resultflags(d);
+	build cmpxaddCC;
+	if (!cmpxaddCC) goto <keep>;
+	m32 = sum;
+<keep>
+	Reg32 = old;
+	build check_Reg32_dest;
+}
+# cmpccxadd.sinc:38
+:CMP^cmpxaddCC^"XADD" m64, Reg64, apxNDD64 is $(LONGMODE_ON) & $(APX_EVEX_GPR) & evexAAA=0 & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F38) & $(VEX_W1) & apxNDD64; row=0xe & cmpxaddCC; (mod != 3 & Reg64) ... & m64
+[ evexD8Type = 1; evexTType = 1; ]
+{
+	local old:8 = m64;
+	local sum:8 = old + apxNDD64;
+	subflags(old, Reg64);
+	local d:8 = old - Reg64;
+	resultflags(d);
+	build cmpxaddCC;
+	if (!cmpxaddCC) goto <keep>;
+	m64 = sum;
+<keep>
+	Reg64 = old;
 }

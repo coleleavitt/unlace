@@ -1030,6 +1030,23 @@ define token instr(32)
 	XOP_12_VLE=(12,15)
 	
 	XOP_VLE=(22,25)
+@ifdef PAIRED_SINGLE
+	PSD1=(21,25)
+	PSA1=(16,20)
+	PSB1=(11,15)
+	PSC1=(6,10)
+	PSQ_W=(15,15)
+	PSQ_I=(12,14)
+	PSQ_IC=(12,14)
+	PSQ_GQR=(12,14)
+	PSQ_D=(0,11) signed
+	PSQX_W=(10,10)
+	PSQX_I=(7,9)
+	PSQX_IC=(7,9)
+	PSQX_GQR=(7,9)
+	PSQX_XO=(1,6)
+	PS_RC=(0,0)
+@endif
 ;	
 
 define token instrvle(16)

@@ -1,0 +1,54 @@
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/go126-runtime-types-386/go1.26.0-386-stripped',
+    'option dwarf off',
+    'option gotypeglobals off',
+    'read symbols',
+    'load function main.createWord',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go126-runtime-types-386/go1.26.0-386-stripped',
+    'option dwarf off',
+    'option gotypeglobals on',
+    'read symbols',
+    'load function main.createWord',
+    'decompile',
+    'print C',
+    'load function main.create',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go 1.26 i386 names the recursive node descriptor'
+count = 1
+regex = 'runtime\.newobject\([^\n]*type:main.Node'
+
+[[match]]
+name = 'Go 1.26 i386 names the padded record descriptor'
+count = 1
+regex = 'runtime\.newobject\([^\n]*type:main.Record'
+
+[[match]]
+name = 'Go 1.26 i386 descriptor naming respects the display option'
+count = 1
+literal = 'runtime.newobject(0x80cd920);'
+
+[[match]]
+name = 'Go 1.26 i386 retains node initialization in both views'
+count = 2
+literal = '*v1 = a0;'

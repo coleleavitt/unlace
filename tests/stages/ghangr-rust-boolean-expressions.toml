@@ -1,0 +1,93 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/rust_boolean_expressions_x86_64',
+    'read symbols',
+    'map prototype loop_xor bool loop_xor(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_and bool loop_and(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_or bool loop_or(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_eager bool loop_eager(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_and_call bool loop_and_call(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_or_call bool loop_or_call(int4 a,int4 b,int4 count,void *p);',
+    'map prototype loop_store void loop_store(bool *out,int4 a,int4 b,int4 count);',
+    'map prototype barrier void barrier(void);',
+    'map prototype observe bool observe(int4 value);',
+    'option outlang rust',
+    'load function loop_xor',
+    'decompile',
+    'print C',
+    'load function loop_and',
+    'decompile',
+    'print C',
+    'load function loop_or',
+    'decompile',
+    'print C',
+    'load function loop_eager',
+    'decompile',
+    'print C',
+    'load function loop_and_call',
+    'decompile',
+    'print C',
+    'load function loop_or_call',
+    'decompile',
+    'print C',
+    'load function loop_store',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'load function loop_xor',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Merged Boolean XOR assignments retain Boolean identity'
+count = 2
+literal = 'v1 = (v1 ^ (count == 3)) as bool;'
+
+[[match]]
+name = 'Merged Boolean AND assignment retains Boolean identity'
+count = 1
+literal = 'v1 = (v1 & (count != 3)) as bool;'
+
+[[match]]
+name = 'Merged Boolean OR assignment retains Boolean identity'
+count = 1
+literal = 'v1 = (v1 | (count == 3)) as bool;'
+
+[[match]]
+name = 'Callback Boolean expressions preserve all three bitwise operators'
+count = 3
+regex = 'v1 = \(v1 [&|^] observe\(count\)\) as bool;'
+
+[[match]]
+name = 'Boolean returns retain identity casts'
+count = 6
+regex = 'return \(\(p == core::ptr::null_mut\(\)\) [&|^] v1\) as bool;'
+
+[[match]]
+name = 'Boolean store retains identity cast'
+count = 1
+literal = '*out = (v1 & (a == 4)) as bool;'
+
+[[match]]
+name = 'Boolean expressions are never compared with integer zero'
+count = 0
+regex = '\(v1 [&|^].*\) != 0;'
+
+[[match]]
+name = 'C keeps its Boolean bitwise return'
+count = 1
+literal = 'return (bool)(p == NULL & v1);'

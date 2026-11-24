@@ -1,0 +1,109 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'option goabi off',
+    'clear architecture',
+    'load file tests/fixtures/go-abi0-model/linux-amd64',
+    'read symbols',
+    'option outlang go',
+    'load function main.store',
+    'decompile',
+    'print C',
+    'load function main.callStore',
+    'decompile',
+    'print C',
+    'option goabi auto',
+    'clear architecture',
+    'load file tests/fixtures/go-abi0-model/linux-amd64',
+    'read symbols',
+    'option outlang go',
+    'load function main.store',
+    'decompile',
+    'print C',
+    'load function main.callStore',
+    'decompile',
+    'print C',
+    'load function main.abi0',
+    'decompile',
+    'print C',
+    'load addr 0x454c40',
+    'decompile',
+    'print C',
+    'load function runtime.sigtramp',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/go-pair-results/go1.27.3-pair',
+    'read symbols',
+    'option outlang go',
+    'load addr 0x47c9e0',
+    'decompile',
+    'print C',
+    'load addr 0x47f8c0',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go ABI0 off loses the stack parameters'
+count = 1
+literal = 'func store() {'
+
+[[match]]
+name = 'Go ABI0 auto recovers both stack parameters'
+count = 1
+regex = 'func store\(a0 u?int64, a1 u?int64\)'
+
+[[match]]
+name = 'Go ABI0 auto binds the operands in the callee'
+count = 1
+regex = 'sink = a0 \* (0x)?3 \+ a1'
+
+[[match]]
+name = "Go ABI0 auto recovers the first call's stack operands"
+count = 1
+regex = 'store\.abi0\(a0, *a1\)'
+
+[[match]]
+name = 'Go ABI0 auto preserves reversed caller operands'
+count = 1
+regex = 'store\.abi0\(a1, *a0\)'
+
+[[match]]
+name = 'Go ABI0 leaves an ordinary function with that name under ABIInternal'
+count = 1
+literal = 'func abi0(a0 uint64) uint64'
+
+[[match]]
+name = 'Go ABI0 leaves the returning runtime wrapper uninferred'
+count = 1
+regex = 'func (write|abi0)\(\) \{'
+
+[[match]]
+name = "Go ABI0 leaves the signal trampoline's prior rendering intact"
+count = 1
+literal = [
+    'v1 = sigtrampgo.abi0()',
+    'return v1',
+]
+
+[[match]]
+name = 'Go ABI0 keeps the private gogo tail transfer under the existing model'
+count = 1
+regex = 'gogo\(a0, *v1,'
+
+[[match]]
+name = 'Go ABI0 keeps the nonreturning exitThread continuation under the existing model'
+count = 1
+regex = '\)\(v1, *a1, *0x47f8d7\) // int3-pad'

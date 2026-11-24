@@ -1,0 +1,68 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/go_store_value_x86_64',
+    'read symbols',
+    'option outlang go',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype signed8 void signed8(struct Fields *p,uint1 a,uint1 b);',
+    'map prototype unsigned16 void unsigned16(struct Fields *p,int2 a,int2 b);',
+    'map prototype signed_xor32 void signed_xor32(struct Fields *p,int4 a);',
+    'map prototype counted_destination struct Fields *counted_destination(struct Fields *p);',
+    'map prototype counted_value uint8 counted_value(uint8 a,uint8 b);',
+    'map prototype side_effect void side_effect(struct Fields *p,uint8 a,uint8 b);',
+    'map prototype array_store void array_store(int8 *p,uint8 i,uint8 a);',
+    'load function signed8',
+    'decompile',
+    'print C',
+    'load function unsigned16',
+    'decompile',
+    'print C',
+    'load function signed_xor32',
+    'decompile',
+    'print C',
+    'load function side_effect',
+    'decompile',
+    'print C',
+    'load function array_store',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go signed byte store converts unsigned arithmetic'
+count = 1
+literal = '(*p).s8 = int8(b + a)'
+
+[[match]]
+name = 'Go unsigned short store converts signed arithmetic'
+count = 1
+literal = '(*p).u16 = uint16(b + a)'
+
+[[match]]
+name = 'Go signed word store converts bitwise expression'
+count = 1
+literal = '(*p).s32 = int32(uint32(a) ^ 0x1)'
+
+[[match]]
+name = 'Go side effect store converts returned value once'
+count = 1
+literal = '(*counted_destination(p)).s64 = int64(v1)'
+
+[[match]]
+name = 'Go indexed signed store converts unsigned value'
+count = 1
+literal = 'unsafe.Add(unsafe.Pointer(p),i * 8)) = int64(a)'

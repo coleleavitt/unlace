@@ -2,7 +2,7 @@
 //!
 //! The Rust catalog JSON emitter (`kuna_phases::emit_catalog_json`) must
 //! reproduce `kuna_console.cc kunaEmitSettableJson`'s output **byte for byte**:
-//! `tests/stages/kuna-catalog.xml` (a C++ datatest) string-matches the raw
+//! `tests/stages/kuna-catalog.toml` (a C++ datatest) string-matches the raw
 //! emitter output, and `python -m kuna.catalog` parses it, so any drift in key
 //! order, spacing, separators, pipe-splitting, the conditional `current` field,
 //! or escaping would silently break the LLM control surface.
@@ -81,9 +81,9 @@ fn fixture_has_no_current_field() {
 // Every row carries the tier field appended after change_kind.
 // ... and the symptoms array appended after tier (C3).
 fn fixture_has_all_362_settables() {
-    assert_eq!(FIXTURE.matches("\"option\": ").count(), 362);
-    assert_eq!(FIXTURE.matches("\"tier\": ").count(), 362);
-    assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), 362);
+    assert_eq!(FIXTURE.matches("\"option\": ").count(), 363);
+    assert_eq!(FIXTURE.matches("\"tier\": ").count(), 363);
+    assert_eq!(FIXTURE.matches("\"symptoms\": ").count(), 363);
 }
 
 #[test]

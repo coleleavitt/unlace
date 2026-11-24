@@ -28,6 +28,7 @@
 //!    width). The checks guard the lowering in both directions; equality
 //!    itself follows from the rules being identities.
 
+use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -106,18 +107,24 @@ impl Analysis<Bv> for Fold {
     }
 }
 
-/// The op count of [`Expr::ops`]: leaves and constants are free.
+/// The op count of [`Expr::ops`] (leaves and constants free), then the
+/// bitwise op count, so of two forms with as many ops the one with fewer
+/// bitwise ops is extracted.
 struct OpCount;
 
 impl CostFunction<Bv> for OpCount {
-    type Cost = usize;
+    type Cost = (usize, usize);
 
-    fn cost<C>(&mut self, enode: &Bv, mut costs: C) -> usize
+    fn cost<C>(&mut self, enode: &Bv, mut costs: C) -> (usize, usize)
     where
-        C: FnMut(Id) -> usize,
+        C: FnMut(Id) -> (usize, usize),
     {
-        let own = usize::from(!enode.is_leaf());
-        enode.fold(own, |sum, i| sum.saturating_add(costs(i)))
+        let bitwise = matches!(enode, Bv::And(_) | Bv::Or(_) | Bv::Xor(_) | Bv::Not(_));
+        let own = (usize::from(!enode.is_leaf()), usize::from(bitwise));
+        enode.fold(own, |(o, b), i| {
+            let (co, cb) = costs(i);
+            (o.saturating_add(co), b.saturating_add(cb))
+        })
     }
 }
 
@@ -142,6 +149,7 @@ fn rules() -> &'static [Rw] {
             rewrite!("xor-assoc"; "(^ ?a (^ ?b ?c))" => "(^ (^ ?a ?b) ?c)"),
             // Ring identities.
             rewrite!("neg-neg"; "(neg (neg ?a))" => "?a"),
+            rewrite!("sub-swap"; "(- ?a ?b)" => "(neg (- ?b ?a))"),
             rewrite!("add-0"; "(+ ?a 0)" => "?a"),
             rewrite!("mul-1"; "(* ?a 1)" => "?a"),
             rewrite!("mul-0"; "(* ?a 0)" => "0"),
@@ -175,6 +183,9 @@ fn rules() -> &'static [Rw] {
             rewrite!("xor-and-b"; "(^ (& ?a ?b) ?b)" => "(& (~ ?a) ?b)"),
             rewrite!("or-xor-b"; "(| (^ ?a ?b) ?b)" => "(| ?a ?b)"),
             rewrite!("and-xor-b"; "(& (^ ?a ?b) ?b)" => "(& (~ ?a) ?b)"),
+            rewrite!("and-xnor-b"; "(& (~ (^ ?a ?b)) ?b)" => "(& ?a ?b)"),
+            rewrite!("or-mask-b"; "(| (& ?a (~ ?b)) ?b)" => "(| ?a ?b)"),
+            rewrite!("and-or-notb"; "(& (| ?a ?b) (~ ?b))" => "(& ?a (~ ?b))"),
             // Complement and negation: ~a = -a - 1.
             rewrite!("neg-not"; "(neg (~ ?a))" => "(+ ?a 1)"),
             rewrite!("not-neg"; "(~ (neg ?a))" => "(- ?a 1)"),
@@ -327,9 +338,27 @@ fn agree_exhaustive(a: &Expr, b: &Expr, n: usize) -> bool {
     })
 }
 
+/// The bitwise ops of `e`.
+fn bitwise_ops(e: &Expr) -> usize {
+    match e {
+        Expr::Leaf(_) | Expr::Const(_) => 0,
+        Expr::Not(a) => 1 + bitwise_ops(a),
+        Expr::Neg(a) | Expr::Mul(a, _) => bitwise_ops(a),
+        Expr::And(a, b) | Expr::Or(a, b) | Expr::Xor(a, b) => 1 + bitwise_ops(a) + bitwise_ops(b),
+        Expr::Add(a, b) | Expr::Sub(a, b) | Expr::Prod(a, b) => bitwise_ops(a) + bitwise_ops(b),
+    }
+}
+
 /// The cheapest expression equal to `f` (`n` leaves, `bits` wide) that saturation
-/// finds, when it has fewer than `budget` ops and passes the checks.
-pub(crate) fn saturate(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<Expr> {
+/// finds, when it has fewer than `budget` ops and fewer than `bit_budget`
+/// bitwise ops and passes the checks.
+pub(crate) fn saturate(
+    f: &Expr,
+    n: usize,
+    bits: u32,
+    budget: usize,
+    bit_budget: usize,
+) -> Option<Expr> {
     if n == 0 || n > MAX_LEAVES {
         return None;
     }
@@ -356,6 +385,7 @@ pub(crate) fn saturate(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<E
     let (_, best) = Extractor::new(&runner.egraph, OpCount).find_best(root);
     let simple = lower(&best, best.root())?;
     if simple.ops() >= budget
+        || bitwise_ops(&simple) >= bit_budget
         || !kuna_mba::agree(f, &simple, n, mask)
         || !agree_exhaustive(f, &simple, n)
     {
@@ -369,11 +399,17 @@ pub(crate) fn saturate(f: &Expr, n: usize, bits: u32, budget: usize) -> Option<E
 /// (kuna `egraph`) `RuleEgraphSimplify`.
 pub struct RuleEgraphSimplify {
     group: String,
+    /// Fingerprints of the trees rewritten in this function without removing
+    /// a bitwise op.
+    regrouped: BTreeSet<[u64; 4]>,
 }
 
 impl RuleEgraphSimplify {
     pub fn new(g: impl Into<String>) -> RuleEgraphSimplify {
-        RuleEgraphSimplify { group: g.into() }
+        RuleEgraphSimplify {
+            group: g.into(),
+            regrouped: BTreeSet::new(),
+        }
     }
 }
 
@@ -392,11 +428,13 @@ impl Rule for RuleEgraphSimplify {
     }
 
     fn clone_rule(&self, grouplist: &ActionGroupList) -> Option<Box<dyn Rule>> {
-        grouplist.contains(&self.group).then(|| {
-            Box::new(RuleEgraphSimplify {
-                group: self.group.clone(),
-            }) as Box<dyn Rule>
-        })
+        grouplist
+            .contains(&self.group)
+            .then(|| Box::new(RuleEgraphSimplify::new(self.group.clone())) as Box<dyn Rule>)
+    }
+
+    fn reset(&mut self, _data: &mut Funcdata) {
+        self.regrouped.clear();
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
@@ -435,9 +473,22 @@ impl Rule for RuleEgraphSimplify {
         if !t.mixed || t.budget < 2 {
             return 0;
         }
-        let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget) else {
+        // The ops under an op with several readers stay; count them all as bitwise.
+        let kept = t.expr.ops().saturating_sub(t.budget);
+        let bit_budget = bitwise_ops(&t.expr).saturating_sub(kept);
+        let Some(simple) = saturate(&t.expr, t.n, 8 * size as u32, t.budget, usize::MAX) else {
             return 0;
         };
+        // A rewrite that keeps every bitwise op regroups arithmetic the core
+        // rules may regroup back, which would show this tree again: it is
+        // done once per tree value.
+        if bitwise_ops(&simple) >= bit_budget
+            && !self
+                .regrouped
+                .insert(t.fingerprint(kuna_mba::mask_of(size)))
+        {
+            return 0;
+        }
         let rw = t.into_rewrite(simple);
         kuna_mba::replace(data, op, &rw, size)
     }
@@ -476,7 +527,7 @@ mod tests {
             bx(Expr::Xor(l(0), l(1))),
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
-        let s = saturate(&f, 2, 32, f.ops()).expect("saturates");
+        let s = saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
         assert!(kuna_mba::agree(&f, &s, 2, 0xffff_ffff));
     }
@@ -487,7 +538,7 @@ mod tests {
             bx(Expr::Xor(l(0), k(0x3039))),
             bx(Expr::Mul(bx(Expr::And(l(0), k(0x3039))), 2)),
         );
-        let s = saturate(&f, 1, 32, f.ops()).expect("saturates");
+        let s = saturate(&f, 1, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 1);
         assert_eq!(kuna_mba::prove_equal(&f, &s, 1, 32), Some(true));
     }
@@ -501,7 +552,7 @@ mod tests {
             bx(Expr::Mul(bx(Expr::And(l(0), l(1))), 2)),
         );
         let f = Expr::Sub(bx(a), bx(b));
-        let s = saturate(&f, 2, 64, f.ops()).expect("saturates");
+        let s = saturate(&f, 2, 64, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s, Expr::Const(0));
     }
 
@@ -513,16 +564,30 @@ mod tests {
             bx(Expr::Xor(bx(t.clone()), l(2))),
             bx(Expr::Mul(bx(Expr::And(bx(t), l(2))), 2)),
         );
-        let s = saturate(&f, 3, 32, f.ops()).expect("saturates");
+        let s = saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).expect("saturates");
         assert_eq!(s.ops(), 2);
         assert!(kuna_mba::agree(&f, &s, 3, 0xffff_ffff));
         assert_eq!(kuna_mba::prove_equal(&f, &s, 3, 32), Some(true));
     }
 
     #[test]
+    fn regrouping_arithmetic_alone_is_refused() {
+        // ((x & y) + (z + 3)) + 4 folds to (x & y) + z + 7, but keeps its one
+        // bitwise op: the core rules own that regrouping.
+        let f = Expr::Add(
+            bx(Expr::Add(
+                bx(Expr::And(l(0), l(1))),
+                bx(Expr::Add(l(2), k(3))),
+            )),
+            k(4),
+        );
+        assert!(saturate(&f, 3, 32, f.ops(), bitwise_ops(&f)).is_none());
+    }
+
+    #[test]
     fn a_tree_without_a_smaller_form_is_left() {
         let f = Expr::Add(l(0), bx(Expr::And(l(0), l(1))));
-        assert!(saturate(&f, 2, 32, f.ops()).is_none());
+        assert!(saturate(&f, 2, 32, f.ops(), bitwise_ops(&f)).is_none());
     }
 
     #[test]

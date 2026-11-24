@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="S12Z"
+            endian="big"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="s12z.sla"
+            processorspec="s12z.pspec"
+            id="S12Z:BE:24:default">
+    <description>NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH), 16 MiB linear address space</description>
+    <compiler name="default" spec="s12z.cspec" id="default"/>
+  </language>
+</language_definitions>

@@ -3054,7 +3054,11 @@ impl ParamListStandard {
     ) -> KunaResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         let mut back = ParameterPieces::default();
-        let outtype = proto.outtype.clone().expect("outtype null");
+        let Some(outtype) = proto.outtype.clone() else {
+            return Err(KunaError::param_unassigned(
+                "Cannot assign the output of a prototype with no return type",
+            ));
+        };
         if outtype.get_metatype() != type_metatype::TYPE_VOID {
             self.assign_address(
                 &outtype,
@@ -3093,7 +3097,11 @@ impl ParamListStandard {
     ) -> KunaResult<()> {
         let mut status = vec![0i32; self.numgroup as usize];
         let mut back = ParameterPieces::default();
-        let outtype = proto.outtype.clone().expect("outtype null");
+        let Some(outtype) = proto.outtype.clone() else {
+            return Err(KunaError::param_unassigned(
+                "Cannot assign the output of a prototype with no return type",
+            ));
+        };
         if outtype.get_metatype() == type_metatype::TYPE_VOID {
             back.type_ = Some(outtype);
             back.flags = 0;

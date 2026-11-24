@@ -383,7 +383,7 @@ crate::kuna_flag!(
     "dwarfdecls",
     "DWARF declarations of imports",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(
@@ -393,7 +393,7 @@ crate::kuna_flag!(
     "dwarfenumtypedef",
     "DWARF anonymous enums named by their typedef",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 crate::kuna_flag!(

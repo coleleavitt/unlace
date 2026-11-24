@@ -1,0 +1,3 @@
+# Hitachi H8/500 minimum mode (64 KiB). See h8500.sinc and ../../README.md for sources.
+@define ASZ "2"
+@include "h8500.sinc"

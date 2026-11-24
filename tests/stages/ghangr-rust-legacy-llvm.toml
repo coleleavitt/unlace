@@ -1,0 +1,97 @@
+# angr 6afa0c79 test_demangle_drops_llvm_suffix. Loader symbol naming is a
+# correctness fix: decode the exact legacy closure name after LLVM renaming.
+# The authored ELF bodies only return zero. The unsuffixed twin calibrates
+# the decoded scope; C++, malformed and uppercase controls keep their paths.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/llvm.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/ordinary.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/cpp.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/uppercase.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/uppercase-bare.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/malformed.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/fixtures/rust-legacy-llvm/invalid-suffix.elf',
+    'read symbols',
+    'load function 0x401000',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust LLVM suffix and ordinary name share the decoded closure scope'
+count = 2
+regex = '^unsigned long std::rt::lang_start_internal::\{\{closure\}\}\(void\)'
+
+[[match]]
+name = 'Rust LLVM suffix leaves no escaped closure identifier'
+count = 0
+regex = '^unsigned long std::rt::lang_start_internal::_\$u7b\$'
+
+[[match]]
+name = 'Rust LLVM recognition preserves the ordinary C++ name'
+count = 1
+regex = '^unsigned long demo::foo\(void\)'
+
+[[match]]
+name = 'Rust LLVM recognition preserves existing uppercase hash treatment'
+count = 2
+regex = '^unsigned long demo::hABCDEF0123456789\(void\)'
+
+[[match]]
+name = 'Rust LLVM recognition preserves malformed legacy names'
+count = 1
+regex = '^unsigned long _ZN999bad17h0123456789abcdefE\.llvm\.9325873435131735662\(void\)'
+
+[[match]]
+name = 'Rust LLVM recognition preserves unsupported suffix handling'
+count = 1
+regex = '^unsigned long demo::keep\(void\)'
+
+[[match]]
+name = 'Rust LLVM name recovery preserves all authored bodies'
+count = 7
+regex = '^  return 0;'

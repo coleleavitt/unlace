@@ -34,7 +34,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 |---|---|
 | `Cargo.toml` + `crates/` | The engine (the cargo workspace is the repo root). `unlace-decomp` = the decompiler's driver and facade (`src/infra/`: scheduling, `decompile_drive`, the pass-hook composition; `src/p0_knowledge/kuna_option_dispatch.rs`; `phases.toml`), re-exporting `unlace-middle`, `unlace-lift`, `unlace-structure`, `unlace-bandb` and `unlace-emit`, so callers keep `unlace_decomp::` paths; `unlace-emit` = its emit band (`p9_emit/`: the printers, the output-language plane, final casts and rendering; same folder layout, builds on the four bands below it); `unlace-bandb` = its Band B (`p3_dataflow/`…`p6_variables/`: dataflow, calls, types, variables; same folder layout): the passes above the fixpoint's cyclic core, building on `unlace-bandb-core` = that core (the strongly connected modules of all four phases) and `unlace-bandb-base` = the Band B modules below or beside the core (same four folders, builds on the three bands below it; `notes/crate-architecture.md` step 10); `unlace-structure` = its structure band (`p7_regions/`, `p8_structure/`: regions and control-flow structuring; same folder layout, builds on `unlace-middle` and `unlace-lift`); `unlace-ctree` = the C syntax tree between structuring and printing (`docs/architecture/ctree.md`; builds on `unlace-middle`); `unlace-lift` = its lift band (`p1_partition/`, `p2_lift/`: partition, flow, switch recovery, call fixups; same folder layout, builds only on `unlace-middle`); `unlace-middle` = its IR band (`substrate/`: the IR incl. `typeop`/`variable`/`cover`/`dynamic`; `p0_knowledge/`: the option/catalog plane; `infra/`: `Architecture`, actions; `engine/`: the SLEIGH engine seam, injection, emulation; `spec/`: modelrules, prefersplit, segmentop; phase folders keep only fspec, heritage, merge, varmap, jump tables; the pass-hook table; `build.rs` generates the catalog tables from `unlace-decomp/phases.toml`); `unlace-analysis` = loader/analyzer tier (ELF/Mach-O, chained fixups, dyld cache, kernelcache, ObjC, Swift, DWARF, DEX, strings, function discovery); `unlace-sleigh`/`unlace-slacomp` = SLEIGH runtime/compiler (`slacomp`); `unlace-console` = `decomp_dbg`; `unlace-cli` = the `unlace` binary; `unlace-project` = the SQLite project file of user overrides (`unlace project`, `--project`; `docs/project.md`); `unlace-idb` = the IDA database (`.idb`/`.i64`) reader behind `unlace idb` and decompiling a database directly (a port of idb-rs's readers, no C dependencies); `unlace-ghidra`/`unlace-wasm` = Ghidra and browser front-ends; `unlace-harness` = the datatest runner, the parity gates (`tests/parity.rs`) and `decomp_test_dbg`; `unlace-base`/`unlace-num`/`unlace-lift-diff` = support; `unlace-decomp-dylib` = dev-only dylib of the engine behind the front-ends' `dynamic_linking` feature (off by default, excluded from the workspace; `docs/dev-setup.md`). |
 | `tests/datatests/` | Vendored XML regression corpus (675 assertions) vs `docs/baseline.json` — `cargo test -p unlace-harness --test parity datatests`. |
-| `tests/stages/` | kuna-owned issue testcases vs `docs/baseline-stages.json` — `cargo test -p unlace-harness --test parity stage_tests` (`tests/stages/README.md`). |
+| `tests/stages/` | kuna-owned issue testcases (TOML, older ones XML vs `docs/baseline-stages.json`) — `cargo test -p unlace-harness --test parity stage_tests` (`tests/stages/README.md`). |
 | `tests/golden/` | Differential golden vectors for the workspace suite. |
 | `specs/Ghidra/Processors/` | Vendored SLEIGH sources. Each `.sla` is compiled from its `.slaspec` on first use into the `.sla` cache (`$XDG_CACHE_HOME/unlace/sla`, `crates/unlace-slacomp/src/slacache.rs`); nothing to build by hand. |
 | `scripts/` + `tools/` | Python helpers + the improvement pipeline, RE-friction loop, decbench campaign drivers. |
@@ -71,9 +71,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   a `kuna_<slug>.rs` module in its owning phase folder (template:
   `p2_lift/kuna_loweredswitch.rs`). Adding or dropping an option also changes hard-coded
   catalog counts (`kuna_phases/tests.rs`, `tests/catalog_bytecompat.rs`,
-  `tests/fixtures/phase_catalog.json`, and in `tests/stages/kuna-catalog.xml` #15 = settables + 8
-  always, #7 when `change_kind = "structure-recovery"` (also add the name to its list), #8 when
-  `"opt-in-tool"`). Recount them from `phases.toml` after merging main, never add +1 to each side.
+  `tests/fixtures/phase_catalog.json`). Recount them from `phases.toml` after merging main, never
+  add +1 to each side. `tests/stages/kuna-catalog.toml` computes its bucket counts from the
+  compiled catalog at test time and needs no edit.
 - **The spec is live**: describe every feature/behavior change in prose in the owning
   `docs/spec/` chapter in the same change; run `python3 tools/check_spec.py`.
 - **Speed is a core principle**: a new default-ON must change 0/675 datatest assertions and
@@ -82,8 +82,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   `target/release/unlace catalog --markdown > docs/options.md`.
 - **Never re-pin `docs/baseline.json` to hide a regression** — fix the code or make it opt-in.
   Sanctioned re-pins (upstream sync / deliberate default change) say so in the message
-  (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity`). Adding a stage test re-records `docs/baseline-stages.json`
-  and bumps the corpus count in `unlace-base/src/xml.rs`.
+  (`UNLACE_BLESS=1 cargo test -p unlace-harness --test parity`). A new stage test is a TOML file
+  (`tests/stages/README.md`): its own baseline, so `docs/baseline-stages.json` (XML files only)
+  is not re-recorded; it still bumps the corpus count in `unlace-base/src/xml.rs`.
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
 - **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream kuna
@@ -160,9 +161,11 @@ it until the label is gone.
 | `docs/options.md` | The generated option catalog (tiers, symptoms, flip guidance). |
 | `docs/dev-setup.md` | Build recipe, local gates (`tools/hooks/`), git hooks, worktree layout. |
 | `docs/cli.md` | The full `unlace` CLI reference (flags, JSON schemas, watchdog, export). |
+| `docs/processor-tests.md` | Testing a new processor family: a row in `crates/unlace-cli/tests/processors.toml`, not a new `*_raw.rs`. |
 | `docs/project.md` | The project file: its SQLite schema, how `--project` applies it, concurrent writers. |
 | `docs/pr-bodies.md` | How to write a PR body (read before opening/editing any PR). |
 | `docs/prepr.md` | Optional pre-PR helpers: a call-arity diff over real MSVC binaries, and a diff lint. |
+| `docs/difffuzz.md` | Differential fuzzing of the lifter: SLEIGH p-code against Unicorn, per instruction. |
 | `docs/improvement-pipeline.md` | The autonomous improvement pipeline + feature-PR requirements. |
 | `docs/re-pipeline.md` | The RE-friction loop (agents solve crackmes, record gaps, self-merge). |
 | `docs/decbench-loop.md` | The decbench benchmark / improvement campaign. |
@@ -173,5 +176,6 @@ it until the label is gone.
 | `docs/missing-ghidra-analyses.md` | The `unlace-analysis` tier: analyzer gap vs Ghidra. |
 | `docs/ghidra-integration.md` | unlace as Ghidra's decompiler core (architecture + wire protocol). |
 | `docs/web-integration.md` | The WASM/browser front-end and the project site. |
+| `docs/sleigh-from-isa-specs.md` | Generating SLEIGH from Sail and other machine-readable ISA specs (`tools/gen_riscv_sail.py`) and checking it against LLVM and QEMU. |
 | `docs/history.md` | Rarely needed: the C++→Rust port, verification, vendored-tree provenance. |
 | `notes/apple-port-from-unlace.md`, `notes/proposal-dyld-cache.md` | Fork Apple-port plans. |

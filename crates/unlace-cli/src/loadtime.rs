@@ -32,7 +32,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         "ppc32picimports" => (unlace_decomp::kuna_ppc32picimports::ENV, Ppc32Pic),
         "ifuncfpret" => (kuna_ifuncfpret::IFUNCFPRET_ENV, DefaultOn),
         "ppcapu" => (kuna_ppcapu::PPCAPU_ENV, DefaultOff),
-        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOff),
+        "delphiabi" => (kuna_delphiabi::DELPHIABI_ENV, DefaultOn),
         "debuglink" => (kuna_debuglink::DEBUGLINK_ENV, DefaultOn),
         "kernelcache" => (kuna_kernelcache::KERNELCACHE_ENV, Kernelcache),
         "kernelcache-boot" => (
@@ -49,7 +49,7 @@ fn binding(name: &str) -> Option<(&'static str, Encoding)> {
         ),
         "dwarfenumtypedef" => (
             unlace_analysis::dwarf::kuna_dwarfenumtypedef::DWARFENUMTYPEDEF_ENV,
-            DefaultOff,
+            DefaultOn,
         ),
         "calltargettype" => (kuna_calltargettype::CALLTARGETTYPE_ENV, DefaultOn),
         "macho-arm64e" => (kuna_macho_arm64e::MACHO_ARM64E_ENV, DefaultOn),

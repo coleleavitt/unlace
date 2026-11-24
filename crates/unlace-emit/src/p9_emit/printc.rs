@@ -5091,13 +5091,26 @@ impl PrintC {
 
     /// (kuna `boolreturn`, `retternary`) Print the value of a `return` the C syntax tree made
     /// from an `if`: a `Branch` through the `ONLY_BRANCH` render of its condition block (it
-    /// parenthesizes itself), `Not` as `!`, an `Op` as the returned value of that `RETURN`
-    /// (a constant or a variable), and `?:`, `&&`, `||` between their operands.
+    /// parenthesizes itself), `Not` as `!` unless the branch it negates can print negated
+    /// itself (`return_not_flip`), an `Op` as the returned value of that `RETURN` (a
+    /// constant or a variable), and `?:`, `&&`, `||` between their operands.
     fn emit_return_value(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
         expr: crate::kuna_ctree::ExprId,
+    ) {
+        self.emit_return_expr(fd, arch, expr, true);
+    }
+
+    /// [`emit_return_value`](Self::emit_return_value) of `expr`; `value` is set when the
+    /// printed text is the returned value itself, which must stay `0` or `1`.
+    fn emit_return_expr(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        expr: crate::kuna_ctree::ExprId,
+        value: bool,
     ) {
         use crate::kuna_ctree::ExprKind;
         use crate::prettyprint::Emit;
@@ -5117,12 +5130,25 @@ impl PrintC {
                 self.context.pop_mod();
             }
             ExprKind::Not(inner) => {
+                if let Some(cbranch) = self.return_not_flip(fd, inner, value) {
+                    let flipped = self.flipped_branches.remove(&cbranch);
+                    if !flipped {
+                        self.flipped_branches.insert(cbranch);
+                    }
+                    self.emit_return_expr(fd, arch, inner, false);
+                    if flipped {
+                        self.flipped_branches.insert(cbranch);
+                    } else {
+                        self.flipped_branches.remove(&cbranch);
+                    }
+                    return;
+                }
                 self.emit.tag_op(
                     tokens::BOOLEAN_NOT.print1,
                     SyntaxHighlight::NoColor,
                     &MarkupRef::none(),
                 );
-                self.emit_return_value(fd, arch, inner);
+                self.emit_return_expr(fd, arch, inner, false);
             }
             ExprKind::Op(ret) => {
                 if let Some(vn) = fd.obank().get(ret).and_then(|o| o.get_in(1)) {
@@ -5130,11 +5156,11 @@ impl PrintC {
                 }
             }
             ExprKind::Ternary(cond, yes, no) => {
-                self.emit_return_value(fd, arch, cond);
+                self.emit_return_expr(fd, arch, cond, false);
                 token(&mut self.emit, "?");
-                self.emit_return_value(fd, arch, yes);
+                self.emit_return_expr(fd, arch, yes, value);
                 token(&mut self.emit, ":");
-                self.emit_return_value(fd, arch, no);
+                self.emit_return_expr(fd, arch, no, value);
             }
             ExprKind::And(left, right) | ExprKind::Or(left, right) => {
                 let and = matches!(kind, ExprKind::And(..));
@@ -5173,12 +5199,49 @@ impl PrintC {
                 _ => false,
             });
         if !wrap {
-            self.emit_return_value(fd, arch, expr);
+            self.emit_return_expr(fd, arch, expr, false);
             return;
         }
         let id = self.emit.open_paren(crate::printlanguage::OPEN_PAREN, 0);
-        self.emit_return_value(fd, arch, expr);
+        self.emit_return_expr(fd, arch, expr, false);
         self.emit.close_paren(crate::printlanguage::CLOSE_PAREN, id);
+    }
+
+    /// The `CBRANCH` a returned `Not` of `inner` can flip instead of printing `!`, so the
+    /// comparison prints its complement (`v1 <= v2` as `v2 < v1`, `!x` as `x`): `inner` is
+    /// a `Branch` of a single leaf ending in a `CBRANCH`. When the negation is the returned
+    /// `value` itself, only a comparison that still prints as one (not a `truthycond` bare
+    /// truth test) and is not a `!` qualifies.
+    fn return_not_flip(
+        &self,
+        fd: &Funcdata,
+        inner: crate::kuna_ctree::ExprId,
+        value: bool,
+    ) -> Option<OpId> {
+        let crate::kuna_ctree::ExprKind::Branch(block) = self.ctree.as_ref()?.expr(inner).kind
+        else {
+            return None;
+        };
+        let sb = fd.sblocks_ref();
+        if sb.block(block).get_type() != crate::block::BlockType::Copy {
+            return None;
+        }
+        let cbranch = fd.bb_op_tail(sb.block(block).get_copy()?).filter(|op| {
+            fd.obank()
+                .get(*op)
+                .is_some_and(|o| o.code() == OpCode::CPUI_CBRANCH)
+        })?;
+        if !value {
+            return Some(cbranch);
+        }
+        let in1 = fd.obank().get(cbranch)?.get_in(1)?;
+        let def = fd.vbank().get(in1)?.get_def()?;
+        let d = fd.obank().get(def)?;
+        (self.check_print_negation(fd, in1)
+            && d.is_bool_output()
+            && d.code() != OpCode::CPUI_BOOL_NEGATE
+            && self.truthy_other_operand(fd, def).is_none())
+        .then_some(cbranch)
     }
 
     /// (kuna `nestedand`) Print a condition of the C syntax tree in the `ONLY_BRANCH` state:
@@ -15942,7 +16005,11 @@ fn import_slot_name(fd: &Funcdata, mut vn: VarnodeId) -> Option<String> {
 /// The import whose address `op` reads when `vn` is the slot of a data import
 /// itself, not a pointer through it: the loader fills the slot with the import's
 /// address, so a read of the whole value it was loaded with, before or after a
-/// call, is `&import`. An operator C does not apply to a pointer (a mask, a
+/// call, is `&import`. On a Windows PE a function import's `externref` IAT slot
+/// read as a value (MSVC caching `[__imp_GetLastError]` in a register or frame
+/// slot before a loop) is the same `&import`; a call through the slot never
+/// reaches here, and a Mach-O function slot keeps its name (a weak import's
+/// test reads it). An operator C does not apply to a pointer (a mask, a
 /// shift, a multiply) keeps the slot name.
 fn import_slot_address(
     fd: &Funcdata,
@@ -15950,17 +16017,15 @@ fn import_slot_address(
     vn: VarnodeId,
     op: OpId,
 ) -> Option<String> {
-    if arch.data_import_slots.is_empty() {
-        return None;
-    }
     let v = fd.vbank().get(vn)?;
     let slot = v.get_addr();
     let space = slot.get_space()?;
     let reader = fd.obank().get(op)?;
-    if !(v.is_persist()
-        && arch
-            .data_import_slots
-            .contains(&(space.get_index(), slot.get_offset())))
+    let data_slot = arch
+        .data_import_slots
+        .contains(&(space.get_index(), slot.get_offset()));
+    let pe_code_slot = arch.image_windows_user && v.is_external_ref();
+    if !(v.is_persist() && (data_slot || pe_code_slot))
         || v.get_size() as u32 != space.get_addr_size()
         || reader.get_out() == Some(vn)
         || integer_only_operator(reader.code())

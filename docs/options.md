@@ -48,9 +48,10 @@ Three tiers:
 | the same arithmetic expression on the same values is computed twice into two temporaries | [`latecse`](#latecse----on--off-default-off) |
 | v1 = a + b * 4; ... v2 = a + b * 4; where one would do | [`latecse`](#latecse----on--off-default-off) |
 | duplicated address arithmetic in both arms of an if | [`latecse`](#latecse----on--off-default-off) |
-| flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet | [`phithread`](#phithread----on--off-default-off) |
-| a variable set only to constants is tested immediately where the paths join | [`phithread`](#phithread----on--off-default-off) |
-| a small block that only assigns a constant is shared by several paths before a test of that value | [`phithread`](#phithread----on--off-default-off) |
+| flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a variable set only to constants is tested immediately where the paths join | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a small block that only assigns a constant is shared by several paths before a test of that value | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a value is tested again right after a branch on it already decided the second test on one path, if (x == 3) { .. } if (x > 0) | [`phithread`](#phithread----on--off--ranges-default-off) |
 | a do/while that decrements a 0xffffffffffffffff counter while stepping a char pointer until the byte read is zero | [`strlenscan`](#strlenscan----on--off-default-on) |
 | if (!v3) break; v3 -= 1; inside a loop that reads one byte per step | [`strlenscan`](#strlenscan----on--off-default-on) |
 | ~v3 - 1 or ~v3 - 5 where the source computes a string length | [`strlenscan`](#strlenscan----on--off-default-on) |
@@ -268,6 +269,9 @@ Three tiers:
 | an inner this-only call takes an argument pushed for the outer virtual call after it | [`calleeargs`](#calleeargs----on--off-default-on-destructive-opt-in) |
 | the outer call after an inner call is missing its last stack argument | [`calleeargs`](#calleeargs----on--off-default-on-destructive-opt-in) |
 | an indirect or import call takes a trailing argument that is a local of its caller (the /GS cookie, a zero-initialised buffer) | [`calleeargs`](#calleeargs----on--off-default-on-destructive-opt-in) |
+| a fastcall or custom-convention call takes a trailing stack argument that the next thiscall in the same expression chain pops | [`calleeargsmsvc`](#calleeargsmsvc----on--off-default-off) |
+| a later thiscall in an operator<< chain prints with no argument | [`calleeargsmsvc`](#calleeargsmsvc----on--off-default-off) |
+| an MSVC function with an EH frame or a /GS cookie gives its callers no stack-argument bound | [`calleeargsmsvc`](#calleeargsmsvc----on--off-default-off) |
 | a FILE * or char * the caller holds becomes long at the callee's parameter | [`protoorder`](#protoorder----off--types--cycles--lock-default-cycles) |
 | a function that only hands a string on to a recursive function (quotearg_buffer_restyled, a tree walk, a pair of functions calling each other) keeps an integer parameter | [`protoorder`](#protoorder----off--types--cycles--lock-default-cycles) |
 | an argument is typed at one call site of a callee and not at another | [`protoorder`](#protoorder----off--types--cycles--lock-default-cycles) |
@@ -498,6 +502,9 @@ Three tiers:
 |  y) that hide a plain multiplication | [`mba`](#mba----on--off-default-off) |
 | an or of (~a & b) and (a & ~b) instead of a ^ b | [`mba`](#mba----on--off-default-off) |
 | (x ^ 0x3039) + (x & 0x3039) * 2 instead of x + 0x3039 | [`mba`](#mba----on--off-default-off) |
+| obfuscated arithmetic that option mba leaves unsimplified | [`egraph`](#egraph----on--off-default-off) |
+| one mba identity applied to the result of another | [`egraph`](#egraph----on--off-default-off) |
+| ollvm substitution chains such as (a ^ ~b) & a instead of a & b | [`egraph`](#egraph----on--off-default-off) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -828,6 +835,9 @@ Three tiers:
 | delphi class names missing and vmts left as unnamed data | [`delphi`](#delphi----on--off-default-off) |
 | delphi virtual methods and event handlers stay sub_<addr> | [`delphi`](#delphi----on--off-default-off) |
 | a delphi @FinalizeRecord or @DynArrayClear call passes an unnamed dat_<addr> type info | [`delphi`](#delphi----on--off-default-off) |
+| a delphi method reads eax/edx/ecx as unaffected registers and has no parameters | [`delphiabi`](#delphiabi----on--off-default-on) |
+| calls in a delphi program print with no arguments | [`delphiabi`](#delphiabi----on--off-default-on) |
+| delphi Self missing from every method | [`delphiabi`](#delphiabi----on--off-default-on) |
 | an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | a call to a fixed 0x4000xxxx address in an Espressif image has no name | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | sub_40000xxx callees in an ESP32-C3 image that have no body | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
@@ -1044,13 +1054,13 @@ Three tiers:
 | a global described by DWARF as a struct renders as raw offsets off its address | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a DWARF-typed pointer global is a long or undefined8 | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
 | a -g binary's globals have names but not types | [`dwarfglobaltypes`](#dwarfglobaltypes----on--off-default-off) |
-| a call to a library function passes 1 where the header names an enum member | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
-| an import declared in the binary's DWARF still has an inferred prototype | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
-| a call to an import drops an argument or passes CONCAT44 garbage in a -g binary | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
-| enum constants print as numbers in calls to a shared library | [`dwarfdecls`](#dwarfdecls----on--off-default-off) |
-| a parameter typed by a typedef enum prints numbers instead of members in a -g binary | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
-| an anonymous enum behind a typedef is an int | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
-| constants passed to a typedef'd enum parameter are not named | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-off) |
+| a call to a library function passes 1 where the header names an enum member | [`dwarfdecls`](#dwarfdecls----on--off-default-on) |
+| an import declared in the binary's DWARF still has an inferred prototype | [`dwarfdecls`](#dwarfdecls----on--off-default-on) |
+| a call to an import drops an argument or passes CONCAT44 garbage in a -g binary | [`dwarfdecls`](#dwarfdecls----on--off-default-on) |
+| enum constants print as numbers in calls to a shared library | [`dwarfdecls`](#dwarfdecls----on--off-default-on) |
+| a parameter typed by a typedef enum prints numbers instead of members in a -g binary | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-on) |
+| an anonymous enum behind a typedef is an int | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-on) |
+| constants passed to a typedef'd enum parameter are not named | [`dwarfenumtypedef`](#dwarfenumtypedef----on--off-default-on) |
 | a __thread variable reads as *(int *)(v1 + -0x10) with v1 an fs_offset | [`tlsnames`](#tlsnames----on--off-default-on) |
 | thread-local variables of an executable have no names although .symtab has STT_TLS symbols | [`tlsnames`](#tlsnames----on--off-default-on) |
 | the TLS block is not modelled | [`tlsnames`](#tlsnames----on--off-default-on) |
@@ -1426,13 +1436,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · kuna · transform · kuna-latecse
 - **Example:** `option latecse on`
 
-### `phithread` -- on | off, default `off`
+### `phithread` -- on | off | ranges, default `off`
 
-- **Symptoms:** flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet; a variable set only to constants is tested immediately where the paths join; a small block that only assigns a constant is shared by several paths before a test of that value.
-- **What it does:** Resolve a join that only tests a value its arms set to constants, per path. A shared arm that sets a register (`flag = 1;`) and flows into a join that immediately branches on it makes the join's MULTIEQUAL collect unrelated constants into one variable, printed as `flag = 1; ... flag = 0; ... if (flag != 0)`. ActionPhiThread (kuna_phithread.rs, after ActionConditionalExe) takes a join block ending in a CBRANCH whose condition is computed only from its MULTIEQUALs and constants and whose values are read only inside it; for each in edge whose MULTIEQUAL inputs decide the branch it moves the edge past the join to the successor the branch would take, fixing both blocks' MULTIEQUALs. An arm holding only MULTIEQUALs, COPYs and a BRANCH whose value into the join comes from a MULTIEQUAL with a constant input is first split per such predecessor (Funcdata::node_split_through), as Hex-Rays does with BREAK_PHI_ARM_MERGES, so each copy passes a constant. The join keeps at least one in edge; at most 32 edits per function. OFF, the default, is upstream byte-for-byte.
+- **Symptoms:** flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet; a variable set only to constants is tested immediately where the paths join; a small block that only assigns a constant is shared by several paths before a test of that value; a value is tested again right after a branch on it already decided the second test on one path, if (x == 3) { .. } if (x > 0).
+- **What it does:** Resolve a join that only tests a value its arms set to constants, per path. A shared arm that sets a register (`flag = 1;`) and flows into a join that immediately branches on it makes the join's MULTIEQUAL collect unrelated constants into one variable, printed as `flag = 1; ... flag = 0; ... if (flag != 0)`. ActionPhiThread (kuna_phithread.rs, after ActionConditionalExe) takes a join block ending in a CBRANCH whose condition is computed only from its MULTIEQUALs and constants and whose values are read only inside it; for each in edge whose MULTIEQUAL inputs decide the branch it moves the edge past the join to the successor the branch would take, fixing both blocks' MULTIEQUALs. An arm holding only MULTIEQUALs, COPYs and a BRANCH whose value into the join comes from a MULTIEQUAL with a constant input is first split per such predecessor (Funcdata::node_split_through), as Hex-Rays does with BREAK_PHI_ARM_MERGES, so each copy passes a constant. With `ranges`, when the edge's inputs are not constants, a join whose branch compares one value against a constant is also decided along the edge when the value's range there, from a conditional branch on it ending the predecessor or a single-predecessor chain above it, lies inside one outcome (Hex-Rays' BACKPROP_CC, value-range jump threading). The join keeps at least one in edge; at most 32 edits per function. OFF, the default, is upstream byte-for-byte.
 - **When to flip:** OFF by default: it changes control flow, so it moves structuring and can duplicate small arms. Turn it ON when a function sets a flag variable to constants on several paths and then branches on it straight away (state flags, found/not-found results, error codes tested at a join), or when that flag variable merges unrelated values into one name. Not yet measured on a corpus; a default change needs the datatests, the speed budget and the DecBench variable-match and GED numbers.
 - **Where / provenance:** P3/simplification-quiescence · ida · transform · unlace-20
-- **Example:** `option phithread on`
+- **Example:** `option phithread ranges`
 
 ### `strlenscan` -- on | off, default `on`
 
@@ -1962,6 +1972,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P4/active-input-trial-scoring · ghidra · new-analysis · GH-1562
 - **Example:** `option calleeargs off`
 
+### `calleeargsmsvc` -- on | off, default `off`
+
+- **Symptoms:** a fastcall or custom-convention call takes a trailing stack argument that the next thiscall in the same expression chain pops; a later thiscall in an operator<< chain prints with no argument; an MSVC function with an EH frame or a /GS cookie gives its callers no stack-argument bound.
+- **What it does:** On x86-32 Windows, with calleeargs on, let the callee walk that bounds a direct call's stack arguments read through the MSVC frame boilerplate instead of stating nothing. Two things in every MSVC C++ function with an exception frame or a /GS cookie made the walk give up: the SEH registration stores the address of a local record into fs:[0] (mov fs:[0],eax), which is a stack address stored through a pointer the walk cannot place, and the /GS prologue scrambles the cookie with the frame pointer (xor eax,ebp) and stores it, which is a stack-derived value the walk cannot place. With this on, a local address stored through FS is not an escape (only the exception dispatcher reads the TEB exception list), and an INT_XOR of a stack address with a value that is neither a stack address nor a constant is data. The callee's extent is then stated, so a call to a register-only (fastcall or MSVC custom-convention) callee no longer takes the pushes the compiler made early for a later call: in std::ostream chains `stream << text << value` the value went to the first operator<< and the operator that pops it printed without it.
+- **When to flip:** Off by default. Turn it on for MSVC x86-32 C++ images where a call to a __fastcall or custom-convention helper (std::operator<< taking the stream in ECX and the text in EDX) prints with a trailing argument that a later __thiscall call in the same chain pops, or where every EH-framed or /GS-protected callee keeps the upstream stack-argument test.
+- **Where / provenance:** P4/active-input-trial-scoring · kuna · new-analysis · holley-ltcgchain
+- **Example:** `--option calleeargsmsvc on`
+
 ### `protoorder` -- off | types | cycles | lock, default `cycles`
 
 - **Symptoms:** a FILE * or char * the caller holds becomes long at the callee's parameter; a function that only hands a string on to a recursive function (quotearg_buffer_restyled, a tree walk, a pair of functions calling each other) keeps an integer parameter; an argument is typed at one call site of a callee and not at another; decompiling one function alone gives it a prototype the whole-binary output does not use at its call sites; the same sub_ address is called with one argument at one site and three at another in the same function.
@@ -2433,6 +2451,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default. Turn it on for obfuscated code (Tigress, OLLVM substitution) whose arithmetic reads as xor/and/or soup, such as `(a0 ^ a1) + (a0 & a1) * 2`.
 - **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · ida95-45
 - **Example:** `--option mba on`
+
+### `egraph` -- on | off, default `off`
+
+- **Symptoms:** obfuscated arithmetic that option mba leaves unsimplified; one mba identity applied to the result of another; ollvm substitution chains such as (a ^ ~b) & a instead of a & b.
+- **What it does:** Simplify mixed boolean-arithmetic (MBA) trees by equality saturation. RuleEgraphSimplify collects the tree under an arithmetic or bitwise root the way the mba option's nonlinear path does (arithmetic under bitwise ops, the ops of several readers inlined, constants kept as numbers; at most 6 leaves and 48 nodes) when it mixes bitwise and arithmetic ops and no op of the set is its one reader, and adds it to an e-graph (the egg crate). Each subterm that the mba option's linear or polynomial solver folds is merged with its folded form, and the root with the mba option's proven nonlinear candidate. The e-graph is then saturated with ring and boolean-algebra identities (commutativity, associativity, distribution, De Morgan, ~a = -a - 1, absorption) and the MBA identities obfuscators apply (`(a ^ b) + 2*(a & b)` is `a + b`, `(a | b) - (a & b)` is `a ^ b`, `(a & ~b) - (~a & b)` is `a - b`), each an identity modulo 2^w at every width, with constant folding at the root's width, up to 4000 e-nodes or 12 iterations with deterministic hashing. The expression with the fewest ops is extracted; it replaces the tree when it has fewer ops than the tree keeps for itself, agrees on 64 random full-width inputs and on every input at a width small enough for 2^16 combinations, and is not refuted by the mba option's bit-serial proof (run for up to 3 leaves, where it proves equality at the full width). So one substitution applied to the result of another, `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, becomes `(x | y) + z`.
+- **When to flip:** Off by default. Turn it on for obfuscated code where option mba leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree. It costs one saturation per such tree.
+- **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-egraph
+- **Example:** `--option egraph on`
 
 ### `noreturn_disc` -- on | off, default `on`
 
@@ -3182,6 +3208,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-455
 - **Example:** `--option delphi on`
 
+### `delphiabi` -- on | off, default `on`
+
+- **Symptoms:** a delphi method reads eax/edx/ecx as unaffected registers and has no parameters; calls in a delphi program print with no arguments; delphi Self missing from every method.
+- **What it does:** On a 32-bit Delphi PE, compose the `:borlanddelphi` compiler field in the SLEIGH language id, so the image is read under the vendored `x86delphi.cspec` whose default model is Delphi's `register` convention: the first three arguments in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the return. Under the `windows` model those registers are not inputs, so a method loses `Self` and its first arguments and every call through a VMT slot prints with no arguments (`(**(code **)(*(int *)(v1 + 0x43c) + 0x130))()`); under the Delphi model the same body reads `Self` as a parameter and passes it on (`(**(code **)(**(int **)(a0 + 0x43c) + 0x130))(*(int **)(a0 + 0x43c))`). A load-time gate carried as the `KUNA_DELPHIABI` environment variable (the `goabi` pattern: the id is composed inside `load file`). It fires only on an I386 PE that holds the `TObject` class name and at least two Delphi VMTs (the `delphi` pass's own detection); every other image composes the same id as before. Each Win32 import, at its IAT slot and its jump thunk, stays `__stdcall` (a Delphi package export, `@`-mangled, takes the register model, a C runtime import `__cdecl`). The image's own routines all take the model, so one written with another convention (a `stdcall` Windows callback, a `cdecl` helper) is read with register arguments.
+- **When to flip:** On by default: a 32-bit Delphi or C++Builder program's methods get `Self` and their register arguments, and virtual and event-handler calls get their arguments (two Inno Setup stubs: calls printed with no arguments 621 -> 112 and 2245 -> 917). Flip off for a C++Builder image whose code is mostly `cdecl`/`stdcall`, or to compare with the Windows reading. Inert on any other image.
+- **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · unlace-455
+- **Example:** `--option delphiabi on`
+
 ### `esprom` -- auto | off | esp32 | esp32s2 | esp32s3 | esp32c2 | esp32c3 | esp32c6 | esp32h2 | esp8266, default `auto`
 
 - **Symptoms:** an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy; a call to a fixed 0x4000xxxx address in an Espressif image has no name; sub_40000xxx callees in an ESP32-C3 image that have no body; a peripheral register poll loop in ESP firmware folds to while (true); ets_printf, esp_rom_delay_us or Cache_Read_Enable missing from an ESP image's output.
@@ -3606,21 +3640,21 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida95-59
 - **Example:** `option dwarfglobaltypes off`
 
-### `dwarfdecls` -- on | off, default `off`
+### `dwarfdecls` -- on | off, default `on`
 
 - **Symptoms:** a call to a library function passes 1 where the header names an enum member; an import declared in the binary's DWARF still has an inferred prototype; a call to an import drops an argument or passes CONCAT44 garbage in a -g binary; enum constants print as numbers in calls to a shared library.
 - **What it does:** Type the calls to an import by the DWARF declaration of it. A unit that calls a function another module defines carries a declaration-only DW_TAG_subprogram (DW_AT_declaration, no DW_AT_low_pc) with the return and parameter types its header gave the compiler; the DWARF pass skipped every such DIE, so an import no library signature knows was called with untyped arguments and an inferred arity (gnutls_bye(v3,1), gnutls_deinit() with its argument lost). On, a declaration is kept when its name (the linkage name if it has one) is an ELF import with PLT entries, the file has no DWARF definition of it, it is prototyped (a K&R declaration says nothing about parameters), and every unit that declares it agrees on the return type, the parameter types and the variadic slot; it is built with the definition arm's type mapper and placed at each PLT entry of the import. The commit adds it only where no other prototype fact names the import or sits at that entry, so a libc or Win32 signature, a type library and a DWARF definition keep precedence. An enum-typed parameter then prints its constant arguments as members (GNUTLS_SHUT_WR), the Hex-Rays AUTOCONV_TO_ENUM case; a pointer parameter types the object passed. ELF only (the import map is the PLT); inert on an image without DWARF.
-- **When to flip:** Off by default while it is measured: it changes the output of every -g ELF that calls a library no signature pass knows. Turn on to read such a binary with its library calls typed as the headers declared them. Leave off to see what the binary alone gives, or when a header the program was built against does not match the library it loads.
+- **When to flip:** ON by default. Measured on the 222 DecBench O2-noinline ELFs with DWARF (74,665 functions): 0 errors, no time cost (809 s against 844 s off), 4,578 functions changed in 137 binaries, untyped (void) import prototypes 11,199 -> 8,272. Turn off to see what the binary alone gives, or when a header the program was built against does not match the library it loads.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
-- **Example:** `option dwarfdecls on`
+- **Example:** `option dwarfdecls off`
 
-### `dwarfenumtypedef` -- on | off, default `off`
+### `dwarfenumtypedef` -- on | off, default `on`
 
 - **Symptoms:** a parameter typed by a typedef enum prints numbers instead of members in a -g binary; an anonymous enum behind a typedef is an int; constants passed to a typedef'd enum parameter are not named.
 - **What it does:** Name an anonymous DWARF enumeration after the typedef it is reached through. C headers usually write `typedef enum { A, B } name_t;`, so the DW_TAG_enumeration_type has no DW_AT_name and only the typedef names it; the enum arm of the DWARF type mapper built a real enum only for a named DIE and flattened an anonymous one to its underlying integer, so a parameter of type gnutls_close_request_t took `1` where the header has GNUTLS_SHUT_WR, in a DWARF definition's prototype and in a dwarfdecls declaration alike. On, an anonymous enumeration reached through a typedef (the innermost typedef of the qualifier chain, the same alias an anonymous struct or union already takes) is interned as an enum of that name with its members; a name another type already holds keeps the plain integer, as for a named enum. A load-time env bridge (KUNA_DWARFENUMTYPEDEF): set it before the image is loaded.
-- **When to flip:** Off by default while it is measured: it changes how constants print wherever a -g binary uses a typedef'd anonymous enum (parameters, locals, globals, struct fields). Turn on, with dwarfdecls for library calls, to read those constants as the header's members. Leave off to see the plain integers.
+- **When to flip:** ON by default. Measured on the 222 DecBench O2-noinline ELFs with DWARF (74,665 functions): 0 errors, no time cost (812 s against 844 s off), 2,730 functions changed in 72 binaries, 4,904 constants printed as the header's enum members. Turn off to see the plain integers.
 - **Where / provenance:** P1/external-refinement · ida · analysis-enablement · ida-hexrays-rules-6
-- **Example:** `option dwarfenumtypedef on`
+- **Example:** `option dwarfenumtypedef off`
 
 ### `tlsnames` -- on | off, default `on`
 
@@ -3941,7 +3975,7 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 ### `importdata` -- on | off, default `on`
 
 - **Symptoms:** a data import read through __got renders *dat_<slot>; a witness table, type metadata or class object passed to a call prints as dat_<slot>; __stack_chk_guard shows as a dereferenced dat_ address; imported globals are anonymous even though their GOT slot is named; an ELF shared object reads stdout or environ as *dat_<slot> or *stdout_ptr.
-- **What it does:** Render a data read through a loader-marked import slot as the import itself. A data import (Mach-O __got / __auth_got, a dyld-cache coalesced GOT slot, a PE IAT entry) is reached through a slot the dynamic loader fills with the import's address: `ldr x8,[slot]; ldr w8,[x8]`. The slot is already named for the import and painted `externref` (peimportcall), which is what lets ActionDeindirect resolve a CALL through it to the import; a DATA read is not a call, so it printed as a dereference of the anonymous slot, `*dat_<slot>`. On: a LOAD whose pointer is such a slot renders as the import (`imported_counter`, `__stack_chk_guard`), resolved exactly as ActionDeindirect resolves a call through the same slot (query_function on the externref persist address). Calls are unaffected (deindirect consumes them first), and a read through anything that is not an externref import slot is untouched. Needs the slot painted externref: on PE/Mach-O that is peimportcall, and on ELF the elfgotimports pass, committed under this same gate, which names each GLOB_DAT GOT slot of an undefined symbol (x86-64, AArch64, i386, ARM) for its import and paints it externref. On ELF that painting also lets ActionDeindirect bind a call through such a slot (`(*dat_e9f30)()` becomes `__cxa_finalize()`), the binding peimportcall gives PE and Mach-O. A GLOB_DAT slot of a symbol the image defines is never painted: dynrelocs already folds it to the object (`exported_value`, `&exported_value`). The slot's own value, used without a dereference (a Swift witness table or type metadata passed to the runtime, an Objective-C class object passed as a receiver), is the import's address: on, for a Mach-O slot machodataslots marks as a data import, a read of the value the loader put in the slot, carried only across calls and joins, renders `&<import>` (`swift_getWitnessTable(&<SwiftUI.ModifiedContent<A,B>:SwiftUI.View>.protocol_conformance_descriptor,...)`, `objc_msgSend$numberWithLongLong:(&OBJC_CLASS_$_NSNumber,...)`) instead of `dat_<slot>`; a value the function itself stored into the slot keeps the slot name.
+- **What it does:** Render a data read through a loader-marked import slot as the import itself. A data import (Mach-O __got / __auth_got, a dyld-cache coalesced GOT slot, a PE IAT entry) is reached through a slot the dynamic loader fills with the import's address: `ldr x8,[slot]; ldr w8,[x8]`. The slot is already named for the import and painted `externref` (peimportcall), which is what lets ActionDeindirect resolve a CALL through it to the import; a DATA read is not a call, so it printed as a dereference of the anonymous slot, `*dat_<slot>`. On: a LOAD whose pointer is such a slot renders as the import (`imported_counter`, `__stack_chk_guard`), resolved exactly as ActionDeindirect resolves a call through the same slot (query_function on the externref persist address). Calls are unaffected (deindirect consumes them first), and a read through anything that is not an externref import slot is untouched. Needs the slot painted externref: on PE/Mach-O that is peimportcall, and on ELF the elfgotimports pass, committed under this same gate, which names each GLOB_DAT GOT slot of an undefined symbol (x86-64, AArch64, i386, ARM) for its import and paints it externref. On ELF that painting also lets ActionDeindirect bind a call through such a slot (`(*dat_e9f30)()` becomes `__cxa_finalize()`), the binding peimportcall gives PE and Mach-O. A GLOB_DAT slot of a symbol the image defines is never painted: dynrelocs already folds it to the object (`exported_value`, `&exported_value`). The slot's own value, used without a dereference (a Swift witness table or type metadata passed to the runtime, an Objective-C class object passed as a receiver), is the import's address: on, for a Mach-O slot machodataslots marks as a data import, a read of the value the loader put in the slot, carried only across calls and joins, renders `&<import>` (`swift_getWitnessTable(&<SwiftUI.ModifiedContent<A,B>:SwiftUI.View>.protocol_conformance_descriptor,...)`, `objc_msgSend$numberWithLongLong:(&OBJC_CLASS_$_NSNumber,...)`) instead of `dat_<slot>`; a value the function itself stored into the slot keeps the slot name. On a Windows PE a function import's IAT slot read as a value is the same: MSVC caches an import's address in a register or frame slot before a loop (`mov eax,[__imp_GetTickCount]; mov [ebp-4],eax; ... call [ebp-4]`), and the read renders `&GetTickCount` instead of `dat_<slot>`.
 - **When to flip:** On by default: a data read through a GOT/IAT import slot names the import -- the stack-protector guard, XPC type objects, global counters -- so `if (*dat_1041cc6c8 == ...)` reads `if (__stack_chk_guard == ...)`, and on an ELF shared object `return *dat_3fe8;` reads `return imported_counter;` and `*stdout_ptr` reads `stdout`. Flip off to keep the slot dereference `*dat_<slot>`, for example to see which slot a read goes through or to diff against Ghidra output.
 - **Where / provenance:** P9/naming-policy · kuna · presentation-default · kuna-importdata
 - **Example:** `option importdata off`

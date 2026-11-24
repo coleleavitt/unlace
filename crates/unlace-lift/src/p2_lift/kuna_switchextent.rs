@@ -467,6 +467,10 @@ impl Fold<'_> {
                     Some(Val::Entry { width: 1 | 2, .. }),
                     Some(Val::Const(base) | Val::Indexed { base, .. }),
                 ) => Some(Val::Indexed { base, cases: None }),
+                // An unknown register plus a small immediate is a field or
+                // displacement (`movzbl 1(%rdi)`), not a table and its index.
+                (Some(Val::Const(_)), None) if small_imm(vars.first()) => None,
+                (None, Some(Val::Const(_))) if small_imm(vars.get(1)) => None,
                 (Some(Val::Const(base) | Val::Indexed { base, .. }), None)
                 | (None, Some(Val::Const(base) | Val::Indexed { base, .. })) => {
                     Some(Val::Indexed { base, cases: None })
@@ -530,6 +534,16 @@ impl Fold<'_> {
     }
 }
 
+/// Whether `vn` is an immediate below 64 KiB: an offset, never a table address.
+fn small_imm(vn: Option<&VarnodeData>) -> bool {
+    vn.is_some_and(|vn| {
+        vn.space
+            .as_ref()
+            .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT)
+            && vn.offset < 0x1_0000
+    })
+}
+
 fn key_of(vn: &VarnodeData) -> Option<Key> {
     let space = vn.space.as_ref()?;
     match space.get_type() {
@@ -577,7 +591,7 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
         return None;
     }
     let (a, b) = (add.get_in(0)?, add.get_in(1)?);
-    let (table, scaled) = match (constant(fd, a), constant(fd, b)) {
+    let (table, scaled) = match (base_constant(fd, a), base_constant(fd, b)) {
         (Some(t), None) => (t, b),
         (None, Some(t)) => (t, a),
         _ => return None,
@@ -610,6 +624,42 @@ pub fn table_read(fd: &Funcdata, load: OpId) -> Option<(u64, u64, VarnodeId)> {
 fn constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
     let v = fd.vbank().get(vn)?;
     v.is_constant().then(|| v.get_offset())
+}
+
+/// A constant, also through copies and through a loop-carried register: a
+/// MULTIEQUAL each of whose inputs is that constant or the MULTIEQUAL itself
+/// (gnulib's regcomp keeps its table base in `%rbx` across the loop).
+fn base_constant(fd: &Funcdata, vn: VarnodeId) -> Option<u64> {
+    let mut seen: Vec<VarnodeId> = Vec::new();
+    let mut work = vec![vn];
+    let mut value = None;
+    while let Some(at) = work.pop() {
+        if seen.contains(&at) {
+            continue;
+        }
+        if seen.len() >= 16 {
+            return None;
+        }
+        seen.push(at);
+        if let Some(c) = constant(fd, at) {
+            if value.is_some_and(|v| v != c) {
+                return None;
+            }
+            value = Some(c);
+            continue;
+        }
+        let op = fd.obank().get(fd.vbank().get(at)?.get_def()?)?;
+        match op.code() {
+            OpCode::CPUI_COPY => work.push(op.get_in(0)?),
+            OpCode::CPUI_MULTIEQUAL => {
+                for i in 0..op.num_input() {
+                    work.push(op.get_in(i)?);
+                }
+            }
+            _ => return None,
+        }
+    }
+    value
 }
 
 /// Fill this pass's hooks ([`crate::kuna_passhooks`]).

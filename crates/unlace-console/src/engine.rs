@@ -5117,39 +5117,15 @@ pub(crate) fn bootstrap_xml_image(
     Ok(prog)
 }
 
-/// Environment bridge for the CLI's explicit ARM decode-mode override.
-pub const ARM_ISA_ENV: &str = "UNLACE_ARM_ISA";
+/// The ARM/Thumb decode mode is [`ArmIsa`], and its environment variable
+/// [`ARM_ISA_ENV`] is read once into the load options.
+pub use unlace_decomp::loadoptions::{ARM_ISA_ENV, ArmIsa};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArmIsa {
-    Arm,
-    Thumb,
-}
-
-impl ArmIsa {
-    pub fn parse(value: &str) -> Result<Option<Self>, String> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "" | "auto" => Ok(None),
-            "arm" => Ok(Some(Self::Arm)),
-            "thumb" => Ok(Some(Self::Thumb)),
-            _ => Err(format!(
-                "invalid --isa value {value:?} (expected auto, arm, or thumb)"
-            )),
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Arm => "arm",
-            Self::Thumb => "thumb",
-        }
-    }
-
-    fn context_value(self) -> u32 {
-        match self {
-            Self::Arm => 0,
-            Self::Thumb => 1,
-        }
+/// The `TMode` context value a decode mode paints: 0 for ARM, 1 for Thumb.
+fn arm_isa_context_value(isa: ArmIsa) -> u32 {
+    match isa {
+        ArmIsa::Arm => 0,
+        ArmIsa::Thumb => 1,
     }
 }
 
@@ -5188,7 +5164,7 @@ fn input_isa_paints_for_ranges(
                 addr,
                 end: Some(end),
                 var: "TMode",
-                value: isa.context_value(),
+                value: arm_isa_context_value(isa),
             })
         })
         .collect())
@@ -6025,7 +6001,6 @@ pub fn bootstrap_from_image(
 ) -> UnlaceResult<ConsoleProgram> {
     Bootstrap::new(spec_roots)
         .target(target)
-        .arm_isa(arm_isa_from_env()?)
         .options(&LoadOptions::from_env_for_load())
         .image(path)
 }
@@ -6393,17 +6368,15 @@ pub(crate) fn bootstrap_te_bytes(
 /// `getTarget()` path takes precedence over the loader's arch type.
 ///
 /// The load-time options are the environment's, read once at the load
-/// ([`LoadOptions::from_env_for_load`]); the ARM decode mode is [`ARM_ISA_ENV`]'s.
+/// ([`LoadOptions::from_env_for_load`]), the ARM decode mode among them.
 pub fn bootstrap_from_object(
     path: &str,
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    let isa = arm_isa_from_env()?;
     let options = LoadOptions::from_env_for_load();
     Bootstrap::new(spec_roots)
         .target(target)
-        .arm_isa(isa)
         .options(&options)
         .object(path)
 }
@@ -9573,14 +9546,8 @@ pub fn bootstrap_from_file(
     target: &str,
     spec_roots: &[String],
 ) -> UnlaceResult<ConsoleProgram> {
-    // An unreadable ARM ISA variable keeps the environment-mode load, which
-    // reports it only for an input that reads it.
-    let Ok(isa) = arm_isa_from_env() else {
-        return Bootstrap::new(spec_roots).target(target).file(path);
-    };
     Bootstrap::new(spec_roots)
         .target(target)
-        .arm_isa(isa)
         .options(&LoadOptions::from_env_for_load())
         .file(path)
 }
@@ -9660,17 +9627,6 @@ pub(crate) fn classify_file(path: &str) -> UnlaceResult<FileInput> {
         return Err(UnlaceError::lowlevel(RAW_IMAGE_INPUT_HINT));
     }
     Ok(FileInput::Xml(root))
-}
-
-/// The ARM decode mode named by [`ARM_ISA_ENV`], for the entry points that
-/// take none.
-pub fn arm_isa_from_env() -> UnlaceResult<Option<ArmIsa>> {
-    unlace_base::env::var(ARM_ISA_ENV)
-        .ok()
-        .map(|value| ArmIsa::parse(&value))
-        .transpose()
-        .map_err(UnlaceError::lowlevel)
-        .map(Option::flatten)
 }
 
 /// Iterate the opened [`LoadImageXml`]'s symbol records (name → address) into a

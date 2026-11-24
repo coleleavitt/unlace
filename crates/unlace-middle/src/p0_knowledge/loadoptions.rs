@@ -64,6 +64,36 @@ pub const LOAD_OBJC_ENV: &str = "UNLACE_LOAD_OBJC";
 pub const LOAD_STRINGS_ENV: &str = "UNLACE_LOAD_STRINGS";
 /// `off` copies a thin Mach-O into memory instead of mapping it.
 pub const LOAD_MMAP_ENV: &str = "UNLACE_LOAD_MMAP";
+/// The ARM/Thumb decode mode of a 32-bit ARM image (`--isa`).
+pub const ARM_ISA_ENV: &str = "UNLACE_ARM_ISA";
+
+/// The ARM/Thumb decode mode a 32-bit ARM image is painted with (`--isa`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArmIsa {
+    Arm,
+    Thumb,
+}
+
+impl ArmIsa {
+    /// Parse an `--isa` value: `auto` or empty leaves the decode mode to the image.
+    pub fn parse(value: &str) -> Result<Option<Self>, String> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "" | "auto" => Ok(None),
+            "arm" => Ok(Some(Self::Arm)),
+            "thumb" => Ok(Some(Self::Thumb)),
+            _ => Err(format!(
+                "invalid --isa value {value:?} (expected auto, arm, or thumb)"
+            )),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Arm => "arm",
+            Self::Thumb => "thumb",
+        }
+    }
+}
 
 /// Every load-time setting, one field per option. [`Default`] is the shipped
 /// default of each option, the value an unset environment variable means.
@@ -140,6 +170,10 @@ pub struct LoadOptions {
     pub dwarfenumtypedef: bool,
     /// The discovery walk's decode lanes (`--jobs`); `None` runs one.
     pub decode_jobs: Option<usize>,
+    /// `UNLACE_ARM_ISA` (`--isa`): the ARM/Thumb decode mode of a 32-bit ARM
+    /// image. `Ok(None)` leaves the image's own evidence to decide; an
+    /// unrecognized value is an error at each load that reads it.
+    pub arm_isa: Result<Option<ArmIsa>, String>,
 }
 
 impl Default for LoadOptions {
@@ -180,6 +214,7 @@ impl Default for LoadOptions {
             dwarfscopes: true,
             dwarfenumtypedef: true,
             decode_jobs: None,
+            arm_isa: Ok(None),
         }
     }
 }
@@ -235,6 +270,7 @@ impl LoadOptions {
             dwarfscopes: read::dwarfscopes(vars),
             dwarfenumtypedef: read::dwarfenumtypedef(vars),
             decode_jobs: read::decode_jobs(vars),
+            arm_isa: read::arm_isa(vars),
         }
     }
 
@@ -611,6 +647,13 @@ pub mod read {
 
     pub fn decode_jobs(v: &Vars<'_>) -> Option<usize> {
         v.var(DECODE_JOBS_ENV).ok()?.trim().parse::<usize>().ok()
+    }
+
+    pub fn arm_isa(v: &Vars<'_>) -> Result<Option<ArmIsa>, String> {
+        match v.var(ARM_ISA_ENV) {
+            Ok(value) => ArmIsa::parse(&value),
+            Err(_) => Ok(None),
+        }
     }
 
     /// The `"<maj>.<min>"` release in `UNLACE_GOVERSION`; `None` when it is

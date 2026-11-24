@@ -72,7 +72,7 @@
 //! `Architecture`), each `engine_unavailable` site is the single place to wire
 //! the real call; the surrounding faithful structure does not change.
 
-use crate::engine::{ArmIsa, ConsoleProgram, UNBOUNDED_SIZE, bootstrap_from_file};
+use crate::engine::{ConsoleProgram, UNBOUNDED_SIZE};
 use crate::interface::{
     CommandStream, IfaceCommandAction, IfaceData, IfaceError, IfaceResult, IfaceStatus,
 };
@@ -1351,40 +1351,32 @@ decomp_command!(
     }
 );
 
-/// `load file`: [`bootstrap_from_file`] with the console's load options
-/// ([`IfaceDecompData::next_load_options`]) and the ARM ISA of
-/// [`ARM_ISA_ENV`](crate::engine::ARM_ISA_ENV). An unreadable ISA variable keeps
-/// the environment-mode load, which reports it only for an input that reads it.
+/// `load file`: the file loaded with the console's load options
+/// ([`IfaceDecompData::next_load_options`]), which carry the ARM ISA.
 fn console_load_file(
     path: &str,
     target: &str,
     spec_roots: &[String],
     options: &unlace_decomp::loadoptions::LoadOptions,
 ) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
-    let Ok(isa) = crate::engine::arm_isa_from_env() else {
-        return bootstrap_from_file(path, target, spec_roots);
-    };
     crate::engine::Bootstrap::new(spec_roots)
         .target(target)
-        .arm_isa(isa)
         .options(options)
         .file(path)
 }
 
 /// `load raw`: [`bootstrap_from_raw`](crate::engine::bootstrap_from_raw) with the
-/// console's load options.
+/// console's load options, which carry the ARM ISA.
 fn console_load_raw(
     path: &str,
     target: &str,
     base: u64,
     entries: &[u64],
-    isa: Option<ArmIsa>,
     spec_roots: &[String],
     options: &unlace_decomp::loadoptions::LoadOptions,
 ) -> unlace_base::error::UnlaceResult<ConsoleProgram> {
     crate::engine::Bootstrap::new(spec_roots)
         .target(target)
-        .arm_isa(isa)
         .options(options)
         .raw(path, base, entries)
 }
@@ -1428,12 +1420,10 @@ decomp_command!(
             .split(',')
             .map(parse_raw_address)
             .collect::<Result<Vec<_>, _>>()?;
-        let isa = unlace_base::env::var(crate::engine::ARM_ISA_ENV)
-            .ok()
-            .map(|value| ArmIsa::parse(&value))
-            .transpose()
-            .map_err(IfaceError::parse)?
-            .flatten();
+        let options = dcp_mut(status)?.next_load_options();
+        if let Err(err) = &options.arm_isa {
+            return Err(IfaceError::parse(err.clone()));
+        }
         {
             let dcp = dcp_mut(status)?;
             if dcp.conf.is_some() {
@@ -1441,34 +1431,24 @@ decomp_command!(
             }
         }
         let spec_roots = dcp_mut(status)?.spec_roots.clone();
-        let options = dcp_mut(status)?.next_load_options();
         // A language id can contain spaces (`x86:LE:16:Real Mode`), which a
         // console token cannot: `_` stands for a space when the id as written
         // has no specification.
-        let loaded = console_load_raw(
-            &filename,
-            &target,
-            base,
-            &entries,
-            isa,
-            &spec_roots,
-            &options,
-        )
-        .or_else(|e| {
-            if target.contains('_') {
-                console_load_raw(
-                    &filename,
-                    &target.replace('_', " "),
-                    base,
-                    &entries,
-                    isa,
-                    &spec_roots,
-                    &options,
-                )
-            } else {
-                Err(e)
-            }
-        });
+        let loaded = console_load_raw(&filename, &target, base, &entries, &spec_roots, &options)
+            .or_else(|e| {
+                if target.contains('_') {
+                    console_load_raw(
+                        &filename,
+                        &target.replace('_', " "),
+                        base,
+                        &entries,
+                        &spec_roots,
+                        &options,
+                    )
+                } else {
+                    Err(e)
+                }
+            });
         match loaded {
             Ok(prog) => {
                 let desc = prog.description().to_string();

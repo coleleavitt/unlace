@@ -44,7 +44,7 @@ pub enum GoBoolMode {
     Always,
 }
 
-impl crate::kuna_optionset::KunaOption for GoBoolMode {
+impl crate::optionset::KunaOption for GoBoolMode {
     const NAME: &'static str = "gobool";
     crate::kuna_option_id!();
 
@@ -227,5 +227,5 @@ impl Rule for RuleGoBoolReturn {
 }
 
 #[cfg(test)]
-#[path = "kuna_gobool/tests.rs"]
+#[path = "gobool/tests.rs"]
 mod tests;

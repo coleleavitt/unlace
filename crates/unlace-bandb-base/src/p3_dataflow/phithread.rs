@@ -628,7 +628,7 @@ pub struct PhiThread {
     pub ranges: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for PhiThread {
+impl crate::optionset::KunaOption for PhiThread {
     const NAME: &'static str = "phithread";
     crate::kuna_option_id!();
 
@@ -652,7 +652,7 @@ impl crate::kuna_optionset::KunaOption for PhiThread {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_optionset::KunaOption;
+    use crate::optionset::KunaOption;
 
     #[test]
     fn option_parses_and_ships_off() {

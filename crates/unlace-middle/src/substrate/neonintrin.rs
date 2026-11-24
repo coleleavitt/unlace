@@ -408,7 +408,7 @@ pub struct NeonIntrin {
     pub fuse: bool,
 }
 
-impl crate::kuna_optionset::KunaOption for NeonIntrin {
+impl crate::optionset::KunaOption for NeonIntrin {
     const NAME: &'static str = "neonintrin";
     crate::kuna_option_id!();
 

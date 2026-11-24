@@ -22,7 +22,7 @@ pub fn plan(
     id: OpId,
     printed: impl Fn(VarnodeId) -> Rc<Datatype>,
 ) -> Option<WidenedAddPlan> {
-    if !arch.kuna_options.get::<crate::kuna_widenedadd::WrapAdd>().0 {
+    if !arch.kuna_options.get::<crate::widenedadd::WrapAdd>().0 {
         return None;
     }
     let op = data.obank().get(id)?;

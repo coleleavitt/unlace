@@ -1,7 +1,7 @@
 //! Unit tests for the `structmerge` option surface and the union rule.
 
 use super::*;
-use crate::kuna_structsynth::ledger;
+use crate::structsynth::ledger;
 
 const ON: StructMergeMode = StructMergeMode::Siblings;
 const OFF: StructMergeMode = StructMergeMode::Off;

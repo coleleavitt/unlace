@@ -29,13 +29,13 @@ FOLDER_BAND = {
     "engine": "middle", "spec": "middle",
 }
 MODULE_BAND = {
-    "kuna_option_dispatch": "driver",
-    "action": "middle", "architecture": "middle", "kuna_fasthash": "middle",
+    "option_dispatch": "driver",
+    "action": "middle", "architecture": "middle", "fasthash": "middle",
     "fspec": "middle", "varmap": "middle", "heritage": "middle", "merge": "middle", "jumptable": "middle",
-    "kuna_typemerge": "middle", "kuna_phiarm": "middle", "kuna_armpairparam": "middle",
-    "kuna_calleesaved": "middle",
+    "typemerge": "middle", "phiarm": "middle", "armpairparam": "middle",
+    "calleesaved": "middle",
     "remote_provider": "middle",
-    "kuna_calloverlap": "middle", "kuna_loadguardreads": "middle", "kuna_revisitrefine": "middle",
+    "calloverlap": "middle", "loadguardreads": "middle", "revisitrefine": "middle",
 }
 SRC = "crates/unlace-decomp/src"
 # The middle band's own crate (crate-split step 9): same folder layout, scanned with SRC as one tree.

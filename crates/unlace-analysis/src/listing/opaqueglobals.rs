@@ -1,5 +1,5 @@
 //! (kuna `opaquepredicate globals`) Which writable data the program may
-//! write: the whole-program scan behind `unlace_decomp::kuna_opaqueglobals`.
+//! write: the whole-program scan behind `unlace_decomp::opaqueglobals`.
 //!
 //! It is the walk `kuna_floatglobals` takes (every function from its entry,
 //! registers and stack slots followed as constants), filing three more
@@ -33,11 +33,11 @@ use std::collections::BTreeSet;
 
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::type_metatype;
-use unlace_decomp::kuna_floatglobals::FloatScan;
-use unlace_decomp::kuna_opaqueglobals::UnwrittenGlobals;
+use unlace_decomp::floatglobals::FloatScan;
+use unlace_decomp::opaqueglobals::UnwrittenGlobals;
 use unlace_sleigh::loadimage::section_flags;
 
-use super::kuna_floatglobals::{Evidence, Image, walk};
+use super::floatglobals::{Evidence, Image, walk};
 
 /// How far past a held address outside every named object a store through
 /// it may reach.

@@ -49,7 +49,7 @@ fn case_order(block: BlockId, gototype: uint4) -> CaseOrder {
 /// target still needs a label.
 #[test]
 fn switch_case_goto_is_a_label_reference() {
-    use crate::kuna_gotolabel::referenced_goto_targets;
+    use crate::gotolabel::referenced_goto_targets;
     let mut g = BlockGraph::new();
     let root = g.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
     g.root = Some(root);
@@ -78,7 +78,7 @@ fn switch_case_goto_is_a_label_reference() {
 /// A `BlockMultiGoto`'s virtual edges are label references too.
 #[test]
 fn multigoto_edge_is_a_label_reference() {
-    use crate::kuna_gotolabel::referenced_goto_targets;
+    use crate::gotolabel::referenced_goto_targets;
     let mut g = BlockGraph::new();
     let root = g.arena.insert(FlowBlock::new_kind(BlockKind::Graph));
     g.root = Some(root);

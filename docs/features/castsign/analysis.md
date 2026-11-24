@@ -20,7 +20,7 @@ way and pays 587 casts for it.
 
 ## Why `signedness auto` leaves them
 
-`signedness auto` (`p9_emit/kuna_typeround.rs`) already re-declares a local signed
+`signedness auto` (`p9_emit/typeround.rs`) already re-declares a local signed
 when every signedness-sensitive reader of it is signed. A trace of its decision for
 every local that carries one of these casts (base `5458b7ab5`, the full castbench
 corpus, all functions):
@@ -63,7 +63,7 @@ reads (next section), and each flip must remove a cast that prints today.
 None of them touches a declaration whose type is locked. A `--assert type`, a
 DWARF local (mapped `typelock|namelock` onto its frame Symbol) and a type committed
 from Ghidra lock the Symbol, not the member varnodes the walk checks, so
-`kuna_castsign.rs (symbol_type_locked)` reads the lock on the Symbol: the naming
+`castsign.rs (symbol_type_locked)` reads the lock on the Symbol: the naming
 pass's bind, a dynamic Symbol, and the Symbol containing each address-tied member.
 The first build of this option missed it and re-declared DWARF locals the source
 declares unsigned: wc `-O0` `uintmax_t words, chars` and bzip2 `fallbackQSort3`'s
@@ -98,7 +98,7 @@ was removed by the first flip at all, only the declaration changed.
 So a high only `castsign` admits (a frame local, a body local with an input
 member, or a verdict a neutral reader decided) is left alone when any of those
 operators reads it, directly or through the expression its value is printed into
-(`kuna_castsign.rs (can_overflow)`). For `<<` only the shifted operand counts,
+(`castsign.rs (can_overflow)`). For `<<` only the shifted operand counts,
 not the count. `& | ^ ~`, comparisons, truncations, assignments, call arguments,
 stores and `return`s cannot overflow and keep a variable admissible. On the 45
 castbench binaries the earlier version flipped 234 declarations. 139 of them are
@@ -126,7 +126,7 @@ the binary returns 2, the re-declared C returns 1 under both compilers at -O0 an
 A high only `castsign` admits is now left alone when a `==`, `!=`, `&`, `|` or `^`
 meets it, or the expression its value is printed into, with a constant whose top
 bit is set, either as the other operand or inside the expression the other operand
-is printed as (`kuna_castsign.rs (wide_literal)`). A hex literal of the same value
+is printed as (`castsign.rs (wide_literal)`). A hex literal of the same value
 has the unsigned type of the declaration's width and would be exact, but the
 printer's choice of base depends on the constant's display format and on
 `integerformat`, so every such constant counts. That leaves three declarations
@@ -151,7 +151,7 @@ and `(long)(0x7fffffffffffffff - v3) / 0x15180` in shadow's chage keeps its cast
 too. 23 of the 234 castbench flips removed nothing. Now a high only `castsign`
 admits is re-declared only when one of its declared members is read by a cast
 to exactly the new declaration's type that prints today
-(`kuna_castsign.rs (drops_printed_cast)`). A cast whose value is only a call
+(`castsign.rs (drops_printed_cast)`). A cast whose value is only a call
 argument, the right side of an assignment or a `return` can already be left out
 by `castimplied`, so it does not count. Under another conversion it does:
 `SEXT816((long)v34)`, `(long)(int)v8` and `p[(int)v16]` keep a same-width sign

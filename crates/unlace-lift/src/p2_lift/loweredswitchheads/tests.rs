@@ -13,7 +13,7 @@ use unlace_num::opcodes::OpCode;
 use super::*;
 use crate::context::{ArchContext, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::kuna_loweredswitch::ActionLowerSwitchDetect;
+use crate::p2_lift::loweredswitch::ActionLowerSwitchDetect;
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();

@@ -1835,7 +1835,7 @@ impl Rule for RulePtrFlow {
         let mut made_change = 0;
         match op_code(data, op) {
             OpCode::CPUI_CALLOTHER => {
-                let Some(effect) = crate::kuna_octeoneffects::effect(data, op) else {
+                let Some(effect) = crate::octeoneffects::effect(data, op) else {
                     return 0;
                 };
                 if !effect.addressed() {
@@ -2221,8 +2221,8 @@ impl Rule for RuleConditionalMove {
             return 0;
         }
         // (kuna javatry) An exception edge selects no value.
-        if crate::kuna_javatry::dispatch_handler(data, cbranch).is_some()
-            || crate::kuna_javatry::is_throws_edge(data, cbranch)
+        if crate::javatry::dispatch_handler(data, cbranch).is_some()
+            || crate::javatry::is_throws_edge(data, cbranch)
         {
             return 0;
         }
@@ -2476,7 +2476,7 @@ impl Rule for RuleFloatCast {
                 if insize2 > insize1 {
                     return 0;
                 }
-                if outsize == insize2 && !super::kuna_floatquiet::can_elide(data, vn2) {
+                if outsize == insize2 && !super::floatquiet::can_elide(data, vn2) {
                     return 0;
                 }
                 // The remaining conversion, if any, still performs NaN quieting.
@@ -2493,7 +2493,7 @@ impl Rule for RuleFloatCast {
                 return 1;
             }
         } else if opc2 == OpCode::CPUI_FLOAT_INT2FLOAT && opc1 == OpCode::CPUI_FLOAT_FLOAT2FLOAT {
-            if !super::kuna_intfloatround::combines(data.get_arch(), insize2, insize1, outsize) {
+            if !super::intfloatround::combines(data.get_arch(), insize2, insize1, outsize) {
                 return 0;
             }
             // Convert integer straight into final float size
@@ -2563,7 +2563,7 @@ fn ignorenan_check_back_for_compare(
         def1 = vn_def(data, vn).expect("ignorenan: negate in0 written");
     }
     if op_is_floating_point(data, def1) {
-        if op_num_input(data, def1) != 2 || crate::kuna_floatnegation::is_exact(data, def1) {
+        if op_num_input(data, def1) != 2 || crate::floatnegation::is_exact(data, def1) {
             return false;
         }
         let in0 = op_in(data, def1, 0).expect("ignorenan: cmp in0");
@@ -2595,7 +2595,7 @@ fn ignorenan_check_back_for_compare(
         if !op_is_floating_point(data, def2) {
             continue;
         }
-        if op_num_input(data, def2) != 2 || crate::kuna_floatnegation::is_exact(data, def2) {
+        if op_num_input(data, def2) != 2 || crate::floatnegation::is_exact(data, def2) {
             continue;
         }
         let in0 = op_in(data, def2, 0).expect("ignorenan: cmp2 in0");
@@ -2722,7 +2722,7 @@ impl Rule for RuleIgnoreNan {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if crate::kuna_floatnegation::fold_nan_consumers(data, op) {
+        if crate::floatnegation::fold_nan_consumers(data, op) {
             return 1;
         }
         if data.get_arch().nan_ignore_all {

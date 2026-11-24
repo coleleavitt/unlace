@@ -66,7 +66,7 @@ pub enum GoWriteBarrierMode {
     Always,
 }
 
-impl crate::kuna_optionset::KunaOption for GoWriteBarrierMode {
+impl crate::optionset::KunaOption for GoWriteBarrierMode {
     const NAME: &'static str = "gowritebarrier";
     crate::kuna_option_id!();
 
@@ -179,7 +179,7 @@ impl Action for ActionGoWriteBarrier {
         }
         // The pre-SSA window; a function carries one diamond per guarded
         // pointer-store group, so loop and re-match after every edit.
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) || data.num_calls() == 0 {
+        if data.is_settled(crate::maturity::Fact::Ssa) || data.num_calls() == 0 {
             return 0;
         }
         let mut changed = 0;
@@ -196,5 +196,5 @@ impl Action for ActionGoWriteBarrier {
 }
 
 #[cfg(test)]
-#[path = "kuna_gowritebarrier/tests.rs"]
+#[path = "gowritebarrier/tests.rs"]
 mod tests;

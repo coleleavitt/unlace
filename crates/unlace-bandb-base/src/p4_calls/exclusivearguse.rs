@@ -42,9 +42,9 @@
 //! the call the value's only use *is* the call.
 //!
 //! This is not the shape the `calleearity` family already covers. All three of
-//! [`calleearity`](crate::kuna_calleearity),
-//! [`calleearityfwd`](crate::kuna_calleearityfwd) and
-//! [`calleearitybody`](crate::kuna_calleearitybody) were built for a
+//! [`calleearity`](crate::calleearity),
+//! [`calleearityfwd`](crate::calleearityfwd) and
+//! [`calleearitybody`](crate::calleearitybody) were built for a
 //! `CBRANCH` use in a block that *dominates* the call (`test rcx,rcx; jz; call`),
 //! and their documentation is explicit that relaxing `only_op_use` for that shape
 //! would fabricate an argument at every guarded call there is. A dominating block
@@ -60,7 +60,7 @@
 //! * the Varnode is the *address* operand of the access, not the stored datum. A
 //!   dereference says the value is a pointer, which is a plausible argument; a
 //!   frame store of the value is the caller-save spill shape and belongs to
-//!   [`spillargtrial`](crate::kuna_spillargtrial), which owns the
+//!   [`spillargtrial`](crate::spillargtrial), which owns the
 //!   `STORE` value slot;
 //! * the Varnode is **defined in a block that both the access's block and the
 //!   call's block are immediate successors of** — the value was produced for the
@@ -180,11 +180,11 @@ pub fn reaches(data: &Funcdata, from: BlockId, target: BlockId) -> bool {
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.exclusivearguse_access_cannot_reach_call = Some(access_cannot_reach_call);
 }
 
 #[cfg(test)]
-#[path = "kuna_exclusivearguse/tests.rs"]
+#[path = "exclusivearguse/tests.rs"]
 mod tests;

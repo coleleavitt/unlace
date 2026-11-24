@@ -25,7 +25,7 @@ use crate::architecture::Architecture;
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
 use crate::fspec::PrototypePieces;
 use crate::funcdata::Funcdata;
-use crate::kuna_langtypes::SpellCtx;
+use crate::langtypes::SpellCtx;
 
 /// A prototype and the type declarations it needs, as C text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,8 +74,7 @@ pub fn declaration(pieces: &PrototypePieces) -> Option<Declaration> {
     let sep = if ret.ends_with('*') { "" } else { " " };
 
     let roots = pieces.outtype.iter().chain(&pieces.intypes);
-    let types =
-        crate::kuna_structdefs::dedup_by_name(&crate::kuna_structdefs::referenced_by(roots));
+    let types = crate::structdefs::dedup_by_name(&crate::structdefs::referenced_by(roots));
     let record = |ct: &Rc<Datatype>| {
         ct.get_typedef().is_none()
             && matches!(
@@ -97,7 +96,7 @@ pub fn declaration(pieces: &PrototypePieces) -> Option<Declaration> {
         .iter()
         .filter(|ct| !(record(ct) && (ct.is_incomplete() || !laid_out_again(ct))))
     {
-        let text = one_line(&crate::kuna_structdefs::definition_text(ct, rt.clone()));
+        let text = one_line(&crate::structdefs::definition_text(ct, rt.clone()));
         if !text.is_empty() {
             typedefs.push(sized_enum(
                 ct,

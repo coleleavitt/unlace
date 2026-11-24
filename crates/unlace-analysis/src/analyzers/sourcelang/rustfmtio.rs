@@ -3,9 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use object::{Object, ObjectSegment, ObjectSymbol, SegmentFlags, SymbolKind};
-use unlace_decomp::kuna_rustfmtio::{ImageSpan, ReceiverAbi, WriterProfile};
+use unlace_decomp::rustfmtio::{ImageSpan, ReceiverAbi, WriterProfile};
 
-use crate::loader::kuna_dynrelocs::{FixupKind, FixupSite, fixup_sites, relro_range};
+use crate::loader::dynrelocs::{FixupKind, FixupSite, fixup_sites, relro_range};
 
 const STDOUT_WRITE_FMT: &str = "<&std::io::stdio::Stdout as std::io::Write>::write_fmt";
 

@@ -29,7 +29,7 @@
 //! get nothing.
 
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use unlace_base::types::{int4, uint4};
@@ -130,7 +130,7 @@ fn int_arg_cast(
     if !unlace_base::address::signbit_negative(v.get_nz_mask(), size) {
         return None;
     }
-    let signed = match crate::kuna_unsignedread::c_int(data, strat, invn, op) {
+    let signed = match crate::unsignedread::c_int(data, strat, invn, op) {
         Some((unsigned, width)) => !unsigned && width == size,
         None => data.vn_high_type_read_facing(invn, op).get_metatype() == type_metatype::TYPE_INT,
     };

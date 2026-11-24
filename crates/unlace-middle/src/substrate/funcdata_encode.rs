@@ -130,7 +130,7 @@ impl Funcdata {
         // scopes to recurse into.
         let mut encodable: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
         if !self.has_no_code() {
-            crate::p0_knowledge::kuna_wrappedstackmap::wire_storage(self);
+            crate::p0_knowledge::wrappedstackmap::wire_storage(self);
             let wire_symbols = std::mem::take(&mut self.kuna_wire_symbols);
             if let Some(lm) = self.get_scope_local() {
                 lm.encode_with_storage(&wire_symbols, &self.kuna_wrapped_wire_storage, enc)?;
@@ -510,7 +510,7 @@ impl Funcdata {
                 // hardcoded `maxduplicates = 8` (`DynamicHash.java:440`), and a
                 // hash the two sides disagree on cannot round-trip a rename.
                 // Deliberately NOT kuna's own budget
-                // (`kuna_dynamichashmax::MAX_DUPLICATES`): the wire value must
+                // (`dynamichashmax::MAX_DUPLICATES`): the wire value must
                 // match what Java recomputes.
                 match crate::dynamic::dynamic_unique_hash(rep, 8, self) {
                     Ok((h, _)) if h != 0 => h,

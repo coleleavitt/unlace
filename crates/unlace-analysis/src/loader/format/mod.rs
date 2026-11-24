@@ -102,7 +102,7 @@ pub trait ObjectFormat {
 
     /// `(stub, definition)` for each import stub the image's own relocations
     /// bind to a function it defines (`pltlocal`); ELF only, ascending by stub.
-    /// See [`crate::loader::kuna_pltlocal`].
+    /// See [`crate::loader::pltlocal`].
     fn local_import_targets(&self, _file: &object::File, _bytes: &[u8]) -> Vec<(u64, u64)> {
         Vec::new()
     }

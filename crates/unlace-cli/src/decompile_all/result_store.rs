@@ -173,7 +173,7 @@ mod tests {
     }
 
     fn check(mut store: ResultStore) {
-        let warning = unlace_decomp::kuna_functionwarnings::Warning {
+        let warning = unlace_decomp::functionwarnings::Warning {
             address: Some(0x1004),
             text: "WARNING: Bad instruction".into(),
             line: 2,

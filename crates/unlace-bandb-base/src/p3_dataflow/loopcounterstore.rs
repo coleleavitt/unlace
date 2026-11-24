@@ -51,7 +51,7 @@
 //!   `v43 = v43 - 0x2a` on the witness alone.
 //! - the `COPY`'s output is address-tied and not `persist`, its input is not
 //!   address-tied, and the marker is the **last** reader — the same three
-//!   guards [`crate::kuna_tiedstorekeep`] carries, for the same
+//!   guards [`crate::tiedstorekeep`] carries, for the same
 //!   reasons (a global keeps its last store printed by heritage's own
 //!   `addrforce` RETURN-COPY, and while an ordinary reader survives the store is
 //!   alive anyway and upstream's propagation is pure gain).
@@ -83,7 +83,7 @@ use crate::funcdata::Funcdata;
 ///
 /// Called from `RulePropagateCopy`'s marker arm, after its own constant /
 /// `addrforce` / differing-addrtied guards and after
-/// [`crate::kuna_tiedstorekeep::declines`] have declined to fire.
+/// [`crate::tiedstorekeep::declines`] have declined to fire.
 /// `vn` is the marker's input under consideration and is known to be the output
 /// of a `CPUI_COPY` whose input is `invn`.
 pub fn declines(data: &Funcdata, op: OpId, vn: VarnodeId, invn: VarnodeId) -> bool {

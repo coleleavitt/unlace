@@ -357,10 +357,10 @@ impl Action for ActionStackByteCopy {
             || fd
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+                .get::<crate::indexaliasguard::IndexAliasGuard>()
                 .0
-                == super::kuna_indexaliasguard::LEVEL_OFF
-            || fd.is_settled(crate::kuna_maturity::Fact::Ssa)
+                == super::indexaliasguard::LEVEL_OFF
+            || fd.is_settled(crate::maturity::Fact::Ssa)
         {
             return 0;
         }

@@ -28,7 +28,7 @@
 //! The rows are instruction references. A pointer the image stores in its data
 //! (an initialized function pointer, a vtable slot) is a reference too, but no
 //! instruction makes it; those are the separate `pointer` rows
-//! ([`unlace_analysis::loader::kuna_dataptrs`]), taken from the image's own
+//! ([`unlace_analysis::loader::dataptrs`]), taken from the image's own
 //! rebase/relocation metadata, never merged into the instruction rows, and
 //! reported with how much of that metadata they cover (`data_refs_coverage`:
 //! the source for a complete list, else `partial`, `unsupported` or `none`,
@@ -37,19 +37,19 @@
 //! `coverage` says what the walk examined: whether it decoded the queried
 //! address, the section that address is in, and the called code it did not
 //! decode because its section is not marked as code
-//! ([`unlace_analysis::listing::kuna_unflaggedcode`]). An explicit `--from` source
+//! ([`unlace_analysis::listing::unflaggedcode`]). An explicit `--from` source
 //! in such memory is decoded when the image says it is code (decoded code calls
 //! it, or an ELF symbol declares a function there), so an empty answer about
 //! code there is an answer, and one about bytes nobody decoded says so.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use unlace_analysis::listing::kuna_unflaggedcode::{
+use unlace_analysis::listing::unflaggedcode::{
     Placement, UnflaggedSection, declared_data, declared_function, named_at, placement,
 };
 use unlace_analysis::listing::xrefs::{Xref, XrefIndex, XrefKind};
-use unlace_analysis::loader::kuna_dataptrs::Coverage as PointerCoverage;
-use unlace_analysis::loader::kuna_kernelcache::FilesetMap;
+use unlace_analysis::loader::dataptrs::Coverage as PointerCoverage;
+use unlace_analysis::loader::kernelcache::FilesetMap;
 use unlace_console::engine::{ConsoleProgram, EntryLookupError, EntrySelector};
 
 use crate::args::take_value as take;
@@ -289,7 +289,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     let mut prog = load_program(&load, DriverDefaults::Query)?;
 
     let entries = prog.function_entries_canonical();
-    let unflagged = unlace_analysis::listing::kuna_unflaggedcode::unflagged_sections(&file);
+    let unflagged = unlace_analysis::listing::unflaggedcode::unflagged_sections(&file);
     let names = EntryNames {
         entries: entries
             .iter()
@@ -304,7 +304,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
         &inventory,
         prog.arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0,
     );
     // The operand resolves to an address BEFORE the walk so the walk can be
@@ -392,7 +392,7 @@ fn query(args: &XrefArgs) -> Result<String, String> {
     for note in &coverage.notes {
         eprintln!("note: {note}");
     }
-    let data = unlace_analysis::loader::kuna_dataptrs::data_pointers(&file, &bytes);
+    let data = unlace_analysis::loader::dataptrs::data_pointers(&file, &bytes);
     let operands = matches!(
         object::Object::architecture(&file),
         object::Architecture::I386
@@ -445,7 +445,7 @@ fn add_scoped_calls(
     if !arch.analysis_ppc32picimports.scoped()
         || arch
             .kuna_tables
-            .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+            .get::<unlace_decomp::ppc32piccalls::PicImports>()
             .is_empty()
         || !args.instructions
         || !(args.kinds.is_empty() || args.kinds.contains(&XrefKind::Call))
@@ -456,7 +456,7 @@ fn add_scoped_calls(
         Direction::To
             if target.class.iter().any(|a| {
                 arch.kuna_tables
-                    .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+                    .get::<unlace_decomp::ppc32piccalls::PicImports>()
                     .contains_key(a)
             }) =>
         {
@@ -924,7 +924,7 @@ fn data_rows(
     names: &EntryNames,
     target: &Target,
     direction: Direction,
-    pointers: &[unlace_analysis::loader::kuna_dataptrs::DataPointer],
+    pointers: &[unlace_analysis::loader::dataptrs::DataPointer],
     operands: bool,
 ) -> Vec<DataRef> {
     let in_code = |vma: u64| {
@@ -961,7 +961,7 @@ fn data_rows(
         .get_default_code_space()
         .cloned()
         .filter(|_| operands);
-    let operand = |p: &unlace_analysis::loader::kuna_dataptrs::DataPointer| {
+    let operand = |p: &unlace_analysis::loader::dataptrs::DataPointer| {
         let Some(space) = code_space.as_ref() else {
             return false;
         };
@@ -1084,7 +1084,7 @@ fn target_address(prog: &ConsoleProgram, spec: &str) -> Result<Resolution, Strin
         && let Some(slot) = prog
             .arch()
             .kuna_tables
-            .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+            .get::<unlace_decomp::ppc32piccalls::PicImports>()
             .values()
             .find(|s| s.name == spec)
     {
@@ -1139,7 +1139,7 @@ fn resolve_target(
         class.extend(
             prog.arch()
                 .kuna_tables
-                .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+                .get::<unlace_decomp::ppc32piccalls::PicImports>()
                 .values()
                 .filter(|s| Some(&s.name) == name.as_ref())
                 .map(|s| s.address),
@@ -1205,7 +1205,7 @@ fn name_at(
                 .then(|| {
                     prog.arch()
                         .kuna_tables
-                        .get::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+                        .get::<unlace_decomp::ppc32piccalls::PicImports>()
                         .get(&vma)
                         .map(|s| s.name.clone())
                 })
@@ -1589,9 +1589,9 @@ fn site_label(vma: u64, owner: Option<(u64, String)>) -> String {
 
 /// `unlace xrefs` over a DEX file or an APK: the `invoke` call graph, every
 /// method reference resolved across the APK's DEX files
-/// (`kuna_dex::links`). Calls are the only kind a DEX image has.
+/// (`dex::links`). Calls are the only kind a DEX image has.
 fn dex_query(args: &XrefArgs, bytes: Vec<u8>) -> Result<String, String> {
-    use unlace_decomp::kuna_dex::links;
+    use unlace_decomp::dex::links;
     let models = unlace_analysis::loadimage_dex::load_dex_models(bytes)
         .map_err(|e| format!("could not parse {}: {e}", args.binary))?;
     let mut names: BTreeMap<u64, String> = BTreeMap::new();
@@ -1904,12 +1904,12 @@ fn objc_resolved_edges(
     if !prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_objcrettype::ObjcResolve>()
+        .get::<unlace_decomp::objcrettype::ObjcResolve>()
         .0
         || prog
             .arch()
             .kuna_states
-            .get::<unlace_decomp::kuna_objcrettype::ObjcClassTable>()
+            .get::<unlace_decomp::objcrettype::ObjcClassTable>()
             .is_none_or(|t| t.classes.is_empty())
     {
         return Vec::new();

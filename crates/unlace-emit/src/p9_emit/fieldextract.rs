@@ -20,7 +20,7 @@ pub fn plan(
     index: i32,
     offset: i64,
 ) -> Option<Extraction> {
-    if whole.is_incomplete() || whole.has_bitfields() || crate::kuna_typequal::is_volatile(whole) {
+    if whole.is_incomplete() || whole.has_bitfields() || crate::typequal::is_volatile(whole) {
         return None;
     }
     let field = &whole.get_field(index)?.field_type;
@@ -35,7 +35,7 @@ pub fn plan(
         || input.get_size() != whole.get_size()
         || field.is_enum_type()
         || target.is_enum_type()
-        || crate::kuna_typequal::is_volatile(field)
+        || crate::typequal::is_volatile(field)
         || !matches!(
             field.get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT

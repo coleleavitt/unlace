@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-New module `p9_emit/kuna_bytehonest.rs`, two functions:
+New module `p9_emit/bytehonest.rs`, two functions:
 
 ```rust
 pub fn is_uncommitted_byte(dt: &Rc<Datatype>) -> bool {
@@ -54,7 +54,7 @@ regenerated.
 
 ## 4. Tests
 
-- `p6_variables/kuna_bytehonest/tests.rs` — the predicate: the byte, the wider
+- `p6_variables/bytehonest/tests.rs` — the predicate: the byte, the wider
   unknowns, the array of unknown (including the 1-element array, whose *size* is
   1), the three committed one-byte types, and the spelling-independence case.
 - `kuna-console/tests/verify_bytehonest.rs` — two-pass end-to-end on the vendored

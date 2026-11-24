@@ -5,7 +5,7 @@
 //! The candidates are the functions the image calls directly whose first
 //! kilobyte references a vftable (x64 `lea r, [rip+vftable]`; x86 the
 //! vftable's address as an immediate). Each is lifted and walked along its
-//! fall-through path (`kuna_itaniumctors.rs (Walker)`) with `this` where MSVC
+//! fall-through path (`itaniumctors.rs (Walker)`) with `this` where MSVC
 //! passes it (RCX on x64, ECX under x86 `__thiscall`), and only a store of a
 //! vftable through `this + off` counts: a factory stores through its
 //! allocation, a caller building a local through its own frame. The class whose
@@ -38,14 +38,14 @@ use object::{Architecture, BinaryFormat, SectionKind};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, SymFact, SymKind};
 
-use super::kuna_itaniumctors::{
+use super::itaniumctors::{
     ClassVtables, MAX_DTOR_INSNS, MAX_INSNS, Walker, ctor_name, dtor_name, named_already,
     owning_class, pairs,
 };
-use super::kuna_msvcvtabletypes::{Class, facts, recover};
-use super::kuna_vtabletypes::struct_name;
 use super::models::ImageBytes;
+use super::msvcvtabletypes::{Class, facts, recover};
 use super::vftable::TextRanges;
+use super::vtabletypes::struct_name;
 
 /// How far past a candidate's entry a vftable reference may sit.
 const MAX_REF_DISTANCE: u64 = 0x400;
@@ -234,7 +234,7 @@ pub fn run(ctx: &AnalysisCtx) -> AnalysisOutput {
 /// vftables of its bases on the way down). It returns `this`, as an MSVC
 /// deleting destructor does.
 fn inlined_deleting_dtor(
-    walk: &super::kuna_itaniumctors::Walk,
+    walk: &super::itaniumctors::Walk,
     owner_of: &HashMap<u64, (usize, bool)>,
     vtables: &[ClassVtables],
 ) -> Option<usize> {

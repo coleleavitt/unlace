@@ -37,7 +37,7 @@
 //! `f(GetModuleHandleA(0), ...)` include the outer call's), so one proven pop
 //! among them moves the guessed calls' arguments instead of fixing them.
 
-use crate::kuna_fasthash::FxHashMap as HashMap;
+use crate::fasthash::FxHashMap as HashMap;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -176,7 +176,7 @@ pub fn moves_stack(arch: &Architecture, entry: &Address) -> bool {
     applies(arch) && !entry.is_invalid() && summary(arch, entry, DEPTH).effect == Effect::Unbalanced
 }
 
-pub use crate::kuna_calleefacts::StackArgs;
+pub use crate::calleefacts::StackArgs;
 
 /// The bytes the caller takes off the stack after the call at `call_at`, read
 /// along the straight-line code that follows it: how far above where the call
@@ -407,25 +407,24 @@ pub fn summary(arch: &Architecture, entry: &Address, depth: u8) -> Summary {
 fn walk_options(arch: &Architecture) -> u8 {
     u8::from(
         arch.kuna_options
-            .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+            .get::<crate::calleestackargs::KunaCalleeargs>()
             .0,
     ) | u8::from(
         arch.kuna_options
-            .get::<crate::kuna_analysisgates::NoreturnKnown>()
+            .get::<crate::analysisgates::NoreturnKnown>()
             .0,
     ) << 1
         | u8::from(
-            arch.kuna_options.get::<crate::kuna_gobounds::GoBounds>().0
-                && arch.source_lang().is_go(),
+            arch.kuna_options.get::<crate::gobounds::GoBounds>().0 && arch.source_lang().is_go(),
         ) << 2
         | u8::from(
             arch.kuna_options
-                .get::<crate::kuna_securitycheck::StripSecurityCheck>()
+                .get::<crate::securitycheck::StripSecurityCheck>()
                 .0,
         ) << 3
         | u8::from(
             arch.kuna_options
-                .get::<crate::kuna_calleestackargs::KunaCalleeargsMsvc>()
+                .get::<crate::calleestackargs::KunaCalleeargsMsvc>()
                 .0,
         ) << 4
 }
@@ -439,14 +438,14 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     let options = walk_options(arch);
     if arch
         .kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .tracked
         != Some(options)
     {
         let mut cache = arch
             .kuna_tables
-            .get::<crate::kuna_calleepurge::CacheCell>()
+            .get::<crate::calleepurge::CacheCell>()
             .borrow_mut();
         cache.tracked = Some(options);
         cache.whole.clear();
@@ -455,7 +454,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     {
         let cache = arch
             .kuna_tables
-            .get::<crate::kuna_calleepurge::CacheCell>()
+            .get::<crate::calleepurge::CacheCell>()
             .borrow();
         if let Some(&(hit, need)) = cache.whole.get(&off).filter(|(_, need)| *need <= depth) {
             return (hit, need);
@@ -464,7 +463,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
             return (hit, CUT);
         }
     }
-    let found = if crate::kuna_calleenoreturn::is_no_return(arch, entry) {
+    let found = if crate::calleenoreturn::is_no_return(arch, entry) {
         (
             Summary {
                 effect: Effect::NoReturn,
@@ -479,7 +478,7 @@ fn summary_at(arch: &Architecture, entry: &Address, depth: u8) -> (Summary, u8) 
     };
     let mut cache = arch
         .kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow_mut();
     if found.1 <= depth {
         cache.whole.insert(off, found);
@@ -496,14 +495,14 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
     let key = (slot.get_offset(), CUT);
     if let Some(&hit) = arch
         .kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .cut
         .get(&key)
     {
         return hit;
     }
-    let found = if crate::kuna_calleenoreturn::is_no_return(arch, slot) {
+    let found = if crate::calleenoreturn::is_no_return(arch, slot) {
         Summary {
             effect: Effect::NoReturn,
             ..UNKNOWN
@@ -512,7 +511,7 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
         UNKNOWN
     };
     arch.kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow_mut()
         .cut
         .insert(key, found);
@@ -523,7 +522,7 @@ fn slot_effect(arch: &Architecture, slot: &Address) -> Summary {
 fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decoded> {
     if let Some(hit) = arch
         .kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow()
         .decoded
         .get(&at)
@@ -538,7 +537,7 @@ fn decode(arch: &Architecture, space: &Rc<AddrSpace>, at: uintb) -> Option<Decod
     let found: Decoded = Rc::new((collect.0, len.max(1) as uintb));
     let mut cache = arch
         .kuna_tables
-        .get::<crate::kuna_calleepurge::CacheCell>()
+        .get::<crate::calleepurge::CacheCell>()
         .borrow_mut();
     if cache.decoded.len() >= DECODED {
         cache.decoded.clear();
@@ -1385,11 +1384,11 @@ fn registers(arch: &Architecture) -> Option<Regs> {
     let space = space?;
     let msvc = arch
         .kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0
         && arch
             .kuna_options
-            .get::<crate::kuna_calleestackargs::KunaCalleeargsMsvc>()
+            .get::<crate::calleestackargs::KunaCalleeargsMsvc>()
             .0;
     let fs = t
         .get_register_data("FS_OFFSET")
@@ -1439,7 +1438,7 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
     let mut returns_stack = false;
     let track = arch
         .kuna_options
-        .get::<crate::kuna_calleestackargs::KunaCalleeargs>()
+        .get::<crate::calleestackargs::KunaCalleeargs>()
         .0;
     let mut steps = 0usize;
     while let Some((at, incoming)) = work.pop() {
@@ -1530,7 +1529,7 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
             let effect = match call {
                 Call::Direct(t) if depth == 0 => {
                     let target = Address::new(space.clone(), t);
-                    if crate::kuna_calleenoreturn::is_no_return(arch, &target) {
+                    if crate::calleenoreturn::is_no_return(arch, &target) {
                         Summary {
                             effect: Effect::NoReturn,
                             ..UNKNOWN
@@ -1690,17 +1689,17 @@ fn walk(arch: &Architecture, entry: &Address, depth: u8) -> Option<(Summary, u8)
 }
 
 /// (kuna) Each x86-32 callee's stack effect read off its own code, shared through `&Architecture`;
-/// an [`ArchTable`](crate::kuna_archstate::ArchTable).
+/// an [`ArchTable`](crate::archstate::ArchTable).
 pub type CacheCell = std::cell::RefCell<Cache>;
 crate::kuna_arch_table!(CacheCell);
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleepurge_forget_walks = Some(forget_walks);
 }
 
 /// Forget the architecture's x86-32 callee walks.
-fn forget_walks(tables: &mut crate::kuna_archstate::ArchTables) {
+fn forget_walks(tables: &mut crate::archstate::ArchTables) {
     tables.get_mut::<CacheCell>().get_mut().forget_walks();
 }
 

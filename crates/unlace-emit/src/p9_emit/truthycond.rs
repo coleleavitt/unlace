@@ -18,7 +18,7 @@
 //! compares, enum-typed zeros, and equate-named zeros are excluded; value
 //! contexts (`v = (x != 0)`, `return x != 0`, call arguments) never normalize.
 //!
-//! Following the kuna-option idiom ([`crate::kuna_arraynotation::OptionArrayNotation`]),
+//! Following the kuna-option idiom ([`crate::arraynotation::OptionArrayNotation`]),
 //! this module owns only the option struct that flips the
 //! [`crate::printc::PrintCOptions::truthy_cond`] toggle; the caller
 //! (`Architecture::set_kuna_option`) writes the live flag.
@@ -29,7 +29,7 @@ use unlace_base::marshal::ElementId;
 use crate::options::on_or_off;
 
 /// Marshaling element `<truthycond>` (kuna 4000+ range; 4113 = condfold,
-/// 4114 retired — see kuna_condfold.rs).
+/// 4114 retired — see condfold.rs).
 pub const ELEM_TRUTHYCOND: ElementId = ElementId::new("truthycond", 4115);
 
 /// (kuna) Toggle truthy condition rendering: `truthycond on|off` (DIV-36).
@@ -54,5 +54,5 @@ impl OptionTruthyCond {
 }
 
 #[cfg(test)]
-#[path = "kuna_truthycond/tests.rs"]
+#[path = "truthycond/tests.rs"]
 mod tests;

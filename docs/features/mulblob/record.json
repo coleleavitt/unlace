@@ -101,7 +101,7 @@
   "CI": "tests.yml on the rebased head: parity gates success, cargo workspace suite success (full-ci label)"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_mulblob.rs",
+  "decompiler/crates/kuna-decomp/src/p3_dataflow/mulblob.rs",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/ruleaction_6.rs",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/mod.rs",
   "decompiler/crates/kuna-decomp/src/infra/architecture.rs",

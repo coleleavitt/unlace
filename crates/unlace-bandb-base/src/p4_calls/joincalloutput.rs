@@ -25,7 +25,7 @@ pub fn needs_reflow(data: &Funcdata, call: &FuncCallSpecs, proto: &FuncProto) ->
         .is_some_and(|out| out.get_addr() == &address && out.get_size() == output.get_size())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.joincalloutput_needs_reflow = Some(needs_reflow);
 }

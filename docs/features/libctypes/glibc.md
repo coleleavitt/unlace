@@ -48,7 +48,7 @@ stage fixture, console spelling):
 
 `.scratch`-built program, compiled and run on the machine this was written on
 against the installed headers. It is reproduced here in full because the tables
-in `kuna_libctypes/glibc.rs` are a transcription of its output and nothing else.
+in `libctypes/glibc.rs` are a transcription of its output and nothing else.
 
 ```c
 #define _GNU_SOURCE

@@ -54,7 +54,7 @@ fn build_fd() -> Funcdata {
     // `enabled` constructor arg (the original seam-style contract); clear the
     // arch-flag default (DIV-2 default-on) so the flag does not also open the gate.
     arch.kuna_options
-        .set(crate::kuna_compareform::PresentLessequal(false));
+        .set(crate::compareform::PresentLessequal(false));
     let glb = Rc::new(arch);
     let ram = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let addr = Address::new(ram, 0x1000);

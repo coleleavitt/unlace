@@ -119,7 +119,7 @@ fn scan_mips_markers(file: &object::File, t9_size: u32) -> AnalysisOutput {
     let mut out = AnalysisOutput::default();
     // canAnalyze gate: MIPS only. On any other language the pass contributes
     // nothing (== canAnalyze false).
-    if !super::kuna_mipsabi::is_mips(file.architecture()) {
+    if !super::mipsabi::is_mips(file.architecture()) {
         return out;
     }
     // Only ELF carries these conventions (the only format kuna loads for MIPS).
@@ -232,7 +232,7 @@ pub(crate) fn scan_mips_isa_markers(file: &object::File) -> AnalysisOutput {
     // e_machine == EM_MIPS). On any other language the pass contributes
     // nothing (the belt half: the commit boundary also swallows an "ISA_MODE not
     // registered" error, so this is a strict no-op off-MIPS).
-    if !super::kuna_mipsabi::is_mips(file.architecture()) {
+    if !super::mipsabi::is_mips(file.architecture()) {
         return out;
     }
     // Only ELF carries these conventions (the only format kuna loads for MIPS).

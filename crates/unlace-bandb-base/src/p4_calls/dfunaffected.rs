@@ -74,7 +74,7 @@ pub fn assert_direction_flag_unaffected(
     model.push_effect(EffectRecord::from_varnode(df, effect_type::UNAFFECTED));
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.dfunaffected_assert_direction_flag_unaffected = Some(assert_direction_flag_unaffected);
 }

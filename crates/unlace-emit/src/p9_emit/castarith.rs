@@ -206,7 +206,7 @@ fn same_element(pointee: &Rc<Datatype>, target: &Rc<Datatype>) -> bool {
 /// width C names no type for.
 fn c_sizeof_is_size(types: &crate::dtype::TypeFactoryImpl, target: &Rc<Datatype>) -> bool {
     let size = target.get_size();
-    let model = crate::kuna_ctypes::CDataModel::from_types(types);
+    let model = crate::ctypes::CDataModel::from_types(types);
     match target.get_metatype() {
         type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => {
             model.integer_spelling(size, false).is_some()
@@ -674,9 +674,9 @@ pub fn plan(data: &mut Funcdata, op: OpId) -> Result<Plan, Leave> {
     }
     let cvn = ins[1 - ptr_slot as usize];
     let base_vn = ins[ptr_slot as usize];
-    if crate::kuna_ptrfromuse::constant_is_global_base(data, op, cvn)
+    if crate::ptrfromuse::constant_is_global_base(data, op, cvn)
         || (integer_made_pointer(data, base_vn)
-            && crate::kuna_ptrfromuse::constant_may_be_global_base(data, op, cvn))
+            && crate::ptrfromuse::constant_may_be_global_base(data, op, cvn))
     {
         return Err(Leave::AddressLike);
     }
@@ -1233,5 +1233,5 @@ pub fn pointer_difference(data: &mut Funcdata, op: OpId) -> Result<Rc<Datatype>,
 }
 
 #[cfg(test)]
-#[path = "kuna_castarith/tests.rs"]
+#[path = "castarith/tests.rs"]
 mod tests;

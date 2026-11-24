@@ -95,9 +95,9 @@ pub fn neon_builtin_kinds() -> Vec<(uint4, String, u8)> {
         for (li, lane) in LANES.iter().enumerate() {
             for (ti, total) in NEON_TOTALS.iter().enumerate() {
                 if let Some((name, elem)) =
-                    crate::kuna_neonintrin::fused_name(op, float, *lane as u32, *total)
+                    crate::neonintrin::fused_name(op, float, *lane as u32, *total)
                 {
-                    let kind = crate::kuna_neonintrin::kind_code(elem, *lane as u32);
+                    let kind = crate::neonintrin::kind_code(elem, *lane as u32);
                     out.push((neon_id(oi, li, ti), name, kind));
                 }
             }
@@ -253,7 +253,7 @@ pub fn fuse_neon(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<bool> {
             i = end;
             continue;
         };
-        if crate::kuna_neonintrin::fused_name(op, float, lane as u32, total).is_none() {
+        if crate::neonintrin::fused_name(op, float, lane as u32, total).is_none() {
             i = end;
             continue;
         }
@@ -336,7 +336,7 @@ pub fn mask_builtins(ops: &mut dyn Iterator<Item = (uint4, &[u8])>) -> Vec<(uint
         let Ok(name) = std::str::from_utf8(nm) else {
             continue;
         };
-        if crate::kuna_avxintrin::intrinsic(name, 64).is_none() {
+        if crate::avxintrin::intrinsic(name, 64).is_none() {
             continue;
         }
         out.push((BUILTIN_MASK_BASE + 2 * i, format!("{name}_mask")));
@@ -798,8 +798,8 @@ pub fn fold_mask(data: &mut Funcdata, ops: &[OpId], evex_z: bool) -> KunaResult<
     Ok(true)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.lanefuse_mask_builtins = Some(mask_builtins);
     hooks.lanefuse_builtins = Some(builtins);
 }

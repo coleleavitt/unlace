@@ -1,7 +1,7 @@
 //! (kuna) `pdbinterior` — never start a function inside a procedure the PDB
 //! describes (P1 code/data partition).
 //!
-//! The PDB half of [`crate::entry::kuna_pdatainterior`], for the functions the
+//! The PDB half of [`crate::entry::pdatainterior`], for the functions the
 //! exception table cannot vouch for. A kuna `FunctionSymbol` is an entry address
 //! with no extent, so the commit boundary cannot answer "is this candidate already
 //! inside a known function?". `.pdata` answers it for every function that needs
@@ -142,7 +142,7 @@ pub fn eligible_pdb_bodies(
     starts.sort_unstable();
     starts.dedup();
     let extents = vouched_extents(&procs, &executable_ranges(file));
-    crate::entry::kuna_pdatainterior::eligible(&extents, &starts)
+    crate::entry::pdatainterior::eligible(&extents, &starts)
 }
 
 /// One decoded instruction, as the walk inside a procedure reads it.

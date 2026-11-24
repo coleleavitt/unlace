@@ -30,7 +30,7 @@ the same to `long` locals.
 
 A high only `castsign` admits is now left alone when a `==`, `!=`, `&`, `|` or
 `^` meets it, or the expression its value is printed into, with a constant whose
-top bit is set (`kuna_castsign.rs (wide_literal)`). Hex literals count too, since
+top bit is set (`castsign.rs (wide_literal)`). Hex literals count too, since
 the printer's choice of base is not visible to the rule. `castsign_eq_x86_64.c`
 (gcc and clang `-O0`: `d_eq32`, `c_eq64`, `c_ne64`, `c_or64` and the control
 `c_eq7`) joins the round trip; on the round-2 build it fails

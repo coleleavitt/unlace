@@ -69,7 +69,7 @@ pub fn is_dyld_cache_file(path: &Path) -> bool {
 
 /// The selected images of the dyld shared cache at `path`, rebuilt as one thin
 /// Mach-O; `None` when `path` is not a dyld shared cache. The selection is the
-/// `dyldimage` option, carried in [`unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV`].
+/// `dyldimage` option, carried in [`unlace_decomp::dyldcache::DYLDIMAGE_ENV`].
 ///
 /// One command reads the image several times (runtime hints, compiler and
 /// language policy, the engine load), so the last rebuild is kept, keyed by
@@ -79,7 +79,7 @@ pub fn read_selected_image(path: &Path) -> Option<Result<Vec<u8>, String>> {
     if !is_dyld_cache_file(path) {
         return None;
     }
-    let selected = unlace_decomp::kuna_dyldcache::selected_image();
+    let selected = unlace_decomp::dyldcache::selected_image();
     let key = ImageKey::of(path, &selected);
     if let (Some(key), Ok(last)) = (&key, LAST_IMAGE.lock()) {
         if let Some((k, bytes)) = last.as_ref() {
@@ -117,7 +117,7 @@ impl ImageKey {
             len: meta.len(),
             modified: meta.modified().ok(),
             selected: selected.clone(),
-            exporttrie: unlace_decomp::kuna_exporttrie::exporttrie_enabled(),
+            exporttrie: unlace_decomp::exporttrie::exporttrie_enabled(),
         })
     }
 }

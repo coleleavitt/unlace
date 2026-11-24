@@ -76,5 +76,5 @@ pub fn is_escape_site(exempt: bool, code: OpCode) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_cookiescramble/tests.rs"]
+#[path = "cookiescramble/tests.rs"]
 mod tests;

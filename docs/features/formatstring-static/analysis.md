@@ -197,7 +197,7 @@ targets where it is not:
   `f_conv` printed its unrelated `double` parameter.
 
 The post-drive audit cannot see any of these, because the call's argument count
-matches. So the rule is stated per target instead (`kuna_formatstring.rs
+matches. So the rule is stated per target instead (`formatstring.rs
 (vararg_abi)`), checked for every conversion in `build_override_pieces`, and
 therefore binding on `full` as well as `static`:
 
@@ -317,7 +317,7 @@ return a + 1;` rendered `return 6;` with the prototype closed (clang `-O1` and
 up), and a `"%c %c"` pair `return 0;`.
 
 So the override is no longer installed closed
-(`decompiler/crates/kuna-decomp/src/p4_calls/kuna_formattail.rs`, spec
+(`decompiler/crates/kuna-decomp/src/p4_calls/formattail.rs`, spec
 chapter 04). The call gets its declared arguments followed by `...`
 (`first_var_arg_slot` = the declared count), is offered and scores the trials
 past them exactly as under `off`, and sheds whatever it took there, and the

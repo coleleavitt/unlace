@@ -6,7 +6,7 @@ use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use unlace_decomp::kuna_langfacet::LangFacet;
+use unlace_decomp::langfacet::LangFacet;
 
 const CARRIER: &str = "__kuna_go_int_error_result";
 
@@ -40,7 +40,7 @@ fn bodies(mut program: ConsoleProgram, names: &[&str]) -> Vec<String> {
     }
     let mut status = ConsoleCommands::into_status(commands);
     register_decomp_commands(&mut status);
-    unlace_console::kuna_console::register_kuna_commands(&mut status);
+    unlace_console::console::register_kuna_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

@@ -6,7 +6,7 @@
 //! has an `ST0` input, so the call recovers no argument, nothing reads `ST0`, and
 //! the whole expression that computed the operand is dead-code eliminated.
 //! Adding an `ST0` input to a shared model would invent a phantom argument on
-//! every other callee (see [`crate::kuna_msvcftol`]), so these helpers
+//! every other callee (see [`crate::msvcftol`]), so these helpers
 //! get a model of their own, bound to them by address by the analysis tier.
 //!
 //! [`MODEL_NAME`] takes one floating-point input in `ST0` and returns one in
@@ -20,7 +20,7 @@
 
 use unlace_base::error::KunaResult;
 
-pub use crate::kuna_specnames::X87_UNARY_MODEL as MODEL_NAME;
+pub use crate::specnames::X87_UNARY_MODEL as MODEL_NAME;
 
 /// The two-operand model's name.
 pub const BINARY_MODEL_NAME: &str = "__kuna_x87binary";
@@ -143,8 +143,8 @@ pub fn decode_prototype(
     Ok(())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.x87intrinsic_decode_prototype = Some(decode_prototype);
 }
 

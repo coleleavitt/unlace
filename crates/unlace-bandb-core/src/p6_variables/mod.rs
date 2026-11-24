@@ -3,23 +3,23 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
+pub mod arrayextent;
+pub mod callarrayextent;
+pub mod calleepop;
+pub mod calleepopframe;
+pub mod calleepopslot;
 pub mod coreaction_stackptr;
+pub mod endptrbound;
 pub mod funcdata_facing;
 pub mod funcdata_spacebase;
-pub mod kuna_arrayextent;
-pub mod kuna_callarrayextent;
-pub mod kuna_calleepop;
-pub mod kuna_calleepopframe;
-pub mod kuna_calleepopslot;
-pub mod kuna_endptrbound;
-pub mod kuna_localstackviews;
-pub mod kuna_stackobjectalias;
-pub mod kuna_stackobjectasserts;
-pub mod kuna_stackobjects;
-pub mod kuna_stackparamviews;
-pub mod kuna_stackstruct;
-pub mod kuna_stackuses;
-pub mod kuna_stackvaluecopies;
-pub mod kuna_stackvalueviews;
-pub mod kuna_stackviews;
-pub mod kuna_storereach;
+pub mod localstackviews;
+pub mod stackobjectalias;
+pub mod stackobjectasserts;
+pub mod stackobjects;
+pub mod stackparamviews;
+pub mod stackstruct;
+pub mod stackuses;
+pub mod stackvaluecopies;
+pub mod stackvalueviews;
+pub mod stackviews;
+pub mod storereach;

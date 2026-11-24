@@ -2,28 +2,28 @@
 
 ## The seam
 
-`p9_emit/kuna_typeround.rs (plan)` is the one place a local's declared signedness
+`p9_emit/typeround.rs (plan)` is the one place a local's declared signedness
 is rounded. `castsign` widens what it looks at; the decision, the declaration
 override and the cast drop (`SignPlan::drop_cast`) are unchanged.
 
-- `p9_emit/kuna_castsign.rs (whole_slot_local)`: a high with symbol offset 0, a
+- `p9_emit/castsign.rs (whole_slot_local)`: a high with symbol offset 0, a
   Symbol type that is a plain integer of the declaration's width (or none), and no
   other high in the function printing the same name (`name_counts`).
-- `p9_emit/kuna_castsign.rs (neutral_reader)`: a `CPUI_CAST` to a pointer of the
+- `p9_emit/castsign.rs (neutral_reader)`: a `CPUI_CAST` to a pointer of the
   value's width, or the index of a `PTRADD` whose base is the value's width.
   `evidence_walk` consults it only where it would otherwise veto.
 - The `is_param` skip is lifted under `castsign`. `retain_sole_named` already keeps
   only highs the printer declares in the body.
 - Any decision one of these made (`frame_local || is_param || widened`) is kept
   only if it declares the value signed (`TYPE_INT`), no operator that overflows
-  over a signed operand reads the value (`kuna_castsign.rs (can_overflow)`,
+  over a signed operand reads the value (`castsign.rs (can_overflow)`,
   recorded by `evidence_walk` as `CastsignWalk::wraps`), no `==` `!=` `&` `|` `^`
-  meets it with a constant whose top bit is set (`kuna_castsign.rs (wide_literal)`,
+  meets it with a constant whose top bit is set (`castsign.rs (wide_literal)`,
   recorded as `CastsignWalk::wide`), and one of the casts the
   walk saw on a declared member prints today and becomes a no-op
-  (`kuna_castsign.rs (drops_printed_cast)` over `CastsignWalk::casts`).
+  (`castsign.rs (drops_printed_cast)` over `CastsignWalk::casts`).
 
-`castimplied` (`kuna_castimplied.rs (ImpliedCasts::assigns_to)`) accepts
+`castimplied` (`castimplied.rs (ImpliedCasts::assigns_to)`) accepts
 `lhs = (T)e` → `lhs = e` when `castsign` is on, the plan re-signed `lhs`'s
 declaration (the printed spelling is the planned type's), and that type is as
 wide as `T`.

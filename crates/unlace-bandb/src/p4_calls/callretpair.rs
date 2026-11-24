@@ -40,7 +40,7 @@
 //! wrote something here" survive untouched, which is what renders as a local the
 //! function never assigns.
 //!
-//! [`crate::kuna_rustabi`] completed that arm, but gated it on the image being
+//! [`crate::rustabi`] completed that arm, but gated it on the image being
 //! rustc-produced. The completion is not Rust-specific and neither is the
 //! evidence behind it: a sixteen-byte aggregate return is ordinary C on this
 //! ABI, and `option rustabi auto` cannot see a GCC image at all. This option is
@@ -48,7 +48,7 @@
 //!
 //! # What the seam can prove
 //!
-//! [`crate::kuna_rustabi::classify_call_output_pair`] is the whole list, and it
+//! [`crate::rustabi::classify_call_output_pair`] is the whole list, and it
 //! is unchanged here: the model's output rule matched a justified,
 //! non-overlapping register pair; the caller reads both halves out of the call;
 //! and a bounded decode of the resolved callee did not refute it by proving the
@@ -109,8 +109,8 @@
 //! own return trial is a read kuna has not yet decided is real (an x86-64
 //! `RDX` a next call only appears to take as an argument is one).
 
-use crate::kuna_rustabi::FuncdataRustabiExt;
-use crate::kuna_voidret::FuncdataVoidretExt;
+use crate::rustabi::FuncdataRustabiExt;
+use crate::voidret::FuncdataVoidretExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -182,7 +182,7 @@ pub fn build_partial_pair(
     {
         return false;
     }
-    let order = crate::kuna_bejoin::call_join_order(data, &probe, Some(fc.get_entry_address()));
+    let order = crate::bejoin::call_join_order(data, &probe, Some(fc.get_entry_address()));
     if order != probe.join_pair_order() {
         return false;
     }
@@ -245,9 +245,9 @@ pub fn build_partial_pair(
     let Some(call_addr) = data.obank().get(op).map(|o| o.get_addr().clone()) else {
         return false;
     };
-    let Some(joinaddr) = crate::kuna_rustabi::pair_join_address(
-        data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr,
-    ) else {
+    let Some(joinaddr) =
+        crate::rustabi::pair_join_address(data, &hi_addr, hi_size, &lo_addr, lo_size, &call_addr)
+    else {
         return false;
     };
     let Ok(whole) = data.new_varnode_out(lo_size + hi_size, &joinaddr, op) else {
@@ -349,7 +349,7 @@ fn pair_of(
 }
 
 /// Does the callee's own last recovery, when this run has one (`decompile-all`
-/// files it callee-first, [`crate::kuna_voidret::record`]), return a value
+/// files it callee-first, [`crate::voidret::record`]), return a value
 /// whose storage holds every register in `regs`? A callee recovered `void`, or
 /// returning only its first register (an `int` whose `idiv` leaves the
 /// remainder in `EDX`), does not hand the caller what it reads there.
@@ -360,7 +360,7 @@ fn callee_returns_cover(data: &Funcdata, entry: &Address, regs: &[&(Address, int
     let k = (sp.get_index(), entry.get_offset());
     match data.kuna_callee_returns(k) {
         None => true,
-        Some(crate::kuna_voidret::Returns::Void) => false,
+        Some(crate::voidret::Returns::Void) => false,
         Some(_) => data
             .kuna_callee_return_storage(k)
             .is_some_and(|(addr, size)| {
@@ -385,7 +385,7 @@ fn callee_returns_cover(data: &Funcdata, entry: &Address, regs: &[&(Address, int
 
 /// Did the decoded callee body write any byte of `[addr, addr+size)` on the
 /// paths the bounded decode covered?
-fn writes(w: &crate::kuna_rustabi::CalleeReturnWrites, addr: &Address, size: int4) -> bool {
+fn writes(w: &crate::rustabi::CalleeReturnWrites, addr: &Address, size: int4) -> bool {
     let Some(sp) = addr.get_space() else {
         return false;
     };
@@ -414,7 +414,7 @@ fn read_by_the_function(data: &Funcdata, vn: VarnodeId, depth: u32) -> bool {
                     && o.get_out()
                         .is_some_and(|out| out != vn && read_by_the_function(data, out, depth - 1))
             }
-            OpCode::CPUI_COPY if crate::kuna_passthrough::is_injected_noop(data, op) => {
+            OpCode::CPUI_COPY if crate::passthrough::is_injected_noop(data, op) => {
                 depth > 0
                     && o.get_out()
                         .is_some_and(|out| read_by_the_function(data, out, depth - 1))

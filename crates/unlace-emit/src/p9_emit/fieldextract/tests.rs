@@ -128,9 +128,9 @@ fn unsupported_fields_and_invalid_ranges_keep_the_existing_path() {
     let mut enumeration = (*integer).clone();
     enumeration.flags |= flags::enumtype;
     excluded.push(structure(Rc::new(enumeration)));
-    excluded.push(structure(crate::kuna_typequal::qualified_type(
+    excluded.push(structure(crate::typequal::qualified_type(
         Rc::clone(&integer),
-        crate::kuna_typequal::VOLATILE,
+        crate::typequal::VOLATILE,
     )));
     for flag in [flags::has_bitfields, flags::type_incomplete] {
         let mut whole = structure(Rc::clone(&integer));
@@ -138,7 +138,7 @@ fn unsupported_fields_and_invalid_ranges_keep_the_existing_path() {
         excluded.push(whole);
     }
     let mut volatile = structure(Rc::clone(&integer));
-    volatile.qualifiers = crate::kuna_typequal::VOLATILE;
+    volatile.qualifiers = crate::typequal::VOLATILE;
     excluded.push(volatile);
     for whole in excluded {
         let (fd, op) = slice(false, &whole, Rc::clone(&target), 8);

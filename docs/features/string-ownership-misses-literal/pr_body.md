@@ -27,7 +27,7 @@ there and resume at `0x401732`, leaving 758 bytes of the function dark and
 
 ## The fix
 
-- `listing/kuna_switchtable.rs` reads the table a computed jump indexes and
+- `listing/switchtable.rs` reads the table a computed jump indexes and
   queues its entries as walk successors.
 - The base is the address the dispatch *materializes* — the `Data` reference the
   constant scan already files — rather than a pattern match on `JMP dword ptr

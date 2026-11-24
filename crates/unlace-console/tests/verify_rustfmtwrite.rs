@@ -8,7 +8,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_rustfmt::RustFmtMode;
+use unlace_decomp::rustfmt::RustFmtMode;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -137,19 +137,18 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                 enabled,
                 "rust",
                 |arch| {
-                    use unlace_decomp::kuna_rustfmtwrite::WriterMethod;
+                    use unlace_decomp::rustfmtwrite::WriterMethod;
                     match mutation {
                         0 => arch.rustc_stable_version = None,
                         1 => arch.rustc_stable_version = Some((1, 93, 2)),
-                        2 => {
-                            arch.kuna_options
-                                .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
-                                    unlace_decomp::kuna_sourcelang::SourceLang::C,
-                                )))
-                        }
+                        2 => arch
+                            .kuna_options
+                            .set(unlace_decomp::sourcelang::SourceLangForced(Some(
+                                unlace_decomp::sourcelang::SourceLang::C,
+                            ))),
                         3 => arch
                             .kuna_tables
-                            .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>()
+                            .get_mut::<unlace_decomp::rustfmtwrite::WriterMethods>()
                             .clear(),
                         index => {
                             let missing = [
@@ -159,7 +158,7 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
                                 WriterMethod::WriteFmt,
                             ][index - 4];
                             arch.kuna_tables
-                                .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>()
+                                .get_mut::<unlace_decomp::rustfmtwrite::WriterMethods>()
                                 .retain(|_, method| *method != missing);
                         }
                     }
@@ -173,7 +172,7 @@ fn layout_language_and_complete_method_identity_bound_recovery() {
 
 #[test]
 fn ambiguous_object_symbols_never_establish_a_string_writer() {
-    use unlace_decomp::kuna_rustfmtwrite::{WriterMethod, writer_symbols};
+    use unlace_decomp::rustfmtwrite::{WriterMethod, writer_symbols};
     let names = [
         (
             "core::ptr::drop_in_place<alloc::string::String>",

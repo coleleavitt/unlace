@@ -290,7 +290,7 @@ fn argument(data: &Funcdata, vn: VarnodeId, addr: Address, zext_trimmed: bool) -
 pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     if !arch
         .kuna_tables
-        .get::<crate::kuna_callerargs::Ledger>()
+        .get::<crate::callerargs::Ledger>()
         .recording
     {
         return;
@@ -298,7 +298,7 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
     let me = entry.get_offset();
     let own = if arch
         .kuna_tables
-        .get::<crate::kuna_callerargs::Ledger>()
+        .get::<crate::callerargs::Ledger>()
         .own
         .contains_key(&me)
     {
@@ -341,13 +341,10 @@ pub fn record(arch: &mut Architecture, entry: &Address, fd: &Funcdata) {
         ));
     }
     let taken = taken_entries(
-        &arch
-            .kuna_tables
-            .get::<crate::kuna_callerargs::Ledger>()
-            .expected,
+        &arch.kuna_tables.get::<crate::callerargs::Ledger>().expected,
         fd,
     );
-    let ledger = arch.kuna_tables.get_mut::<crate::kuna_callerargs::Ledger>();
+    let ledger = arch.kuna_tables.get_mut::<crate::callerargs::Ledger>();
     ledger.taken.extend(taken);
     if !ledger.recorded.insert(me) {
         for sites in ledger.sites.values_mut() {
@@ -434,7 +431,7 @@ fn agree(args: &[&Arg]) -> Option<(int4, Ext)> {
 /// Decide what every function's callers state about its parameters; returns
 /// the entries whose statement is new.
 pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
-    let ledger = arch.kuna_tables.get::<crate::kuna_callerargs::Ledger>();
+    let ledger = arch.kuna_tables.get::<crate::callerargs::Ledger>();
     let mut decided: Vec<(uintb, Vec<NarrowParam>)> = Vec::new();
     for (&entry, expected) in &ledger.expected {
         let (Some(own), Some(sites)) = (ledger.own.get(&entry), ledger.sites.get(&entry)) else {
@@ -496,7 +493,7 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
             }
         }
         arch.kuna_tables
-            .get_mut::<crate::kuna_callerargs::Ledger>()
+            .get_mut::<crate::callerargs::Ledger>()
             .stated
             .insert(k, Rc::new(s));
     }
@@ -507,14 +504,14 @@ pub fn decide(arch: &mut Architecture) -> Vec<uintb> {
 pub fn seed(arch: &Architecture, data: &mut Funcdata) {
     if !arch
         .kuna_options
-        .get::<crate::kuna_narrowargs::NarrowArgs>()
+        .get::<crate::narrowargs::NarrowArgs>()
         .callers
     {
         return;
     }
     if let Some(s) = arch
         .kuna_tables
-        .get::<crate::kuna_callerargs::Ledger>()
+        .get::<crate::callerargs::Ledger>()
         .stated
         .get(&data.get_address().get_offset())
     {
@@ -554,7 +551,7 @@ pub fn narrow_stated(data: &mut Funcdata) -> int4 {
         } else {
             OpCode::CPUI_INT_ZEXT
         };
-        if crate::kuna_narrowargs::narrow_input_to(data, vn, p.width, ext) {
+        if crate::narrowargs::narrow_input_to(data, vn, p.width, ext) {
             count += 1;
         }
     }
@@ -597,7 +594,7 @@ pub fn trace() -> bool {
 /// (kuna `narrowargs callers`) The parameters every caller passes narrow; kept across
 /// `Funcdata::clear`.
 #[derive(Default)]
-struct NarrowSlot(Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>);
+struct NarrowSlot(Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>);
 crate::kuna_func_state!(NarrowSlot, keep_across_clear: true);
 
 /// The `kuna_callerargs` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -606,22 +603,22 @@ pub trait FuncdataCallerargsExt {
     /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
     fn kuna_set_callerargs(
         &mut self,
-        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
+        stated: Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>,
     );
     /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>;
+    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>;
 }
 
 impl FuncdataCallerargsExt for crate::funcdata::Funcdata {
     /// (kuna `narrowargs callers`) Record the parameters every caller passes narrow.
     fn kuna_set_callerargs(
         &mut self,
-        stated: Option<std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>>,
+        stated: Option<std::rc::Rc<Vec<crate::callerargs::NarrowParam>>>,
     ) {
         self.kuna_state_mut::<NarrowSlot>().0 = stated;
     }
     /// (kuna `narrowargs callers`) The parameters every caller passes narrow.
-    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::kuna_callerargs::NarrowParam>>> {
+    fn kuna_callerargs(&self) -> Option<&std::rc::Rc<Vec<crate::callerargs::NarrowParam>>> {
         self.kuna_state::<NarrowSlot>().0.as_ref()
     }
 }

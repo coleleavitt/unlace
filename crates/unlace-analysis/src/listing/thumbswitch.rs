@@ -25,7 +25,7 @@
 //! # The rule
 //!
 //! [`HalfwordTables::targets`] folds the dispatch's own p-code with the
-//! [`super::kuna_switchtable`] lattice, which answers only for the PC-relative
+//! [`super::switchtable`] lattice, which answers only for the PC-relative
 //! form: a byte or halfword read at `inst_next + index`, doubled and added back
 //! to the same `inst_next`. The table states no length, so the count comes from
 //! the range check right before it: a `cmp index,#n` (lifted to
@@ -49,8 +49,8 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{
+use super::poolref::PoolImage;
+use super::switchtable::{
     DEFAULT_MAX_ENTRIES, Key, MAX_TRACKED, MIN_ENTRIES, Val, fold, invalidate, is_constant, key_of,
     keys_overlap, value_of,
 };

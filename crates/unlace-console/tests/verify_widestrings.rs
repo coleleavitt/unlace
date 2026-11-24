@@ -1,5 +1,5 @@
 //! End-to-end gate for the 2-byte width of the string-literal pass
-//! (`widestrings` — `kuna_widestrings::scan_wide_strings`).
+//! (`widestrings` — `widestrings::scan_wide_strings`).
 //!
 //! Both arms run against the vendored `widestrings_x86_64.exe`, a synthesized
 //! PE32+ whose entry passes a UTF-16LE `L"ntdll.dll"` to `LoadLibraryW` and an
@@ -59,10 +59,10 @@ fn decompile_entry_with(widestrings: bool, operand_refs: bool) -> String {
         .expect("bootstrap fixture with built processor specs");
     prog.arch_mut()
         .kuna_options
-        .set(unlace_decomp::kuna_analysisgates::Widestrings(widestrings));
+        .set(unlace_decomp::analysisgates::Widestrings(widestrings));
     prog.arch_mut()
         .kuna_options
-        .set(unlace_decomp::kuna_analysisgates::OperandRefs(operand_refs));
+        .set(unlace_decomp::analysisgates::OperandRefs(operand_refs));
     prog.commit_pending_analysis()
         .expect("analysis commit succeeds");
 
@@ -156,7 +156,7 @@ fn the_commit_plants_a_symbol_at_the_wide_literal() {
             .expect("bootstrap fixture with built processor specs");
         prog.arch_mut()
             .kuna_options
-            .set(unlace_decomp::kuna_analysisgates::Widestrings(on));
+            .set(unlace_decomp::analysisgates::Widestrings(on));
         prog.commit_pending_analysis()
             .expect("analysis commit succeeds");
         let arch = prog.arch();

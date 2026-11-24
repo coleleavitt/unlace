@@ -77,12 +77,12 @@ use unlace_base::address::Address;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
-use crate::context::{OpId, VarnodeId};
-use crate::funcdata::Funcdata;
-use crate::kuna_calleepop::{
+use crate::calleepop::{
     MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, caller_cleans_up, caller_raise, child_at,
     const_signed, decompose, is_argument_push, is_imported,
 };
+use crate::context::{OpId, VarnodeId};
+use crate::funcdata::Funcdata;
 
 /// The settled pop of each earlier call, by the stack-pointer Varnode its
 /// INDIRECT produces.
@@ -459,5 +459,5 @@ fn is_stored(data: &Funcdata, slot: VarnodeId) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleepopslot/tests.rs"]
+#[path = "calleepopslot/tests.rs"]
 mod tests;

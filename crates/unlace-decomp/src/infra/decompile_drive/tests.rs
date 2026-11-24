@@ -272,7 +272,7 @@ fn markup_lines_follow_the_trimmed_text() {
 }
 
 fn budget_site() -> Option<String> {
-    crate::kuna_budget::budget_site()
+    crate::budget::budget_site()
 }
 
 #[test]
@@ -280,13 +280,11 @@ fn budget_site_is_the_first_probe_to_see_the_expiry() {
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
     assert_eq!(budget_site(), None);
     {
-        let _table = crate::kuna_budget::JumpTableScope::enter(0x401026);
-        assert!(crate::kuna_budget::deadline_passed_in(
-            "jump-table basic model"
-        ));
-        crate::kuna_budget::note_budget_site(|| "action jumptable".to_string());
+        let _table = crate::budget::JumpTableScope::enter(0x401026);
+        assert!(crate::budget::deadline_passed_in("jump-table basic model"));
+        crate::budget::note_budget_site(|| "action jumptable".to_string());
     }
-    crate::kuna_budget::note_budget_site(|| "heritage".to_string());
+    crate::budget::note_budget_site(|| "heritage".to_string());
     assert_eq!(
         budget_site().as_deref(),
         Some("jump-table basic model at 0x401026")
@@ -296,8 +294,8 @@ fn budget_site_is_the_first_probe_to_see_the_expiry() {
 #[test]
 fn budget_site_inside_table_recovery_names_the_table() {
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
-    let _table = crate::kuna_budget::JumpTableScope::enter(0x1820e009b);
-    crate::kuna_budget::note_budget_site(|| "action oppool1".to_string());
+    let _table = crate::budget::JumpTableScope::enter(0x1820e009b);
+    crate::budget::note_budget_site(|| "action oppool1".to_string());
     assert_eq!(
         budget_site().as_deref(),
         Some("action oppool1 during jump-table recovery at 0x1820e009b")
@@ -307,13 +305,11 @@ fn budget_site_inside_table_recovery_names_the_table() {
 #[test]
 fn each_drive_starts_with_no_budget_site_and_restores_the_outer_one() {
     let _outer = super::DeadlineScope::enter(Some(std::time::Instant::now()));
-    crate::kuna_budget::note_budget_site(|| "heritage".to_string());
+    crate::budget::note_budget_site(|| "heritage".to_string());
     {
         let _inner = super::DeadlineScope::enter(None);
         assert_eq!(budget_site(), None);
-        assert!(!crate::kuna_budget::deadline_passed_in(
-            "region structuring"
-        ));
+        assert!(!crate::budget::deadline_passed_in("region structuring"));
         assert_eq!(budget_site(), None);
     }
     assert_eq!(budget_site().as_deref(), Some("heritage"));
@@ -365,7 +361,7 @@ fn a_jump_table_value_walk_stops_once_a_probe_sees_the_budget_spent() {
             assert!((0..2000).take_while(|_| values.next().unwrap()).count() >= 999);
         }
         let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
-        let _table = crate::kuna_budget::JumpTableScope::enter(0x401026);
+        let _table = crate::budget::JumpTableScope::enter(0x401026);
         assert!(values.initialize_for_reading());
         let stride = (0..1000).take_while(|_| values.next().is_ok()).count() + 1;
         assert!(stride <= 256, "first step to ask the clock: {stride}");
@@ -381,35 +377,35 @@ fn a_jump_table_value_walk_stops_once_a_probe_sees_the_budget_spent() {
 fn a_budget_probe_stays_spent_for_its_drive_and_names_no_site() {
     {
         let _unbudgeted = super::DeadlineScope::enter(None);
-        assert!((0..1000).all(|_| !crate::kuna_budget::budget_probe()));
+        assert!((0..1000).all(|_| !crate::budget::budget_probe()));
     }
     let _drive = super::DeadlineScope::enter(Some(std::time::Instant::now()));
     let stride = (0..1000)
-        .take_while(|_| !crate::kuna_budget::budget_probe())
+        .take_while(|_| !crate::budget::budget_probe())
         .count()
         + 1;
     assert!(stride <= 256, "first probe to ask the clock: {stride}");
     assert!(
-        (0..10).all(|_| crate::kuna_budget::budget_probe()),
+        (0..10).all(|_| crate::budget::budget_probe()),
         "every probe after it answers spent"
     );
     assert_eq!(budget_site(), None);
     {
         let _inner = super::DeadlineScope::enter(None);
         assert!(
-            (0..1000).all(|_| !crate::kuna_budget::budget_probe()),
+            (0..1000).all(|_| !crate::budget::budget_probe()),
             "a new drive starts unspent"
         );
     }
     assert!(
-        crate::kuna_budget::budget_probe(),
+        crate::budget::budget_probe(),
         "the outer drive is still spent"
     );
 }
 
 #[test]
 fn region_identification_stops_at_the_budget_and_names_itself() {
-    use crate::kuna_regionid::KunaRegionIdentifier;
+    use crate::regionid::KunaRegionIdentifier;
     let build = || {
         let mut ri = KunaRegionIdentifier::new();
         let n: Vec<_> = (1..=4).map(|a| ri.add_synthetic_block(a)).collect();

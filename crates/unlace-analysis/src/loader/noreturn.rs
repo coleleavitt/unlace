@@ -49,8 +49,8 @@ use object::read::{Object, ObjectSymbol};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 use crate::sourcelang::Compiler;
 
-#[path = "kuna_rustnoreturn.rs"]
-mod kuna_rustnoreturn;
+#[path = "rustnoreturn.rs"]
+mod rustnoreturn;
 
 /// The known-no-return name list, extended from Ghidra
 /// `Ghidra/Features/Base/data/ElfFunctionsThatDoNotReturn`.
@@ -63,7 +63,7 @@ const ELF_NORETURN_LIST: &str = include_str!("../../data/ElfFunctionsThatDoNotRe
 /// duplicated here so a PE still flags `exit`), plus the Windows-CRT specifics
 /// (`__fastfail`/`_invoke_watson`/`quick_exit`/…) the ELF list does not name.
 const PE_MAC_NORETURN_LIST: &str = include_str!("../../data/PeMacFunctionsThatDoNotReturn");
-/// The Windows-only names (`crate::loader::kuna_peimportcall` matches them at
+/// The Windows-only names (`crate::loader::peimportcall` matches them at
 /// load); [`listed_noreturn`] reads them for names a later rename gives.
 const PE_WIN32_NORETURN_LIST: &str = include_str!("../../data/PEFunctionsThatDoNotReturn");
 
@@ -244,7 +244,7 @@ pub(crate) fn name_matches_ladder(
 ) -> bool {
     name_matches(name, exact, wildcard)
         || (ladder
-            && crate::analyzers::protos::kuna_nameladder::fallbacks(name)
+            && crate::analyzers::protos::nameladder::fallbacks(name)
                 .iter()
                 .any(|f| name_matches(f, exact, wildcard)))
 }
@@ -326,7 +326,7 @@ fn scan_noreturn(
     let mut emit = |out: &mut AnalysisOutput, addr: u64, n: String| {
         let hit = name_matches_ladder(&n, &exact, &wildcard, ladder)
             || (rust_paths && rust_path(&n).is_some_and(|p| path_matches(&p, &exact, &wildcard)))
-            || (rust_exit && kuna_rustnoreturn::process_exit(&n));
+            || (rust_exit && rustnoreturn::process_exit(&n));
         if hit && seen.insert((addr, n.clone())) {
             out.noreturn.push(NoReturnFact { addr, name: n });
         }
@@ -397,7 +397,7 @@ impl AnalysisPass for NoReturnKnownPass {
             ctx.file,
             ctx.bytes,
             self.compiler,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         if let Some(image) = ctx.image {
             let (imports, _) = crate::protos::loaded_import_addrs(ctx.file, ctx.bytes, image);

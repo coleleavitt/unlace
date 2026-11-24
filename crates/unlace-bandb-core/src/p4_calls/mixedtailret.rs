@@ -60,8 +60,8 @@
 //! function returns a value. It is inert wherever `passthrough` is (no callee
 //! decompiled first, `--option passthrough off`).
 
-use crate::kuna_passthrough::FuncdataPassthroughExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::passthrough::FuncdataPassthroughExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::spacetype;
@@ -118,7 +118,7 @@ pub fn returns_decided_value(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_mixedtailret::MixedTailRet>()
+        .get::<crate::mixedtailret::MixedTailRet>()
         .0
         || !last_write_is_own(data, ret, addr, *size)
     {
@@ -160,7 +160,7 @@ pub fn feeds_tail_call(data: &Funcdata, producers: &[OpId], pieces: &[(Address, 
 pub fn claimed_beside_own(data: &Funcdata) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::kuna_mixedtailret::MixedTailRet>()
+        .get::<crate::mixedtailret::MixedTailRet>()
         .0
         && data.kuna_passthrough_claims().iter().any(|c| c.beside_own)
 }
@@ -193,7 +193,7 @@ fn write_of(data: &Funcdata, op: OpId, addr: &Address, size: int4) -> Write {
         return Write::None;
     };
     if !overlaps(out.get_addr(), out.get_size(), addr, size)
-        || crate::kuna_passthrough::is_injected_noop(data, op)
+        || crate::passthrough::is_injected_noop(data, op)
     {
         return Write::None;
     }
@@ -323,7 +323,7 @@ fn decided_origin(
             }
             let out = o.get_out().and_then(|v| data.vbank().get(v));
             if out.is_some_and(|v| overlaps(v.get_addr(), v.get_size(), &tracked.0, tracked.1))
-                && !crate::kuna_passthrough::is_injected_noop(data, op)
+                && !crate::passthrough::is_injected_noop(data, op)
             {
                 match register_copy_source(data, op) {
                     Some(source) => tracked = source,
@@ -785,11 +785,11 @@ fn condition_feeders(data: &Funcdata, bl: BlockId) -> Vec<OpId> {
 
 /// (kuna) A value a function returns beside a claimed tail-call result is
 /// its return value too (option `mixedtailret`).  See
-/// [`crate::kuna_mixedtailret`].
+/// [`crate::mixedtailret`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct MixedTailRet(pub bool);
 
-impl crate::kuna_optionset::KunaOption for MixedTailRet {
+impl crate::optionset::KunaOption for MixedTailRet {
     const NAME: &'static str = "mixedtailret";
     crate::kuna_option_id!();
 
@@ -802,7 +802,7 @@ impl crate::kuna_optionset::KunaOption for MixedTailRet {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_mixedtailret::OptionMixedTailRet.apply(value)?;
+        let (v, msg) = crate::mixedtailret::OptionMixedTailRet.apply(value)?;
         Ok((MixedTailRet(v), msg))
     }
 }

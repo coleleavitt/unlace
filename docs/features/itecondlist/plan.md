@@ -29,7 +29,7 @@ so it wins.
 
 ## Mechanism
 
-`p8_structure/kuna_itecondlist.rs::cond_list_tail(data, id) -> BlockId`
+`p8_structure/itecondlist.rs::cond_list_tail(data, id) -> BlockId`
 
 - `option itecondlist off` (or the arch flag clear): return `id` unchanged, so
   every existing decision is bit-identical.
@@ -38,8 +38,8 @@ so it wins.
 
 Two call sites, both in the **condition** position only:
 
-- `kuna_iteregion.rs (cond_cbranch)` — `leaf_bblock(data, cond_list_tail(data, id))`.
-- `kuna_iteboolean.rs (match_ite_boolean)` — the descent sits at the
+- `iteregion.rs (cond_cbranch)` — `leaf_bblock(data, cond_list_tail(data, id))`.
+- `iteboolean.rs (match_ite_boolean)` — the descent sits at the
   `BlockType::Condition` gate, and the descended block is what
   `cond_terminal_cbranch` is called on. It must **not** go inside
   `cond_terminal_cbranch`: that function's leaf arm is only ever reached for the

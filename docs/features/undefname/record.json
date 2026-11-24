@@ -22,7 +22,7 @@
   "upstream_fidelity": "port-defect",
   "upstream_anchor": "Ghidra/Features/Decompiler/src/decompile/cpp/coreaction.cc ActionNameVars::apply:3079 (localmap->assignDefaultNames(base)); database.cc Scope::buildUndefinedName:2854",
   "div": "DIV-58 (DIV-55/56/57 claimed by #252/#253/#254 on merge; renumbered on rebase -- re-check at merge)",
-  "module": "decompiler/crates/kuna-decomp/src/p6_variables/kuna_undefname.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p6_variables/undefname.rs",
   "stage_test": "tests/stages/ghdec-undefname.xml",
   "spec_chapter": "docs/spec/06-variables-and-merge.md (6.1, 'Closing out the undefined names')",
   "ablation_changed": 0,

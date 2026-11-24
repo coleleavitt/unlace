@@ -197,7 +197,7 @@ fn name_function_angr_vs_upstream() {
     // angr-style on by default: sub_<addr> (kuna_function_name).
     assert!(
         arch.kuna_options
-            .get::<crate::kuna_coreoptions::NameStyleAngr>()
+            .get::<crate::coreoptions::NameStyleAngr>()
             .0
     );
     let n_angr = arch.name_function(&addr);
@@ -207,7 +207,7 @@ fn name_function_angr_vs_upstream() {
     // (AddrSpace::printRaw): zero-padded to the address width (4 bytes -> 8 hex
     // digits), no space-name prefix, word-size division (wordsize 1 here).
     arch.kuna_options
-        .set(crate::kuna_coreoptions::NameStyleAngr(false));
+        .set(crate::coreoptions::NameStyleAngr(false));
     let n_up = arch.name_function(&addr);
     assert_eq!(n_up, "func_0x00401000", "upstream name was {n_up}");
 }

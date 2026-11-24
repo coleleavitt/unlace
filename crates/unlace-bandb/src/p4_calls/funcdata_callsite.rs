@@ -41,21 +41,21 @@ use crate::varmap::AliasChecker;
 /// (kuna) The deferred argument-list retry one finalized call leaves behind.
 ///
 /// At most one of the two is ever set: a call whose list came out EMPTY is
-/// [`crate::kuna_calleearityfwd`]'s, one whose list came out SHORT is
-/// [`crate::kuna_calleearitylive`]'s. Both are replayed at the end of
+/// [`crate::calleearityfwd`]'s, one whose list came out SHORT is
+/// [`crate::calleearitylive`]'s. Both are replayed at the end of
 /// `ActionActiveParam::apply`, when every spec in the pass is final.
 #[derive(Default)]
 pub struct PendingCallFixup {
     /// The empty-list rescue candidate (`calleearityfwd`).
-    pub rescue: Option<crate::kuna_calleearityfwd::PendingRescue>,
+    pub rescue: Option<crate::calleearityfwd::PendingRescue>,
     /// The short-list extension candidate (`calleearitylive`).
-    pub extend: Option<crate::kuna_calleearitylive::PendingExtend>,
+    pub extend: Option<crate::calleearitylive::PendingExtend>,
     /// The no-sibling body-recovery candidate (`calleearitybody`).
-    pub body: Option<crate::kuna_calleearitybody::PendingBodyArgs>,
+    pub body: Option<crate::calleearitybody::PendingBodyArgs>,
     /// The forwarded-register extension candidate (`passthrough`).
-    pub pass_through: Option<crate::kuna_passthrough::PendingPassThrough>,
+    pub pass_through: Option<crate::passthrough::PendingPassThrough>,
     /// The callee-read extension candidate (`calleereadarg`).
-    pub read_arg: Option<crate::kuna_calleereadarg::PendingReadArg>,
+    pub read_arg: Option<crate::calleereadarg::PendingReadArg>,
 }
 
 /// C++ `FuncCallSpecs::checkInputTrialUse` (`fspec.cc:5592`).
@@ -70,7 +70,7 @@ pub fn check_input_trial_use(
     idx: int4,
     data: &mut Funcdata,
     aliascheck: &mut AliasChecker,
-    held: &mut crate::kuna_calleestackargs::Contenders,
+    held: &mut crate::calleestackargs::Contenders,
 ) {
     // INDEX-BASED (CORRECTION-7 #3): the call spec stays in `data.qlst` so the
     // ancestor walk (`ancestor_op_use` -> `only_op_use` -> `check_call_double_use`)
@@ -104,7 +104,7 @@ pub fn check_input_trial_use(
     }
 
     // (kuna `calleeargs`) What the callee reads bounds its stack arguments.
-    // See [`crate::kuna_calleestackargs`].
+    // See [`crate::calleestackargs`].
     let stack_args = data.get_call_specs(idx).callee_stack_arg_bytes();
     let stack_args = stack_args
         .filter(|_| !(0..data.num_calls()).any(|j| data.get_call_specs(j).callee_moves_stack()));
@@ -113,14 +113,14 @@ pub fn check_input_trial_use(
     let read_end = stack_args.map(|a| 4 + a.read as i64);
 
     // (kuna) The registers a variadic call's caller counts as filled (`al`, CR6).
-    let counted = crate::kuna_varargretreg::counted_float_arguments(data, data.get_call_specs(idx));
-    let format_arguments = crate::kuna_varargformat::arguments(data, data.get_call_specs(idx));
+    let counted = crate::varargretreg::counted_float_arguments(data, data.get_call_specs(idx));
+    let format_arguments = crate::varargformat::arguments(data, data.get_call_specs(idx));
     let num_trials = data
         .get_call_specs_mut(idx)
         .get_active_input()
         .get_num_trials();
     for i in 0..num_trials {
-        if crate::kuna_budget::deadline_passed_in("action activeparam") {
+        if crate::budget::deadline_passed_in("action activeparam") {
             return;
         }
         if data
@@ -135,7 +135,7 @@ pub fn check_input_trial_use(
                 .get_trial(i)
                 .is_active()
             {
-                crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments);
+                crate::varargformat::activate_trial(data, idx, i, &format_arguments);
             }
             continue;
         }
@@ -169,7 +169,7 @@ pub fn check_input_trial_use(
         };
         if is_spacebase
             && arg_bound.is_some_and(|bound| trial_start >= bound)
-            && !crate::kuna_calleestackargs::contested(data, idx, vn, held)
+            && !crate::calleestackargs::contested(data, idx, vn, held)
         {
             data.get_call_specs_mut(idx)
                 .get_active_input()
@@ -182,19 +182,19 @@ pub fn check_input_trial_use(
                     let mut access = data.alias_gather_access();
                     aliascheck.has_local_alias(Some((vn_space.clone(), vn_offset)), &mut access)
                 }
-                && crate::kuna_directalias::aliases(data, aliascheck, vn_offset, vn_size);
+                && crate::directalias::aliases(data, aliascheck, vn_offset, vn_size);
             // C++ keeps these two no-use conditions as separate branches
             // (fspec.cc:5616-5619): a stack alias, OR a stack location outside the
             // CALLER's local range, both mean "not a parameter".  The range test is
             // on the argument Varnode's caller-relative address, not the trial's
-            // callee-relative one (kuna, [`crate::kuna_callsitestackargs`]).
+            // callee-relative one (kuna, [`crate::callsitestackargs`]).
             #[allow(clippy::if_same_then_else)]
             if has_alias {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
                     .get_trial_mut(i)
                     .mark_no_use();
-            } else if crate::kuna_callsitestackargs::outside_caller_local_range(
+            } else if crate::callsitestackargs::outside_caller_local_range(
                 data.get_func_proto().get_local_range(),
                 &vn_space,
                 vn_offset,
@@ -273,7 +273,7 @@ pub fn check_input_trial_use(
         } else if {
             // (kuna `calleereginputs`) The callee's own code reads it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_calleereginputs::reads_register(
+            crate::calleereginputs::reads_register(
                 data.get_call_specs(idx),
                 t.get_address(),
                 t.get_size(),
@@ -286,14 +286,14 @@ pub fn check_input_trial_use(
             trial.set_ancestor_realistic();
             trial.set_ancestor_solid();
             trial.mark_active();
-        } else if crate::kuna_swiftinfer::carries_async_target(data, idx, slot) {
+        } else if crate::swiftinfer::carries_async_target(data, idx, slot) {
             data.get_call_specs_mut(idx)
                 .get_active_input()
                 .get_trial_mut(i)
                 .mark_no_use();
         } else if {
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_swiftinfer::passes_context(data, idx, t.get_address(), t.get_size())
+            crate::swiftinfer::passes_context(data, idx, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -311,7 +311,7 @@ pub fn check_input_trial_use(
                 .get_active_input()
                 .get_trial_mut(i)
                 .mark_no_use();
-        } else if crate::kuna_passthrough::is_call_target(data, op, vn) {
+        } else if crate::passthrough::is_call_target(data, op, vn) {
             data.get_call_specs_mut(idx)
                 .get_active_input()
                 .get_trial_mut(i)
@@ -320,7 +320,7 @@ pub fn check_input_trial_use(
             // (kuna) `passthrough`: a trial on a range the pass claimed is left
             // where the option-off run's hole-filling trial would start.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_passthrough::claimed_range(data, t.get_address(), t.get_size())
+            crate::passthrough::claimed_range(data, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -332,7 +332,7 @@ pub fn check_input_trial_use(
             // (kuna `swiftcall`) A `swiftself` value set for an earlier call is
             // not an argument of a struct member that may not take it.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_swiftcall::stale_self(data, idx, slot, t.get_address(), t.get_size())
+            crate::swiftcall::stale_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             data.get_call_specs_mut(idx)
                 .get_active_input()
@@ -342,7 +342,7 @@ pub fn check_input_trial_use(
             // (kuna `swiftcall`) An indirect call passes `swiftself` exactly
             // when it dispatches on the value the register holds.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_swiftcall::indirect_self(data, idx, slot, t.get_address(), t.get_size())
+            crate::swiftcall::indirect_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -358,7 +358,7 @@ pub fn check_input_trial_use(
         } else if {
             // (kuna `swiftcall`) The caller's own `self`, handed on untouched.
             let t = data.get_call_specs(idx).active_input().get_trial(i);
-            crate::kuna_swiftcall::passes_own_self(data, idx, slot, t.get_address(), t.get_size())
+            crate::swiftcall::passes_own_self(data, idx, slot, t.get_address(), t.get_size())
         } {
             let trial = data
                 .get_call_specs_mut(idx)
@@ -377,13 +377,7 @@ pub fn check_input_trial_use(
                 let t = data.get_call_specs(idx).active_input().get_trial(i);
                 (t.get_address().clone(), t.get_size())
             };
-            crate::kuna_calleedeadarg::trial_is_dead_in_callee(
-                data,
-                idx,
-                slot,
-                &trial_addr,
-                trial_size,
-            )
+            crate::calleedeadarg::trial_is_dead_in_callee(data, idx, slot, &trial_addr, trial_size)
         } {
             data.get_call_specs_mut(idx)
                 .get_active_input()
@@ -392,7 +386,7 @@ pub fn check_input_trial_use(
         } else if {
             let t = data.get_call_specs(idx).active_input().get_trial(i);
             (t.get_size() == 8 && counted.contains(t.get_address()))
-                || crate::kuna_varargforward::forwards_declared_value(
+                || crate::varargforward::forwards_declared_value(
                     data,
                     idx,
                     slot,
@@ -407,7 +401,7 @@ pub fn check_input_trial_use(
             trial.set_ancestor_realistic();
             trial.set_ancestor_solid();
             trial.mark_active();
-        } else if crate::kuna_stackaddrargtrial::carries_stack_address(data, vn) {
+        } else if crate::stackaddrargtrial::carries_stack_address(data, vn) {
             let trial = data
                 .get_call_specs_mut(idx)
                 .get_active_input()
@@ -434,7 +428,7 @@ pub fn check_input_trial_use(
             if realistic || solid {
                 let mut trial = data.get_call_specs(idx).active_input().get_trial(i).clone();
                 let only = data.ancestor_op_use(maxancestor, vn, op, &mut trial, 0, 0)
-                    || crate::kuna_varargsharedfloat::feeds_earlier_argument(
+                    || crate::varargsharedfloat::feeds_earlier_argument(
                         data,
                         idx,
                         vn,
@@ -450,8 +444,8 @@ pub fn check_input_trial_use(
                         .get_active_input()
                         .get_trial_mut(i)
                         .mark_active();
-                    crate::kuna_reloadarg::note(data, idx, i, ancestor.solid_loads());
-                    crate::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
+                    crate::reloadarg::note(data, idx, i, ancestor.solid_loads());
+                    crate::varargforward::narrow_undeclared_upper(data, idx, i);
                     if data
                         .get_call_specs_mut(idx)
                         .get_active_input()
@@ -462,15 +456,14 @@ pub fn check_input_trial_use(
                             .get_active_input()
                             .mark_needs_final_check();
                     }
-                } else if !crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments)
-                {
+                } else if !crate::varargformat::activate_trial(data, idx, i, &format_arguments) {
                     data.get_call_specs_mut(idx)
                         .get_active_input()
                         .get_trial_mut(i)
                         .mark_inactive();
-                    crate::kuna_varargforward::narrow_undeclared_upper(data, idx, i);
+                    crate::varargforward::narrow_undeclared_upper(data, idx, i);
                 }
-            } else if crate::kuna_varargformat::activate_trial(data, idx, i, &format_arguments) {
+            } else if crate::varargformat::activate_trial(data, idx, i, &format_arguments) {
             } else if vn_is_input || {
                 // (kuna) `passthrough`: the incoming register carried past calls
                 // that leave it alone, to a callee whose recovered prototype
@@ -479,16 +472,11 @@ pub fn check_input_trial_use(
                 let (addr, size) = (t.get_address().clone(), t.get_size());
                 data.get_arch()
                     .kuna_options
-                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .get::<crate::passthrough::PassThrough>()
                     .0
-                    && crate::kuna_passthrough::forwarded_own_input(data, vn, &addr, size)
-                    && crate::kuna_passthrough::stated_width(
-                        data,
-                        data.get_call_specs(idx),
-                        &addr,
-                        size,
-                    )
-                    .is_some()
+                    && crate::passthrough::forwarded_own_input(data, vn, &addr, size)
+                    && crate::passthrough::stated_width(data, data.get_call_specs(idx), &addr, size)
+                        .is_some()
             } {
                 // Not likely a parameter but maybe
                 data.get_call_specs_mut(idx)
@@ -519,9 +507,8 @@ pub fn check_input_trial_use(
                     !t.is_active() && !t.is_definitely_not_used(),
                 )
             };
-            if (inactive
-                && crate::kuna_passthrough::forwarded_in_place(data, op, slot, &addr, size))
-                || (active && crate::kuna_passthrough::saves_own_register(data, op, slot, &addr))
+            if (inactive && crate::passthrough::forwarded_in_place(data, op, slot, &addr, size))
+                || (active && crate::passthrough::saves_own_register(data, op, slot, &addr))
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -531,10 +518,10 @@ pub fn check_input_trial_use(
                 && data
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .get::<crate::passthrough::PassThrough>()
                     .0
-                && (crate::kuna_passthrough::survives_call(data, op, vn)
-                    || crate::kuna_passthrough::set_before_branch(data, op, vn))
+                && (crate::passthrough::survives_call(data, op, vn)
+                    || crate::passthrough::set_before_branch(data, op, vn))
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -545,10 +532,10 @@ pub fn check_input_trial_use(
                 && data
                     .get_arch()
                     .kuna_options
-                    .get::<crate::kuna_passthrough::PassThrough>()
+                    .get::<crate::passthrough::PassThrough>()
                     .0
-                && crate::kuna_stackarggap::address_is_spacebase(&addr)
-                && crate::kuna_passthrough::holds_constant(data, vn)
+                && crate::stackarggap::address_is_spacebase(&addr)
+                && crate::passthrough::holds_constant(data, vn)
             {
                 data.get_call_specs_mut(idx)
                     .get_active_input()
@@ -559,7 +546,7 @@ pub fn check_input_trial_use(
 
         // (kuna) `hiddenretarg`: an active hidden-return register is no argument
         // when no callee could be returning through it.
-        crate::kuna_hiddenretarg::rescore_active_trial(data, idx, i);
+        crate::hiddenretarg::rescore_active_trial(data, idx, i);
 
         // If definitely not used, free up the dataflow.
         if data
@@ -570,7 +557,7 @@ pub fn check_input_trial_use(
         {
             let c = data.new_constant(vn_size, 0);
             let _ = data.op_set_input(op, c, slot);
-            crate::kuna_directalias::refresh(data, aliascheck, vn);
+            crate::directalias::refresh(data, aliascheck, vn);
         }
     }
 }
@@ -627,7 +614,7 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     // (kuna) `passthrough`: capture the forwarded registers the call may still
     // take, and retire the trials the pass registered, before any other rule
     // reads the trials.  Inert with the option off.
-    let pass_through = crate::kuna_passthrough::capture(fc, data);
+    let pass_through = crate::passthrough::capture(fc, data);
     let mut newparam: Vec<VarnodeId> = Vec::new();
     // Preserve the fspec parameter (in0).
     if let Some(in0) = data.obank().get(op).and_then(|o| o.get_in(0)) {
@@ -652,13 +639,13 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     // (kuna) `calleearity`: before the argument list is written, reconcile it
     // with a sibling call to the same callee whose list is already final, so one
     // callee does not render with two arities in one function.  See
-    // [`crate::kuna_calleearity`].
-    crate::kuna_calleearity::unify_with_sibling_call(fc, data);
+    // [`crate::calleearity`].
+    crate::calleearity::unify_with_sibling_call(fc, data);
     // (kuna) `argclobber`: and after it, the subtractive direction -- a trailing
     // register argument a previous call's clobber put there is dropped, unless a
     // sibling the additive rule above could read really passed one at that
-    // storage.  Inert with the option off.  See [`crate::kuna_argclobber`].
-    crate::kuna_argclobber::drop_clobber_tail_arg(fc, data);
+    // storage.  Inert with the option off.  See [`crate::argclobber`].
+    crate::argclobber::drop_clobber_tail_arg(fc, data);
 
     let stackoffset = fc.get_stackoffset();
     let num_trials = fc.get_active_input().get_num_trials();
@@ -685,51 +672,50 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
             // Translate the parameter address relative to the caller's spacebase.
             off = spc.wrap_offset(stackoffset.wrapping_add(off));
         }
-        let vn: VarnodeId =
-            if is_unref && crate::kuna_armfloatargs::unread_slot(data, fc, &addr, sz) {
-                data.new_constant(sz, 0)
-            } else if is_unref {
-                // recovered unreferenced address as part of prototype: create the vn.
-                data.new_varnode(sz, &Address::new(spc.clone(), off), None)
-            } else {
-                let cur = match data.obank().get(op).and_then(|o| o.get_in(slot)) {
-                    Some(v) => v,
+        let vn: VarnodeId = if is_unref && crate::armfloatargs::unread_slot(data, fc, &addr, sz) {
+            data.new_constant(sz, 0)
+        } else if is_unref {
+            // recovered unreferenced address as part of prototype: create the vn.
+            data.new_varnode(sz, &Address::new(spc.clone(), off), None)
+        } else {
+            let cur = match data.obank().get(op).and_then(|o| o.get_in(slot)) {
+                Some(v) => v,
+                None => continue,
+            };
+            let cur_size = data.vbank().get(cur).map(|v| v.get_size()).unwrap_or(sz);
+            if cur_size > sz {
+                // Varnode bigger than type: create a truncating SUBPIECE.
+                let cur_addr = data.vbank().get(cur).map(|v| v.get_addr().clone());
+                let cur_addr = match cur_addr {
+                    Some(a) => a,
                     None => continue,
                 };
-                let cur_size = data.vbank().get(cur).map(|v| v.get_size()).unwrap_or(sz);
-                if cur_size > sz {
-                    // Varnode bigger than type: create a truncating SUBPIECE.
-                    let cur_addr = data.vbank().get(cur).map(|v| v.get_addr().clone());
-                    let cur_addr = match cur_addr {
-                        Some(a) => a,
-                        None => continue,
-                    };
-                    let opaddr = data
-                        .obank()
-                        .get(op)
-                        .expect("buildInput: stale op")
-                        .get_addr()
-                        .clone();
-                    let newop = data.new_op(2, opaddr);
-                    let outaddr = if big_endian {
-                        &cur_addr + ((cur_size - sz) as i64)
-                    } else {
-                        cur_addr
-                    };
-                    let outvn = match data.new_varnode_out(sz, &outaddr, newop) {
-                        Ok(v) => v,
-                        Err(_) => continue,
-                    };
-                    data.op_set_opcode_code(newop, OpCode::CPUI_SUBPIECE);
-                    let _ = data.op_set_input(newop, cur, 0);
-                    let zero = data.new_constant(1, 0);
-                    let _ = data.op_set_input(newop, zero, 1);
-                    data.op_insert_before(newop, op);
-                    outvn
+                let opaddr = data
+                    .obank()
+                    .get(op)
+                    .expect("buildInput: stale op")
+                    .get_addr()
+                    .clone();
+                let newop = data.new_op(2, opaddr);
+                let outaddr = if big_endian {
+                    &cur_addr + ((cur_size - sz) as i64)
                 } else {
-                    cur
-                }
-            };
+                    cur_addr
+                };
+                let outvn = match data.new_varnode_out(sz, &outaddr, newop) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                data.op_set_opcode_code(newop, OpCode::CPUI_SUBPIECE);
+                let _ = data.op_set_input(newop, cur, 0);
+                let zero = data.new_constant(1, 0);
+                let _ = data.op_set_input(newop, zero, 1);
+                data.op_insert_before(newop, op);
+                outvn
+            } else {
+                cur
+            }
+        };
         newparam.push(vn);
         // Mark the stack range used to pass this parameter as unmapped.
         if isspacebase {
@@ -738,37 +724,35 @@ pub fn build_input_from_trials(fc: &mut FuncCallSpecs, data: &mut Funcdata) -> P
     }
     // (kuna) `calleearityfwd` / `calleearitylive`: capture the retry candidate
     // while the trials and the CALL's pre-rewrite inputs are both still there.
-    let read_arg = crate::kuna_calleereadarg::capture(fc, data);
+    let read_arg = crate::calleereadarg::capture(fc, data);
     // (kuna `swiftcall`) A call passing only a Swift `self` is, for the
     // callee-body rule, one that recovered nothing.
     let only_self = newparam.len() == 2 && {
         let t = (0..fc.active_input().get_num_trials())
             .map(|i| fc.active_input().get_trial(i))
             .find(|t| t.is_used());
-        t.is_some_and(|t| {
-            crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size())
-        })
+        t.is_some_and(|t| crate::swiftcall::is_self_storage(data, t.get_address(), t.get_size()))
     };
     let pending = if newparam.len() < 2 {
         PendingCallFixup {
-            rescue: crate::kuna_calleearityfwd::capture_empty_call(fc, data),
+            rescue: crate::calleearityfwd::capture_empty_call(fc, data),
             extend: None,
-            body: crate::kuna_calleearitybody::capture_lone_call(fc, data),
+            body: crate::calleearitybody::capture_lone_call(fc, data),
             pass_through,
             read_arg,
         }
     } else if only_self {
         PendingCallFixup {
-            rescue: crate::kuna_calleearityfwd::capture_empty_call(fc, data),
-            extend: crate::kuna_calleearitylive::capture_partial_call(fc, data),
-            body: crate::kuna_calleearitybody::capture_lone_call(fc, data),
+            rescue: crate::calleearityfwd::capture_empty_call(fc, data),
+            extend: crate::calleearitylive::capture_partial_call(fc, data),
+            body: crate::calleearitybody::capture_lone_call(fc, data),
             pass_through,
             read_arg,
         }
     } else {
         PendingCallFixup {
             rescue: None,
-            extend: crate::kuna_calleearitylive::capture_partial_call(fc, data),
+            extend: crate::calleearitylive::capture_partial_call(fc, data),
             body: None,
             pass_through,
             read_arg,
@@ -874,8 +858,8 @@ pub fn build_output_from_trials(
     data: &mut Funcdata,
     trialvn: &[Option<VarnodeId>],
 ) {
-    if crate::kuna_callretpair::build_partial_pair(fc, data, trialvn)
-        || crate::kuna_bejoin::build_high_read(fc, data, trialvn)
+    if crate::callretpair::build_partial_pair(fc, data, trialvn)
+        || crate::bejoin::build_high_read(fc, data, trialvn)
     {
         return;
     }
@@ -915,13 +899,12 @@ pub fn build_output_from_trials(
         // halves become SUBPIECEs of it, instead of staying INDIRECT creations
         // that render as locals the function never assigns.
         let entry = fc.get_entry_address().clone();
-        let order = crate::kuna_bejoin::call_join_order(data, fc.get_active_output(), Some(&entry));
-        let order =
-            crate::kuna_bejoinpass::call_order(data, fc.get_active_output(), trialvn, order);
-        if crate::kuna_rustabi::build_call_output_pair(
+        let order = crate::bejoin::call_join_order(data, fc.get_active_output(), Some(&entry));
+        let order = crate::bejoinpass::call_order(data, fc.get_active_output(), trialvn, order);
+        if crate::rustabi::build_call_output_pair(
             op,
             data,
-            crate::kuna_rustabi::call_model(fc.proto()),
+            crate::rustabi::call_model(fc.proto()),
             &finalvn,
             Some(&entry),
             order,

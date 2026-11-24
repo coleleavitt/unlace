@@ -11,7 +11,7 @@
 //! lower) is the caller's.
 //!
 //! The first shape, [`match_entry_guard_loop`], is the Go stack-growth
-//! prologue (`p2_lift/kuna_gomorestack.rs`); the guarded-cold-call diamond the
+//! prologue (`p2_lift/gomorestack.rs`); the guarded-cold-call diamond the
 //! existing strippers hand-match is the next candidate to migrate when a new
 //! consumer lands.
 

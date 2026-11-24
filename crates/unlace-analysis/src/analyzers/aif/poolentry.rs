@@ -220,7 +220,7 @@ fn referenced_words(
             .unwrap_or(u64::MAX);
         let body =
             super::check_valid_subroutine(decoder, listing, entry, entry, gap_hi).or_else(|| {
-                super::kuna_ptrentry::check_terminating_routine(decoder, listing, entry, gap_hi)
+                super::ptrentry::check_terminating_routine(decoder, listing, entry, gap_hi)
             });
         let Some(body) = body else { continue };
         for vma in body {

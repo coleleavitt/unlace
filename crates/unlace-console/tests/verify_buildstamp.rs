@@ -5,7 +5,7 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use unlace_console::kuna_buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
+use unlace_console::buildstamp::{ChildKind, PARENT_ENV, REPLY, identity};
 
 fn run(parent: Option<&str>) -> (String, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_decomp_dbg"));

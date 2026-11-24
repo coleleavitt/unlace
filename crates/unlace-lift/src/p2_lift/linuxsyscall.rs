@@ -135,7 +135,7 @@ pub enum LinuxSyscallMode {
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for LinuxSyscallMode {
+impl crate::optionset::KunaOption for LinuxSyscallMode {
     const NAME: &'static str = "linuxsyscall";
     crate::kuna_option_id!();
 

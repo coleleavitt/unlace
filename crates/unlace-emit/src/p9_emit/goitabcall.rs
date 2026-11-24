@@ -23,10 +23,8 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_goitabcalls::{
-    GoItabCalls, ITAB_FUN_OFFSET_64, ITAB_RECORD_PREFIX, itab_record_name,
-};
-use crate::kuna_langfacet::LangFacet;
+use crate::goitabcalls::{GoItabCalls, ITAB_FUN_OFFSET_64, ITAB_RECORD_PREFIX, itab_record_name};
+use crate::langfacet::LangFacet;
 use unlace_base::address::Address;
 
 /// How many defining ops [`table_interface`] follows back from a table value.

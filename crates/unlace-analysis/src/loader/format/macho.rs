@@ -88,11 +88,11 @@ pub fn in_readonly_segment(segments: &[(u64, u64)], section: &object::Section) -
 /// Mach-O then loads with the generic `AARCH64:LE:64:v8A` spec exactly as any
 /// arm64. Effective at *load* time, before any console `option` command, and
 /// read live so a test can toggle it in-process.
-pub use unlace_decomp::kuna_macho_arm64e::MACHO_ARM64E_ENV;
+pub use unlace_decomp::macho_arm64e::MACHO_ARM64E_ENV;
 
 /// Whether the arm64e Apple-Silicon spec gate is enabled ([`MACHO_ARM64E_ENV`]).
 fn arm64e_gate_enabled() -> bool {
-    unlace_decomp::kuna_macho_arm64e::macho_arm64e_enabled()
+    unlace_decomp::macho_arm64e::macho_arm64e_enabled()
 }
 
 /// Whether a thin Mach-O's header reports the arm64e CPU subtype

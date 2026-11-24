@@ -82,7 +82,7 @@ struct StackSolver {
     /// Number of variables missing an equation (C++ `missedvariables`).
     missedvariables: int4,
     /// (kuna) The pops settled so far, by INDIRECT output.
-    settled: crate::kuna_calleepopslot::SettledPops,
+    settled: crate::calleepopslot::SettledPops,
     /// (kuna `stackexitanchor`) `(variable, value)` read off the epilogue:
     /// applied after the exact equations and before any guess.
     anchors: Vec<(int4, int4)>,
@@ -105,7 +105,7 @@ impl StackSolver {
             companion: Vec::new(),
             soln: Vec::new(),
             missedvariables: 0,
-            settled: crate::kuna_calleepopslot::SettledPops::new(),
+            settled: crate::calleepopslot::SettledPops::new(),
             anchors: Vec::new(),
             call_out: std::collections::HashMap::new(),
             dynamic: Vec::new(),
@@ -433,7 +433,7 @@ impl StackSolver {
                     // majority of calls under a spec whose default model is
                     // `__stdcall extrapop="unknown"`, and is the x86-32
                     // return-address size: the call's own pushes are the measure.
-                    use crate::kuna_calleepop::RETURN_ADDRESS_ONLY;
+                    use crate::calleepop::RETURN_ADDRESS_ONLY;
                     let ret_bytes = callee
                         .and_then(|fc_idx| {
                             let call = data.get_call_specs(fc_idx).get_op();
@@ -441,7 +441,7 @@ impl StackSolver {
                                 .get(call)
                                 .map(|c| c.get_addr().clone())
                                 .and_then(|at| {
-                                    crate::kuna_calleepop::return_address_bytes(data, id, &at)
+                                    crate::calleepop::return_address_bytes(data, id, &at)
                                 })
                         })
                         .unwrap_or(RETURN_ADDRESS_ONLY);
@@ -450,12 +450,12 @@ impl StackSolver {
                     if let (Some(sp), Some(out), Some(fc_idx)) = (othervn, out, callee) {
                         let entry = data.get_call_specs(fc_idx).get_entry_address().clone();
                         let call = data.get_call_specs(fc_idx).get_op();
-                        if let Some(guess) = crate::kuna_calleepopframe::guess_extra_pop(
-                            data, &spacebase, call, sp, out,
-                        ) {
+                        if let Some(guess) =
+                            crate::calleepopframe::guess_extra_pop(data, &spacebase, call, sp, out)
+                        {
                             rhs = guess;
                         } else {
-                            let (guess, settles) = crate::kuna_calleepopslot::guess_extra_pop(
+                            let (guess, settles) = crate::calleepopslot::guess_extra_pop(
                                 data,
                                 &spacebase,
                                 &entry,
@@ -535,7 +535,7 @@ impl StackSolver {
         if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+            .get::<crate::stackexitanchor::StackExitAnchor>()
             .0
         {
             for &(call, value) in data.kuna_stack_exit_anchors() {
@@ -635,12 +635,12 @@ impl StackSolver {
     /// (kuna) A literal, or a value that evaluates to one (`mov ax,8;
     /// sub sp,ax`): the adjustment then has its exact equation.
     fn is_const(data: &Funcdata, vn: Option<VarnodeId>) -> bool {
-        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8))
+        vn.and_then(|v| crate::bejoin::literal_value(data, v, 8))
             .is_some()
     }
 
     fn const_off(data: &Funcdata, vn: Option<VarnodeId>) -> uintb {
-        vn.and_then(|v| crate::kuna_bejoin::literal_value(data, v, 8))
+        vn.and_then(|v| crate::bejoin::literal_value(data, v, 8))
             .unwrap_or(0) as uintb
     }
 
@@ -967,7 +967,7 @@ pub fn analyze_extra_pop(data: &mut Funcdata, stackspace: &Rc<AddrSpace>, spcbas
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+        .get::<crate::stackexitanchor::StackExitAnchor>()
         .0
     {
         if let Some(var) = solver.inconsistent() {

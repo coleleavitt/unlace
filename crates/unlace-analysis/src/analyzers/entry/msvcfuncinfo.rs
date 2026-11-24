@@ -16,14 +16,14 @@
 
 use object::read::pe::PeFile64;
 use object::{Object, ObjectSymbol};
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 
 use crate::pass::{AnalysisOutput, CommentFact, FidMatch};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
-use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
+use unlace_decomp::itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
 
-use super::kuna_msvceh::type_name;
+use super::msvceh::type_name;
 
 /// `FuncInfo::magicNumber` values (the low 3 bits are the version).
 const FH3_MAGIC_MIN: u32 = 0x1993_0520;

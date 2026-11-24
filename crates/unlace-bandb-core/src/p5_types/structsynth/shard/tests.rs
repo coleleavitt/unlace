@@ -103,7 +103,7 @@ fn a_replay_names_every_structure_as_the_ledger_does() {
             size,
             &unclaimed,
             &[],
-            crate::kuna_structmerge::StructMergeMode::Off,
+            crate::structmerge::StructMergeMode::Off,
         )
         .map(|t| t.get_name().to_string());
         assert_eq!(replay.lookup_or_mint(&request), real);
@@ -178,7 +178,7 @@ fn a_held_name_is_never_minted_over() {
         16,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .map(|t| t.get_name().to_string());
     assert_eq!(real.as_deref(), Some("struct_1"));
@@ -200,7 +200,7 @@ fn a_table_rebuilds_the_same_structures_in_another_factory() {
             size,
             &unclaimed,
             &[],
-            crate::kuna_structmerge::StructMergeMode::Off,
+            crate::structmerge::StructMergeMode::Off,
         );
     }
     let other = factory();
@@ -233,7 +233,7 @@ fn a_table_rebuilds_the_same_structures_in_another_factory() {
         24,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .unwrap();
     assert!(install_table(&worker, &table).is_err());
@@ -255,7 +255,7 @@ fn a_table_rebuilds_the_same_structures_in_another_factory() {
             size,
             &unclaimed,
             &[],
-            crate::kuna_structmerge::StructMergeMode::Off,
+            crate::structmerge::StructMergeMode::Off,
         )
         .unwrap();
         // The parameter's pointer keeps the structure reachable.
@@ -301,7 +301,7 @@ fn a_field_type_is_rebuilt_only_when_it_is_the_same_type() {
         16,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .unwrap();
     assert_eq!(TypeRecipe::of(&minted), None);
@@ -364,7 +364,7 @@ fn the_unknown_placeholder_travels_as_itself() {
         16,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .unwrap();
     install_table(&g, &decode_table(&encode_table(replay.table())).unwrap()).unwrap();
@@ -424,7 +424,7 @@ fn a_forced_hook_answers_in_order_and_notices_a_changed_script() {
         16,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .unwrap();
     let hook = ShardHook::forcing(at_load());
@@ -497,7 +497,7 @@ fn minted_structures_are_rendered_by_number() {
             size,
             &[],
             &[],
-            crate::kuna_structmerge::StructMergeMode::Off,
+            crate::structmerge::StructMergeMode::Off,
         )
         .unwrap()
     })
@@ -550,7 +550,7 @@ fn a_recording_hook_reports_its_own_answers() {
         8,
         &[],
         &[],
-        crate::kuna_structmerge::StructMergeMode::Off,
+        crate::structmerge::StructMergeMode::Off,
     )
     .unwrap();
     let hook = ShardHook::recording(Rc::new(AtLoad::of(&f)));

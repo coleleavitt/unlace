@@ -31,7 +31,7 @@ fn architecture() -> Architecture {
     arch.types_impl().set_default_alignment_map();
     arch.build_core_types().unwrap();
     arch.kuna_options
-        .set(crate::kuna_armconstantshift::ConstShiftMode::All);
+        .set(crate::armconstantshift::ConstShiftMode::All);
     arch
 }
 fn function() -> Funcdata {
@@ -179,7 +179,7 @@ fn signed_shifts_with_proven_safe_known_bits_keep_the_compact_form() {
 
 #[test]
 fn only_the_all_value_plans_a_64_bit_shift() {
-    use crate::kuna_armconstantshift::ConstShiftMode;
+    use crate::armconstantshift::ConstShiftMode;
     let mut arch = architecture();
     let mut fd = function();
     let input = fd.new_unique(8, Some(Rc::new(Datatype::new(8, type_metatype::TYPE_INT))));
@@ -203,7 +203,7 @@ fn only_the_all_value_plans_a_64_bit_shift() {
 /// The two-valued spellings keep their meaning, including the bare `on`.
 #[test]
 fn option_values_keep_the_two_valued_spellings() {
-    use crate::kuna_armconstantshift::{ConstShiftMode, OptionArmConstShift};
+    use crate::armconstantshift::{ConstShiftMode, OptionArmConstShift};
     for (value, mode) in [
         ("off", ConstShiftMode::Off),
         ("on", ConstShiftMode::On),

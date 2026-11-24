@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use super::kuna_entrychecks::CheckedAif;
+use super::entrychecks::CheckedAif;
 
 const HEADER: &str = "kuna-armframes 1";
 

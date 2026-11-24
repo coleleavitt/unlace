@@ -42,8 +42,8 @@ impl KernelcacheChoice {
     /// The choice of the load in progress (`LoadOptions::kernelcache`, else
     /// [`KERNELCACHE_ENV`]).
     pub fn in_force() -> Self {
-        crate::kuna_loadoptions::scoped(|o| o.kernelcache.clone())
-            .unwrap_or_else(crate::kuna_loadoptions::env::kernelcache)
+        crate::loadoptions::scoped(|o| o.kernelcache.clone())
+            .unwrap_or_else(crate::loadoptions::env::kernelcache)
     }
 
     /// The choice [`KERNELCACHE_ENV`] states; an unset or unparsable value is

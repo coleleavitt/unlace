@@ -28,59 +28,59 @@
 //! *adjacent* ranges — a straight-line instruction run cost one B-tree node per
 //! decoded instruction.
 
+mod a32switch;
+mod a64switch;
+pub mod accesswidth;
+mod armwalkmode;
+pub mod callbackentry;
+pub mod callerreads;
+pub mod calltable;
 pub mod classify;
+mod compactrefs;
 pub mod context;
 pub mod decode;
-mod kuna_a32switch;
-mod kuna_a64switch;
-pub mod kuna_accesswidth;
-mod kuna_armwalkmode;
-pub mod kuna_callbackentry;
-pub mod kuna_callerreads;
-pub mod kuna_calltable;
-mod kuna_compactrefs;
-pub(crate) mod kuna_decodememo;
-pub(crate) mod kuna_decodereuse;
-pub mod kuna_dosexit;
-pub mod kuna_entrythumbflow;
-mod kuna_fingerprintcontext;
-pub mod kuna_floatglobals;
-mod kuna_flowmode;
-pub(crate) mod kuna_framemode;
-pub mod kuna_funcchunks;
-mod kuna_gotcall;
-mod kuna_insnindex;
-mod kuna_insnstore;
-pub mod kuna_mzsweep;
-pub mod kuna_opaqueglobals;
-mod kuna_pcform;
-pub mod kuna_pdecode;
-mod kuna_picbase;
-mod kuna_picpool;
-mod kuna_pltstub;
-pub mod kuna_poolextents;
-mod kuna_poolref;
-mod kuna_ppclocalentry;
-pub mod kuna_rawdiscover;
-pub mod kuna_rawextent;
-mod kuna_regcarry;
-mod kuna_switchextent;
-mod kuna_switchflow;
-mod kuna_switchtable;
-pub mod kuna_tailcallentry;
-mod kuna_thumbswitch;
-pub mod kuna_thunkentry;
-pub mod kuna_unflaggedcode;
-mod kuna_unmappedentry;
-mod kuna_walkcontext;
-mod kuna_x86listingswitch;
+pub(crate) mod decodememo;
+pub(crate) mod decodereuse;
+pub mod dosexit;
+pub mod entrythumbflow;
+mod fingerprintcontext;
+pub mod floatglobals;
+mod flowmode;
+pub(crate) mod framemode;
+pub mod funcchunks;
+mod gotcall;
+mod insnindex;
+mod insnstore;
 pub mod model;
+pub mod mzsweep;
+pub mod opaqueglobals;
+mod pcform;
+pub mod pdecode;
+mod picbase;
+mod picpool;
+mod pltstub;
+pub mod poolextents;
+mod poolref;
+mod ppclocalentry;
+pub mod rawdiscover;
+pub mod rawextent;
+mod regcarry;
+mod switchextent;
+mod switchflow;
+mod switchtable;
+pub mod tailcallentry;
+mod thumbswitch;
+pub mod thunkentry;
+pub mod unflaggedcode;
+mod unmappedentry;
 pub mod walk;
+mod walkcontext;
+mod x86listingswitch;
 // (kuna) The read-only cross-reference query behind `unlace xrefs` -- a consumer of
 // the same decode this tier performs, not a pass; nothing commits its output.
 pub mod xrefs;
 
-pub use kuna_pdecode::WalkPlan;
+pub use pdecode::WalkPlan;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Bound;
@@ -135,9 +135,9 @@ impl ListingDetail {
 /// The Listing facade: three sub-models sharing one decode pass (design §2.5).
 pub struct Listing {
     /// Instruction model, keyed by VMA.
-    insns: kuna_insnstore::InstructionStore,
+    insns: insnstore::InstructionStore,
     /// Cross-reference edges, indexed in both address orders.
-    refs: kuna_compactrefs::ReferenceIndex,
+    refs: compactrefs::ReferenceIndex,
     /// Discovered/seeded functions, keyed by entry VMA (ordered).
     funcs: BTreeMap<u64, DiscoveredFunction>,
     /// The coverage universe for the partition / gap walk (sorted, disjoint).
@@ -152,7 +152,7 @@ pub struct Listing {
     /// and the context database disagrees with; empty when it has none.
     mode_runs: Vec<(u64, u64, u32)>,
     /// (kuna `armfuncmode`) The extents painted A32 from function-symbol
-    /// evidence (see [`crate::loader::kuna_armfuncmode`]); empty otherwise.
+    /// evidence (see [`crate::loader::armfuncmode`]); empty otherwise.
     a32_extents: Vec<(u64, u64)>,
     /// A resume must rebuild ordinary coverage after optional i386 expansion.
     x86_switch_rebuild: bool,
@@ -222,13 +222,13 @@ impl Listing {
     }
 
     fn from_partition_store(
-        insns: kuna_insnstore::InstructionStore,
+        insns: insnstore::InstructionStore,
         funcs: BTreeMap<u64, DiscoveredFunction>,
         exec_ranges: Vec<(u64, u64)>,
     ) -> Listing {
         Listing {
             insns,
-            refs: kuna_compactrefs::ReferenceIndex::default(),
+            refs: compactrefs::ReferenceIndex::default(),
             funcs,
             exec_ranges,
             has_assembly: true,
@@ -370,8 +370,8 @@ impl Listing {
         seed_names: &[(u64, String)],
         detail: ListingDetail,
         plan: &WalkPlan,
-        frames: Option<&mut kuna_framemode::FrameModes>,
-        memo: Option<&kuna_decodememo::DecodeMemo>,
+        frames: Option<&mut framemode::FrameModes>,
+        memo: Option<&decodememo::DecodeMemo>,
     ) -> Listing {
         let sites: std::collections::HashSet<u64> = arch
             .loader_transfer_sites
@@ -379,7 +379,7 @@ impl Listing {
             .map(unlace_base::address::Address::get_offset)
             .collect();
         let mips_transfers = (!sites.is_empty())
-            .then(|| crate::loader::kuna_mipsstubs::linkage(file))
+            .then(|| crate::loader::mipsstubs::linkage(file))
             .flatten()
             .map(|linkage| {
                 linkage
@@ -427,7 +427,7 @@ impl Listing {
         if self.x86_switch_rebuild
             || (arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+                .get::<unlace_decomp::analysisgates::X86listingswitch>()
                 .0
                 && file.architecture() == object::Architecture::I386
                 && arch.archid.starts_with("x86:LE:32:"))
@@ -484,9 +484,9 @@ impl Listing {
         seed_names: &[(u64, String)],
         detail: ListingDetail,
         plan: &WalkPlan,
-        frames: Option<&mut kuna_framemode::FrameModes>,
+        frames: Option<&mut framemode::FrameModes>,
         resumed: Option<walk::WalkState>,
-        memo: Option<&kuna_decodememo::DecodeMemo>,
+        memo: Option<&decodememo::DecodeMemo>,
         mips_transfers: Vec<(u64, u64)>,
     ) -> Listing {
         debug_assert!(
@@ -504,9 +504,9 @@ impl Listing {
         // A Mach-O's `LC_DATA_IN_CODE` runs (inline jump tables, literal pools)
         // are data: the walk never decodes them.
         if file.format() == object::BinaryFormat::MachO {
-            let data = crate::loader::kuna_machodataincode::data_in_code_ranges(file);
+            let data = crate::loader::machodataincode::data_in_code_ranges(file);
             if !data.is_empty() {
-                exec_ranges = crate::loader::kuna_machodataincode::subtract(&exec_ranges, &data);
+                exec_ranges = crate::loader::machodataincode::subtract(&exec_ranges, &data);
             }
         }
 
@@ -519,8 +519,8 @@ impl Listing {
                 // caller asked for: `has_refs` reports what was built, not what
                 // was requested.
                 return Listing {
-                    insns: kuna_insnstore::InstructionStore::default(),
-                    refs: kuna_compactrefs::ReferenceIndex::default(),
+                    insns: insnstore::InstructionStore::default(),
+                    refs: compactrefs::ReferenceIndex::default(),
                     funcs: BTreeMap::new(),
                     exec_ranges,
                     has_assembly: detail.assembly,
@@ -562,46 +562,46 @@ impl Listing {
         // as before; on ARM/MIPS it paints Thumb/MIPS16 mode so alt-ISA functions
         // decode correctly instead of as A32/MIPS32 garbage.
         let painter = context::ContextPainter::new(file, arch);
-        let flow_mode = kuna_flowmode::FlowMode::for_object(file, arch, &painter);
-        let arm_walk = kuna_armwalkmode::ArmWalkMode::for_object(file, arch, &painter);
+        let flow_mode = flowmode::FlowMode::for_object(file, arch, &painter);
+        let arm_walk = armwalkmode::ArmWalkMode::for_object(file, arch, &painter);
 
         // The PPC64 ELFv2 local-entry fold (`ppclocalentry`): an intra-module `bl`
         // targets `st_value + <localentry>`, which is a point inside the callee,
         // not a function of its own. Empty on every other architecture (see
         // `kuna_ppclocalentry`).
-        let local_entries = kuna_ppclocalentry::fold_map(file, seeds);
+        let local_entries = ppclocalentry::fold_map(file, seeds);
         let tail_transfers: BTreeMap<u64, u64> = mips_transfers.iter().copied().collect();
         let want_stack_callbacks = arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .get::<unlace_decomp::analysisgates::FastFuncdisc>()
             .0
             && matches!(
                 file.architecture(),
                 object::Architecture::I386 | object::Architecture::X86_64
             );
 
-        let tables = kuna_thumbswitch::HalfwordTables::new(
+        let tables = thumbswitch::HalfwordTables::new(
             file,
             arch.manage().get_default_data_space().cloned(),
             arch.max_jumptable_size as usize,
         );
-        let a32_pool = kuna_a32switch::applies(file, arch)
-            .then(|| kuna_poolref::PoolImage::new(file))
+        let a32_pool = a32switch::applies(file, arch)
+            .then(|| poolref::PoolImage::new(file))
             .flatten();
         let a32_tables = a32_pool
             .as_ref()
-            .map(|pool| kuna_a32switch::A32Tables::new(arch, pool));
-        let a64_pool = kuna_a64switch::applies(file)
-            .then(|| kuna_poolref::PoolImage::new(file))
+            .map(|pool| a32switch::A32Tables::new(arch, pool));
+        let a64_pool = a64switch::applies(file)
+            .then(|| poolref::PoolImage::new(file))
             .flatten();
         let a64_tables = a64_pool
             .as_ref()
-            .map(|pool| kuna_a64switch::A64Tables::new(arch, pool, seeds));
+            .map(|pool| a64switch::A64Tables::new(arch, pool, seeds));
         let x86_tables = arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+            .get::<unlace_decomp::analysisgates::X86listingswitch>()
             .0
-            .then(|| kuna_x86listingswitch::X86Tables::new(file, arch))
+            .then(|| x86listingswitch::X86Tables::new(file, arch))
             .flatten();
         let st = walk::walk(
             translate,
@@ -627,7 +627,7 @@ impl Listing {
             memo,
         );
 
-        let refs = kuna_compactrefs::ReferenceIndex::new(st.refs);
+        let refs = compactrefs::ReferenceIndex::new(st.refs);
 
         Listing {
             insns: st.insns,
@@ -710,7 +710,7 @@ impl Listing {
             None,
             None,
         );
-        let refs = kuna_compactrefs::ReferenceIndex::new(st.refs);
+        let refs = compactrefs::ReferenceIndex::new(st.refs);
         Listing {
             insns: st.insns,
             refs,
@@ -735,7 +735,7 @@ impl Listing {
     pub(crate) fn from_insns_for_test(insns: Vec<Insn>, has_assembly: bool) -> Listing {
         Listing {
             insns: insns.into_iter().map(|i| (i.addr, i)).collect(),
-            refs: kuna_compactrefs::ReferenceIndex::default(),
+            refs: compactrefs::ReferenceIndex::default(),
             funcs: BTreeMap::new(),
             exec_ranges: vec![(0, u64::MAX)],
             has_assembly,
@@ -758,7 +758,7 @@ impl Listing {
     ) -> Listing {
         Listing {
             insns: insns.into_iter().map(|i| (i.addr, i)).collect(),
-            refs: kuna_compactrefs::ReferenceIndex::default(),
+            refs: compactrefs::ReferenceIndex::default(),
             funcs: funcs.into_iter().map(|f| (f.entry, f)).collect(),
             exec_ranges,
             has_assembly: true,
@@ -1085,7 +1085,7 @@ impl Listing {
     pub(crate) fn from_parts_for_test(insns: Vec<Insn>, entries: &[u64]) -> Listing {
         Listing {
             insns: insns.into_iter().map(|i| (i.addr, i)).collect(),
-            refs: kuna_compactrefs::ReferenceIndex::default(),
+            refs: compactrefs::ReferenceIndex::default(),
             funcs: entries.iter().map(|&e| (e, walk::discovered(e))).collect(),
             exec_ranges: Vec::new(),
             has_assembly: false,
@@ -1125,7 +1125,7 @@ mod tests {
             .collect();
         let listing = Listing {
             insns,
-            refs: kuna_compactrefs::ReferenceIndex::default(),
+            refs: compactrefs::ReferenceIndex::default(),
             funcs: BTreeMap::new(),
             exec_ranges: Vec::new(),
             has_assembly: true,
@@ -1178,7 +1178,7 @@ mod tests {
                 engine.set_loader(Box::new(loader));
                 let mut arch = Architecture::new("x86:LE:32:default:gcc", engine);
                 arch.kuna_options
-                    .set(unlace_decomp::kuna_analysisgates::X86listingswitch(true));
+                    .set(unlace_decomp::analysisgates::X86listingswitch(true));
                 let mut seeds = vec![0x100000, 0x1004f0];
                 let expanded = Listing::build_with_meta_without_image(
                     &file,
@@ -1193,7 +1193,7 @@ mod tests {
                 assert!(expanded.function_at(0x100510).is_some());
                 if disable {
                     arch.kuna_options
-                        .set(unlace_decomp::kuna_analysisgates::X86listingswitch(false));
+                        .set(unlace_decomp::analysisgates::X86listingswitch(false));
                 } else {
                     seeds.push(0x10040d);
                 }

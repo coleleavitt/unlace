@@ -13,7 +13,7 @@
 //! `timer_helper(a0,a1,a2,a3)`.
 //!
 //! The loader records, per stub, the function the slot's dynamic relocation
-//! binds it to (`loader::kuna_pltlocal`, joined by relocation symbol, never by
+//! binds it to (`loader::pltlocal`, joined by relocation symbol, never by
 //! name). Flow builds the call spec of a direct call to
 //! such a stub at the definition's entry: the printed name and the flow effects
 //! (no-return, inline, injection) stay the stub's. A stub that declares a

@@ -22,7 +22,7 @@ One iteration:
 1. **Find** a case kuna is bad at (§1 — three routes).
 2. **Investigate**: reproduce it, confirm the reference is genuinely better, localize the
    decision to a phase (§2).
-3. **Implement** one option-gated feature, modelled on `kuna_loweredswitch.rs` (§3).
+3. **Implement** one option-gated feature, modelled on `loweredswitch.rs` (§3).
 4. **Verify & ship**: ablation decides the default, speed is a gate, four green gates,
    PR with a real before/after (§4).
 
@@ -169,7 +169,7 @@ investigating.
      shape. Ground truth is the *installed* angr in the venv (the version that ran), not
      angr master; use the checkout for readability.
 4. **Decide scope.** Small = one Action/Rule-shaped pass, one module, hooked at one
-   registration point (like `kuna_loweredswitch.rs`). **Large** — any of: a new pass
+   registration point (like `loweredswitch.rs`). **Large** — any of: a new pass
    *type* or infrastructure; structuring work beyond one gated pass; >3 ported-core
    anchor files; >1 new module — goes the `[PROPOSAL]` route (§4), design first, no
    implementation before human approval. When the call is close, have a second
@@ -181,7 +181,7 @@ investigating.
 
 ## 3. Implement: one option-gated feature
 
-Canonical template: `crates/unlace-lift/src/p2_lift/kuna_loweredswitch.rs`
+Canonical template: `crates/unlace-lift/src/p2_lift/loweredswitch.rs`
 (+ its `phases.toml` row and `tests/stages/ghangr-loweredswitch.toml`). Model the code,
 registration, and test on it. New logic lives in `kuna_<slug>.rs` inside the owning phase
 folder; edits to ported-core files only where an anchor demands it, each marked
@@ -198,7 +198,7 @@ The artifact checklist (every item, or the gates fail opaquely):
    `tier`, `symptoms`, `source_decompiler`, `inspiration`, `change_kind`.
 3. Option name registered in `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (two places; grep the current total):
-   `src/p0_knowledge/kuna_phases/tests.rs` (count asserts) and
+   `src/p0_knowledge/phases/tests.rs` (count asserts) and
    `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
    `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
    `openfile write`/`phase catalog` recapture documented in that file's header).
@@ -303,7 +303,7 @@ re-queues violations.
    written in its `docs/spec/` chapter (and its `phases.toml` row when it has one). A change
    whose outcome is a judgement — faithfulness vs readability, a speculative or destructive
    recovery, a speed trade, a heuristic scanner — sits behind a runtime `--option <name>`
-   (`phases.toml` settableTable + `kuna_option_dispatch.rs`). A **strict correctness fix**,
+   (`phases.toml` settableTable + `option_dispatch.rs`). A **strict correctness fix**,
    whose `off` value would only reproduce output that is false about the program, ships with
    no option and is always on. A **refinement** of an existing feature extends that feature's
    option (unconditional when the parent is on, or a new value), never a sibling flag. A

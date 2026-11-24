@@ -551,14 +551,14 @@
  "review_round_2": {
   "finding": "re-declaring a frame local signed moved arithmetic under a signed compare from unsigned wraparound to signed-overflow UB (dec_neg, cnt_wrap, spin, count_down shapes; gcc -O0 and gcc/clang -O2 print a different value at 2^63); 23 flips removed no cast",
   "response": [
-   "a high only castsign admits is left alone when + - * << or unary - reads it (kuna_castsign.rs can_overflow)",
-   "it is re-declared only when a cast the new declaration makes a no-op prints today (kuna_castsign.rs drops_printed_cast)",
+   "a high only castsign admits is left alone when + - * << or unary - reads it (castsign.rs can_overflow)",
+   "it is re-declared only when a cast the new declaration makes a no-op prints today (castsign.rs drops_printed_cast)",
    "round trip extended to boundary inputs, gcc and clang at -O0 and -O2, and the reviewer's shapes; spec 9.3 states the -fwrapv caveat for signedness auto"
   ]
  },
  "review_round_3": {
   "finding": "an unchanged `v == 3000000000` (or 10000000000000000000) line computes a different value once `v` is re-declared signed: the decimal literal's C type is wider than the declaration, so a signed `v` is sign-extended",
-  "fix": "kuna_castsign.rs (wide_literal): a high only castsign admits is left alone when == != & | ^ meets it, or its printed expression, with a constant whose top bit is set (directly or inside the other operand's printed expression)",
+  "fix": "castsign.rs (wide_literal): a high only castsign admits is left alone when == != & | ^ meets it, or its printed expression, with a constant whose top bit is set (directly or inside the other operand's printed expression)",
   "test": "castsign_eq_x86_64.c (gcc/clang -O0: d_eq32, c_eq64, c_ne64, c_or64, control c_eq7) in a_signed_only_variable_round_trips_through_the_printed_c; fails on the round-2 build (gcc -O0 option on: d_eq32 1 1 0 for 2 1 0), passes with the rule",
   "review_repros": "cw.c/cz.c at gcc/clang -O0/-O1/-O2: option on prints byte-identical C to option off in all 12 builds",
   "not_fixed_here": "signedness auto register locals have the same hazard on origin/main: clang -O0 `unsigned v = ntohl(*p); if (v == 3000000000u) return 2; return (int)v < 0;` prints `int v1; // eax` with `if (v1 != 3000000000)`, C returns 1 where the binary returns 2",

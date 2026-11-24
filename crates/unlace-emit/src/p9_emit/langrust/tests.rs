@@ -1,8 +1,8 @@
 //! Tests for the rust-language profile.
 
 use super::*;
-use crate::kuna_lang::OutLang;
-use crate::kuna_lang::OutLangExt;
+use crate::lang::OutLang;
+use crate::lang::OutLangExt;
 use crate::printc::tokens;
 
 #[test]
@@ -72,12 +72,7 @@ fn rust_caps_neutralize_the_default_on_c_renderings() {
 /// inside a `match` arm inside a loop would break the *loop*.
 #[test]
 fn rust_match_does_not_capture_break() {
-    assert!(
-        crate::kuna_lang::OutLang::C
-            .profile()
-            .caps
-            .switch_captures_break
-    );
+    assert!(crate::lang::OutLang::C.profile().caps.switch_captures_break);
     assert!(!OutLang::Rust.profile().caps.switch_captures_break);
 }
 
@@ -223,7 +218,7 @@ fn absent_keywords_are_paired_with_a_forbidding_cap() {
 /// emitter: each names the shape `printc.rs` should reach for.
 #[test]
 fn rust_forms_select_the_rust_shapes() {
-    use crate::kuna_lang::*;
+    use crate::lang::*;
     let f = OutLang::Rust.profile().forms;
     assert_eq!(f.proto, ProtoForm::RustFnArrow);
     assert_eq!(f.decl, DeclForm::RustLetColon);

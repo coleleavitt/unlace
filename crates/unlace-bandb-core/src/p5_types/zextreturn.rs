@@ -59,7 +59,7 @@ pub fn unsigned_trim(
     let Some((narrow, list)) = narrow_output(data, storage, size) else {
         return false;
     };
-    crate::kuna_narrowext::extends_by_sign(data.get_arch().narrow_ext.output, list, &narrow, size)
+    crate::narrowext::extends_by_sign(data.get_arch().narrow_ext.output, list, &narrow, size)
         || read_width(data, &narrow, size).is_some_and(|w| w <= 4)
 }
 
@@ -90,8 +90,8 @@ pub fn zero_extended_word(
         .is_some_and(|v| v.get_nz_mask() >> (size * 8 - 1) & 1 != 0);
     let rule = data.get_arch().narrow_ext.output;
     let Some((narrow, any, by_type)) = narrow_output(data, storage, size).map(|(narrow, list)| {
-        let any = crate::kuna_narrowext::sign_extends_any(rule, list, &narrow, size);
-        let by_type = crate::kuna_narrowext::extends_by_sign(rule, list, &narrow, size);
+        let any = crate::narrowext::sign_extends_any(rule, list, &narrow, size);
+        let by_type = crate::narrowext::extends_by_sign(rule, list, &narrow, size);
         (narrow, any, by_type)
     }) else {
         return false;

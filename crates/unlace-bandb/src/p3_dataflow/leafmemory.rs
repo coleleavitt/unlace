@@ -1,6 +1,6 @@
 //! Preserve caller stack storage across a complete, memory-write-free helper.
 
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -8,7 +8,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN};
 use crate::funcdata::Funcdata;
-use crate::kuna_rustabi::CalleeReturnWrites;
+use crate::rustabi::CalleeReturnWrites;
 
 fn register_only_body(summary: &CalleeReturnWrites, register: i32, stack: (u64, u32)) -> bool {
     if !summary.is_complete()
@@ -84,7 +84,7 @@ pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i
             .get_offset()
             .wrapping_sub(call.get_spacebase_offset()),
     );
-    if !crate::kuna_calleeprotostack::above_callee_frame(relative, size, width, width) {
+    if !crate::calleeprotostack::above_callee_frame(relative, size, width, width) {
         return false;
     }
     let Some(register) = manager.get_space_by_name("register") else {
@@ -109,8 +109,8 @@ pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i
     })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.leafmemory_preserves = Some(preserves);
 }
 

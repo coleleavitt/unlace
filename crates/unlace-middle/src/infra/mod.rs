@@ -5,5 +5,5 @@
 
 pub mod action;
 pub mod architecture;
-pub mod kuna_fasthash;
+pub mod fasthash;
 pub mod remote_provider;

@@ -373,14 +373,14 @@ pub fn return_to_halt(data: &mut Funcdata, ops: &[OpId]) -> KunaResult<()> {
 /// Ghidra's `Comment::user2`, the instruction comment the printer emits inline.
 const USER2: unlace_base::types::uint4 = 2;
 
-pub use crate::kuna_coreoptions::ItaniumEh;
+pub use crate::coreoptions::ItaniumEh;
 
 crate::kuna_arch_state!(EhTable);
 
 /// The image's call-site table, when `itaniumeh` is on; empty before the loader commits one.
 pub fn eh_table(glb: &crate::context::ArchContext) -> Option<std::rc::Rc<EhTable>> {
     glb.kuna_options
-        .get::<crate::kuna_coreoptions::ItaniumEh>()
+        .get::<crate::coreoptions::ItaniumEh>()
         .on
         .then(|| glb.kuna_states.get_rc::<EhTable>().unwrap_or_default())
 }

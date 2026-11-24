@@ -24,7 +24,7 @@
   "source_decompiler": "kuna",
   "div": "DIV-141",
   "default_on": true,
-  "owning_file": "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_win32sigs.rs",
+  "owning_file": "decompiler/crates/kuna-analysis/src/analyzers/protos/win32sigs.rs",
   "owning_function": "Win32SigsPass::run",
   "upstream_anchor": "Ghidra ApplyDataArchiveAnalyzer (.gdt archives)",
   "spec_chapter": "docs/spec/01-program-prep.md",
@@ -51,7 +51,7 @@
   "speed_delta_pct": -16.94,
   "parity": "make test PARITY OK 675/675; make test-stages PARITY OK 704/704; make test-cli 99/99; make check-spec OK; kuna catalog --check OK; workspace suite green",
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_win32sigs.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/protos/win32sigs.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs",
     "decompiler/crates/kuna-analysis/src/pass.rs",
     "decompiler/crates/kuna-analysis/src/passes.rs",

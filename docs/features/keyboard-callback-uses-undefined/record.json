@@ -25,7 +25,7 @@
   "default_on_recommended": true,
   "ablation_changed": 0,
   "parity": "make test PARITY OK 675/675; make test-stages PARITY OK 620/620 (615 + this feature's 5); make check-spec OK; kuna catalog --check OK; tests/cli 28/28",
-  "owning_file": "decompiler/crates/kuna-decomp/src/p4_calls/kuna_inputparamgap.rs",
+  "owning_file": "decompiler/crates/kuna-decomp/src/p4_calls/inputparamgap.rs",
   "owning_function": "ParamListStandard::force_inactive_chain",
   "upstream_anchor": "fspec.cc:1519 (ParamListStandard::forceInactiveChain), coreaction.cc:4941 (ActionInputPrototype::apply)",
   "spec_chapter": "docs/spec/04-calls-and-prototypes.md",

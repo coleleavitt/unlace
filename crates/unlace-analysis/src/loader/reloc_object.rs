@@ -40,7 +40,7 @@
 //!    overwriting opcode bits. MIPS fields, with o32's paired `HI16`/`LO16`
 //!    addends and the `$gp`-relative and GOT forms against a synthetic `_gp`
 //!    and GOT laid out between the other sections and the small data, are
-//!    [`super::kuna_mipsreloc`]'s. A PowerPC64 ELFv1 function symbol names an
+//!    [`super::mipsreloc`]'s. A PowerPC64 ELFv1 function symbol names an
 //!    `.opd` descriptor; it is registered, and called, at the descriptor's code.
 //!    `A` is the entry's addend for a RELA table and the in-place field value for
 //!    a REL-style one (COFF, 32-bit ELF). Entries that cannot be applied are left
@@ -68,7 +68,7 @@ use object::{
 };
 
 use super::format::ObjectFormat;
-use super::kuna_mipsreloc;
+use super::mipsreloc;
 use super::reloc_apply::{self, RelocationFailure};
 
 /// Synthetic load base for the first `SHF_ALLOC` section (angr's CLE default for
@@ -310,7 +310,7 @@ pub struct RelocLayout {
     /// laid out (a `.debug_*`/`.rela.*` table, or an empty `SHF_ALLOC`
     /// placeholder) and has no address in the loaded image.  Exposed so the
     /// analysis tier can rebase a pre-link fact through its OWN section's delta
-    /// (see [`crate::loader::kuna_relocrebase`]) — sections are laid out
+    /// (see [`crate::loader::relocrebase`]) — sections are laid out
     /// non-contiguously, so there is no single global offset.
     pub section_vma: HashMap<SectionIndex, u64>,
     /// `(section, laid size)` for each section laid out shorter than its header
@@ -337,7 +337,7 @@ pub struct RelocLayout {
     /// fills and which therefore does not fold. Disjoint from the extern slots
     /// and from [`Self::common_range`].
     pub import_slots: Vec<(u64, u64)>,
-    pub nullable_relocations: Vec<unlace_decomp::kuna_nullable_reloc::NullableRelocation>,
+    pub nullable_relocations: Vec<unlace_decomp::nullable_reloc::NullableRelocation>,
     /// Additional addresses of the same logical import, `(alias, canonical)`:
     /// its import slot, beside the synthetic extern address it is entered at.
     pub function_address_aliases: Vec<(u64, u64)>,
@@ -430,7 +430,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     let mut diagnostics = RelocDiagnostics::default();
     let architecture = file.architecture();
     let machine = elf_machine(file);
-    let unit = super::kuna_wordaddr::address_unit_bytes(machine);
+    let unit = super::wordaddr::address_unit_bytes(machine);
     let little_endian = file.is_little_endian();
     // The static TLS block the AArch64 TLSLE relocations resolve against.
     let tls = (architecture == Architecture::Aarch64 && file.format() == object::BinaryFormat::Elf)
@@ -459,20 +459,20 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         Architecture::Mips | Architecture::Mips64 | Architecture::Mips64_N32
     ) && file.format() == object::BinaryFormat::Elf;
     let macho = file.format() == object::BinaryFormat::MachO;
-    let mut gp: Option<kuna_mipsreloc::Gp> = None;
+    let mut gp: Option<mipsreloc::Gp> = None;
     let mut got_entries = 0;
     if mips {
-        alloc.sort_by_key(|sec| kuna_mipsreloc::is_small_data(sec.name().unwrap_or("")));
+        alloc.sort_by_key(|sec| mipsreloc::is_small_data(sec.name().unwrap_or("")));
         let sized: Vec<(SectionIndex, u64)> = alloc.iter().map(|s| (s.index(), s.size())).collect();
-        got_entries = kuna_mipsreloc::entry_bound(file, &sized);
+        got_entries = mipsreloc::entry_bound(file, &sized);
     }
     let small = alloc
         .iter()
-        .position(|sec| mips && kuna_mipsreloc::is_small_data(sec.name().unwrap_or("")))
+        .position(|sec| mips && mipsreloc::is_small_data(sec.name().unwrap_or("")))
         .unwrap_or(alloc.len());
     for (i, sec) in alloc.iter().enumerate() {
         if mips && i == small {
-            let g = kuna_mipsreloc::Gp::new(
+            let g = mipsreloc::Gp::new(
                 align_up(cursor, 16),
                 if file.is_64() { 8 } else { 4 },
                 got_entries,
@@ -526,7 +526,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         cursor = vma.wrapping_add(size);
     }
     if mips && gp.is_none() {
-        let g = kuna_mipsreloc::Gp::new(
+        let g = mipsreloc::Gp::new(
             align_up(cursor, 16),
             if file.is_64() { 8 } else { 4 },
             got_entries,
@@ -537,7 +537,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     }
     let got_base = gp.as_ref().map(|g| g.base());
     let input_gp = if mips {
-        kuna_mipsreloc::input_gp(file)
+        mipsreloc::input_gp(file)
     } else {
         Ok(0)
     };
@@ -581,7 +581,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
     };
     let mut extern_of: HashMap<SymbolIndex, u64> = HashMap::new();
     let mut extern_order: Vec<(SymbolIndex, u64)> = Vec::new();
-    let mut common_allocator = super::kuna_commonalloc::CommonAllocator::new(
+    let mut common_allocator = super::commonalloc::CommonAllocator::new(
         extern_cursor,
         file.symbols()
             .filter(|symbol| symbol.section() == SymbolSection::Undefined)
@@ -589,7 +589,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         file.is_64(),
     );
     let weak_limit = common_allocator
-        .reserve(super::kuna_nullable_reloc::reserved_bytes(file))
+        .reserve(super::nullable_reloc::reserved_bytes(file))
         .unwrap_or(0);
     // Externs reached through a PLT-relative relocation (`R_X86_64_PLT32`) or a
     // branch/call instruction field are *code targets* — even when the undefined
@@ -631,18 +631,18 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         // Collect first so the `laid` buffer can be borrowed mutably below.
         let relocs: Vec<(u64, object::Relocation)> = sec.relocations().collect();
         let lo_halves = if mips {
-            kuna_mipsreloc::lo_halves(file, &relocs, sec.data().unwrap_or(&[]), little_endian)
+            mipsreloc::lo_halves(file, &relocs, sec.data().unwrap_or(&[]), little_endian)
         } else {
             Vec::new()
         };
         if let Some(g) = gp.as_mut() {
             let gp_value = g.gp();
             let mut resolve = |target: RelocationTarget| {
-                let local = kuna_mipsreloc::is_local(file, target);
+                let local = mipsreloc::is_local(file, target);
                 if let RelocationTarget::Symbol(idx) = target {
-                    if let Some(special) = kuna_mipsreloc::special_symbol(file, idx, gp_value) {
+                    if let Some(special) = mipsreloc::special_symbol(file, idx, gp_value) {
                         let address = special.unwrap_or(0);
-                        return Some(kuna_mipsreloc::Target {
+                        return Some(mipsreloc::Target {
                             address,
                             local,
                             gp_disp: special.is_none(),
@@ -667,7 +667,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                     RelocationTarget::Absolute => 0,
                     _ => return None,
                 };
-                Some(kuna_mipsreloc::Target {
+                Some(mipsreloc::Target {
                     address,
                     local,
                     gp_disp: false,
@@ -675,9 +675,9 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             };
             for (_, reloc) in &relocs {
                 if let (Some(r_type), RelocationTarget::Symbol(idx)) =
-                    (kuna_mipsreloc::r_type_of(reloc), reloc.target())
+                    (mipsreloc::r_type_of(reloc), reloc.target())
                 {
-                    if kuna_mipsreloc::targets_code(r_type) {
+                    if mipsreloc::targets_code(r_type) {
                         code_externs.insert(idx);
                     }
                 }
@@ -696,7 +696,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
                 let (offset, reloc) = &relocs[record];
                 diagnostics.record(
                     architecture,
-                    kuna_mipsreloc::r_type_of(reloc),
+                    mipsreloc::r_type_of(reloc),
                     reason,
                     sec_vma,
                     *offset,
@@ -714,17 +714,14 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             Architecture::I386 | Architecture::X86_64 | Architecture::X86_64_X32
         ) && sec.kind() == SectionKind::Text
         {
-            code_externs.extend(super::kuna_x86_relcode::code_targets(
-                &laid[li].data,
-                &relocs,
-            ));
+            code_externs.extend(super::x86_relcode::code_targets(&laid[li].data, &relocs));
         }
         if matches!(
             architecture,
             Architecture::Sparc | Architecture::Sparc32Plus
         ) && sec.kind() == SectionKind::Text
         {
-            code_externs.extend(super::kuna_sparc_relcode::code_targets(
+            code_externs.extend(super::sparc_relcode::code_targets(
                 &laid[li].data,
                 &relocs,
                 little_endian,
@@ -736,7 +733,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         for (offset, reloc) in relocs {
             // A word-addressed object counts r_offset in its address unit.
             let offset = offset.wrapping_mul(unit);
-            let r_type = kuna_mipsreloc::r_type_of(&reloc);
+            let r_type = mipsreloc::r_type_of(&reloc);
             let insn = laid[li]
                 .data
                 .get(offset as usize..)
@@ -1035,7 +1032,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
             function_slots.push((idx, slot));
         }
     }
-    let (nullable_relocations, allocated) = super::kuna_nullable_reloc::references(
+    let (nullable_relocations, allocated) = super::nullable_reloc::references(
         file,
         &vma_of,
         &extern_of,
@@ -1186,7 +1183,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         extern_range,
         common_range: common_allocator.range(),
         got_range,
-        gp: gp.as_ref().map(kuna_mipsreloc::Gp::gp),
+        gp: gp.as_ref().map(mipsreloc::Gp::gp),
         import_slots,
         nullable_relocations,
         function_address_aliases,
@@ -1229,11 +1226,11 @@ fn resolve_symbol(
     extern_of: &mut HashMap<SymbolIndex, u64>,
     extern_order: &mut Vec<(SymbolIndex, u64)>,
     extern_cursor: &mut u64,
-    common_allocator: &mut super::kuna_commonalloc::CommonAllocator,
+    common_allocator: &mut super::commonalloc::CommonAllocator,
     architecture: Architecture,
 ) -> Option<ResolvedRelocationTarget> {
     let sym = file.symbol_by_index(idx).ok()?;
-    let unit = super::kuna_wordaddr::address_unit_bytes(elf_machine(file));
+    let unit = super::wordaddr::address_unit_bytes(elf_machine(file));
     match sym.section() {
         SymbolSection::Section(sec_idx) => {
             vma_of.get(&sec_idx).map(|base| ResolvedRelocationTarget {
@@ -1470,7 +1467,7 @@ fn macho_target(
     extern_of: &mut HashMap<SymbolIndex, u64>,
     extern_order: &mut Vec<(SymbolIndex, u64)>,
     extern_cursor: &mut u64,
-    common_allocator: &mut super::kuna_commonalloc::CommonAllocator,
+    common_allocator: &mut super::commonalloc::CommonAllocator,
     architecture: Architecture,
 ) -> Option<ResolvedRelocationTarget> {
     let RelocationFlags::MachO {
@@ -3131,7 +3128,7 @@ mod tests {
         {
             let bytes = with_section_size(name, declared);
             let file = object::File::parse(&*bytes).unwrap();
-            let view = crate::loader::kuna_relocrebase::rebased_view(&file, &bytes).unwrap();
+            let view = crate::loader::relocrebase::rebased_view(&file, &bytes).unwrap();
             let seen = object::File::parse(&*view.bytes).unwrap();
             assert_eq!(seen.section_by_name(name).unwrap().size(), laid, "{name}");
             assert!(
@@ -3164,7 +3161,7 @@ mod tests {
         }
         let file = object::File::parse(&*bytes).unwrap();
         assert!(laid(&bytes).section_vma.is_empty());
-        let view = crate::loader::kuna_relocrebase::rebased_view(&file, &bytes).unwrap();
+        let view = crate::loader::relocrebase::rebased_view(&file, &bytes).unwrap();
         let seen = object::File::parse(&*view.bytes).unwrap();
         assert_eq!(seen.section_by_name(".text").unwrap().size(), 0);
     }

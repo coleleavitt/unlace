@@ -104,7 +104,7 @@ angr (stored, GED 0) reproduces every one of them, including the identity arms:
 ## Analysis — four distinct sub-symptoms, only one is small
 
 Owning phase for all four: **P8**,
-`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`
+`decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`
 (`match_ite_assignment` / `single_assign_arm` / `cond_cbranch`).
 
 **(B) plain diamond, 2 of 3 re-rolled — the `itecondlist` bug.** Three byte-identical

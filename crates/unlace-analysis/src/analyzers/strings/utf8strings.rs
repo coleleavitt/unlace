@@ -1,5 +1,5 @@
 //! (kuna `utf8strings`) The multi-byte reading of the 1-byte width, for the
-//! [`inventory`](super::kuna_stringinv::inventory) query.
+//! [`inventory`](super::stringinv::inventory) query.
 //!
 //! # The gap
 //!
@@ -26,7 +26,7 @@
 //! is never in the 1-byte charset, so no accepted sequence can swallow a byte the
 //! 1-byte matcher would have taken, and an ill-formed sequence advances one byte
 //! and lets the scan continue. Every 1-byte run is therefore a subrange of some
-//! run here, which is why [`inventory`](super::kuna_stringinv::inventory) runs
+//! run here, which is why [`inventory`](super::stringinv::inventory) runs
 //! one 1-byte scan or the other rather than both, and labels each row by what its
 //! bytes actually hold.
 //!

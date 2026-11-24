@@ -1,6 +1,6 @@
 //! Exact caller-side memory intervals of a completely decoded leaf callee.
 
-use crate::kuna_calleememory::FuncdataCalleememoryExt;
+use crate::calleememory::FuncdataCalleememoryExt;
 use slotmap::SecondaryMap;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
@@ -56,8 +56,8 @@ pub fn preserves(
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.globalcallranges_preserves = Some(preserves);
 }
 

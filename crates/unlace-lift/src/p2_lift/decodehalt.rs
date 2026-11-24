@@ -76,5 +76,5 @@ pub fn halt_call_name(halt_type: uint4) -> Option<&'static str> {
 }
 
 #[cfg(test)]
-#[path = "kuna_decodehalt/tests.rs"]
+#[path = "decodehalt/tests.rs"]
 mod tests;

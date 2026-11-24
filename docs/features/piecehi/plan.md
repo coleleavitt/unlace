@@ -15,7 +15,7 @@ leftover: the RETURN was cut to `EDI` and `ESI` lost its only reader
 half beside an argument low half kept the high half alone (`return a0 + 1;` at
 -O2), returning the high bits as the whole value.
 
-## 1. The change (`p4_calls/kuna_returnuncomputed.rs`)
+## 1. The change (`p4_calls/returnuncomputed.rs`)
 
 - `storage_pieces(vn)`: the storage locations a Varnode occupies, most
   significant first: the pieces of its join record, or its own storage.
@@ -31,7 +31,7 @@ half beside an argument low half kept the high half alone (`return a0 + 1;` at
 
 ## 2. Tests
 
-- `kuna_returnuncomputed/tests.rs`: the slot mapping on little- and big-endian
+- `returnuncomputed/tests.rs`: the slot mapping on little- and big-endian
   registers; a never-written high half of one register is still dropped; a
   computed high half of one register is never returned alone.
 - `tests/stages/kuna-returnpiece.toml`: seven gcc -O0 functions and gcc -O2

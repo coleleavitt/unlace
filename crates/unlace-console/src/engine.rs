@@ -30,11 +30,11 @@
 //! function entry the faithful way (the binaryimage's own symbol records, which
 //! is precisely what `readLoaderSymbols` reads).
 
-mod kuna_retroimage;
-mod kuna_signature_names;
-mod kuna_thunknames;
 mod lazy_inventory;
-pub(crate) use kuna_retroimage::bootstrap_retro_bytes;
+mod retroimage;
+mod signature_names;
+mod thunknames;
+pub(crate) use retroimage::bootstrap_retro_bytes;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -49,8 +49,8 @@ use unlace_base::types::int4;
 use unlace_base::xml::{DocumentStorage, Element};
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_loadoptions::LoadOptions;
-use unlace_decomp::kuna_memoryspecs::IntoSpecRoot;
+use unlace_decomp::loadoptions::LoadOptions;
+use unlace_decomp::memoryspecs::IntoSpecRoot;
 use unlace_decomp::options::register_option_elements;
 use unlace_decomp::raw_arch::RawBinaryArchitectureCapability;
 use unlace_decomp::sleigh_arch::{LanguageDatabase, SleighArchitecture, register_sleigh_arch_ids};
@@ -59,7 +59,7 @@ use unlace_decomp::xml_arch::XmlArchitectureCapability;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use unlace_analysis::flirt::kuna_rustprofiles::{
+use unlace_analysis::flirt::rustprofiles::{
     ImageReport as RustProfileReport, Request as RustProfileRequest,
 };
 use unlace_analysis::loadimage_cil::image::CilLoadImage;
@@ -75,12 +75,12 @@ use unlace_sleigh::loadimage_xml::LoadImageXml;
 use unlace_sleigh::loadimage_xml::register_loadimage_xml_ids;
 use unlace_sleigh::translate::register_translate_ids;
 
+pub use crate::bootstrap::{Bootstrap, LanguageSource};
 use crate::entry_selector::ObjectSectionLocation;
 pub use crate::entry_selector::{
     DataName, EntryLookupError, EntryProvenance, EntrySelector, FunctionEntry, NameSuggestion,
     ObjectLocation,
 };
-pub use crate::kuna_bootstrap::{Bootstrap, LanguageSource};
 
 /// One function symbol discovered in the `<binaryimage>` (name → entry address).
 #[derive(Debug, Clone)]
@@ -562,7 +562,7 @@ pub struct InsnFlow {
 /// keep them on the program so the console can resolve an option name to its
 /// element id and dispatch it against the real architecture.
 pub struct ConsoleProgram {
-    pub(crate) callwide: crate::kuna_callwide::State,
+    pub(crate) callwide: crate::callwide::State,
     /// The engine assembly (owns the `Architecture` god object).  Both the XML
     /// `<binaryimage>` frontend and the real-ELF frontend slice their leaf
     /// architecture back to this `SleighArchitecture` once the loader is opened
@@ -639,7 +639,7 @@ pub struct ConsoleProgram {
     /// (kuna) What became of each configured `.fid` database at the last
     /// analysis commit (`AnalysisOutput::fid_databases`). Empty when the FID
     /// pass did not run or no database was configured.
-    fid_databases: Vec<unlace_analysis::fid::kuna_fidapply::FidDbReport>,
+    fid_databases: Vec<unlace_analysis::fid::fidapply::FidDbReport>,
     rust_profile_request: Option<RustProfileRequest>,
     rust_profile_apply: bool,
     rust_profile_image_modified: bool,
@@ -664,7 +664,7 @@ pub struct ConsoleProgram {
     object_view: Option<Rc<[u8]>>,
     /// (kuna `armframes`) The whole-image frame recovery: set before the commit,
     /// it is replayed instead of searched; after it, the record that commit made.
-    arm_frames: Option<unlace_analysis::aif::kuna_framereplay::ArmFrameReplay>,
+    arm_frames: Option<unlace_analysis::aif::framereplay::ArmFrameReplay>,
     /// (kuna) The loader's defined `STT_OBJECT` data symbols as `(addr, name,
     /// size)`, read from `.symtab`/`.dynsym` at load
     /// ([`ObjectLoadImage::data_symbols`]) and installed as named globals by
@@ -687,9 +687,9 @@ pub struct ConsoleProgram {
     loader_entry_names: BTreeMap<u64, String>,
     /// (kuna `mzsweep`) An MS-DOS executable's relocated module and relocation
     /// words, the evidence its raw-image call sweep reads.
-    mz_evidence: Option<unlace_analysis::listing::kuna_mzsweep::MzEvidence>,
+    mz_evidence: Option<unlace_analysis::listing::mzsweep::MzEvidence>,
     /// (kuna `esprom`) The chip whose ROM names and memory map are applied.
-    pub(crate) esprom_applied: Option<unlace_decomp::kuna_esprom::EspChip>,
+    pub(crate) esprom_applied: Option<unlace_decomp::esprom::EspChip>,
     /// (kuna #1288) Where each function ends, entry VMA -> exclusive end: what
     /// bounds [`crate::funcextent`]'s clip where the one CODE range holds the
     /// program's data too. An x86 real-mode raw image measures its flow ends
@@ -737,7 +737,7 @@ pub struct ConsoleProgram {
     /// (kuna, issue #1438) Each declaration measured against the image's byte
     /// map when it was made, keyed by the same normalized VMA as
     /// [`Self::declared_entries`] -- what [`Self::declaration_notes`] warns of.
-    declared_bytes: BTreeMap<u64, crate::kuna_declaredbytes::Declaration>,
+    declared_bytes: BTreeMap<u64, crate::declaredbytes::Declaration>,
     /// Changes whenever `declared_names` (it orders canonical entry names) or
     /// `declared_extents` (it sizes them) does.
     declared_revision: u64,
@@ -775,7 +775,7 @@ pub struct ConsoleProgram {
     /// point of them; the slot is still a pointer word rather than a function
     /// entry, which is what [`Self::function_entries_executable`] reads this for.
     /// Empty on the XML datatest path and for every non-PE image.
-    import_slots: crate::kuna_importslots::ImportSlots,
+    import_slots: crate::importslots::ImportSlots,
     function_address_aliases: BTreeMap<u64, u64>,
     /// (kuna, issue #666) Does this container decorate a C identifier with a
     /// leading `_` in its symbol table?
@@ -810,7 +810,7 @@ impl ConsoleProgram {
         self.callwide.changed();
         self.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+            .get_mut::<unlace_decomp::callwide::ProofSlot>()
             .clear();
     }
 
@@ -818,7 +818,7 @@ impl ConsoleProgram {
         self.callwide.unavailable(reason);
         self.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_callwide::ProofSlot>()
+            .get_mut::<unlace_decomp::callwide::ProofSlot>()
             .clear();
     }
 
@@ -864,8 +864,8 @@ impl ConsoleProgram {
     }
 
     /// What became of each configured `.fid` database (see
-    /// `unlace_analysis::fid::kuna_fidapply`).
-    pub fn fid_databases(&self) -> &[unlace_analysis::fid::kuna_fidapply::FidDbReport] {
+    /// `unlace_analysis::fid::fidapply`).
+    pub fn fid_databases(&self) -> &[unlace_analysis::fid::fidapply::FidDbReport] {
         &self.fid_databases
     }
 
@@ -978,7 +978,7 @@ impl ConsoleProgram {
         // so bound the query too: `load function <name>` must accept both the
         // binary's ORIGINAL name and the one the listing renders. Idempotent, and
         // a no-op for every real name.
-        let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
+        let name = &*unlace_decomp::symbolnamebound::bound_scope_path(name, "::");
         self.symbols
             .lookup(name)
             .map(|s| s.addr.clone())
@@ -1063,7 +1063,7 @@ impl ConsoleProgram {
     /// spelling a name selector would match first). O(1) on the name index.
     pub(crate) fn has_symbol_spelled(&self, name: &str) -> bool {
         let _load = self.arch().load_scope();
-        let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
+        let name = &*unlace_decomp::symbolnamebound::bound_scope_path(name, "::");
         (self.symbols.lookup(name).is_some() || self.anonymous_address(name).is_some())
             || self
                 .loader_aliases
@@ -1423,7 +1423,7 @@ impl ConsoleProgram {
         // so bound the query too -- a caller holding the binary's ORIGINAL name
         // must still resolve. Idempotent, so the bounded spelling resolves as
         // well, and a no-op for every real name.
-        let want = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(want, "::");
+        let want = &*unlace_decomp::symbolnamebound::bound_scope_path(want, "::");
         if self.symbols.lookup(want).is_none() {
             if let Some(addr) = self.anonymous_address(want) {
                 return Some(self.entry_at_or_named(addr.get_offset()));
@@ -1591,7 +1591,7 @@ impl ConsoleProgram {
                 // spelling, so bound the query too -- a caller holding the
                 // binary's ORIGINAL name must still resolve. Idempotent, so the
                 // bounded spelling resolves as well.
-                let want = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(want, "::");
+                let want = &*unlace_decomp::symbolnamebound::bound_scope_path(want, "::");
                 if self.symbols.lookup(want).is_none() {
                     if let Some(addr) = self.anonymous_address(want) {
                         return Ok(self.entry_at_or_named(addr.get_offset()));
@@ -1835,7 +1835,7 @@ impl ConsoleProgram {
                 if let Some(entry) = self.lone_elf_definition(&candidates) {
                     return Ok(entry);
                 }
-                let want = unlace_decomp::kuna_symbolnamebound::bound_scope_path(want, "::");
+                let want = unlace_decomp::symbolnamebound::bound_scope_path(want, "::");
                 if self.keep_direct_candidates(&mut candidates, &want) {
                     return self.one_candidate(selector, candidates);
                 }
@@ -2496,15 +2496,12 @@ impl ConsoleProgram {
 
     /// (kuna `armframes`) Replay `record` at the analysis commit instead of
     /// searching for frames: a `--jobs` worker passes its parent's.
-    pub fn replay_arm_frames(
-        &mut self,
-        record: unlace_analysis::aif::kuna_framereplay::ArmFrameReplay,
-    ) {
+    pub fn replay_arm_frames(&mut self, record: unlace_analysis::aif::framereplay::ArmFrameReplay) {
         self.arm_frames = Some(record);
     }
 
     /// (kuna `armframes`) What the analysis commit's frame recovery decided.
-    pub fn arm_frames(&self) -> Option<&unlace_analysis::aif::kuna_framereplay::ArmFrameReplay> {
+    pub fn arm_frames(&self) -> Option<&unlace_analysis::aif::framereplay::ArmFrameReplay> {
         self.arm_frames.as_ref()
     }
 
@@ -2534,7 +2531,7 @@ impl ConsoleProgram {
             self.symbols.iter().map(|s| s.name.clone()).collect();
         let mut seeded = 0usize;
         for (name, addr) in entries {
-            let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
+            let name = &*unlace_decomp::symbolnamebound::bound_scope_path(name, "::");
             if taken.contains(name) || self.anonymous_address(name).is_some() {
                 continue;
             }
@@ -2703,7 +2700,7 @@ impl ConsoleProgram {
         // (kuna `symbolnamebound`) Same bound as the loader stream above, so an
         // analysis-discovered or hand-mapped name agrees with the scope path the
         // symbol table nests it under.
-        let name = &*unlace_decomp::kuna_symbolnamebound::bound_scope_path(name, "::");
+        let name = &*unlace_decomp::symbolnamebound::bound_scope_path(name, "::");
         let prior = self.symbols.lookup_at(name, &addr).map(|s| s.provenance);
         if sole {
             self.symbols.remove_name(name);
@@ -2763,7 +2760,7 @@ impl ConsoleProgram {
     /// its extent the input maps, in address order.
     pub fn declarations(
         &self,
-    ) -> impl Iterator<Item = (u64, crate::kuna_declaredbytes::DeclaredBytes)> + '_ {
+    ) -> impl Iterator<Item = (u64, crate::declaredbytes::DeclaredBytes)> + '_ {
         self.declared_bytes
             .iter()
             .map(|(&vma, decl)| (vma, decl.bytes))
@@ -2774,14 +2771,14 @@ impl ConsoleProgram {
     pub fn declaration_notes(&self) -> Vec<String> {
         self.declared_bytes
             .iter()
-            .filter_map(|(&vma, decl)| crate::kuna_declaredbytes::note(self, vma, decl))
+            .filter_map(|(&vma, decl)| crate::declaredbytes::note(self, vma, decl))
             .collect()
     }
 
     /// The sentence for the declaration at `vma` alone.
     pub(crate) fn declaration_note(&self, vma: u64) -> Option<String> {
         let vma = self.thumb_normalized(vma);
-        crate::kuna_declaredbytes::note(self, vma, self.declared_bytes.get(&vma)?)
+        crate::declaredbytes::note(self, vma, self.declared_bytes.get(&vma)?)
     }
 
     /// (kuna) Whether `name` is NOT the one the caller declared at `vma`.
@@ -2951,10 +2948,10 @@ impl ConsoleProgram {
         self.declare_extent(vma, size);
         self.declared_entries.insert(vma);
         let extent = u64::try_from(size).unwrap_or(0);
-        let bytes = crate::kuna_declaredbytes::measure(self, vma, extent);
+        let bytes = crate::declaredbytes::measure(self, vma, extent);
         self.declared_bytes.insert(
             vma,
-            crate::kuna_declaredbytes::Declaration {
+            crate::declaredbytes::Declaration {
                 name: name.clone(),
                 size: extent,
                 bytes,
@@ -3038,7 +3035,7 @@ impl ConsoleProgram {
         addr: &Address,
     ) {
         let spellings: Vec<String> = std::iter::once(name.to_string())
-            .chain(unlace_analysis::protos::kuna_nameladder::fallbacks(name))
+            .chain(unlace_analysis::protos::nameladder::fallbacks(name))
             .collect();
         if let Some(found) = spellings
             .iter()
@@ -3057,7 +3054,7 @@ impl ConsoleProgram {
             name,
             self.arch().types(),
             word_size,
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+            unlace_decomp::libctypes::LibcTypesLayout::Opaque,
         )
         .is_some()
     }
@@ -3081,31 +3078,29 @@ impl ConsoleProgram {
         // image whose own target gate passed may be handed the glibc field
         // layouts (see `Self::libctypes_glibc`).
         let layout = if self.libctypes_refused {
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Off
+            unlace_decomp::libctypes::LibcTypesLayout::Off
         } else if self.libctypes_glibc {
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Glibc
+            unlace_decomp::libctypes::LibcTypesLayout::Glibc
         } else {
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque
+            unlace_decomp::libctypes::LibcTypesLayout::Opaque
         };
         let pieces = {
             let types = self.arch().types();
             unlace_analysis::protos::declared_libc_prototype(name, types, word_size, layout)
         };
-        let whole = unlace_decomp::kuna_typedcallabi::returns_doubles_whole(self.arch());
+        let whole = unlace_decomp::typedcallabi::returns_doubles_whole(self.arch());
         let (pieces, withheld) = match pieces {
-            Some(p) if !whole && unlace_decomp::kuna_typedcallabi::declares_a_float(&p) => {
-                (None, true)
-            }
+            Some(p) if !whole && unlace_decomp::typedcallabi::declares_a_float(&p) => (None, true),
             other => (other, false),
         };
         if withheld {
             self.arch_mut()
                 .kuna_tables
-                .get_mut::<unlace_decomp::kuna_honestgaps::WithheldPrototypes>()
+                .get_mut::<unlace_decomp::honestgaps::WithheldPrototypes>()
                 .record(
                     Some(addr.get_offset()),
                     name,
-                    unlace_decomp::kuna_honestgaps::WithheldCause::FloatConvention,
+                    unlace_decomp::honestgaps::WithheldCause::FloatConvention,
                 );
         }
         if let Some(pieces) = pieces {
@@ -3150,7 +3145,7 @@ impl ConsoleProgram {
             .filter(|(addr, _, _, _)| *addr == func_addr)
             .map(|(_, name, ty, off)| (name.clone(), Rc::clone(ty), *off))
             .collect();
-        crate::kuna_dwarfstack::coalesce(
+        crate::dwarfstack::coalesce(
             self.arch().types(),
             func_addr,
             locals,
@@ -3253,7 +3248,7 @@ impl ConsoleProgram {
         if self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         {
             if let Some(set) =
@@ -3285,7 +3280,7 @@ impl ConsoleProgram {
         let found = {
             let arch = self.arch();
             let mz = self.mz_evidence.as_ref();
-            unlace_analysis::listing::kuna_rawdiscover::discover(
+            unlace_analysis::listing::rawdiscover::discover(
                 arch,
                 arch.translate(),
                 &code_space,
@@ -3327,7 +3322,7 @@ impl ConsoleProgram {
         if !self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Objectview>()
+            .get::<unlace_decomp::analysisgates::Objectview>()
             .0
         {
             self.analysis_image = None;
@@ -3369,14 +3364,14 @@ impl ConsoleProgram {
     /// is gated on `--option listing on`, a flag the CLI sets after `load file`,
     /// so the Listing — and any pass that reads it (e.g. discovered-no-return) —
     /// is built/run HERE (when the flag is finally in effect), not at load. When
-    /// `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` is on, the stashed image bytes are re-parsed, the
+    /// `arch.kuna_options.get::<unlace_decomp::analysisgates::Listing>().0` is on, the stashed image bytes are re-parsed, the
     /// Listing is built, and the enabled Listing-consumer passes run; their
     /// defensively re-gated facts merge into the same `merged` output committed
     /// below. Fast inventory or an explicit Rust profile request can also need
     /// this Listing while the ordinary Listing-consumer gates remain off.
     pub fn commit_pending_analysis(&mut self) -> KunaResult<()> {
         let _load = self.arch().load_scope();
-        crate::kuna_esprom::apply(self)?;
+        crate::esprom::apply(self)?;
         let rust_profile_request = self.rust_profile_request.take();
         let apply_rust_names = std::mem::take(&mut self.rust_profile_apply);
         if apply_rust_names && (self.rust_profile_image_modified || self.analysis_image.is_none()) {
@@ -3400,7 +3395,7 @@ impl ConsoleProgram {
                 .filter(|(id, _)| analysis_pass_enabled(self.arch(), id))
                 .flat_map(|(_, out)| out.noreturn.iter().map(|fact| fact.addr))
                 .collect();
-            let flow = unlace_analysis::listing::kuna_entrythumbflow::entry_thumb_flow(
+            let flow = unlace_analysis::listing::entrythumbflow::entry_thumb_flow(
                 self.arch(),
                 &code_space,
                 &pending.executable_ranges,
@@ -3413,7 +3408,7 @@ impl ConsoleProgram {
                     &path,
                     &format!(
                         "[kuna entrythumbflow] {path}: the Thumb context walk from the entry stopped at {} instructions; code it did not reach decodes as A32 (use --isa thumb for a wholly Thumb image)",
-                        unlace_analysis::listing::kuna_entrythumbflow::MAX_INSTRUCTIONS
+                        unlace_analysis::listing::entrythumbflow::MAX_INSTRUCTIONS
                     ),
                 );
             }
@@ -3505,7 +3500,7 @@ impl ConsoleProgram {
         if self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .get::<unlace_decomp::analysisgates::Listing>()
             .0
         {
             noreturn_seed_addrs.extend(self.function_entries().filter_map(|(_, addr)| {
@@ -3540,22 +3535,22 @@ impl ConsoleProgram {
         let want_listing = self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .get::<unlace_decomp::analysisgates::Listing>()
             .0;
         let want_fast_funcdisc = self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .get::<unlace_decomp::analysisgates::FastFuncdisc>()
             .0;
         let want_operand_refs = self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::OperandRefs>()
+            .get::<unlace_decomp::analysisgates::OperandRefs>()
             .0;
         let want_wide32_alone = self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+            .get::<unlace_decomp::analysisgates::Widestrings32>()
             .0
             && !want_operand_refs;
         // (kuna) The full byte-pattern entry sweep is deferred here too — not
@@ -3565,7 +3560,7 @@ impl ConsoleProgram {
         let want_addrtable = self
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+            .get::<unlace_decomp::analysisgates::Addrtable>()
             .0;
         if self.analysis_image.is_some() {
             if let Some((path, bytes, import_proofs)) = self.analysis_image.take() {
@@ -3722,7 +3717,7 @@ impl ConsoleProgram {
                             names.fid_names =
                                 profile.agreed_names().map_err(KunaError::lowlevel)?;
                             names.sanitize_names(
-                                unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode(),
+                                unlace_decomp::symbolnamechars::symbolnamechars_mode(),
                             );
                             merged.merge(names);
                         }
@@ -3762,7 +3757,7 @@ impl ConsoleProgram {
                 }
                 if merged.fid_names.iter().any(|m| m.by_signature) {
                     zero_size_data_names =
-                        unlace_analysis::flirt::kuna_elf_data_names::zero_size_data_names(&bytes);
+                        unlace_analysis::flirt::elf_data_names::zero_size_data_names(&bytes);
                 }
             }
         } else {
@@ -3787,7 +3782,7 @@ impl ConsoleProgram {
         if !self.arch().get_description().contains("windows") {
             self.arch_mut().kuna_fde_extents = Rc::new(fde_bodies.clone());
         }
-        unlace_analysis::entry::kuna_fdeinterior::suppress_interior_entries(
+        unlace_analysis::entry::fdeinterior::suppress_interior_entries(
             &mut merged.entries,
             &fde_bodies,
         );
@@ -3800,10 +3795,7 @@ impl ConsoleProgram {
         // function: drop every entry inside one, its start included.
         let mut eh_cold = std::mem::take(&mut merged.eh_cold);
         eh_cold.sort_unstable();
-        unlace_analysis::entry::kuna_ehcold::suppress_eh_cold_entries(
-            &mut merged.entries,
-            &eh_cold,
-        );
+        unlace_analysis::entry::ehcold::suppress_eh_cold_entries(&mut merged.entries, &eh_cold);
         // (kuna, `pdbinterior`) The same rejection inside PDB procedures, on its own
         // terms: see `suppress_pdb_interior_entries`.
         suppress_pdb_interior_entries(self.arch(), &code_space, &mut merged);
@@ -3813,7 +3805,7 @@ impl ConsoleProgram {
         // spoken: the library declares only the imports, and the functions
         // FLIRT, FID or a PDB named, that nothing else did.
         if let Some(facts) = merged.typelib.take() {
-            let said = match crate::kuna_typelib::seed(self.arch(), &facts, &mut merged) {
+            let said = match crate::typelib::seed(self.arch(), &facts, &mut merged) {
                 Ok((_, note)) => note,
                 Err(message) => Some(message),
             };
@@ -3848,7 +3840,7 @@ impl ConsoleProgram {
         seeds.dedup();
         self.arch_mut()
             .kuna_states
-            .set(Rc::new(unlace_decomp::kuna_floatglobals::FloatScan {
+            .set(Rc::new(unlace_decomp::floatglobals::FloatScan {
                 sections,
                 seeds,
             }));
@@ -3870,7 +3862,7 @@ fn suppress_pdb_interior_entries(
     code_space: &Rc<AddrSpace>,
     merged: &mut unlace_analysis::pass::AnalysisOutput,
 ) {
-    use unlace_decomp::kuna_noreturn_externmatch::is_known_noreturn_name;
+    use unlace_decomp::noreturn_externmatch::is_known_noreturn_name;
 
     let bodies = std::mem::take(&mut merged.pdb_bodies);
     if bodies.is_empty() {
@@ -3914,7 +3906,7 @@ fn suppress_pdb_interior_entries(
                 .function_is_no_return_across_scopes(&at(target))
             || (arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .get::<unlace_decomp::analysisgates::NoreturnKnown>()
                 .0
                 && (names_at(target).any(is_known_noreturn_name)
                     || arch
@@ -3937,7 +3929,7 @@ fn suppress_pdb_interior_entries(
         } else {
             (Vec::new(), classified.flows)
         };
-        Some(unlace_analysis::pdb::kuna_pdbinterior::InsnFlow {
+        Some(unlace_analysis::pdb::pdbinterior::InsnFlow {
             len: insn.len,
             fall_through: classified.fall_through,
             jumps,
@@ -3945,7 +3937,7 @@ fn suppress_pdb_interior_entries(
             is_call: classified.flow.is_call,
         })
     };
-    unlace_analysis::pdb::kuna_pdbinterior::suppress_owned_interior_entries(
+    unlace_analysis::pdb::pdbinterior::suppress_owned_interior_entries(
         &mut merged.entries,
         &bodies,
         is_function,
@@ -3983,32 +3975,32 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
     match pass_id {
         "armframes" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .get::<unlace_decomp::analysisgates::Listing>()
                 .0
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                    .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
                     .0
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                    .get::<unlace_decomp::analysisgates::ArmFrames>()
                     .inventory
         }
         "noreturn_known" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .get::<unlace_decomp::analysisgates::NoreturnKnown>()
                 .0
         }
         "gonoreturn" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .get::<unlace_decomp::analysisgates::NoreturnKnown>()
                 .0
         }
         // (kuna `goitabcalls`) Interface parameters typed from the static itabs
         // callers pass: only under the option.
         "goitabargs" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
+                .get::<unlace_decomp::goitabcalls::GoItabCalls>()
                 .0
         }
         // (kuna) PE/Mach-O import-slot call binding — typed-slot `externref`
@@ -4023,7 +4015,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
 
         "arm64evcall" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Arm64evcall>()
+                .get::<unlace_decomp::analysisgates::Arm64evcall>()
                 .0
         }
         // (kuna) ELF GOT data imports: the slot names + externref paint exist only
@@ -4036,7 +4028,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
 
         "machobinds" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Machobinds>()
+                .get::<unlace_decomp::analysisgates::Machobinds>()
                 .0
         }
         "machodataslots" => {
@@ -4050,15 +4042,14 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `off` renders exactly what the base table alone renders.
         "libgccsigs" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Libgccsigs>()
+                .get::<unlace_decomp::analysisgates::Libgccsigs>()
                 .0
         }
         // (kuna `typelib`) The image's library target and imports; dropped
         // here when no library is to be read.
         "typelib" => {
-            arch.kuna_options
-                .get::<unlace_decomp::kuna_typelib::TypeLib>()
-                != unlace_decomp::kuna_typelib::TypeLib::Off
+            arch.kuna_options.get::<unlace_decomp::typelib::TypeLib>()
+                != unlace_decomp::typelib::TypeLib::Off
         }
         // (kuna) The LOAD-TIME format-string resolver — a Listing consumer whose
         // per-call-site overrides are computed at the deferred commit point and
@@ -4066,7 +4057,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `full` everywhere).
         "formatstring" => arch
             .kuna_options
-            .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+            .get::<unlace_decomp::formatstring::FormatStringMode>()
             .resolves_at_load(&arch.archid),
         // (kuna) The built-in Win32 API signatures — the Windows half of the
         // `.gdt` stand-in, seeded onto IMPORTED API names only and keyed by entry
@@ -4074,63 +4065,61 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `off` renders exactly what no Win32 prototype at all renders.
         "tlsnames" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_tlsnames::Tlsnames>()
+                .get::<unlace_decomp::tlsnames::Tlsnames>()
                 .0
         }
         "uefi" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Uefi>()
+                .get::<unlace_decomp::analysisgates::Uefi>()
                 .0
         }
         "cortexmscs" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Cortexmscs>()
+                .get::<unlace_decomp::analysisgates::Cortexmscs>()
                 .0
         }
         "com" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Com>()
+                .get::<unlace_decomp::analysisgates::Com>()
                 .0
         }
         "dextrpc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Dextrpc>()
+                .get::<unlace_decomp::analysisgates::Dextrpc>()
                 .0
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Osclassinfo>()
+                    .get::<unlace_decomp::analysisgates::Osclassinfo>()
                     .0
         }
         "strings" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Strings>()
+                .get::<unlace_decomp::analysisgates::Strings>()
                 .0
         }
         // (kuna `fatstr`) The Rust `&str`-record string pass — gated on the SAME
         // option mode the engine's (ptr,len) literal rule reads, so one option
         // governs both recognizers; `off` (0) drops the bounded facts here.
         "fatstrrecords" => {
-            arch.kuna_options
-                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
-                != unlace_decomp::kuna_fatstr::FatStrMode::Off
+            arch.kuna_options.get::<unlace_decomp::fatstr::FatStrMode>()
+                != unlace_decomp::fatstr::FatStrMode::Off
         }
         "strcodelen" => {
-            arch.kuna_options
-                .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
-                != unlace_decomp::kuna_fatstr::FatStrMode::Off
+            arch.kuna_options.get::<unlace_decomp::fatstr::FatStrMode>()
+                != unlace_decomp::fatstr::FatStrMode::Off
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Strcodelen>()
+                    .get::<unlace_decomp::analysisgates::Strcodelen>()
                     .0
         }
         "panicloc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Panicloc>()
+                .get::<unlace_decomp::analysisgates::Panicloc>()
                 .0
         }
         "entry_disc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::EntryDisc>()
+                .get::<unlace_decomp::analysisgates::EntryDisc>()
                 .0
         }
         // (kuna) `.eh_frame` LSDA landing-pad discovery (GccExceptionAnalyzer) — a
@@ -4140,21 +4129,21 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // the discovery set is byte-identical to FDE-pcBegin-only.
         "eh_frame_full" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
+                .get::<unlace_decomp::analysisgates::EhFrameFull>()
                 .0
         }
         "itaniumeh" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                .get::<unlace_decomp::itaniumeh::ItaniumEh>()
                 .on
         }
         "ehnote" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Ehnote>()
+                .get::<unlace_decomp::analysisgates::Ehnote>()
                 .0
                 && !arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_itaniumeh::ItaniumEh>()
+                    .get::<unlace_decomp::itaniumeh::ItaniumEh>()
                     .on
         }
         // (kuna) Mach-O `__unwind_info` function-start discovery — facts computed
@@ -4163,12 +4152,12 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // carrying `LC_FUNCTION_STARTS` gains nothing (the starts are a subset).
         "unwindstarts" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Unwindstarts>()
+                .get::<unlace_decomp::analysisgates::Unwindstarts>()
                 .0
         }
         "machoehframe" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Machoehframe>()
+                .get::<unlace_decomp::analysisgates::Machoehframe>()
                 .0
         }
         // (kuna) PE CRT entry-function prototype recovery — a standalone stashed pass
@@ -4190,7 +4179,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `sub_<addr>` / width-only form exactly.
         "elfmain" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Elfmain>()
+                .get::<unlace_decomp::analysisgates::Elfmain>()
                 .0
         }
         // (kuna) `.eh_frame` FDE-interior entry suppression — the pass reports the
@@ -4199,34 +4188,34 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // dropped here and the discovery set is exactly what it was before.
         "ehcold" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Ehcold>()
+                .get::<unlace_decomp::analysisgates::Ehcold>()
                 .0
         }
         "functails" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Functails>()
+                .get::<unlace_decomp::analysisgates::Functails>()
                 .0
         }
         "mfcmsgmap" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Mfcmsgmap>()
+                .get::<unlace_decomp::analysisgates::Mfcmsgmap>()
                 .0
         }
         "msvcptrentry" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Msvcptrentry>()
+                .get::<unlace_decomp::analysisgates::Msvcptrentry>()
                 .0
         }
         "importvote" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_importvote::Importvote>()
+                .get::<unlace_decomp::importvote::Importvote>()
                 .0
         }
         // (kuna) PDB-procedure-interior entry suppression — the extents come out of
         // the `.pdb`, so switching `pdb` off withdraws them too.
         "pdbinterior" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .get::<unlace_decomp::analysisgates::Pdb>()
                 .0
         }
         // (kuna) The widened Cortex-M vector-table oracle — a standalone stashed
@@ -4236,12 +4225,12 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // byte-identical to the shipped (e_entry-matching) signature.
         "cortexmvectors" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Cortexmvectors>()
+                .get::<unlace_decomp::analysisgates::Cortexmvectors>()
                 .0
         }
         "ptrentry" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+                .get::<unlace_decomp::analysisgates::Ptrentry>()
                 .0
         }
         // (kuna) ARM literal-pool inference — the additive pool-end entries are
@@ -4250,7 +4239,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // filters, which the `aif` arm above already gates.
         "poolentry" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Poolentry>()
+                .get::<unlace_decomp::analysisgates::Poolentry>()
                 .0
         }
         // (kuna) The full byte-pattern function-start pass — default-OFF
@@ -4260,7 +4249,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // contract.
         "funcstart_patterns" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
                 .0
         }
         // (kuna) The recursive-descent discovery commit — promotes the Listing walk's
@@ -4269,7 +4258,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // decompile-all surface). x86-64 keeps it off ⇒ byte-identical there.
         "funcdisc_recursive" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+                .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
                 .0
         }
         // (kuna `armfuncmode`) An explicit `--isa` states the mode of the whole
@@ -4280,66 +4269,66 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // here is the defensive half of the check that decides whether it runs.
         "dwarf" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
+                .get::<unlace_decomp::analysisgates::Dwarf>()
                 .0
         }
         // (kuna `cppsig`) The whole-pass gate; WHICH certainty tier survives is a
         // second decision, made on the mode in `commit_analysis_output`.
         "cppsig" => arch
             .kuna_options
-            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .get::<unlace_decomp::cppsig::CppSigMode>()
             .enabled(),
         // Explicit (NOT the fail-open `_ => true` default): the source-line pass is
         // default-OFF (it changes the output), so it must be registered here to be
         // gated by the `analysis_dwarf_lines` flag rather than running by default.
         "dwarf_lines" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::DwarfLines>()
+                .get::<unlace_decomp::analysisgates::DwarfLines>()
                 .0
         }
         "cvftrace" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .names
         }
         "cvftrace_lines" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .lines
         }
         "gopcln" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .get::<unlace_decomp::analysisgates::GoPcln>()
                 .on
         }
         "gopcln_lines" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::GoPcln>()
+                .get::<unlace_decomp::analysisgates::GoPcln>()
                 .lines
         }
         "addrtable" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+                .get::<unlace_decomp::analysisgates::Addrtable>()
                 .0
         }
         "operand_refs" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::OperandRefs>()
+                .get::<unlace_decomp::analysisgates::OperandRefs>()
                 .0
         }
         "listing" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .get::<unlace_decomp::analysisgates::Listing>()
                 .0
         }
         "fast_funcdisc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+                .get::<unlace_decomp::analysisgates::FastFuncdisc>()
                 .0
         }
         "noreturn_disc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnDisc>()
+                .get::<unlace_decomp::analysisgates::NoreturnDisc>()
                 .0
         }
         // (kuna, GH-312) The positive-evidence-only tally has no fact stream of its
@@ -4348,17 +4337,17 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // silently re-enables a pass id that does not exist.
         "noreturn_propagate" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+                .get::<unlace_decomp::analysisgates::NoreturnPropagate>()
                 .0
         }
         "fid" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .on
         }
         "flirt" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .get::<unlace_decomp::coreoptions::Flirt>()
                 .0
         }
         // (kuna) MSVC RTTI / vftable recovery — a standalone load-time pass whose
@@ -4368,17 +4357,17 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // a default run / every non-PE binary commits nothing here.
         "rtti" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Rtti>()
+                .get::<unlace_decomp::analysisgates::Rtti>()
                 .0
         }
         "msvceh" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Msvceh>()
+                .get::<unlace_decomp::analysisgates::Msvceh>()
                 .0
         }
         "delphi" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Delphi>()
+                .get::<unlace_decomp::analysisgates::Delphi>()
                 .0
         }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
@@ -4389,12 +4378,12 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // every non-ELF binary commits nothing here.
         "itaniumrtti" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
+                .get::<unlace_decomp::analysisgates::Itaniumrtti>()
                 .0
         }
         "aif" => arch
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .enabled(),
         // (kuna, GH-299) The AIF bracketed-candidate reject has no fact stream of
         // its own -- it shapes the `aif` accept list inside `run_aif`, which the
@@ -4402,7 +4391,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // `_ => true` never silently re-enables a pass id that does not exist.
         "vtabletypes" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+                .get::<unlace_decomp::coreoptions::Vtabletypes>()
                 .0
         }
         // (kuna, GH-299) The AIF filler reject, shaping the `aif` accept list the
@@ -4411,7 +4400,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // the same way; registered for the same fail-open reason.
         "aifpoolslide" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+                .get::<unlace_decomp::analysisgates::Aifpoolslide>()
                 .0
         }
         // (kuna) Tail-call function-entry recovery — default-OFF (discovers more
@@ -4419,35 +4408,35 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // the live gate is the pre-invocation check in `run_listing_consumers`.
         "tailcallentry" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Tailcallentry>()
+                .get::<unlace_decomp::analysisgates::Tailcallentry>()
                 .0
         }
 
         "funcchunks" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+                .get::<unlace_decomp::analysisgates::Funcchunks>()
                 .0
         }
         "globalwidth" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Globalwidth>()
+                .get::<unlace_decomp::analysisgates::Globalwidth>()
                 .0
         }
         "aifdataveto" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Aifdataveto>()
+                .get::<unlace_decomp::analysisgates::Aifdataveto>()
                 .0
         }
         "calltable" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+                .get::<unlace_decomp::analysisgates::Calltable>()
                 .0
         }
         // (kuna) Stripped Mach-O stub naming from chained binds; default-on,
         // output-changing (names `sub_` stubs), so `off` really skips it.
         "stubbinds" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Stubbinds>()
+                .get::<unlace_decomp::analysisgates::Stubbinds>()
                 .0
         }
         // (kuna) Mach-O Objective-C metadata recovery — default-OFF (output-changing:
@@ -4455,21 +4444,21 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // is gated by `analysis_objc` rather than running by the fail-open default.
         "objc" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Objc>()
+                .get::<unlace_decomp::analysisgates::Objc>()
                 .0
         }
         // (kuna) Swift runtime-metadata recovery — default-OFF (output-changing:
         // names stripped functions and descriptor records).
         "swiftmetadata" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Swiftmetadata>()
+                .get::<unlace_decomp::analysisgates::Swiftmetadata>()
                 .0
         }
         // (kuna) The Swift runtime prototypes — default-ON (a Swift image's
         // runtime calls are the same functions everywhere).
         "swiftruntime" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Swiftruntime>()
+                .get::<unlace_decomp::analysisgates::Swiftruntime>()
                 .0
         }
         // (kuna) Mach-O `__cfstring` constant-string recovery — default-on,
@@ -4478,27 +4467,27 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // renders the entry exactly as before.
         "cfstrings" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::CfStrings>()
+                .get::<unlace_decomp::analysisgates::CfStrings>()
                 .pass
         }
         "iokitclasses" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+                .get::<unlace_decomp::analysisgates::IokitClasses>()
                 .names
         }
         "xnutables" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Xnutables>()
+                .get::<unlace_decomp::analysisgates::Xnutables>()
                 .0
         }
         "osclassinfo" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Osclassinfo>()
+                .get::<unlace_decomp::analysisgates::Osclassinfo>()
                 .0
         }
         "blobs" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Blobs>()
+                .get::<unlace_decomp::analysisgates::Blobs>()
                 .0
         }
         // (kuna) PE PDB metadata recovery — default-OFF (output-changing: renames
@@ -4508,7 +4497,7 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // default.
         "pdb" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .get::<unlace_decomp::analysisgates::Pdb>()
                 .0
         }
         // (kuna) The PDB types/prototypes/locals and source-line passes: their
@@ -4516,20 +4505,20 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         // that gate as well as its own.
         "pdbtypes" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .get::<unlace_decomp::analysisgates::Pdb>()
                 .0
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Pdbtypes>()
+                    .get::<unlace_decomp::analysisgates::Pdbtypes>()
                     .0
         }
         "pdblines" => {
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Pdb>()
+                .get::<unlace_decomp::analysisgates::Pdb>()
                 .0
                 && arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_analysisgates::Pdblines>()
+                    .get::<unlace_decomp::analysisgates::Pdblines>()
                     .0
         }
         // (kuna) `libctypes` has NO arm on purpose and reaches this fail-open
@@ -4804,7 +4793,7 @@ fn build_registry() -> IdRegistry {
 /// arg parser records the spec roots and hands them here.  The first existing
 /// root wins (mirroring the C++ `scanForSleighDirectories` over the recorded
 /// roots).  A root may also be a tree held in memory
-/// ([`unlace_decomp::kuna_memoryspecs::MemorySpecs`]).
+/// ([`unlace_decomp::memoryspecs::MemorySpecs`]).
 fn scan_language_database(
     spec_roots: &[impl IntoSpecRoot],
     registry: &IdRegistry,
@@ -4930,11 +4919,11 @@ fn build_engine_and_init(sleigh: &mut SleighArchitecture, db: &LanguageDatabase)
         db.modify_spaces(langindex, arch.manage())?;
         // (kuna) The same records, kept as data: rebuilding a decode-equivalent
         // engine elsewhere means applying them there too
-        // (`kuna_decodekit::EngineRecipe`).
+        // (`decodekit::EngineRecipe`).
         arch.set_decode_truncations(db.truncations(langindex));
-        unlace_decomp::kuna_langfamily::set_language_families(
+        unlace_decomp::langfamily::set_language_families(
             arch,
-            unlace_decomp::kuna_langfamily::families(db),
+            unlace_decomp::langfamily::families(db),
         );
     }
 
@@ -5526,9 +5515,8 @@ pub(crate) fn bootstrap_raw_image(
         isa,
         isa.is_some(),
     )?;
-    if let Some(cs) = unlace_analysis::loader::kuna_realmodecs::raw_image_cs(image_base, image_size)
-    {
-        unlace_analysis::loader::kuna_realmodecs::paint(
+    if let Some(cs) = unlace_analysis::loader::realmodecs::raw_image_cs(image_base, image_size) {
+        unlace_analysis::loader::realmodecs::paint(
             raw.sleigh().base().unwrap(),
             &code_space,
             &[(image_base, cs)],
@@ -5564,8 +5552,8 @@ pub(crate) fn bootstrap_raw_image(
         prog.pending_analysis
             .push((unlace_analysis::cortexmscs::ID, scs));
     }
-    if unlace_analysis::loader::kuna_cortexmdevice::is_m_profile(&arch_id, None) {
-        unlace_analysis::loader::kuna_cortexmdevice::paint_volatile(
+    if unlace_analysis::loader::cortexmdevice::is_m_profile(&arch_id, None) {
+        unlace_analysis::loader::cortexmdevice::paint_volatile(
             prog.arch_mut(),
             &code_space,
             &[(image_base, image_size, 0)],
@@ -5582,7 +5570,7 @@ pub(crate) fn bootstrap_raw_image(
         let view = mapped_bytes
             .or_else(|| std::fs::read(path).ok())
             .and_then(|bytes| {
-                unlace_analysis::loader::kuna_objectview::raw_as_elf(
+                unlace_analysis::loader::objectview::raw_as_elf(
                     &bytes, image_base, entry, &language,
                 )
             });
@@ -5622,7 +5610,7 @@ pub(crate) fn bootstrap_image(
     if file_is_te_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_te(path, target, languages, isa)
-    } else if let Some(bytes) = kuna_retroimage::file_retro_image(path) {
+    } else if let Some(bytes) = retroimage::file_retro_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_retro_bytes(path, &bytes, target, languages, isa)
     } else if file_is_dex(path) {
@@ -5637,7 +5625,7 @@ pub(crate) fn bootstrap_image(
     } else if let Some(bytes) = file_mz_dos_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_mz_bytes(path, &bytes, target, languages, isa)
-    } else if let Some(image) = crate::kuna_esprom::file_esp_image(path) {
+    } else if let Some(image) = crate::esprom::file_esp_image(path) {
         let _load = enter_load(options, from_env);
         bootstrap_esp_image(path, &image, target, languages, isa)
     } else if let Some(image) = {
@@ -5658,9 +5646,9 @@ pub(crate) fn bootstrap_image(
 /// explicit-options load, the live environment for an entry point that takes
 /// none (`options` is then [`LoadOptions::from_env`], read for the bootstrap's
 /// own decisions). The program built under the scope keeps that choice.
-fn enter_load(options: &LoadOptions, from_env: bool) -> unlace_decomp::kuna_loadoptions::LoadScope {
+fn enter_load(options: &LoadOptions, from_env: bool) -> unlace_decomp::loadoptions::LoadScope {
     if from_env {
-        unlace_decomp::kuna_loadoptions::enter_environment()
+        unlace_decomp::loadoptions::enter_environment()
     } else {
         options.enter()
     }
@@ -5761,7 +5749,7 @@ pub(crate) fn bootstrap_wasm_bytes(
     loader.attach_to_space(Rc::clone(&code_space));
     let readonly_ranges = loader_readonly_ranges(&loader, sleigh.base().unwrap().manage());
     let litpool_const =
-        unlace_decomp::kuna_litpoolconst::code_const_ranges(&LoadImage::get_segments(&loader), &[]);
+        unlace_decomp::litpoolconst::code_const_ranges(&LoadImage::get_segments(&loader), &[]);
 
     let mut symbols = read_loader_symbols_generic(&loader);
     let image = loader.image();
@@ -5811,7 +5799,7 @@ pub(crate) fn bootstrap_wasm_bytes(
 /// whole only when its headers name a CLI header.
 fn file_cil_image(path: &str, target: &str) -> Option<CilImage> {
     use std::io::Read;
-    if !unlace_decomp::kuna_cil::cil_enabled()
+    if !unlace_decomp::cil::cil_enabled()
         || unlace_analysis::loadimage_object::explicit_language_target(target).is_some()
     {
         return None;
@@ -5833,7 +5821,7 @@ fn file_cil_image(path: &str, target: &str) -> Option<CilImage> {
 
 /// `bytes` as a managed .NET assembly with at least one method body.
 fn cil_image(bytes: &[u8]) -> Option<CilImage> {
-    if !unlace_decomp::kuna_cil::cil_enabled() || !is_cil_image(bytes) {
+    if !unlace_decomp::cil::cil_enabled() || !is_cil_image(bytes) {
         return None;
     }
     CilImage::parse(bytes)
@@ -5942,12 +5930,12 @@ pub(crate) fn bootstrap_mz_bytes(
     let target =
         unlace_analysis::loadimage_object::explicit_language_target(target).unwrap_or(MZ_LANGUAGE);
     let entry = image.entry;
-    let evidence = unlace_analysis::listing::kuna_mzsweep::MzEvidence::new(
+    let evidence = unlace_analysis::listing::mzsweep::MzEvidence::new(
         image.base,
         image.module.clone(),
         image.relocated_words.clone(),
     );
-    let fpu_emu_evidence = unlace_decomp::kuna_fpuemu::emulator_evidence(&image.module);
+    let fpu_emu_evidence = unlace_decomp::fpuemu::emulator_evidence(&image.module);
     let mut program = bootstrap_raw_image(
         path,
         target,
@@ -5958,14 +5946,10 @@ pub(crate) fn bootstrap_mz_bytes(
         RawBytes::Whole(image.module.clone()),
     )?;
     if let Some(space) = program.analysis_code_space.clone() {
-        unlace_analysis::loader::kuna_realmodecs::paint(
-            program.arch(),
-            &space,
-            &image.code_segments,
-        );
+        unlace_analysis::loader::realmodecs::paint(program.arch(), &space, &image.code_segments);
         if target.starts_with("x86:LE:16:Real Mode") {
             let arch = program.arch();
-            let startup = unlace_analysis::loader::kuna_mzdgroup::startup_ds(
+            let startup = unlace_analysis::loader::mzdgroup::startup_ds(
                 arch,
                 arch.translate(),
                 &space,
@@ -5974,19 +5958,19 @@ pub(crate) fn bootstrap_mz_bytes(
             *program
                 .arch_mut()
                 .kuna_tables
-                .get_mut::<unlace_decomp::kuna_mzdgroup::ImageDgroup>() =
-                startup.map(|startup| unlace_decomp::kuna_mzdgroup::MzDataSegment {
+                .get_mut::<unlace_decomp::mzdgroup::ImageDgroup>() =
+                startup.map(|startup| unlace_decomp::mzdgroup::MzDataSegment {
                     ds: startup.ds,
                     start: image.base,
                     end: image.base + image.module.len() as u64,
                     entry,
                     others: startup.others,
                 });
-            unlace_decomp::kuna_mzdgroup::apply(program.arch());
+            unlace_decomp::mzdgroup::apply(program.arch());
         }
     }
     program.arch_mut().fpu_emu_evidence = fpu_emu_evidence;
-    unlace_decomp::kuna_fpuemu::apply(program.arch());
+    unlace_decomp::fpuemu::apply(program.arch());
     program.image_metadata = Some(ProgramImageMetadata {
         entry: Some(entry),
         sections: Vec::new(),
@@ -5994,7 +5978,7 @@ pub(crate) fn bootstrap_mz_bytes(
     program.mz_evidence = Some(evidence);
     let mapped = program.sections();
     if let Some(space) = program.analysis_code_space.clone() {
-        unlace_analysis::loader::kuna_pcmemory::paint_volatile(program.arch_mut(), &space, &mapped);
+        unlace_analysis::loader::pcmemory::paint_volatile(program.arch_mut(), &space, &mapped);
     }
     Ok(program)
 }
@@ -6035,7 +6019,7 @@ fn file_class_image(path: &str) -> Option<Vec<u8>> {
         .ok()?
         .read_exact(&mut prefix)
         .ok()?;
-    if !unlace_decomp::kuna_jvm::is_class(&prefix) && !prefix.starts_with(b"PK\x03\x04") {
+    if !unlace_decomp::jvm::is_class(&prefix) && !prefix.starts_with(b"PK\x03\x04") {
         return None;
     }
     let bytes = std::fs::read(path).ok()?;
@@ -6062,7 +6046,7 @@ fn file_is_dex(path: &str) -> bool {
 
 /// (kuna `dexmodel`) Bootstrap a DEX file, or an APK's `classes*.dex` files:
 /// each mapped read-only for the Dalvik spec, one function per method with
-/// code, and a [`unlace_decomp::kuna_dex::DexModel`] per file that the engine
+/// code, and a [`unlace_decomp::dex::DexModel`] per file that the engine
 /// asks for constant-pool records and register payloads. The method
 /// prototypes are locked at the analysis commit, after the `option` lines.
 pub fn bootstrap_from_dex_bytes(
@@ -6121,7 +6105,7 @@ pub(crate) fn bootstrap_dex_bytes(
 
 /// (kuna `jvmmodel`) Bootstrap a Java class file, or a JAR's `.class` members:
 /// each method's code mapped read-only for the JVM spec, one function per
-/// method with code, and a [`unlace_decomp::kuna_jvm::JvmModel`] per class that
+/// method with code, and a [`unlace_decomp::jvm::JvmModel`] per class that
 /// the engine asks for constant-pool records and payloads. The method
 /// prototypes are locked at the analysis commit, after the `option` lines.
 pub(crate) fn bootstrap_class_bytes(
@@ -6190,7 +6174,7 @@ pub(crate) fn bootstrap_esp_image(
 ) -> KunaResult<ConsoleProgram> {
     let target = unlace_analysis::loadimage_object::explicit_language_target(target)
         .unwrap_or(image.target());
-    let (loader, base, metadata) = crate::kuna_esprom::raw_image(path, image)?;
+    let (loader, base, metadata) = crate::esprom::raw_image(path, image)?;
     let mut program = bootstrap_raw_image(
         path,
         target,
@@ -6207,13 +6191,12 @@ pub(crate) fn bootstrap_esp_image(
         loader_readonly_ranges(&**loader, program.arch().manage())
     };
     apply_readonly_ranges(&mut program, &readonly);
-    let litpool_const =
-        unlace_decomp::kuna_litpoolconst::code_const_ranges(&program.sections(), &[]);
+    let litpool_const = unlace_decomp::litpoolconst::code_const_ranges(&program.sections(), &[]);
     program.arch_mut().litpool_const = Rc::new(litpool_const);
     *program
         .arch_mut()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_esprom::ImageChip>() = image.chip;
+        .get_mut::<unlace_decomp::esprom::ImageChip>() = image.chip;
     program.image_metadata = Some(metadata);
     Ok(program)
 }
@@ -6315,7 +6298,7 @@ pub(crate) fn bootstrap_te_bytes(
     // spans before the walk. Uninitialized tails would decode as Thumb no-ops.
     let walkable_ranges = code_ranges(&loader.file_backed_segments());
     let litpool_const =
-        unlace_decomp::kuna_litpoolconst::code_const_ranges(&loader.file_backed_segments(), &[]);
+        unlace_decomp::litpoolconst::code_const_ranges(&loader.file_backed_segments(), &[]);
     let readonly_ranges = loader_readonly_ranges(&loader, sleigh.base().unwrap().manage());
     let entry = loader.entry();
     let image_metadata = ProgramImageMetadata {
@@ -6342,10 +6325,7 @@ pub(crate) fn bootstrap_te_bytes(
         entry,
     });
     program.analysis_code_space = Some(code_space);
-    program.set_object_view(
-        path,
-        unlace_analysis::loader::kuna_objectview::te_as_pe(bytes),
-    );
+    program.set_object_view(path, unlace_analysis::loader::objectview::te_as_pe(bytes));
     apply_readonly_ranges(&mut program, &readonly_ranges);
     program.arch_mut().litpool_const = Rc::new(litpool_const);
     Ok(program)
@@ -6399,12 +6379,8 @@ fn mips_t9_probe(
         );
         let bytes = loader.ok()?.shared_bytes()?;
         Some(
-            unlace_analysis::loader::kuna_mipsentry::value(
-                &*bytes,
-                entry.get_offset(),
-                elf32,
-                little,
-            )? & mask,
+            unlace_analysis::loader::mipsentry::value(&*bytes, entry.get_offset(), elf32, little)?
+                & mask,
         )
     })
 }
@@ -6427,7 +6403,7 @@ pub fn bootstrap_from_object_with_isa(
 /// The object bootstrap. `from_env` is set by the entry points that take no
 /// options: their load and the program it builds read the environment live, and
 /// they publish the image's Go toolchain version in
-/// [`GOVERSION_ENV`](unlace_decomp::kuna_goreg::GOVERSION_ENV) (cleared for a
+/// [`GOVERSION_ENV`](unlace_decomp::goreg::GOVERSION_ENV) (cleared for a
 /// non-Go image). An explicit-options load leaves the environment alone and
 /// never reads it. The options are in force from the first byte read.
 pub(crate) fn bootstrap_object(
@@ -6448,10 +6424,10 @@ pub(crate) fn bootstrap_object(
         // the clamp can rewrite it; so does a prelinked kernelcache, whose
         // pointers the `kernelcache` peel rebases in place.
         Some(bytes)
-            if unlace_analysis::loader::kuna_machotolerance::runs_past_the_file(&bytes)
-                || (unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force()
-                    != unlace_decomp::kuna_kernelcache::KernelcacheChoice::Off
-                    && unlace_analysis::loader::kuna_kernelcache::is_prelinked(&bytes)) =>
+            if unlace_analysis::loader::machotolerance::runs_past_the_file(&bytes)
+                || (unlace_decomp::kernelcache::KernelcacheChoice::in_force()
+                    != unlace_decomp::kernelcache::KernelcacheChoice::Off
+                    && unlace_analysis::loader::kernelcache::is_prelinked(&bytes)) =>
         {
             None
         }
@@ -6459,15 +6435,14 @@ pub(crate) fn bootstrap_object(
     };
     let (bytes, load_notes) = match mapped {
         Some(bytes) => {
-            let crypt_note = unlace_analysis::loader::kuna_machotolerance::encryption_note(&bytes);
+            let crypt_note = unlace_analysis::loader::machotolerance::encryption_note(&bytes);
             (bytes, crypt_note.into_iter().collect())
         }
         None => {
             // Read the image bytes once: reused for the loader AND the analysis-pass
             // object::File view (the analyzers need a parsed object the loader drops).
             let bytes =
-                match unlace_analysis::loader::kuna_dyldcache::read_selected_image(Path::new(path))
-                {
+                match unlace_analysis::loader::dyldcache::read_selected_image(Path::new(path)) {
                     Some(image) => {
                         image.map_err(|e| KunaError::lowlevel(format!("{path}: {e}")))?
                     }
@@ -6477,13 +6452,10 @@ pub(crate) fn bootstrap_object(
                 };
             // (kuna `kernelcache`) IMG4 / IM4P / LZFSE / complzss unwrapping and MH_FILESET
             // entry selection, ahead of every other normalization.
-            let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force();
-            let peeled = unlace_analysis::loader::kuna_kernelcache::peel_file(
-                Path::new(path),
-                bytes,
-                &choice,
-            )
-            .map_err(KunaError::lowlevel)?;
+            let choice = unlace_decomp::kernelcache::KernelcacheChoice::in_force();
+            let peeled =
+                unlace_analysis::loader::kernelcache::peel_file(Path::new(path), bytes, &choice)
+                    .map_err(KunaError::lowlevel)?;
             if let Some(note) = &peeled.note {
                 unlace_base::notes::say_once(path, &format!("[kuna] {note}"));
             }
@@ -6522,8 +6494,8 @@ pub(crate) fn bootstrap_object(
             let (bytes, datadir_note) =
                 unlace_analysis::loader::pe_datadirs::tolerate_oversized_data_directories(bytes);
             let (bytes, clamp_note) =
-                unlace_analysis::loader::kuna_machotolerance::clamp_out_of_file_ranges(bytes);
-            let crypt_note = unlace_analysis::loader::kuna_machotolerance::encryption_note(&bytes);
+                unlace_analysis::loader::machotolerance::clamp_out_of_file_ranges(bytes);
+            let crypt_note = unlace_analysis::loader::machotolerance::encryption_note(&bytes);
             let load_notes: Vec<String> = [
                 shdr_note,
                 dosmagic_note,
@@ -6561,14 +6533,11 @@ pub(crate) fn bootstrap_object(
             Some((maj, min)) => {
                 // FIXME: Audit that the environment access only happens in single-threaded code.
                 unsafe {
-                    std::env::set_var(
-                        unlace_decomp::kuna_goreg::GOVERSION_ENV,
-                        format!("{maj}.{min}"),
-                    )
+                    std::env::set_var(unlace_decomp::goreg::GOVERSION_ENV, format!("{maj}.{min}"))
                 }
             }
             // FIXME: Audit that the environment access only happens in single-threaded code.
-            None => unsafe { std::env::remove_var(unlace_decomp::kuna_goreg::GOVERSION_ENV) },
+            None => unsafe { std::env::remove_var(unlace_decomp::goreg::GOVERSION_ENV) },
         }
     }
     let _load = enter_load(&options, from_env);
@@ -6639,11 +6608,10 @@ pub(crate) fn bootstrap_object(
             })
         })
         .flatten();
-    let m_profile =
-        unlace_analysis::loader::kuna_cortexmdevice::is_m_profile(&arch_id, parsed.as_ref());
+    let m_profile = unlace_analysis::loader::cortexmdevice::is_m_profile(&arch_id, parsed.as_ref());
     drop(parsed);
     sleigh.base_mut().unwrap().mapped_flow_boundary_image =
-        unlace_decomp::kuna_mappedflowboundary::eligible_elf(&bytes, &arch_id);
+        unlace_decomp::mappedflowboundary::eligible_elf(&bytes, &arch_id);
     let input_context_paints = install_input_isa(
         sleigh.base_mut().unwrap(),
         &arch_id,
@@ -6684,8 +6652,7 @@ pub(crate) fn bootstrap_object(
     // against the whole collection's slots instead.
     if let Some(signed) = &signed {
         if let Ok(file) = unlace_analysis::loadimage_object::parse_object(&bytes) {
-            let vcall_sites =
-                unlace_analysis::rtti::kuna_arm64evcall::resolve_signed(&file, signed);
+            let vcall_sites = unlace_analysis::rtti::arm64evcall::resolve_signed(&file, signed);
             pending_analysis.retain(|(id, _)| *id != "arm64evcall");
             pending_analysis.push((
                 "arm64evcall",
@@ -6724,7 +6691,7 @@ pub(crate) fn bootstrap_object(
         .base_mut()
         .unwrap()
         .kuna_states
-        .set::<unlace_decomp::kuna_nullable_reloc::Relocations>(std::rc::Rc::new(nullable));
+        .set::<unlace_decomp::nullable_reloc::Relocations>(std::rc::Rc::new(nullable));
     pending_analysis.extend(object_import_slot_stash(
         !loader.reloc_sections().is_empty(),
         loader.import_slot_ranges(),
@@ -6757,12 +6724,12 @@ pub(crate) fn bootstrap_object(
     // instruction stream carries inside itself fold to their constants without the
     // program-wide `option readonly`. Sections when the image has a usable table,
     // the `PF_X` load segments when it does not.
-    let litpool_const: Vec<(u64, u64)> = unlace_decomp::kuna_litpoolconst::code_const_ranges(
+    let litpool_const: Vec<(u64, u64)> = unlace_decomp::litpoolconst::code_const_ranges(
         &loader.section_snapshot(),
         &unlace_sleigh::loadimage::LoadImage::get_segments(&loader),
     );
     let globalref_ranges: Vec<(u64, u64)> = loader.data_object_ranges().to_vec();
-    let cstring_ranges: Vec<(u64, u64)> = unlace_decomp::kuna_cstringconst::literal_sections(
+    let cstring_ranges: Vec<(u64, u64)> = unlace_decomp::cstringconst::literal_sections(
         loader
             .section_metadata()
             .iter()
@@ -6776,7 +6743,7 @@ pub(crate) fn bootstrap_object(
     let eh_sections: Vec<(String, u64, u64)> = loader
         .section_metadata()
         .iter()
-        .filter(|s| unlace_decomp::kuna_bejoin::is_exception_table(&s.name))
+        .filter(|s| unlace_decomp::bejoin::is_exception_table(&s.name))
         .map(|s| (s.name.clone(), s.vma, s.size))
         .collect();
     let func_sizes = loader.func_symbol_sizes();
@@ -6860,7 +6827,7 @@ pub(crate) fn bootstrap_object(
         sleigh.base_mut().unwrap().rust_display_formatters = formatters
             .iter()
             .filter_map(|(&address, formatter)| {
-                (formatter.kind == unlace_decomp::kuna_rustfmtflags::Trait::Display)
+                (formatter.kind == unlace_decomp::rustfmtflags::Trait::Display)
                     .then_some((address, formatter.primitive))
             })
             .collect();
@@ -6868,20 +6835,19 @@ pub(crate) fn bootstrap_object(
             .base_mut()
             .unwrap()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_rustfmtflags::IntegerFormatters>() = formatters;
+            .get_mut::<unlace_decomp::rustfmtflags::IntegerFormatters>() = formatters;
         sleigh.base_mut().unwrap().rust_str_display_formatters = metadata.strings;
         *sleigh
             .base_mut()
             .unwrap()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_rustfmtwrite::WriterMethods>() =
-            metadata.writers.methods;
+            .get_mut::<unlace_decomp::rustfmtwrite::WriterMethods>() = metadata.writers.methods;
         sleigh.base_mut().unwrap().rust_fmt_write_relro = metadata.writers.relro;
         *sleigh
             .base_mut()
             .unwrap()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_rustfmtio::WriterProfiles>() = metadata.io_writers;
+            .get_mut::<unlace_decomp::rustfmtio::WriterProfiles>() = metadata.io_writers;
     }
     // (kuna `pebnames`) The same kind of one-bit image fact: is this a Windows
     // GUI/console PE, whose segment base holds a user-mode TEB?  `option pebnames
@@ -6904,11 +6870,11 @@ pub(crate) fn bootstrap_object(
         object::FileKind::parse(&*bytes),
         Ok(object::FileKind::Elf32 | object::FileKind::Elf64)
     );
-    let image_family = unlace_analysis::formatstring::kuna_fmtstatic::image_family(&bytes);
+    let image_family = unlace_analysis::formatstring::fmtstatic::image_family(&bytes);
     // (kuna `chkstkdarwin`) And whether it is an Apple container: the Darwin
     // stack probe is removed only there.
     sleigh.base_mut().unwrap().image_apple =
-        image_family == unlace_decomp::kuna_formatstring::ImageFamily::Apple;
+        image_family == unlace_decomp::formatstring::ImageFamily::Apple;
     // (kuna `callmechanisms`) And whether the loader validated PPC64 ELFv1
     // function descriptors (a linked image's or an object's `.opd`), whose ABI
     // reserves `0x28(r1)` for the TOC save: `option callmechanisms auto`
@@ -6924,15 +6890,13 @@ pub(crate) fn bootstrap_object(
         object::FileKind::parse(&*bytes),
         Ok(object::FileKind::MachO32 | object::FileKind::MachO64)
     );
-    let vararg_abi = unlace_decomp::kuna_formatstring::vararg_abi(
-        &sleigh.base().unwrap().archid,
-        Some(image_family),
-    );
+    let vararg_abi =
+        unlace_decomp::formatstring::vararg_abi(&sleigh.base().unwrap().archid, Some(image_family));
     *sleigh
         .base_mut()
         .unwrap()
         .kuna_tables
-        .get_mut::<unlace_decomp::kuna_formatstring::ImageVarargAbi>() = Some(vararg_abi);
+        .get_mut::<unlace_decomp::formatstring::ImageVarargAbi>() = Some(vararg_abi);
 
     // Hand the loader to the engine (the C++ `loader` back-pointer the decode
     // reads on load_fill).
@@ -6977,7 +6941,7 @@ pub(crate) fn bootstrap_object(
     // by the CLI after `load file`, so it is built at the deferred commit
     // (`read symbols`) when the flag is known — not at load. `bytes` is moved
     // here (it is unused below this point).
-    prog.callwide = crate::kuna_callwide::State::object(&bytes);
+    prog.callwide = crate::callwide::State::object(&bytes);
     if explicit_isa {
         prog.callwide_unavailable("explicit decode mode requires a new complete image proof");
     }
@@ -6986,7 +6950,7 @@ pub(crate) fn bootstrap_object(
     prog.analysis_image = Some((path.to_string(), bytes, Some(proof_memo)));
     prog.loader_data_objects = loader_data_objects;
     prog.loader_data_exports = loader_data_exports;
-    prog.import_slots = crate::kuna_importslots::ImportSlots::new(import_slots);
+    prog.import_slots = crate::importslots::ImportSlots::new(import_slots);
     prog.function_address_aliases = function_address_aliases.into_iter().collect();
     prog.symbol_underscore_prefix = symbol_underscore_prefix;
     if let Ok(loc) = prog.arch().get_register_varnode(b"r2") {
@@ -7006,14 +6970,14 @@ pub(crate) fn bootstrap_object(
     }
     prog.elf_functions = elf_functions;
     for (raw, name) in loader_aliases {
-        let name = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&name, "::").into_owned();
+        let name = unlace_decomp::symbolnamebound::bound_scope_path(&name, "::").into_owned();
         let vma = prog.thumb_normalized(raw);
         prog.loader_aliases.entry(vma).or_default().push(name);
     }
     prog.pending_entry_thumb = entry_thumb_walk;
     if m_profile {
         let mapped = prog.sections();
-        unlace_analysis::loader::kuna_cortexmdevice::paint_volatile(
+        unlace_analysis::loader::cortexmdevice::paint_volatile(
             prog.arch_mut(),
             &code_space,
             &mapped,
@@ -7103,10 +7067,8 @@ fn commit_input_hints(
     code_space: &Rc<AddrSpace>,
     facts: &[unlace_analysis::pass::InputHintFact],
 ) {
-    let mut hints: std::collections::BTreeMap<
-        Address,
-        Vec<unlace_decomp::kuna_inputhints::InputHint>,
-    > = std::collections::BTreeMap::new();
+    let mut hints: std::collections::BTreeMap<Address, Vec<unlace_decomp::inputhints::InputHint>> =
+        std::collections::BTreeMap::new();
     for fact in facts {
         let Ok(loc) = prog.arch().get_register_varnode(fact.reg.as_bytes()) else {
             continue;
@@ -7118,7 +7080,7 @@ fn commit_input_hints(
         hints
             .entry(entry)
             .or_default()
-            .push(unlace_decomp::kuna_inputhints::InputHint {
+            .push(unlace_decomp::inputhints::InputHint {
                 addr: Address::new(space, loc.offset),
                 size: loc.size as i32,
                 name: fact.name.clone(),
@@ -7128,7 +7090,7 @@ fn commit_input_hints(
     for (entry, list) in hints {
         prog.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_inputhints::LoaderHints>()
+            .get_mut::<unlace_decomp::inputhints::LoaderHints>()
             .0
             .entry(entry)
             .or_insert_with(|| Rc::new(list));
@@ -7155,7 +7117,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Dwarfnocall>()
+        .get::<unlace_decomp::analysisgates::Dwarfnocall>()
         .0
     {
         out.apply_dwarf_nocall();
@@ -7170,7 +7132,7 @@ fn commit_analysis_output(
     for slot in std::mem::take(&mut out.ppc32_pic_slots) {
         prog.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_ppc32piccalls::PicImports>()
+            .get_mut::<unlace_decomp::ppc32piccalls::PicImports>()
             .insert(slot.address, slot);
     }
     let cpp = std::mem::take(&mut out.cpp_dwarf);
@@ -7186,7 +7148,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Dwarfglobaltypes>()
+        .get::<unlace_decomp::analysisgates::Dwarfglobaltypes>()
         .0
     {
         let typed: std::collections::BTreeSet<u64> = dwarf_globals.iter().map(|g| g.addr).collect();
@@ -7199,7 +7161,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Dwarfdecls>()
+        .get::<unlace_decomp::analysisgates::Dwarfdecls>()
         .0
     {
         let named: std::collections::BTreeSet<String> =
@@ -7215,7 +7177,7 @@ fn commit_analysis_output(
     let go_prototypes = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Godwarfsig>()
+        .get::<unlace_decomp::analysisgates::Godwarfsig>()
         .0
     {
         out.go_dwarf
@@ -7253,7 +7215,7 @@ fn commit_analysis_output(
     if !prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Swiftobjcthunk>()
+        .get::<unlace_decomp::analysisgates::Swiftobjcthunk>()
         .0
         && !positional.is_empty()
     {
@@ -7284,7 +7246,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_valuewitness::Valuewitness>()
+        .get::<unlace_decomp::valuewitness::Valuewitness>()
         .0
     {
         out.symbols.extend(witnesses.names);
@@ -7292,7 +7254,7 @@ fn commit_analysis_output(
         if prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+            .get::<unlace_decomp::analysisgates::Swifttypes>()
             .0
         {
             out.typed_data.extend(witnesses.typed_data);
@@ -7301,7 +7263,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+        .get::<unlace_decomp::analysisgates::Swifttypes>()
         .0
     {
         let swift = std::mem::take(&mut out.swift_types);
@@ -7311,7 +7273,7 @@ fn commit_analysis_output(
         if prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_swiftcall::Swiftcall>()
+            .get::<unlace_decomp::swiftcall::Swiftcall>()
             .0
         {
             out.swift_types.models = swift.models;
@@ -7331,7 +7293,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Swifthelpers>()
+        .get::<unlace_decomp::analysisgates::Swifthelpers>()
         .0
     {
         out.symbols.extend(helpers.symbols);
@@ -7347,7 +7309,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::GoTypeGlobals>()
+        .get::<unlace_decomp::analysisgates::GoTypeGlobals>()
         .0
     {
         let descriptors = std::mem::take(&mut out.go_type_globals);
@@ -7366,7 +7328,7 @@ fn commit_analysis_output(
     let cppsig_mode = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_cppsig::CppSigMode>();
+        .get::<unlace_decomp::cppsig::CppSigMode>();
     let (msvc_byval, msvc_builders) = if cppsig_mode.enabled() {
         (
             std::mem::take(&mut out.cpp_sig.msvc_byval),
@@ -7380,7 +7342,7 @@ fn commit_analysis_output(
     let iokit = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+        .get::<unlace_decomp::analysisgates::IokitClasses>()
         .types
     {
         std::mem::take(&mut out.iokit_cxx)
@@ -7390,13 +7352,13 @@ fn commit_analysis_output(
     let typed_vtables = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .get::<unlace_decomp::coreoptions::Vtabletypes>()
         .0
         || !iokit.vtables.classes.is_empty();
     if !prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_coreoptions::Vtabletypes>()
+        .get::<unlace_decomp::coreoptions::Vtabletypes>()
         .0
     {
         out.cpp_vtables = Default::default();
@@ -7426,7 +7388,7 @@ fn commit_analysis_output(
         out.cpp_sig.inferred = rest;
     }
     let cppsig_protos = if cppsig_mode.enabled() {
-        unlace_analysis::demangle::kuna_cppsig::select(
+        unlace_analysis::demangle::cppsig::select(
             std::mem::take(&mut out.cpp_sig),
             cppsig_mode.inferred(),
         )
@@ -7435,7 +7397,7 @@ fn commit_analysis_output(
     };
     let out = out;
     let signature_names =
-        kuna_signature_names::SignatureNames::collect(prog, &out, zero_size_data_names);
+        signature_names::SignatureNames::collect(prog, &out, zero_size_data_names);
 
     // Keep lookup identities even when richer debug information wins the map;
     // a spelling shared by several objects resolves to its lowest address. A
@@ -7471,7 +7433,7 @@ fn commit_analysis_output(
         *slot = (*slot).min(address);
     }
 
-    let mut data_names = crate::kuna_dataidentifiers::Names::new(
+    let mut data_names = crate::dataidentifiers::Names::new(
         prog.symbols
             .iter()
             .map(|s| s.name.clone())
@@ -7488,8 +7450,8 @@ fn commit_analysis_output(
             .chain(out.symbols.iter().map(|s| s.name.clone()))
             .chain(out.data_objects.iter().map(|d| d.name.clone()))
             .chain(out.typed_data.iter().map(|d| d.name.clone())),
-        unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode()
-            == unlace_decomp::kuna_symbolnamechars::NameChars::Ident,
+        unlace_decomp::symbolnamechars::symbolnamechars_mode()
+            == unlace_decomp::symbolnamechars::NameChars::Ident,
     );
 
     // 0b. (kuna `libctypes glibc`) The load-time target decision, carried to the
@@ -7510,7 +7472,7 @@ fn commit_analysis_output(
     let ivars_on = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_objcivars::ObjcIvars>()
+        .get::<unlace_decomp::objcivars::ObjcIvars>()
         .0;
     let const_on = |gate: unlace_analysis::pass::ConstGate| match gate {
         unlace_analysis::pass::ConstGate::ObjcRefs => true,
@@ -7642,10 +7604,10 @@ fn commit_analysis_output(
         let fragments: Vec<Address> = prog
             .symbols
             .iter()
-            .filter(|s| unlace_decomp::kuna_outlinedinline::is_outlined_name(&s.name))
+            .filter(|s| unlace_decomp::outlinedinline::is_outlined_name(&s.name))
             .map(|s| s.addr.clone())
             .collect();
-        unlace_decomp::kuna_outlinedinline::mark_inline(prog.arch_mut(), &fragments);
+        unlace_decomp::outlinedinline::mark_inline(prog.arch_mut(), &fragments);
     }
 
     // 1-. (kuna `elfgotimports`) The import a loader import slot holds. A
@@ -7796,21 +7758,21 @@ fn commit_analysis_output(
     let lazy_funcs = prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Lazyfuncs>()
+        .get::<unlace_decomp::analysisgates::Lazyfuncs>()
         .0;
     let jump_thunks = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Thunknames>()
+        .get::<unlace_decomp::analysisgates::Thunknames>()
         .0
     {
-        kuna_thunknames::jump_thunks(prog.arch(), code_space, &out.entries)
+        thunknames::jump_thunks(prog.arch(), code_space, &out.entries)
     } else {
         Default::default()
     };
     let eager = if lazy_funcs {
-        let mut eager = crate::kuna_lazyfuncs::fact_entries(&out);
-        let named_thunks = kuna_thunknames::thunks_to(&jump_thunks, &eager);
+        let mut eager = crate::lazyfuncs::fact_entries(&out);
+        let named_thunks = thunknames::thunks_to(&jump_thunks, &eager);
         eager.extend(named_thunks);
         eager
     } else {
@@ -7839,7 +7801,7 @@ fn commit_analysis_output(
             && prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::NameStyleAngr>()
+                .get::<unlace_decomp::coreoptions::NameStyleAngr>()
                 .0
             && !named_placeholders.contains(&vma)
             && prog.thumb_normalized(vma) == vma
@@ -7930,7 +7892,7 @@ fn commit_analysis_output(
     // (kuna `itaniumeh`) Park the call-site table and the two registers the
     // unwinder fills at a pad. Empty unless the gate is on.
     if !out.eh_call_sites.is_empty() || !out.msvc_eh_sites.is_empty() {
-        let mut table = unlace_decomp::kuna_itaniumeh::EhTable::new(out.eh_call_sites.clone());
+        let mut table = unlace_decomp::itaniumeh::EhTable::new(out.eh_call_sites.clone());
         let arch = prog.arch();
         let reg = |names: &[&str]| {
             names
@@ -7961,7 +7923,7 @@ fn commit_analysis_output(
             let funclets = out
                 .msvc_funclets
                 .iter()
-                .map(|f| unlace_decomp::kuna_itaniumeh::FuncletPad {
+                .map(|f| unlace_decomp::itaniumeh::FuncletPad {
                     pad: f.pad,
                     frame: f.frame_reg.as_deref().and_then(|r| reg(&[r])),
                     frame_offset: f.frame_offset,
@@ -7993,7 +7955,7 @@ fn commit_analysis_output(
         *prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_kernelbug::BugSites>() = sites;
+            .get_mut::<unlace_decomp::kernelbug::BugSites>() = sites;
     }
 
     // (kuna `poolextents`) Park the ARM32 literal-pool extents the Listing's
@@ -8015,11 +7977,11 @@ fn commit_analysis_output(
     if !out.format_sites.is_empty() {
         let mut parked: std::collections::BTreeMap<
             u64,
-            Vec<unlace_decomp::kuna_formatstring::ParkedFormatSite>,
+            Vec<unlace_decomp::formatstring::ParkedFormatSite>,
         > = std::collections::BTreeMap::new();
         for site in &out.format_sites {
             parked.entry(site.func).or_default().push(
-                unlace_decomp::kuna_formatstring::ParkedFormatSite {
+                unlace_decomp::formatstring::ParkedFormatSite {
                     callpoint: site.callpoint,
                     pieces: site.pieces.clone(),
                     format_slot: site.format_slot,
@@ -8034,11 +7996,11 @@ fn commit_analysis_output(
         *prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_formatstring::ParkedSites>() = parked;
+            .get_mut::<unlace_decomp::formatstring::ParkedSites>() = parked;
     }
 
     // (kuna) Park the prototypes a pass stated for single call instructions
-    // (`unlace_decomp::kuna_callsiteproto`) and the interface instances the
+    // (`unlace_decomp::callsiteproto`) and the interface instances the
     // `uefi` pass found installed.
     for (site, pieces) in &out.call_prototypes {
         prog.arch_mut()
@@ -8176,14 +8138,14 @@ fn commit_analysis_output(
             if prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_fidproto::Fidproto>()
+                .get::<unlace_decomp::fidproto::Fidproto>()
                 .0
             {
                 prog.apply_renamed_library_facts(sid, &m.name, &addr);
             }
         }
     }
-    let contested = kuna_signature_names::contested_addresses(
+    let contested = signature_names::contested_addresses(
         signature_renames
             .iter()
             .map(|(addr, _, name)| (prog.thumb_normalized(addr.get_offset()), *name)),
@@ -8195,7 +8157,7 @@ fn commit_analysis_output(
             if prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_fidproto::Fidproto>()
+                .get::<unlace_decomp::fidproto::Fidproto>()
                 .0
             {
                 prog.apply_renamed_library_facts(sid, name, &addr);
@@ -8233,14 +8195,14 @@ fn commit_analysis_output(
 
     // 3'''. (kuna `thunknames`) A placeholder jump thunk takes its target's name
     //       behind `j_`, after every other name source has named the targets.
-    let renamed_thunks = kuna_thunknames::commit(prog, code_space, &jump_thunks)?;
+    let renamed_thunks = thunknames::commit(prog, code_space, &jump_thunks)?;
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Nullsubs>()
+        .get::<unlace_decomp::analysisgates::Nullsubs>()
         .0
     {
-        kuna_thunknames::name_nullsubs(prog, code_space, &out.entries)?;
+        thunknames::name_nullsubs(prog, code_space, &out.entries)?;
     }
 
     // 4. Detected string literals: place a typelocked `char[len]` data symbol at
@@ -8267,18 +8229,18 @@ fn commit_analysis_output(
     //    byte-identical to the 1-byte markup alone. (kuna `widestrings32`) The
     //    4-byte width (`wchar4[N]`, element count `len / 4`) goes before both on
     //    the same grounds, under its own gate.
-    //    (kuna `fatstr`) The length-BOUNDED facts (`strings::kuna_strrecords`,
+    //    (kuna `fatstr`) The length-BOUNDED facts (`strings::strrecords`,
     //    Rust `&str` records) go before every scanned width: a record states the
     //    literal's exact extent where the NUL scan can only guess a run, and the
     //    occupied-address guard below then retires the glued row the NUL scan
     //    produced for the same address (the measured witness: three adjacent
     //    unterminated literals read back as one 39-byte string). A bounded
     //    fact's `len` is the exact element count — there is no terminator.
-    let blob_extents = crate::kuna_blobdata::Extents::new(&out.blobs);
+    let blob_extents = crate::blobdata::Extents::new(&out.blobs);
     let wide = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Widestrings>()
+        .get::<unlace_decomp::analysisgates::Widestrings>()
         .0
     {
         out.wide_strings.as_slice()
@@ -8288,7 +8250,7 @@ fn commit_analysis_output(
     let wide32 = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+        .get::<unlace_decomp::analysisgates::Widestrings32>()
         .0
     {
         out.wide_strings32.as_slice()
@@ -8325,9 +8287,9 @@ fn commit_analysis_output(
     let narrow: Vec<unlace_analysis::pass::StringFact> = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_fatstr::FatStrMode>(
+        .get::<unlace_decomp::fatstr::FatStrMode>(
     )
-        != unlace_decomp::kuna_fatstr::FatStrMode::Off
+        != unlace_decomp::fatstr::FatStrMode::Off
     {
         let mut starts: Vec<u64> = out.bounded_strings.iter().map(|f| f.addr).collect();
         starts.sort_unstable();
@@ -8435,7 +8397,7 @@ fn commit_analysis_output(
     //     seeded, and a symbol inside the entry, mapped before the paint, takes
     //     the read-only flag. Empty under `--option cfstrings off`.
     let cfstring_record = match out.cfstrings.first() {
-        Some(fact) => unlace_decomp::kuna_cfstr::declare_types(
+        Some(fact) => unlace_decomp::cfstr::declare_types(
             prog.arch().types(),
             fact.size as i32,
             code_space.get_word_size(),
@@ -8659,12 +8621,12 @@ fn commit_analysis_output(
 
     // 4c. (kuna `blobs`) Embedded images and archives, last so every named or
     //     typed claim on the address is kept.
-    crate::kuna_blobdata::commit(prog, code_space, &out.blobs, &mut data_names, num_spaces)?;
+    crate::blobdata::commit(prog, code_space, &out.blobs, &mut data_names, num_spaces)?;
 
     // 4b. The C runtime declaration `elfmain` has for an executable's own
     //     `main`. Not parked on the symbol: the drive locks only its `int`
     //     return and names and types the parameters `main`'s own analysis
-    //     recovers (`unlace_decomp::kuna_elfmaindecl`). Any prototype another
+    //     recovers (`unlace_decomp::elfmaindecl`). Any prototype another
     //     stream parks on `main` (DWARF) wins outright.
     for (addr, pieces) in out.main_decl_at {
         prog.arch_mut().elfmain_main_decl =
@@ -8683,7 +8645,7 @@ fn commit_analysis_output(
     let self_types: std::collections::HashMap<String, Rc<unlace_decomp::dtype::Datatype>> = if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_objcivars::ObjcIvars>()
+        .get::<unlace_decomp::objcivars::ObjcIvars>()
         .0
     {
         out.objc_self_types.into_iter().collect()
@@ -8696,7 +8658,7 @@ fn commit_analysis_output(
         if prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Objc>()
+            .get::<unlace_decomp::analysisgates::Objc>()
             .0
         {
             let data_slots: std::collections::HashSet<u64> =
@@ -8722,7 +8684,7 @@ fn commit_analysis_output(
     if !out.kalloc_types.is_empty() {
         prog.arch_mut()
             .kuna_states
-            .set::<unlace_decomp::kuna_kalloctype::KallocTypes>(Rc::new(
+            .set::<unlace_decomp::kalloctype::KallocTypes>(Rc::new(
                 out.kalloc_types.iter().cloned().collect(),
             ));
     }
@@ -8731,7 +8693,7 @@ fn commit_analysis_output(
     if !out.com_interfaces.is_empty() {
         prog.arch_mut()
             .kuna_states
-            .set(Rc::new(unlace_decomp::kuna_comtyping::ComInterfaces(
+            .set(Rc::new(unlace_decomp::comtyping::ComInterfaces(
                 out.com_interfaces.iter().cloned().collect(),
             )));
     }
@@ -8771,7 +8733,7 @@ fn commit_analysis_output(
         let withheld = prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_honestgaps::WithheldPrototypes>();
+            .get_mut::<unlace_decomp::honestgaps::WithheldPrototypes>();
         for (at, name, cause) in out.withheld_prototypes {
             withheld.record(at, &name, cause);
         }
@@ -8793,7 +8755,7 @@ fn commit_analysis_output(
         .cloned();
     if let (true, Some(cdecl)) = (default_pop_unknown, cdecl) {
         for name in &out.c_runtime_imports {
-            if unlace_decomp::kuna_x87intrinsic::is_intrinsic(name) {
+            if unlace_decomp::x87intrinsic::is_intrinsic(name) {
                 continue;
             }
             prog.arch_mut()
@@ -8819,7 +8781,7 @@ fn commit_analysis_output(
     //     applied declaration returning a class by value) are recorded.
     let mut msvc_applied: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
     for sig in cppsig_protos {
-        let unlace_analysis::demangle::kuna_cppsig::SelectedSig {
+        let unlace_analysis::demangle::cppsig::SelectedSig {
             addr,
             pieces,
             model,
@@ -8858,17 +8820,17 @@ fn commit_analysis_output(
         if msvc_applied.contains(&addr) {
             prog.arch_mut()
                 .kuna_states
-                .make_mut::<unlace_decomp::kuna_msvcbyval::ByvalDecls>()
+                .make_mut::<unlace_decomp::msvcbyval::ByvalDecls>()
                 .insert((space_index, addr), decl);
         }
     }
     for (addr, kind) in msvc_builders {
         let applied =
-            kind == unlace_decomp::kuna_msvcbyval::Builder::This || msvc_applied.contains(&addr);
+            kind == unlace_decomp::msvcbyval::Builder::This || msvc_applied.contains(&addr);
         if applied {
             prog.arch_mut()
                 .kuna_states
-                .make_mut::<unlace_decomp::kuna_msvcbyval::Builders>()
+                .make_mut::<unlace_decomp::msvcbyval::Builders>()
                 .insert((space_index, addr), kind);
         }
     }
@@ -8888,13 +8850,9 @@ fn commit_analysis_output(
     // 5f. (kuna `vtabletypes`) The typed vtables, after every prototype source
     //     above so a slot's function pointer carries the methods' signature.
     if typed_vtables {
-        unlace_decomp::kuna_vtabletypes::install(
-            prog.arch(),
-            code_space,
-            &out.cpp_vtables.classes,
-        )?;
-        crate::kuna_iokittypes::commit(prog, code_space, &iokit)?;
-        crate::kuna_msvcclasses::commit(prog, code_space, &out.cpp_vtables)?;
+        unlace_decomp::vtabletypes::install(prog.arch(), code_space, &out.cpp_vtables.classes)?;
+        crate::iokittypes::commit(prog, code_space, &iokit)?;
+        crate::msvcclasses::commit(prog, code_space, &out.cpp_vtables)?;
     }
 
     // 5e. (kuna `importvote`) The call sites of every PLT import, read by the
@@ -9023,7 +8981,7 @@ fn commit_analysis_output(
     if prog
         .arch()
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Swifttypes>()
+        .get::<unlace_decomp::analysisgates::Swifttypes>()
         .0
     {
         for fact in &out.swift_types.param_locks {
@@ -9103,7 +9061,7 @@ fn commit_analysis_output(
         // hints, the register again resolved through the language.
         commit_model_facts(prog, code_space, &out.swift_types.models);
         commit_input_hints(prog, code_space, &out.swift_types.input_hints);
-        use unlace_decomp::kuna_swiftcall::{
+        use unlace_decomp::swiftcall::{
             SWIFTASYNCCALL, SWIFTASYNCCALL_THROWS, SWIFTCALL, SWIFTCALL_THROWS,
         };
         // (kuna `swiftcall`) The runtime's `swiftasync` entry points, by
@@ -9171,7 +9129,7 @@ fn commit_analysis_output(
                     .iter()
                     .map(|&f| (code_space.get_index(), f))
                     .collect();
-                let swift_abi = Rc::new(unlace_decomp::kuna_swiftcall::SwiftAbi {
+                let swift_abi = Rc::new(unlace_decomp::swiftcall::SwiftAbi {
                     self_reg,
                     error_reg,
                     async_reg,
@@ -9217,7 +9175,7 @@ fn commit_analysis_output(
 
     // 7d. (kuna `swiftmetadata`) Each local Swift enum's case count by its
     //     metadata accessor: the bound of the table its `switch` indexes
-    //     (`p2_lift/kuna_switchextent.rs`).
+    //     (`p2_lift/switchextent.rs`).
     prog.arch_mut().loader_swift_enum_cases =
         Rc::new(out.swift_enum_cases.iter().copied().collect());
 
@@ -9445,11 +9403,11 @@ fn commit_analysis_output(
         );
     }
 
-    crate::kuna_fidproto::apply(prog, code_space, out.fid_prototypes);
+    crate::fidproto::apply(prog, code_space, out.fid_prototypes);
 
     // 10. (kuna `thunknames`) A renamed jump thunk takes its target's prototype,
     //     after every prototype stream above has parked its own.
-    kuna_thunknames::inherit_prototypes(prog, code_space, &jump_thunks, &renamed_thunks);
+    thunknames::inherit_prototypes(prog, code_space, &jump_thunks, &renamed_thunks);
 
     Ok(())
 }
@@ -9545,9 +9503,9 @@ fn select_macho_slice(bytes: Vec<u8>, slice: Option<&str>, target: &str) -> Vec<
 
 /// An IMG4 / IM4P / compressed kernelcache, admitted while `kernelcache` is not off.
 fn is_apple_container(bytes: &[u8]) -> bool {
-    unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force()
-        != unlace_decomp::kuna_kernelcache::KernelcacheChoice::Off
-        && unlace_analysis::loader::kuna_kernelcache::is_container(bytes)
+    unlace_decomp::kernelcache::KernelcacheChoice::in_force()
+        != unlace_decomp::kernelcache::KernelcacheChoice::Off
+        && unlace_analysis::loader::kernelcache::is_container(bytes)
 }
 
 const RAW_IMAGE_INPUT_HINT: &str = "unrecognized input format; for a headerless image use --raw-image --target <SLEIGH-language-id> --base <address> and at least one --entry/--addr <address>";
@@ -9592,7 +9550,7 @@ pub(crate) enum FileInput {
 
 /// Read and classify the file [`bootstrap_from_file`] loads.
 pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
-    if unlace_analysis::loader::kuna_dyldcache::is_dyld_cache_file(Path::new(path))
+    if unlace_analysis::loader::dyldcache::is_dyld_cache_file(Path::new(path))
         || unlace_analysis::image_bytes::ImageBytes::map_thin_macho(path)
             .ok()
             .flatten()
@@ -9623,7 +9581,7 @@ pub(crate) fn classify_file(path: &str) -> KunaResult<FileInput> {
     if let Some(image) = cil_image(&bytes) {
         return Ok(FileInput::Cil(Box::new(image)));
     }
-    if unlace_analysis::loader::kuna_retroimage::is_retro_image(&bytes) {
+    if unlace_analysis::loader::retroimage::is_retro_image(&bytes) {
         return Ok(FileInput::Retro(bytes));
     }
     if is_object_binary(&bytes) || is_apple_container(&bytes) {
@@ -9690,7 +9648,7 @@ fn read_loader_symbols_generic(loader: &dyn LoadImage) -> Vec<ProgramSymbol> {
         // reaches every surface -- `functions`, the `// Function:` header, the
         // emitted declaration and the call site. A no-op (borrowed, unallocated)
         // for every real name.
-        let name = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&name, "::").into_owned();
+        let name = unlace_decomp::symbolnamebound::bound_scope_path(&name, "::").into_owned();
         out.push(ProgramSymbol {
             ordinal: 0,
             name,

@@ -126,7 +126,7 @@ impl OptionTypeMerge {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for TypeMergeMode {
+impl crate::optionset::KunaOption for TypeMergeMode {
     const NAME: &'static str = "typemerge";
     crate::kuna_option_id!();
 
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn shipped_default_is_storage() {
-        use crate::kuna_optionset::KunaOption;
+        use crate::optionset::KunaOption;
         assert_eq!(TypeMergeMode::shipped(), TypeMergeMode::Storage);
         assert_eq!(TypeMergeMode::unset(), TypeMergeMode::On);
     }

@@ -163,7 +163,7 @@ Per `docs/improvement-pipeline.md` section 3's checklist:
    call are dead-code eliminated"*, *"outgoing-argument stack slots render as locals commented
    `// stack - 0xNN`"*.
 3. **Register in** `src/p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`).
-4. **Bump the hard-coded catalog counts** — `src/p0_knowledge/kuna_phases/tests.rs`,
+4. **Bump the hard-coded catalog counts** — `src/p0_knowledge/phases/tests.rs`,
    `tests/catalog_bytecompat.rs` + its `tests/fixtures/phase_catalog.json` fixture, and the
    `tests/stages/kuna-catalog.toml` count assertions (the `ghidra-upstream` /
    `correctness-fix` buckets).

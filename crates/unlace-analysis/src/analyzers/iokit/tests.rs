@@ -8,8 +8,8 @@ use super::*;
 fn real_kernelcache_entry() {
     let path = unlace_base::env::var("UNLACE_KC").unwrap();
     let entry = unlace_base::env::var("UNLACE_KC_ENTRY").unwrap_or_else(|_| "auto".into());
-    let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::parse(&entry).unwrap();
-    let bytes = crate::loader::kuna_kernelcache::peel(std::fs::read(path).unwrap(), &choice)
+    let choice = unlace_decomp::kernelcache::KernelcacheChoice::parse(&entry).unwrap();
+    let bytes = crate::loader::kernelcache::peel(std::fs::read(path).unwrap(), &choice)
         .unwrap()
         .bytes;
     let file = object::File::parse(&*bytes).unwrap();
@@ -187,7 +187,7 @@ fn names_kalloc_views_and_dispatch_tables() {
             .is_none(),
         "no struct is interned before a call needs it"
     );
-    let derived = unlace_decomp::kuna_kalloctype::view_struct(&types, recipe).unwrap();
+    let derived = unlace_decomp::kalloctype::view_struct(&types, recipe).unwrap();
     assert_eq!((derived.get_name(), derived.get_size()), ("Derived", 0x30));
     let (view, packet) = &out.kalloc_types[1];
     assert_eq!(
@@ -267,8 +267,8 @@ fn reads_driverkit_class_records() {
 fn real_kernelcache_tables() {
     let path = unlace_base::env::var("UNLACE_KC").unwrap();
     let entry = unlace_base::env::var("UNLACE_KC_ENTRY").unwrap_or_else(|_| "auto".into());
-    let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::parse(&entry).unwrap();
-    let bytes = crate::loader::kuna_kernelcache::peel(std::fs::read(path).unwrap(), &choice)
+    let choice = unlace_decomp::kernelcache::KernelcacheChoice::parse(&entry).unwrap();
+    let bytes = crate::loader::kernelcache::peel(std::fs::read(path).unwrap(), &choice)
         .unwrap()
         .bytes;
     let file = object::File::parse(&*bytes).unwrap();
@@ -408,7 +408,7 @@ fn cxx_facts_type_the_classes_and_their_members() {
 
 #[test]
 fn classifies_driverkit_rpc_symbols() {
-    use kuna_dextrpc::{RpcSymbol, classify};
+    use dextrpc::{RpcSymbol, classify};
     assert_eq!(
         classify("_ZN12AppleUSBFTDI9_DispatchEPS_5IORPC"),
         Some(RpcSymbol::StaticDispatch("AppleUSBFTDI"))
@@ -446,7 +446,7 @@ fn classifies_driverkit_rpc_symbols() {
 
 #[test]
 fn reads_driverkit_method_tables() {
-    use kuna_dextrpc::{RpcMethod, rpc_methods};
+    use dextrpc::{RpcMethod, rpc_methods};
     fn put(d: &mut [u8], at: usize, v: u32) {
         d[at..at + 4].copy_from_slice(&v.to_le_bytes());
     }

@@ -88,7 +88,7 @@ impl Rule for RuleDynAlloca {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_dynalloca::DynAlloca>()
+            .get::<crate::dynalloca::DynAlloca>()
             .0
         {
             return 0;

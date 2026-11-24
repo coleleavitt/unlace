@@ -66,20 +66,20 @@ pub fn parse_aif_mode(p1: &str) -> KunaResult<(AifMode, String)> {
     ))
 }
 
-impl crate::kuna_optionset::KunaOption for AifMode {
+impl crate::optionset::KunaOption for AifMode {
     const NAME: &'static str = "aif";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_aif::AifMode::Off
+        crate::aif::AifMode::Off
     }
 
     fn shipped() -> Self {
-        crate::kuna_aif::AifMode::Off
+        crate::aif::AifMode::Off
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_aif::parse_aif_mode(value)?)
+        Ok(crate::aif::parse_aif_mode(value)?)
     }
 }
 

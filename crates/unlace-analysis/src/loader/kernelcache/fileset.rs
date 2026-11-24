@@ -3,11 +3,11 @@
 
 use std::collections::HashMap;
 
-use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
+use unlace_decomp::kernelcache::KernelcacheChoice;
 
 use super::linked::{self, LinkSearch};
 use crate::loader::format::macho::{ChainedFixups, resolve_chained_fixups};
-use crate::rtti::kuna_arm64evcall::SignedImage;
+use crate::rtti::arm64evcall::SignedImage;
 
 mod merge;
 mod prelink;

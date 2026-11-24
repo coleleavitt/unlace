@@ -1425,7 +1425,7 @@ impl ScopeLocal {
     /// C++ `ScopeInternal::assignDefaultNames(base)` (`database.cc:2880`) on this
     /// local scope — the catch-all rename `ActionNameVars::apply` runs as its final
     /// statement (`coreaction.cc:3079`) so no `$$undef` placeholder survives the
-    /// pass.  See [`crate::kuna_undefname`].
+    /// pass.  See [`crate::undefname`].
     pub fn assign_default_names(
         &mut self,
         base: &mut int4,
@@ -2102,7 +2102,7 @@ impl ScopeLocal {
     /// -- often the caller's.  Without such a Symbol this is `render(base++)`.
     ///
     /// When a directive batch is replayed the previous decompile's numbering
-    /// is kept instead (see [`crate::kuna_stablenames`]): the number comes from
+    /// is kept instead (see [`crate::stablenames`]): the number comes from
     /// [`Self::prefer_names`] and the Symbol being named, and `base` is unused.
     pub fn next_default_name(
         &mut self,
@@ -2157,7 +2157,7 @@ impl ScopeLocal {
         self.name_state.set_targets(targets);
     }
 
-    /// Record the number each local keeps (`kuna_stablenames::assign_numbers`).
+    /// Record the number each local keeps (`stablenames::assign_numbers`).
     pub fn set_assigned_numbers(
         &mut self,
         assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>,
@@ -2170,12 +2170,12 @@ impl ScopeLocal {
         self.name_state.assigned(high)
     }
 
-    /// The name a name-only rename gives `high` (`kuna_stablenames::rename_targets`).
+    /// The name a name-only rename gives `high` (`stablenames::rename_targets`).
     pub fn rename_target(&self, high: crate::context::HighVariableId) -> Option<String> {
         self.name_state.target(high).map(str::to_string)
     }
 
-    /// Let a renamed local's number be handed out again (`kuna_stablenames::orphaned`).
+    /// Let a renamed local's number be handed out again (`stablenames::orphaned`).
     pub fn release_prior_number(&mut self, number: int4) {
         self.name_state.release(number);
     }
@@ -2810,7 +2810,7 @@ impl ScopeLocal {
         usepoint: &Address,
         types: &dyn TypeFactory,
     ) -> Option<Rc<Datatype>> {
-        let width = if crate::p0_knowledge::kuna_wrappedstackmap::pieces(addr, size).is_some() {
+        let width = if crate::p0_knowledge::wrappedstackmap::pieces(addr, size).is_some() {
             1
         } else {
             size
@@ -3608,7 +3608,7 @@ impl MapState {
 }
 
 /// (kuna `--assert`) What the naming pass keeps of a previous decompile's numbering
-/// (`kuna_stablenames::PriorNames::name_seed`).
+/// (`stablenames::PriorNames::name_seed`).
 #[derive(Clone, Debug, Default)]
 pub struct NameSeed {
     /// Is a previous decompile's numbering being kept?
@@ -3652,7 +3652,7 @@ impl NameState {
         }
     }
 
-    /// Record the number each local keeps (`kuna_stablenames::assign_numbers`).
+    /// Record the number each local keeps (`stablenames::assign_numbers`).
     pub fn set_assigned(
         &mut self,
         assigned: std::collections::BTreeMap<crate::context::HighVariableId, int4>,
@@ -3665,7 +3665,7 @@ impl NameState {
         self.assigned.get(&high).copied()
     }
 
-    /// Record which local each name-only rename names (`kuna_stablenames::rename_targets`).
+    /// Record which local each name-only rename names (`stablenames::rename_targets`).
     pub fn set_targets(
         &mut self,
         targets: std::collections::BTreeMap<crate::context::HighVariableId, String>,
@@ -3683,13 +3683,13 @@ impl NameState {
         self.active
     }
 
-    /// The numbers the next allocation should try first (`kuna_stablenames::best`).
+    /// The numbers the next allocation should try first (`stablenames::best`).
     pub fn prefer(&mut self, numbers: Vec<int4>) {
         self.preferred = numbers;
     }
 
     /// Let number `i`, which a renamed local held, be handed out again: the
-    /// rename named nothing (`kuna_stablenames::orphaned`).
+    /// rename named nothing (`stablenames::orphaned`).
     pub fn release(&mut self, i: int4) {
         self.prior.vacated.remove(&i);
     }

@@ -1,7 +1,7 @@
 //! (kuna) `kuna_callpopret` — a `call` whose callee pops the pushed return
 //! address off the stack and `ret`s to its *caller's* caller (S2 flow
 //! classification).  Sibling of
-//! [`kuna_calltrampoline`](crate::kuna_calltrampoline), which decides the same
+//! [`kuna_calltrampoline`](crate::calltrampoline), which decides the same
 //! question for the flavour of the idiom that ends in a `jmp`.
 //!
 //! ## The structural gap
@@ -74,7 +74,7 @@ use unlace_base::space::{VarnodeStorage, spacetype};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::kuna_calltrampoline::RawOp;
+use crate::calltrampoline::RawOp;
 
 /// Marshaling element `<callpopret>` (kuna).  ElementIds live in the 4000+
 /// range; 4163 was the next free id when this module was added.
@@ -305,5 +305,5 @@ fn binary_displacement(track: &Track, op: &RawOp) -> Option<i64> {
 }
 
 #[cfg(test)]
-#[path = "kuna_callpopret/tests.rs"]
+#[path = "callpopret/tests.rs"]
 mod tests;

@@ -11,7 +11,7 @@
 //! - **The result.** The local every `return` of a value returns, where any
 //!   other `return` returns a constant: `result`.
 //!
-//! Both are evidence for [`crate::kuna_libcnames`], which owns the naming: a
+//! Both are evidence for [`crate::libcnames`], which owns the naming: a
 //! local keeps its number for directives and replays, a name that clashes
 //! takes `_2`, `_3`, ... in the order of the evidence, and nothing repeats a
 //! name another variable, the scope or a callee holds. Only the result of a
@@ -25,7 +25,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, HighVariableId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_libcnames::{Evidence, LOOP, RESULT, folded_from, local_of};
+use crate::libcnames::{Evidence, LOOP, RESULT, folded_from, local_of};
 
 /// Loop counter names by nesting depth, outermost first.
 const LOOP_NAMES: [&str; 5] = ["i", "j", "k", "m", "n"];
@@ -199,7 +199,7 @@ fn result(fd: &mut Funcdata, found: &mut BTreeMap<HighVariableId, Vec<Evidence>>
 
 crate::kuna_flag!(
     /// (kuna `contextnames`) Name loop counters and the returned local.
-    /// See [`crate::kuna_contextnames`].
+    /// See [`crate::contextnames`].
     ContextNames,
     "contextnames",
     "loop-counter and result local names",

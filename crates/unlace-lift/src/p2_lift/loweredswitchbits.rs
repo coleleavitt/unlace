@@ -4,7 +4,7 @@
 //! clang lowers `switch (t) { case A: case B: case F: ...; }` over a narrow
 //! selector into `if (t - A <= N && (1 << (t - A)) & mask)`: a range check on
 //! an offset copy of the selector and a test of a bit of a constant mask, with
-//! several tests sharing one shift.  [`crate::p2_lift::kuna_loweredswitch`]
+//! several tests sharing one shift.  [`crate::p2_lift::loweredswitch`]
 //! reads only compares of the selector itself against a constant, so these
 //! cascades stay `if` chains.
 //!
@@ -34,8 +34,8 @@ use unlace_num::opcodes::OpCode;
 use crate::block::BlockType;
 use crate::context::{BlockId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::p2_lift::kuna_loweredswitch::KunaLoweredSwitchRecord;
-use crate::p2_lift::kuna_loweredswitchvalue::ValueCheck;
+use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitchvalue::ValueCheck;
 
 /// The most case values a recovered switch holds.
 pub const MAX_CASES: usize = 64;
@@ -447,7 +447,7 @@ pub fn recover(data: &Funcdata) -> Option<KunaLoweredSwitchRecord> {
 
 crate::kuna_flag!(
     /// (kuna `loweredswitchbits`) A switch lowered to bit tests re-rolls.  See
-    /// [`crate::p2_lift::kuna_loweredswitchbits`].
+    /// [`crate::p2_lift::loweredswitchbits`].
     LoweredSwitchBits,
     "loweredswitchbits",
     "Switches lowered to bit tests re-rolled",

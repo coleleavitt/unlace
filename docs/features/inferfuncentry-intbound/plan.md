@@ -4,7 +4,7 @@ Strict fix, no new option. `inferfuncentry` keeps its meaning (on = the GH-6930
 escape exists, off = upstream); what changes is which readers the escape is
 offered to.
 
-1. `p5_types/kuna_inferfuncentry.rs`: `reads_as_integer(opcode)` (ordering
+1. `p5_types/inferfuncentry.rs`: `reads_as_integer(opcode)` (ordering
    comparison, multiply, divide, remainder, shift) and
    `entry_escape_applies(opcode, value_reads_as_integer)`.
 2. `p9_emit/coreaction_render.rs`: `ActionConstantPtr::apply` builds the set of

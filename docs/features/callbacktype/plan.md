@@ -3,7 +3,7 @@
 1. **Census** (done, `census.md`): scan the 444 slices for functions whose address is handed
    to a declared callback slot; check every one against the DWARF twin; count the
    ground-truth parameters that would move.
-2. **Module** `decompiler/crates/kuna-decomp/src/p4_calls/kuna_callbacktype.rs`: the slot
+2. **Module** `decompiler/crates/kuna-decomp/src/p4_calls/callbacktype.rs`: the slot
    table, the run's ledger, the declared-pieces builder and the body refusals.
 3. **Driver** `callback_park_round` in `decompiler/crates/kuna-cli/src/decompile_all.rs`:
    the image half of the escape question (`open_function_entries`,

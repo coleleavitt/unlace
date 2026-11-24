@@ -47,10 +47,10 @@ pub trait KunaOption: Any + Clone {
 macro_rules! kuna_option_id {
     () => {
         #[inline]
-        fn id() -> $crate::kuna_optionset::OptionId {
-            static ID: std::sync::OnceLock<$crate::kuna_optionset::OptionId> =
+        fn id() -> $crate::optionset::OptionId {
+            static ID: std::sync::OnceLock<$crate::optionset::OptionId> =
                 std::sync::OnceLock::new();
-            *ID.get_or_init($crate::kuna_optionset::OptionId::next)
+            *ID.get_or_init($crate::optionset::OptionId::next)
         }
     };
 }
@@ -63,7 +63,7 @@ macro_rules! kuna_flag {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub struct $ty(pub bool);
 
-        impl $crate::kuna_optionset::KunaOption for $ty {
+        impl $crate::optionset::KunaOption for $ty {
             const NAME: &'static str = $name;
             $crate::kuna_option_id!();
 

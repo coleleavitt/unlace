@@ -21,16 +21,16 @@ pub struct StackObjectInfo {
 }
 
 pub fn extract(arch: &Architecture, fd: &Funcdata) -> Vec<StackObjectInfo> {
-    crate::kuna_stackobjects::objects(fd)
+    crate::stackobjects::objects(fd)
         .iter()
         .map(|object| {
-            let asserted = crate::kuna_stackobjectasserts::specs(fd)
+            let asserted = crate::stackobjectasserts::specs(fd)
                 .iter()
                 .find(|assertion| assertion.selector == object.name);
             StackObjectInfo {
                 id: object.name.clone(),
                 name: asserted.map_or_else(|| object.name.clone(), |a| a.name.clone()),
-                stack_offset: crate::kuna_funcreport::signed_space_offset(
+                stack_offset: crate::funcreport::signed_space_offset(
                     object
                         .address
                         .get_space()
@@ -45,7 +45,7 @@ pub fn extract(arch: &Architecture, fd: &Funcdata) -> Vec<StackObjectInfo> {
                     .map(|use_| StackObjectUseInfo {
                         address: use_.point.address,
                         slot: use_.slot,
-                        type_name: crate::kuna_bytehonest::exported_type_name(arch, &use_.datatype),
+                        type_name: crate::bytehonest::exported_type_name(arch, &use_.datatype),
                     })
                     .collect(),
             }

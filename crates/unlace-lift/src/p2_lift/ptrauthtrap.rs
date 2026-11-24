@@ -60,7 +60,7 @@ use crate::context::BlockId;
 use crate::database::TranslateAccess;
 use crate::funcdata::Funcdata;
 
-pub use crate::kuna_specnames::PTRAUTH_BREAKPOINT_USEROP as BREAKPOINT_USEROP;
+pub use crate::specnames::PTRAUTH_BREAKPOINT_USEROP as BREAKPOINT_USEROP;
 
 /// Is `imm` one of the `brk` immediates LLVM reserves for a pointer-auth
 /// failure (`0xc470 | key`, keys IA, IB, DA, DB)?
@@ -334,7 +334,7 @@ impl Action for ActionPtrAuthTrap {
         let Some(userop) = data.get_arch().ptrauth_trap_userop else {
             return 0;
         };
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
+        if data.is_settled(crate::maturity::Fact::Ssa) {
             return 0;
         }
         let edges = trap_edges(data, userop);
@@ -355,5 +355,5 @@ impl Action for ActionPtrAuthTrap {
 }
 
 #[cfg(test)]
-#[path = "kuna_ptrauthtrap/tests.rs"]
+#[path = "ptrauthtrap/tests.rs"]
 mod tests;

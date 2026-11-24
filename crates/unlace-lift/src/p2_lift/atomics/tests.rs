@@ -1,6 +1,6 @@
 use super::*;
 use crate::context::{ArchContext, TypeOp};
-use crate::kuna_sourcelang::SourceLang;
+use crate::sourcelang::SourceLang;
 use crate::userop::{ATOMIC_BUILTINS, MSVC_ATOMIC_BUILTINS};
 use unlace_base::space::{
     AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,

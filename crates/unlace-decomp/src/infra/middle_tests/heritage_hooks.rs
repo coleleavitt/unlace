@@ -6,9 +6,9 @@
 /// The imports of `heritage` itself, as a glob so the tests' own imports win.
 mod module_scope {
     pub(super) use crate::context::BlockId;
-    pub(super) use crate::kuna_coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
-    pub(super) use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
+    pub(super) use crate::coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
     pub(super) use crate::overrides::Override;
+    pub(super) use crate::restartlog::{KunaRestartReason, RestartLog};
     pub(super) use crate::varnode::varnode_flags;
     pub(super) use std::rc::Rc;
     pub(super) use unlace_base::address::Address;

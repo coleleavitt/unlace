@@ -220,7 +220,7 @@ anchored at the call. Same user-visible symptom, second producer.
 ## Proposed fix
 
 **Feature `paramcopyhoist` (P6, default-off), new module
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
+`decompiler/crates/unlace-decomp/src/p6_variables/paramcopyhoist.rs`.**
 
 One decision, one call site:
 
@@ -244,7 +244,7 @@ One decision, one call site:
   needs no edit.
 
 Owning files:
-- `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new)
+- `decompiler/crates/unlace-decomp/src/p6_variables/paramcopyhoist.rs` (new)
 - `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs` (`op_insert_end_pred` consults it)
 - `phases.toml` + `p0_knowledge/options.rs` row; catalog count bumps
 - `docs/spec/` P6 chapter; `tests/stages/ghdec-paramcopyhoist.toml` two-pass testcase

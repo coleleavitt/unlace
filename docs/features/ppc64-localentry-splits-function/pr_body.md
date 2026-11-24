@@ -64,7 +64,7 @@ diagnosis over the prologue-matcher one.
 
 New option **`ppclocalentry`** (`on|off`, default **on**, analysis tier, P1
 code/data-partition, DIV-107), implemented in
-`decompiler/crates/kuna-analysis/src/listing/kuna_ppclocalentry.rs` and consulted at the
+`decompiler/crates/kuna-analysis/src/listing/ppclocalentry.rs` and consulted at the
 walk's CALL-target seam — the same seam, one line above, that already carries
 `unmappedentry`. An address that a defined `STT_FUNC` symbol declares to be its own local
 entry is never claimed as a function, because by the ABI's construction the two entries

@@ -263,7 +263,7 @@ pub fn computed_target(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_returnbranch::ReturnBranch>()
+        .get::<crate::returnbranch::ReturnBranch>()
         .0
         || ret.code() != OpCode::CPUI_RETURN
         || ret.get_halt_type() != 0
@@ -425,7 +425,7 @@ mod tests {
             arch.opbehaviors[code as usize] = Some(behavior);
         }
         arch.kuna_options
-            .set(crate::kuna_returnbranch::ReturnBranch(!off));
+            .set(crate::returnbranch::ReturnBranch(!off));
         if tracked {
             let loc = unlace_num::pcoderaw::VarnodeData {
                 space: Some(ram.clone()),

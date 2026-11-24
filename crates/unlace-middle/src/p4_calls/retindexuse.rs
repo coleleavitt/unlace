@@ -32,7 +32,7 @@ pub enum RetIndexUse {
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for RetIndexUse {
+impl crate::optionset::KunaOption for RetIndexUse {
     const NAME: &'static str = "retindexuse";
     crate::kuna_option_id!();
 
@@ -119,7 +119,7 @@ fn index_only_load(data: &Funcdata, opmatch: OpId, op: OpId, vn: VarnodeId) -> b
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.retindexuse_index_only_load = Some(index_only_load);
 }

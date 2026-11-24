@@ -26,7 +26,7 @@
 use object::SectionKind;
 use object::read::{Object, ObjectSection};
 
-use super::kuna_strrecords::{RoRegion, is_text, ro_regions};
+use super::strrecords::{RoRegion, is_text, ro_regions};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, StringFact};
 
 /// SysV integer argument registers by x86 register number.

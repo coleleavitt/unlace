@@ -11,7 +11,7 @@ const MAX_GUARD_SCAN_OPS: usize = 8192;
 
 #[doc(hidden)]
 pub fn moves_write(fd: &Funcdata, storage: HighVariableId, value: HighVariableId) -> bool {
-    if !crate::kuna_stackviews::enabled(fd) || storage == value {
+    if !crate::stackviews::enabled(fd) || storage == value {
         return false;
     }
     let Some(stack) = fd.get_arch().manage().get_stack_space() else {
@@ -106,8 +106,7 @@ pub fn moves_write(fd: &Funcdata, storage: HighVariableId, value: HighVariableId
             if has_addr_tied_value {
                 continue;
             }
-            let Some(definition) =
-                crate::kuna_globalorder::value_definition(fd, high.get_instance(i))
+            let Some(definition) = crate::globalorder::value_definition(fd, high.get_instance(i))
             else {
                 continue;
             };
@@ -245,7 +244,7 @@ fn is_matching_call_guard(
         .is_some_and(|guarded| guarded.symbol == symbol)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackvalueorder_moves_write = Some(moves_write);
 }

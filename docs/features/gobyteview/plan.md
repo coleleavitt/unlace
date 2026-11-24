@@ -5,7 +5,7 @@ currently uses artificial members on a [16]byte local, which Go cannot compile.
 Correct those members in P9 without changing the inferred result ABI or adding
 source tuple contracts.
 
-The planner in p9_emit/kuna_gobyteview.rs accepts bounded unsigned/unknown byte
+The planner in p9_emit/gobyteview.rs accepts bounded unsigned/unknown byte
 arrays. Whole-array covers use the array value. Integer views of widths 1, 2, 4
 and 8 use one unsafe typed dereference at the existing byte offset, preserving
 the named path. Unsupported widths, types, positions and volatile/annotation

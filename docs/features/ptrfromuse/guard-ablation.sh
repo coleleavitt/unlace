@@ -14,7 +14,7 @@ WT=${WT:-$(git rev-parse --show-toplevel)}
 OUT=${OUT:-$WT/.scratch/sweep}
 R=${R:-/home/mahaloz/github/decbench/results/full_run_address_2026-09-11}
 export SLEIGHHOME=$WT/specs KUNA_SPECS=$WT/specs
-P=$WT/decompiler/crates/kuna-decomp/src/p5_types/kuna_ptrfromuse.rs
+P=$WT/decompiler/crates/kuna-decomp/src/p5_types/ptrfromuse.rs
 mkdir -p "$OUT"
 cp "$P" /tmp/ptrfromuse-guard-keep.rs
 sed -i 's/match const_base_evidence(data, op, other_vn) {/match BaseEvidence::No {/' "$P"

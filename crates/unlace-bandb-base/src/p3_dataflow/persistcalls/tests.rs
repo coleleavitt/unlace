@@ -276,7 +276,7 @@ fn a_read_crosses_only_guarded_calls() {
     let x = addr(&fd, X);
     assert!(!guarded(&fd, r_op, &x, 8), "c2 has no guard of the global");
     let (mut pending, mut iops) = (Vec::new(), Default::default());
-    let g2 = crate::kuna_renamereads::new_indirect(&mut fd, c2, &x, 8, 0, &mut pending, &mut iops);
+    let g2 = crate::renamereads::new_indirect(&mut fd, c2, &x, 8, 0, &mut pending, &mut iops);
     assert!(
         guarded(&fd, r_op, &x, 8),
         "c2's guard is what the read sees"
@@ -294,13 +294,13 @@ fn a_read_crosses_only_guarded_calls() {
         !guarded(&fd, r_op, &x, 8),
         "the value read is live past c3, which has no guard"
     );
-    crate::kuna_renamereads::new_indirect(&mut fd, c3, &x, 8, 0, &mut pending, &mut iops);
+    crate::renamereads::new_indirect(&mut fd, c3, &x, 8, 0, &mut pending, &mut iops);
     assert!(
         guarded(&fd, r_op, &x, 8),
         "c3's guard keeps the value read apart from the global"
     );
     let _ = c1;
-    crate::kuna_renamereads::finish(&mut fd, &mut pending);
+    crate::renamereads::finish(&mut fd, &mut pending);
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn a_kept_guard_reading_across_a_skipped_call_is_stale() {
     let s4 = call(&mut fd, b[4]);
     let k6 = call(&mut fd, b[6]);
     let calls = [s0, k0, s1, k3, s4, k6];
-    let kept: crate::kuna_fasthash::FxHashSet<OpId> = [k0, k3, k6].into_iter().collect();
+    let kept: crate::fasthash::FxHashSet<OpId> = [k0, k3, k6].into_iter().collect();
     let stale = stale_inputs(&fd, &calls, &kept, &[w], &[]);
     assert!(stale.contains(&k0), "k0 reads the value from before s0");
     assert!(
@@ -352,7 +352,7 @@ fn a_kept_guard_reading_across_a_skipped_call_is_stale() {
         "a join of the range defines the value k3 reads"
     );
     assert!(!stale.contains(&k6), "and so does one at block 5");
-    let kept: crate::kuna_fasthash::FxHashSet<OpId> = calls.into_iter().collect();
+    let kept: crate::fasthash::FxHashSet<OpId> = calls.into_iter().collect();
     assert!(
         stale_inputs(&fd, &calls, &kept, &[w], &[]).is_empty(),
         "with every guard built no input is stale"

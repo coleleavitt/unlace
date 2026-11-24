@@ -140,7 +140,7 @@ pub fn next_apply_index() -> u32 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GuardArm(pub bool);
 
-impl crate::kuna_optionset::KunaOption for GuardArm {
+impl crate::optionset::KunaOption for GuardArm {
     const NAME: &'static str = "guardarm";
     crate::kuna_option_id!();
 
@@ -153,7 +153,7 @@ impl crate::kuna_optionset::KunaOption for GuardArm {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_ifnoexit::OptionGuardArm.apply(value)?;
+        let (v, msg) = crate::ifnoexit::OptionGuardArm.apply(value)?;
         Ok((GuardArm(v), msg))
     }
 }
@@ -165,7 +165,7 @@ impl crate::kuna_optionset::KunaOption for GuardArm {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoopCondHoist(pub bool);
 
-impl crate::kuna_optionset::KunaOption for LoopCondHoist {
+impl crate::optionset::KunaOption for LoopCondHoist {
     const NAME: &'static str = "loopcondhoist";
     crate::kuna_option_id!();
 
@@ -178,7 +178,7 @@ impl crate::kuna_optionset::KunaOption for LoopCondHoist {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_ifnoexit::OptionLoopCondHoist.apply(value)?;
+        let (v, msg) = crate::ifnoexit::OptionLoopCondHoist.apply(value)?;
         Ok((LoopCondHoist(v), msg))
     }
 }

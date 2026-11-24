@@ -37,11 +37,11 @@ use unlace_num::opcodes::OpCode;
 use unlace_decomp::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use unlace_decomp::cover::{Cover, CoverPoint, PcodeOpSet};
 use unlace_decomp::dtype::{Datatype, type_metatype};
-use unlace_decomp::kuna_typemerge::TypeMergeMode;
 use unlace_decomp::merge::{
     AddrTiedRange, BlockVarnode, HighGroupInfo, Merge, MergeContext, MergeIntersect, MergePieceId,
     compare_copy_by_in_varnode, compare_high_by_block,
 };
+use unlace_decomp::typemerge::TypeMergeMode;
 use unlace_decomp::variable::{
     CompareNameView, HighContext, HighIntersectTest, VarnodeView, VarnodeViewLoc,
 };
@@ -939,28 +939,23 @@ fn phiarm_keeps_apart_only_the_recorded_pair() {
         m.make_high(h, h as u64, t_a.clone(), cover_block(h as int4, 0, 2));
     }
     let arms = [(vid(1), vid(2))];
-    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+    assert!(unlace_decomp::phiarm::keeps_apart(
         &arms,
         &m,
         hid(1),
         hid(2)
     ));
-    assert!(unlace_decomp::kuna_phiarm::keeps_apart(
+    assert!(unlace_decomp::phiarm::keeps_apart(
         &arms,
         &m,
         hid(2),
         hid(1)
     ));
-    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
+    assert!(!unlace_decomp::phiarm::keeps_apart(
         &arms,
         &m,
         hid(1),
         hid(3)
     ));
-    assert!(!unlace_decomp::kuna_phiarm::keeps_apart(
-        &[],
-        &m,
-        hid(1),
-        hid(2)
-    ));
+    assert!(!unlace_decomp::phiarm::keeps_apart(&[], &m, hid(1), hid(2)));
 }

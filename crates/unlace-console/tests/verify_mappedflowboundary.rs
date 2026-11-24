@@ -601,7 +601,7 @@ fn an_unmapped_first_byte_is_reported_from_the_map_even_with_a_cold_window() {
 
 #[test]
 fn a_truncated_instruction_needs_a_mapped_first_byte_even_with_a_warm_window() {
-    use unlace_decomp::kuna_mappedflowboundary::truncated_instruction;
+    use unlace_decomp::mappedflowboundary::truncated_instruction;
     let path = fixture(&[(0x10000, &[0xb8, 7, 0, 0, 0, 0xc3, 0xb8, 7], 8)]);
     let prog = load(&path);
     let tr = prog.arch().translate();

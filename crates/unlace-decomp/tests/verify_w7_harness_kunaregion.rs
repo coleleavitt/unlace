@@ -24,7 +24,7 @@
 //! a head that is NOT the lowest input address).
 
 use unlace_decomp::context::BlockId;
-use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
+use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 
 /// Re-implementation of the harness collector, kept byte-for-byte equivalent so
 /// the tests exercise the SAME reconstruction logic under review.

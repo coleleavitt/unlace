@@ -80,7 +80,7 @@ fn provisional_effects_do_not_supply_unknown_stack_pointer_provenance() {
     data.op_insert(store, block, None);
     let mut guards = Vec::new();
     let mut writes = Vec::new();
-    crate::kuna_spillstoreguard::build(
+    crate::spillstoreguard::build(
         &mut data,
         &Address::new(stack, 0x20),
         4,

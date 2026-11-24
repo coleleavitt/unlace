@@ -211,8 +211,8 @@ fn reached(
     Some(found)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.indirectreturn_target_encoding = Some(target_encoding);
 }
 
@@ -672,13 +672,13 @@ mod tests {
         let mut jt = JumpTable::new(Address::new(ram.clone(), 0x1004));
         jt.increment_recovery_count();
         jt.increment_recovery_count();
-        use crate::kuna_constselectjump::ConstSelectMode;
+        use crate::constselectjump::ConstSelectMode;
         assert!(
-            !crate::kuna_constselectjump::admits(&jt, ConstSelectMode::Reentry)
-                && crate::kuna_constselectjump::admits(&jt, ConstSelectMode::On)
+            !crate::constselectjump::admits(&jt, ConstSelectMode::Reentry)
+                && crate::constselectjump::admits(&jt, ConstSelectMode::On)
         );
         jt.kuna_retry_flow();
-        assert!(crate::kuna_constselectjump::admits(
+        assert!(crate::constselectjump::admits(
             &jt,
             ConstSelectMode::Reentry
         ));
@@ -688,7 +688,7 @@ mod tests {
         jt.mark_complete();
         assert!(
             !jt.kuna_keeps_recovered_targets()
-                && crate::kuna_constselectjump::admits(&jt, ConstSelectMode::Reentry)
+                && crate::constselectjump::admits(&jt, ConstSelectMode::Reentry)
         );
     }
 
@@ -944,7 +944,7 @@ mod tests {
                 0,
                 &[target.unwrap()],
             );
-            let mut model = crate::kuna_constselectjump::JumpModelConstSelect::new();
+            let mut model = crate::constselectjump::JumpModelConstSelect::new();
             if variant != "not-admitted" {
                 model.kuna_admit_return(Some((8, u64::MAX)));
             }

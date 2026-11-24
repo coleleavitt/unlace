@@ -263,11 +263,11 @@ determines how aggressive the merge may be:
   its Symbols again. A register local's isolated Symbol is seeded with its
   use point and keeps the flag. A stack local's Symbol is rebuilt by the frame
   layout, and a parameter's Symbol does not exist until after the merges have
-  run, so neither can carry a flag to the merge. `kuna_isolated.rs (carried)`
+  run, so neither can carry a flag to the merge. `isolated.rs (carried)`
   records the storage and width of each isolated Symbol that is a parameter or
   holds its storage for the whole function, the replay hands the set to the
-  next decompile with the previous numbering (`kuna_stablenames.rs (carry)`),
-  and `kuna_isolated.rs (holds)` answers the isolated test for a variable that
+  next decompile with the previous numbering (`stablenames.rs (carry)`),
+  and `isolated.rs (holds)` answers the isolated test for a variable that
   holds the function input or the address-tied storage of one. The set is
   empty unless an `isolate` named such a local, and the test then costs one
   emptiness check. With `isolate a0`, a parameter whose register the function
@@ -363,7 +363,7 @@ forbids a forced merge, the machinery edits the data flow until it doesn't:
    pre-branch machine reads, and wrapping frame ranges also keep the existing
    placement. Other shapes retain the defining-op
    placement; the repair does not reschedule through further nested guards.
-   `kuna_guardedreadtrim.rs` (always on) applies this scope-aware placement
+   `guardedreadtrim.rs` (always on) applies this scope-aware placement
    to ordinary and volatile locals. Ordinary scalar captures may
    produce equivalent C values, whereas an extra volatile read is observable.
    Windows spanning
@@ -387,7 +387,7 @@ forbids a forced merge, the machinery edits the data flow until it doesn't:
    so the forced merge goes through. The op itself trims one branch at a time,
    re-testing after each, and as a last resort trims its own output; if the
    required tests *still* fail after all trims, the sweep errors out ("Unable
-   to force merge of op"). *(kuna)* `kuna_tiedphitrim.rs` (§6.4) adds one trim
+   to force merge of op"). *(kuna)* `tiedphitrim.rs` (§6.4) adds one trim
    upstream never makes: a loop head's direct read of an aliased location
    whose loop values are loaded from memory. *(kuna)* Where upstream lets that error abort the
    whole decompilation, `ActionMergeRequired` swallows it at the action
@@ -402,7 +402,7 @@ and a budget that ran out inside it was overrun by as much). So every merge
 step probes (`merge.rs (Merge::budget)`): each address-tied window, each
 Varnode `unify_address` snips, each op of `merge_marker`, `merge_opcode` and
 `merge_adjacent`, each pair `merge_linear` tests and each `Merge::merge`. Every
-64th probe asks the drive's budget (`kuna_budget.rs (deadline_passed)`);
+64th probe asks the drive's budget (`budget.rs (deadline_passed)`);
 once one has seen it spent, that one names `variable merging` as the budget's
 site and every later step of that `Merge` fails at once. The merge actions drop
 the error like any other, the next action boundary stops the pipeline, and the
@@ -500,7 +500,7 @@ marking (below), three passes fuse variables to reduce clutter:
   globals and 35 address-tied, and the pass made 61.4 million pair tests in
   25 s for 6 merges.
 
-  Option `typemerge` (`kuna_typemerge.rs (TypeMergeMode)`, read by
+  Option `typemerge` (`typemerge.rs (TypeMergeMode)`, read by
   `coreaction_cleanup.rs (ActionMergeType)` and passed to
   `merge_by_datatype`) narrows which same-typed highs share a group. The type
   grouping joins two variables that only share a type wherever each is
@@ -510,10 +510,10 @@ marking (below), three passes fuse variables to reduce clutter:
   the decompiled locals that stand for several DWARF variables by 13% and the
   variables spread over several locals by 6%, for GED -2 and about 10% more
   declarations), keys each gathered high by the storages
-  its instances sit in (`kuna_typemerge.rs (storages)`: same space, offset and
+  its instances sit in (`typemerge.rs (storages)`: same space, offset and
   size, read through `MergeContext::vn_storage`; a high whose context cannot
   say for one instance has no key) and lets a candidate join a group only when
-  its key shares a storage with the group head's (`kuna_typemerge.rs
+  its key shares a storage with the group head's (`typemerge.rs
   (TypeMergeMode::joins)`). A slot or register the compiler reused for one value
   still reads as one variable, and a high that an earlier merge spread over
   several registers still joins one held in any of them; values that never
@@ -522,10 +522,10 @@ marking (below), three passes fuse variables to reduce clutter:
   registers without any type join, which multiplied SIMD lane and Dalvik
   register variables (a VM handler went from 40 to over 100 declarations). `off` clears the gathered list, so no high
   is joined by type. Both narrower modes still run the prior-decompile groups
-  (`kuna_stablenames.rs (variable_groups)`) and leave every other merge pass
+  (`stablenames.rs (variable_groups)`) and leave every other merge pass
   alone; they only drop speculative joins.
 
-  Option `phiarm` (`kuna_phiarm.rs (arm_slots)`, default off) acts one step
+  Option `phiarm` (`phiarm.rs (arm_slots)`, default off) acts one step
   earlier, inside the required merge: `merge.rs (Merge::merge_op)` asks it,
   after upstream's own trims of a MULTIEQUAL, which inputs are values of their
   own, and gives each upstream's `trimOpInput` COPY at the end of its
@@ -535,12 +535,12 @@ marking (below), three passes fuse variables to reduce clutter:
   loop variable); it is written by an op that is not a COPY, MULTIEQUAL or
   INDIRECT and does not read the join value; and an op other than the
   MULTIEQUAL, not a marker, reads it. The pair (arm value, join output) is
-  recorded, and `kuna_phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
+  recorded, and `phiarm.rs (keeps_apart)`, asked by `Merge::merge` and
   `Merge::merge_test`, refuses any later merge that would join the two again,
   so a later forced merge trims instead and `ActionMergeCopy` does not undo the
   split. This is the copy form of Hex-Rays' `BREAK_PHI_ARM_MERGES`.
 
-  Option `calleesaved` (`kuna_calleesaved.rs (span_key)`, default off, set on
+  Option `calleesaved` (`calleesaved.rs (span_key)`, default off, set on
   the merge by `coreaction_cleanup.rs (ActionMergeType)`) narrows
   `merge_by_datatype` for register reuse across calls. Each gathered high that
   lives wholly in one processor register the function's own prototype model
@@ -568,7 +568,7 @@ duplicated terminal count exceeds `max_term_duplication`, which also ships at 2
 op, it is forced explicit.
 
 Both bounds are settable per run rather than compiled in
-(`kuna_impliedrefs.rs (OptionImpliedRefs)`, `(OptionTermDup)`): `option
+(`impliedrefs.rs (OptionImpliedRefs)`, `(OptionTermDup)`): `option
 impliedrefs <n>` writes the descendant bound and `option termdup <n>` the
 terminal-term bound, each taking a decimal count from 0 to 1000000 (the value
 `base_explicit` already uses as its never-explicit sentinel). The two are
@@ -583,7 +583,7 @@ functions) the emitted C declares 369 locals at 2, 366 at 3 and 363 at 4, and
 `max_implied_ref` is a program-wide tunable rather than a private constant of
 this pass: `funcdata_block.rs (Funcdata::bb_is_complex)` — upstream
 `BlockBasic::isComplex`, the OR-clause absorb test of `blockaction.rs
-(CollapseStructure::rule_block_or)` — and `kuna_condfold.rs` read the same field
+(CollapseStructure::rule_block_or)` — and `condfold.rs` read the same field
 to bound how many printed statements a condition block may carry, so
 `impliedrefs` loosens those two structure tests along with the marking.
 
@@ -595,7 +595,7 @@ STORE into the same space that may touch the loaded bytes
 (`coreaction_cleanup.rs (is_possible_alias)`, recursion depth 2), at
 `indexaliasguard global` (the default) a LOAD whose cover crosses a store to a
 global in the space it reads
-(`kuna_indexaliasguard.rs (load_crosses_global_store)`), a
+(`indexaliasguard.rs (load_crosses_global_store)`), a
 LOAD or call output whose cover crosses any call, or a defining input whose
 high would collide after inflating its cover to the candidate's
 (`merge.rs (Merge::inflate_test)`, copy shadows again forgiven). The failure
@@ -623,7 +623,7 @@ the LOAD and may alias it. On APoseFix.dll's 205 KB `0x1806f78a0` the pass
 goes from 6.1 s to 0.8 s.
 
 Enabled system-call user ops follow the same memory fence as ordinary calls.
-`kuna_syscallregs.rs (memory_calls)` lists only the recognized, uninjected
+`syscallregs.rs (memory_calls)` lists only the recognized, uninjected
 family user ops under chapter 02's `syscallregs` image policy; these have no
 call-spec record, so the ordinary call-site iteration cannot see them. A
 pointer LOAD or call result whose cover crosses one stays explicit. Thus
@@ -631,13 +631,13 @@ pointer LOAD or call result whose cover crosses one stays explicit. Thus
 and two system calls cannot collapse their intervening read into the second
 one. Unrelated CALLOTHER operations retain their existing behavior. The
 `syscall_error()` flag chapter 02 places after a MIPS or PowerPC system call
-(`kuna_syscallregs.rs (is_error_flag)`) is fenced the same way as a call
+(`syscallregs.rs (is_error_flag)`) is fenced the same way as a call
 output: crossing a call or another system call keeps it explicit, so the flag of
 the first of two system calls prints right after it, never as a
 `syscall_error()` after the second.
 
 Recognized x86-64 system calls use the same fence through
-`kuna_x64syscall.rs (memory_calls)`. The successful ABI rewrite marks each op,
+`x64syscall.rs (memory_calls)`. The successful ABI rewrite marks each op,
 so it remains recognizable after an unused RAX result is removed. Under the
 existing `x64syscall on` or `abi` mode and chapter 02's proven ordinary SysV
 target, model and stack domain, a pointer LOAD or call result whose cover
@@ -666,7 +666,7 @@ arithmetic op) whose output is the global's own varnode, so the STORE arm never
 sees it, and `x = *p; gi = b; return x;` printed `gi = a1; return *a0;`, which
 returns `b` when `p` points at `gi`. At `option indexaliasguard global` (the
 default; chapter [03](03-ssa-and-simplification.md) §3.1)
-`kuna_indexaliasguard.rs (load_crosses_global_store)` adds that arm: a LOAD
+`indexaliasguard.rs (load_crosses_global_store)` adds that arm: a LOAD
 stays explicit when the interior of its cover holds a live, non-marker op that
 writes a global in the space the LOAD reads, other than heritage's return copy,
 a `COPY` of the same storage, or a `COPY` of the global into a temporary of its
@@ -687,9 +687,9 @@ kept and the load implied it would print `gj = 0; gi = *a0;`. At `load` and
 `off` the arm does not run.
 
 A LOAD whose value is live across a write of another global also stays out of
-a guarded global's HighVariable: `kuna_loadorder.rs (keeps_apart)`, which counts
+a guarded global's HighVariable: `loadorder.rs (keeps_apart)`, which counts
 only a write of a global whose range chapter 03's STORE guard covered
-(`kuna_loadorder.rs (crosses_global_write)`, `Heritage::global_store_guarded`),
+(`loadorder.rs (crosses_global_write)`, `Heritage::global_store_guarded`),
 refuses the
 copy merge and the adjacent merge between such a global and a high holding such
 a LOAD.
@@ -703,7 +703,7 @@ dat_e10 = v1 * 0.017453292f;`.
 
 A computed value stored to a guarded global keeps a separate HighVariable
 when joining them would move its write ahead of an observation or onto another
-path (`kuna_globalorder.rs (keeps_apart)`, `(copy_moves_write)`). At the existing
+path (`globalorder.rs (keeps_apart)`, `(copy_moves_write)`). At the existing
 `indexaliasguard global` default, the copy and adjacent merges inspect the
 value's copies into that global. Following at most 64 same-size temporary
 COPYs locates an ordinary computation. LOAD, call, user-operation, marker and
@@ -715,7 +715,7 @@ before the switch when the binary writes it only in selected cases.
 Within one block, a call or user operation, another persistent write, or a
 LOAD or STORE in the global's space is a barrier. A constant pointer proves a
 memory access disjoint only in a byte-addressed space and with non-overlapping,
-non-overflowing byte ranges (`kuna_globalorder.rs (write_moves)`). Unknown
+non-overflowing byte ranges (`globalorder.rs (write_moves)`). Unknown
 pointers remain possible aliases. Chapter 03 preserves the copies that would
 otherwise disappear into a forced marker merge before this phase.
 
@@ -725,7 +725,7 @@ computation into the global used to print `gi = a1 + gi * 2; v1 = *a0;`
 binary returns 904; kept apart, the load precedes `gi = t`. A first store the
 binary makes before the LOAD stays before it, and its later store stays later.
 When an earlier value of the global is still read after the store, the existing
-`kuna_globalstorekeep.rs (old_value_read_after)` handling is retained, so a
+`globalstorekeep.rs (old_value_read_after)` handling is retained, so a
 newly explicit old value is not copied out above a pointer store the binary
 reads after. Values that are global loads remain under `kuna_loadorder` and the global LOAD
 guard's existing rules: `t = a[3]; gi = t; if (c) t = *p * 3; gi = t - 7;`
@@ -783,7 +783,7 @@ same storage is called redundant and silenced, the emitted C returns the call's
 result on a path where the binary returns the parameter.
 
 The copy marker also runs
-`crates/unlace-bandb-base/src/p6_variables/kuna_undefinedcopy.rs` for trim
+`crates/unlace-bandb-base/src/p6_variables/undefinedcopy.rs` for trim
 copies whose source is an INDIRECT creation explicitly marked as killed by a
 call, rather than a possible return value. Predicated loads can leave such a
 source on an unused phi edge: `if (valid) p = load(); if (valid && pending) use(p)`
@@ -831,7 +831,7 @@ real engine (`merge.rs (Merge::merge_multi_entry)`) but its multi-entry-symbol
 source (`funcdata_merge.rs (MergeContext::multi_entry_symbols)`) returns empty
 pending the symbol-scope layer.
 
-**Inputs that are only ever read indirectly** (`kuna_indirectonly.rs
+**Inputs that are only ever read indirectly** (`indirectonly.rs
 (mark_indirect_only)`, run by `coreaction_cleanup.rs (ActionMarkIndirectOnly)`
 one slot ahead of `ActionMergeAdjacent`, option `indirectonly`, default off).
 Two of the tests above ask whether a variable's input member is an *illegal*
@@ -844,7 +844,7 @@ value from being printed as a real one, and `variable.rs
 all of that kind. Both carry an exception for the case where the leftover value
 is not really read at all, and the exception needs a Varnode flag that says so.
 
-`kuna_indirectonly.rs (check_indirect_use)` decides it, as a worklist over the
+`indirectonly.rs (check_indirect_use)` decides it, as a worklist over the
 def-set. A reader that is a plain `CPUI_INDIRECT` is the accepting case and the
 walk stops there — an INDIRECT is the record that *some other op may have
 overwritten this storage*, not a use of the value. An INDIRECT caused by a STORE
@@ -891,7 +891,7 @@ Ghidra's partitioning; leaving it off restores the inert stub exactly, and
 `indirectonly` then has no writer and both readers take their more-variables
 branch.
 
-**Shadow copies** (`kuna_hideshadow.rs (hide_shadow_copies)` driving
+**Shadow copies** (`hideshadow.rs (hide_shadow_copies)` driving
 `merge.rs (Merge::hide_shadows)`, scheduled as `coreaction_cleanup.rs
 (ActionHideShadow)` immediately ahead of the copy marker, always on). Two Varnodes reached from one ancestor through COPYs alone
 always hold the same value. When the two copy paths are not nested the merges
@@ -919,7 +919,7 @@ spot, and the previous iteration's `op_set_input` is exactly what dirties it.
 Off, the action returns without walking anything, which is what the tree did
 while the body was a stub.
 
-**Closing out the undefined names** (`kuna_undefname.rs
+**Closing out the undefined names** (`undefname.rs
 (finish_undefined_names)`, the tail of `coreaction_cleanup.rs
 (name_local_highs_angr)`). A Symbol created with an empty name is given the
 placeholder `$$undef` plus eight hex digits (`p0_knowledge/database.rs
@@ -970,10 +970,10 @@ name through their shared Symbol, never through a recommendation.
 carries the library's names for its parameters and result (chapter 01), which the
 recommendation above never sees: they are not `innames` and lock nothing. The
 library name is a second name for a numbered local, never a replacement for
-its number. `crates/unlace-bandb-base/src/p6_variables/kuna_libcnames.rs
+its number. `crates/unlace-bandb-base/src/p6_variables/libcnames.rs
 (candidates)` reads the evidence before the naming walk, the walk numbers
 every local exactly as it does with the option off and records that numbering
-for a directive replay, and only then does `kuna_libcnames.rs (apply)` give a
+for a directive replay, and only then does `libcnames.rs (apply)` give a
 candidate still printed under its number the library's name, recording the
 pair on the function (`Funcdata::kuna_library_aliases`). So `v4` is the same
 variable whether or not the option is on, and the locals after a named one do
@@ -1004,7 +1004,7 @@ whether or not the function reads it), the scope holds, a callee or the
 function itself has.
 
 A directive reaches such a local by either name.
-`crates/unlace-console/src/kuna_hightarget.rs (library_number)`
+`crates/unlace-console/src/hightarget.rs (library_number)`
 reads a library name as the number it stands for, and the printed-local lookup
 answers a number for the local printed under its library name, so a replay
 record and the stable numbering above only ever see numbers, and a directive
@@ -1026,7 +1026,7 @@ still `fd_2` and no local becomes `fd`; after `name v5 n`, read's result prints
 `v3` and `name v3 got` reaches it.
 
 **A loop counter and the returned local are named from their shape
-(`contextnames`, default off).** `crates/unlace-bandb-base/src/p6_variables/kuna_contextnames.rs
+(`contextnames`, default off).** `crates/unlace-bandb-base/src/p6_variables/contextnames.rs
 (evidence)` adds two kinds of evidence to the `libcnames` walk above, so they
 are aliases of the same kind: the walk numbers every local as with the option
 off, the name is printed over the number afterwards, a directive reaches the
@@ -1051,7 +1051,7 @@ a local, so with `libcnames` off a returned `open` descriptor still prints
 features' stage assertions and CLI tests spell as `vN`.
 
 **A local is named from the fields and the type it meets (`flownames`,
-default off).** `crates/unlace-bandb-base/src/p6_variables/kuna_flownames.rs
+default off).** `crates/unlace-bandb-base/src/p6_variables/flownames.rs
 (evidence)` adds two more kinds of evidence to the same walk. A field: the
 output of a `LOAD` whose address is a `PTRSUB` of a pointer to a named
 structure, the value a `STORE` through such an address writes, and the value a
@@ -1076,7 +1076,7 @@ structure or scalar whose own address is a library argument
 `ReadFile(hFile,Buffer,0x200,&NumberOfBytesRead,NULL)`) is not a value the
 argument evidence above can reach: the argument is a `PTRSUB` of the frame's
 spacebase, and the object is the stack Symbol it addresses.
-`crates/unlace-bandb-base/src/p6_variables/kuna_libcnames.rs
+`crates/unlace-bandb-base/src/p6_variables/libcnames.rs
 (addressed_object)` reads that Symbol at the address the naming walk links the
 reference to (`Funcdata::resolve_spacebase_ref_addr`), and takes it only when
 the reference addresses its first byte, its name is still undefined (a DWARF,
@@ -1084,7 +1084,7 @@ user or directive name is defined, so it stays), it is not a parameter, and the
 pointer is not to a member of a structure (a typed pointer narrower than the
 structure). Its evidence is the argument evidence above, kind for kind and with
 the same ranking, under the name of the object the parameter points at
-(`kuna_libcnames.rs (pointee_name)`): glibc's name as it is (`buf`,
+(`libcnames.rs (pointee_name)`): glibc's name as it is (`buf`,
 `stat_loc`, `timer`, `tv`), a Windows SDK name less its pointer prefix (an `lp`
 or `p` before a Hungarian name: `lpBuffer` names the buffer `Buffer`,
 `lpNumberOfBytesRead` the count `NumberOfBytesRead`, `lpflOldProtect` the
@@ -1112,7 +1112,7 @@ a replay records and a directive may use (`name v2 chunk` and `name buf chunk`
 rename the same buffer; a retype keeps `buf`, and a retype that names the
 object by its number (`type v1 unsigned char v1` on a one-byte `read`
 buffer) gives it that name, which
-`unlace-console/src/kuna_hightarget.rs (apply_local)` locks as a rename although
+`unlace-console/src/hightarget.rs (apply_local)` locks as a rename although
 the Symbol already holds it), and an object competes with the locals for spellings
 in the order of its evidence. When a register local and the object hold the
 same storage, the earlier of their evidence names both. Over 117 stripped
@@ -1194,7 +1194,7 @@ old `v10` printed as `v9`, and a later directive naming `v9` (the web page sends
 every edit as a directive naming what the first decompile printed) reached a
 different variable than the one the caller saw. A retype that splits or merges a
 variable shifted the numbers the same way.
-`crates/unlace-bandb-base/src/p6_variables/kuna_stablenames.rs (snapshot)`
+`crates/unlace-bandb-base/src/p6_variables/stablenames.rs (snapshot)`
 now records which name each local got as the naming pass hands it out, when the
 caller may replay a directive against the function (the CLI's and the web page's
 first pass when a `name`/`type` directive targets it, and every console
@@ -1248,10 +1248,10 @@ states no type is now carried as a name, not as a Symbol: the batch still maps
 an unlocked Symbol so later directives can find the variable, but
 `unlace-console/src/assertions.rs (carried_usepoint_symbols, carried_dynamic_symbols,
 carried_symbols)` leaves it out of what the next decompile is seeded with, and
-`kuna_stablenames.rs (carry)` records the rename instead: by the instance keys
+`stablenames.rs (carry)` records the rename instead: by the instance keys
 above for a printed local, and by storage and width for a stack local's Symbol.
 The analysis of the next decompile is therefore the analysis of the first. In
-its naming pass `kuna_stablenames.rs (rename_targets)` gives the new name to the
+its naming pass `stablenames.rs (rename_targets)` gives the new name to the
 local holding most of the renamed variable's instances, through the same paths
 a callee's parameter name takes (a Symbol the analysis rebuilt takes it in place
 of a number, `varmap.rs (ScopeLocal::default_symbol_name)`), and its number
@@ -1264,12 +1264,12 @@ same fixture `type v5 unsigned long` turned `long v5; // r9 | rax | rdi | rsi`
 into `unsigned long v5; // r9 | rdi | rsi` plus a new `unsigned long v14; //
 rax`, and `type v8 unsigned long` retyped `v2` as well and moved `v5`'s `rax`
 into it. A retype that keeps the printed variable's width and kind
-(`kuna_stablenames.rs (retypes_as_unit)`: an integer, `bool` or enumeration to
+(`stablenames.rs (retypes_as_unit)`: an integer, `bool` or enumeration to
 another of the same width, a float to a float, a pointer to a pointer) now types
 the variable as one unit, whether it is a register local or a stack local's
-Symbol. `unlace-console/src/kuna_hightarget.rs (apply_local)` records the type on
+Symbol. `unlace-console/src/hightarget.rs (apply_local)` records the type on
 the batch's directive, which is carried as a name rather than a Symbol,
-`kuna_stablenames.rs (carry)` hands the type on under the name the first
+`stablenames.rs (carry)` hands the type on under the name the first
 decompile printed, and the next decompile's naming pass gives it to
 the local holding most of the variable's instances (`retype_targets`), locking
 it on every instance after the merge and before the casts are placed
@@ -1284,27 +1284,27 @@ becomes `v7 < (long)v5`.
 
 A type that prints the constants the variable meets in its own way (an
 enumeration names them, `bool` spells them, a character type quotes them,
-`kuna_stablenames.rs (prints_literals)`) gives its type to those constants too:
+`stablenames.rs (prints_literals)`) gives its type to those constants too:
 applied to the instances alone, `type v1 state` on an `int` holding `enum
 state` printed `v1 = 3` where the Symbol had printed `v1 = RUN`.
 `retype_whole_variable` types each constant copied into the variable, tested
 for equality with it or combined with it bit by bit (`v1 |= F_R`;
-`kuna_stablenames.rs (met_constants)`), which is where type inference would
+`stablenames.rs (met_constants)`), which is where type inference would
 have taken the type, and nothing further away: inference would also carry it
 into the variable's copies, into arithmetic (`a0[7] + E_ONE`) and across the
 frame, which this does not. An ordered comparison keeps its constant a number,
 as before.
 
 A local the function only ever passes by address (`read(0,&c,1)`) has no
-instance at all, so nothing could carry its type; `kuna_hightarget.rs
+instance at all, so nothing could carry its type; `hightarget.rs
 (apply_local)` retypes its stack Symbol instead, as before, since the storage
 is the variable's whole identity and nothing can split.
 
 A pointer whose pointee the analysis reads through (a structure, union, array
-or function, or a relative pointer, `kuna_stablenames.rs (reads_through)`) is
+or function, or a relative pointer, `stablenames.rs (reads_through)`) is
 the one unit retype that still reaches type inference (`reaches_inference`),
 which turns the offsets read through it into fields, elements and calls.
-`kuna_stablenames.rs (lock_retyped)` locks it, at the start of every type
+`stablenames.rs (lock_retyped)` locks it, at the start of every type
 inference (`p5_types/coreaction_infertypes.rs (run_infer_types)`), on each
 varnode whose defining operation (instruction and creation time) defined an
 instance of the retyped variable in the first decompile. The shape and place
@@ -1321,7 +1321,7 @@ Opaque;`) still reaches inference, which carries the type to the variable's
 copies and the signature, but it states no extent: for a value carrying the
 replayed lock whose pointee has no size, the frame layout reads the range off
 the pointee the variable was printed with (`UnitRetype::from`,
-`kuna_stablenames.rs (printed_pointee)`, asked by `funcdata_spacebase.rs
+`stablenames.rs (printed_pointee)`, asked by `funcdata_spacebase.rs
 (gather_open)`), which is what laid the frame out the first time, and adds no
 range when that has no size either or the retypes sharing the lock disagree on
 it. The default one-byte range it used to add split the stack array the pointer
@@ -1334,7 +1334,7 @@ variables a `char *` pointer was the only one to lay out, renumbering them.
 The type also changes which operations the analysis builds, so the first
 decompile's keys can miss the retyped variable's instances, and the naming pass
 falls back to the lock: an instance no key matches but that carries the locked
-type counts for the retyped variable (`kuna_stablenames.rs (matched_name)`), so
+type counts for the retyped variable (`stablenames.rs (matched_name)`), so
 the variable keeps its number and the name a directive gave it. It also stays
 explicit (`holds_retype`, asked by `coreaction_cleanup.rs (base_explicit)`): it
 was printed, and an expression the new type reshapes could otherwise inline it
@@ -1342,11 +1342,11 @@ and leave its name on nothing. For the same reason copy propagation does not
 move the value out of a definition the reshaped frame turned into a `COPY`
 (`ruleaction_3.rs (RulePropagateCopy)`, chapter 03), which would leave the
 variable with no instance at all. The merge follows the first decompile's
-variables wherever the keys still identify them: `kuna_stablenames.rs
+variables wherever the keys still identify them: `stablenames.rs
 (same_variable)`, asked by `merge.rs (merge_test_adjacent)` and
 `merge_adjacent`, refuses to join highs whose instances belonged to different
 locals and lets highs that belonged to one local join whatever their types,
-and `kuna_stablenames.rs (variable_groups)` hands `merge_by_datatype` the parts
+and `stablenames.rs (variable_groups)` hands `merge_by_datatype` the parts
 of each local that its grouping by type kept apart. What does not hold: a high
 no key identifies merges by the usual rules, and inference carries the type
 into the variable's copies, as it carries any type, which can change their
@@ -1365,7 +1365,7 @@ per local a batch touched, the name it must be declared under and the type the
 last `type` gave it, and `assertions.rs (check_printed)` finds each in the C the
 replay printed by the declaration the printer emitted for it
 (`p9_emit/printc.rs (declared_locals)`): the declaration of the HighVariable
-the replay gave the directive to (`kuna_stablenames.rs (directive_targets)`),
+the replay gave the directive to (`stablenames.rs (directive_targets)`),
 else one the naming pass gave the expected name and no other directive took; a
 parameter is read from the signature. A replay records a local printed under
 its library name (`libcnames`, above) by its number, so a declaration under
@@ -1385,13 +1385,13 @@ did not map.
 
 **A local is edited by the name it shows.** The printer suffixes a name
 another identifier already holds
-(`p9_emit/kuna_dedupvardecls.rs (DeclNameUniquifier)`): `name v7 score` prints `score_1` beside a function
+(`p9_emit/dedupvardecls.rs (DeclNameUniquifier)`): `name v7 score` prints `score_1` beside a function
 `score`, a rename to a parameter's name prints `a0_1`, and of two locals given
 one name the later in declaration order prints `dup_1`. No local carries such a
 name, so a directive naming it answered `No symbol named: score_1` (and the
 shared one `More than one symbol named: dup (2)`), although the output and the
 "applied as" note offered exactly that edit. When an identifier resolves to no
-local, or to more than one, `unlace-console/src/kuna_hightarget.rs (resolve_shown)` prints the
+local, or to more than one, `unlace-console/src/hightarget.rs (resolve_shown)` prints the
 function with a printer of its own (`printc.rs (declarations_of)`), after
 giving each local the batch has renamed so far its new name, so it reads the
 names the next decompile shows, and takes the one local declared under the
@@ -1403,7 +1403,7 @@ while the next decompile declares them apart -- it cannot say which one is
 shown unsuffixed, and the directive is rejected as before rather than applied
 to either. A local whose name
 another local shares is carried under the suffixed name it was reached by
-(`kuna_stablenames.rs (relabel)`), so the next decompile tells the two apart.
+(`stablenames.rs (relabel)`), so the next decompile tells the two apart.
 An identifier that resolves is read as before, a library name (`fd_2`) still
 through its number first; a name the batch start printed for one local and an
 earlier directive gave another is still rejected as ambiguous; and the extra
@@ -1416,7 +1416,7 @@ scalar shrank the local and its remainder came back as another (`type v24
 unsigned char` on `char v24 [20]` printed `char v62 [19]` and no `v24`), a
 wider one swallowed its neighbours and was then reported refused, and a type
 running past the end of the stack left the Symbol unmapped.
-`kuna_hightarget.rs (check_stack_width)` refuses these before anything
+`hightarget.rs (check_stack_width)` refuses these before anything
 changes, with the same reason, so the C is the one the caller had. A
 structure, union or array states the extent of the object at that address, so
 it still applies at any width that stays on the stack: it grows a buffer the
@@ -1425,7 +1425,7 @@ narrows one to its declared extent (`unsigned int[10]` over a 48-byte slot), as
 a type of the same width (`unsigned char[20]`, `int[5]`) retypes it.
 
 **A new name must be one the declaration can print.**
-`unlace-console/src/kuna_hightarget.rs (check_local_name)` rejects a `name`, or
+`unlace-console/src/hightarget.rs (check_local_name)` rejects a `name`, or
 the name a `type` states, that is a C keyword or a type the program knows by
 that name (`uint4`, an asserted `typedef`): `name v6 int` printed `int int;`.
 
@@ -1446,7 +1446,7 @@ This is a correctness fix and is unconditional: two distinct variables under
 one identifier make the emitted C read and write the wrong object, and make a
 `name` assertion ambiguous.
 
-`kuna_fputruncviews.rs` (always on) separates a numerical `FLOAT_TRUNC` result from an
+`fputruncviews.rs` (always on) separates a numerical `FLOAT_TRUNC` result from an
 inferred floating storage view of the same-width bits. After address-tied
 recovery, an unlocked, unmapped conversion result that meets a floating view
 keeps an explicit integer local. A marked bit-preserving COPY carries the
@@ -1466,7 +1466,7 @@ numerical truncations count as integers regardless of traversal order. Actual
 call and return prototypes determine floating ABI views. Where the prototype
 is unknown, an existing inferred floating view is preserved only for an
 argument or return value the model passes in a float-class register
-(`kuna_floatreg.rs (passed_in_a_float_register)`); an argument the call takes
+(`floatreg.rs (passed_in_a_float_register)`); an argument the call takes
 in an integer register reads the logical integer, since copy propagation
 leaves `vmov r0,s18; bl sinki` reading the floating register. This does not
 recover missing ABI information. A mapped or name-locked root is deliberately
@@ -1505,7 +1505,7 @@ mechanism (`crates/unlace-middle/src/p6_variables/varmap.rs
 (ScopeLocal::mark_not_mapped)`) later excludes an unaliased return-value
 staging slot (`funcdata_spacebase.rs (Funcdata::check_unaliased_return)`).
 
-`kuna_savedregisterspills.rs (ActionRestrictLocalSavedLanes)` handles the
+`savedregisterspills.rs (ActionRestrictLocalSavedLanes)` handles the
 split-lane case the exact-width pass cannot see: SLEIGH may represent a
 16-byte unaffected register effect, such as Win64 XMM6, as several smaller
 unaffected input Varnodes and lower its stack save to `STORE`s. It enumerates
@@ -1578,7 +1578,7 @@ the right choice for the emitted C. On a machine-readable surface it is the wron
 one: it asserts an element type the recovery never established, where the
 program's own type may as well be `_Bool`, `unsigned char`, a one-byte enum or one
 byte of a struct nobody split.
-`crates/unlace-emit/src/p9_emit/kuna_bytehonest.rs
+`crates/unlace-emit/src/p9_emit/bytehonest.rs
 (exported_type_name)` reports the width instead — `undefined1`, the spelling
 Ghidra uses for the same fact and the analogue of IDA's `_BYTE`. The predicate
 (`is_uncommitted_byte`) reads the datatype's own metatype and size, never its
@@ -1602,7 +1602,7 @@ that pass ran before type recovery committed anything, so at -O0 almost every
 filler slot reads `undefined8` while the C body prints the value that lived in
 it as `char *`. The value is still in the final function; only the link from
 the slot to it is gone.
-`crates/unlace-bandb-base/src/p6_variables/kuna_slotptr.rs (record_pass)`
+`crates/unlace-bandb-base/src/p6_variables/slotptr.rs (record_pass)`
 runs beside the union at the tail of every `restructure_varnode` and notes, per
 exact `(offset, size)`, every value stored into the frame by its durable
 identity: the root op that computed it (walked back through COPY chains; an
@@ -1610,12 +1610,12 @@ indirect-creation stands for the call whose output return recovery later
 attaches), the function input it came from, or a null constant. It also notes
 every stack range any live Varnode touched. Op identities are SeqNums, so the
 record is cleared with the op bank on a restart. `extract_variables` then asks
-`kuna_slotptr.rs (slot_pointer_type)` for each filler row, which resolves each
+`slotptr.rs (slot_pointer_type)` for each filler row, which resolves each
 store in the FINAL function and reads the type the stored value is declared
 with (its HighVariable's declaration type, following the output CAST when the
 producing op writes an implied temporary). The row is re-spelled only when
 every non-null store resolves, they all agree, the type is a pointer of the
-slot's width whose pointee was committed (`kuna_slotptr.rs (admit)`: `char *`,
+slot's width whose pointee was committed (`slotptr.rs (admit)`: `char *`,
 `T *`, a named libc record, `struct_N *`, `T **` and `void *` qualify; a pointer
 to unknown bytes names nothing, and a pointer to code prints as `void *` and in
 every measured case came from a constant mistaken for a code address), no
@@ -1655,14 +1655,14 @@ them had a row: a consumer could not read their types, and decbench's
 index, then stack offset, then instruction-address overlap, scored every
 register-resident DWARF local as a miss. `extract_variables` appends a fourth
 section,
-`crates/unlace-emit/src/p9_emit/kuna_reglocals.rs
+`crates/unlace-emit/src/p9_emit/reglocals.rs
 (register_locals)`: the declarations the printer emitted for the function
 (`printc.rs (DeclaredLocal)`), in declaration order, minus every declaration whose
 printed name a parameter or frame row already carries and every one that is
 stack storage. That is a HighVariable bound to a stack Symbol, with stack
 storage only, with only the address constants of a frame object, or with a
 stack instance inside a reported frame row; and a declaration whose storage
-comment lists only stack homes (`kuna_varsources.rs (high_homes)`, over the
+comment lists only stack homes (`varsources.rs (high_homes)`, over the
 declared high and every high declared through it), such as a temporary the
 printer declares as the copy of a frame slot (`unsigned long *v3; // stack -
 0x18` beside the frame row `local_18`). A declaration whose storage merges a
@@ -1673,7 +1673,7 @@ being called a register, so `register` never labels stack storage. Each row has
 `kind: "register"`, a null `stack_offset` and `arg_index`, the printed name, so
 a consumer joins the row to its declaration line, and as its type the datatype
 the declarator spells (`DeclaredLocal::ty`) through the same
-`kuna_bytehonest.rs (exported_type_name)` the parameter and stack rows use. For
+`bytehonest.rs (exported_type_name)` the parameter and stack rows use. For
 a scalar that is the printed declarator (an uncommitted byte is spelled
 `undefined1`); for an array it is the array type, `char[16]` as for a frame
 row, where the declaration line splits it around the name (`char v1 [16]`).
@@ -1686,7 +1686,7 @@ mismatch on either yields no row rather than one from another function.
 
 The evidence is the same markup provenance the other rows carry, resolved
 through the declaration instead of through storage or name:
-`kuna_reglocals.rs (DeclarationHighs)` collects the declared HighVariable and
+`reglocals.rs (DeclarationHighs)` collects the declared HighVariable and
 every HighVariable the printer declared through it (`PrintC::declared_through`:
 collapsed pieces, Symbol duplicates and group members that print under the same
 name), and the row's `line_numbers` and `addresses` are those of the lines that
@@ -1717,12 +1717,12 @@ stack Symbol, so it is spelled by width: `local_c undefined4`. At -O0 the value
 in such a slot is usually a printed local that merged a register with its
 spill, declared `char *v1; // r0 | stack - 0xc`. The filler row keeps its frame name, offset and size and takes the
 type the C declares there, from
-`crates/unlace-emit/src/p9_emit/kuna_slotreport.rs
+`crates/unlace-emit/src/p9_emit/slotreport.rs
 (covering_type)`. The candidates are the printer's declarations for the
 function (the same `DeclaredLocal` list and naming check `reglocals` uses)
 whose declared type is as wide as the slot and one of whose storage homes
 starts at the slot's offset with that width. The homes are exactly those the
-declaration's storage comment lists (`kuna_varsources.rs (high_homes)`, through
+declaration's storage comment lists (`varsources.rs (high_homes)`, through
 `high_stack_homes`, which keeps each stack home's width), over the declared
 high and every high declared through it, so a row never takes a type for
 storage the C does not show the local in; `DeclaredSlots` indexes them once per
@@ -1734,7 +1734,7 @@ keeps `undefinedN`. A declaration that lists the slot at another width is not a
 candidate: it neither types the slot nor stops a same-width one from typing
 it, since refusing the slot whenever such a declaration also lists it was
 measured and lost more matches than it saved. The type is spelled by
-`kuna_bytehonest.rs (exported_type_name)`, so an uncommitted byte the printer
+`bytehonest.rs (exported_type_name)`, so an uncommitted byte the printer
 renders `char` is still `undefined1`, and a slot whose candidate is a one-byte
 integer or `bool` keeps `undefined1` too (`byte_scalar`): the type system's
 byte types are its default for any byte it computes with, and the program may
@@ -1749,7 +1749,7 @@ filled in. Folding the slot into the declaration's row instead (one row under
 the printed name, with the slot's offset) was measured as the alternative and
 lost the register row's own matches. The second section follows the same rule
 for a frame Symbol whose own type the recovery left uncommitted
-(`kuna_slotreport.rs (declared_type)`): when the C declares it under its own
+(`slotreport.rs (declared_type)`): when the C declares it under its own
 name at a type of its width other than a one-byte integer or `bool`, at the
 Symbol's offset, the row reports that type, whatever it is. That includes
 `undefinedN` when the C prints the Symbol so: a row that spelled the Symbol's
@@ -1775,11 +1775,11 @@ what follows it) reaches the rows as one `undefinedN`: `local_18 undefined12`
 although the C declares `double v1; // stack - 0x18 | ...` at its start. Such
 a row is cut at the homes of the printed
 declarations lying wholly inside it, from
-`crates/unlace-emit/src/p9_emit/kuna_slotsplit.rs
+`crates/unlace-emit/src/p9_emit/slotsplit.rs
 (split_rows)`. The homes are the `DeclaredSlots` index `slotreport` builds
-(`kuna_slotreport.rs (homes_within)`): a declaration's stack homes at its
+(`slotreport.rs (homes_within)`): a declaration's stack homes at its
 declared width, over its high and the highs declared through it. Each declared
-piece takes the type its declarations spell (`kuna_slotreport.rs
+piece takes the type its declarations spell (`slotreport.rs
 (piece_type)`): their common type, `undefined1` for one-byte integers or
 `bool` (the `bytehonest` reasoning), `undefinedN` when they disagree. Each gap
 between pieces stays `undefinedK` at its own offset and width; the piece at
@@ -1989,7 +1989,7 @@ storage retains its earlier values and aliases. The qualifying post-call read
 is still recognized relative to the original passed address, not the expanded
 parent base. Parameters and positive frame offsets are excluded. Explicit local
 types remain authoritative. The implementation is
-`crates/unlace-bandb-core/src/p6_variables/kuna_callarrayextent.rs`.
+`crates/unlace-bandb-core/src/p6_variables/callarrayextent.rs`.
 
 **Address-taken frame records (kuna `stackstruct`, default `off`, on in
 `aggressive`).** A local record whose address is handed to a callee keeps no
@@ -2066,7 +2066,7 @@ printed as seven scalars -- and renumbers the synthesized structures of the
 later functions in that run. With the option on
 in default mode no datatest assertion and no other stage file's assertion
 moves. The implementation is
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackstruct.rs`.
+`crates/unlace-bandb-core/src/p6_variables/stackstruct.rs`.
 
 
 **An indexed array's extent (kuna `arrayextent`, default `on`).** The [0,3]
@@ -2080,13 +2080,13 @@ sources of extent, both in `funcdata_spacebase.rs (Funcdata::gather_open)`.
 
 At `bound`, an indexed base whose pointer is the stack base plus constants plus
 indices that their known bits bound (the same walk `stackstoreguard` uses,
-`kuna_storereach.rs (pointer_pieces)`), and which the function only
+`storereach.rs (pointer_pieces)`), and which the function only
 dereferences or offsets (no call, store, compare or phi takes it),
 gets room for every element those LOAD and STORE ops may touch:
-`crates/unlace-bandb-core/src/p6_variables/kuna_arrayextent.rs
+`crates/unlace-bandb-core/src/p6_variables/arrayextent.rs
 (bounded_items)` raises the base's open hint to cover `[base, lo + reach +
 width)`, stopping at the closest other pointer base above it
-(`kuna_arrayextent.rs (next_base)`). Inside that span the binary can address
+(`arrayextent.rs (next_base)`). Inside that span the binary can address
 every slot through the index, so the array has to cover it for the C to be
 defined. The stop is there because a known-bits bound is loose (an index loaded
 as a byte reaches 256 elements whatever the loop does with it), and a slot whose
@@ -2101,7 +2101,7 @@ such scalar then prints as an element; the values are the same slots, so what
 the C computes does not change.
 
 At `on` (the default) an indexed base with no such bound also grows along the
-frame, in `kuna_arrayextent.rs (extend_unbounded)`, which runs after the
+frame, in `arrayextent.rs (extend_unbounded)`, which runs after the
 symbol hints are gathered. It applies to the open hint of every indexed base
 the alias checker found with no bound and of every guard with a step but no
 locked range (`Funcdata::add_guard` returns those), unless a locked guard
@@ -2111,12 +2111,12 @@ alias bases and guards share them. The hint takes the next slot of its element s
 slot starts exactly where its elements end, below the frame's endpoint; no
 fixed hint inside the array runs past it; every hint starting in it is an
 unlocked fixed hint exactly one element wide whose type keeps the array's
-(`kuna_arrayextent.rs (joinable)`: unknown, an integer beside an integer or
+(`arrayextent.rs (joinable)`: unknown, an integer beside an integer or
 unknown element, or the element type behind the same pointers); no open hint
 starts there, so a second array or an escaping address stops it; and the
 function cannot observe the slot except through a pointer
-(`kuna_arrayextent.rs (observed)`): no op reads a stack Varnode that overlaps it
-(`kuna_storereach.rs (is_read)`), and no value copied into it is used by
+(`arrayextent.rs (observed)`): no op reads a stack Varnode that overlaps it
+(`storereach.rs (is_read)`), and no value copied into it is used by
 anything but copies into stack slots outside the array. The second half matters
 at `-O0`, where a scalar's reads are propagated to the register it was stored
 from (`fmt = f(); if (fmt == 2)` reads the call's result, not the slot), and
@@ -2134,11 +2134,11 @@ each constant-initialised slot joined that way raises it again. Started from the
 last slot this rule took (`int flag = 0;` written and never read), that walk
 would carry the array over the loop counters and the sum that follow it at
 `-O0`. So once `MapState::initialize` has sorted the hints,
-`ScopeLocal::restructure` first calls `kuna_arrayextent.rs (settle)`, which
+`ScopeLocal::restructure` first calls `arrayextent.rs (settle)`, which
 runs the same merge steps
 (`merge`, the absorbing-base `absorb`, `attempt_join`) over copies of the
 sorted hints with each lengthened array back at its old `highind`
-(`kuna_arrayextent.rs (upstream_ends)`). Where that upstream merge ends the
+(`arrayextent.rs (upstream_ends)`). Where that upstream merge ends the
 array at or before the end of the last slot taken, the fixed hints in that slot
 lose their constant-copy mark (`COPY_CONSTANT`) and the array ends there. Where
 it carries the array further on its own, the marks stay and the array is the
@@ -2162,7 +2162,7 @@ pair, a type lock, or a conflicting layout hint vetoes the change. The
 backing stops after the second word; a following local (such as a saved
 canary) is not absorbed. The two unsigned storage words are not a claim
 about the source type, and no callee or import name is used
-(`kuna_callarrayextent.rs (coalesce_delay_slot_init)`). Other targets, and
+(`callarrayextent.rs (coalesce_delay_slot_init)`). Other targets, and
 SPARC32 pairs whose second store is outside the delay slot, keep the split.
 
 **Terminator absorption** (`option nulterminator`, **opt-in, default off**). An
@@ -2175,7 +2175,7 @@ the value-set refinement no range to lock. With the option on,
 slot a constant COPY writes, whether each such write is a zero that no op reads
 directly (`varmap.rs (MapState::note_terminator_store)`), and after
 `attempt_join` declines a hint,
-`crates/unlace-bandb-base/src/p6_variables/kuna_nulterminator.rs
+`crates/unlace-bandb-base/src/p6_variables/nulterminator.rs
 (close_at_terminator)` closes the open range into a *fixed* range ending one
 element after that hint -- when the range is open and unlocked with one- or
 two-byte integer elements, the hint is a plain fixed constant-COPY slot of
@@ -2211,11 +2211,11 @@ no array covers it) prints as `char buf[8200]`, `char buf[1001]` as
 buf[32]`. The source size is anywhere in the last 16 bytes of the gap, and the
 frame alone cannot say where. The call that receives the buffer often can.
 
-`crates/unlace-bandb-base/src/p6_variables/kuna_arraysize.rs (gather)`
+`crates/unlace-bandb-base/src/p6_variables/arraysize.rs (gather)`
 runs in `restructure_varnode` after the open hints are gathered. For every call
 it reads the argument a library buffer function takes the buffer in and the
-byte count it states for it (`kuna_arraysize.rs (LENGTH_CALLS)`), and what that
-count says (`kuna_arraysize.rs (Says)`): a length the callee may fill up to
+byte count it states for it (`arraysize.rs (LENGTH_CALLS)`), and what that
+count says (`arraysize.rs (Says)`): a length the callee may fill up to
 (`fgets`, `snprintf`, `read`, `readlink`, `strftime`, `getcwd`, `strncpy`,
 `getnameinfo`, the product of `fread`'s size and count), a length the callee
 writes exactly (`memset`, a `memcpy` or `memmove` destination) or only reads (a
@@ -2225,7 +2225,7 @@ passes. A count is read only when the argument is a constant (or the
 `PTRSUB(#0, #c)` pointer constant the type pass makes of an integer that happens
 to be a mapped address), and it is filed under the escaped base (an
 alias-checker base with no index) the buffer argument may hold, through copies,
-casts, indirect effects and loop phis (`kuna_arraysize.rs (start_of)`): a
+casts, indirect effects and loop phis (`arraysize.rs (start_of)`): a
 program that passes a call that many bytes at the base on any path needs them
 there. A phi input that is no frame address (a callee-saved register's incoming
 value) does not stop the walk, but an argument that may hold two different bases
@@ -2235,17 +2235,17 @@ whose result is the number of bytes it stored (`read`, `readlink`, `recv`,
 the buffer's address plus that result (`n = readlink(p, buf, 4096); buf[n] =
 0;`: an indexed alias-checker base at the same start whose index is the call's
 output on every path through copies, extensions, truncations and phis,
-`kuna_arraysize.rs (carries)`, and whose only uses are one-byte loads and
-stores, `kuna_arraysize.rs (byte_access_only)`), the count is one more, since
+`arraysize.rs (carries)`, and whose only uses are one-byte loads and
+stores, `arraysize.rs (byte_access_only)`), the count is one more, since
 that index reaches the length itself; a result capped on some path
 (`if (n == 64) n = 63;`) is not the output on every path. At `calls` every
 constant argument of a call outside that table is filed the same way under the
 base another of its arguments holds.
 
-`gather` also follows every escaped base (`kuna_arraysize.rs (trace)`) through
+`gather` also follows every escaped base (`arraysize.rs (trace)`) through
 copies, casts, indirect effects, phis and constant pointer arithmetic to the
 loads, stores and library calls it reaches, and records where they land
-(`kuna_arraysize.rs (Reach)`): the bytes a constant-offset access or a library
+(`arraysize.rs (Reach)`): the bytes a constant-offset access or a library
 call with a constant length touches, and whether some access may land anywhere
 above or below the base. A pointer that reaches a phi again at another offset
 (a loop that advances or walks back through the buffer), a non-constant amount
@@ -2256,7 +2256,7 @@ unbounded. Indexed alias-checker bases whose index is not such a terminator are
 recorded by offset.
 
 In `ScopeLocal::restructure`, once `adjust_fit` has fixed the gap of an open
-range, `kuna_arraysize.rs (fit)` takes the largest count filed under its start
+range, `arraysize.rs (fit)` takes the largest count filed under its start
 that may decide its size: a fill length, an object size or a `calls` constant;
 an exact-write or read-only length only says the buffer is at least that long.
 The range keeps its gap when any count, of any kind, comes within one byte of
@@ -2320,17 +2320,17 @@ bytes). The trip count, which is the buffer size, is not recoverable from the
 C. (A constant initializer that writes the buffer in wider pieces keeps that
 form, `v1._0_4_ = ...`, whichever way the buffer is declared.)
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_endptrbound.rs
+`crates/unlace-bandb-core/src/p6_variables/endptrbound.rs
 (find_pointer_walks)` accepts a walk during `restructure_varnode` only when it
 can prove that every dereference through the pointer lands in `[start, end)`.
 The candidates are the `MULTIEQUAL`s that some LOAD or STORE reads through,
-possibly plus constants. `kuna_endptrbound.rs (walk_loop)` requires the phi to
+possibly plus constants. `endptrbound.rs (walk_loop)` requires the phi to
 head a natural loop: every input arriving on an edge from a block the phi's
 block dominates (a back edge) is the phi plus one positive constant `step`,
 every other input is one stack address `start`, and the loop body is the header
 plus every block that reaches a back-edge source without passing the header.
 Casts and copies are looked through; an INDIRECT is not, anywhere, because the
-call it stands for may have changed the value. `kuna_endptrbound.rs
+call it stands for may have changed the value. `endptrbound.rs
 (pointer_derefs)` then accounts for every use of the pointer: values at a known
 constant offset flow through casts, copies and constant additions; each
 dereference must fit inside one element (offset `0 <= off` and
@@ -2339,11 +2339,11 @@ comparisons read no memory; a value narrower than a pointer, or the pointer's
 difference with a stack address, is an integer and is not followed. A variable
 offset that reaches a dereference, or the pointer reaching a call, an INDIRECT,
 a store as a value, a return, or any other phi, declines the walk.
-`kuna_endptrbound.rs (controlling_bounds)` looks for the comparison that bounds
+`endptrbound.rs (controlling_bounds)` looks for the comparison that bounds
 the loop: `t == end`, `t != end`, `t < end` or `end <= t`, where `t` is the
 pointer itself or the one value every back edge carries, and `end` is a stack
 address (followed through a loop-invariant phi to the address that seeds it).
-`kuna_endptrbound.rs (exit_branch)` requires the comparison to reach, through
+`endptrbound.rs (exit_branch)` requires the comparison to reach, through
 `BOOL_NEGATE` and copies, the condition of a `CBRANCH` in a loop block that
 dominates every back-edge source and whose one out-edge leaves the loop — the
 edge taken exactly when `t` reaches `end`, with the branch's boolean flip
@@ -2358,7 +2358,7 @@ way must name the same `end`, at least one must keep the dereferences inside the
 walk on its own, and `end` must be at least two and a whole number of steps
 beyond `start`.
 
-For each walk, `kuna_endptrbound.rs (coalesce_hints)` runs after gathering and
+For each walk, `endptrbound.rs (coalesce_hints)` runs after gathering and
 before the layout decision and replaces every hint that starts inside
 `[start, end)` with one array hint of `step`-byte elements, typed by the most
 specific `step`-wide scalar hint already in the range (so a `char` walk stays
@@ -2380,7 +2380,7 @@ range without one of the two containing the other. Nested walks resolve to the
 outermost: the array hint the outer walk leaves carries index evidence that
 reaches past the inner walk's edge. Once the layout holds an array
 Symbol that covers exactly `[start, end)` — this pass's or a locked one from
-debug information — `kuna_endptrbound.rs (rebase_bounds)` rebuilds a compared
+debug information — `endptrbound.rs (rebase_bounds)` rebuilds a compared
 address written as `sp + end` into `PTRSUB(sp, start) + (end - start)`, which
 renders `&buf[n]`; the array's slack makes the form stable against
 `RulePtrsubUndo`, and a bound already in that form is not rebuilt again. The
@@ -2408,20 +2408,20 @@ object, so a read of it never sees the store. Two layout decisions broke that.
 The first is the reach. Two four-byte constant slots written by `u.w[0]` and
 `u.w[1]` produce two fixed hints, and the store's own open hint only claims the
 first few bytes, so the store indexes one local and reads the next one.
-`crates/unlace-bandb-core/src/p6_variables/kuna_storereach.rs
+`crates/unlace-bandb-core/src/p6_variables/storereach.rs
 (prepare_hints)` runs in `restructure_varnode` after the three gathers and
 before `endptrbound`. It takes each STORE of a one-byte value that a guard
 INDIRECT on the stack names as its effect, and resolves its pointer as the
-stack base plus constants plus indices (`kuna_storereach.rs (pointer_pieces)`,
+stack base plus constants plus indices (`storereach.rs (pointer_pieces)`,
 through copies, casts, INDIRECTs, `PTRSUB`, `PTRADD` and `INT_ADD`, and through
 a pointer walk's `MULTIEQUAL` whose other inputs agree on the base). The walk
 gives up, as unresolved, past twelve steps. It remembers what each Varnode at
-each depth gave (`kuna_storereach.rs (Walk)`), so a pointer built through
+each depth gave (`storereach.rs (Walk)`), so a pointer built through
 nested choices is walked once per value rather than once per path, which on
 MIPS `ld.so.1` never finished; the answer is the same either way. The two
 tests beside it, whether a pointer passes a `MULTIEQUAL`
-(`kuna_storereach.rs (through_walk)`) and whether it is a loop's walk
-(`kuna_storereach.rs (loop_walk)`), remember the same way and treat a give-up
+(`storereach.rs (through_walk)`) and whether it is a loop's walk
+(`storereach.rs (loop_walk)`), remember the same way and treat a give-up
 (past twelve steps, or past the watchdog deadline) as yes. Past the deadline
 every walk gives up, and the drive reports the function as over its budget.
 When every
@@ -2429,14 +2429,14 @@ index has a known-bits mask that bounds it, the reach is `[base, base + max +
 1)`. An index that is an unsigned remainder by a constant, directly or through
 a copy, a zero extension, or a sign extension whose input's sign bit the
 remainder cannot reach, is also at most the divisor less one
-(`kuna_storereach.rs (index_bound)`), so `b[(i >> 4) % 12]` reaches 12 bytes;
+(`storereach.rs (index_bound)`), so `b[(i >> 4) % 12]` reaches 12 bytes;
 an index multiplied or shifted left by a constant is bounded by its operand's
 bound times that constant. With the option off, `pointer_pieces` bounds an
 index by its known-bits mask alone, as `arrayextent` does on main.
 A `MULTIEQUAL` that chooses between different stack addresses (`p = (j &
 2) ? &u.b[0] : &u.b[4]; *p ^= 1;`) gives one such piece per address, and the
 store reaches from the lowest piece to the end of the highest
-(`kuna_storereach.rs (store_reach)`). A walk that starts from such a choice
+(`storereach.rs (store_reach)`). A walk that starts from such a choice
 (`*p++ ^= 1`) gives one piece per address with no bound, and each address is a
 base whose open range absorbs (below). A choice input that does not come from
 the stack base (`(j & 2) ? &u.b[2] : gbuf`) is not a stack address and is
@@ -2460,7 +2460,7 @@ v1[0]);`). When that layout is still wrong, the function falls back to no
 guard (below).
 
 For a byte STORE whose value-set guard has a fully locked range and unit step,
-`kuna_storereach.rs (locked_byte_ranges)` supplies that proven span even when
+`storereach.rs (locked_byte_ranges)` supplies that proven span even when
 no guard INDIRECT survives. A zeroing loop can cover a word header and a
 payload whose address is taken at an interior offset; a later header write
 must not let the fixed word hint discard the loop's array hint and split the
@@ -2480,8 +2480,8 @@ pointer's bound (chapter 03), while the upstream layout gives an array whose
 window value-set analysis did not lock only four elements, so a kept slot past
 them was its own local, which the C store through the array never writes
 (`b[5]` after `b[(i >> 4) % 12] = 7` with `int b[12]` printed as a separate
-`v2`). `kuna_storereach.rs (widen_open_hints)` raises the open hint at such a
-store's base to every element of its bound (`kuna_storereach.rs
+`v2`). `storereach.rs (widen_open_hints)` raises the open hint at such a
+store's base to every element of its bound (`storereach.rs
 (store_window)`) when one of the store's guard INDIRECTs keeps a slot past the
 hint's end, and the slot then joins the array (`v1[5]`). The unlocked integer
 hints of another width inside the widened array are dropped, since an open
@@ -2517,7 +2517,7 @@ option leaves alone.
 
 Neither step runs in a frame where some LOAD or STORE address comes from the
 stack base through arithmetic that `pointer_pieces` cannot resolve
-(`kuna_storereach.rs (frame_unresolved)`), where a guarded store's own address
+(`storereach.rs (frame_unresolved)`), where a guarded store's own address
 does not resolve, or where a choice spans more than eight stack addresses or
 more than 256 bytes; a choice between stack addresses resolves, so a pointer to
 one of two buffers does not count. clang's ppc32 `-O0` code forms `&u.s.b[i]`
@@ -2543,7 +2543,7 @@ must satisfy (`Funcdata::note_store_reach_checks`): each guarded store's reach
 since nothing bounds how far `((u8 *)&s)[i]` or a walk writes), and the guarded
 store pieces in a float reach. A wider store heritage guarded a written slot
 against (`Funcdata::indexed_guard_stores`) adds its reach when its index is
-bounded (`kuna_storereach.rs (wide_reaches)`): from its base to the end of its
+bounded (`storereach.rs (wide_reaches)`): from its base to the end of its
 bound or of its furthest guarded slot. Without the check a `long b[8]` whose
 `b[6]` the layout left as a separate local after a six-element array printed
 `v1[a1 & 7] = 3`, which writes past `v1`. Every such wider store, bounded or
@@ -2551,24 +2551,24 @@ not, must also find, at each stack address its pointer may index from (one, or
 a choice such as `p = c ? a : b; p[i] = x`, or a frame array chosen against a
 pointer from a call or a global), an array whose element is its own width or a
 part of it, holding every slot its guard keeps from that address to its reach
-(`kuna_storereach.rs (indexes_own_array)`): a scalar there prints the store as
+(`storereach.rs (indexes_own_array)`): a scalar there prints the store as
 `(&v1)[a1] = 3`, past the scalar, and an array of wider elements indexes with
 the wrong stride. A pointer that comes from the stack base along a path
 `pointer_pieces` cannot resolve (`p = n >= 16 ? alloca(n * 8) : buf`) fails:
 no layout check can see the array it indexes, and the guard left `buf` as
 scalars the C indexed past (`v1 = &v3; v1[a1 & 3] = 3`); that holds for a loop
 walk too, except one of variable step from one stack address (`p = buf; ... p
-+= len;`, `kuna_storereach.rs (variable_walk)`), which the final check follows
++= len;`, `storereach.rs (variable_walk)`), which the final check follows
 from that address. At an address of a choice that has no index of its own and is stored
 through as it is (`*p = x` for `p = c ? &a : &b`), one local must hold the
-store's bytes (`kuna_storereach.rs (is_choice)`). A loop's pointer walk
-(`kuna_storereach.rs (loop_walk)`, such as a zeroing loop over a struct's first
+store's bytes (`storereach.rs (is_choice)`). A loop's pointer walk
+(`storereach.rs (loop_walk)`, such as a zeroing loop over a struct's first
 field) prints as `*p = 0`, not through the local; the final check below keeps
 the arrays it goes through whole.
 
 Beyond those, the guard must never end early a local that any indexed access
 or walk, load or store, goes through. A slot the guard keeps is guard-only
-when its values are read only through the guard (`kuna_storereach.rs
+when its values are read only through the guard (`storereach.rs
 (guard_only_ranges)`): no Varnode on it is an input, none from outside the
 guard has a use other than the guard's INDIRECTs and the MULTIEQUALs, COPYs,
 PIECEs and SUBPIECEs that carry their values, and none at all feeds another
@@ -2583,12 +2583,12 @@ MULTIEQUAL they left still keep the slot a local of its own, as for the
 through. Each layout pass therefore drops a
 guard-only integer hint at an element boundary of the open range below it, no
 wider than the element, when the element is wider than a byte
-(`kuna_storereach.rs (drop_guard_only_hints)`); its read becomes the element or
+(`storereach.rs (drop_guard_only_hints)`); its read becomes the element or
 a cast of it, and an element-wide one gives the range its type when the range
 has none (`short b[16]` keeps its sign). Byte hints stay, since the byte reach
 checks take the element type from them (`unsigned char b[12]` keeps its sign).
 A guard-only hint inside an element, wider than one, a float or a locked type
-stays as well, and the final check (`kuna_storereach.rs (guard_shortens)`) withdraws
+stays as well, and the final check (`storereach.rs (guard_shortens)`) withdraws
 the guard when the local holding the lowest base of a LOAD or STORE through an
 index or a walk is a guard-only non-array, or is followed by guard-only storage
 up to and including the start of the next local. The storage need not be a
@@ -2599,7 +2599,7 @@ never reaches `b[3]` left `long v5[3]; long v7;`, and a walk over `struct
 {long a; int b; int c;} s[4]` that writes only `.a` left `long v4[3]` below
 `s[1].b`, and the walks wrote past the arrays. An index whose known-bits span is 256 bytes or
 more counts as unbounded (`u.b[i & 511]`). After the last pass
-`decompile_drive.rs (run_pipeline)` calls `kuna_storereach.rs
+`decompile_drive.rs (run_pipeline)` calls `storereach.rs
 (withdraw_spoiled_guard)`, which takes the bytes of every guard INDIRECT still
 on the stack whose effect is a byte store or one of those wider stores. The layout is spoiled when such a slot whose value some op other
 than an INDIRECT or MULTIEQUAL reads overlaps more than one local (the P3 guard
@@ -2618,7 +2618,7 @@ slot past a smaller array (`char v1[8]; unsigned int v2; v1[a0] = a1` for a
 buffer, which the guard therefore gives up on (`char v1[400]; unsigned int v2;
 v1[a0 & 0x1ff] = a1;` for a 512-byte union with a constant word at byte 400).
 The local holding a reach's base must also be able to hold it
-(`kuna_storereach.rs (holds_reach)`): an array of bytes or of 2-, 4- or 8-byte
+(`storereach.rs (holds_reach)`): an array of bytes or of 2-, 4- or 8-byte
 integers or unknowns, which ends at the next local and which the store writes by
 byte (`v1[i]`, `((char *)v5)[i]` for the `int4 v5[4]` an ARM word read gives), or,
 for a bounded reach, a float local; in both cases holding all of a bounded
@@ -2628,7 +2628,7 @@ all (a 16-byte SSE zero-initializer at the base types the buffer `undefined16
 v1[2]`, printed as `v1[0][a0 % 0x18] = a1`, which does not compile). A float
 piece is spoiled when no single local covers it, or when its local is read as
 an integer while a member of that variable is typed float
-(`kuna_storereach.rs (read_only_as_float)`): such a read prints as a cast,
+(`storereach.rs (read_only_as_float)`): such a read prints as a cast,
 which converts the value (`(unsigned short)v1` of a `double v1`). Float ops,
 copies and PIECEs into the range, and SUBPIECEs above the low end, which print
 as the bytes (`v1._6_2_`), do not. `decompile_drive.rs
@@ -2648,10 +2648,10 @@ signed, so a stack local the body reads with bit tests comes back `unsigned int`
 even where the callee that fills it declares `int *`: `waitpid`'s status prints
 as `unsigned int v5;` and the call as `waitpid(v2,(int *)&v5,0)`, with the
 arithmetic shift of `WEXITSTATUS` casting the value back (`(int)v5 >> 8`).
-`crates/unlace-bandb-base/src/p6_variables/kuna_castobject.rs
+`crates/unlace-bandb-base/src/p6_variables/castobject.rs
 (declare_out_params)` runs in `restructure_varnode` after the three gathers and
 before the layout decision. From the alias checker's additive bases
-(`kuna_castobject.rs (frame_refs)`) it keeps an offset only when every base that
+(`castobject.rs (frame_refs)`) it keeps an offset only when every base that
 lands on it has no index and is read by nothing but direct calls, each at a
 parameter whose type is locked (a declared or libc signature; a format-string
 position and a prototype override do not count) and is a pointer to one plain 4-
@@ -2664,7 +2664,7 @@ read of one half or a wider copy of the slot leaves it alone, and so does a slot
 whose open hint the layout would stretch into an array because no hint starts
 where the slot ends (the extra elements are bytes no access reads, and the
 declaration would re-type them too). The pass runs after the `endptrbound`
-coalesce, so a walked buffer is already a single hint there. `kuna_castobject.rs
+coalesce, so a walked buffer is already a single hint there. `castobject.rs
 (readers_agree)` then walks every read of the slot's Varnodes, through copies,
 phis and the operators whose C result keeps the operand's type (`& | ^ ~`, a
 right shift, a quotient or remainder, and `+ - *` and `<<` of an unsigned slot),
@@ -2695,7 +2695,7 @@ prints as nothing (`castimplied` sees an identity), and the rest are the
 conversions C performs itself on assignment, argument passing and return. A
 merge can still bring readers the walk never saw into the variable: a value
 stored into the slot joins it through the COPY, and that value's own reads
-become the variable's. `kuna_castobject.rs (reconcile)` runs at the head of
+become the variable's. `castobject.rs (reconcile)` runs at the head of
 `ActionSetCasts`, after every merge: for each slot any pass re-declared whose
 variable's type is not `T`, it repeats the walk over every member of the
 variable and, when some reader disagrees, types the slot's storage and its
@@ -2741,7 +2741,7 @@ stack pointer gets a `PTRSUB(sp, #0)` spliced in so the type system renders
 `&local` instead of the bare register (`funcdata_spacebase.rs
 (Funcdata::annotate_raw_stack_ptr)`).
 
-**What counts as a pointer escaping (kuna `kuna_cookiescramble.rs`, always on).**
+**What counts as a pointer escaping (kuna `cookiescramble.rs`, always on).**
 The escape sites `gather_additive_base` records are the *non-additive* uses of
 a stack-pointer-derived Varnode: the walk follows `COPY`/`INT_ADD`/`PTRADD`/
 `PTRSUB`/`INT_SUB` chains and treats every other use as "this address left our
@@ -2772,7 +2772,7 @@ whose stack-pointer solution rests on a guessed pop (some call's pop is neither
 stated nor proven): a stack address the call hands a register its direct
 callee reads (`calleereginputs`, the `this` of `lea ecx,[esp+N]`; chapter 04)
 is not an escape site there (`funcdata_spacebase.rs (gather_additive_base)`,
-`p4_calls/kuna_calleereginputs.rs (skips_read_operands)`). A pop the solver
+`p4_calls/calleereginputs.rs (skips_read_operands)`). A pop the solver
 guesses short moves every later offset, so such a `this` can land below the
 outgoing-argument slots of calls on the other side of the guess and take their
 stack arguments with it; before the callee's reads were known the operand was
@@ -2901,7 +2901,7 @@ unique hash for varnode".
 hard-codes the collision budget at 8, which dense unrolled AArch64/Go NEON
 loops overflow, turning the whole decompilation into that abort. kuna's own
 analysis uses 16
-(`crates/unlace-bandb-base/src/p6_variables/kuna_dynamichashmax.rs
+(`crates/unlace-bandb-base/src/p6_variables/dynamichashmax.rs
 (MAX_DUPLICATES)`, always on): collision lists of up to 8 still encode exactly in
 the 3-bit position/total fields, and a 9–16-entry champion escapes the
 "Unable to find unique hash" abort — its overflowing position/total then makes
@@ -2941,7 +2941,7 @@ truth.
 (`base_explicit`'s call arm, §6.1), so a call result always spills:
 `v5 = timespec_cmp(...); if (v5 <= -1)`. angr folds a single-use call return
 into its consumer. The kuna port
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (call_output_foldable)`) relaxes the forced-explicit rule only when the fold
 is provably order-safe — marking a call output implied *moves the call's
 evaluation* to the use site, so the predicate demands: exactly one descendant
@@ -2970,11 +2970,11 @@ can read". Heritage promotes a write to a fixed global address into a plain
 return t + k;` once folded to `k = 0x2a; return f(7) + 0x2a;` — the binary
 returns 50, that C reads 91 (kuna GH-657). The barrier set is therefore stated
 in storage as well as opcodes
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (op_is_barrier)`): a barrier is a call, a `CPUI_LOAD`/`CPUI_STORE`/
 `CPUI_CALLOTHER`, **or** any op whose output varnode is persistent or
 address-tied
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (op_writes_tied_storage)`). A global's output is persistent; a frame slot's is
 tied to its stack address, and the callee can reach one whenever the frame
 address escaped into it — an escaped slot is *not* held back as a `CPUI_STORE`,
@@ -2983,7 +2983,7 @@ callee could not have reached.
 
 One op with a tied output writes nothing: a `CPUI_COPY` back into the storage
 its input already occupies
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (op_is_self_copy)`). `RuleIndirectCollapse` leaves that shape behind — `glob =
 COPY glob` — wherever a call turns out not to write a global it carried an
 INDIRECT for, and it stores the value that is already there, so it is exempt
@@ -2996,16 +2996,16 @@ consumed. So the call output is re-examined in `ActionMarkImplied`
 (`crates/unlace-bandb/src/p6_variables/coreaction_cleanup.rs
 (check_implied_cover)`), where the descendants-first walk has already classified
 the chain below the use and the landing statement is therefore derivable
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (print_chain)`); a landing statement in another block, or one with a write in
 between, keeps the call spilled
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (fold_print_point_is_order_safe)`). The ops of that chain are themselves exempt:
 each consumes the previous one's value, so the call is evaluated before them in
 the folded text exactly as it is in the binary.
 
 Over that second span the question narrows to **writes**
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (op_is_write_barrier)`): a call, a `CPUI_STORE` or `CPUI_CALLOTHER`, or a write
 to persistent or address-tied storage. `CPUI_LOAD` is a barrier only up to the
 use. Both halves of that split are measured on the 37-binary sweep in
@@ -3050,7 +3050,7 @@ every op of the chain can sit in the call's own block, but the printer emits
 them as C's `&&` and `||`, which skip the right-hand operand whenever the
 left-hand one decides. So a fold whose value reaches input 1 of a `BOOL_AND` or
 `BOOL_OR` anywhere along the chain keeps the call in its own statement
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (chain_reaches_short_circuit_rhs)`). gcc -O0 compiles `int r = tick(a); if ((r
 == 0) & (a > 5)) puts("A");` to one block (`call tick; cmpl $0,-4(%rbp); sete
 %dl; cmpl $5,-0x14(%rbp); setg %al; and %edx,%eax`), and the fold used to print
@@ -3101,7 +3101,7 @@ globals as an argument (`v3 = sub_3700(stdin,v7); v1 = 1; v12 &= v3;`) is enough
 to put a second version of the operand's high over the call output's cover. The
 colliding version is produced by the very call being moved.
 
-`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
+`crates/unlace-bandb-base/src/p6_variables/foldcallretphi.rs
 (conflict_is_self_call_effect)` discounts exactly that case: the rejection is
 ignored only when at least one instance of the operand's high collides and
 *every* colliding instance is the output of an INDIRECT whose effect op is this
@@ -3114,7 +3114,7 @@ discounted. Second, a use op that itself reads an INDIRECT effect of the call
 declines, since the folded text would otherwise name the operand's high both as
 the call's argument (pre-call) and as an operand of the use (post-call). Third,
 the call's output has to carry everything the callee returns
-(`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-bandb-base/src/p6_variables/foldcallretphi.rs
 (call_output_is_full_width)`). A locked output is the callee's declared type and
 qualifies. An unlocked one qualifies only when no wider return storage contains
 it. An unlocked `eax` read out of `rax` does not qualify: the callee may write
@@ -3139,14 +3139,14 @@ carry `__int128` or a two-word struct, and counting them would mark every
 
 How far the call travels is the rest of this option's question, and it is asked
 here rather than borrowed from `foldcallret`
-(`crates/unlace-bandb-base/src/p6_variables/kuna_foldcallretphi.rs
+(`crates/unlace-bandb-base/src/p6_variables/foldcallretphi.rs
 (print_point_is_order_safe)`): from the call up to the landing statement nothing
 may be a barrier — any opcode in `foldcallret`'s first set, or any op writing
 persistent or address-tied storage, the self-copy exemption not applied — and
 nothing up to and including that statement may read a value the call writes
 indirectly. Nor may the call's value reach a `BOOL_AND` or `BOOL_OR` as its
 right-hand operand anywhere along the chain the expression travels through
-(`crates/unlace-bandb-base/src/p6_variables/kuna_callretfold.rs
+(`crates/unlace-bandb-base/src/p6_variables/callretfold.rs
 (chain_reaches_short_circuit_rhs)`, the rule `foldcallret` asks of its own
 folds). Both ops evaluate both operands, and every
 op of the chain can sit in the call's own block, but C prints them as `&&` and
@@ -3191,7 +3191,7 @@ fewer single-def/single-use temporaries. Over those and 24 more stripped binarie
 (11,279 functions) the `--json` `variables[]` surface decbench scores keeps the
 same (kind, type, stack offset, size, argument index) multiset in every function,
 with only `vN` names and line spans moving; every declaration this removes is a
-register local, which `variables[]` had no row for until `kuna_reglocals.rs`. Each hunk is a fold, one of
+register local, which `variables[]` had no row for until `reglocals.rs`. Each hunk is a fold, one of
 those operand hoists, a renumbering, or the declaration that went with them. A
 folded call is never moved past a call, a load, a store through a pointer, a
 global write or a branch, and never into an operand of `&&` or `||`. The most it crosses is an assignment to a local whose
@@ -3221,7 +3221,7 @@ the frame SSA values, so dead-code elimination can erase the writes that the
 physical memory read needs. The general heritage delay fixes GH-8500's original
 control but does not cover this escape.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackalias.rs`
+`crates/unlace-bandb/src/p6_variables/stackalias.rs`
 (`holds_store`) identifies physical `stack_store` writes in the local frame
 space. With `stackalias on`, `deadcode_apply` in
 `crates/unlace-emit/src/p9_emit/coreaction_render.rs` holds them
@@ -3282,7 +3282,7 @@ sub-cases both route here: two-or-more trimmed slots (later collapsed by
 `buildDominantCopy`) and exactly one trimmed slot (no dominant-copy pass at all,
 so the single `opInsertEnd` is final).
 
-When on, `crates/unlace-bandb-base/src/p6_variables/kuna_paramcopyhoist.rs
+When on, `crates/unlace-bandb-base/src/p6_variables/paramcopyhoist.rs
 (ActionParamCopyHoist)` relocates the COPY to the end of the entry block. It is
 the **last** action in `universal_sched`, and that position is load-bearing:
 taking the decision inside `Merge::trimOpInput` defeats the trim's own purpose
@@ -3308,7 +3308,7 @@ definitions sit today, so two definitions of one variable can both be admitted
 even though, once both have moved, the second kills the first on every path.
 
 **(kuna, issue #767) A pointer stored to a global keeps its own variable**
-(`crates/unlace-bandb-base/src/p6_variables/kuna_pointeevalue.rs
+(`crates/unlace-bandb-base/src/p6_variables/pointeevalue.rs
 (keeps_apart)`, a strict fix, no option). `Merge` joins a register value with the
 persistent global it is copied to whenever their Covers allow it, and the joined
 value prints as a read of the global. When the value is a pointer the binary
@@ -3325,7 +3325,7 @@ side is persistent and the other is a computed value (not persistent, address-ti
 or an input) used as an address: its instances, or anything a `COPY`, `INDIRECT`
 or `MULTIEQUAL` carries them to or from, reach the address of a `LOAD` or `STORE`
 or the base of a `PTRADD` or `PTRSUB`, directly or through the adds that offset
-them (chapter 03's `kuna_pointeestorekeep.rs (reads_pointee)` and
+them (chapter 03's `pointeestorekeep.rs (reads_pointee)` and
 `(offsets_address)`; a walk of more than 256 varnodes answers yes). The value
 keeps its own variable and the type its own uses give it, and the `COPY` prints as
 the store where the binary makes it: `a0 = &a0[a1]; gc = a0; return a0[2] +
@@ -3337,12 +3337,12 @@ reading the global, so a `-O0` reload, or any load after a pointer store that
 may change the global, still prints as the global.
 
 A register copy of such a load (`r = gi` where `gi` holds a stored value, the
-input of a `COPY` that `kuna_pointeestorekeep.rs (loads_stored_global)`
+input of a `COPY` that `pointeestorekeep.rs (loads_stored_global)`
 recognizes) is a read of memory at the point of the load. When a `STORE`, or a
 call with no `INDIRECT` on the global, lies between the copy and one of its
-readers (`kuna_pointeestorekeep.rs (written_between)`), the copy's own
+readers (`pointeestorekeep.rs (written_between)`), the copy's own
 copy-shadow join with the global is refused too, and `ActionMarkImplied`'s
-`checkImpliedCover` keeps the copy explicit (`kuna_pointeevalue.rs
+`checkImpliedCover` keeps the copy explicit (`pointeevalue.rs
 (load_crosses_write)`): joined, or printed inline at its reader, the read would
 move past a write that may change the global, which the Cover tests cannot see
 when kuna's SSA puts no `INDIRECT` on a global at a `STORE` (`option
@@ -3352,7 +3352,7 @@ indexaliasguard load`, or a function past the STORE guard's budget). So
 `return v1 + gi[1];` after the second store.
 
 **(kuna, GH-468) A loop that reads memory does not store what it reads**
-(`kuna_tiedphitrim.rs`, always on). A HighVariable that holds an
+(`tiedphitrim.rs`, always on). A HighVariable that holds an
 address-tied instance *is* that location, so every other instance's definition
 prints as an assignment to it. `merge.rs (Merge::merge_op)` forces a
 MULTIEQUAL's output and inputs into one HighVariable and trims an input only when
@@ -3369,7 +3369,7 @@ after the loop the C is wrong, not only misleading: an in-place lowercase loop
 followed by `strcmp(buf, name)` compares an empty string in the C, because every
 iteration stored into `buf[0]`.
 
-`crates/unlace-bandb-base/src/p6_variables/kuna_tiedphitrim.rs
+`crates/unlace-bandb-base/src/p6_variables/tiedphitrim.rs
 (tied_slots)` runs inside `merge_op` after upstream's own trims. It fires on a
 MULTIEQUAL whose output is not address-tied when every address-tied input reads
 one location a pointer can observe and arrives from outside the loop, and some
@@ -3396,7 +3396,7 @@ dominates and that reach the head again. Second, `Merge` records each trimmed lo
 variable with its location, and `merge.rs (Merge::merge)` and
 `merge.rs (Merge::merge_test)` test every merge into that location as if the
 location's variable still held the loop variable
-(`kuna_tiedphitrim.rs (intersects)`). No address-tied variable merges with the
+(`tiedphitrim.rs (intersects)`). No address-tied variable merges with the
 loop variable, at the trimmed location or any other: upstream's required test
 never merges two address-tied variables, and the loop variable used to be one.
 Without that, `buf[1] = c;` after a loop over `buf` would fold the loop variable
@@ -3411,7 +3411,7 @@ so a live store into the location keeps its statement. `off` is upstream's merge
 exactly.
 
 **(kuna) A value a sign-sensitive operation reads keeps its own variable rather
-than merging into a global it is stored to** (`kuna_globalvalue.rs`, a strict
+than merging into a global it is stored to** (`globalvalue.rs`, a strict
 fix, no option). `Merge` joins a register value with the persistent global it is
 copied to whenever their Covers allow it. The joined value prints as a read of
 the global, and any operation on it takes the global's signedness. For
@@ -3432,7 +3432,7 @@ so the `COPY` survives at the binary's own store. `Merge` then refuses the join
 in the two optional merges that would make it — the `COPY`'s required merge in
 `merge_opcode` and the same-type merge in `merge_adjacent` — when one side is
 persistent and the other is a value an operation reads sign-sensitively
-(`kuna_globalvalue.rs (keeps_apart)`): the shifted operand of `>>`, a divide,
+(`globalvalue.rs (keeps_apart)`): the shifted operand of `>>`, a divide,
 remainder or ordered compare in either signedness, either extension, an
 integer-to-float conversion, and, below `int` width where C promotes the operand
 first, `==`/`!=` unless the other side is a constant with the operand's top bit
@@ -3485,7 +3485,7 @@ that variable rather than the global. A parameter never merges with a global, so
 its stores keep upstream's handling too.
 
 The same join also decides the *pointee* type an access through the value
-takes. That is the pointer case above (`kuna_pointeevalue.rs`, issue #767): it
+takes. That is the pointer case above (`pointeevalue.rs`, issue #767): it
 refuses the join for a value used as an address, independently of this test, so
 either refusal keeps the value apart.
 
@@ -3595,7 +3595,7 @@ constant, the rewrite turns `sp - ax` into `sp_in + c`, and the allocated
 pointer prints as a fixed frame local; two allocations then share one address
 and the writes into them overflow it. An adjustment whose amount is neither the stack pointer nor a
 value that evaluates to a constant
-(`crates/unlace-bandb-core/src/p4_calls/kuna_bejoin.rs (literal_value)`; a
+(`crates/unlace-bandb-core/src/p4_calls/bejoin.rs (literal_value)`; a
 PTRADD's element size is not an amount) is a candidate. A trial solve with the
 upstream equations keeps a candidate the solve gives a nonzero move as an
 ordinary adjustment, because such a register often holds a constant on that
@@ -3618,7 +3618,7 @@ is untouched. Constant adjustments get their exact equation: `INT_SUB sp, #c`
 is `INT_ADD sp, #-c`, and an amount that evaluates to a constant (`mov ax,8;
 sub sp,ax`) is that constant, instead of being left to the merge equalities.
 
-The guessed equation is where kuna diverges (`kuna_calleepop.rs`, always on).
+The guessed equation is where kuna diverges (`calleepop.rs`, always on).
 Upstream's constant `extrapop = 4` states that the callee pops none of its
 arguments, and under a compiler spec whose `<default_proto>` carries
 `extrapop="unknown"` — `x86win.cspec`'s `__stdcall` is the one that matters —
@@ -3635,7 +3635,7 @@ upstream's guess, except in a function where every call's pop is stated or
 proven by its callee's own returns: there no call reaches the guess at all
 (chapter [04](04-calls-and-prototypes.md), `ActionExtraPopSetup`). For an import the argument bytes are counted off the caller's
 own push run
-(`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopslot.rs
+(`crates/unlace-bandb-core/src/p6_variables/calleepopslot.rs
 (guess_extra_pop)`): back from the return-address slot in pointer-sized steps,
 stopping at the first push that stores a register's own input Varnode (a
 prologue callee-save) or at a step that is no push at all (a bare `sub esp,n`).
@@ -3653,7 +3653,7 @@ argument is dropped, which is visible on deep-frame MSVC CRT helpers.
 The constant itself is measured rather than assumed:
 upstream's `4` is the x86-32 return-address size, and the guess's base is now
 the bytes the call instruction itself stores
-(`crates/unlace-bandb-core/src/p6_variables/kuna_calleepop.rs
+(`crates/unlace-bandb-core/src/p6_variables/calleepop.rs
 (return_address_bytes)`), counted over the live STOREs at the call's address and
 the COPYs into the stack space that `RuleStoreVarnode` already made of them. An
 x86 16-bit near call stores two bytes and a far call four, so a callee that pops
@@ -3668,7 +3668,7 @@ The guesses fill in only what the exact equations leave open, and nothing used
 to tie a path's exit to the entry. So the guess for the last unknown call before
 a return decided every offset after it even where the epilogue states the
 answer (option `stackexitanchor`, default on;
-`p6_variables/kuna_stackexitanchor.rs (record)`). The return instruction pops
+`p6_variables/stackexitanchor.rs (record)`). The return instruction pops
 the return address the caller pushed, so the stack pointer entering it equals
 the input one. The adjustments between the last call and the return
 (`add esp,0x38; pop ebx`) are constants, but dead-code elimination removes them
@@ -3709,7 +3709,7 @@ use a dynamic-symbol anchor instead of a physical address. The console verifies
 that hashing and resolving the selected representative returns the same high and
 width; a missing or ambiguous anchor rejects the assertion. Both the CLI's second
 pass and later console decompiles carry these symbols and their isolation flags.
-`crates/unlace-bandb-base/src/p6_variables/kuna_dynamiclocals.rs` applies a
+`crates/unlace-bandb-base/src/p6_variables/dynamiclocals.rs` applies a
 locked dynamic type before propagation and merging, then refreshes the symbol on
 a rebuilt high without rebinding another symbol's value. The late mapping follows
 CASTs to the explicit value. Analysis-local arena identities are never replay keys.
@@ -3729,7 +3729,7 @@ native and emitted C agree for inputs with both zero and nonzero upper words.
 The fallback that ties a return register across its marker definitions requires
 one connected SSA value family, whether the return contract is declared or
 inferred.
-`crates/unlace-bandb-base/src/p6_variables/kuna_registerepochs.rs`
+`crates/unlace-bandb-base/src/p6_variables/registerepochs.rs`
 walks same-width COPY, CAST, MULTIEQUAL and non-creating INDIRECT edges in both
 directions, excluding constants and the INDIRECT operation annotation. Unrelated
 loads or computations occupying the register do not join that family. The walk
@@ -3749,7 +3749,7 @@ modes.
 
 ### Shared stack-object views
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackuses.rs` reads declared
+`crates/unlace-bandb-core/src/p6_variables/stackuses.rs` reads declared
 pointer contracts from calls, typed assignments, and volatile writes as well as
 declared pointer returns. The same contracts drive backing views and logical
 object identities. Global assignments require a locked storage type; unknown
@@ -3761,7 +3761,7 @@ copy and pointer-offset chains back to the locked declaration. Inferred pointer
 types alone do not create a contract. Interior views retain their displacement
 when selecting a backing member.
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackvalueviews.rs` selects
+`crates/unlace-bandb-core/src/p6_variables/stackvalueviews.rs` selects
 scalar members for register instances coalesced with a shared frame symbol.
 The selection follows the high variable's symbol and byte offset, and preserves
 existing scalar resolutions and declared aggregate views. A generated backing's
@@ -3770,7 +3770,7 @@ value. Definitions and reads both receive field edges;
 a loop counter merged with its stack copy must not lose its scalar member just
 because the counter's own storage is a register.
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackvaluecopies.rs` prevents
+`crates/unlace-bandb-core/src/p6_variables/stackvaluecopies.rs` prevents
 generated frame types from becoming standalone scalar snapshot types. Unlocked,
 untied values without a backing symbol retain their one-, two-, four-, or
 eight-byte unsigned representation. Locked declarations and physical storage
@@ -3781,7 +3781,7 @@ retains a declared pointer view when every byte at that use comes from its one
 native stack store. Conflicting pointer contracts keep the unsigned fallback;
 locked source declarations and incoming values remain authoritative.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackvalueorder.rs` prevents
+`crates/unlace-bandb/src/p6_variables/stackvalueorder.rs` prevents
 a register value from merging into shared frame storage when that would publish
 its bytes before the native store. For an original stack-store COPY into a
 generated backing, the defining value must be in the same block and have no
@@ -3797,7 +3797,7 @@ lets another input alias the frame: reading an object pointer must not overwrite
 the object before its kind or key is examined. The guard runs only with
 `stackviews`.
 
-`crates/unlace-bandb/src/p6_variables/kuna_stackloadcover.rs` keeps a load
+`crates/unlace-bandb/src/p6_variables/stackloadcover.rs` keeps a load
 explicit when its live cover spans a physical frame write. Such writes can be
 COPY or arithmetic operations after lifting, so the ordinary STORE-only alias
 check is insufficient. Known frame ranges use byte overlap; unresolved pointers
@@ -3805,7 +3805,7 @@ may observe locally aliased storage, while literal global addresses cannot name
 this frame. Marker versions are not writes. The check is enabled by stackviews.
 
 The bounded local policy (always on) is
-`crates/unlace-bandb-core/src/p6_variables/kuna_localstackviews.rs`.
+`crates/unlace-bandb-core/src/p6_variables/localstackviews.rs`.
 Full `stackviews` takes precedence: the bounded local policy records no evidence
 and supplies no preservation, publication or mapping facts while that broader
 option is enabled. Its existing view collection remains authoritative.
@@ -3912,7 +3912,7 @@ ranges remain separate. Limits are 32 distinct views and 64 KiB per extent.
 An incoming stack parameter can be narrower than an object later written over
 its slot. Parameter-area aliases keep those writes live too. For a fully
 defined scalar object with one surviving full-width value, whose known address
-uses all consume that full range, `kuna_stackparamviews.rs` binds the call to
+uses all consume that full range, `stackparamviews.rs` binds the call to
 the wider local. The input parameter keeps its original name and value; it is
 not grouped as a field of the later local. Full-width symbol lookups let ordinary
 and logical naming assertions select that local without falling back to the
@@ -3951,7 +3951,7 @@ only recovers byte extents for byte-addressed stack spaces, so word-addressed
 pointers cannot justify removing an overlapping save.
 
 When a generated frame-union value becomes a detached scalar snapshot,
-`kuna_stackvaluecopies.rs` retypes its instances to the scalar type of their
+`stackvaluecopies.rs` retypes its instances to the scalar type of their
 source bytes, else the unsigned word of their width, before emission. P9 reads
 the resulting integer C declaration like any other word variable and preserves
 bits at native floating uses and floating stores. Integer bit operations and
@@ -3990,7 +3990,7 @@ parameter-variants fixture checks scalar escape, equal-width double reuse,
 multiple formals, replacement inside their shared extent and a partial read of
 an incoming word; logical name/type replay preserves the native results.
 
-`crates/unlace-console/src/kuna_paramasserts.rs` synchronizes a named
+`crates/unlace-console/src/paramasserts.rs` synchronizes a named
 parameter's scope symbol with its internal prototype. The category slot and
 complete storage must agree before a directive applies; a retype preserves the
 native width. Rebuilds carry the locked input descriptions, retaining storage,
@@ -4002,7 +4002,7 @@ and name swaps preserve the original parameter slots. The console
 `kassert P9 naming-policy` directive uses the same local-assertion path as
 `rename`, so its parameter edits also survive prototype reconstruction.
 
-`crates/unlace-bandb-base/src/p6_variables/kuna_stackranges.rs` follows
+`crates/unlace-bandb-base/src/p6_variables/stackranges.rs` follows
 same-width copies, casts and additive pointer expressions back to the input
 spacebase. It retains byte scales, constant displacements and bounded index
 terms. Native-width scalar additions, subtractions, negations and constant
@@ -4035,7 +4035,7 @@ spelling consults the same facing type used to request the cast, rather than the
 SSA type that originally occupied the register or slot. Global destinations also
 keep their declared scalar type when a frame address escapes into them.
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjects.rs` records
+`crates/unlace-bandb-core/src/p6_variables/stackobjects.rs` records
 logical object identities at complete, locked pointee uses when `stackviews` is
 enabled. Each identity retains its physical range, declared views, native use
 points and the reaching definition family of each byte. Equal defined families
@@ -4066,7 +4066,7 @@ for scoping object assertions, not a claim that a C or C++ lifetime ended. It
 neither removes memory versions nor allocates separate addresses: an escaped
 pointer continues to observe the shared backing.
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjectasserts.rs`
+`crates/unlace-bandb-core/src/p6_variables/stackobjectasserts.rs`
 consumes these identities for `name` and `type` directives. An assertion retains
 native call addresses, argument slots, its physical range and byte-definition
 families across rebuilds; it contains no operation or high-variable identifiers.
@@ -4095,13 +4095,13 @@ varnode. Explicit retypes still lock the datatype. This distinction matters for
 wide integer temporaries represented internally by a fallback byte-array type:
 naming the operand does not declare that it is an aggregate in memory.
 
-`crates/unlace-emit/src/p9_emit/kuna_stackobjectinfo.rs` exports
+`crates/unlace-emit/src/p9_emit/stackobjectinfo.rs` exports
 logical selectors, asserted names, signed frame ranges, defined/uncertain state
 and declared native uses without exposing analysis-local identifiers. CLI results
 carry these records through batch workers. `--no-vars` suppresses their extraction;
 empty collections do not add a JSON field to ordinary runs.
 
-`crates/unlace-bandb-core/src/p6_variables/kuna_stackobjectalias.rs` binds a
+`crates/unlace-bandb-core/src/p6_variables/stackobjectalias.rs` binds a
 logical assertion through an existing mapped layout when no matching generated
 union member is available. Its whole extent must fit both the physical entry and
 its complete datatype, with an exact byte displacement. A typed `<name>_view`
@@ -4125,7 +4125,7 @@ credited with popping all three; for the second call the cleanup and its one
 push cancel, so its return-address slot is the first call's result itself and
 the guess gives up at `4`. The class size is not in the mangled name, so a
 demangled prototype cannot settle the second cleanup either.
-`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopslot.rs
+`crates/unlace-bandb-core/src/p6_variables/calleepopslot.rs
 (guess_extra_pop)` reads the caller's stack depth for consistency instead.
 A push through a stack-pointer value strictly above the call's own result —
 which only a raise followed by a push produces — vetoes a callee pop: had the
@@ -4165,7 +4165,7 @@ count, the guess stays at `4`, and the `sub` then lowers the solved stack
 pointer by the popped bytes, so an incoming argument read after the call
 resolves to a local and a slot whose address an earlier call was handed is
 read back from a different one.
-`crates/unlace-bandb-core/src/p6_variables/kuna_calleepopframe.rs
+`crates/unlace-bandb-core/src/p6_variables/calleepopframe.rs
 (guess_extra_pop)` guesses `4 + n` when the first write to the stack pointer
 after the call in its block is the call's result lowered by `n` (positive, at
 most 256, a multiple of the pointer size) and every pointer-sized slot of
@@ -4197,7 +4197,7 @@ alignment slots are never written.
 A declared struct parameter split across registers and the entry stack can be
 spilled contiguously beside its incoming stack tail. The spill then crosses
 entry SP=0, so the ordinary local-only range cannot describe the whole object.
-`crates/unlace-bandb-base/src/p6_variables/kuna_wrappedstackaggregate.rs`
+`crates/unlace-bandb-base/src/p6_variables/wrappedstackaggregate.rs`
 recovers one local struct only from a nonindexed typed stack reference whose
 wrapping extent exactly matches a type-locked joined parameter of the same
 struct type. The logical tail must map to stack offset zero, consume the
@@ -4225,7 +4225,7 @@ every MULTIEQUAL input into the phi's HighVariable, so the loop pointer takes
 the stack pointer's `addrtied` storage name from `build_variable_name`
 (`Register` + offset) and prints as an assignment to it. With option
 `spphistack` (default off),
-`crates/unlace-bandb-base/src/p6_variables/kuna_spphistack.rs (ActionSpPhiStack)`
+`crates/unlace-bandb-base/src/p6_variables/spphistack.rs (ActionSpPhiStack)`
 runs just before `ActionAssignHigh`: each MULTIEQUAL input that is the
 spacebase input register is replaced by `PTRSUB(sp(i), 0)`, computed at the end
 of that edge's predecessor, so the phi merges with an ordinary value whose

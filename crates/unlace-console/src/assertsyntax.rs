@@ -338,7 +338,7 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             let (func, addr) = split_qualifier(addr);
             let addr = parse_vma(&addr).ok_or_else(|| bad("format needs a hex <addr>"))?;
             let (format, tail) = take_token(tail);
-            if crate::kuna_constformat::format_code(format).is_none() {
+            if crate::constformat::format_code(format).is_none() {
                 return Err(bad(
                     "format needs <addr> then one of hex, dec, oct, bin, char",
                 ));
@@ -350,7 +350,7 @@ pub fn parse_directive(spec: &str) -> Result<Directive, String> {
             let value = match value {
                 "" => None,
                 value => Some(
-                    crate::kuna_constformat::parse_value(value)
+                    crate::constformat::parse_value(value)
                         .ok_or_else(|| bad("format's <value> is decimal, or hex with 0x"))?,
                 ),
             };

@@ -54,7 +54,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, VarnodeId};
 use crate::expression::TermOrder;
 use crate::funcdata::Funcdata;
-use crate::kuna_volatileload;
+use crate::volatileload;
 
 /// `sizeof(uintb)` from the C++ — the rules cap at 8-byte precision
 /// (`if (size > sizeof(uintb)) return 0`).
@@ -119,7 +119,7 @@ impl Rule for RuleEarlyRemoval {
         // Get rid of unused op
         data.note_dead_removal(op);
         if data.dead_cascade_now() {
-            crate::kuna_deadcascade::remove(data, op, Self::removable);
+            crate::deadcascade::remove(data, op, Self::removable);
         } else {
             data.op_destroy(op);
         }
@@ -185,9 +185,9 @@ impl RuleEarlyRemoval {
             }
         }
 
-        let mut memo = kuna_volatileload::Memo::new();
-        !(kuna_volatileload::is_volatile_with(data, op, &mut memo)
-            && !kuna_volatileload::rereads(data, op, &mut memo, |data, load| {
+        let mut memo = volatileload::Memo::new();
+        !(volatileload::is_volatile_with(data, op, &mut memo)
+            && !volatileload::rereads(data, op, &mut memo, |data, load| {
                 data.obank()
                     .get(load)
                     .and_then(|o| o.get_out())
@@ -417,7 +417,7 @@ impl Rule for RuleCollectTerms {
         if nonzerocount <= 1 {
             return 0;
         }
-        if crate::kuna_globalarrayanchor::preserve_array_base(data, op) {
+        if crate::globalarrayanchor::preserve_array_base(data, op) {
             return 0;
         }
         let vn1 = termorder.term(order[lastconst]).get_varnode();
@@ -2584,7 +2584,7 @@ impl Rule for RulePullsubIndirect {
         if !RulePullsubMulti::acceptable_size(new_size) {
             return 0;
         }
-        if super::kuna_stackstoreguard::keeps_store_indirect_whole(data, vn, targ_op) {
+        if super::stackstoreguard::keeps_store_indirect_whole(data, vn, targ_op) {
             return 0;
         }
         let outvn = data
@@ -2939,8 +2939,8 @@ impl Rule for RulePushMulti {
                 return 0;
             }
             // (kuna) a global's join of stores kept for its loads stays; see
-            // [`crate::kuna_pointeestorekeep::keeps_join`].
-            if crate::kuna_pointeestorekeep::keeps_join(data, op) {
+            // [`crate::pointeestorekeep::keeps_join`].
+            if crate::pointeestorekeep::keeps_join(data, op) {
                 return 0;
             }
             let substitute =

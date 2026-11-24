@@ -627,7 +627,7 @@ pub fn lookup_or_mint(
     size: int4,
     unclaimed: &[(int4, int4)],
     selfs: &[int4],
-    merge: crate::kuna_structmerge::StructMergeMode,
+    merge: crate::structmerge::StructMergeMode,
 ) -> Option<Rc<Datatype>> {
     let want = layout_of_fields(&fields, size, selfs);
     let (held, free) = entries(types, lookup_window(size));
@@ -649,7 +649,7 @@ pub fn lookup_or_mint(
         let pairs: Vec<(Rc<Datatype>, Layout)> =
             wide.into_iter().map(|e| (e.ct, e.layout)).collect();
         if let Some((mfields, msize, mselfs)) =
-            crate::kuna_structmerge::merge(types, &pairs, &want, &fields, size, selfs, unclaimed)
+            crate::structmerge::merge(types, &pairs, &want, &fields, size, selfs, unclaimed)
         {
             // A union that will not mint is not a reason to leave the reader
             // untyped: the layout it measured is still minted below, exactly as
@@ -657,7 +657,7 @@ pub fn lookup_or_mint(
             if let Some(ct) = mint(types, &free, mfields, msize, &mselfs) {
                 return Some(ct);
             }
-            crate::kuna_structmerge::trace_mint_failed(&free, &want);
+            crate::structmerge::trace_mint_failed(&free, &want);
         }
     }
     // Minting this layout supersedes every entry it strictly contains; that is
@@ -666,7 +666,7 @@ pub fn lookup_or_mint(
     mint(types, &free, fields, size, selfs)
 }
 
-/// The sizes a [`crate::kuna_structmerge`] partner search has to read.
+/// The sizes a [`crate::structmerge`] partner search has to read.
 ///
 /// The union is at least as large as either side and answers for both, so it is
 /// at most [`MAX_SIZE_GROWTH`] times each of them: a partner is no smaller than

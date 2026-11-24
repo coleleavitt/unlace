@@ -19,10 +19,10 @@
 //! dispatcher apart.
 //!
 //! [`A32Tables::targets`] folds the dispatch's p-code with the
-//! [`super::kuna_switchtable`] lattice and answers only for these two
+//! [`super::switchtable`] lattice and answers only for these two
 //! PC-relative shapes, whose table starts exactly 8 bytes past the dispatch.
 //! The case count comes from the `cmp index,#n` before it, read the way
-//! [`super::kuna_thumbswitch`] reads a `tbb` guard, with the dispatch's own
+//! [`super::thumbswitch`] reads a `tbb` guard, with the dispatch's own
 //! condition as the range branch when it is predicated. Without that guard
 //! nothing is read. Word tables are confined to the dispatcher's executable
 //! section; branch-table slots are the instructions themselves.
@@ -33,8 +33,8 @@ use unlace_base::space::AddrSpace;
 use unlace_num::opcodes::OpCode;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{
+use super::poolref::PoolImage;
+use super::switchtable::{
     Key, MAX_TRACKED, MIN_ENTRIES, TableRead, Val, fold, invalidate, is_constant, key_of, value_of,
 };
 use super::xrefs::{FullCapture, FullOp, decode, in_range};
@@ -51,7 +51,7 @@ pub(crate) fn applies(
 ) -> bool {
     use object::Object;
     arch.kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+        .get::<unlace_decomp::analysisgates::ArmFrames>()
         .inventory
         && file.architecture() == object::Architecture::Arm
         && file.kind() != object::ObjectKind::Relocatable
@@ -72,7 +72,7 @@ impl<'a> A32Tables<'a> {
         pool: &'a PoolImage<'a>,
     ) -> Self {
         let max_entries = match arch.max_jumptable_size as usize {
-            0 => super::kuna_switchtable::DEFAULT_MAX_ENTRIES,
+            0 => super::switchtable::DEFAULT_MAX_ENTRIES,
             n => n,
         };
         A32Tables {
@@ -143,7 +143,7 @@ impl<'a> A32Tables<'a> {
                 let Some(index) = index.filter(|_| scaled) else {
                     return TableRead::default();
                 };
-                let cases = match super::kuna_thumbswitch::guard_cases(
+                let cases = match super::thumbswitch::guard_cases(
                     translate,
                     code_space,
                     data,
@@ -163,14 +163,8 @@ impl<'a> A32Tables<'a> {
                 };
                 let read = cases.min(self.max_entries);
                 let targets = if words {
-                    let mut words = super::kuna_switchtable::targets(
-                        base,
-                        from,
-                        self.pool,
-                        exec,
-                        Some(read),
-                        read,
-                    );
+                    let mut words =
+                        super::switchtable::targets(base, from, self.pool, exec, Some(read), read);
                     words.truncate(
                         words
                             .iter()

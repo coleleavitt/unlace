@@ -98,7 +98,7 @@ impl Origins<'_> {
                 .get_call_specs_index(id)
                 .map(|index| self.fd.get_call_specs(index));
             return Some(!call.is_some_and(|call| {
-                crate::kuna_calleememory::preserves(
+                crate::calleememory::preserves(
                     self.fd,
                     call,
                     &Address::new(Rc::clone(&self.space), byte),
@@ -111,7 +111,7 @@ impl Origins<'_> {
             if pointer.is_constant() {
                 return Some(false);
             }
-            if let Some(address) = crate::kuna_stackranges::frame_address(self.fd, op.get_in(1)?) {
+            if let Some(address) = crate::stackranges::frame_address(self.fd, op.get_in(1)?) {
                 let width = self.fd.vbank().get(op.get_in(2)?)?.get_size();
                 let (start, size) = address.extent(width)?;
                 return Some(self.contains(start, size, byte).is_some());
@@ -335,7 +335,7 @@ impl Origins<'_> {
 /// Keep content families separate without assigning them different addresses.
 pub fn recover(fd: &mut Funcdata) {
     fd.stack_objects_mut().clear();
-    if !crate::kuna_stackviews::enabled(fd) {
+    if !crate::stackviews::enabled(fd) {
         return;
     }
     let Some(space) = fd
@@ -354,7 +354,7 @@ pub fn recover(fd: &mut Funcdata) {
             continue;
         };
         for slot in 0..op.num_input() {
-            let Some(ty) = crate::kuna_stackviews::declared_view(fd, call, slot) else {
+            let Some(ty) = crate::stackviews::declared_view(fd, call, slot) else {
                 continue;
             };
             if ty.get_size() > MAX_OBJECT_SIZE {
@@ -362,7 +362,7 @@ pub fn recover(fd: &mut Funcdata) {
             }
             let Some(address) = op
                 .get_in(slot)
-                .and_then(|input| crate::kuna_stackranges::frame_address(fd, input))
+                .and_then(|input| crate::stackranges::frame_address(fd, input))
             else {
                 continue;
             };
@@ -372,15 +372,15 @@ pub fn recover(fd: &mut Funcdata) {
             if !fd
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::StackViews>()
+                .get::<crate::coreoptions::StackViews>()
                 .0
-                && crate::kuna_stackparamviews::backing_for_address(
+                && crate::stackparamviews::backing_for_address(
                     fd,
                     &Address::new(Rc::clone(&space), space.wrap_offset(address.first as u64)),
                     ty.get_size(),
                 )
                 .is_none()
-                && !crate::kuna_localstackviews::mapped_range(
+                && !crate::localstackviews::mapped_range(
                     fd,
                     space.wrap_offset(address.first as u64),
                     ty.get_size(),
@@ -526,44 +526,44 @@ pub fn describe(fd: &Funcdata) -> String {
 
 /// (kuna `stackobjects`) The stack objects recovered for the function; reset by `Funcdata::clear`.
 #[derive(Default)]
-struct ObjectsSlot(Vec<crate::kuna_stackobjects::StackObject>);
+struct ObjectsSlot(Vec<crate::stackobjects::StackObject>);
 crate::kuna_func_state!(ObjectsSlot, keep_across_clear: false);
 
 /// The `kuna_stackobjects` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataStackobjectsExt {
-    fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject>;
-    fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject>;
+    fn stack_objects(&self) -> &Vec<crate::stackobjects::StackObject>;
+    fn stack_objects_mut(&mut self) -> &mut Vec<crate::stackobjects::StackObject>;
     fn stack_object_bound_uses(
         &self,
-    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>;
+    ) -> &std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)>;
     fn stack_object_bound_uses_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>;
+    ) -> &mut std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)>;
 }
 
 impl FuncdataStackobjectsExt for crate::funcdata::Funcdata {
-    fn stack_objects(&self) -> &Vec<crate::kuna_stackobjects::StackObject> {
+    fn stack_objects(&self) -> &Vec<crate::stackobjects::StackObject> {
         &self.kuna_state::<ObjectsSlot>().0
     }
-    fn stack_objects_mut(&mut self) -> &mut Vec<crate::kuna_stackobjects::StackObject> {
+    fn stack_objects_mut(&mut self) -> &mut Vec<crate::stackobjects::StackObject> {
         &mut self.kuna_state_mut::<ObjectsSlot>().0
     }
     fn stack_object_bound_uses(
         &self,
-    ) -> &std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+    ) -> &std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)> {
         &self.kuna_state::<BoundUsesSlot>().0
     }
     fn stack_object_bound_uses_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)> {
+    ) -> &mut std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)> {
         &mut self.kuna_state_mut::<BoundUsesSlot>().0
     }
 }
 
 /// (kuna `stackobjects`) The source uses already bound to a stack object's shared storage; reset by `Funcdata::clear`.
 #[derive(Default)]
-struct BoundUsesSlot(std::collections::BTreeSet<(crate::kuna_stackobjects::SourcePoint, i32)>);
+struct BoundUsesSlot(std::collections::BTreeSet<(crate::stackobjects::SourcePoint, i32)>);
 crate::kuna_func_state!(BoundUsesSlot, keep_across_clear: false);
 
 #[cfg(test)]

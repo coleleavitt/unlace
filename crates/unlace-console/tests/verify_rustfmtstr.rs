@@ -8,7 +8,7 @@ use unlace_console::ifacedecomp::{
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_rustfmt::RustFmtMode;
+use unlace_decomp::rustfmt::RustFmtMode;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -139,8 +139,8 @@ fn language_layout_and_formatter_facts_bound_string_recovery() {
                     3 => arch.rustc_stable_version = Some((1, 99, 1)),
                     _ => arch
                         .kuna_options
-                        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(Some(
-                            unlace_decomp::kuna_sourcelang::SourceLang::C,
+                        .set(unlace_decomp::sourcelang::SourceLangForced(Some(
+                            unlace_decomp::sourcelang::SourceLang::C,
                         ))),
                 },
                 |_| {},
@@ -177,8 +177,7 @@ fn complete_object_identity_and_instruction_body_are_required() {
             "changed instruction or target byte {byte}"
         );
     }
-    let target =
-        unlace_decomp::kuna_rustfmtstr::forwarded_target(address, &bytes[offset..]).unwrap();
+    let target = unlace_decomp::rustfmtstr::forwarded_target(address, &bytes[offset..]).unwrap();
     let target_name = file
         .symbols()
         .find(|s| s.address() == target)

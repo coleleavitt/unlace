@@ -1617,7 +1617,7 @@ impl Rule for RuleMbaSimplify {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if !data.get_arch().kuna_options.get::<crate::kuna_mba::Mba>().0 {
+        if !data.get_arch().kuna_options.get::<crate::mba::Mba>().0 {
             return 0;
         }
         let Some(out) = data.obank().get(op).and_then(|o| o.get_out()) else {

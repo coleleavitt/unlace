@@ -114,7 +114,7 @@ impl AnalysisPass for GoPclnPass {
         let gate = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::GoPcln>();
+            .get::<unlace_decomp::analysisgates::GoPcln>();
         if !gate.on {
             return AnalysisOutput::default();
         }
@@ -135,7 +135,7 @@ impl AnalysisPass for GoPclnLinesPass {
         let gate = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::GoPcln>();
+            .get::<unlace_decomp::analysisgates::GoPcln>();
         if !gate.lines {
             return AnalysisOutput::default();
         }

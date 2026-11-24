@@ -39,7 +39,7 @@
 //! trial for it. The caller's `xor eax,eax` is then dead, the trial is used by
 //! the `RET`, and the call acquires a return value the machine never computes.
 //!
-//! [`calleepreserves`](crate::kuna_calleepreserves) is the pass that
+//! [`calleepreserves`](crate::calleepreserves) is the pass that
 //! narrows `killedbycall` from the callee's own decoded body, and it declines
 //! here for its own reason: its positive-evidence gate asks the callee to have
 //! written a register the convention promises is *preserved*, which is the
@@ -53,7 +53,7 @@
 //! For the call's **return storage** the question is sharper than for a scratch
 //! register, and so is the evidence. A callee that returns a value in `RAX`
 //! must *write* `RAX`. When the same bounded, complete decode
-//! ([`probe_callee_return_writes`](crate::kuna_rustabi::probe_callee_return_writes))
+//! ([`probe_callee_return_writes`](crate::rustabi::probe_callee_return_writes))
 //! covered every path to a `RETURN` and recorded no write to the return storage
 //! at all, the callee cannot be returning anything in it: the effect is
 //! downgraded to `unaffected`, no INDIRECT creation is planted, no output trial
@@ -120,7 +120,7 @@
 //! register the ABI says carries the answer, and it only ever keeps a value the
 //! caller computed.
 
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::marshal::ElementId;
 use unlace_base::space::spacetype;
@@ -165,7 +165,7 @@ pub fn callee_preserves_return_storage(
 fn undeclared_model_output(fc: &FuncCallSpecs, addr: &Address, size: int4) -> bool {
     fc.proto().is_output_locked()
         && !locked_void_uses_model_output(fc)
-        && crate::kuna_rustabi::call_model(fc.proto())
+        && crate::rustabi::call_model(fc.proto())
             .is_some_and(|m| m.characterize_as_output(addr, size) == Containment::ContainsJustified)
 }
 
@@ -339,7 +339,7 @@ fn untouched_summary<'a>(
     fc: &FuncCallSpecs,
     addr: &Address,
     size: int4,
-) -> Option<&'a crate::kuna_rustabi::CalleeReturnWrites> {
+) -> Option<&'a crate::rustabi::CalleeReturnWrites> {
     match addr.get_space() {
         Some(sp) if sp.get_type() == spacetype::IPTR_PROCESSOR => {}
         _ => return None,
@@ -352,7 +352,7 @@ fn untouched_summary<'a>(
         return None;
     }
     let w = data.kuna_callee_ret_writes(entry)?;
-    w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size)
+    w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size)
         .then_some(w)
 }
 
@@ -361,15 +361,12 @@ fn untouched_summary<'a>(
 fn returns_elsewhere(
     data: &Funcdata,
     fc: &FuncCallSpecs,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
+    w: &crate::rustabi::CalleeReturnWrites,
     addr: &Address,
     size: int4,
 ) -> bool {
-    !crate::kuna_rustabi::passes_arguments_in(
-        crate::kuna_rustabi::call_model(fc.proto()),
-        addr,
-        size,
-    ) && writes_return_register(data, fc, w)
+    !crate::rustabi::passes_arguments_in(crate::rustabi::call_model(fc.proto()), addr, size)
+        && writes_return_register(data, fc, w)
 }
 
 /// Does the decoded body write, or possibly STORE through, ANY of the call's
@@ -383,7 +380,7 @@ fn returns_elsewhere(
 fn writes_some_return_storage(
     data: &Funcdata,
     fc: &FuncCallSpecs,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
+    w: &crate::rustabi::CalleeReturnWrites,
 ) -> bool {
     if w.store_spaces().iter().any(|&idx| {
         fc.proto().model().output().get_entry().iter().any(|entry| {
@@ -413,7 +410,7 @@ fn writes_some_return_storage(
 fn writes_return_register(
     data: &Funcdata,
     fc: &FuncCallSpecs,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
+    w: &crate::rustabi::CalleeReturnWrites,
 ) -> bool {
     let manage = data.get_arch().manage();
     w.written_ranges().iter().any(|&(idx, off, sz)| {
@@ -452,7 +449,7 @@ const MIN_BODY_INSTRUCTIONS: u32 = 2;
 fn body_is_a_body(
     data: &Funcdata,
     fc: &FuncCallSpecs,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
+    w: &crate::rustabi::CalleeReturnWrites,
 ) -> bool {
     if w.instruction_count() < MIN_BODY_INSTRUCTIONS {
         return false;
@@ -487,8 +484,8 @@ fn body_is_a_body(
     })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleeretpreserves_callee_preserved_output_within = Some(callee_preserved_output_within);
     hooks.calleeretpreserves_callee_preserves_return_storage =
         Some(callee_preserves_return_storage);
@@ -501,5 +498,5 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleeretpreserves/tests.rs"]
+#[path = "calleeretpreserves/tests.rs"]
 mod tests;

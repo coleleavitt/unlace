@@ -160,7 +160,7 @@ Everything the matcher tests *about the diamond* is identical across all eight, 
 declining predicate has to be the one that depends on the diamond's **neighbours**: the
 condition component.
 
-`p8_structure/kuna_iteregion.rs::match_ite_assignment` requires the `BlockIf`'s component 0
+`p8_structure/iteregion.rs::match_ite_assignment` requires the `BlockIf`'s component 0
 to be a single leaf:
 
 ```rust
@@ -200,12 +200,12 @@ fn emit_block_ls(...) {
 ```
 
 So the render is already correct for a list condition; only the *matcher* refuses. The
-sibling pass `kuna_iteboolean.rs` already generalises past `leaf_bblock` in exactly this
+sibling pass `iteboolean.rs` already generalises past `leaf_bblock` in exactly this
 spirit (`cond_terminal_cbranch` descends a `BlockType::Condition` tree to its terminal
 `CBRANCH`) — it just never learned about `Ls`.
 
 Owning phase: **P8** (structured AST & goto quality), module
-`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`.
+`decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`.
 
 **Instrumentation gap found on the way**: kuna cannot dump its own P8 structured tree —
 `print tree block`, `print C xml` and `structure blocks` are all
@@ -239,14 +239,14 @@ the fix improves shipped default output in every mode, and it hits `iteboolean` 
 
 ## Proposed fix
 
-`itecondlist` — in `kuna_iteregion.rs::cond_cbranch`, when the condition component is a
+`itecondlist` — in `iteregion.rs::cond_cbranch`, when the condition component is a
 multi-component `Ls`/`Graph`, descend to its **last** component and take the `CBRANCH` from
 there (the earlier components keep printing as ordinary statements ahead of the ternary,
 which `emit_block_if_ite`'s `NO_BRANCH` pass already does). Optionally lift the same
-descent into `kuna_iteboolean.rs::cond_terminal_cbranch` so all three passes agree.
+descent into `iteboolean.rs::cond_terminal_cbranch` so all three passes agree.
 
-- Files: `p8_structure/kuna_iteregion.rs` (one function), optionally
-  `p8_structure/kuna_iteboolean.rs` (one call site). Printer unchanged.
+- Files: `p8_structure/iteregion.rs` (one function), optionally
+  `p8_structure/iteboolean.rs` (one call site). Printer unchanged.
 - Risks: a `Ls` component that is not a plain statement run (a loop, a labelled goto
   target) must still decline — keep the existing per-component leaf checks on the last
   element and reject when the list's non-final components contain an unstructured target.

@@ -285,9 +285,9 @@
   "rebased_onto": "origin/main 22df4282c"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_globalref.rs",
-  "decompiler/crates/kuna-decomp/src/p9_emit/kuna_globalref/tests.rs",
-  "decompiler/crates/kuna-analysis/src/loader/kuna_globalref.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/globalref.rs",
+  "decompiler/crates/kuna-decomp/src/p9_emit/globalref/tests.rs",
+  "decompiler/crates/kuna-analysis/src/loader/globalref.rs",
   "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
   "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",
   "decompiler/crates/kuna-console/src/project.rs",

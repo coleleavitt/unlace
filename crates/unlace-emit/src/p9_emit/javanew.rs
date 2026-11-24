@@ -184,9 +184,10 @@ pub fn ctor_calls(fd: &Funcdata) -> HashMap<OpId, CtorCall> {
             let Some(from) = copy.get_in(0) else { break };
             source = from;
         }
-        let is_this = fd.vbank().get(source).is_some_and(|v| {
-            v.is_input() && v.get_offset() == crate::kuna_dex::INPUT_REGISTER_START
-        });
+        let is_this = fd
+            .vbank()
+            .get(source)
+            .is_some_and(|v| v.is_input() && v.get_offset() == crate::dex::INPUT_REGISTER_START);
         if !is_this {
             continue;
         }

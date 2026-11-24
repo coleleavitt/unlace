@@ -15,16 +15,16 @@ mod p9_emit;
 pub use p9_emit::*;
 #[doc(hidden)]
 pub use unlace_bandb::*;
-pub use unlace_ctree::{kuna_ctree, kuna_ctreebuild};
+pub use unlace_ctree::{ctree, ctreebuild};
 
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
     crate::coreaction_casts::provide(slots);
-    crate::kuna_bitcast::provide(slots);
+    crate::bitcast::provide(slots);
     crate::printc::provide(slots);
-    crate::kuna_lang::provide(slots);
+    crate::lang::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
@@ -32,7 +32,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

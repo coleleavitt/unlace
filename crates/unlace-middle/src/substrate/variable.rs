@@ -1215,12 +1215,12 @@ pub struct HighIntersectTest {
     affecting_ops_revision: u64,
     /// (kuna) While a run of tests that edits nothing is open, the instances
     /// of each large high whose Cover has each block.
-    instance_blocks: Option<crate::kuna_fasthash::FxHashMap<HighVariableId, InstanceBlocks>>,
+    instance_blocks: Option<crate::fasthash::FxHashMap<HighVariableId, InstanceBlocks>>,
 }
 
 /// The instances of one HighVariable whose Cover has each block, in instance
 /// order.
-pub type InstanceBlocks = crate::kuna_fasthash::FxHashMap<int4, Vec<VarnodeId>>;
+pub type InstanceBlocks = crate::fasthash::FxHashMap<int4, Vec<VarnodeId>>;
 
 impl HighIntersectTest {
     pub fn new(affecting_ops: PcodeOpSet) -> HighIntersectTest {

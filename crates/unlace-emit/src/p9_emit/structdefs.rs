@@ -55,7 +55,7 @@ use unlace_base::marshal::ElementId;
 
 use crate::dtype::{Datatype, DatatypeKind};
 use crate::funcdata::Funcdata;
-use crate::kuna_langtypes::SpellCtx;
+use crate::langtypes::SpellCtx;
 use crate::options::on_or_off;
 use crate::printc::{
     compose_enum_body, compose_type_body, compose_typedef_line, sanitize_type_name,
@@ -256,5 +256,5 @@ pub fn definition_text(ct: &Rc<Datatype>, rt: SpellCtx) -> String {
 }
 
 #[cfg(test)]
-#[path = "kuna_structdefs/tests.rs"]
+#[path = "structdefs/tests.rs"]
 mod tests;

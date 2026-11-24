@@ -1,7 +1,7 @@
 //! (kuna) `kuna_calltrampoline` — a `call` whose callee discards the pushed
 //! return address and jumps back into the instruction stream (S2 flow
-//! classification).  Sibling of [`kuna_tailcalljump`](crate::kuna_tailcalljump)
-//! and [`kuna_tailcallframe`](crate::kuna_tailcallframe), which decide the
+//! classification).  Sibling of [`kuna_tailcalljump`](crate::tailcalljump)
+//! and [`kuna_tailcallframe`](crate::tailcallframe), which decide the
 //! opposite question about a `jmp`.
 //!
 //! ## The structural gap
@@ -64,7 +64,7 @@
 //! target to be an address the symbol table does **not** know as a function
 //! entry.  A fragment that re-enters mid-instruction-stream satisfies that by
 //! construction; a thunk to a discovered callee does not, and stays a `CALL` for
-//! [`kuna_tailcalljump`](crate::kuna_tailcalljump) to claim at its `jmp`.
+//! [`kuna_tailcalljump`](crate::tailcalljump) to claim at its `jmp`.
 
 use unlace_base::marshal::ElementId;
 use unlace_base::space::{VarnodeStorage, spacetype};
@@ -282,5 +282,5 @@ fn binary_displacement(track: &SpTrack, op: &RawOp) -> Option<i64> {
 }
 
 #[cfg(test)]
-#[path = "kuna_calltrampoline/tests.rs"]
+#[path = "calltrampoline/tests.rs"]
 mod tests;

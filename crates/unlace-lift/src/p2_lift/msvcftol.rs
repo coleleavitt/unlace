@@ -67,7 +67,7 @@
 //!
 //! `__ftol` (pre-VS2002) and `__ftol2` (VS2002+) take the 64-bit payload;
 //! `__ftol2_sse`, `__ftol2_pentium4` and `__ftol2_sse_excpt` the 32-bit one.
-//! All take `ST0`. In a stripped PE, `unlace_analysis::callfixup::kuna_msvcftolsig`
+//! All take `ST0`. In a stripped PE, `unlace_analysis::callfixup::msvcftolsig`
 //! names them by their bytes. The installer probes a function name
 //! bare, then `_`-prefixed, then `__`-prefixed
 //! (`CallFixupAnalyzer.getCallFixupNameForFunction`), so each `__`-spelled target
@@ -160,8 +160,8 @@ pub fn decode_payload(
     Ok(())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.msvcftol_decode_payload = Some(decode_payload);
     hooks.msvcftol_language_is_x86_32 = Some(language_is_x86_32);
 }

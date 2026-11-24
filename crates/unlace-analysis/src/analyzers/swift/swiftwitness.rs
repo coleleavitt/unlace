@@ -26,7 +26,7 @@ use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
 use super::descriptors::{Context, ContextKind, Metadata, Reader};
-use super::kuna_swifttypes::{Types, locate_metadata};
+use super::swifttypes::{Types, locate_metadata};
 use super::{Namer, Owner};
 use crate::pass::{AnalysisOutput, TypedDataFact};
 

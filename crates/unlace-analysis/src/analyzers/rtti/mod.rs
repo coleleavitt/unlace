@@ -36,7 +36,7 @@
 //! So the virtual dispatch — `(**(code **)*plVar1)()`, an unnamed `DAT_*` vtable slot
 //! before — now resolves to a named function (`Box::vfunc_0` = `Box::area`). The
 //! slots are those of the vftable as `vtabletypes` cuts it
-//! (`kuna_msvcvtabletypes.rs (trim_overruns)`): a walk that ran on into the table
+//! (`msvcvtabletypes.rs (trim_overruns)`): a walk that ran on into the table
 //! laid after the vftable (an RPC server's dispatch table) named its routines too.
 //!
 //! The slot-index name is `vfunc_<i>` and NOT `vftable_<i>`: a routine must not be named
@@ -63,15 +63,15 @@
 //! [`AnalysisPass`] never-fail contract): a non-PE input, a missing `type_info`
 //! vftable, or any malformed structure yields an **empty** output — never a panic.
 
-pub mod kuna_arm64evcall;
-pub mod kuna_itaniumctors;
-pub mod kuna_itaniumrtti;
-pub mod kuna_msvcctors;
-pub mod kuna_msvcvtabletypes;
-pub mod kuna_vtabletypes;
+pub mod arm64evcall;
+pub mod itaniumctors;
+pub mod itaniumrtti;
 pub mod models;
+pub mod msvcctors;
+pub mod msvcvtabletypes;
 pub mod refkind;
 pub mod vftable;
+pub mod vtabletypes;
 
 use object::read::Object;
 use object::read::pe::{ImageNtHeaders, PeFile32, PeFile64};
@@ -86,7 +86,7 @@ use models::{
     TypeDescriptor, read_base_class_array,
 };
 use refkind::{End, RefKind};
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 use vftable::{TextRanges, walk_vftable};
 
 /// The byte distance from a reference-to-a-`TypeDescriptor` back to the
@@ -219,7 +219,7 @@ fn emit_classes(
 ) {
     let (cols, meta_slots) = find_cols(img, rk, tds);
     let mut named = SlotNames {
-        cut: kuna_msvcvtabletypes::recover_from(img, rk, text, &cols, &meta_slots)
+        cut: msvcvtabletypes::recover_from(img, rk, text, &cols, &meta_slots)
             .into_values()
             .flat_map(|c| c.tables)
             .map(|t| (t.vt.base, t.vt.slots))
@@ -241,7 +241,7 @@ fn emit_classes(
 #[derive(Default)]
 struct SlotNames {
     /// The vftables cut where a walk ran into the table after them
-    /// (`kuna_msvcvtabletypes.rs (trim_overruns)`), by first slot.
+    /// (`msvcvtabletypes.rs (trim_overruns)`), by first slot.
     cut: FxHashMap<u64, Vec<u64>>,
     /// `(target, class, slot)` in walk order.
     slots: Vec<(u64, String, usize)>,

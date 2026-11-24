@@ -59,7 +59,7 @@
 //! The slots mint that `FILE` at glibc's x86-64 width, so the pass calls in here
 //! only on a target that width is true of (`glibc::target_takes_the_widths`).
 //! The relocation numbering below still lists four architectures because it is
-//! [`crate::loader::kuna_dynrelocs`]'s; the other three are never reached.
+//! [`crate::loader::dynrelocs`]'s; the other three are never reached.
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -76,7 +76,7 @@ pub(super) const STREAM_NAMES: [&str; 3] = ["stdin", "stdout", "stderr"];
 
 /// The `COPY` / `GLOB_DAT` `r_type` pair for `machine`, or `None` where kuna does
 /// not know this architecture's dynamic relocation numbering. The same four
-/// architectures [`crate::loader::kuna_dynrelocs`] handles.
+/// architectures [`crate::loader::dynrelocs`] handles.
 fn copy_globdat(arch: object::Architecture) -> Option<(u32, u32)> {
     match arch {
         object::Architecture::X86_64 => Some((elf::R_X86_64_COPY, elf::R_X86_64_GLOB_DAT)),

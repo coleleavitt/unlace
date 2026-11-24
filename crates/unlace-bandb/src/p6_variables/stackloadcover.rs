@@ -5,7 +5,7 @@ use crate::funcdata::Funcdata;
 
 #[doc(hidden)]
 pub fn crosses_write(fd: &Funcdata, id: VarnodeId) -> bool {
-    if !crate::kuna_stackviews::enabled(fd) {
+    if !crate::stackviews::enabled(fd) {
         return false;
     }
     let Some(value) = fd.vbank().get(id) else {
@@ -44,7 +44,7 @@ pub fn crosses_write(fd: &Funcdata, id: VarnodeId) -> bool {
     if fd.vbank().get(pointer).is_some_and(|v| v.is_constant()) {
         return false;
     }
-    let extent = crate::kuna_stackranges::frame_address(fd, pointer).and_then(|address| {
+    let extent = crate::stackranges::frame_address(fd, pointer).and_then(|address| {
         address.extent(load.get_out().and_then(|v| fd.vbank().get(v))?.get_size())
     });
     for (block, _) in cover.iter() {

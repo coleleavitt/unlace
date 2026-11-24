@@ -16,7 +16,7 @@ use object::{Object, ObjectSection, ObjectSymbol, SectionFlags, SectionKind, Sym
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, OnceLock};
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Value {
@@ -1406,7 +1406,7 @@ fn resolver_exit(file: &object::File<'_>, code: &[(u32, u32)]) -> BTreeSet<u32> 
     };
     let mut got = None;
     for tag in bytes.chunks_exact(8) {
-        let key = super::kuna_ppc32_imports::word(file, tag);
+        let key = super::ppc32_imports::word(file, tag);
         if key == 0 {
             break;
         }
@@ -1414,7 +1414,7 @@ fn resolver_exit(file: &object::File<'_>, code: &[(u32, u32)]) -> BTreeSet<u32> 
             if got.is_some() {
                 return exits;
             }
-            got = Some(super::kuna_ppc32_imports::word(file, &tag[4..]));
+            got = Some(super::ppc32_imports::word(file, &tag[4..]));
         }
     }
     let Some(got) = got else { return exits };
@@ -1429,7 +1429,7 @@ fn resolver_exit(file: &object::File<'_>, code: &[(u32, u32)]) -> BTreeSet<u32> 
                     .and_then(|data| data.get((u64::from(got) - section.address()) as usize..))
                     .is_some_and(|data| {
                         data.len() >= 12
-                            && u64::from(super::kuna_ppc32_imports::word(file, data))
+                            && u64::from(super::ppc32_imports::word(file, data))
                                 == dynamic.address()
                     })
         })
@@ -1793,7 +1793,7 @@ fn prove(
         }
         let words: Vec<_> = bytes.chunks_exact(4).map(|b| image.read(b)).collect();
         for (i, window) in words.windows(4).enumerate() {
-            if let Some(delta) = unlace_decomp::kuna_ppc32piccalls::stub_delta(window) {
+            if let Some(delta) = unlace_decomp::ppc32piccalls::stub_delta(window) {
                 image.stubs.insert(start + i as u32 * 4, delta);
             }
         }

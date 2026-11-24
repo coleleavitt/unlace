@@ -36,7 +36,7 @@
 //! never a function of its own — the two entries are the same routine by
 //! construction, which is why this is a strict correction rather than a
 //! heuristic. So the walk withholds the function claim there, exactly as
-//! [`super::kuna_unmappedentry`] does at the same seam.
+//! [`super::unmappedentry`] does at the same seam.
 //!
 //! The instruction closure is unchanged, and provably so: the fold is only
 //! applied when the **global** entry is itself a walk seed, so the bytes at the

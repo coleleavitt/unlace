@@ -29,7 +29,7 @@ pub struct StackArgs {
 ///
 /// By name, not by `spacetype`: a processor's register file and its ram are both
 /// `IPTR_PROCESSOR`, and `register` is the name
-/// [`probe_callee_entry_dead`](crate::p4_calls::kuna_calleedeadarg::probe_callee_entry_dead)
+/// [`probe_callee_entry_dead`](crate::p4_calls::calleedeadarg::probe_callee_entry_dead)
 /// resolves its own index from.
 #[inline]
 pub fn is_register(addr: &Address) -> bool {

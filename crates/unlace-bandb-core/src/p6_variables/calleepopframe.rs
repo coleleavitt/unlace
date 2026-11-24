@@ -16,7 +16,7 @@
 //!   sub  esp, 0x14         ; the frame is back where it was
 //! ```
 //!
-//! [`crate::kuna_calleepop`] reads a pop off the push run in
+//! [`crate::calleepop`] reads a pop off the push run in
 //! front of the call, and there is none here, so the guess stays at the return
 //! address alone. The `sub` then lowers the solved stack pointer by the popped
 //! bytes, and every later frame offset in the function is off by them: an
@@ -51,17 +51,15 @@ use unlace_base::address::Address;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
+use crate::calleepop::{MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, const_signed, decompose};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_calleepop::{
-    MAX_ARG_BYTES, RETURN_ADDRESS_ONLY, at_address, const_signed, decompose,
-};
 
 /// The extrapop a fixed-frame caller states for the callee of `call`, or `None`
 /// when its frame says nothing.
 ///
 /// `call_sp` and `call_out` are the call's stack-pointer INDIRECT input and
-/// output, as for [`crate::kuna_calleepopslot::guess_extra_pop`].
+/// output, as for [`crate::calleepopslot::guess_extra_pop`].
 pub fn guess_extra_pop(
     data: &Funcdata,
     spacebase: &Address,
@@ -234,5 +232,5 @@ fn sp_offset(data: &Funcdata, spacebase: &Address, base: VarnodeId, sp: VarnodeI
 }
 
 #[cfg(test)]
-#[path = "kuna_calleepopframe/tests.rs"]
+#[path = "calleepopframe/tests.rs"]
 mod tests;

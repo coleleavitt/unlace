@@ -41,7 +41,7 @@ use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::{ContextCommitRecord, Translate};
 
 use super::context::ContextPainter;
-use super::kuna_insnstore::InstructionStore;
+use super::insnstore::InstructionStore;
 
 const TMODE: &[u8] = b"TMode";
 
@@ -68,7 +68,7 @@ impl ArmWalkMode {
     ) -> Option<ArmWalkMode> {
         if !arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Armwalkmode>()
+            .get::<unlace_decomp::analysisgates::Armwalkmode>()
             .0
             || arch.input_arm_isa_override
             || file.format() != object::BinaryFormat::Elf
@@ -76,7 +76,7 @@ impl ArmWalkMode {
             || file.kind() == ObjectKind::Relocatable
             || file.entry() & 1 != 0
             || painter.paints("TMode")
-            || crate::loader::kuna_armfloatabi::thumb_only(file)
+            || crate::loader::armfloatabi::thumb_only(file)
         {
             return None;
         }

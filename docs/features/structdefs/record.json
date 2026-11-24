@@ -1,6 +1,6 @@
 {
   "opportunity": "kuna recovers composite layouts and then shows them only on the whole-program surface. `kuna decompile ./fmt get_prefix` prints `int get_prefix(_IO_FILE *f)` and field accesses against a layout nothing in the output describes; reaching that layout means exporting a whole `decompile-project` folder for one function. angr prints the typedefs a function references above it, which is a large part of why its output reads struct-aware. kuna had the renderer (`PrintC::doc_type_definitions`, the `docTypeDefinitions` port) and only a whole-project caller for it.",
-  "test_name": "tests/stages/kuna-structdefs.xml (5 assertions, two `print C` passes over one decompiled function) + 7 unit tests in kuna_structdefs/tests.rs + tests/cli/structdefs-json-types-array.json and -key-off.json",
+  "test_name": "tests/stages/kuna-structdefs.xml (5 assertions, two `print C` passes over one decompiled function) + 7 unit tests in structdefs/tests.rs + tests/cli/structdefs-json-types-array.json and -key-off.json",
   "binary": "/home/mahaloz/github/decbench/results/full_run_address_2026-09-11/O2/coreutils/compiled/fmt",
   "selector": "get_prefix",
   "func_addr": "0x2f30",
@@ -170,8 +170,8 @@
     "CI": "parity gates pass; cargo workspace suite pass (full-ci label)"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_structdefs.rs",
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_structdefs/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/structdefs.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/structdefs/tests.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",

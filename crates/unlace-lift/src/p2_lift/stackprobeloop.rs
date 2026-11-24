@@ -352,5 +352,5 @@ fn vn_addr(data: &Funcdata, vn: VarnodeId) -> Address {
 }
 
 #[cfg(test)]
-#[path = "kuna_stackprobeloop/tests.rs"]
+#[path = "stackprobeloop/tests.rs"]
 mod tests;

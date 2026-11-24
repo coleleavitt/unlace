@@ -145,18 +145,18 @@ pub fn close_at_terminator(
     Some(closed)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.nulterminator_close_at_terminator = Some(close_at_terminator);
 }
 
 /// (kuna) An unread zero element right after an open stack character
 /// array is that array's terminator, and the array ends after it (option
-/// `nulterminator`).  See [`crate::kuna_nulterminator`].
+/// `nulterminator`).  See [`crate::nulterminator`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct NulTerminator(pub bool);
 
-impl crate::kuna_optionset::KunaOption for NulTerminator {
+impl crate::optionset::KunaOption for NulTerminator {
     const NAME: &'static str = "nulterminator";
     crate::kuna_option_id!();
 
@@ -169,11 +169,11 @@ impl crate::kuna_optionset::KunaOption for NulTerminator {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_nulterminator::OptionNulTerminator.apply(value)?;
+        let (v, msg) = crate::nulterminator::OptionNulTerminator.apply(value)?;
         Ok((NulTerminator(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_nulterminator/tests.rs"]
+#[path = "nulterminator/tests.rs"]
 mod tests;

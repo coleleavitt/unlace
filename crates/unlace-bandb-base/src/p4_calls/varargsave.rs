@@ -70,12 +70,9 @@ fn named(regs: &Regs, name: &[u8]) -> Option<Key> {
 
 pub fn regs(arch: &crate::architecture::Architecture) -> Option<Regs> {
     let id = arch.get_description();
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_varargsave::VarargSave>()
-        .0
+    if !arch.kuna_options.get::<crate::varargsave::VarargSave>().0
         || !id.starts_with("x86:LE:64")
-        || crate::kuna_fastfailnoreturn::archid_is_windows(id)
+        || crate::fastfailnoreturn::archid_is_windows(id)
     {
         return None;
     }
@@ -540,8 +537,8 @@ pub fn strip(data: &mut Funcdata) {
     data.get_func_proto_mut().set_dotdotdot(true);
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.varargsave_regs = Some(regs);
 }
 

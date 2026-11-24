@@ -3,7 +3,7 @@
 //!
 //! The CLI reads the value from the run's `--option` list before the engine
 //! starts and turns the headers into `--types` directives
-//! (`unlace-cli/src/kuna_sdktypes.rs`); the engine only checks the value. Apple's
+//! (`unlace-cli/src/sdktypes.rs`); the engine only checks the value. Apple's
 //! headers are never vendored: the user names an SDK on disk, and nothing
 //! derived from it is written anywhere.
 

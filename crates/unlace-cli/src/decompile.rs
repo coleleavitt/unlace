@@ -21,8 +21,8 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+use unlace_console::buildstamp;
 use unlace_console::engine::{ARM_ISA_ENV, ArmIsa};
-use unlace_console::kuna_buildstamp;
 
 use crate::args::take_value;
 use crate::decompile_all::{self, Args as AllArgs, DriverDefaults};
@@ -761,8 +761,8 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
                 .arg(args.max_fn_seconds.to_string());
         }
         cmd.env(
-            kuna_buildstamp::PARENT_ENV,
-            kuna_buildstamp::identity(kuna_buildstamp::ChildKind::Engine),
+            buildstamp::PARENT_ENV,
+            buildstamp::identity(buildstamp::ChildKind::Engine),
         );
         match args.isa {
             Some(isa) => {
@@ -787,8 +787,8 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             .map_err(|e| (format!("failed to run decomp_dbg: {e}"), false))?;
 
         let stdout_text = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr_text = kuna_buildstamp::report(
-            kuna_buildstamp::ChildKind::Engine,
+        let stderr_text = buildstamp::report(
+            buildstamp::ChildKind::Engine,
             String::from_utf8_lossy(&output.stderr).into_owned(),
             "decomp_dbg",
             &engine.path,
@@ -811,7 +811,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             }
         }
         let combined = format!("{stdout_text}\n{stderr_text}");
-        for sentence in unlace_console::kuna_declaredbytes::from_transcript(&stdout_text) {
+        for sentence in unlace_console::declaredbytes::from_transcript(&stdout_text) {
             unlace_base::notes::say_once(&binary, &format!("warning: {sentence}"));
         }
         for line in crate::fid::report::from_transcript(&stdout_text) {
@@ -988,7 +988,7 @@ pub fn run(args: &DecompileArgs) -> i32 {
             // (kuna outlang) The Rust back-end's unrepresentable gotos, counted
             // off the rendered text: this surface drives `decomp_dbg` as a
             // subprocess, so an in-engine counter would never reach it.
-            let gotos = unlace_decomp::kuna_langrust::count_unstructured_gotos(&out.c);
+            let gotos = unlace_decomp::langrust::count_unstructured_gotos(&out.c);
             decompile_all::report_unstructured_goto_sites(&[(out.name.as_str(), gotos)]);
             // A rejected assertion is reported and the run continues;
             // `--assert-strict` makes it the verdict.  A directive the PIPELINE
@@ -1288,7 +1288,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         stored.append(&mut assertions);
         assertions = stored;
     }
-    let sdk = crate::kuna_sdktypes::directives(
+    let sdk = crate::sdktypes::directives(
         &binary,
         &options,
         slice.as_deref(),

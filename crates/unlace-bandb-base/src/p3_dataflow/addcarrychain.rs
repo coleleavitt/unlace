@@ -320,5 +320,5 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 }
 
 #[cfg(test)]
-#[path = "kuna_addcarrychain/tests.rs"]
+#[path = "addcarrychain/tests.rs"]
 mod tests;

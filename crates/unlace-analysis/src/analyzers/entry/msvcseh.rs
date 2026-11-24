@@ -25,15 +25,15 @@
 
 use object::Object;
 use object::read::pe::PeFile64;
-use unlace_decomp::kuna_fasthash::FxHashSet;
+use unlace_decomp::fasthash::FxHashSet;
 
 use crate::pass::{AnalysisOutput, CommentFact};
 use crate::rtti::models::ImageBytes;
 use crate::rtti::refkind::{End, RefKind};
 use crate::rtti::vftable::TextRanges;
-use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
+use unlace_decomp::itaniumeh::{EhCallSite, EhClause, MsvcFunclet};
 
-use super::kuna_msvcfuncinfo::{
+use super::msvcfuncinfo::{
     decode_fh3, funclet_name, is_fh3, language_handler, name_funclet, notes, parent_names,
     runtime_functions,
 };
@@ -158,7 +158,7 @@ fn x64_scopes(file: &object::File, bytes: &[u8], img: &ImageBytes, out: &mut Ana
     let mut named = FxHashSet::<u64>::default();
     let mut entries = FxHashSet::<u64>::default();
     let records = runtime_functions(&pe, bytes, base);
-    let ends: unlace_decomp::kuna_fasthash::FxHashMap<u64, u64> =
+    let ends: unlace_decomp::fasthash::FxHashMap<u64, u64> =
         records.iter().map(|&(b, e, _)| (b, e)).collect();
     let mut finals = FxHashSet::<u64>::default();
     for &(func, _, unwind) in &records {
@@ -234,7 +234,7 @@ fn finally_pads(
     func: u64,
     unwind: u64,
     scopes: &[SehScope],
-    ends: &unlace_decomp::kuna_fasthash::FxHashMap<u64, u64>,
+    ends: &unlace_decomp::fasthash::FxHashMap<u64, u64>,
     finals: &mut FxHashSet<u64>,
     out: &mut AnalysisOutput,
 ) {
@@ -295,7 +295,7 @@ pub fn constant_filter(c: i32) -> String {
 fn x86_splice(
     code: &[(u64, &[u8])],
     func: u64,
-    info: &super::kuna_msvcfuncinfo::EhFuncInfo,
+    info: &super::msvcfuncinfo::EhFuncInfo,
     spliced: &mut FxHashSet<u64>,
     out: &mut AnalysisOutput,
 ) {
@@ -321,7 +321,7 @@ fn x86_splice(
     let body = &data[(func - base) as usize..(end - base) as usize];
     let mut states = vec![(func, -1)];
     states.extend(x86_state_stores(body, func));
-    let regions = super::kuna_msvcfuncinfo::state_regions(&states, func, end);
+    let regions = super::msvcfuncinfo::state_regions(&states, func, end);
     if regions.is_empty() {
         return;
     }
@@ -406,7 +406,7 @@ fn x86_seh_splice(code: &[(u64, &[u8])], func: u64, scopes: &[SehScope], out: &m
     let mut states = vec![(func, -1)];
     states.extend(x86_state_stores(body, func));
     let mut finals = FxHashSet::<u64>::default();
-    for (lo, hi, level) in super::kuna_msvcfuncinfo::state_regions(&states, func, end) {
+    for (lo, hi, level) in super::msvcfuncinfo::state_regions(&states, func, end) {
         for scope in x86_level_chain(scopes, level as usize) {
             let (pad, clause) = match scope.kind {
                 SehKind::Except { filter, handler } => {

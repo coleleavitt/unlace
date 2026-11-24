@@ -146,7 +146,7 @@ fn forget_call(data: &mut Funcdata, op: OpId) {
             break;
         }
         cur = po.basic_neighbours().0;
-        if crate::kuna_callpush::is_call_push(data, p) {
+        if crate::callpush::is_call_push(data, p) {
             data.op_destroy(p);
             break;
         }
@@ -184,7 +184,7 @@ impl Rule for RuleStrcpyChain {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_helperrole::HelperRoles>()
+            .get::<crate::helperrole::HelperRoles>()
             .0
         {
             return 0;
@@ -267,7 +267,7 @@ impl Rule for RuleStrcpyChain {
 
 crate::kuna_flag!(
     /// (kuna `helperroles`) Role-tagged helper-call rewrites
-    /// ([`crate::kuna_helperrole`]).
+    /// ([`crate::helperrole`]).
     HelperRoles,
     "helperroles",
     "Role-tagged helper-call rewrites",

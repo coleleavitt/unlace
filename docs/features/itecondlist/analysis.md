@@ -87,7 +87,7 @@ Exactly `ceil(N/2)` becomes exactly `N`.
 ## Root cause — confirmed by instrumentation, not inferred
 
 `iteregion` and `iteboolean` reach the diamond's condition component through the
-same helper, `kuna_iteregion.rs (leaf_bblock)`, which descends a `BlockList` of
+same helper, `iteregion.rs (leaf_bblock)`, which descends a `BlockList` of
 **one** component but bails on a list of two or more:
 
 ```rust

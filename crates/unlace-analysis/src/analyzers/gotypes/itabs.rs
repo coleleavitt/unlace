@@ -44,7 +44,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use super::kuna_typeglobals::{global_name_ok, linker_name};
+use super::typeglobals::{global_name_ok, linker_name};
 use super::*;
 use crate::pass::{SymFact, SymKind};
 

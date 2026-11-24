@@ -308,8 +308,8 @@
   "note": "re-derived with scripts.repipe.counters --fix on a freshly built tree after rebasing onto #647/#648"
  },
  "files": [
-  "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes.rs",
-  "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes/tests.rs",
+  "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes.rs",
+  "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/tests.rs",
   "decompiler/crates/kuna-analysis/src/analyzers/protos/mod.rs",
   "decompiler/crates/kuna-analysis/src/passes.rs",
   "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_stat_x86_64",
@@ -318,11 +318,11 @@
   "decompiler/crates/kuna-cli/src/decompile_all.rs",
   "decompiler/crates/kuna-cli/tests/decompile_project_cli.rs",
   "decompiler/crates/kuna-console/src/engine.rs",
-  "decompiler/crates/kuna-console/src/kuna_console.rs",
+  "decompiler/crates/kuna-console/src/console.rs",
   "decompiler/crates/kuna-console/src/project.rs",
   "decompiler/crates/kuna-decomp/phases.toml",
   "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
-  "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_libctypes.rs",
+  "decompiler/crates/kuna-decomp/src/p0_knowledge/libctypes.rs",
   "docs/spec/01-program-prep.md",
   "docs/spec/09-emission.md",
   "tests/stages/kuna-libctypes.xml"
@@ -438,7 +438,7 @@
  "default_flip": {
   "what": "the default moves off -> opaque; nothing about the pass changes. `--option libctypes off` restores the shipped `void *` tables.",
   "files": [
-   "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_libctypes.rs (unset env => on, mirroring the dwarfstructs bridge)",
+   "decompiler/crates/kuna-decomp/src/p0_knowledge/libctypes.rs (unset env => on, mirroring the dwarfstructs bridge)",
    "decompiler/crates/kuna-cli/src/decompile.rs + decompile_all.rs (the two load-time env bridges: off-token polarity, token passed through verbatim like the symbolnamebound bridge, so a later layout value cannot read as `off`)",
    "decompiler/crates/kuna-decomp/src/infra/architecture.rs (reset_defaults_internal)",
    "decompiler/crates/kuna-decomp/phases.toml (default + use_when + example)",
@@ -866,7 +866,7 @@
  },
  "glibc": {
   "what": "the third value: the PUBLISHED glibc x86-64 field layouts of the nine aggregates whose members are part of the platform's API -- FILE, stat, timespec, timeval, tm, passwd, group, option, dirent. `opaque` gives each named aggregate a real width and no members, so a field access renders `f->field_0x8` and the loaded value keeps whatever the cast said; `glibc` installs the real members, so the same access is `f->_IO_read_ptr` and the value takes the FIELD's type.",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes/glibc.rs",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/glibc.rs",
   "provenance": "every offset/width/alignment measured on this machine with offsetof/sizeof/_Alignof against the installed headers (glibc 2.35, x86-64); the program and its output are in docs/features/libctypes/glibc.md. Nothing restated from memory.",
   "target_gate": "installed only on an ELF for x86-64 whose .dynstr names glibc (the `libc.so.6` soname or a GLIBC_2.x symbol version). musl, another libc, another architecture and a statically linked image keep the opaque shells -- and a static image loses nothing, because these tables match IMPORTED names only.",
   "laid_out": [
@@ -1169,7 +1169,7 @@
  },
  "stdio": {
   "what": "the stdio STREAM SLOTS as typed data symbols. The rest of the table types a stream where a CALL says what it is; the slots themselves were untyped storage (named by `datasyms`, an `undefined<size>` word) or, in a shared object, not named at all. This step emits a typed DATA symbol for each, keyed on the dynamic relocation that binds it -- which is also the evidence that the name is the C library's and not a global the program happens to spell `stdout`.",
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes/streams.rs",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
   "carrier": "AnalysisOutput::typed_data (new `TypedDataFact`), committed in kuna-console/src/engine.rs as arm 4b with `typelock|namelock` -- after the DWARF data globals (1a) and the string literals (4) so a richer source keeps its address, before the loader `.dynsym` data stream (4a) so its untyped naming of the same slot stands down.",
   "shapes": {
    "copy": "R_*_COPY on a DEFINED symbol whose st_size is the pointer width: the .bss word the run-time loader fills with libc's own `FILE *stdout`. Type `FILE *`, name `stdout`. (coreutils fmt: 0xc088 / 0xc090 / 0xc0c0.)",
@@ -1214,10 +1214,10 @@
    "note": "decbench scores variables[] -- arguments and stack symbols. A global is not one and neither is the register local that carries it, so only a stream reaching a stack slot whose ground truth is a stream can score. tar's argp_parse gains `FILE *v70` on exactly such a slot and does not move the number because that function's ground truth does not describe it. The sweep is the guard, not the case: the case is the hunk classification."
   },
   "default": "no new option and no new value -- the stream slots ride the existing `libctypes` gate (`off` emits nothing; `opaque` and `glibc` both emit, differing only in whether the pointee has members).",
-  "tests": "tests/stages/kuna-libctypes.xml passes 6-9 (the exe and the .so built from one source, each once `off` and once `opaque`), assertions #16-#25, plus pass 10 / #26 for the `datasyms off` interaction; 7 unit tests in protos/kuna_libctypes/tests.rs (the seventh pins the minted-name decline on libctypes_streams_collide_so_x86_64.so); tests/cli/structdefs-json-types-array.json retargeted (main of i386_pie_nl now references two libc shells, so `types` carries FILE ahead of option, each pinned by name, .h text and size).",
+  "tests": "tests/stages/kuna-libctypes.xml passes 6-9 (the exe and the .so built from one source, each once `off` and once `opaque`), assertions #16-#25, plus pass 10 / #26 for the `datasyms off` interaction; 7 unit tests in protos/libctypes/tests.rs (the seventh pins the minted-name decline on libctypes_streams_collide_so_x86_64.so); tests/cli/structdefs-json-types-array.json retargeted (main of i386_pie_nl now references two libc shells, so `types` carries FILE ahead of option, each pinned by name, .h text and size).",
   "files": [
-   "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes/streams.rs",
-   "decompiler/crates/kuna-analysis/src/analyzers/protos/kuna_libctypes.rs",
+   "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes/streams.rs",
+   "decompiler/crates/kuna-analysis/src/analyzers/protos/libctypes.rs",
    "decompiler/crates/kuna-analysis/src/pass.rs",
    "decompiler/crates/kuna-console/src/engine.rs",
    "decompiler/crates/kuna-analysis/tests/fixtures/libctypes_streams_x86_64{,.c}",

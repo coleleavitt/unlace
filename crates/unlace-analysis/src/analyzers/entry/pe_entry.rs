@@ -39,7 +39,7 @@
 //!    word holding an absolute address, and one landing in an executable section
 //!    is a stored code address: an address-taken function nothing else describes
 //!    (a VM handler table, a vtable slot, a registered callback).
-//!    [`super::kuna_pereloccode`] owns it, including the `.pdata` interior guard
+//!    [`super::pereloccode`] owns it, including the `.pdata` interior guard
 //!    that separates a stored function start from a switch-table label.
 //! 4. **Exports** (`file.exports()`) — a DLL / export-bearing exe's named
 //!    entry points. Already a funcsym source in `pe_iat::resolve_pe_imports`, but
@@ -113,7 +113,7 @@ pub(super) fn pe_entry_candidates(
     }
 
     // Oracle 6: the CRT initializer tables a PE32 hands to `_initterm`.
-    super::kuna_initterm::initterm_entries(file, bytes, execs, &mut out);
+    super::initterm::initterm_entries(file, bytes, execs, &mut out);
 
     out
 }
@@ -131,8 +131,8 @@ fn collect_typed<Pe: ImageNtHeaders>(
     let image_base = pe.relative_address_base();
     pdata_begins(pe, bytes, image_base, out);
     tls_callbacks(pe, bytes, ptr, out);
-    super::kuna_pereloccode::reloc_code_pointers(pe, bytes, image_base, ptr, execs, out);
-    out.extend(crate::loader::kuna_peloadconfig::function_starts(pe, bytes));
+    super::pereloccode::reloc_code_pointers(pe, bytes, image_base, ptr, execs, out);
+    out.extend(crate::loader::peloadconfig::function_starts(pe, bytes));
 }
 
 /// Walk the exception directory (`.pdata`) as an array of `RUNTIME_FUNCTION`

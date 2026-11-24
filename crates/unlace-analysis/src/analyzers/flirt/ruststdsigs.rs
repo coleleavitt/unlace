@@ -19,10 +19,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use object::read::{Object, ObjectSection};
-use unlace_decomp::kuna_ruststdsigs::{RustStdSigs, ruststdsigs};
+use unlace_decomp::ruststdsigs::{RustStdSigs, ruststdsigs};
 
-use super::kuna_flirtpat::{FuncPattern, Target, patterns_from_object};
-use super::kuna_flirtsig::build_sig;
+use super::flirtpat::{FuncPattern, Target, patterns_from_object};
+use super::flirtsig::build_sig;
 
 /// The standard-library crates whose functions are signed.
 const CRATES: [&str; 3] = ["libstd-", "libcore-", "liballoc-"];

@@ -78,7 +78,7 @@ impl Fx {
         let stack = Rc::clone(manager.get_stack_space().unwrap());
         let mut arch = ArchContext::new_shared(Rc::clone(&manager));
         arch.kuna_options
-            .set(crate::kuna_coreoptions::StackViews(stack_views));
+            .set(crate::coreoptions::StackViews(stack_views));
         arch.default_return_addr =
             return_address.map(|(offset, size)| unlace_num::pcoderaw::VarnodeData {
                 space: Some(Rc::clone(&stack)),

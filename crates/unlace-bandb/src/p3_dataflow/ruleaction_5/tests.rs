@@ -288,7 +288,7 @@ fn guarded_float_root_keeps_unordered_case_for_direct_readers() {
             fd.op_insert_end(op, block);
         }
         assert_eq!(
-            crate::kuna_floatnegation::fold_nan_consumers(&mut fd, nan_a),
+            crate::floatnegation::fold_nan_consumers(&mut fd, nan_a),
             folds
         );
         if !folds {
@@ -335,7 +335,7 @@ fn guarded_float_branch_preserves_polarity_and_shared_conditions() {
         if flipped {
             fd.op_flip_condition(branch);
         }
-        assert!(crate::kuna_floatnegation::fold_nan_consumers(&mut fd, nan));
+        assert!(crate::floatnegation::fold_nan_consumers(&mut fd, nan));
         let branch_op = fd.obank().get(branch).unwrap();
         assert_eq!(branch_op.is_boolean_flip(), !flipped);
         assert_eq!(branch_op.get_in(0), Some(target));

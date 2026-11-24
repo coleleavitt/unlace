@@ -21,8 +21,8 @@
   "hypothesis_status": "filed hypothesis ('text and JSON bind the declaration to different function names') is upheld in symptom and half-right in mechanism; the round-3 refuter's correction is what reproduced: ONE path throws <func> away. The discriminator is the DECLARATION's name, not the output format -- a same-name declaration applies on the text surface too, and a renaming declaration is dropped there whatever the format.",
   "files": [
     "decompiler/crates/kuna-console/src/ifacedecomp.rs",
-    "decompiler/crates/kuna-console/src/kuna_console.rs",
-    "decompiler/crates/kuna-console/src/kuna_console/tests.rs",
+    "decompiler/crates/kuna-console/src/console.rs",
+    "decompiler/crates/kuna-console/src/console/tests.rs",
     "decompiler/crates/kuna-console/tests/verify_assertplane.rs",
     "decompiler/crates/kuna-cli/src/assertdecl.rs",
     "decompiler/crates/kuna-cli/src/decompile.rs",

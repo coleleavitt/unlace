@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet, btree_map::Entry};
 
 use unlace_analysis::pass::{AnalysisOutput, SymKind};
-use unlace_decomp::kuna_symbolnamebound::bound_scope_path;
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name, symbolnamechars_mode};
+use unlace_decomp::symbolnamebound::bound_scope_path;
+use unlace_decomp::symbolnamechars::{sanitize_symbol_name, symbolnamechars_mode};
 
 use super::ConsoleProgram;
 

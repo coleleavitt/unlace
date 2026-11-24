@@ -26,7 +26,7 @@ use unlace_num::opcodes::{OpcodeDecoder, OpcodeEncoder};
 
 use unlace_num::pcoderaw::VarnodeData;
 
-use crate::kuna_lazytemplates::{self, LazyTemplates};
+use crate::lazytemplates::{self, LazyTemplates};
 use crate::semantics::ConstructTpl;
 use crate::slaformat as sla;
 use crate::slghpatexpress::PatternValue;
@@ -476,7 +476,7 @@ impl SleighBase {
         let mut symtab = std::mem::take(&mut self.symtab);
         let mut templates = std::mem::take(&mut self.templates);
         let mut lazy = LazyTemplates::new();
-        let decode_res = if kuna_lazytemplates::lazy_enabled() {
+        let decode_res = if lazytemplates::lazy_enabled() {
             let mut trans = LazyTemplateDecoder {
                 const_space,
                 templates: &mut lazy,

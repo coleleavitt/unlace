@@ -391,7 +391,7 @@ fn copy_pair_writes(
 }
 
 impl MergeContext for Funcdata {
-    fn pass_hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+    fn pass_hooks(&self) -> &'static crate::passhooks::KunaHooks {
         self.hooks()
     }
 

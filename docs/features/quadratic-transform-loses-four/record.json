@@ -10,7 +10,7 @@
   "subphase": "heritage-guard",
   "scope": "small",
   "modules": [
-    "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_indexaliasguard.rs"
+    "decompiler/crates/kuna-decomp/src/p3_dataflow/indexaliasguard.rs"
   ],
   "anchors": [
     "heritage.cc:1194 (Heritage::guard)",

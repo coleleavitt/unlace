@@ -88,7 +88,7 @@
     "Anonymous-aggregate name collision: naming every unnamed struct `anon_struct` fuses unrelated types under one interned name, which the qualifier-strip made reachable in many more places. Fixed by naming an anonymous aggregate after the typedef it was reached through (`__mbstate_t`, not `anon_struct`)."
   ],
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/kuna_cppproto.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/dwarf/cppproto.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/dwarf/mod.rs",
     "decompiler/crates/kuna-analysis/src/pass.rs",
     "decompiler/crates/kuna-console/src/engine.rs",

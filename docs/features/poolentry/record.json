@@ -241,7 +241,7 @@
     "note": "Re-run in full on the rebased tree (base 11f40f46, funcboundflow). test-stages is 407 not 405 because #280 added tests/stages/funcboundflow.xml; the baseline it is checked against is main s, unchanged."
   },
   "files": {
-    "pass": "decompiler/crates/kuna-analysis/src/analyzers/aif/kuna_poolentry.rs",
+    "pass": "decompiler/crates/kuna-analysis/src/analyzers/aif/poolentry.rs",
     "wiring": "decompiler/crates/kuna-analysis/src/passes.rs",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32",
     "fixture_generator": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_poolentry_le32.py",
@@ -255,7 +255,7 @@
     "bytecompat_fixture": "96 -> 97",
     "note": "Derived from a fresh `phase catalog` capture on a green build, not by arithmetic. REBASED onto funcboundflow (#280, DIV-67), which registered an option of its own, so every shared counter was re-derived from scratch on the rebased tree rather than carried over: the 97 settables and the (20 core, 42 transform, 35 analysis) tier split come from counting a live `kuna catalog --json`, and the bytecompat fixture was recaptured with the documented `decomp_dbg openfile write` recipe (it came out byte-identical to the merge result). Both sides of the rebase had made the SAME textual 95 -> 96 edit at four sites, so git auto-merged them silently to 96 with no conflict shown; the correct value is 97. tests/stages/kuna-catalog.xml is untouched: its assertions are exact-name matches on other options, ranges, or counts of `source_decompiler: angr` / `structure-recovery` / `opt-in-tool`, none of which this row is. kuna-base/src/xml.rs is untouched by poolentry (no stages XML added; its 194 is funcboundflow's), and docs/baseline-stages.json is unchanged.",
     "catalog_form_comma_count": "95 -> 96",
-    "pass_gates": "poolentry added to kuna_phases/tests.rs PASS_GATES (no codegen live_value reader, like tailcallentry)"
+    "pass_gates": "poolentry added to phases/tests.rs PASS_GATES (no codegen live_value reader, like tailcallentry)"
   },
   "div_row": null,
   "notes": "Default-OFF, so no DIV row (default output is byte-identical; make test / make test-stages PARITY OK). Parked in modes.rs UNEVALUATED next to its three sequence siblings: cortexmvectors, ptrentry, tailcallentry and poolentry COMPOSE, every number here is measured on top of the other three, and preset membership should be one joint evaluation rather than four.",

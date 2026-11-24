@@ -148,7 +148,7 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("globalarrayanchor", "on"),
     ("opaquepredicate", "on"),
     ("sparcstructret", "on"),     // SPARC-idiom-gated; no-op off-SPARC
-    ("v850indirectbranch", "on"), // V850-gated (kuna_v850indbranch::applies); no-op off-V850
+    ("v850indirectbranch", "on"), // V850-gated (v850indbranch::applies); no-op off-V850
     ("regionedgeorder", "on"),
     ("returndup", "on"), // default-ON since DIV-54; kept so the preset owns it
     // (kuna) Decline the returndup split at the join of a one-block `if`, so
@@ -456,7 +456,7 @@ mod tests {
     /// test makes the omission a build failure instead of a silent no-feature.
     #[test]
     fn aggressive_carries_every_default_off_option() {
-        use crate::kuna_phases::{kuna_num_settables, kuna_settable_by_index};
+        use crate::phases::{kuna_num_settables, kuna_settable_by_index};
 
         /// The DELIBERATE exclusions, each with its reason recorded on
         /// `AGGRESSIVE_OVERRIDES`: `dwarf_lines` buries a `-g` binary's C under

@@ -12,9 +12,9 @@ use crate::context::TypeOp;
 use crate::context::VarnodeId;
 use crate::dtype::Datatype;
 use crate::dtype::type_metatype;
+use crate::emulatefunction::EmulateFunction;
 use crate::funcdata::Funcdata;
 use crate::jumptable::*;
-use crate::kuna_emulatefunction::EmulateFunction;
 use crate::op::pcodeop_flags;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -143,7 +143,7 @@ fn guard_range_retry_keeps_both_wrapped_bounds() {
         ),
     ];
     let mut range = CircleRange::new(0, 0, 4, 1);
-    crate::kuna_switchguardrange::intersect(&fd, &guards, input, &mut range);
+    crate::switchguardrange::intersect(&fd, &guards, input, &mut range);
     assert_eq!((range.get_min(), range.get_end()), (58, 0x8000003a));
     assert!(range.contains_val(0x80000000));
     let mut model = JumpBasicModel::new();
@@ -164,10 +164,7 @@ fn a_dropped_return_destination_keeps_the_constant_targets() {
     jt.kuna_push_entry(Address::new(ram.clone(), 0x1040), 0, 0x1040);
     jt.addresstable.push(Address::new(ram.clone(), 0x1005));
     jt.jmodel = Some(Box::new(
-        crate::kuna_constselectjump::JumpModelConstSelect::from_flow_targets(
-            vec![0x1040],
-            Some(0x1005),
-        ),
+        crate::constselectjump::JumpModelConstSelect::from_flow_targets(vec![0x1040], Some(0x1005)),
     ));
     assert_eq!(
         jt.kuna_return_default(),

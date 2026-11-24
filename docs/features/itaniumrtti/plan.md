@@ -26,7 +26,7 @@ list is byte-identical to before the pass existed; the pass *also* self-gates on
 
 ## 3. Module layout — reuse, don't re-port
 
-New file `analyzers/rtti/kuna_itaniumrtti.rs`, a sibling of the MSVC pass inside the
+New file `analyzers/rtti/itaniumrtti.rs`, a sibling of the MSVC pass inside the
 folder that already owns RTTI. Reused rather than duplicated:
 
 | existing | reused for |

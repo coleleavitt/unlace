@@ -83,13 +83,13 @@ impl V850IndirectBranchOption {
 /// processor whose SLEIGH lifts `jmp [reg]` to a CALLIND.
 pub fn applies(arch: &crate::architecture::Architecture) -> bool {
     arch.kuna_options
-        .get::<crate::kuna_v850indbranch::V850IndirectBranch>()
+        .get::<crate::v850indbranch::V850IndirectBranch>()
         .0
         && arch.archid.starts_with("V850:")
 }
 
 /// (kuna) Is `op` a V850 "jmp [reg]" CALLIND that should become a BRANCHIND?
-/// (C++ `kunaIsV850IndirectJmp`, kuna_v850indbranch.cc:13-36, GH-8817).
+/// (C++ `kunaIsV850IndirectJmp`, v850indbranch.cc:13-36, GH-8817).
 ///
 /// `gate` is the resolved `glb->v850_indirect_branch` (see
 /// [`V850IndirectBranchOption`]).  `register_name` is the already-resolved
@@ -147,5 +147,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_v850indbranch/tests.rs"]
+#[path = "v850indbranch/tests.rs"]
 mod tests;

@@ -59,7 +59,7 @@ use std::collections::BTreeSet;
 use crate::listing::Listing;
 
 use super::GapDecoder;
-use super::kuna_poolentry::{DecodeMode, literal_target, wide};
+use super::poolentry::{DecodeMode, literal_target, wide};
 
 /// Every word an instruction seen so far loads as a PC-relative literal, and the
 /// even values such words hold in Thumb code.

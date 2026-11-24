@@ -274,14 +274,14 @@ fn target_through_segment(fd: &crate::funcdata::Funcdata, indop: crate::context:
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.segmentize_table_leaves_image = Some(table_leaves_image);
     hooks.segmentize_build = Some(build_all);
 }
 
 /// The compiled `<segmentop>` definitions by address-space index (C++ `userops.segmentop`),
-/// kept in the architecture's [`ArchStates`](crate::kuna_archstate::ArchStates) and shared with
+/// kept in the architecture's [`ArchStates`](crate::archstate::ArchStates) and shared with
 /// every per-function context.
 struct SegmentDefs(Vec<Option<Rc<SegmentDef>>>);
 crate::kuna_arch_state!(SegmentDefs);
@@ -293,7 +293,7 @@ fn build_all(
     arch: &crate::architecture::Architecture,
     manager: Rc<AddrSpaceManager>,
     behaviors: &[Option<Rc<dyn OpBehavior>>],
-    states: &mut crate::kuna_archstate::ArchStates,
+    states: &mut crate::archstate::ArchStates,
 ) -> KunaResult<()> {
     let mut defs: Vec<Option<Rc<SegmentDef>>> = Vec::new();
     for i in 0..arch.userops.num_segment_ops() {

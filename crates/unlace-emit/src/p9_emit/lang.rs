@@ -38,16 +38,16 @@ use unlace_base::types::int4;
 use crate::printc::{keywords, tokens};
 use crate::printlanguage::OpToken;
 
-pub use crate::kuna_outlang::OutLang;
+pub use crate::outlang::OutLang;
 
 /// The output language's emit-band records: its profile, ABI renderer and type speller.
 pub trait OutLangExt {
     /// The surface vocabulary and capability record.
     fn profile(self) -> &'static LangProfile;
     /// How this language renders a recovered calling convention.
-    fn abi(self) -> &'static dyn crate::kuna_langabi::LangAbi;
+    fn abi(self) -> &'static dyn crate::langabi::LangAbi;
     /// How this language spells a recovered type.
-    fn speller(self) -> &'static dyn crate::kuna_langtypes::TypeSpeller;
+    fn speller(self) -> &'static dyn crate::langtypes::TypeSpeller;
 }
 
 impl OutLangExt for OutLang {
@@ -55,28 +55,28 @@ impl OutLangExt for OutLang {
     fn profile(self) -> &'static LangProfile {
         match self {
             OutLang::C => &LANG_C,
-            OutLang::Rust => &crate::kuna_langrust::LANG_RUST,
-            OutLang::Go => &crate::kuna_langgo::LANG_GO,
-            OutLang::Java => &crate::kuna_langjava::LANG_JAVA,
+            OutLang::Rust => &crate::langrust::LANG_RUST,
+            OutLang::Go => &crate::langgo::LANG_GO,
+            OutLang::Java => &crate::langjava::LANG_JAVA,
         }
     }
 
     /// How this language renders a recovered calling convention.
-    fn abi(self) -> &'static dyn crate::kuna_langabi::LangAbi {
+    fn abi(self) -> &'static dyn crate::langabi::LangAbi {
         match self {
-            OutLang::C | OutLang::Java => &crate::kuna_langabi::C_ABI,
-            OutLang::Rust => &crate::kuna_langabi::RUST_ABI,
-            OutLang::Go => &crate::kuna_langabi::C_ABI,
+            OutLang::C | OutLang::Java => &crate::langabi::C_ABI,
+            OutLang::Rust => &crate::langabi::RUST_ABI,
+            OutLang::Go => &crate::langabi::C_ABI,
         }
     }
 
     /// How this language spells a recovered type.
-    fn speller(self) -> &'static dyn crate::kuna_langtypes::TypeSpeller {
+    fn speller(self) -> &'static dyn crate::langtypes::TypeSpeller {
         match self {
-            OutLang::C => &crate::kuna_langc::C_SPELLER,
-            OutLang::Rust => &crate::kuna_rusttypes::RUST_SPELLER,
-            OutLang::Go => &crate::kuna_langgo::GO_SPELLER,
-            OutLang::Java => &crate::kuna_langjava::JAVA_SPELLER,
+            OutLang::C => &crate::langc::C_SPELLER,
+            OutLang::Rust => &crate::rusttypes::RUST_SPELLER,
+            OutLang::Go => &crate::langgo::GO_SPELLER,
+            OutLang::Java => &crate::langjava::JAVA_SPELLER,
         }
     }
 }
@@ -86,7 +86,7 @@ impl OutLangExt for OutLang {
 /// The vocabulary is shared; the ORDER is per-language, which is the whole point
 /// — C and Rust disagree about where the bitwise operators sit relative to
 /// equality, and that disagreement is a silent wrong answer rather than a syntax
-/// error when it is got wrong (see [`crate::kuna_langrust`]).
+/// error when it is got wrong (see [`crate::langrust`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Prec {
     Comma,
@@ -381,7 +381,7 @@ pub type FnAttributes = &'static [&'static str];
 /// language that cannot express a construct never sees it — rather than the
 /// operator being told to flip four options. `switch_captures_break` is the
 /// load-bearing one: a C `switch` captures a bare `break`, so
-/// `kuna_scope_break` (`p8_structure/kuna_loopbreak_recovery.rs`) legitimately retags a
+/// `kuna_scope_break` (`p8_structure/loopbreak_recovery.rs`) legitimately retags a
 /// goto-to-switch-exit as `f_break_goto`; a language whose switch does not
 /// capture `break` must re-resolve that scope or emit a jump to the wrong place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -595,8 +595,8 @@ fn unknown_base(
     lang.speller().unknown_base(size, under_pointer, long_is_8)
 }
 
-/// Fill this module's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this module's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.lang_do_while_continue = Some(do_while_continue);
     hooks.lang_int_promotion = Some(int_promotion);
     hooks.lang_c_for = Some(c_for);

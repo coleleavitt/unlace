@@ -34,7 +34,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::OpId;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_x64syscall::overlaps;
+use crate::x64syscall::overlaps;
 
 /// The probe as the Mach-O loader names the import (one leading underscore
 /// stripped) and as an image that defines it names it.
@@ -196,9 +196,9 @@ impl Action for ActionChkstkDarwin {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::ChkstkDarwin>()
+            .get::<crate::coreoptions::ChkstkDarwin>()
             .0
-            || data.is_settled(crate::kuna_maturity::Fact::Ssa)
+            || data.is_settled(crate::maturity::Fact::Ssa)
             || data.num_calls() == 0
         {
             return 0;
@@ -218,8 +218,8 @@ impl Action for ActionChkstkDarwin {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.chkstkdarwin_applies_to = Some(applies_to);
 }
 

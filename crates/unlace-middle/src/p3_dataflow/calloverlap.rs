@@ -61,7 +61,7 @@ pub const LEVEL_FULL: int4 = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CallOverlap(pub int4);
 
-impl crate::kuna_optionset::KunaOption for CallOverlap {
+impl crate::optionset::KunaOption for CallOverlap {
     const NAME: &'static str = "calloverlap";
     crate::kuna_option_id!();
 
@@ -193,8 +193,8 @@ pub fn auto_register(
         })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calloverlap_auto_register = Some(auto_register);
 }
 

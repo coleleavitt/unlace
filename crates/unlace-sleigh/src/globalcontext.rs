@@ -1404,7 +1404,7 @@ mod tests {
 
     #[test]
     fn decode_scope_keeps_untouched_context_storage() {
-        use crate::kuna_contextscope::DecodeContextScope;
+        use crate::contextscope::DecodeContextScope;
         use std::cell::RefCell;
         let manager = test_manager();
         let mut original = test_db();
@@ -1457,7 +1457,7 @@ mod tests {
 
     #[test]
     fn decode_scope_restores_nested_ranges_boundaries_and_cache_on_unwind() {
-        use crate::kuna_contextscope::DecodeContextScope;
+        use crate::contextscope::DecodeContextScope;
         use std::cell::RefCell;
         use std::panic::{AssertUnwindSafe, catch_unwind};
         let manager = test_manager();
@@ -1569,7 +1569,7 @@ mod tests {
 
     #[test]
     fn speculative_context_preserves_write_boundaries_and_restores_nested_changes() {
-        use crate::kuna_contextscope::ContextScope;
+        use crate::contextscope::ContextScope;
         use std::cell::RefCell;
         let manager = test_manager();
         let mut original = test_db();

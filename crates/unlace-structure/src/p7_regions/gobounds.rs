@@ -140,7 +140,7 @@ impl Action for ActionGoBounds {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_gobounds::GoBounds>()
+            .get::<crate::gobounds::GoBounds>()
             .0
             || !data.get_arch().source_lang.is_go()
             || data.num_calls() == 0

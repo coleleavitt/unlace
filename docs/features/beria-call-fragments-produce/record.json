@@ -21,7 +21,7 @@
   "source_decompiler": "kuna",
   "div": "DIV-144",
   "default_on": true,
-  "owning_file": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_calltrampoline.rs",
+  "owning_file": "decompiler/crates/kuna-decomp/src/p2_lift/calltrampoline.rs",
   "owning_function": "kuna_trampoline_branch_target",
   "upstream_anchor": "FlowInfo::xrefControlFlow (flow.cc), the CPUI_CALL arm",
   "spec_chapter": "docs/spec/02-lift-and-flow.md",
@@ -60,8 +60,8 @@
     "verified_on_witness": true
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_calltrampoline.rs",
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_calltrampoline/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p2_lift/calltrampoline.rs",
+    "decompiler/crates/kuna-decomp/src/p2_lift/calltrampoline/tests.rs",
     "decompiler/crates/kuna-decomp/src/p2_lift/flow.rs",
     "decompiler/crates/kuna-decomp/src/p2_lift/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",

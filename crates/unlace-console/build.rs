@@ -1,5 +1,5 @@
 //! The source fingerprints behind the `unlace` <-> engine-binary build handshake
-//! (`src/kuna_buildstamp.rs`).
+//! (`src/buildstamp.rs`).
 //!
 //! The engine fingerprint covers `unlace-console` and its production workspace
 //! dependency graph. The harness fingerprint starts at `unlace-harness`, whose
@@ -11,7 +11,7 @@
 use std::env;
 use std::path::PathBuf;
 
-#[path = "src/kuna_buildstamp_fingerprint.rs"]
+#[path = "src/buildstamp_fingerprint.rs"]
 mod fingerprint;
 
 fn main() {

@@ -3,67 +3,67 @@
 //! Stage-aligned module group; declared flatly at the crate root via re-export in
 //! `lib.rs` so public paths (`unlace_decomp::<module>`) are unchanged.
 
+pub mod addcarrychain;
+pub mod alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
+pub mod arraystride;
+pub mod bitidioms;
+pub mod booleanmask;
+pub mod boxedcompare;
+pub mod cancelbytearithmetic;
+pub mod cmpmerge;
+pub mod compareform;
 pub mod condconst;
 pub mod condexe;
-pub mod kuna_addcarrychain;
-pub mod kuna_alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
-pub mod kuna_arraystride;
-pub mod kuna_bitidioms;
-pub mod kuna_booleanmask;
-pub mod kuna_boxedcompare;
-pub mod kuna_cancelbytearithmetic;
-pub mod kuna_cmpmerge;
-pub mod kuna_compareform;
 #[doc(hidden)]
-pub mod kuna_constantbytes;
-pub mod kuna_constspaceload;
-pub mod kuna_copyrun;
-pub mod kuna_deadcascade;
-pub mod kuna_devectorize;
-pub mod kuna_egraph; // (kuna `egraph`) equality saturation over MBA trees
-pub mod kuna_flagcompare;
-pub mod kuna_floatnegation;
-pub mod kuna_floatnegpiece;
-pub mod kuna_floatquiet;
-pub mod kuna_globalstorekeep;
-pub mod kuna_haltloopguard;
-pub mod kuna_indirectanchor; // (kuna) an op inserted after a guard INDIRECT anchors to the op it speaks for
-pub mod kuna_inputrefinement;
-pub mod kuna_inputtile;
-pub mod kuna_intfloatround;
-pub mod kuna_latecse;
-pub mod kuna_loopcounterstore;
-pub mod kuna_maskjoin;
-pub mod kuna_mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
-pub mod kuna_memoryguard;
-pub mod kuna_mulblob; // (kuna) keep a widened multiply operand a value, not an aggregate
-pub mod kuna_multiregargs;
-pub mod kuna_octeoneffects;
-pub mod kuna_opaquearms;
-pub mod kuna_opaqueimplied;
-pub mod kuna_ovlesssimplify;
-pub mod kuna_pairphi; // (kuna `pairlocal`) a 64-bit local held in a register pair joins at its phis
-pub mod kuna_partialglobalload;
-pub mod kuna_persistcalls;
-pub mod kuna_phithread;
-pub mod kuna_pointeestorekeep;
-pub mod kuna_prunedssa;
-pub mod kuna_rangefold;
-pub mod kuna_renamereads;
-pub mod kuna_repstring;
-pub mod kuna_satconvert;
-pub mod kuna_satmul;
-pub mod kuna_selectdiv;
-pub mod kuna_simdlane;
-pub mod kuna_spillstoreguard;
-pub mod kuna_splitstorekeep;
-pub mod kuna_stackreadscope;
-pub mod kuna_storecopyeffects;
-pub mod kuna_strlenscan;
-pub mod kuna_tiedstorekeep;
-pub mod kuna_volatileload;
-pub mod kuna_wideslice;
-pub mod kuna_wrapsplit;
-pub mod kuna_x87truncate;
+pub mod constantbytes;
+pub mod constspaceload;
+pub mod copyrun;
+pub mod deadcascade;
+pub mod devectorize;
+pub mod egraph; // (kuna `egraph`) equality saturation over MBA trees
+pub mod flagcompare;
+pub mod floatnegation;
+pub mod floatnegpiece;
+pub mod floatquiet;
+pub mod globalstorekeep;
+pub mod haltloopguard;
+pub mod indirectanchor; // (kuna) an op inserted after a guard INDIRECT anchors to the op it speaks for
+pub mod inputrefinement;
+pub mod inputtile;
+pub mod intfloatround;
+pub mod latecse;
+pub mod loopcounterstore;
+pub mod maskjoin;
+pub mod mba; // (kuna `mba`) linear mixed boolean-arithmetic simplification
+pub mod memoryguard;
+pub mod mulblob; // (kuna) keep a widened multiply operand a value, not an aggregate
+pub mod multiregargs;
+pub mod octeoneffects;
+pub mod opaquearms;
+pub mod opaqueimplied;
+pub mod ovlesssimplify;
+pub mod pairphi; // (kuna `pairlocal`) a 64-bit local held in a register pair joins at its phis
+pub mod partialglobalload;
+pub mod persistcalls;
+pub mod phithread;
+pub mod pointeestorekeep;
+pub mod prunedssa;
+pub mod rangefold;
+pub mod renamereads;
+pub mod repstring;
 pub mod ruleaction_2;
 pub mod ruleaction_7;
+pub mod satconvert;
+pub mod satmul;
+pub mod selectdiv;
+pub mod simdlane;
+pub mod spillstoreguard;
+pub mod splitstorekeep;
+pub mod stackreadscope;
+pub mod storecopyeffects;
+pub mod strlenscan;
+pub mod tiedstorekeep;
+pub mod volatileload;
+pub mod wideslice;
+pub mod wrapsplit;
+pub mod x87truncate;

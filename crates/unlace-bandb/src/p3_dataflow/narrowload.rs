@@ -57,7 +57,7 @@ pub fn widens_into_declared_field(data: &Funcdata, ptr: VarnodeId) -> bool {
     matches!(
         record.get_metatype(),
         type_metatype::TYPE_STRUCT | type_metatype::TYPE_UNION
-    ) && !crate::kuna_structsynth::points_at_synthesized_record(base_type)
+    ) && !crate::structsynth::points_at_synthesized_record(base_type)
         && reaches_type_lock(data, ptr)
 }
 

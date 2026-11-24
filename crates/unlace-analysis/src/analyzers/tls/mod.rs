@@ -1,11 +1,11 @@
 //! (kuna `tlsnames`) The static TLS block of an x86 or AArch64 ELF image: `PT_TLS`
 //! and the `STT_TLS` symbols of an executable, or the `SHF_TLS` sections of a
 //! relocatable object (the layout the loader applies the AArch64 TLSLE
-//! relocations with), for `unlace_decomp::kuna_tlsnames`.
+//! relocations with), for `unlace_decomp::tlsnames`.
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use object::{Object, ObjectSymbol, SymbolKind};
-use unlace_decomp::kuna_tlsnames::TlsLayout;
+use unlace_decomp::tlsnames::TlsLayout;
 
 pub struct TlsNamesPass;
 

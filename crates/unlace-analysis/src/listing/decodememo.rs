@@ -21,7 +21,7 @@ use unlace_sleigh::translate::Translate;
 
 use super::classify::{Classified, classify};
 use super::decode::{DecodedListing, decode_one_listing};
-use super::kuna_decodereuse::ReusableDecode;
+use super::decodereuse::ReusableDecode;
 use super::model::{FlowKind, FlowType, Mnemonic};
 use super::walk::StepCtx;
 

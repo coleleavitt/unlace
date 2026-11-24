@@ -26,7 +26,7 @@ it swallowed; the body is `a0 + 0x6e`.
 ## The fix
 
 - New `option calltrampoline` (P2 flow-classification, default on, DIV-144).
-  `kuna_calltrampoline.rs` decodes a direct call's target out of band and fires
+  `calltrampoline.rs` decodes a direct call's target out of band and fires
   when the stack pointer passes through exactly `entrySP + <pointer size>` and the
   run then ends in a direct unconditional branch, with no call, conditional
   branch, indirect branch or return in between. The `CALL` becomes a `BRANCH` and

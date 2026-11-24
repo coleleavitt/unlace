@@ -2,7 +2,7 @@
 
 Status (2026-11-23): section 9 steps 2-4 landed: `crates/unlace-ctree` holds the types, `CMaturity`
 and the builder at `built`; `option ctree on` (default off) prints the body through the tree
-(`printc/kuna_ctreeprint.rs`: graph sequences, leaves, and through `CTree::part` the arms of an
+(`printc/ctreeprint.rs`: graph sequences, leaves, and through `CTree::part` the arms of an
 `if` and the bodies of loops and goto blocks). Loops, switches and goto blocks are tree nodes, and the tree reaches `statements`: each leaf holds
 its ops, and the leaf printer prints from that list. The first rewrites, `iteboolean` and
 `iteregion`, run on the tree (`PrintC::ctree_rewrite`, level `rewritten`); they live in the emit
@@ -205,7 +205,7 @@ name, default and log line:
 
 ## 5. Maturity
 
-The function-level levels of §0.10 (`crates/unlace-middle/src/substrate/kuna_maturity.rs`) end at
+The function-level levels of §0.10 (`crates/unlace-middle/src/substrate/maturity.rs`) end at
 `complete`, and the tree is only built after it: the builder asserts
 `debug_assert_settled!(fd, BlockStructure)` and `debug_assert_settled!(fd, Casts)`. The tree then has its own
 level, `CMaturity`, which only rises. Unlike the function's level it never drops back: printing
@@ -255,7 +255,7 @@ unlace-middle ─┬─ unlace-structure ─┐
   matchers and the `switchmerge`/`gotonext` plans the rewrites take over). It never depends on
   `unlace-emit`.
 - `unlace-emit` depends on it; the tree printer is a `printc/` submodule (like
-  `printc/kuna_cpoolprint.rs`), since it calls PrintC's private emit routines.
+  `printc/cpoolprint.rs`), since it calls PrintC's private emit routines.
 - Some rewrites need to know what a leaf prints (`ops_print_nothing`, `is_suppressed_statement`, the
   implied-varnode filter). Those predicates move down into `unlace-ctree` when the `statements` level
   is built, as one function both paths call, so they cannot drift apart. Ones that read printer state

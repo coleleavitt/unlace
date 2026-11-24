@@ -71,7 +71,7 @@ Exactly `ceil(N/2)` becomes exactly `N`.
 ## Mechanism, and why it is sound
 
 `iteregion` and `iteboolean` both reach the condition component through
-`kuna_iteregion.rs (leaf_bblock)`, which descends a `BlockList` of **one**
+`iteregion.rs (leaf_bblock)`, which descends a `BlockList` of **one**
 component but bails on a list of two or more. The collapse structurer concatenates
 a just-collapsed predecessor together with the following condition block into a
 two-component `BlockList`, and that list becomes component 0 of the *next*

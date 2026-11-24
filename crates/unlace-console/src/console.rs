@@ -12,7 +12,7 @@
 //!
 //! # The commands and what is expressible today
 //!
-//! The kuna stage model is pure static data ([`unlace_decomp::kuna_phases`], the
+//! The kuna stage model is pure static data ([`unlace_decomp::phases`], the
 //! W4 registry), so the **registry-only** commands port in full, byte-for-byte:
 //!
 //! - [`IfcKunaPhaseList`] — `phase list`: the stages, Band B membership, and the
@@ -21,7 +21,7 @@
 //!   console surface, or sub-stage to its stage (or dump the full tables).
 //! - [`IfcKunaPhaseCatalog`] — `phase catalog [<option>]`: emit the
 //!   LLM-settable assertion catalog as JSON, calling the **W4 byte-compatible
-//!   emitter** ([`unlace_decomp::kuna_phases::emit_catalog_json`]). With a program
+//!   emitter** ([`unlace_decomp::phases::emit_catalog_json`]). With a program
 //!   loaded the live `current` field is joined per option from the
 //!   [`Architecture`] flags ([`kuna_live_value`], the port of
 //!   `kuna_console.cc kunaLiveValue`). `tests/stages/kuna-catalog.toml`
@@ -31,7 +31,7 @@
 //! - [`IfcKunaAssert`] — `kassert ...`: validate a typed assertion against the
 //!   registry and route it to a store. The **validation + routing decision**
 //!   core (parse-error precedence, `kassert list`, the LATENT/unroutable
-//!   branches) ports in full via [`unlace_decomp::kuna_assert`]; the store
+//!   branches) ports in full via [`unlace_decomp::assert`]; the store
 //!   mutation for a *routable* assertion needs the unported engine integration
 //!   layer (Override / FuncProto locks / retype / `OptionDatabase::set`) and is
 //!   routed through [`engine_unavailable`].
@@ -70,14 +70,14 @@ use crate::interface::{CommandStream, IfaceCommandAction, IfaceError, IfaceResul
 use std::borrow::Cow;
 use std::cell::RefCell;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_assert::{AssertLog, Dispatch, KunaAssertion, validate_assertion};
-use unlace_decomp::kuna_phases::{
+use unlace_decomp::assert::{AssertLog, Dispatch, KunaAssertion, validate_assertion};
+use unlace_decomp::phases::{
     KunaPhase, KunaStrength, emit_catalog_json, emit_catalog_json_one, kuna_group_by_index,
     kuna_num_groups, kuna_num_subphases, kuna_num_surfaces, kuna_subphase_by_index,
     kuna_surface_by_index, lookup_group, lookup_settable, lookup_subphase, lookup_surface,
 };
-use unlace_decomp::kuna_regionid::KunaRegionIdentifier;
 use unlace_decomp::printc::ArchPrintExt;
+use unlace_decomp::regionid::KunaRegionIdentifier;
 
 /// The named pipeline variants built by `ActionDatabase::buildDefaultGroups`
 /// (C++ `PIPELINE_VARIANTS`).
@@ -166,21 +166,20 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
     if option == "dyldimage" {
         let _load = conf.load_scope();
         return Some(
-            unlace_decomp::kuna_dyldcache::selected_image()
-                .map_or(Cow::Borrowed("none"), Cow::Owned),
+            unlace_decomp::dyldcache::selected_image().map_or(Cow::Borrowed("none"), Cow::Owned),
         );
     }
     if option == "typelib" {
         return Some(Cow::Owned(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_typelib::TypeLib>()
+                .get::<unlace_decomp::typelib::TypeLib>()
                 .as_str(),
         ));
     }
     if option == "comcfg" {
         return Some(Cow::Owned(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_comcfg::ComCfg>()
+                .get::<unlace_decomp::comcfg::ComCfg>()
                 .as_str(),
         ));
     }
@@ -188,12 +187,12 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // The program's load options, or for a program loaded from the
         // environment the env bridge, which the `option` command also sets.
         let _load = conf.load_scope();
-        let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force();
+        let choice = unlace_decomp::kernelcache::KernelcacheChoice::in_force();
         return Some(Cow::Owned(choice.as_str().to_string()));
     }
     if option == "kernelcache-boot" {
         let _load = conf.load_scope();
-        let choice = unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot::in_force();
+        let choice = unlace_decomp::kernelcacheboot::KernelcacheBoot::in_force();
         return Some(Cow::Owned(choice.as_str().into_owned()));
     }
     Some(Cow::Borrowed(match option {
@@ -208,18 +207,18 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "loopcontinue" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_loopcontinue::LoopContinue>()
+                .get::<unlace_decomp::loopcontinue::LoopContinue>()
                 .0,
         ),
         "postinc" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::PostIncrement>()
+                .get::<unlace_decomp::coreoptions::PostIncrement>()
                 .0,
         ),
         "compareform" => {
             if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .get::<unlace_decomp::compareform::PresentLessequal>()
                 .0
             {
                 "original"
@@ -232,28 +231,28 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "arraynotation" => on_off(conf.print().options.array_notation()),
         "armfloatargs" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_armfloatargs::ArmFloatArgs>()
+                .get::<unlace_decomp::armfloatargs::ArmFloatArgs>()
                 .0,
         ),
         "callarrayextent" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_callarrayextent::CallArrayExtent>()
+                .get::<unlace_decomp::callarrayextent::CallArrayExtent>()
                 .0,
         ),
         "stackstruct" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_stackstruct::StackStruct>()
+                .get::<unlace_decomp::stackstruct::StackStruct>()
                 .0,
         ),
         "globalarrayanchor" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_globalarrayanchor::GlobalArrayAnchor>()
+                .get::<unlace_decomp::globalarrayanchor::GlobalArrayAnchor>()
                 .0,
         ),
         "opaquepredicate"
             if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .get::<unlace_decomp::coreoptions::OpaquePredicate>()
                 .globals =>
         {
             "globals"
@@ -261,68 +260,64 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
 
         "bitidioms" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_bitidioms::BitIdioms>()
+                .get::<unlace_decomp::bitidioms::BitIdioms>()
                 .0,
         ),
         "helperroles" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_helperrole::HelperRoles>()
+                .get::<unlace_decomp::helperrole::HelperRoles>()
                 .0,
         ),
         "dynalloca" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_dynalloca::DynAlloca>()
+                .get::<unlace_decomp::dynalloca::DynAlloca>()
                 .0,
         ),
-        "vaarg" => on_off(
-            conf.kuna_options
-                .get::<unlace_decomp::kuna_vaarg::VaArg>()
-                .0,
-        ),
+        "vaarg" => on_off(conf.kuna_options.get::<unlace_decomp::vaarg::VaArg>().0),
         "indexrescale" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_indexrescale::IndexRescale>()
+                .get::<unlace_decomp::indexrescale::IndexRescale>()
                 .0,
         ),
         "looprotate" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_looprotate::LoopRotate>()
+                .get::<unlace_decomp::looprotate::LoopRotate>()
                 .0,
         ),
         "vastart" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_vastart::VaStartRewrite>()
+                .get::<unlace_decomp::vastart::VaStartRewrite>()
                 .0,
         ),
         "typevote" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_typevote::TypeVote>()
+                .get::<unlace_decomp::typevote::TypeVote>()
                 .0,
         ),
         "switchguardmerge" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_switchguardmerge::SwitchGuardMerge>()
+                .get::<unlace_decomp::switchguardmerge::SwitchGuardMerge>()
                 .0,
         ),
         "opaquepredicate" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::OpaquePredicate>()
+                .get::<unlace_decomp::coreoptions::OpaquePredicate>()
                 .on,
         ),
         "memsetrecover" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_memsetsequence::MemsetRecover>()
+                .get::<unlace_decomp::memsetsequence::MemsetRecover>()
                 .0,
         ),
         "rodatastring" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_rodatastring::RodataString>()
+                .get::<unlace_decomp::rodatastring::RodataString>()
                 .0,
         ),
         "returnpair" => {
             if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_returnpair::ReturnSingle>()
+                .get::<unlace_decomp::returnpair::ReturnSingle>()
                 .0
             {
                 "single"
@@ -332,42 +327,42 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "nulterminator" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_nulterminator::NulTerminator>()
+                .get::<unlace_decomp::nulterminator::NulTerminator>()
                 .0,
         ),
         "retsplitglobal" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::RetSplitGlobal>()
+                .get::<unlace_decomp::coreoptions::RetSplitGlobal>()
                 .0,
         ),
         // (kuna `protoorder`) Three-valued, so it reports its own token.
         "protoorder" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_protoorder::ProtoOrderMode>()
+            .get::<unlace_decomp::protoorder::ProtoOrderMode>()
             .as_str(),
         // (kuna `calleevote`) Three-valued, so it reports its own token.
         "calleevote" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_calleevote::CalleeVoteMode>()
+            .get::<unlace_decomp::calleevote::CalleeVoteMode>()
             .as_str(),
         // (kuna `callbacktype`) A mode over an enum field like its two
         // neighbours, so it reports its own token rather than a `live_field`.
         "callbacktype" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_callbacktype::CallbackTypeMode>()
+            .get::<unlace_decomp::callbacktype::CallbackTypeMode>()
             .as_str(),
         // (kuna `calleereginputs`) Three-valued (off|on|custom), reported from
         // its two engine flags.
         "calleereginputs" => {
             if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .get::<unlace_decomp::calleereginputs::CalleeRegInputs>()
                 .custom
             {
                 "custom"
             } else if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_calleereginputs::CalleeRegInputs>()
+                .get::<unlace_decomp::calleereginputs::CalleeRegInputs>()
                 .on
             {
                 "on"
@@ -378,86 +373,86 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `castwiden`) Three-valued, so it reports its own token.
         "castwiden" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_castwiden::CastWidenMode>()
+            .get::<unlace_decomp::castwiden::CastWidenMode>()
             .as_str(),
         // (kuna `narrowext`) Three-valued, so it reports its own token.
         "narrowext" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_narrowext::NarrowExtMode>()
+            .get::<unlace_decomp::narrowext::NarrowExtMode>()
             .as_str(),
         // (kuna `syscallregs`) Three-valued, so it reports its own token.
         "syscallregs" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_syscallregs::SyscallRegsMode>()
+            .get::<unlace_decomp::syscallregs::SyscallRegsMode>()
             .as_str(),
         // (kuna `linuxsyscall`) Three-valued, so it reports its own token.
         "linuxsyscall" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_linuxsyscall::LinuxSyscallMode>()
+            .get::<unlace_decomp::linuxsyscall::LinuxSyscallMode>()
             .as_str(),
         // (kuna `callmechanisms`) Three-valued, so it reports its own token.
         "callmechanisms" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_callmechanisms::CallMechanismMode>()
+            .get::<unlace_decomp::callmechanisms::CallMechanismMode>()
             .as_str(),
         // (kuna `rustabi`) Three-valued, so it reports its own token.
         "rustabi" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_rustabi::RustAbiMode>()
+            .get::<unlace_decomp::rustabi::RustAbiMode>()
             .as_str(),
         // (kuna `fatstr`) Three-valued, so it reports its own token.
         "fatstr" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_fatstr::FatStrMode>()
+            .get::<unlace_decomp::fatstr::FatStrMode>()
             .as_str(),
         "swiftstr" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_swiftstr::SwiftStr>()
+            .get::<unlace_decomp::swiftstr::SwiftStr>()
             .0
             .as_str(),
         // (kuna `gobool`) Three-valued, so it reports its own token.
         "gobool" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_gobool::GoBoolMode>()
+            .get::<unlace_decomp::gobool::GoBoolMode>()
             .as_str(),
         // (kuna `fpuemu`) Three-valued, so it reports its own token.
         "fpuemu" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_fpuemu::FpuEmuMode>()
+            .get::<unlace_decomp::fpuemu::FpuEmuMode>()
             .as_str(),
         "mzdgroup" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::MzDgroupOn>()
+                .get::<unlace_decomp::coreoptions::MzDgroupOn>()
                 .0,
         ),
         "rustprobestack" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_rustprobestack::RustProbestackMode>()
+            .get::<unlace_decomp::rustprobestack::RustProbestackMode>()
             .as_str(),
         "rustfmt" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_rustfmt::RustFmtMode>()
+            .get::<unlace_decomp::rustfmt::RustFmtMode>()
             .as_str(),
         // (kuna `gomorestack`) Three-valued, so it reports its own token.
         "gomorestack" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_gomorestack::GoMorestackMode>()
+            .get::<unlace_decomp::gomorestack::GoMorestackMode>()
             .as_str(),
         // (kuna `gowritebarrier`) Three-valued, so it reports its own token.
         "gowritebarrier" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_gowritebarrier::GoWriteBarrierMode>()
+            .get::<unlace_decomp::gowritebarrier::GoWriteBarrierMode>()
             .as_str(),
         "gonewtype" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_gonewtype::GoNewType>()
+                .get::<unlace_decomp::gonewtype::GoNewType>()
                 .0,
         ),
         // (kuna `sourcelang`) Reports the OPTION state, not the detected fact:
         // `auto` until a run forces a language.
         "sourcelang" => match conf
             .kuna_options
-            .get::<unlace_decomp::kuna_sourcelang::SourceLangForced>()
+            .get::<unlace_decomp::sourcelang::SourceLangForced>()
             .0
         {
             Some(lang) => lang.as_str(),
@@ -466,24 +461,24 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `bejoin`) Three-valued, so it reports its own token.
         "bejoin" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_bejoin::BeJoinMode>()
+            .get::<unlace_decomp::bejoin::BeJoinMode>()
             .as_str(),
         "bejoinpass" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_bejoinpass::BeJoinPassMode>()
+            .get::<unlace_decomp::bejoinpass::BeJoinPassMode>()
             .as_str(),
         "octeoneffects" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_octeoneffects::OcteonEffectsMode>()
+            .get::<unlace_decomp::octeoneffects::OcteonEffectsMode>()
             .as_str(),
         "sparcstructret" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_sparcstructret::SparcStructReturn>()
+                .get::<unlace_decomp::sparcstructret::SparcStructReturn>()
                 .0,
         ),
         "arraystride" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_arraystride::RecoverArrayStride>()
+                .get::<unlace_decomp::arraystride::RecoverArrayStride>()
                 .0,
         ),
         "stackalias" => on_off(
@@ -493,12 +488,12 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         "stackviews" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::StackViews>()
+                .get::<unlace_decomp::coreoptions::StackViews>()
                 .0,
         ),
         "v850indirectbranch" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_v850indbranch::V850IndirectBranch>()
+                .get::<unlace_decomp::v850indbranch::V850IndirectBranch>()
                 .0,
         ),
         "switchmodbound" => on_off(
@@ -508,7 +503,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         ),
         "constselectjump" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_constselectjump::ConstSelectMode>()
+            .get::<unlace_decomp::constselectjump::ConstSelectMode>()
             .as_str(),
         "switchsharedcase" => on_off(
             conf.kuna_options
@@ -523,12 +518,12 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // (kuna `calloverlap`) Report the selected overlap policy.
         "calloverlap" => match conf
             .kuna_options
-            .get::<unlace_decomp::kuna_calloverlap::CallOverlap>()
+            .get::<unlace_decomp::calloverlap::CallOverlap>()
             .0
         {
-            unlace_decomp::kuna_calloverlap::LEVEL_OFF => "off",
-            unlace_decomp::kuna_calloverlap::LEVEL_AUTO => "auto",
-            unlace_decomp::kuna_calloverlap::LEVEL_IN => "in",
+            unlace_decomp::calloverlap::LEVEL_OFF => "off",
+            unlace_decomp::calloverlap::LEVEL_AUTO => "auto",
+            unlace_decomp::calloverlap::LEVEL_IN => "in",
             _ => "full",
         },
         // (kuna) Analysis-pass gates: the live `current` field reflects each pass's
@@ -537,134 +532,126 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // None), so the no-program catalog byte-compat fixture is untouched.
         "noreturn_known" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnKnown>()
+                .get::<unlace_decomp::analysisgates::NoreturnKnown>()
                 .0,
         ),
         "godwarfsig" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Godwarfsig>()
+                .get::<unlace_decomp::analysisgates::Godwarfsig>()
                 .0,
         ),
         "goitabcalls" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
+                .get::<unlace_decomp::goitabcalls::GoItabCalls>()
                 .0,
         ),
         "libgccsigs" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Libgccsigs>()
+                .get::<unlace_decomp::analysisgates::Libgccsigs>()
                 .0,
         ),
         "gotypeglobals" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::GoTypeGlobals>()
+                .get::<unlace_decomp::analysisgates::GoTypeGlobals>()
                 .0,
         ),
         // (kuna `libctypes`) Valued `off|opaque|glibc`, so the live token is the
         // value, not an on/off word.
         "libctypes" => match conf
             .kuna_options
-            .get::<unlace_decomp::kuna_libctypes::LibcTypesLayout>()
+            .get::<unlace_decomp::libctypes::LibcTypesLayout>()
         {
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Off => "off",
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque => "opaque",
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Glibc => "glibc",
+            unlace_decomp::libctypes::LibcTypesLayout::Off => "off",
+            unlace_decomp::libctypes::LibcTypesLayout::Opaque => "opaque",
+            unlace_decomp::libctypes::LibcTypesLayout::Glibc => "glibc",
         },
         "strings" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Strings>()
+                .get::<unlace_decomp::analysisgates::Strings>()
                 .0,
         ),
         "blobs" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Blobs>()
+                .get::<unlace_decomp::analysisgates::Blobs>()
                 .0,
         ),
         "widestrings" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Widestrings>()
+                .get::<unlace_decomp::analysisgates::Widestrings>()
                 .0,
         ),
         "widestrings32" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Widestrings32>()
+                .get::<unlace_decomp::analysisgates::Widestrings32>()
                 .0,
         ),
         "entry_disc" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::EntryDisc>()
+                .get::<unlace_decomp::analysisgates::EntryDisc>()
                 .0,
         ),
         "eh_frame_full" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::EhFrameFull>()
+                .get::<unlace_decomp::analysisgates::EhFrameFull>()
                 .0,
         ),
         "unwindstarts" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Unwindstarts>()
+                .get::<unlace_decomp::analysisgates::Unwindstarts>()
                 .0,
         ),
 
         "machoehframe" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Machoehframe>()
+                .get::<unlace_decomp::analysisgates::Machoehframe>()
                 .0,
         ),
         "machobinds" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Machobinds>()
+                .get::<unlace_decomp::analysisgates::Machobinds>()
                 .0,
         ),
-        "exporttrie" => on_off(unlace_decomp::kuna_exporttrie::exporttrie_enabled()),
+        "exporttrie" => on_off(unlace_decomp::exporttrie::exporttrie_enabled()),
         "ppc32picimports" => conf.analysis_ppc32picimports.as_str(),
         "ifuncfpret" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_ifuncfpret::IfuncFpRet>()
+                .get::<unlace_decomp::ifuncfpret::IfuncFpRet>()
                 .0,
         ),
-        "ppcapu" => on_off(
-            conf.kuna_options
-                .get::<unlace_decomp::kuna_ppcapu::PpcApu>()
-                .0,
-        ),
+        "ppcapu" => on_off(conf.kuna_options.get::<unlace_decomp::ppcapu::PpcApu>().0),
         "delphiabi" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_delphiabi::DelphiAbi>()
+                .get::<unlace_decomp::delphiabi::DelphiAbi>()
                 .0,
         ),
 
         "debuglink" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_debuglink::DebugLink>()
+                .get::<unlace_decomp::debuglink::DebugLink>()
                 .0,
         ),
         // (kuna `goabi`) Two-valued but spelled auto|off, so it reports its token.
         "goabi" => {
-            if conf
-                .kuna_options
-                .get::<unlace_decomp::kuna_goabi::GoAbi>()
-                .0
-            {
+            if conf.kuna_options.get::<unlace_decomp::goabi::GoAbi>().0 {
                 "auto"
             } else {
                 "off"
             }
         }
-        "dyldcrossrefs" => on_off(unlace_decomp::kuna_dyldcache::dyldcrossrefs_enabled()),
-        "cil" => on_off(unlace_decomp::kuna_cil::cil_enabled()),
+        "dyldcrossrefs" => on_off(unlace_decomp::dyldcache::dyldcrossrefs_enabled()),
+        "cil" => on_off(unlace_decomp::cil::cil_enabled()),
         // (kuna `symbolnamechars`) Three-valued, so it reports its own token.
         "symbolnamechars" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_symbolnamechars::NameChars>()
+            .get::<unlace_decomp::symbolnamechars::NameChars>()
             .as_str(),
         "ruststdsigs" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_ruststdsigs::RustStdSigs>()
+            .get::<unlace_decomp::ruststdsigs::RustStdSigs>()
             .as_str(),
         "dwarf" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Dwarf>()
+                .get::<unlace_decomp::analysisgates::Dwarf>()
                 .0,
         ),
         // (kuna) ELF data-symbol naming (DIV-76): committed at `read symbols`
@@ -673,28 +660,28 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // on/off.
         "cppsig" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .get::<unlace_decomp::cppsig::CppSigMode>()
             .as_str(),
         "addrtable" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Addrtable>()
+                .get::<unlace_decomp::analysisgates::Addrtable>()
                 .0,
         ),
         "listing" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Listing>()
+                .get::<unlace_decomp::analysisgates::Listing>()
                 .0,
         ),
         "fid" => {
             if !conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .on
             {
                 "off"
             } else if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .strict
             {
                 "strict"
@@ -705,13 +692,13 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "armframes" => {
             if !conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .get::<unlace_decomp::analysisgates::ArmFrames>()
                 .inventory
             {
                 "off"
             } else if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+                .get::<unlace_decomp::analysisgates::ArmFrames>()
                 .full
             {
                 "on"
@@ -721,21 +708,21 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "x86listingswitch" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::X86listingswitch>()
+                .get::<unlace_decomp::analysisgates::X86listingswitch>()
                 .0,
         ),
         "addrtakenentry" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Addrtakenentry>()
+                .get::<unlace_decomp::analysisgates::Addrtakenentry>()
                 .0,
         ),
         // (kuna `flowmode`) Valued `on|aftercall|off`, so it reports its own token.
         "flowmode" => match (
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .get::<unlace_decomp::analysisgates::FlowMode>()
                 .on,
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .get::<unlace_decomp::analysisgates::FlowMode>()
                 .after_call,
         ) {
             (false, _) => "off",
@@ -744,10 +731,10 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         },
         "cvftrace" => match (
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .names,
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::CvfTrace>()
+                .get::<unlace_decomp::analysisgates::CvfTrace>()
                 .lines,
         ) {
             (false, _) => "off",
@@ -757,7 +744,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         "gopcln" => {
             let g = conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::GoPcln>();
+                .get::<unlace_decomp::analysisgates::GoPcln>();
             match (g.on, g.lines) {
                 (false, _) => "off",
                 (true, false) => "on",
@@ -766,51 +753,51 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         }
         "elfmain" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Elfmain>()
+                .get::<unlace_decomp::analysisgates::Elfmain>()
                 .0,
         ),
         "fast_funcdisc" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+                .get::<unlace_decomp::analysisgates::FastFuncdisc>()
                 .0,
         ),
         // (kuna `aif`) Four-valued, so it reports its own token.
         "aif" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .as_str(),
 
         "objectview" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Objectview>()
+                .get::<unlace_decomp::analysisgates::Objectview>()
                 .0,
         ),
         "mapglobalsyms" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_mapglobalsyms::Mapglobalsyms>()
+                .get::<unlace_decomp::mapglobalsyms::Mapglobalsyms>()
                 .0,
         ),
         "aifpoolslide" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Aifpoolslide>()
+                .get::<unlace_decomp::analysisgates::Aifpoolslide>()
                 .0,
         ),
         "esprom" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_esprom::EspRom>()
+            .get::<unlace_decomp::esprom::EspRom>()
             .as_str(),
         "armconstshift" => conf
             .kuna_options
-            .get::<unlace_decomp::kuna_armconstantshift::ConstShiftMode>()
+            .get::<unlace_decomp::armconstantshift::ConstShiftMode>()
             .as_str(),
         "fpargboxed" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_boxedcompare::FpArgBoxed>()
+                .get::<unlace_decomp::boxedcompare::FpArgBoxed>()
                 .0,
         ),
         "satconvert" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_satconvert::SatConvert>()
+                .get::<unlace_decomp::satconvert::SatConvert>()
                 .0,
         ),
         // (PR-8) Mach-O arm64e spec selection: reflects the recorded requested
@@ -818,7 +805,7 @@ pub fn kuna_live_value(conf: &Architecture, option: &str) -> Option<Cow<'static,
         // catalog `current` mirrors the `option macho-arm64e on|off` request).
         "macho-arm64e" => on_off(
             conf.kuna_options
-                .get::<unlace_decomp::kuna_macho_arm64e::MachoArm64e>()
+                .get::<unlace_decomp::macho_arm64e::MachoArm64e>()
                 .0,
         ),
         // No current field (C++ returns "").
@@ -1072,7 +1059,7 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
         os.push_str(
             if conf
                 .kuna_options
-                .get::<unlace_decomp::kuna_compareform::PresentLessequal>()
+                .get::<unlace_decomp::compareform::PresentLessequal>()
                 .0
             {
                 "original"
@@ -1121,7 +1108,7 @@ impl IfaceCommandAction for IfcKunaPhaseStatus {
 /// JSON (C++ `IfcKunaPhaseCatalog`).
 ///
 /// Calls the W4 byte-compatible emitter
-/// ([`unlace_decomp::kuna_phases::emit_catalog_json`] /
+/// ([`unlace_decomp::phases::emit_catalog_json`] /
 /// [`emit_catalog_json_one`]); the live `current` field is joined per option
 /// from the loaded [`Architecture`] via [`kuna_live_value`] (C++
 /// `kunaLiveValue`). Works with no program loaded (the static doc form).
@@ -1174,7 +1161,7 @@ impl IfaceCommandAction for IfcKunaPhaseCatalog {
 ///
 /// The **validation + routing decision** core ports in full (the parse-error
 /// precedence, `kassert list`, the LATENT/unroutable error arms) on top of
-/// [`unlace_decomp::kuna_assert`]. The store mutation for a *routable* assertion
+/// [`unlace_decomp::assert`]. The store mutation for a *routable* assertion
 /// (Override / FuncProto locks / retype / rename / `OptionDatabase::set`) needs
 /// the unported engine integration and is routed through [`engine_unavailable`];
 /// because the success path cannot complete the store write, the `assertLog`
@@ -1340,13 +1327,13 @@ impl IfaceCommandAction for IfcKunaAssert {
                     ));
                 };
                 let dcp = dcp_mut(status)?;
-                let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+                let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
                 dcp.local_symbol_fd(&name)?;
                 let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch()))
                 else {
                     return Err(IfaceError::execution("no function selected"));
                 };
-                crate::kuna_hightarget::isolate_local(fd, &name, maxduplicates, arch)
+                crate::hightarget::isolate_local(fd, &name, maxduplicates, arch)
                     .map_err(IfaceError::execution)?;
                 status.out(&applied_line);
                 self.assert_log.borrow_mut().push(record);
@@ -1361,21 +1348,14 @@ impl IfaceCommandAction for IfcKunaAssert {
                 let oldname = tokens[0].clone();
                 let newname = tokens[1].clone();
                 let dcp = dcp_mut(status)?;
-                let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+                let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
                 dcp.local_symbol_fd(&oldname)?;
                 let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch()))
                 else {
                     return Err(IfaceError::execution("no function selected"));
                 };
-                crate::kuna_hightarget::apply_local(
-                    fd,
-                    &oldname,
-                    &newname,
-                    None,
-                    maxduplicates,
-                    arch,
-                )
-                .map_err(IfaceError::execution)?;
+                crate::hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
+                    .map_err(IfaceError::execution)?;
                 status.out(&applied_line);
                 self.assert_log.borrow_mut().push(record);
                 Ok(())
@@ -1423,7 +1403,7 @@ impl IfaceCommandAction for IfcKunaAssert {
 /// function (C++ `IfcKunaRestarts`).
 ///
 /// C++ calls `kunaDumpRestarts(*status->fileoptr, *dcp->fd)` over the global
-/// restart side table; the ported [`unlace_decomp::kuna_restartlog::RestartLog`]
+/// restart side table; the ported [`unlace_decomp::restartlog::RestartLog`]
 /// is `Architecture`-owned, but the architecture does not yet hold one
 /// (`STUB(W5)`: the log and its trigger sites land together), so the dump is
 /// routed through [`engine_unavailable`] after the `No function selected`
@@ -1672,7 +1652,7 @@ impl IfaceCommandAction for IfcKunaQuality {
 /// region hierarchy (C++ `IfcKunaRegion*` from `kuna_regionid.cc`; registered by
 /// the kuna capability in `kuna_console.cc`).
 ///
-/// The region identifier is ported (`unlace_decomp::kuna_regionid`); its
+/// The region identifier is ported (`unlace_decomp::regionid`); its
 /// `buildFromBlockGraph` block-graph adapter (the W7 boundary) is now closed
 /// ([`KunaRegionIdentifier::build_from_block_graph`]), so these three commands
 /// drive it over the real decompiled `bblocks` CFG (block start addresses, the
@@ -1780,7 +1760,7 @@ struct RegionWalkVisitor {
     addresses: Vec<u64>,
 }
 
-impl unlace_decomp::kuna_regionid::KunaRegionVisitor for RegionWalkVisitor {
+impl unlace_decomp::regionid::KunaRegionVisitor for RegionWalkVisitor {
     fn visit_block(&mut self, _block: Option<unlace_decomp::context::BlockId>, addr: u64) {
         self.addresses.push(addr);
     }
@@ -1842,14 +1822,14 @@ impl IfaceCommandAction for IfcCallwidePrepare {
         if !prog
             .arch()
             .kuna_options
-            .get::<unlace_decomp::kuna_callwide::CallWide>()
+            .get::<unlace_decomp::callwide::CallWide>()
             .0
         {
             return Ok(());
         }
         prog.commit_pending_analysis()
             .map_err(|error| IfaceError::execution(error.explain().to_string()))?;
-        crate::kuna_callwide::prepare(prog);
+        crate::callwide::prepare(prog);
         Ok(())
     }
 
@@ -1982,7 +1962,7 @@ impl IfaceCommandAction for IfcKunaFunctionBounds {
             "Declared {name} at {display_start:#x} spanning {size} bytes\n"
         ));
         if let Some(sentence) = unmapped {
-            status.out(&crate::kuna_declaredbytes::transcript_line(&sentence));
+            status.out(&crate::declaredbytes::transcript_line(&sentence));
         }
         Ok(())
     }
@@ -2066,8 +2046,8 @@ pub struct IfcKunaFunctionContaining;
 impl IfaceCommandAction for IfcKunaFunctionContaining {
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
-        let token = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::")
-            .into_owned();
+        let token =
+            unlace_decomp::symbolnamebound::bound_scope_path(&s.read_token(), "::").into_owned();
         let dcp = dcp_mut(status)?;
         let prog = dcp
             .conf

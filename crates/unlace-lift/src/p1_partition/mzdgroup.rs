@@ -6,7 +6,7 @@
 //! a global read `mov ax, [0x308e]` stayed `*(int *)0x308e`, a pointer constant
 //! resolved against DS 0, and no global of the program had a name. The loader
 //! reads the segment the startup code loads into DS (the linker's DGROUP,
-//! `unlace_analysis::loader::kuna_mzdgroup`); [`apply`] states it as DS's tracked
+//! `unlace_analysis::loader::mzdgroup`); [`apply`] states it as DS's tracked
 //! value over the load module, so each function starts with DS set to it
 //! (`ActionConstbase`) and a constant near pointer resolves against it. The
 //! entry point itself starts with DS holding the PSP and keeps no tracked DS,
@@ -45,7 +45,7 @@ pub struct MzDataSegment {
 pub fn apply(arch: &Architecture) {
     let Some(seg) = arch
         .kuna_tables
-        .get::<crate::kuna_mzdgroup::ImageDgroup>()
+        .get::<crate::mzdgroup::ImageDgroup>()
         .as_ref()
     else {
         return;
@@ -56,10 +56,7 @@ pub fn apply(arch: &Architecture) {
     let Ok(loc) = arch.get_register_varnode(b"DS") else {
         return;
     };
-    let on = arch
-        .kuna_options
-        .get::<crate::kuna_coreoptions::MzDgroupOn>()
-        .0;
+    let on = arch.kuna_options.get::<crate::coreoptions::MzDgroupOn>().0;
     let at = |offset: u64| Address::new(Rc::clone(&space), offset);
     arch.with_context_db_mut(|db| {
         let unstated =
@@ -99,12 +96,12 @@ pub fn apply(arch: &Architecture) {
     });
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.mzdgroup_apply = Some(apply);
 }
 
 /// (kuna `mzdgroup`) The data segment an MS-DOS executable's startup loads into DS; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageDgroup = Option<MzDataSegment>;
 crate::kuna_arch_table!(ImageDgroup);

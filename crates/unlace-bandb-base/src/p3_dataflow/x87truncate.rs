@@ -10,7 +10,7 @@ use crate::action::{ActionGroupList, Rule};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-pub use crate::kuna_specnames::X87_TRUNCATE_USEROPS as USEROP_NAMES;
+pub use crate::specnames::X87_TRUNCATE_USEROPS as USEROP_NAMES;
 
 const ROUND_TOWARD_ZERO: u64 = 0x0c00;
 

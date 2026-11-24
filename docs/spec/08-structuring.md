@@ -168,7 +168,7 @@ error retries and early continues, followed by the ordinary end-of-body latch.
 The collapse schemas can consume each retry as a smaller loop before their
 fallback considers virtualizing any edge, producing nested infinite loops for
 one source loop. With `loopcontinue on` (the default),
-`kuna_loopcontinue.rs (refine_latches)` runs on the freshly seeded collapse
+`loopcontinue.rs (refine_latches)` runs on the freshly seeded collapse
 mirror, including after a region-structurer fallback. It requires one ordinary
 entry, at least two back-edges, and domination of every latch by the head.
 A head with an exit outside the natural-loop body, a switch anywhere in that
@@ -180,12 +180,12 @@ irreducible edge touching the body rejects refinement: dominators are computed
 with those edges masked and alone cannot establish single entry.
 No p-code, statement, or destination changes.
 
-`kuna_loopcontinue.rs (recover_continues)` runs before `mark_unstructured`.
+`loopcontinue.rs (recover_continues)` runs before `mark_unstructured`.
 A goto or if-goto becomes `continue` only when its target's first leaf is the
 first leaf of its innermost `BlockInfLoop`, or the continue point of its
 innermost conditional loop. Entering a nested loop resets that scope. A
 conditional loop's `continue;` evaluates a test or an iterate statement rather
-than restarting the first leaf, so `kuna_loopcontinue.rs (continue_points)`
+than restarting the first leaf, so `loopcontinue.rs (continue_points)`
 gives each one the leaf a `continue;` resumes at, or none. A while-do resumes
 at the front leaf of its condition block, unless it prints as a `for` (an
 iterate op), whose `continue;` would run the iterate statement first; in the
@@ -204,7 +204,7 @@ loop, keeps its goto. `off` restores the original collapse precedence and
 rendering.
 
 **`gotosink` — backward gotos become loops; a jump over a run becomes an
-`if`.** `kuna_gotosink.rs (ActionGotoSink)` runs after the other
+`if`.** `gotosink.rs (ActionGotoSink)` runs after the other
 blockrecovery passes that edit the tree (last before `paramcopyhoist`), with
 `gotosink on` (the default). It first splices every `BlockList` that is a
 member of a list or graph into its parent (`BlockGraph::kuna_flatten_lists`):
@@ -265,7 +265,7 @@ any unconditional jump. kuna's `comma_separate` printer modifier *is*
 `MultiStatementExpression`; kuna's `bb_is_complex` *is*
 `_is_single_statement_block`.
 
-`crates/unlace-structure/src/p8_structure/kuna_condfold.rs` ports exactly
+`crates/unlace-structure/src/p8_structure/condfold.rs` ports exactly
 that relaxation and nothing else. It widens the single `is_complex(orblock)`
 decline in both engines: a complex sibling is accepted when **either** of two
 admission rules takes it. The predicate is their union — the two rules were
@@ -274,14 +274,14 @@ other.
 
 **Defaults and the loop test.** `condfold` defaults to `on`; `condstmts`
 (default 3) still re-splits an operand that prints more statements than its
-cap. `kuna_condfold.rs (compute_condfold_sets)` admits no block that branches
+cap. `condfold.rs (compute_condfold_sets)` admits no block that branches
 back to a block dominating it (`is_loop_latch`): that block is a loop's test,
 and folding it into a short-circuit operand leaves the loop no condition, so a
 `do { ... } while (c)` would come out as `while( true )` with the test as an
 exit.
 
 **The shared width budget.** Every admitted sibling first has to fit the
-policy level's **printed-width budget**: `kuna_condfold.rs (printed_shape)`
+policy level's **printed-width budget**: `condfold.rs (printed_shape)`
 walks the block's live op list with the *same* skip rules the printer applies
 (`p9_emit/printc.rs (PrintC::emit_basic_block_ops)`: not-printed ops, SSA
 markers, ops whose output varnode is implied, and the bare `CPUI_BRANCH`) and
@@ -294,7 +294,7 @@ applied on top of that one measure, so the level is the only thing that changes
 how wide an operand either rule will let through.
 
 **Rule A — bounded prefix.** The sibling is a `BlockCopy` of one `BlockBasic`
-that `kuna_condfold.rs (prefix_eligible)` approves: within the width budget,
+that `condfold.rs (prefix_eligible)` approves: within the width budget,
 with at most one *statement-root* call, and carrying no comment — because
 `emit_basic_block_ops` suppresses `emit_comment_group` under `comma_separate`
 and folding would silently delete the comment. A
@@ -302,7 +302,7 @@ and folding would silently delete the comment. A
 an operand could render braces, multiple lines, or a label inside the
 parentheses, i.e. invalid C.
 
-**Rule B — statement shape.** `kuna_condfold.rs (shape_score)` applies an
+**Rule B — statement shape.** `condfold.rs (shape_score)` applies an
 explicit allowlist on top of the same width budget: every op must be a marker
 (never printed), an op with an output varnode, a void `CALL`/`CALLIND`, a
 `STORE`, or the single terminal `CBRANCH`. A `RETURN`, a second branch, a
@@ -471,7 +471,7 @@ nests one `if` per call where the source wrote `if (a && f(x) && !g(x))`
 
 With `option condcallpush on` `bb_is_complex` skips a `STORE` whose block
 holds a call op at the same instruction address whose result the block's
-branch reads (`crates/unlace-middle/src/substrate/kuna_condcallpush.rs
+branch reads (`crates/unlace-middle/src/substrate/condcallpush.rs
 (is_call_push)`, a walk of at most 32 varnodes back from the `CBRANCH`
 through ops of the block, through the call's output or an `INDIRECT` it
 creates). A call made only for its effect keeps the count, so it is not pulled
@@ -498,11 +498,11 @@ fold stands. The witness is four byte loads feeding a compare against a call's
 result: it scores as one statement and prints as
 `(v1 = *a2, v2 = a2[1], v3 = a2[2], v4 = a2[3], f(a0) == ...)`.
 
-With `option condstmts N`, `p8_structure/kuna_condstmts.rs (record_hits)`
+With `option condstmts N`, `p8_structure/condstmts.rs (record_hits)`
 runs at that final `ActionBlockStructure`, where implied flags are final. It
 walks the tree for the comma-printed positions — every leaf under the right
 operand of a `BlockCondition` and under the condition of a `BlockWhileDo`
-without overflow syntax — and measures each leaf with `kuna_condfold.rs
+without overflow syntax — and measures each leaf with `condfold.rs
 (printed_shape)`, the printer's own skip rules. A leaf printing more than `N`
 statements before its terminal `CBRANCH` has its block start recorded on the
 `Funcdata`. `infra/decompile_drive.rs
@@ -510,7 +510,7 @@ statements before its terminal `CBRANCH` has its block start recorded on the
 function again from scratch with the recorded starts as a seed (kept across
 `Funcdata::clear`, so an in-pipeline restart keeps it), at most twice, keeping
 the last successful result. During the re-analysis
-`kuna_condstmts.rs (complex_blocks)` adds every seeded block to both engines'
+`condstmts.rs (complex_blocks)` adds every seeded block to both engines'
 complex set, so `rule_block_or`/`try_block_or` decline the fold and
 `rule_block_while_do` gives the loop overflow syntax. Re-analysing, rather than
 restructuring in place at the final pass, is deliberate: by then
@@ -520,7 +520,7 @@ ops re-orients unrelated `if`s and loses unrelated folds. The cost is a second
 analysis of each affected function, and only those. Once highs exist (a tree
 rebuilt after a late structure reset), `complex_blocks` also includes every
 block that measures over the cap directly. The cap also bounds `condfold`:
-`kuna_condstmts.rs (condfold_budget)` passes `min(condfold budget, N + 1)` to
+`condstmts.rs (condfold_budget)` passes `min(condfold budget, N + 1)` to
 `compute_condfold_sets`, since that budget counts the terminal `CBRANCH`.
 
 The cap only removes folds, and can therefore only add statements and, where a
@@ -694,7 +694,7 @@ arm's body onto the then-path).
 
 **(kuna `javatry`) DEX `try` dispatches.** `ActionBlockStructure` drops the
 exceptional `java_throws` edges from the structuring graph after seeding it
-(`p2_lift/kuna_javatry.rs (drop_throws_edges)`), so each catch handler is
+(`p2_lift/javatry.rs (drop_throws_edges)`), so each catch handler is
 reached only from its `java_try` dispatch (chapter 2), and sends a function with
 a dispatch to `CollapseStructure` instead of the region structurer. There the
 collapse treats the dispatch as the head of a `try`:
@@ -717,10 +717,10 @@ by DIV-12 under `option regionstructure`.
 
 **Input.** `region_structurer.rs (run_region_structurer)` first runs the
 chapter-07 region identifier fresh over the real CFG
-(`crates/unlace-structure/src/p7_regions/kuna_regionid.rs
+(`crates/unlace-structure/src/p7_regions/regionid.rs
 (KunaRegionIdentifier)`) and consumes two things from it: the deterministic
 node order (tie-breaking for edge virtualization) and — when
-`regionlooprefine` is on — the `kuna_regionid.rs
+`regionlooprefine` is on — the `regionid.rs
 (KunaRegionIdentifier::cyclic_loops)` projection: each loop's refined body
 and exit frontier keyed by block start address, which absorbs
 dominated switch-case successors that a purely structural natural-loop walk
@@ -812,7 +812,7 @@ components, compute forward immediate dominators, and bucket the candidates —
 *crossing* edges (neither endpoint dominates the other) are virtualized
 before *secondary* edges (destination dominates source); a forward tree edge
 is never chosen. Candidate dominance queries use an iterative dominator-tree
-interval index (`p8_structure/kuna_domindex.rs`) built once per immutable
+interval index (`p8_structure/domindex.rs`) built once per immutable
 snapshot. Subtree containment replaces repeated parent-chain walks; absent
 nodes retain the chain walk's self-dominance behavior. The index is discarded
 with the snapshot, so graph changes cannot leave stale intervals. Interval
@@ -884,7 +884,7 @@ the schedule (`crates/unlace-decomp/src/infra/universalaction.rs
   the new layout.
 
 `dedupitetail` has a pre-structuring counterpart, `option armhoist` (default
-off, `crates/unlace-lift/src/p2_lift/kuna_armhoist.rs (ActionArmHoist)`, §2.17):
+off, `crates/unlace-lift/src/p2_lift/armhoist.rs (ActionArmHoist)`, §2.17):
 it moves the ops both arms of a branch share at their head or tail out of the
 arms in the pre-SSA p-code, so this chapter's structurer sees one copy instead
 of merging two leaves afterwards.
@@ -925,7 +925,7 @@ its value into the phi (`RulePropagateCopy` lets a non-constant value into a
 MULTIEQUAL, and the store then dies). The clone's copy of that phi is the store,
 at the start of the clone, after every store the predecessor kept; several such
 stores print in the order the phis are cloned. That order is set by
-`crates/unlace-structure/src/p8_structure/kuna_clonephiorder.rs (order_global_phis)`,
+`crates/unlace-structure/src/p8_structure/clonephiorder.rs (order_global_phis)`,
 always on: the phis on globals are cloned after the others and in address
 order, which is how kuna printed most of these stores before the clone kept its
 guards' flag. Block order would be the reverse of heritage's placement
@@ -960,16 +960,16 @@ becomes a structured early return. The option's value says which return tails
 qualify, and each tier is its own pass:
 
 - `return` runs
-  `crates/unlace-structure/src/p8_structure/kuna_gotoreduce.rs
+  `crates/unlace-structure/src/p8_structure/gotoreduce.rs
   (ActionGotoReduce)` alone. *Pattern:* a `BlockIf` rendering as
   `if (cond) goto T` where `T` is a single-successor basic-block chain ending
   in `return`. *Transform:* the tail is inlined into the `if` arm
   (`kuna_inline_return_tail`). *Bounds/failure:* the chain is capped at
-  `kuna_gotoreduce.rs (MAX_TAIL_BLOCKS)` = 3 blocks and `(MAX_TAIL_OPS)` = 8
+  `gotoreduce.rs (MAX_TAIL_BLOCKS)` = 3 blocks and `(MAX_TAIL_OPS)` = 8
   ops, and **any** `CALL`/`CALLIND`/`CALLOTHER`/`STORE` in the tail declines
   the match.
 - `on`, the default, runs that pass and then
-  `crates/unlace-structure/src/p8_structure/kuna_taildup.rs
+  `crates/unlace-structure/src/p8_structure/taildup.rs
   (ActionTailDup)` for the return tail that *contains a call* — the
   `free(p); return;` epilogue, which the call-free pass rejects and
   `crossjumprevert` (non-return tails only) declines. Two source shapes are
@@ -978,7 +978,7 @@ qualify, and each tier is its own pass:
   surgery. Because the tail ends in `return`, the duplicated call is reached on
   exactly one structured path, so no convergence proof is needed and the call
   runs as often as before. *Bounds/failure:* ≤ 3 blocks, ≤ 12 printed ops, at
-  most `kuna_taildup.rs (MAX_TAIL_CALLS)` = 2 calls (angr
+  most `taildup.rs (MAX_TAIL_CALLS)` = 2 calls (angr
   `ReturnDuplicatorBase.max_calls_in_regions = 2` — a budget in calls rather
   than a veto), `STORE` always declines. The op count includes the casts
   chapter 09's `ActionSetCasts` inserted, since that pass runs first, so a cast
@@ -994,7 +994,7 @@ early returns. Both tiers were flipped on by DIV-14 (changing zero datatests).
 
 ### Releasing a label the duplication passes converted away
 
-`crates/unlace-structure/src/p8_structure/kuna_gotolabel.rs`. The three
+`crates/unlace-structure/src/p8_structure/gotolabel.rs`. The three
 passes that turn a `goto` into a duplicated tail (`gotoreduce`'s two passes and
 `crossjumprevert`) each end by clearing `f_unstructured_targ` on the target
 they converted, so a label whose last goto is gone does not linger. That is a
@@ -1013,7 +1013,7 @@ the printer would otherwise drop but can never remove one.
 
 ### retsplitglobal — a bound on cloning a global-writing epilogue
 
-`crates/unlace-structure/src/p8_structure/kuna_retsplitglobal.rs`, read by
+`crates/unlace-structure/src/p8_structure/retsplitglobal.rs`, read by
 `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_is_splittable)` — the predicate BOTH return splitters
 consult, upstream `ActionReturnSplit` and kuna's `ActionReturnDup`
@@ -1026,7 +1026,7 @@ the COPY's OUTPUT. Upstream that is harmless, because the epilogue COPYs it was
 written for move registers, which die at the return. A COPY into a *persistent*
 Varnode is a store to a global the program can observe, and it is what P9 prints
 as `dat_<addr> = ...`. *Transform:* count the block's observable global stores
-and decline the split past `kuna_retsplitglobal.rs
+and decline the split past `retsplitglobal.rs
 (MAX_CLONED_GLOBAL_STORES)` = 8, so the epilogue stays shared. *A bound, not a
 veto, is the design*, and it matches this phase's other duplication passes
 (`crossjumprevert` and `dedupitetail` cap a duplicated leaf run at 8 printed
@@ -1047,7 +1047,7 @@ duplication or change what the surviving merged block does. Settable
 
 ### retsplitlimit — a bound on what one return split may clone
 
-`crates/unlace-structure/src/p8_structure/kuna_retsplitlimit.rs
+`crates/unlace-structure/src/p8_structure/retsplitlimit.rs
 (split_is_declined)`, read by `crates/unlace-middle/src/substrate/funcdata_block.rs
 (Funcdata::return_split_apply)` once a return block's split edges are known.
 *Pattern:* `node_split` clones the whole return block once per split edge, and
@@ -1075,14 +1075,14 @@ block is reached by 673 gotos).
 
 ### crossjumprevert — un-doing compiler cross-jumping (angr `CrossJumpReverter`)
 
-`crates/unlace-structure/src/p8_structure/kuna_crossjumpreverter.rs
+`crates/unlace-structure/src/p8_structure/crossjumpreverter.rs
 (ActionCrossJumpReverter)`. *Pattern:* compilers condense identical tail code
 reached from several places into one block (Irreducible Statement
 Condensing), leaving all but one predecessor to arrive by `goto` — a
 `BlockGoto` leaf whose target is a small *non-return* block that falls
 through to a unique successor `S`. *Transform:* duplicate the one tail block
 inline and drop the goto — but only under the **convergence precondition**
-(`kuna_crossjumpreverter.rs (converges_on)`): the structured fall-through
+(`crossjumpreverter.rs (converges_on)`): the structured fall-through
 after the goto's parent (`crates/unlace-middle/src/substrate/block.rs
 (BlockGraph::next_flow_after)`) must be exactly `S`, because unlike a return
 tail this path stays open — duplicating it is only semantics-preserving if
@@ -1092,7 +1092,7 @@ both routes provably rejoin at `S`. *Bounds/failure:* exactly one tail block
 in `return` (that is `gotoreduce`'s case) and anything whose
 convergence cannot be proven. Flipped on by DIV-14.
 
-**Past one block** (`crates/unlace-structure/src/p8_structure/kuna_crossjumptail.rs
+**Past one block** (`crates/unlace-structure/src/p8_structure/crossjumptail.rs
 (ActionCrossJumpTail)`). Cross-jumping also shares runs of several
 statements, `if`s and calls, reached from inside nested arms or from deep in
 a loop body. After `gotosink`, a goto `G` to the leaf `L` that starts a run
@@ -1120,14 +1120,14 @@ with 0/675 datatest assertions moved.
 
 ### ifelseflatten — guard-clause flattening (angr `IfElseFlattener`)
 
-`crates/unlace-structure/src/p8_structure/kuna_ifelseflatten.rs
+`crates/unlace-structure/src/p8_structure/ifelseflatten.rs
 (ActionIfElseFlatten)`. *Pattern:* a full 3-component `BlockIf` whose true
 clause is statement-terminating but which still carries an explicit `else` —
 the residue the structurer or fallback could not invert away. *Transform:*
 unlink the else clause and splice it into the parent list as the `if`'s
 immediate follower: `if (c) { ...; return X; } else { body }` becomes
 `if (c) { ...; return X; } body` — the guard-clause de-indent. *The
-termination test is deliberately strict* (`kuna_ifelseflatten.rs
+termination test is deliberately strict* (`ifelseflatten.rs
 (clause_terminates)`, angr's `is_statement_terminating`): only a `return` or
 a no-return call terminates; a trailing `goto`/`break`/`continue` does
 **not** (its target may rejoin the after-if flow, so dropping the else would
@@ -1139,7 +1139,7 @@ DIV-14.
 
 ### dedupitetail — merging over-duplicated arms (angr ITE region dedup)
 
-`crates/unlace-structure/src/p8_structure/kuna_dedupitetail.rs
+`crates/unlace-structure/src/p8_structure/dedupitetail.rs
 (ActionDedupIteTail)`. The **inverse** of the duplication passes: here the
 collapse-based structurer *cloned* a shared continuation into both arms of an
 `if/else` (the compiler emitted two physical copies and structuring kept
@@ -1150,9 +1150,9 @@ named storage by location, call targets by resolved callee. *Transform:*
 hoist the shared run out of the `if` — a prefix before it (unconditionally
 sound: both arms executed it first regardless of the condition), a suffix
 after it, the latter only when each arm's divergent middle provably falls
-through to that suffix (`kuna_dedupitetail.rs (plan_suffix_merge)`).
+through to that suffix (`dedupitetail.rs (plan_suffix_merge)`).
 *Bounds/failure:* only flat leaves (never a nested if/loop, whose hoisting
-would change control flow), ≤ `kuna_dedupitetail.rs (MAX_HOISTED_LEAVES)` = 8
+would change control flow), ≤ `dedupitetail.rs (MAX_HOISTED_LEAVES)` = 8
 leaves and ≤ `(MAX_LEAF_OPS)` = 64 ops per equivalence check, exact-or-decline
 on any mismatch, and a leaf carrying a label/goto is never hoisted. An arm
 left with one component is replaced by that component, and every goto that
@@ -1174,14 +1174,14 @@ this, the goto kept the freed node's id and printing its label panicked.
 
 ### iteregion — `?:` recovery (angr `ITERegionConverter`)
 
-`crates/unlace-structure/src/p8_structure/kuna_iteregion.rs
+`crates/unlace-structure/src/p8_structure/iteregion.rs
 (ActionIteRegion)`. *Pattern:* the assignment diamond a source ternary
 compiles to — a 3-component `BlockIf` with no goto, whose condition leaf's
 only printed op is the `CBRANCH` and whose two arms are each a single `COPY`
 to the same storage. *Transform:* **print-only** — set the `kuna_iteregion`
 addl-flag on the matched CBRANCH; the S9 printer
 (`crates/unlace-emit/src/p9_emit/printc.rs`, via
-`kuna_iteregion.rs (match_ite_assignment)`) re-derives the match and emits
+`iteregion.rs (match_ite_assignment)`) re-derives the match and emits
 `v = ( c ) ? A : B;` in place of the `if/else` — the ternary emit is the one
 genuinely new piece (upstream printc has no ternary operator). No p-code is
 touched; the arm COPYs stay live so later uses render unchanged. *Failure:*
@@ -1203,14 +1203,14 @@ function.
 
 ### iteboolean — short-circuit `0`/`1` re-rolling (decbench)
 
-`crates/unlace-structure/src/p8_structure/kuna_iteboolean.rs
+`crates/unlace-structure/src/p8_structure/iteboolean.rs
 (ActionIteBoolean)`. *Pattern:* the boolean **materialization** diamond a source
 `x = a && b;` compiles to at `-O0` — a 3-component `BlockIf` with no goto whose
 two arms are each a single `COPY` of the constants `1` and `0` (in either order)
 to the same integral storage, and whose condition component is either a clean
 `CBRANCH` leaf or the folded short-circuit `BlockCondition` chain. *Transform:*
 **print-only** — set the `kuna_iteboolean` addl-flag on the condition's terminal
-`CBRANCH`; the S9 printer (via `kuna_iteboolean.rs (match_ite_boolean)`)
+`CBRANCH`; the S9 printer (via `iteboolean.rs (match_ite_boolean)`)
 re-derives the match and emits the single statement `v = ( c );` — or
 `v = !( c );` when the `0` arm is the true arm — in place of the `if/else`.
 
@@ -1236,17 +1236,17 @@ arm, two arms writing different storage or the same constant, a pointer/float/
 aggregate destination (which would lose the constant's own rendering), an `if`
 carrying its own goto, and a condition component that is anything other than a
 `CBRANCH`-terminated leaf or a `BlockCondition` tree of such leaves (capped at
-`kuna_iteboolean.rs (MAX_CONDITION_DEPTH)` = 16). Like `iteregion` this is a
+`iteboolean.rs (MAX_CONDITION_DEPTH)` = 16). Like `iteregion` this is a
 **runtime choice** — a source that really wrote `if (c) x = 1; else x = 0;`
 compiles to the same bytes — flipped on by DIV-51.
 
 ### itecondlist — matching a diamond whose condition was concatenated (decbench)
 
-`crates/unlace-structure/src/p8_structure/kuna_itecondlist.rs
+`crates/unlace-structure/src/p8_structure/itecondlist.rs
 (cond_list_tail)`. Not a pass of its own: a one-predicate widening of the two
 matchers above, shared by both because both bottom out in the same leaf helper.
 
-*The gap.* `kuna_iteregion.rs (leaf_bblock)` descends a `BlockList` of **one**
+*The gap.* `iteregion.rs (leaf_bblock)` descends a `BlockList` of **one**
 component but returns `None` for a list of two or more, and both matchers reach
 the condition component through it. Meanwhile the collapse structurer
 concatenates a just-collapsed predecessor together with the following condition
@@ -1292,7 +1292,7 @@ whenever they do (DIV-56), so their options are the only ones that reach it.
 
 ### earlyreturn — per-edge const-guard peeling (angr `ReturnDuplicatorHigh`, narrowed)
 
-`crates/unlace-structure/src/p8_structure/kuna_earlyreturn.rs
+`crates/unlace-structure/src/p8_structure/earlyreturn.rs
 (ActionEarlyReturn)`. *Pattern:* the leading argument-validity guard — a
 shared RETURN block computing `v = MULTIEQUAL(#K /*guard arm*/, <var> /*body
 arm*/); return v`, a **mixed** phi that whole-block gates structurally cannot
@@ -1309,7 +1309,7 @@ the block must pass the same bare-epilogue filter as `ActionReturnSplit`
 (`funcdata_block.rs (Funcdata::return_split_is_splittable)` — only
 MULTIEQUAL/COPY/RETURN over constant/annotation/non-free inputs, so calls and
 stores are never cloned); the last remaining edge is never split; caps
-`kuna_earlyreturn.rs (MAX_EARLYRETURN_INEDGES)` = 16 predecessors,
+`earlyreturn.rs (MAX_EARLYRETURN_INEDGES)` = 16 predecessors,
 `(MAX_EARLYRETURN_SPLITS)` = 32 splits/function; each hoist logs an
 `earlyreturn:` warning. Because it only ever peels a **constant** arm it
 cannot reproduce `returndup`'s variable-return regression (below). Flipped
@@ -1318,7 +1318,7 @@ improved:regressed over 508 binaries).
 
 ### switchreturn — the wide multi-way extension (angr `ReturnDuplicatorHigh`, switch-phi)
 
-`crates/unlace-structure/src/p8_structure/kuna_switchreturn.rs
+`crates/unlace-structure/src/p8_structure/switchreturn.rs
 (ActionSwitchReturn)`. *Pattern:* the enum-dispatch switch whose every case
 assigns a constant and breaks to one exit — `v = MULTIEQUAL(#K0, #K1, …);
 return v` with one in-edge per case. `earlyreturn` **already** recovers this
@@ -1326,7 +1326,7 @@ for switches whose merge block has at most 16 predecessors — its
 `MAX_EARLYRETURN_INEDGES` cap, read from the code — so a 17-case dispatch
 was left merged. *Transform:* the identical const peel
 (`funcdata_block.rs (Funcdata::switchreturn_apply)` delegates to the same
-`const_return_peel` core) with the caps lifted to `kuna_switchreturn.rs
+`const_return_peel` core) with the caps lifted to `switchreturn.rs
 (MAX_SWITCHRETURN_INEDGES)` = 256 and `(MAX_SWITCHRETURN_SPLITS)` = 256, so
 every constant case ends in its own `return K`. *Bounds/failure:* inherits
 every earlyreturn safeguard (splittable filter, never the last edge,
@@ -1339,7 +1339,7 @@ summed GED, 3:0 improved:regressed, zero regressions).
 
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 
-`crates/unlace-structure/src/p8_structure/kuna_loopbreak_recovery.rs
+`crates/unlace-structure/src/p8_structure/loopbreak_recovery.rs
 (kuna_scope_break)`. The mechanism is the faithful port of upstream Ghidra's
 `BlockGraph::scopeBreak` — which upstream runs unconditionally but kuna's
 port had left stubbed; the gap was found and the pass registered through the
@@ -1360,7 +1360,7 @@ goto. Flipped on by DIV-10.
 
 ### gotonext — jumps to where control goes anyway (Ghidra `gotoPrints`)
 
-`crates/unlace-structure/src/p8_structure/kuna_gotonext.rs
+`crates/unlace-structure/src/p8_structure/gotonext.rs
 (goto_rewrites)`, read by the C printer
 (`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_function_body)`).
 Upstream prints a `BlockGoto`'s jump only when `BlockGoto::gotoPrints`
@@ -1407,7 +1407,7 @@ both the printing of every jump and the recorded chains.
 
 ### switchmerge — one switch for a search tree of jump tables
 
-`crates/unlace-structure/src/p8_structure/kuna_switchmerge.rs
+`crates/unlace-structure/src/p8_structure/switchmerge.rs
 (switch_plans)`, read by the C printer
 (`crates/unlace-emit/src/p9_emit/printc.rs (PrintC::emit_block_switch_c)`)
 and by the goto census. A compiler lowers a sparse source `switch` into a
@@ -1495,13 +1495,13 @@ never which code runs for it. It applies to the C switch form only.
 
 ### returndup — the whole-block duplicator (angr `ReturnDuplicatorHigh`)
 
-`crates/unlace-structure/src/p8_structure/kuna_returndup.rs
+`crates/unlace-structure/src/p8_structure/returndup.rs
 (ActionReturnDup)` is the whole-block gotoless return duplicator: every
 shared bare-epilogue RETURN block passing the splittable filter *and* whose
 whole return value resolves to a constant (`funcdata_block.rs
 (Funcdata::returndup_is_const_ret)` — a literal, COPY chain, or
 phi-of-constants; never a free variable) is split into per-predecessor
-returns, capped at `kuna_returndup.rs (MAX_RETURNDUP_INEDGES)` = 16 /
+returns, capped at `returndup.rs (MAX_RETURNDUP_INEDGES)` = 16 /
 `(MAX_RETURNDUP_SPLITS)` = 64. It exists to break `rule_block_or`'s
 comma-folded guard merges (`if ((A||B) && (v=f(..), C)) …` with one trailing
 return) back into the source's early-return guards.
@@ -1538,7 +1538,7 @@ const/variable diamonds this whole-block gate rejects outright.
 
 ### returndup calls — one call per path for a cross-jumped call tail
 
-`crates/unlace-structure/src/p8_structure/kuna_returndupcalls.rs
+`crates/unlace-structure/src/p8_structure/returndupcalls.rs
 (ActionReturnDupCalls)` runs in the `returnsplit` group right after
 `returndup`, only at the value `option returndup calls` (not a default). gcc
 `-Os` cross-jumps the tails of paths that end in the same call: each path sets
@@ -1557,7 +1557,7 @@ predecessors, at most 16 ops, exactly one CALL (or CALLIND, below), an input of
 that call computed (within the block) from a MULTIEQUAL, and no INDIRECT that still
 creates the call's output. A MULTIEQUAL does not count when every value it merges
 is a LOAD through one pointer, looking through MULTIEQUALs of such loads
-(`kuna_returndupcalls.rs (one_reloaded_value)`): `free(s->buf)` after a loop that
+(`returndupcalls.rs (one_reloaded_value)`): `free(s->buf)` after a loop that
 reads `s->buf` again on each iteration merges one source expression, so splitting
 it only copies the call onto the loop's break and exit paths and adds a goto
 (openssh `freerrset`, GED 4 to 20 before this check) (prototype recovery has not settled the output yet;
@@ -1604,7 +1604,7 @@ constant-return guards plus a trailing return (`iproute2 ip::sci_complete`,
 GED 21 against 0 for the merged form), and `iteboolean` never sees the 0/1
 select diamond either.
 
-`crates/unlace-structure/src/p8_structure/kuna_orchain.rs
+`crates/unlace-structure/src/p8_structure/orchain.rs
 (shortcircuit_shared_targets)` is the gate for exactly that shape, and it is a
 gate on the pass above rather than a pass of its own. It replays
 `collapse_conditions` read-only on the **bblocks** CFG before the first split,
@@ -1652,7 +1652,7 @@ upstream does.
 **`orchainlive` — an operand that computes a live value is a statement.**
 With `option orchainlive on`, the replay above does not fuse a sibling whose
 basic block computes a value read outside it
-(`kuna_orchain.rs (defines_live_value)`: a non-marker op whose output has a
+(`orchain.rs (defines_live_value)`: a non-marker op whose output has a
 reader in another block). Such an operand is a statement the source wrote
 before its own guard, `offset = LSEEK(...); if (offset == -1) return -1;`
 (DecBench O2-noinline zlib `gzoffset64`), not an operand of a boolean
@@ -1664,7 +1664,7 @@ protection. Default **off**.
 `option orchainbool on`, `returndup_apply` ignores the short-circuit protection
 for a shared RETURN block whose returned value resolves through COPY and
 MULTIEQUAL to constants only, at least one of them neither 0 nor 1
-(`crates/unlace-middle/src/substrate/kuna_orchainbool.rs
+(`crates/unlace-middle/src/substrate/orchainbool.rs
 (returns_nonbool_const)`). A chain of tests sharing `return 0`/`return 1` is
 the operand chain of a boolean expression; one sharing `return -1` is a run of
 guard clauses (DecBench O2-noinline zlib `gztell64`), which the split prints
@@ -1681,7 +1681,7 @@ written twice, where IDA and Ghidra print the `if`. The common source of the
 shared block is a stack-protected function: once `stackguard` strips the canary
 check, every exit reaches one bare `return 0`. With `option rettriangle on`,
 `Funcdata::returndup_apply` drops such a block from its candidates
-(`crates/unlace-structure/src/p8_structure/kuna_rettriangle.rs
+(`crates/unlace-structure/src/p8_structure/rettriangle.rs
 (is_triangle_join)`): exactly two predecessors, one a two-way block whose other
 successor is the second predecessor, which has that block as its only
 predecessor and `R` as its only successor. Every other candidate of the
@@ -1713,7 +1713,7 @@ next block in normal flow prints nothing (`block.rs
 (BlockGraph::goto_prints)`, which asks `next_flow_after`) — plus
 `BlockMultiGoto` virtual edges and `BlockIf` if-goto edges still tagged as
 real gotos. The console command `quality`
-(`crates/unlace-console/src/kuna_console.rs (IfcKunaQuality)`,
+(`crates/unlace-console/src/console.rs (IfcKunaQuality)`,
 surfaced through `crates/unlace-middle/src/substrate/funcdata.rs
 (Funcdata::kuna_quality_counts)`) reports the census for the current
 function — basic-block count, goto nodes (and printed), multi-goto edges,
@@ -1790,7 +1790,7 @@ run: it is applied once and every function is then decompiled under it.
 
 The value names only a head and an exit. The member set is recomputed from the live
 `bblocks` with `kuna_check_region`, a transcription of the private `check_region` in
-`p7_regions/kuna_regionid.rs` (that file is a line-faithful port pinned by
+`p7_regions/regionid.rs` (that file is a line-faithful port pinned by
 `docs/spec/07-regions.md` and is not modified to expose it). A region is a block
 **set**, never the interval `head..exit`: an inlined callee is routinely laid out in
 several disjoint pieces, 66% of instances span more than one range, and in the stage
@@ -1890,7 +1890,7 @@ a caller-side branch, and a purity allowlist so compiler intrinsics such as
 would make the transform generally applicable.
 
 **Loop rotation** (`looprotate`, default on; kuna;
-`crates/unlace-structure/src/p8_structure/kuna_looprotate.rs (ActionLoopRotate)`,
+`crates/unlace-structure/src/p8_structure/looprotate.rs (ActionLoopRotate)`,
 in the main loop just before `ActionBlockStructure`): compilers rotate
 `while (c) body` into `if (c) { do body while (c); }`. The action matches, on
 the basic blocks, a guard `G` that branches to the loop's entry side `P` (or
@@ -1952,7 +1952,7 @@ terminal case would make its self-edge internal and drop the inner loop, so
 the outer switch declines until the loop schema has wrapped it.
 
 **Guarded loops** (`guardedloop`, default on, C output only; kuna;
-`crates/unlace-structure/src/p8_structure/kuna_guardedloop.rs (ActionGuardedLoop)`,
+`crates/unlace-structure/src/p8_structure/guardedloop.rs (ActionGuardedLoop)`,
 in the block-recovery group after `crossjumptail`): the rotations `looprotate`
 leaves, mostly because the loop test reads memory or a value the body computes,
 print as `if (g) { I; do B while (c); }`. On the final tree, a do-while in an arm

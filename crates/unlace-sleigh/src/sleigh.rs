@@ -33,7 +33,7 @@ use crate::semantics::{ConstructTpl, OpTpl, PcodeBuilder, VField, VarnodeTpl};
 use crate::sleighbase::{SleighBase, exact_register_name_from_xref, register_name_from_xref};
 use crate::slghpatexpress::{PatternExpression, PatternExpressionContext};
 use crate::slghpattern::DisjointPattern;
-use crate::slghsymbol::kuna_operandplan::{OperandPlan, OperandPlans};
+use crate::slghsymbol::operandplan::{OperandPlan, OperandPlans};
 use crate::slghsymbol::{
     ConstructorRef, OperandSymbol, SymbolKind, SymbolTable, SymbolType, SymbolWalker,
     SymbolWalkerChange,
@@ -312,7 +312,7 @@ impl ParserContext {
                 "Instruction is using more than {MAX_INSTRUCTION_LEN} bytes"
             )));
         }
-        Ok(crate::kuna_instructionbytes::read_bytes(
+        Ok(crate::instructionbytes::read_bytes(
             &self.buf,
             off as usize,
             size,
@@ -328,7 +328,7 @@ impl ParserContext {
                 "Instruction is using more than {MAX_INSTRUCTION_LEN} bytes"
             )));
         }
-        Ok(crate::kuna_instructionbytes::read_bits(
+        Ok(crate::instructionbytes::read_bits(
             &self.buf,
             off as usize,
             startbit % 8,
@@ -1270,7 +1270,7 @@ impl<'a> SleighBuilder<'a> {
             vn.offset = space.wrap_offset(hand.offset_offset);
         }
         vn.space = Some(space);
-        crate::kuna_handleview::export_space(hand)
+        crate::handleview::export_space(hand)
             .ok_or_else(|| KunaError::sleigh("generatePointer: null pointed-to space"))
     }
 
@@ -2925,14 +2925,14 @@ impl Translate for Sleigh {
     fn allow_context_set(&self, val: bool) {
         self.cache.borrow_mut().allow_set(val);
     }
-    fn context_scope(&self) -> Option<crate::kuna_contextscope::ContextScope<'_>> {
-        Some(crate::kuna_contextscope::ContextScope::new(
+    fn context_scope(&self) -> Option<crate::contextscope::ContextScope<'_>> {
+        Some(crate::contextscope::ContextScope::new(
             &self.context_db,
             &self.cache,
         ))
     }
-    fn decode_context_scope(&self) -> Option<crate::kuna_contextscope::DecodeContextScope<'_>> {
-        Some(crate::kuna_contextscope::DecodeContextScope::new(
+    fn decode_context_scope(&self) -> Option<crate::contextscope::DecodeContextScope<'_>> {
+        Some(crate::contextscope::DecodeContextScope::new(
             &self.context_db,
             &self.cache,
         ))

@@ -1,5 +1,5 @@
 // Tests for `kuna_sitetypelock` (included into `mod tests` in
-// kuna_sitetypelock.rs).
+// sitetypelock.rs).
 //
 // Covered:
 //   - the Override store: insert/find/replace/clear round-trip.

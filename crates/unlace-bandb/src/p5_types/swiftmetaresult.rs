@@ -20,7 +20,7 @@
 //! with a value of other provenance (`Funcdata::site_value_is_pure`). A
 //! read outside the 16-byte record (the value witness table below it, the
 //! field offset vector and generic arguments past it) stays a byte offset
-//! (`kuna_valuewitness::keeps_offset`), so the lock is applied only while
+//! (`valuewitness::keeps_offset`), so the lock is applied only while
 //! `valuewitness` is on.
 
 use std::rc::Rc;
@@ -44,7 +44,7 @@ pub fn contribute(data: &mut Funcdata) {
     if !arch.swift_metadata_results
         || !arch
             .kuna_options
-            .get::<crate::kuna_valuewitness::Valuewitness>()
+            .get::<crate::valuewitness::Valuewitness>()
             .0
     {
         return;

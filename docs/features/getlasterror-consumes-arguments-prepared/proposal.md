@@ -14,7 +14,7 @@ workspace suite and fixing exactly the three failures below.
 
 - option `calleeprotostack` (P4, default on, tier core, live_field `callee_proto_stack`),
   full `phases.toml` row, registration in `p0_knowledge/options.rs` + the arch seam
-- new module `p4_calls/kuna_calleeprotostack.rs`
+- new module `p4_calls/calleeprotostack.rs`
 - DIV-142 registry row, spec prose, `docs/options.md` regenerated
 - promoted acceptance probe; fixture
   `decompiler/crates/kuna-analysis/tests/fixtures/calleeprotostack_pe_i386.exe` + its generator
@@ -30,7 +30,7 @@ KNOWN worktree artifact of `KUNA_DECOMP_TEST`, not a regression: relaunch the ga
 `env -u KUNA_DECOMP_TEST make rust-test` and it disappears. Do not chase it.
 
 **(a) `p0_knowledge::kuna_phases::tests::option_values_live_value_present_for_58_suppressed_for_101`**
-`left: 59, right: 58` at `kuna_phases/tests.rs:732`. A FOURTH hidden count assert, in a file
+`left: 59, right: 58` at `phases/tests.rs:732`. A FOURTH hidden count assert, in a file
 where this branch already bumped three (settable_count 171->172, tier_counts 48->49 core, the
 `json.matches("},\n")` 170->171). Because `calleeprotostack` declares
 `live_field = callee_proto_stack`, `with_live` becomes 59. Mechanical repair: bump the assert to

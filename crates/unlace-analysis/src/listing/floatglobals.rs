@@ -1,6 +1,6 @@
 //! (kuna `floatglobals`) Which globals the program only ever moves through
 //! floating-point registers: the whole-program scan behind
-//! `unlace_decomp::kuna_floatglobals`.
+//! `unlace_decomp::floatglobals`.
 //!
 //! Every function of the inventory (and every function it calls) is walked
 //! from its entry, switch tables included, and its registers are followed as
@@ -32,16 +32,16 @@ use std::rc::Rc;
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, spacetype};
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_floatglobals::{FloatGlobals, FloatScan};
+use unlace_decomp::floatglobals::{FloatGlobals, FloatScan};
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::loadimage::section_flags;
 use unlace_sleigh::translate::Translate;
 
 use super::classify::classify;
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable;
 use super::model::RawOp;
+use super::poolref::PoolImage;
+use super::switchtable;
 use super::xrefs::{FullCapture, FullOp, decode, in_range, range_union};
 
 /// How far past an address the program stores to memory a load or store
@@ -127,12 +127,12 @@ pub(super) fn walk<R>(
         floats: &floats,
         ptr,
         clobbered,
-        preserved: kuna_switchtable::preserved_registers(arch),
+        preserved: switchtable::preserved_registers(arch),
         sp,
         extrapop,
         thumb_bit: family[0] == "ARM",
         max_entries: match arch.max_jumptable_size {
-            0 => kuna_switchtable::DEFAULT_MAX_ENTRIES,
+            0 => switchtable::DEFAULT_MAX_ENTRIES,
             n => n as usize,
         },
     };
@@ -583,14 +583,8 @@ fn switch_targets(
                 .as_ref()
                 .is_some_and(|s| s.get_type() == spacetype::IPTR_CONSTANT);
             if constant && ctx.image.section(vn.offset).is_some() {
-                let cases = kuna_switchtable::targets(
-                    vn.offset,
-                    vma,
-                    pool,
-                    &ctx.image.exec,
-                    None,
-                    max_entries,
-                );
+                let cases =
+                    switchtable::targets(vn.offset, vma, pool, &ctx.image.exec, None, max_entries);
                 if !cases.is_empty() {
                     return cases;
                 }
@@ -604,7 +598,7 @@ fn switch_targets(
     else {
         return Vec::new();
     };
-    let read = kuna_switchtable::register_targets(
+    let read = switchtable::register_targets(
         ctx.translate,
         ctx.code,
         Some(ctx.data),
@@ -613,7 +607,7 @@ fn switch_targets(
         branch,
         pool,
         &ctx.image.exec,
-        &super::kuna_switchtable::Reach {
+        &super::switchtable::Reach {
             max_entries,
             preserved: &ctx.preserved,
             settled: false,
@@ -998,7 +992,7 @@ pub(super) struct Evidence {
     accesses: BTreeMap<u64, Vec<(u8, bool)>>,
     pub(super) escapes: BTreeSet<u64>,
     /// (kuna `opaquepredicate globals`) Stores and address uses.
-    pub(super) writes: super::kuna_opaqueglobals::Writes,
+    pub(super) writes: super::opaqueglobals::Writes,
 }
 
 impl Evidence {

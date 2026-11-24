@@ -5,7 +5,7 @@
   "option": "codescalar",
   "div": "DIV-138",
   "phase": "P5",
-  "module": "decompiler/crates/kuna-decomp/src/p5_types/kuna_codescalar.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p5_types/codescalar.rs",
   "default": "on",
   "decisions": [
     "The filed symptom is exact but the WORD is wrong: the type on the scalar is not TYPE_VOID, it is TYPE_CODE. Instrumented Varnode::update_type/update_type_locked/new for a size>0 varnode adopting TYPE_VOID and got ZERO hits on the witness; decomp_dbg's raw dialect prints the same local `code v4; // al` where the C dialect prints `void v4;`. Switching the instrumentation to TYPE_CODE produced four hits, all inside run_infer_types: CPUI_LOAD inslot=1 outslot=-1 outsize=1, CPUI_STORE inslot=1 outslot=2 outsize=1, and two CPUI_INT_EQUAL edges spreading it to the compared constant 0xcc.",

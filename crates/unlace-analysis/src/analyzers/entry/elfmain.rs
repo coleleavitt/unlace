@@ -17,7 +17,7 @@
 //! argument to `__libc_start_main` is `main`, and what that runtime then calls
 //! is `main(argc, argv, envp)`. So this pass applies two things that come
 //! from the same fact, exactly as its Mach-O counterpart
-//! [`super::kuna_machomain`] applies them from `LC_MAIN`:
+//! [`super::machomain`] applies them from `LC_MAIN`:
 //!
 //! - the **name** `main`, through the `entry_names` overlay the commit boundary
 //!   already consults for the `_INIT_<i>`/`_DT_INIT` names;
@@ -86,7 +86,7 @@
 //! never decodes an instruction of its own and can never disagree with the entry
 //! the discovery set already contains. Its ARM arm is written around the
 //! `R_ARM_RELATIVE` that relocates crt1's GOT slot, which a non-PIE ARM32
-//! executable does not carry; [`super::kuna_armlibcmain`] is the arm that reads
+//! executable does not carry; [`super::armlibcmain`] is the arm that reads
 //! that value out of the image instead, and it already names its result `main`.
 //! This pass therefore consults it as a second source **for the prototype only**
 //! — the entry and the name stay that pass's own.
@@ -94,7 +94,7 @@
 //! ## What it refuses
 //!
 //! - a non-ELF image (Mach-O is `machomain`'s, PE is
-//!   [`super::kuna_entrymainproto`]'s);
+//!   [`super::entrymainproto`]'s);
 //! - an image with no symbol spelled `__libc_start_main` at all, whose `main`
 //!   (if it names one) may be a bare-metal routine called with nothing in its
 //!   argument registers. Oracle 4's
@@ -127,7 +127,7 @@
 //! declaration through `AnalysisOutput::main_decl_at` (by ADDRESS, a Thumb
 //! symbol's mode bit cleared), the commit keeps it off the symbol
 //! (`Architecture::elfmain_main_decl`), and the drive applies it inside `main`'s
-//! own analysis ([`unlace_decomp::kuna_elfmaindecl`]): only the `int` return is
+//! own analysis ([`unlace_decomp::elfmaindecl`]): only the `int` return is
 //! locked, and a recovered parameter takes its runtime name and type only when
 //! the inputs the body reads in parameter storage are exactly the first k runtime
 //! arguments. A prototype any other stream parks on `main` (DWARF) is used instead.
@@ -202,7 +202,7 @@ impl AnalysisPass for ElfMainPass {
 enum Source {
     /// Oracle 4's decode of `_start`; this pass names it.
     Decoded,
-    /// [`super::kuna_armlibcmain`], which names it.
+    /// [`super::armlibcmain`], which names it.
     ArmLibcMain,
     /// The image's own symbol `main`.
     Symbol,
@@ -226,9 +226,7 @@ fn main_claim(file: &object::File, bytes: &[u8]) -> Option<(u64, Source)> {
         // The non-PIE ARM32 shape oracle 4's relocation cross-check cannot see.
         // That pass emits the entry and the name; only the prototype is added
         // here, parked on the `main` it installs.
-        None => {
-            super::kuna_armlibcmain::main_vma(file, bytes).map(|vma| (vma, Source::ArmLibcMain))
-        }
+        None => super::armlibcmain::main_vma(file, bytes).map(|vma| (vma, Source::ArmLibcMain)),
     };
     let (vma, source) = match main_symbol {
         MainSymbol::Ambiguous => return None,

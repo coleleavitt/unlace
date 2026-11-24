@@ -155,5 +155,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_sparcstructret/tests.rs"]
+#[path = "sparcstructret/tests.rs"]
 mod tests;

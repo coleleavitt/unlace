@@ -1,6 +1,6 @@
 {
   "opportunity": "Datatype::type_order ranks SUB_UINT_PLAIN (16) ahead of SUB_INT_PLAIN (17), so in get_local_type's most-specific fold one uint vote outranks every int vote on a Varnode and nothing downstream re-decides. On -O2 x86-64 those uint votes are structural (INT_ZEXT from a 32-bit instruction widening into its 64-bit register; INT_AND/INT_RIGHT/INT_XOR from a strength-reduced loop), so a counter compiled from `int` is declared `unsigned int` and cast back to `int` at every comparison.",
-  "test_name": "tests/stages/kuna-signedness.xml (two functions, 6 assertions: the masked loop bound two-pass, and the sub-int width guard reduced from findutils find -O2 sub_bac0) + tests/stages/kuna-signedness-int16.xml (two functions, 4 assertions: the same width guard on x86:LE:16:Protected Mode, whose own cspec integer_size is 2, with a 4-byte control that does flip) + 10 unit tests in p9_emit/kuna_typeround/tests.rs",
+  "test_name": "tests/stages/kuna-signedness.xml (two functions, 6 assertions: the masked loop bound two-pass, and the sub-int width guard reduced from findutils find -O2 sub_bac0) + tests/stages/kuna-signedness-int16.xml (two functions, 4 assertions: the same width guard on x86:LE:16:Protected Mode, whose own cspec integer_size is 2, with a 4-byte control that does flip) + 10 unit tests in p9_emit/typeround/tests.rs",
   "binary": "decbench full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
   "selector": "sub_3060",
   "func_addr": "0x3060",
@@ -490,7 +490,7 @@
     "corrected": "the demand set is a strict SUPERSET of the ops whose get_input_cast passes care_uint_int = true. The four ordered comparisons, / %, >> and the two extensions pass true; INT_SCARRY/INT_SBORROW/INT_CARRY, a same-width CPUI_CAST and INT_LEFT all fall through to the dispatch's DEFAULT arm, which passes false (decompiler/crates/kuna-decomp/src/p9_emit/coreaction_casts.rs, get_input_cast).",
     "why_it_is_still_sound": "demanding on the carry intrinsics and on a same-width cast is an over-constraint, not a gap -- a carry intrinsic spells its own signedness in its name and a cast token establishes the type it prints -- so it can only ever DECLINE a flip that upstream's own flag would have allowed. Soundness rests on the NEUTRAL list being signedness-independent at a fixed width; care_uint_int corroborates where upstream draws the same line but does not prove it.",
     "earlier_claim_was_wrong_in": [
-      "p9_emit/kuna_typeround.rs module header",
+      "p9_emit/typeround.rs module header",
       "docs/spec/09-emission.md",
       "docs/features/signedness/proposal.md",
       "docs/features/signedness/analysis.md"

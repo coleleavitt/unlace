@@ -3,7 +3,7 @@
 //! "opt-in-tool" }, plus = 1 }`), so catalog totals never need hand-bumping. The format and
 //! parser live in unlace-stagefile; `tests/stages/README.md` describes it.
 
-use unlace_decomp::kuna_phases::{KunaSettable, kuna_num_settables, kuna_settable_by_index};
+use unlace_decomp::phases::{KunaSettable, kuna_num_settables, kuna_settable_by_index};
 pub use unlace_stagefile::{PatternLine, StageMatch, StageTest, Table, escape_literal};
 
 /// A string-valued catalog field by its `phases.toml` key.

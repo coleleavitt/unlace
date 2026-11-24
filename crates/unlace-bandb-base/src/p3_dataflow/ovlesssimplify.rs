@@ -242,5 +242,5 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 }
 
 #[cfg(test)]
-#[path = "kuna_ovlesssimplify/tests.rs"]
+#[path = "ovlesssimplify/tests.rs"]
 mod tests;

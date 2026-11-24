@@ -55,7 +55,7 @@
 //! (tricore's `a4`) or living on the stack (SPARC's `[sp+64]`) is left alone.
 //! Default-**on**; `off` restores the upstream scoring.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
 use unlace_base::address::Address;
 use unlace_base::space::spacetype;
 use unlace_base::types::int4;
@@ -158,7 +158,7 @@ pub fn value_leaves(data: &Funcdata, vn: VarnodeId) -> Vec<VarnodeId> {
 /// subtracts and non-creation INDIRECTs along their first input? Before
 /// constant propagation `add x8,sp,#16` adds a temporary, not a constant.
 fn frame_address(data: &Funcdata, vn: VarnodeId) -> bool {
-    let Some(sp) = crate::kuna_spillargtrial::stack_pointer_storage(data) else {
+    let Some(sp) = crate::spillargtrial::stack_pointer_storage(data) else {
         return false;
     };
     let Some(spspace) = sp.space.as_ref() else {
@@ -358,5 +358,5 @@ pub fn rescore_active_trial(data: &mut Funcdata, call_idx: int4, trial: int4) ->
 }
 
 #[cfg(test)]
-#[path = "kuna_hiddenretarg/tests.rs"]
+#[path = "hiddenretarg/tests.rs"]
 mod tests;

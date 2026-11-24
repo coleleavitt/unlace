@@ -11,7 +11,7 @@ pub(crate) struct ArmFrames {
     instructions: Rc<BTreeMap<u64, Rc<ProbedInsn>>>,
     /// The decodes shared across the inventory's frame recovery. No reference
     /// walk replays those frames, so their decodes keep no p-code.
-    memo: Option<Rc<crate::listing::kuna_decodememo::DecodeMemo>>,
+    memo: Option<Rc<crate::listing::decodememo::DecodeMemo>>,
 }
 
 struct PrefixScan {
@@ -24,7 +24,7 @@ struct PrefixScan {
 
 impl ArmFrames {
     /// Frames whose recovery shares every decode through `memo`.
-    pub(super) fn sharing(memo: &Rc<crate::listing::kuna_decodememo::DecodeMemo>) -> Self {
+    pub(super) fn sharing(memo: &Rc<crate::listing::decodememo::DecodeMemo>) -> Self {
         ArmFrames {
             memo: Some(Rc::clone(memo)),
             ..ArmFrames::default()
@@ -139,9 +139,8 @@ impl ArmFrames {
             .map(|(fp, count)| {
                 (
                     fp,
-                    if policy.corroborate && count >= kuna_aifcorroborate::UNCORROBORATED_THRESHOLD
-                    {
-                        kuna_aifcorroborate::UNCORROBORATED_THRESHOLD
+                    if policy.corroborate && count >= aifcorroborate::UNCORROBORATED_THRESHOLD {
+                        aifcorroborate::UNCORROBORATED_THRESHOLD
                     } else {
                         FINGERPRINT_THRESHOLD
                     },
@@ -231,8 +230,7 @@ impl ArmFrames {
                         .filter(|root| !replacements.contains_key(root)),
                 )
                 .chain(replacements.values().copied());
-            let called =
-                kuna_framecalls::independently_called(corpus, independent, &scan.instructions);
+            let called = framecalls::independently_called(corpus, independent, &scan.instructions);
             replacements.retain(|root, _| !called.contains(root));
         }
         replacements

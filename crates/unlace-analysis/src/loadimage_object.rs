@@ -64,14 +64,12 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::space::AddrSpace;
 use unlace_base::types::Wrap;
 
-use unlace_sleigh::kuna_sharedbytes::{restore_window, windowed_load_fill};
 use unlace_sleigh::loadimage::{
     IMAGE_WINDOW_BYTES, ImageBytes, LoadImage, LoadImageFunc, LoadImageSection, section_flags,
 };
+use unlace_sleigh::sharedbytes::{restore_window, windowed_load_fill};
 
-use unlace_decomp::kuna_symbolnamechars::{
-    NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode,
-};
+use unlace_decomp::symbolnamechars::{NameChars, sanitize_symbol_name_bytes, symbolnamechars_mode};
 
 /// Default read-buffer size (C++ `LoadImageBfd::bufsize`, `loadimage_bfd.cc:36`).
 const BUFSIZE: usize = IMAGE_WINDOW_BYTES;
@@ -499,16 +497,16 @@ pub struct ObjectLoadImage {
     /// Name of the loadimage (the `LoadImage` base-class `filename` member).
     filename: String,
     /// (kuna) The ARM container states the VFP procedure-call standard
-    /// ([`crate::loader::kuna_armfloatabi::vfp_args`]).
+    /// ([`crate::loader::armfloatabi::vfp_args`]).
     arm_vfp_args: bool,
     /// (kuna) The container's floating-point argument convention
-    /// ([`crate::loader::kuna_floatabi::float_arg_registers`]).
+    /// ([`crate::loader::floatabi::float_arg_registers`]).
     float_arg_registers: Option<bool>,
     /// (kuna) Whether the container states floating-point register hardware
-    /// ([`crate::loader::kuna_armfloatabi::fp_hardware`]).
+    /// ([`crate::loader::armfloatabi::fp_hardware`]).
     float_hardware: Option<bool>,
     /// (kuna) Whether the callee extends a narrow return value
-    /// ([`crate::loader::kuna_returnext::callee_extends_returns`]).
+    /// ([`crate::loader::returnext::callee_extends_returns`]).
     callee_extends_returns: Option<bool>,
     /// The resolved SLEIGH language id (the `getArchType` payload).
     archtype: Vec<u8>,
@@ -562,7 +560,7 @@ pub struct ObjectLoadImage {
     data_exports: Vec<(u64, String)>,
     /// (kuna `globalref`) Sorted, merged `[start, stop]` ranges of the sections
     /// the program's own data objects live in; see
-    /// [`crate::loader::kuna_globalref`].
+    /// [`crate::loader::globalref`].
     data_objects: Vec<(u64, u64)>,
     /// (kuna) Extra `[start, stop]` (inclusive) byte ranges to treat as *constant*
     /// (read-only) beyond the section-flag scan — the MIPS GOT external slots,
@@ -581,16 +579,16 @@ pub struct ObjectLoadImage {
     /// * `dynrelocs` (linked image): the dynamic-relocation slots this loader
     ///   filled in that `PT_GNU_RELRO` freezes — the GOT entries whose relocated
     ///   value turns `(*dat_e0dc8)(…)` back into a named call. See
-    ///   [`crate::loader::kuna_dynrelocs`].
+    ///   [`crate::loader::dynrelocs`].
     /// * `msvcfpconst` (relocatable object): the MSVC `__real@` floating-point
     ///   COMDATs, whose value is spelled in the symbol name. See
-    ///   [`crate::loader::kuna_msvcfpconst`].
+    ///   [`crate::loader::msvcfpconst`].
     ///
     /// Empty for a non-ELF linked image, and with both gates off.
     dynreloc_const: Vec<(u64, u64)>,
     /// (kuna `opaquepredicate globals`) `[lo, hi)` of the mapped bytes the
     /// run-time loader fills with a value this image does not determine
-    /// ([`crate::loader::kuna_dynrelocs::DynRelocs::runtime_written`] and the
+    /// ([`crate::loader::dynrelocs::DynRelocs::runtime_written`] and the
     /// import slots). `None` when the image cannot list them.
     runtime_written: Option<Vec<(u64, u64)>>,
     /// (kuna) The image's **import pointer slots** as half-open `[lo, hi)` VMA
@@ -601,14 +599,14 @@ pub struct ObjectLoadImage {
     /// a whole-binary enumeration needs to keep them out of the decompile set.
     /// Empty for every non-PE image and for a relocatable object.
     import_slots: Vec<(u64, u64)>,
-    nullable_relocations: Vec<unlace_decomp::kuna_nullable_reloc::NullableRelocation>,
+    nullable_relocations: Vec<unlace_decomp::nullable_reloc::NullableRelocation>,
     function_address_aliases: Vec<(u64, u64)>,
     /// (kuna `pltlocal`) `(stub, definition)` for each PLT stub the image's own
     /// dynamic relocations bind to a function it defines, ascending by stub. See
-    /// [`crate::loader::kuna_pltlocal`].
+    /// [`crate::loader::pltlocal`].
     plt_local: Vec<(u64, u64)>,
     /// MIPS ELF lazy-binding stubs and GOT-proven imports, found once at load.
-    mips_linkage: Option<crate::loader::kuna_mipsstubs::MipsLinkage>,
+    mips_linkage: Option<crate::loader::mipsstubs::MipsLinkage>,
     elfv1: crate::loader::elfv1::Descriptors,
     elf_functions: ElfFunctionProvenance,
     /// The address space the file bytes map to (C++ `spaceid`, null until
@@ -806,7 +804,7 @@ impl ObjectLoadImage {
         let archtype =
             language_id_for(&file, fmt.as_ref(), bytes, filename, effective_arch, target)?;
         if emit_diagnostics {
-            for note in crate::loader::kuna_ppcaputarget::notes(
+            for note in crate::loader::ppcaputarget::notes(
                 &file,
                 &String::from_utf8_lossy(&archtype),
                 target.is_some(),
@@ -818,7 +816,7 @@ impl ObjectLoadImage {
             }
         }
         if emit_diagnostics {
-            for note in crate::loader::kuna_mipstarget::notes(
+            for note in crate::loader::mipstarget::notes(
                 &file,
                 &String::from_utf8_lossy(&archtype),
                 target.is_some(),
@@ -969,7 +967,7 @@ impl ObjectLoadImage {
                 flags,
             });
             if flags & section_flags::UNALLOC == 0
-                && crate::loader::kuna_globalref::holds_program_objects(
+                && crate::loader::globalref::holds_program_objects(
                     sec.name().unwrap_or(""),
                     sec.kind(),
                 )
@@ -1065,7 +1063,7 @@ impl ObjectLoadImage {
             }
             if sym
                 .name_bytes()
-                .is_ok_and(crate::loader::kuna_tilocallabels::is_ti_local_label)
+                .is_ok_and(crate::loader::tilocallabels::is_ti_local_label)
             {
                 continue;
             }
@@ -1139,7 +1137,7 @@ impl ObjectLoadImage {
         // A PE load configuration names the CRT's security cookie and guard
         // pointer slots; each is one pointer wide.
         let pointer_size = if file.is_64() { 8 } else { 4 };
-        for (addr, name) in crate::loader::kuna_peloadconfig::image_named_slots(bytes) {
+        for (addr, name) in crate::loader::peloadconfig::image_named_slots(bytes) {
             if seen_data.insert(addr) {
                 datasyms.push(DataSym {
                     addr,
@@ -1159,7 +1157,7 @@ impl ObjectLoadImage {
             .filter(|(_, s)| {
                 is_elf
                     && (file.architecture() == Architecture::PowerPc
-                        || (crate::loader::kuna_mipsabi::is_mips(file.architecture())
+                        || (crate::loader::mipsabi::is_mips(file.architecture())
                             && s.name == b"_MIPS_STUBS_"))
             })
             .map(|(i, s)| (s.addr, i))
@@ -1261,7 +1259,7 @@ impl ObjectLoadImage {
         let const_ranges = fmt.const_ranges(&file, bytes);
 
         let plt_local = fmt.local_import_targets(&file, bytes);
-        let mips_linkage = crate::loader::kuna_mipsstubs::linkage(&file);
+        let mips_linkage = crate::loader::mipsstubs::linkage(&file);
 
         // (kuna) The import pointer slots the funcsym walk above just registered
         // names at — recorded as addresses so the enumeration can tell a pointer
@@ -1274,7 +1272,7 @@ impl ObjectLoadImage {
         // anything reads them; the RELRO-frozen subset that actually landed is
         // carried separately so the engine can fold those loads.
         let le_image = file.is_little_endian();
-        let dynrelocs = crate::loader::kuna_dynrelocs::resolve(&file, bytes);
+        let dynrelocs = crate::loader::dynrelocs::resolve(&file, bytes);
         let mut applied: HashSet<u64> = HashSet::new();
         let track = !dynrelocs.const_ranges.is_empty();
         for w in &dynrelocs.writes {
@@ -1293,7 +1291,7 @@ impl ObjectLoadImage {
             .collect();
         // (kuna `debuglink`) A stripped ELF's function names from its debug
         // companion (build-id / `.gnu_debuglink`) or its `.gnu_debugdata`.
-        if unlace_decomp::kuna_debuglink::debuglink_enabled() {
+        if unlace_decomp::debuglink::debuglink_enabled() {
             let (symbols, source) = crate::loader::elf_debuglink::companion_symbols(
                 &file,
                 Some(std::path::Path::new(filename)).filter(|p| p.is_file()),
@@ -1343,10 +1341,10 @@ impl ObjectLoadImage {
 
         Ok(ObjectLoadImage {
             filename: filename.to_string(),
-            arm_vfp_args: crate::loader::kuna_armfloatabi::vfp_args(&file),
-            float_arg_registers: crate::loader::kuna_floatabi::float_arg_registers(&file),
-            float_hardware: crate::loader::kuna_armfloatabi::fp_hardware(&file),
-            callee_extends_returns: crate::loader::kuna_returnext::callee_extends_returns(&file),
+            arm_vfp_args: crate::loader::armfloatabi::vfp_args(&file),
+            float_arg_registers: crate::loader::floatabi::float_arg_registers(&file),
+            float_hardware: crate::loader::armfloatabi::fp_hardware(&file),
+            callee_extends_returns: crate::loader::returnext::callee_extends_returns(&file),
             archtype,
             fallback_archtype,
             bytes: Arc::new(SegmentBytes { segments }),
@@ -1366,7 +1364,7 @@ impl ObjectLoadImage {
                 .chain(crate::loader::macho_stubs::data_exports(&file))
                 .map(|(addr, name)| (addr, String::from_utf8_lossy(&name).into_owned()))
                 .collect(),
-            data_objects: crate::loader::kuna_globalref::merged_ranges(data_object_rows),
+            data_objects: crate::loader::globalref::merged_ranges(data_object_rows),
             const_ranges,
             dynreloc_const,
             runtime_written,
@@ -1425,7 +1423,7 @@ impl ObjectLoadImage {
         // undefined in every object but one. Decode the name back into the datum:
         // the undefined half gets bytes at its synthetic extern slot (which has no
         // backing at all otherwise), and both halves get a foldable range.
-        let fpconst = crate::loader::kuna_msvcfpconst::plan(file, &layout);
+        let fpconst = crate::loader::msvcfpconst::plan(file, &layout);
         let got_range = layout.got_range;
         for w in &fpconst.warnings {
             unlace_base::notes::say_once(filename, &format!("[kuna msvcfpconst] {filename}: {w}"));
@@ -1480,15 +1478,12 @@ impl ObjectLoadImage {
         // Common symbols have allocated storage but no input section. Include
         // that storage without treating unresolved external slots as objects.
         let common_objects = layout.common_range.map(|(lo, hi)| (lo, hi - lo));
-        let data_objects = crate::loader::kuna_globalref::merged_ranges(
+        let data_objects = crate::loader::globalref::merged_ranges(
             file.sections()
                 .filter_map(|sec| {
                     let vma = *layout.section_vma.get(&sec.index())?;
-                    crate::loader::kuna_globalref::holds_program_objects(
-                        sec.name().ok()?,
-                        sec.kind(),
-                    )
-                    .then_some((vma, sec.size()))
+                    crate::loader::globalref::holds_program_objects(sec.name().ok()?, sec.kind())
+                        .then_some((vma, sec.size()))
                 })
                 .chain(common_objects),
         );
@@ -1537,10 +1532,10 @@ impl ObjectLoadImage {
 
         Ok(ObjectLoadImage {
             filename: filename.to_string(),
-            arm_vfp_args: crate::loader::kuna_armfloatabi::vfp_args(&file),
-            float_arg_registers: crate::loader::kuna_floatabi::float_arg_registers(&file),
-            float_hardware: crate::loader::kuna_armfloatabi::fp_hardware(&file),
-            callee_extends_returns: crate::loader::kuna_returnext::callee_extends_returns(&file),
+            arm_vfp_args: crate::loader::armfloatabi::vfp_args(&file),
+            float_arg_registers: crate::loader::floatabi::float_arg_registers(&file),
+            float_hardware: crate::loader::armfloatabi::fp_hardware(&file),
+            callee_extends_returns: crate::loader::returnext::callee_extends_returns(&file),
             archtype,
             fallback_archtype,
             bytes: Arc::new(SegmentBytes { segments }),
@@ -1584,7 +1579,7 @@ impl ObjectLoadImage {
             nullable_relocations,
             function_address_aliases,
             plt_local: Vec::new(),
-            mips_linkage: crate::loader::kuna_mipsstubs::class_linkage(&file),
+            mips_linkage: crate::loader::mipsstubs::class_linkage(&file),
             elfv1,
             elf_functions: ElfFunctionProvenance::default(),
             spaceid: None,
@@ -1681,12 +1676,12 @@ impl ObjectLoadImage {
 
     /// The MIPS ELF lazy-binding stubs and GOT-proven imports; `None` for any
     /// other image.
-    pub fn mips_linkage(&self) -> Option<&crate::loader::kuna_mipsstubs::MipsLinkage> {
+    pub fn mips_linkage(&self) -> Option<&crate::loader::mipsstubs::MipsLinkage> {
         self.mips_linkage.as_ref()
     }
 
     /// (kuna `globalref`) Sorted, merged `[start, stop]` ranges of the sections
-    /// a program's own data objects live in ([`crate::loader::kuna_globalref`]).
+    /// a program's own data objects live in ([`crate::loader::globalref`]).
     pub fn data_object_ranges(&self) -> &[(u64, u64)] {
         &self.data_objects
     }
@@ -1701,9 +1696,7 @@ impl ObjectLoadImage {
     /// holds a pointer the run-time loader writes. The engine reports these
     /// ranges so its whole-binary enumeration can decompile the image's code
     /// without inventing a body for every import.
-    pub fn nullable_relocations(
-        &self,
-    ) -> &[unlace_decomp::kuna_nullable_reloc::NullableRelocation] {
+    pub fn nullable_relocations(&self) -> &[unlace_decomp::nullable_reloc::NullableRelocation] {
         &self.nullable_relocations
     }
 
@@ -2129,32 +2122,32 @@ fn language_id_for(
     if let Some(target) = target {
         return Ok(target.as_bytes().to_vec());
     }
-    if let Some(id) = crate::loader::kuna_mipsocteon::language_id(file).map_err(|error| {
+    if let Some(id) = crate::loader::mipsocteon::language_id(file).map_err(|error| {
         KunaError::lowlevel(format!(
             "File: {filename}: {error}; pass an explicit --target"
         ))
     })? {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_arctarget::language_id(file) {
+    if let Some(id) = crate::loader::arctarget::language_id(file) {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_elfmachinetarget::language_id(file) {
+    if let Some(id) = crate::loader::elfmachinetarget::language_id(file) {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_ppcaputarget::language_id(file) {
+    if let Some(id) = crate::loader::ppcaputarget::language_id(file) {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_nanomips::language_id(file) {
+    if let Some(id) = crate::loader::nanomips::language_id(file) {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_ppc64elfv2target::language_id(file) {
+    if let Some(id) = crate::loader::ppc64elfv2target::language_id(file) {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_mipstarget::language_id(file)? {
+    if let Some(id) = crate::loader::mipstarget::language_id(file)? {
         return Ok(id.into_bytes());
     }
-    if let Some(id) = crate::loader::kuna_riscvzc::language_id(file).map_err(|error| {
+    if let Some(id) = crate::loader::riscvzc::language_id(file).map_err(|error| {
         KunaError::lowlevel(format!(
             "File: {filename}: {error}; pass an explicit --target"
         ))
@@ -2185,7 +2178,7 @@ fn language_id_for(
     // arch allowlist, then language detection (which honours the
     // `UNLACE_SOURCELANG` force). Everything else keeps `model` untouched, and
     // the engine's default-model retry covers a spec that fails to load.
-    let model = if unlace_decomp::kuna_goabi::goabi_env_enabled()
+    let model = if unlace_decomp::goabi::goabi_env_enabled()
         && little
         && matches!(
             arch,
@@ -2201,7 +2194,7 @@ fn language_id_for(
     // spec, whose default model is the `register` convention (EAX, EDX, ECX,
     // then the stack). Under the `windows` model those three registers are not
     // inputs, so every method loses `Self` and its first arguments.
-    let model = if unlace_decomp::kuna_delphiabi::delphiabi_enabled()
+    let model = if unlace_decomp::delphiabi::delphiabi_enabled()
         && arch == Architecture::I386
         && file.format() == object::BinaryFormat::Pe
         && crate::delphi::is_delphi_image(file)
@@ -2529,14 +2522,14 @@ pub fn elf_language_ids() -> Vec<String> {
     if let Some(id) = compose_language_id(Architecture::I386, "LE", Some("borlanddelphi")) {
         out.push(id);
     }
-    out.extend(crate::loader::kuna_arctarget::language_ids());
-    out.extend(crate::loader::kuna_elfmachinetarget::language_ids());
-    out.extend(crate::loader::kuna_ppcaputarget::language_ids());
-    out.extend(crate::loader::kuna_ppc64elfv2target::language_ids());
-    out.extend(crate::loader::kuna_mipstarget::language_ids());
-    out.extend(crate::loader::kuna_mipsocteon::language_ids());
-    out.extend(crate::loader::kuna_riscvzc::language_ids());
-    out.extend(crate::loader::kuna_nanomips::language_ids());
+    out.extend(crate::loader::arctarget::language_ids());
+    out.extend(crate::loader::elfmachinetarget::language_ids());
+    out.extend(crate::loader::ppcaputarget::language_ids());
+    out.extend(crate::loader::ppc64elfv2target::language_ids());
+    out.extend(crate::loader::mipstarget::language_ids());
+    out.extend(crate::loader::mipsocteon::language_ids());
+    out.extend(crate::loader::riscvzc::language_ids());
+    out.extend(crate::loader::nanomips::language_ids());
     out.sort();
     out.dedup();
     out
@@ -2777,8 +2770,7 @@ mod tests {
             .expect("object images publish immutable bytes");
         assert!(shared.mapped_covers(0x1000, 0x1000 + payload.len() as u64));
         assert!(!shared.mapped_covers(0x0fff, 0x1001));
-        let mut reader =
-            unlace_sleigh::kuna_sharedbytes::SharedBytesImage::new("synthetic", shared);
+        let mut reader = unlace_sleigh::sharedbytes::SharedBytesImage::new("synthetic", shared);
         reader.attach_to_space(Rc::clone(&ram));
 
         for (off, len) in [(0x1000, 8), (0x1004, 17), (0x11f8, 40), (0x1000, 600)] {

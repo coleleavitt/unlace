@@ -107,7 +107,7 @@ before walking. Merge collision → discard + serial. Memory: +48 MB per lane + 
   `ContextValueSnapshot`; `EngineRecipe` + `build_decode_engine()` with a cross-engine
   equality test over every instruction of several fixtures. Proof: four gates, `make test-cli`,
   the `ab.sh` sha matrix, interleaved timing within noise.
-* **PR-B (the feature):** `listing/kuna_pdecode.rs` (intervals, router, lanes, rounds,
+* **PR-B (the feature):** `listing/pdecode.rs` (intervals, router, lanes, rounds,
   reconcile, gate, self-check, stats), plan plumbing (`WalkPlan` from engine.rs through
   `run_listing_consumers` to `build_with_meta_planned`; `build_with_meta` keeps its signature),
   the knob, tests (unit; `verify_pdecode.rs` differential at lanes 2/3/4/8 × K variants ×

@@ -95,7 +95,7 @@ pub fn arm_func_mode_paints(file: &object::File) -> Vec<ContextPaint> {
         extent.0 = extent.0.max(end);
     }
     if arm.is_empty()
-        || super::kuna_armfloatabi::thumb_only(file)
+        || super::armfloatabi::thumb_only(file)
         || !crate::analyzers::entry::cortexm_thumb_paints(file, true).is_empty()
     {
         return Vec::new();

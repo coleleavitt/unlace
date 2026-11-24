@@ -352,7 +352,7 @@ impl Action for ActionArmHoist {
         if !data.get_arch().kuna_options.get::<ArmHoist>().0 {
             return 0;
         }
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) {
+        if data.is_settled(crate::maturity::Fact::Ssa) {
             return 0;
         }
         self.base.count += armhoist_apply(data);
@@ -371,5 +371,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_armhoist/tests.rs"]
+#[path = "armhoist/tests.rs"]
 mod tests;

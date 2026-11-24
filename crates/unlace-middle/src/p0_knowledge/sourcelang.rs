@@ -19,7 +19,7 @@
 //! (`passes_for(compiler, format)`: the Go pclntab pass, the Rust no-return
 //! widening) *inside* `load file`, upstream of every per-function `option`
 //! command. An override that should reach pass selection therefore travels on
-//! the load options (`LoadOptions::sourcelang`, [`crate::kuna_loadoptions`]),
+//! the load options (`LoadOptions::sourcelang`, [`crate::loadoptions`]),
 //! read by `unlace_analysis::sourcelang::effective_compiler`; the `unlace` CLI
 //! carries it in [`SOURCELANG_ENV`]. The console `option sourcelang` arm still
 //! updates the engine fact for the already-loaded program (the per-function
@@ -98,14 +98,13 @@ pub const SOURCELANG_ENV: &str = "UNLACE_SOURCELANG";
 
 /// The forced source language of the load in progress, if any.
 pub fn forced() -> Option<SourceLang> {
-    crate::kuna_loadoptions::scoped(|o| o.sourcelang)
-        .unwrap_or_else(crate::kuna_loadoptions::env::sourcelang)
+    crate::loadoptions::scoped(|o| o.sourcelang).unwrap_or_else(crate::loadoptions::env::sourcelang)
 }
 
 /// The forced source language in this process's environment, if any. Reads
 /// only the environment; a load in progress reads [`forced`].
 pub fn forced_from_env() -> Option<SourceLang> {
-    crate::kuna_loadoptions::env::sourcelang()
+    crate::loadoptions::env::sourcelang()
 }
 
 /// Export a `set_kuna_option("sourcelang", val)` choice to [`SOURCELANG_ENV`]
@@ -135,7 +134,7 @@ pub fn parse_option_value(value: &str) -> Result<Option<SourceLang>, String> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SourceLangForced(pub Option<SourceLang>);
 
-impl crate::kuna_optionset::KunaOption for SourceLangForced {
+impl crate::optionset::KunaOption for SourceLangForced {
     const NAME: &'static str = "sourcelang";
     crate::kuna_option_id!();
 

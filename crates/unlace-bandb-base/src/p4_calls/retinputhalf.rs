@@ -26,7 +26,7 @@
 //!
 //! # Why it happens
 //!
-//! [`crate::kuna_returnuncomputed`] exists to kill a genuine phantom: a returned
+//! [`crate::returnuncomputed`] exists to kill a genuine phantom: a returned
 //! register that merely holds a value the function never computed — the epilogue's
 //! callee-saved *restore*, where the register is a copy of a frame slot the
 //! function only ever reads, or a callee's clobber at a no-return call. Its walk
@@ -124,7 +124,7 @@
 //!
 //! Gated by `option retinputhalf on|off`.
 
-use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
+use crate::retpushedhalf::FuncdataRetpushedhalfExt;
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -140,12 +140,12 @@ use crate::funcdata::Funcdata;
 /// unwritten (a written one is not this shape and is classified by its defining
 /// op), heritage flagged it a function input (a free Varnode is not a parameter),
 /// it is not a register the function only ever pushed (`option retpushedhalf`;
-/// see [`crate::kuna_retpushedhalf`]), and it sits in storage the prototype model
+/// see [`crate::retpushedhalf`]), and it sits in storage the prototype model
 /// characterizes as input-parameter storage. The last is what separates a passed
 /// argument from a local frame slot the function only reads.
 ///
 /// The caller adds the **placement** test — see `computes_from` in
-/// [`crate::kuna_returnuncomputed`].
+/// [`crate::returnuncomputed`].
 ///
 /// Runs inside `ActionOutputPrototype`, which is scheduled *before*
 /// `ActionInputPrototype` — the proto's parameter list is not fixated yet, so the
@@ -373,7 +373,7 @@ pub fn moved_back(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4, re
 /// storage, so once one path moves the argument back to return it, the same
 /// register left untouched on another path is that argument passing through, and
 /// every RETURN keeps the half. `placed` is the first register of a pair
-/// [`crate::kuna_retcallhalf::accept`] kept for the argument it holds in place,
+/// [`crate::retcallhalf::accept`] kept for the argument it holds in place,
 /// which the record holds as well.
 pub fn note_moved_back_returns(
     data: &mut Funcdata,
@@ -414,5 +414,5 @@ pub fn is_moved_back(data: &Funcdata, addr: &Address, size: int4) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_retinputhalf/tests.rs"]
+#[path = "retinputhalf/tests.rs"]
 mod tests;

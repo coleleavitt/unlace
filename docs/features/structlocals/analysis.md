@@ -119,7 +119,7 @@ not see, because `canon.py` drops declarations and strips casts:
 * `cp` O2 0xbe10: a `mempcpy` tail filled by loads from `"CuXXXXXX"` in
   `.rodata`; the text rule looked at constant stores only.
 
-Fixes (`kuna_structsynth.rs`): return storage is matched by overlap on every
+Fixes (`structsynth.rs`): return storage is matched by overlap on every
 live `RETURN` (`storage_is_tied`); a record returned beside a different
 non-zero value declines (`returned_beside_others`); bytes loaded from a
 read-only literal, INDIRECT-clobbered or not, count as text up to 16 bytes

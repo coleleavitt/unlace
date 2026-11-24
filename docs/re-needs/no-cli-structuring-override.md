@@ -180,7 +180,7 @@ exist). `kind` is effectively `absence`, which is the case `REPIPE_REFUTE_MODE=a
 
 - console command: `crates/unlace-console/src/ifacedecomp.rs:2911` (`IfcFlowOverride`)
 - CLI directive parser: `crates/unlace-cli/src/assertdecl.rs:263-275`
-- the stubs this record NO LONGER covers: `crates/unlace-console/src/kuna_console.rs:718`
+- the stubs this record NO LONGER covers: `crates/unlace-console/src/console.rs:718`
   (`Dispatch::ForceGoto`), `:724` (`Dispatch::MultistageJump`), `:727` (`Dispatch::FlowOverride`,
   the `--kassert` arm), and the `structure blocks` / switch-model entries routed through
   `engine_unavailable`.

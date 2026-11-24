@@ -1,8 +1,8 @@
 //! Scalar VFP input recovery from typed reads and proven callee contracts.
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, ruleflags};
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use crate::{
     architecture::Architecture,
     context::VarnodeId,
@@ -48,7 +48,7 @@ impl Action for ActionArmFloatArgs {
 /// The option is on over `armfloatreturn`'s widened model, whose positional
 /// rules keep an unused leading VFP parameter in its slot.
 pub fn applies(arch: &Architecture) -> bool {
-    arch.kuna_options.get::<ArmFloatArgs>().0 && crate::kuna_armfloatreturn::applies(arch)
+    arch.kuna_options.get::<ArmFloatArgs>().0 && crate::armfloatreturn::applies(arch)
 }
 
 /// Keep a proven double argument independent of an overlapping float call result.
@@ -176,7 +176,7 @@ pub fn mark_single_floats(call: &mut FuncCallSpecs, data: &Funcdata) {
 /// The s-register parameter slots a body reads before writing, by its probe.
 fn read_singles(
     entries: &[crate::fspec::ParamEntry],
-    probe: Option<&crate::kuna_calleedeadarg::CalleeEntryDead>,
+    probe: Option<&crate::calleedeadarg::CalleeEntryDead>,
 ) -> Vec<Address> {
     let Some(probe) = probe else {
         return Vec::new();
@@ -472,7 +472,7 @@ fn plan_stated_inputs(
         if let Some((i, ..)) = exact {
             let parts = passed(*i).map_or(vec![None], |vn| pieces(data, vn));
             let leftover =
-                |vn: VarnodeId| crate::kuna_calleedeadarg::is_leftover_call_result(data, vn, 0);
+                |vn: VarnodeId| crate::calleedeadarg::is_leftover_call_result(data, vn, 0);
             let whole = passed(*i).is_some_and(leftover);
             if never_reads(data, &entry, addr, *size) && (widens(&parts) || whole) {
                 zeros.push(*i);
@@ -527,7 +527,7 @@ fn plan_stated_inputs(
 /// recovered contract misses an input and does not shape the call.
 fn reads_unstated(
     entries: &[crate::fspec::ParamEntry],
-    dead: &crate::kuna_calleedeadarg::CalleeEntryDead,
+    dead: &crate::calleedeadarg::CalleeEntryDead,
     inputs: &[(Address, i32, std::rc::Rc<Datatype>)],
 ) -> bool {
     let singles: Vec<Address> = entries
@@ -584,7 +584,7 @@ fn never_reads(data: &Funcdata, entry: &Address, addr: &Address, size: i32) -> b
 fn result_written(
     data: &Funcdata,
     entry: &Address,
-    dead: &crate::kuna_calleedeadarg::CalleeEntryDead,
+    dead: &crate::calleedeadarg::CalleeEntryDead,
     addr: &Address,
     size: i32,
 ) -> bool {
@@ -908,7 +908,7 @@ fn split_word_inputs(data: &mut Funcdata, typed: &[(Address, i32)]) {
                     && single_entry(data, &high)
                     && floating(v.get_addr())
                     && floating(&high)
-            }) && crate::kuna_armfloatreturn::halves_only(data, vn, 4)
+            }) && crate::armfloatreturn::halves_only(data, vn, 4)
         })
         .collect();
     for vn in inputs {
@@ -1289,8 +1289,8 @@ pub fn base_inputs(arch: &Architecture, pieces: &mut PrototypePieces) -> bool {
     true
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.armfloatargs_applies = Some(applies);
     hooks.armfloatargs_stated_singles = Some(stated_singles);
 }
@@ -1299,7 +1299,7 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArmFloatArgs(pub bool);
 
-impl crate::kuna_optionset::KunaOption for ArmFloatArgs {
+impl crate::optionset::KunaOption for ArmFloatArgs {
     const NAME: &'static str = "armfloatargs";
     crate::kuna_option_id!();
 

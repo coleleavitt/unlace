@@ -1,11 +1,11 @@
-//! Unit tests for the typed assertion core (`kuna_assert.rs`).
+//! Unit tests for the typed assertion core (`assert.rs`).
 //!
 //! Covers the validation precedence, the strength resolution, the
 //! minimal-rewind computation matrix (`stage-model.md` section 12), the
 //! sub-stage -> store dispatch routing, and the `kassert list` rendering.
 
 use super::*;
-use crate::kuna_phases::KunaPhase;
+use crate::phases::KunaPhase;
 use unlace_base::error::KunaError;
 
 // --- validate_assertion: precedence of the C++ IfaceParseError throws --------

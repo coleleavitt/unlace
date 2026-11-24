@@ -21,7 +21,7 @@
 //!
 //! # Why the existing `returndup` cannot reach it
 //!
-//! [`ActionReturnDup`](crate::kuna_returndup) (option `returndup`) gates on
+//! [`ActionReturnDup`](crate::returndup) (option `returndup`) gates on
 //! [`Funcdata::returndup_is_const_ret`](crate::funcdata::Funcdata) — the **whole** return
 //! value must be constant.  That gate exists because broad, variable-return duplication
 //! diverged from the source's merged short-circuit form on the aggregate (decbench: ~976
@@ -110,7 +110,7 @@ impl Action for ActionEarlyReturn {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_earlyreturn::EarlyReturn>()
+            .get::<crate::earlyreturn::EarlyReturn>()
             .0
         {
             return 0;
@@ -157,7 +157,7 @@ impl OptionEarlyReturn {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EarlyReturn(pub bool);
 
-impl crate::kuna_optionset::KunaOption for EarlyReturn {
+impl crate::optionset::KunaOption for EarlyReturn {
     const NAME: &'static str = "earlyreturn";
     crate::kuna_option_id!();
 
@@ -170,7 +170,7 @@ impl crate::kuna_optionset::KunaOption for EarlyReturn {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_earlyreturn::OptionEarlyReturn.apply(value)?;
+        let (v, msg) = crate::earlyreturn::OptionEarlyReturn.apply(value)?;
         Ok((EarlyReturn(v), msg))
     }
 }

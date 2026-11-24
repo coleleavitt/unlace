@@ -78,7 +78,7 @@ use crate::action::{ActionGroupList, Rule, RuleSpec};
 use crate::context::{OpId, TypeOp, VarnodeId};
 use crate::funcdata::Funcdata;
 
-pub use crate::kuna_specnames::SIMDLANE_SHUFFLE_USEROPS as SHUFFLE_USEROP_NAMES;
+pub use crate::specnames::SIMDLANE_SHUFFLE_USEROPS as SHUFFLE_USEROP_NAMES;
 
 /// Marshalling element id (kuna 4000+ range).
 pub const ELEM_SIMDLANE: ElementId = ElementId::new("simdlane", 4142);
@@ -246,7 +246,7 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 // ---------------------------------------------------------------------------
-// Local IR read helpers (the `kuna_booleanmask.rs` access pattern).
+// Local IR read helpers (the `booleanmask.rs` access pattern).
 // ---------------------------------------------------------------------------
 
 fn op_in(data: &Funcdata, op: OpId, slot: int4) -> Option<VarnodeId> {
@@ -292,5 +292,5 @@ fn vn_size(data: &Funcdata, vn: VarnodeId) -> int4 {
 }
 
 #[cfg(test)]
-#[path = "kuna_simdlane/tests.rs"]
+#[path = "simdlane/tests.rs"]
 mod tests;

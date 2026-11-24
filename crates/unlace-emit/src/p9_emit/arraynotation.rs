@@ -15,7 +15,7 @@ use crate::options::on_or_off;
 pub const ELEM_ARRAYNOTATION: ElementId = ElementId::new("arraynotation", 4001);
 
 /// (kuna) Toggle array-notation rendering of standalone pointer arithmetic:
-/// `arraynotation on|off` (C++ `OptionArrayNotation`, kuna_arraynotation.cc:15-25).
+/// `arraynotation on|off` (C++ `OptionArrayNotation`, arraynotation.cc:15-25).
 ///
 /// "off" keeps upstream behavior (`base + index`); "on" renders a standalone
 /// `PTRADD` as `&base[index]` ([`crate::printc::PrintC`]'s `opPtradd`).  Note the
@@ -40,5 +40,5 @@ impl OptionArrayNotation {
 }
 
 #[cfg(test)]
-#[path = "kuna_arraynotation/tests.rs"]
+#[path = "arraynotation/tests.rs"]
 mod tests;

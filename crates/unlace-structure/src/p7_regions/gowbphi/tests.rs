@@ -1,4 +1,4 @@
-// Tests for `kuna_gowbphi` (included into `mod tests` in kuna_gowbphi.rs).
+// Tests for `kuna_gowbphi` (included into `mod tests` in gowbphi.rs).
 //
 // Covered here: the action is inert (returns 0) with the gate off, on a
 // function with no calls, and under `always` with no matching shape. The
@@ -18,8 +18,8 @@ use unlace_base::space::{
 
 use crate::action::ActionContext;
 use crate::context::ArchContext;
-use crate::kuna_gowritebarrier::GoWriteBarrierMode;
-use crate::kuna_sourcelang::SourceLang;
+use crate::gowritebarrier::GoWriteBarrierMode;
+use crate::sourcelang::SourceLang;
 
 fn build_fd(mode: GoWriteBarrierMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();

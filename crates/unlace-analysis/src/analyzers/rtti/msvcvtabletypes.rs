@@ -1,5 +1,5 @@
 //! (kuna `vtabletypes`) The typed-vftable facts of an MSVC C++ image, for the
-//! commit that installs them ([`unlace_decomp::kuna_vtabletypes`]).
+//! commit that installs them ([`unlace_decomp::vtabletypes`]).
 //!
 //! Built on the MSVC RTTI recovery of [`super::RttiPass`], which this pass runs
 //! on its own so the facts do not depend on whether the `rtti` labels are
@@ -32,19 +32,19 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use object::read::{Object, ObjectSymbol};
 use object::{BinaryFormat, SymbolKind};
 
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
-use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::vtabletypes::{VtableClass, VtableSlot};
 
 use crate::demangle::demangle_rtti_class_name;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-use super::kuna_vtabletypes::{VtableFacts, VtableObject, is_identifier, struct_name};
 use super::models::{
     BaseClassDescriptor, ClassHierarchyDescriptor, CompleteObjectLocator, ImageBytes,
     TypeDescriptor, read_base_class_array,
 };
 use super::refkind::RefKind;
 use super::vftable::{TextRanges, VfTable, walk_vftable};
+use super::vtabletypes::{VtableFacts, VtableObject, is_identifier, struct_name};
 
 /// The MSVC typed-vftable pass (gate id `vtabletypes`, PE only).
 #[derive(Default)]

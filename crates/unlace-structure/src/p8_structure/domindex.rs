@@ -3,7 +3,7 @@
 //! Interval slots are indexed by arena id, so the index is sized by the
 //! largest node id in the graph; P8 snapshots come from a fresh pool.
 
-use crate::kuna_regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionGraph};
+use crate::regiongraph::{KunaIncrementalDominators, KunaNodeId, KunaRegionGraph};
 
 const ABSENT: u32 = u32::MAX;
 
@@ -76,7 +76,7 @@ impl DominanceIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_regiongraph::{KunaNodePool, NodeKind};
+    use crate::regiongraph::{KunaNodePool, NodeKind};
 
     #[test]
     fn deep_chain_uses_an_iterative_traversal() {

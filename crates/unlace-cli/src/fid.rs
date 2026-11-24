@@ -19,7 +19,7 @@
 //! `--lang` / `--cspec` are written verbatim into the `.fid` header. The
 //! matching pass applies a database only to an image whose language has the
 //! header language's processor, address size and instruction byte order
-//! (`unlace_analysis::fid::kuna_fidapply`), so the builder refuses an object whose
+//! (`unlace_analysis::fid::fidapply`), so the builder refuses an object whose
 //! own language `--lang` does not apply to: its hashes were computed with the
 //! object's decoder, and the header would send them to the wrong images.
 //! A `.a` archive is unpacked member-by-member (each member is bootstrapped as a
@@ -155,7 +155,7 @@ fn cmd_build(argv: &[String]) -> i32 {
     for name in args.declared.fill(&mut all) {
         eprintln!("unlace fid build: warning: --assert prototype {name}: no record has that name");
     }
-    let disputed = unlace_analysis::fid::kuna_fidproto::drop_disputed(&mut all);
+    let disputed = unlace_analysis::fid::fidproto::drop_disputed(&mut all);
     if !disputed.is_empty() {
         eprintln!(
             "unlace fid build: defined differently by two objects, left opaque: {}",
@@ -244,7 +244,7 @@ fn records_for_object_path(
     let mut prog = bootstrap_from_object(path, "", spec_roots)
         .map_err(|e| ObjectRefusal::Load(format!("bootstrap failed: {e}")))?;
     let arch = prog.arch();
-    unlace_analysis::fid::kuna_fidapply::applies(lang, arch).map_err(|reason| {
+    unlace_analysis::fid::fidapply::applies(lang, arch).map_err(|reason| {
         ObjectRefusal::Language(format!(
             "--lang {lang} does not describe this object: {reason}"
         ))
@@ -271,7 +271,7 @@ fn records_for_object_path(
     // also paint decode context.
     match prog.commit_pending_analysis() {
         Ok(()) => {
-            unlace_analysis::fid::kuna_fidproto::describe(prog.arch(), &image, &mut records);
+            unlace_analysis::fid::fidproto::describe(prog.arch(), &image, &mut records);
         }
         Err(e) => eprintln!(
             "unlace fid build: {path}: no prototypes read: {}",

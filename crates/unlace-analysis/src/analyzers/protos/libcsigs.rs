@@ -52,7 +52,7 @@
 use super::{Sig, Ty, seed_named_prototypes, seed_resolved_prototypes};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use object::Object;
-use unlace_decomp::kuna_typedcallabi;
+use unlace_decomp::typedcallabi;
 
 /// Seed the measured libc signature extension onto imported functions.
 pub struct LibcSigsPass;
@@ -5382,10 +5382,10 @@ impl AnalysisPass for LibcSigsPass {
             types,
             word_size,
             super::L,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &resolved, LIBC_EXT, types, word_size, super::L);
-        let complex_max = crate::analyzers::dwarf::kuna_dwarfcomplex::max_size(
+        let complex_max = crate::analyzers::dwarf::dwarfcomplex::max_size(
             ctx.file.format(),
             ctx.file.architecture(),
             &ctx.arch.archid,
@@ -5425,18 +5425,18 @@ impl AnalysisPass for LibcSigsPass {
             types,
             word_size,
             super::L,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &resolved, &complex, types, word_size, super::L);
         let arm = ctx.arch.archid.starts_with("ARM:");
-        if arm || !kuna_typedcallabi::returns_doubles_whole(ctx.arch) {
+        if arm || !typedcallabi::returns_doubles_whole(ctx.arch) {
             let (float, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut out.prototypes)
                 .into_iter()
-                .partition(kuna_typedcallabi::declares_a_float);
+                .partition(typedcallabi::declares_a_float);
             out.prototypes = kept;
             let (float_at, kept_at): (Vec<_>, Vec<_>) = std::mem::take(&mut out.prototypes_at)
                 .into_iter()
-                .partition(|(_, p)| kuna_typedcallabi::declares_a_float(p));
+                .partition(|(_, p)| typedcallabi::declares_a_float(p));
             out.prototypes_at = kept_at;
             if arm {
                 let mut libm = AnalysisOutput::default();
@@ -5447,7 +5447,7 @@ impl AnalysisPass for LibcSigsPass {
                     types,
                     word_size,
                     super::L,
-                    unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+                    unlace_decomp::loadoptions::nameladder_enabled(),
                 );
                 seed_resolved_prototypes(
                     &mut libm,
@@ -5464,7 +5464,7 @@ impl AnalysisPass for LibcSigsPass {
                     .map(|(at, p)| (Some(at), p));
                 out.arm_float_prototypes.extend(float.chain(float_at));
             } else {
-                let cause = unlace_decomp::kuna_honestgaps::WithheldCause::FloatConvention;
+                let cause = unlace_decomp::honestgaps::WithheldCause::FloatConvention;
                 let named = float.into_iter().map(|p| (None, p.name, cause));
                 let at = float_at
                     .into_iter()

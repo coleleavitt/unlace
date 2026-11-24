@@ -376,8 +376,8 @@ pub fn recover(
     Ok(None)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.rawswitch_recover = Some(recover);
 }
 
@@ -404,7 +404,7 @@ impl OptionRawSwitch {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RawSwitch(pub bool);
 
-impl crate::kuna_optionset::KunaOption for RawSwitch {
+impl crate::optionset::KunaOption for RawSwitch {
     const NAME: &'static str = "rawswitch";
     crate::kuna_option_id!();
 

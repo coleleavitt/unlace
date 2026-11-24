@@ -11,7 +11,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{ActionGroupList, Rule};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_selectdiv::{constant, def_of, input, same, select_condition, size, source};
+use crate::selectdiv::{constant, def_of, input, same, select_condition, size, source};
 
 crate::kuna_flag!(
     /// (kuna `satconvert`) Print an exactly saturating float-to-integer conversion as the C cast.

@@ -30,7 +30,7 @@
 //! # The evidence
 //!
 //! The callee's body settles it. The bounded entry decode
-//! [`crate::kuna_calleedeadarg`] takes for every direct call, cached
+//! [`crate::calleedeadarg`] takes for every direct call, cached
 //! per callee, shows whether some path reads the register's LOW byte before
 //! writing it, for a value that can reach something
 //! ([`CalleeEntryDead::reads_low_byte`]); whatever the caller left there is then
@@ -65,7 +65,7 @@
 //! instead with what its first heritage saw it read, for the registers it
 //! states as parameters; beside a complete walk, the statement adds the
 //! registers the callee hands on to a declared parameter or a callee that takes
-//! them ([`crate::kuna_entryreads`]). A function calling itself reads its own.
+//! them ([`crate::entryreads`]). A function calling itself reads its own.
 //! A list that only that statement extends passes no earlier call's leftover
 //! result: gcc -O2 keeps a value in `rdx` across a call it knows leaves `rdx`
 //! alone, and the register then reads as the call's clobber, an uninitialised
@@ -96,19 +96,19 @@
 //! is a leftover. No more than two such entries may stand in a row, the chain
 //! upstream's positional rule tolerates.
 
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use std::collections::HashSet;
 
 use unlace_base::address::Address;
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
+use crate::calleedeadarg::CalleeEntryDead;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_class;
 use crate::fspec::FuncCallSpecs;
 use crate::funcdata::Funcdata;
-use crate::kuna_calleedeadarg::CalleeEntryDead;
 
 /// How many entries in a row may stand between the list and the register the
 /// callee reads (upstream `fillinMap`'s `maxchain`).
@@ -186,9 +186,9 @@ pub fn reads_as_argument(
 /// Called at the end of `ActionFuncLink`, next to `passthrough`'s own record,
 /// which that option skips in a function that is variadic itself.
 pub fn record_variadic_setups(data: &mut Funcdata) {
-    let variadic = crate::kuna_passthrough::tests_the_vararg_count(data);
+    let variadic = crate::passthrough::tests_the_vararg_count(data);
     let ops: Vec<OpId> = (0..data.num_calls())
-        .filter(|&i| variadic || crate::kuna_passthrough::set_up_as_variadic(data, i))
+        .filter(|&i| variadic || crate::passthrough::set_up_as_variadic(data, i))
         .map(|i| data.get_call_specs(i).get_op())
         .collect();
     data.kuna_set_readarg_vararg_calls(ops);
@@ -223,11 +223,11 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         .kuna_callee_entry_dead(entry)
         .filter(|f| f.is_complete());
     let seen = if live.is_none() {
-        crate::kuna_entryreads::callee_reads(data, entry)
+        crate::entryreads::callee_reads(data, entry)
     } else {
         None
     };
-    let passes = crate::kuna_entryreads::callee_passes(data, entry);
+    let passes = crate::entryreads::callee_passes(data, entry);
     let stated = |a: &Address| {
         *entry == *data.get_address()
             || data
@@ -290,9 +290,9 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
         let callee_reads = match (live, &seen) {
             (Some(f), _) => {
                 f.reads_low_byte(&addr, size, stores, true)
-                    || (stated(&addr) && crate::kuna_entryreads::overlaps(&passes, &addr, size))
+                    || (stated(&addr) && crate::entryreads::overlaps(&passes, &addr, size))
             }
-            (None, Some(r)) => stated(&addr) && crate::kuna_entryreads::overlaps(r, &addr, size),
+            (None, Some(r)) => stated(&addr) && crate::entryreads::overlaps(r, &addr, size),
             _ => false,
         };
         let vn = if t.is_definitely_not_used() || t.is_unref() || t.get_slot() < 1 {
@@ -319,14 +319,14 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
             (Some(f), _) => {
                 reads_as_argument(f, &addr, size, last.as_ref(), stores)
                     || (stated(&addr)
-                        && crate::kuna_entryreads::overlaps(&passes, &addr, size)
+                        && crate::entryreads::overlaps(&passes, &addr, size)
                         && last.as_ref().is_some_and(|(a, s)| !f.proves_read(a, *s)))
             }
             (None, Some(r)) => {
                 callee_reads
                     && last
                         .as_ref()
-                        .is_some_and(|(a, s)| !crate::kuna_entryreads::overlaps(r, a, *s))
+                        .is_some_and(|(a, s)| !crate::entryreads::overlaps(r, a, *s))
             }
             _ => false,
         };
@@ -346,7 +346,7 @@ pub fn capture(fc: &FuncCallSpecs, data: &Funcdata) -> Option<PendingReadArg> {
     if fresh {
         for s in row.iter_mut().flatten() {
             if s.vn
-                .is_some_and(|v| crate::kuna_calleedeadarg::is_leftover_call_result(data, v, 0))
+                .is_some_and(|v| crate::calleedeadarg::is_leftover_call_result(data, v, 0))
             {
                 s.vn = None;
                 s.reads = false;
@@ -438,7 +438,7 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
             return false;
         };
         let arg = if vsize > s.width {
-            match crate::kuna_passthrough::truncate_before(data, vn, s.width, p.op) {
+            match crate::passthrough::truncate_before(data, vn, s.width, p.op) {
                 Some(v) => v,
                 None => return false,
             }
@@ -464,5 +464,5 @@ fn extend_one(data: &mut Funcdata, p: &PendingReadArg) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_calleereadarg/tests.rs"]
+#[path = "calleereadarg/tests.rs"]
 mod tests;

@@ -2,7 +2,7 @@
 
 Deepens gap 2 of `notes/ida-gaps.md`. Correction to that row: unlace can already read a Windows
 `.til` on a PE (`--option typelib /path/mssdk64_win10.til`: `library_text` in
-`crates/unlace-console/src/kuna_typelib.rs` renders a `.til` for the image's own target, e.g.
+`crates/unlace-console/src/typelib.rs` renders a `.til` for the image's own target, e.g.
 `windows x86_64`). What is missing is choosing the library, combining several, and letting it win over
 the hand-written Win32 table. The `typelib` row in `docs/options.md` ("inert on every other target")
 describes `auto` only.
@@ -16,7 +16,7 @@ forwarders `api-ms-win-crt-*`, `vcruntime`, `msvcp`, `ucrtbase` left out), 22,68
 | source | import references declared | distinct names |
 |---|---|---|
 | IDA `mssdk64_win10.til` (221,668 symbols) | 21,946 (96.7%) | 1,154 / 1,470 |
-| unlace `kuna_win32sigs.rs` (146 names) | 11,552 (50.9%) | 131 / 1,470 |
+| unlace `win32sigs.rs` (146 names) | 11,552 (50.9%) | 131 / 1,470 |
 
 1,008 of the til's declarations for these names use a handle, struct or pointer typedef
 (`LPSECURITY_ATTRIBUTES`, `HKEY`, `LPSYSTEM_INFO`, `LPCRITICAL_SECTION`). 99 of them are also in
@@ -61,7 +61,7 @@ table is ever committed, the `.til` files stay a runtime input from the user's I
 |---|---|---|---|
 | 1 | **Precedence.** When `typelib` names a library, a declaration from it replaces a `win32sigs` (and `libcsigs`) entry for the same import; the hand tables stay the fallback when no library is given. | `kuna_typelib::seed` (the "no earlier source declared" filter), or `win32sigs` consulting `TypeLibFacts` | S |
 | 2 | **Several libraries.** `typelib` takes a `:`-separated list (as `KUNA_FLIRT_SIGS` does); the first library that declares a name wins. Lets `mssdk64_win10.til:ntapi64_win10.til` work together. | `TypeLib` option type, `library_text` | S |
-| 3 | **Choose automatically from a directory.** A til directory (env `UNLACE_TIL_DIR` pointing at `<ida>/til`) plus IDA's rules from §2: PE32/PE32+ x subsystem -> `mssdk[64]_win10` or `ntddk[64]_win10` (newest present); EFI subsystems 10-13 -> `uefi[64]`; then `ntapi[64]_win10`. Report the choice on stderr. | `protos/kuna_typelib.rs` (facts: subsystem, magic) + console | S-M |
+| 3 | **Choose automatically from a directory.** A til directory (env `UNLACE_TIL_DIR` pointing at `<ida>/til`) plus IDA's rules from §2: PE32/PE32+ x subsystem -> `mssdk[64]_win10` or `ntddk[64]_win10` (newest present); EFI subsystems 10-13 -> `uefi[64]`; then `ntapi[64]_win10`. Report the choice on stderr. | `protos/typelib.rs` (facts: subsystem, magic) + console | S-M |
 | 4 | **Names beyond imports.** Seed the library for functions named by FLIRT, FID or a PDB (IDA's "Types applied to %d names"), not only for imports. | `seed`: walk `named` (already in `TypeLibFacts`) as well as `imports` | S |
 | 5 | **Docs.** The `typelib` row and spec chapter state that a `.til` path works on any target. | `phases.toml`, `docs/spec`, regenerate `docs/options.md` | S |
 
@@ -86,11 +86,11 @@ declares functions FLIRT, FID or a PDB named. Not done: compiler voting (Borland
 
 ```sh
 python3 -I idamine_pecov.py ~/SiteResearch/lenovo/gfx-driver ~/SiteResearch/ida-pro/ida-9.5-tils.sqlite \
-    crates/unlace-analysis/src/analyzers/protos/kuna_win32sigs.rs
+    crates/unlace-analysis/src/analyzers/protos/win32sigs.rs
 sqlite3 -readonly ~/SiteResearch/ida-pro/sqlite/x86__pc.sqlite "select text from pseudocode where ea=0x98900"
 sqlite3 -readonly ~/SiteResearch/ida-pro/libida.sqlite "select text from pseudocode where ea=0x684360"
 ```
 
 The script (pefile; counts import names per image, looks each up in `til_symbols` of
-`mssdk64_win10.til` and in the quoted names of `kuna_win32sigs.rs`) is kept with the derived database at
+`mssdk64_win10.til` and in the quoted names of `win32sigs.rs`) is kept with the derived database at
 `~/SiteResearch/ida-pro/derived/idamine_pecov.py`.

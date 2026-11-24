@@ -5,7 +5,7 @@
    which parameter rule each would hit. Done: 274 fields over 12 builds, 10 pass
    the strict rules.
 2. `structsynth nest`, a value of the existing option (not a new option): the
-   parameter pass unchanged, plus `kuna_structsynth/nest.rs` over the merged
+   parameter pass unchanged, plus `structsynth/nest.rs` over the merged
    evidence of each pointer field's loads, depth-bounded at two records.
 3. Self-reference by claim subset after the standalone rules; minted around the
    shell in `ledger::mint`, keyed `SELF`; the shell resolved at the LOAD/STORE

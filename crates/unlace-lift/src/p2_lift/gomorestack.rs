@@ -75,7 +75,7 @@ pub enum GoMorestackMode {
     Always,
 }
 
-impl crate::kuna_optionset::KunaOption for GoMorestackMode {
+impl crate::optionset::KunaOption for GoMorestackMode {
     const NAME: &'static str = "gomorestack";
     crate::kuna_option_id!();
 
@@ -180,7 +180,7 @@ impl Action for ActionGoMorestack {
         // The pre-SSA window: cut the edge before heritage so the entry phi
         // never forms (a function carries one entry guard; the loop covers a
         // wrapper that inlined another and keeps each edit's match fresh).
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa) || data.num_calls() == 0 {
+        if data.is_settled(crate::maturity::Fact::Ssa) || data.num_calls() == 0 {
             return 0;
         }
         let mut changed = 0;
@@ -205,5 +205,5 @@ impl Action for ActionGoMorestack {
 }
 
 #[cfg(test)]
-#[path = "kuna_gomorestack/tests.rs"]
+#[path = "gomorestack/tests.rs"]
 mod tests;

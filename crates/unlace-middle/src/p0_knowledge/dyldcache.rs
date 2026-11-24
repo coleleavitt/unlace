@@ -21,8 +21,8 @@ pub const DYLDIMAGE_ENV: &str = "UNLACE_DYLD_IMAGE";
 pub const DYLDCROSSREFS_ENV: &str = "UNLACE_DYLDCROSSREFS";
 
 pub fn dyldcrossrefs_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.dyldcrossrefs)
-        .unwrap_or_else(crate::kuna_loadoptions::env::dyldcrossrefs)
+    crate::loadoptions::scoped(|o| o.dyldcrossrefs)
+        .unwrap_or_else(crate::loadoptions::env::dyldcrossrefs)
 }
 
 pub fn set_dyldcrossrefs_env(on: bool) {
@@ -43,8 +43,8 @@ pub fn image_name(value: &str) -> Option<&str> {
 /// The image the load in progress selected (`LoadOptions::dyldimage`, else
 /// [`DYLDIMAGE_ENV`]).
 pub fn selected_image() -> Option<String> {
-    crate::kuna_loadoptions::scoped(|o| o.dyldimage.clone())
-        .unwrap_or_else(crate::kuna_loadoptions::env::dyldimage)
+    crate::loadoptions::scoped(|o| o.dyldimage.clone())
+        .unwrap_or_else(crate::loadoptions::env::dyldimage)
 }
 
 /// Apply `option dyldimage|dyldcrossrefs VALUE`, or `None` for another option.

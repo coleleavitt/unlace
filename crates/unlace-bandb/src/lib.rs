@@ -26,22 +26,22 @@ pub use unlace_bandb_core::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
-    crate::kuna_callresultuse::provide(slots);
-    crate::kuna_calleepreserves::provide(slots);
-    crate::kuna_calleeretpreserves::provide(slots);
-    crate::kuna_pairrefine::provide(slots);
-    crate::kuna_registerslots::provide(slots);
-    crate::kuna_stackeffects::provide(slots);
-    crate::kuna_leafmemory::provide(slots);
-    crate::kuna_callmechanisms::provide(slots);
-    crate::kuna_fputruncviews::provide(slots);
-    crate::kuna_globalorder::provide(slots);
-    crate::kuna_loadorder::provide(slots);
-    crate::kuna_stackvalueorder::provide(slots);
-    crate::kuna_qualifiedcall::provide(slots);
-    crate::kuna_x87emptyreturn::provide(slots);
-    crate::kuna_indexaliasguard::provide(slots);
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+    crate::callresultuse::provide(slots);
+    crate::calleepreserves::provide(slots);
+    crate::calleeretpreserves::provide(slots);
+    crate::pairrefine::provide(slots);
+    crate::registerslots::provide(slots);
+    crate::stackeffects::provide(slots);
+    crate::leafmemory::provide(slots);
+    crate::callmechanisms::provide(slots);
+    crate::fputruncviews::provide(slots);
+    crate::globalorder::provide(slots);
+    crate::loadorder::provide(slots);
+    crate::stackvalueorder::provide(slots);
+    crate::qualifiedcall::provide(slots);
+    crate::x87emptyreturn::provide(slots);
+    crate::indexaliasguard::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
@@ -49,7 +49,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

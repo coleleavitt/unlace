@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use unlace_analysis::loader::kuna_relocrebase::RebasedView;
-use unlace_analysis::strings::kuna_stringinv::{self, Termination};
+use unlace_analysis::loader::relocrebase::RebasedView;
+use unlace_analysis::strings::stringinv::{self, Termination};
 use unlace_console::assertions::Outcome;
 use unlace_console::disasm::{hex, mapped_run_end, read_upto};
 use unlace_console::engine::{ConsoleProgram, FunctionEntry};
@@ -291,8 +291,8 @@ fn function_json(
 /// run) or `null`, and `base` the one the code addresses its stack through.
 fn frame_json(prog: &ConsoleProgram, entry: u64, rows: &[unlace_console::disasm::Row]) -> String {
     let body: Vec<u64> = rows.iter().map(|r| r.addr).collect();
-    let bases = unlace_console::kuna_framebase::frame_bases(prog, entry, &body);
-    let reg = |r: Option<unlace_console::kuna_framebase::FrameRegister>| {
+    let bases = unlace_console::framebase::frame_bases(prog, entry, &body);
+    let reg = |r: Option<unlace_console::framebase::FrameRegister>| {
         r.map_or_else(
             || "null".to_string(),
             |r| {
@@ -421,7 +421,7 @@ pub fn strings_json(
     assertions: &[Outcome],
 ) -> String {
     use object::{Object, ObjectSection, SectionKind};
-    let query = kuna_stringinv::Query {
+    let query = stringinv::Query {
         min_len: 5,
         ascii: true,
         utf8: true,
@@ -430,8 +430,8 @@ pub fn strings_json(
         termination: Termination::Any,
     };
     let inv = match rebased {
-        Some(view) => kuna_stringinv::inventory_in_image(file, &query, &view.ranges),
-        None => kuna_stringinv::inventory(file, &query),
+        Some(view) => stringinv::inventory_in_image(file, &query, &view.ranges),
+        None => stringinv::inventory(file, &query),
     };
     let code: Vec<(u64, u64)> = file
         .sections()

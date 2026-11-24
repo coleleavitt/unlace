@@ -231,7 +231,7 @@ files, adding 16 rows costs:
 
 | site | what | 83 → 99 |
 |---|---|---|
-| `src/p0_knowledge/kuna_phases/tests.rs:48,49` | `kuna_num_settables()`, `SETTABLE_TABLE.len()` | 2 edits |
+| `src/p0_knowledge/phases/tests.rs:48,49` | `kuna_num_settables()`, `SETTABLE_TABLE.len()` | 2 edits |
 | `tests/catalog_bytecompat.rs:82,84,86` | `"option":` / `"tier":` / `"symptoms":` counts | 3 edits |
 | `tests/fixtures/phase_catalog.json` | the **byte-for-byte** catalog fixture (`assert_eq!(rust, FIXTURE)`) | regenerate |
 | `tests/stages/kuna-catalog.toml:40,44` | `#5 use_when` / `#9 change_kind` are `min="10" max="160"` | **no bump** (99 < 160) |

@@ -14,7 +14,7 @@ pub(super) fn matches(
     let arm = is_arm_lr_prologue(data, off, little);
     let thumb = arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+        .get::<unlace_decomp::analysisgates::ArmFrames>()
         .full
         && is_thumb_lr_prologue_endian(data, off, little);
     if !arm && !thumb {

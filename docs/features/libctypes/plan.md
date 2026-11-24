@@ -17,8 +17,8 @@ scores (`kuna decompile-all --json`'s `variables[]`), where every such slot is
 | option | `libctypes`, values `off\|opaque`, default `off` |
 | phase / subphase | P1 / `external-refinement` |
 | tier / change_kind | `analysis` / `analysis-enablement` |
-| owner | `kuna-analysis/src/analyzers/protos/kuna_libctypes.rs` (`LibcTypesPass`) |
-| gate | load-time env bridge `KUNA_LIBCTYPES` (`kuna-decomp/src/p0_knowledge/kuna_libctypes.rs`) |
+| owner | `kuna-analysis/src/analyzers/protos/libctypes.rs` (`LibcTypesPass`) |
+| gate | load-time env bridge `KUNA_LIBCTYPES` (`kuna-decomp/src/p0_knowledge/libctypes.rs`) |
 | spec | `docs/spec/01-program-prep.md`, prototype-sources section |
 
 ## Steps taken

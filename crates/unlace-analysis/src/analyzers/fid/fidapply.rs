@@ -11,7 +11,7 @@
 use std::path::Path;
 
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_langfamily::{LanguageFamily, language_id};
+use unlace_decomp::langfamily::{LanguageFamily, language_id};
 
 use super::db::{FidDatabase, FidDb};
 
@@ -118,7 +118,7 @@ pub fn open(path: &Path, arch: &Architecture) -> (FidDbReport, Option<FidDb>) {
 /// `.ldefs` languages falls back to exact language-id equality.
 pub fn applies(db_language: &str, arch: &Architecture) -> Result<(), String> {
     let image_language = language_id(&arch.archid);
-    if !unlace_decomp::kuna_langfamily::has_language_families(arch) {
+    if !unlace_decomp::langfamily::has_language_families(arch) {
         return if db_language == image_language {
             Ok(())
         } else {
@@ -127,12 +127,12 @@ pub fn applies(db_language: &str, arch: &Architecture) -> Result<(), String> {
             ))
         };
     }
-    let Some(db) = unlace_decomp::kuna_langfamily::language_family(arch, db_language) else {
+    let Some(db) = unlace_decomp::langfamily::language_family(arch, db_language) else {
         return Err(format!(
             "database language {db_language:?} is not a language the loaded specs define"
         ));
     };
-    let Some(image) = unlace_decomp::kuna_langfamily::language_family(arch, image_language) else {
+    let Some(image) = unlace_decomp::langfamily::language_family(arch, image_language) else {
         return if db_language == image_language {
             Ok(())
         } else {

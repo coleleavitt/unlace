@@ -12,7 +12,7 @@
 //! So the check runs at the final `ActionBlockStructure`: every block in a
 //! comma-printed position (the right operand of a `BlockCondition`, or the
 //! condition of a `while (...)` header) is measured with the printer's own walk,
-//! `kuna_condfold::printed_shape`, and a block printing more than N statements
+//! `condfold::printed_shape`, and a block printing more than N statements
 //! before its test is recorded on the `Funcdata`.  The decompile drive then
 //! analyzes the function again with those block starts seeded as complex from the
 //! first structuring on, so the fold is declined (or a loop head takes the
@@ -50,7 +50,7 @@ pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
         return out;
     }
     let seed = data.condstmts_seed();
-    let measure = data.is_settled(crate::kuna_maturity::Fact::HighVariables);
+    let measure = data.is_settled(crate::maturity::Fact::HighVariables);
     if seed.is_empty() && !measure {
         return out;
     }
@@ -66,7 +66,7 @@ pub fn complex_blocks(data: &Funcdata) -> BTreeSet<BlockId> {
 }
 
 fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
-    crate::kuna_condfold::printed_shape(data, &data.bb_ops(bb))
+    crate::condfold::printed_shape(data, &data.bb_ops(bb))
         .is_some_and(|shape| shape.stmts - 1 > cap)
 }
 
@@ -75,7 +75,7 @@ fn is_overlong(data: &Funcdata, bb: BlockId, cap: int4) -> bool {
 pub fn record_hits(data: &mut Funcdata) {
     let cap = data.get_arch().kuna_options.get::<CondStmts>().0;
     if cap < 0
-        || !data.is_settled(crate::kuna_maturity::Fact::HighVariables)
+        || !data.is_settled(crate::maturity::Fact::HighVariables)
         || data.sblocks_get_size() == 0
     {
         return;
@@ -142,7 +142,7 @@ pub fn condfold_budget(cond_fold: int4, cond_stmts: int4) -> int4 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CondStmts(pub int4);
 
-impl crate::kuna_optionset::KunaOption for CondStmts {
+impl crate::optionset::KunaOption for CondStmts {
     const NAME: &'static str = "condstmts";
     crate::kuna_option_id!();
 

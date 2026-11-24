@@ -11,7 +11,7 @@
 //! upstream's bit copy, and the store is left as upstream prints it; a float
 //! narrower than C's `float` (a half float) has no C type to point at.
 
-use crate::kuna_typequal::DatatypeQualExt;
+use crate::typequal::DatatypeQualExt;
 use std::rc::Rc;
 
 use crate::dtype::{Datatype, TypeFactory, type_metatype};

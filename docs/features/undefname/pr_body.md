@@ -76,7 +76,7 @@ non-perturbingly: exactly **one** Symbol at that offset, and no `$$undef` Symbol
 
 **The gate is a faithful port and is left alone.** Relaxing it would move *when* a Symbol
 consumes `base` and renumber every later local. Instead `ActionNameVars` grows the tail
-it was missing (`p6_variables/kuna_undefname.rs`): wire the catch-all `assignDefaultNames`,
+it was missing (`p6_variables/undefname.rs`): wire the catch-all `assignDefaultNames`,
 then re-resolve every high still holding a placeholder through the *same*
 `queryProperties(addr,1,usepoint)` containment query that bound it -- kuna's stand-in for
 the printer's live read. Both steps run after every `vN` is handed out and after the

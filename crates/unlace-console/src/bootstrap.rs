@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::xml::Element;
-use unlace_decomp::kuna_loadoptions::{self, LoadOptions, LoadScope};
+use unlace_decomp::loadoptions::{self, LoadOptions, LoadScope};
 
 use crate::engine::{
     ArmIsa, ConsoleProgram, FileInput, Languages, RawBytes, arm_isa_from_env, bootstrap_cil,
@@ -17,7 +17,7 @@ use crate::engine::{
 };
 
 /// Where a [`Bootstrap`] finds its languages: spec roots (a slice, array or
-/// `Vec` of anything [`IntoSpecRoot`](unlace_decomp::kuna_memoryspecs::IntoSpecRoot)
+/// `Vec` of anything [`IntoSpecRoot`](unlace_decomp::memoryspecs::IntoSpecRoot)
 /// takes) it scans at each load, or a
 /// [`LanguageDatabase`](unlace_decomp::sleigh_arch::LanguageDatabase) a caller
 /// scanned once with [`language_database`](crate::engine::language_database).
@@ -30,7 +30,7 @@ impl<L: Languages + ?Sized> LanguageSource for L {}
 ///
 /// ```no_run
 /// # use unlace_console::engine::{language_database, ArmIsa, Bootstrap};
-/// # use unlace_decomp::kuna_loadoptions::LoadOptions;
+/// # use unlace_decomp::loadoptions::LoadOptions;
 /// let db = language_database(&["specs"])?;
 /// let options = LoadOptions::default();
 /// let load = Bootstrap::new(&db).arm_isa(Some(ArmIsa::Thumb)).options(&options);
@@ -48,7 +48,7 @@ impl<L: Languages + ?Sized> LanguageSource for L {}
 ///   even when another program's options are in force there, and the program
 ///   it builds keeps reading the environment live; an object load (or an image
 ///   load that reaches the object loader) also writes the image's Go version
-///   to [`GOVERSION_ENV`](unlace_decomp::kuna_goreg::GOVERSION_ENV), or clears
+///   to [`GOVERSION_ENV`](unlace_decomp::goreg::GOVERSION_ENV), or clears
 ///   it. With [`Bootstrap::options`], nothing on the load reads or writes the
 ///   environment, and the program keeps the options for its analysis commit
 ///   and decompiles.
@@ -289,7 +289,7 @@ impl<'a, L: LanguageSource + ?Sized> Bootstrap<'a, L> {
     fn enter(&self) -> LoadScope {
         match self.options {
             Some(options) => options.enter(),
-            None => kuna_loadoptions::enter_environment(),
+            None => loadoptions::enter_environment(),
         }
     }
 

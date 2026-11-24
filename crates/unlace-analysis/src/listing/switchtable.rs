@@ -88,7 +88,7 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
+use super::poolref::PoolImage;
 use super::xrefs::{FullCapture, FullOp, decode, in_range};
 
 /// Below this an accepted run is a coincidence rather than a table: a compiler
@@ -1204,7 +1204,7 @@ pub(super) enum Val {
 }
 
 /// A varnode's identity, in the two classes the fold models — the same split
-/// [`super::kuna_picpool`] makes, since `register` and `ram` are both processor
+/// [`super::picpool`] makes, since `register` and `ram` are both processor
 /// spaces and only the default data space tells them apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum Key {

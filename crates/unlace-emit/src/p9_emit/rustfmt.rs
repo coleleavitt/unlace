@@ -11,7 +11,7 @@ pub enum RustFmtMode {
     All,
 }
 
-impl crate::kuna_optionset::KunaOption for RustFmtMode {
+impl crate::optionset::KunaOption for RustFmtMode {
     const NAME: &'static str = "rustfmt";
     crate::kuna_option_id!();
 

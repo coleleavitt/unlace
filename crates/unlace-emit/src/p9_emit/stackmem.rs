@@ -13,7 +13,7 @@ use unlace_num::opcodes::OpCode;
 pub struct ByteAddress {
     pub name: String,
     pub offset: i32,
-    pub terms: Vec<crate::kuna_stackranges::IndexTerm>,
+    pub terms: Vec<crate::stackranges::IndexTerm>,
     pub pointer_size: i32,
 }
 
@@ -30,7 +30,7 @@ pub struct Access {
 /// are copied; other memory keeps its ordinary dereference.
 #[doc(hidden)]
 pub fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
-    if !crate::kuna_stackviews::enabled(fd) {
+    if !crate::stackviews::enabled(fd) {
         return None;
     }
     let operation = fd.obank().get(op)?;
@@ -55,7 +55,7 @@ pub fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         && address.is_none()
     {
@@ -90,7 +90,7 @@ pub fn access(fd: &Funcdata, op: OpId) -> Option<Access> {
 
 fn byte_address(fd: &Funcdata, pointer: VarnodeId, size: i32) -> Option<ByteAddress> {
     use unlace_base::address::{Address, calc_mask};
-    let address = crate::kuna_stackranges::frame_address(fd, pointer)?;
+    let address = crate::stackranges::frame_address(fd, pointer)?;
     let space = fd.get_arch().manage().get_stack_space()?;
     let at = Address::new(
         Rc::clone(space),

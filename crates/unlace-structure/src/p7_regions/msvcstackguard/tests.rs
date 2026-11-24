@@ -1,5 +1,5 @@
 // Tests for `kuna_msvcstackguard` (included into `mod tests` in
-// kuna_msvcstackguard.rs).
+// msvcstackguard.rs).
 //
 // Covered:
 //   - `stack_pointer_offset`: the entry stack pointer answers 0, a PTRSUB /
@@ -91,7 +91,7 @@ fn build_fd_with_option(on: bool) -> Funcdata {
         .unwrap();
     let mut ctx = ArchContext::new(manage);
     ctx.kuna_options
-        .set(crate::kuna_msvcstackguard::StripMsvcStackGuard(on));
+        .set(crate::msvcstackguard::StripMsvcStackGuard(on));
     let glb = Rc::new(ctx);
     let code = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let entry = Address::new(code, 0x1000);

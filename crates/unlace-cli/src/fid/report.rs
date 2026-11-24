@@ -1,7 +1,7 @@
 //! What became of each `.fid` database a run was configured with, on stderr and
 //! in the `fid_databases` field of the JSON documents.
 
-use unlace_analysis::fid::kuna_fidapply::FidDbReport;
+use unlace_analysis::fid::fidapply::FidDbReport;
 use unlace_console::engine::ConsoleProgram;
 
 use crate::jsonfmt::Json;
@@ -30,7 +30,7 @@ pub(crate) fn from_transcript(transcript: &str) -> impl Iterator<Item = &str> {
         })
         .filter(|line| {
             line.strip_prefix("warning: ").is_some_and(|rest| {
-                rest.starts_with(unlace_analysis::fid::kuna_fidapply::WARNING_PREFIX)
+                rest.starts_with(unlace_analysis::fid::fidapply::WARNING_PREFIX)
             })
         })
 }

@@ -11,9 +11,9 @@
 //! collection, so no load command needs rewriting. Gated by the `kernelcache`
 //! option ([`KernelcacheChoice`]).
 
-use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
+use unlace_decomp::kernelcache::KernelcacheChoice;
 
-use crate::rtti::kuna_arm64evcall::SignedImage;
+use crate::rtti::arm64evcall::SignedImage;
 
 pub use fileset::FilesetMap;
 pub use linked::LinkSearch;
@@ -79,7 +79,7 @@ pub fn peel_file(
     bytes: Vec<u8>,
     choice: &KernelcacheChoice,
 ) -> Result<Peeled, String> {
-    let boot = unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot::in_force();
+    let boot = unlace_decomp::kernelcacheboot::KernelcacheBoot::in_force();
     peel_linked(bytes, choice, &LinkSearch::new(path, boot))
 }
 

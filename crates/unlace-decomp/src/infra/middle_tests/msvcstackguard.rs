@@ -19,9 +19,9 @@ use crate::fspec::FuncCallSpecs;
 use crate::fspec::ProtoModel;
 use crate::funcdata::Funcdata;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::kuna_msvcstackguard::*;
-use crate::kuna_stackguard::collect_value_slots;
-use crate::kuna_stackguard::release_canary_slots;
+use crate::msvcstackguard::*;
+use crate::stackguard::collect_value_slots;
+use crate::stackguard::release_canary_slots;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::rc::Rc;
@@ -92,7 +92,7 @@ fn build_fd_with_option(on: bool) -> Funcdata {
         .unwrap();
     let mut ctx = ArchContext::new(manage);
     ctx.kuna_options
-        .set(crate::kuna_msvcstackguard::StripMsvcStackGuard(on));
+        .set(crate::msvcstackguard::StripMsvcStackGuard(on));
     let glb = Rc::new(ctx);
     let code = Rc::clone(glb.manage().get_space_by_name("ram").unwrap());
     let entry = Address::new(code, 0x1000);

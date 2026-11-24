@@ -73,7 +73,7 @@ fn this_class(prog: &ConsoleProgram, func: u64) -> Option<String> {
     let hints = prog
         .arch()
         .kuna_tables
-        .get::<unlace_decomp::kuna_inputhints::ThisHints>();
+        .get::<unlace_decomp::inputhints::ThisHints>();
     let (_, list) = hints.0.iter().find(|(a, _)| a.get_offset() == func)?;
     let hint = list.first()?;
     assert_eq!(hint.name, "this");

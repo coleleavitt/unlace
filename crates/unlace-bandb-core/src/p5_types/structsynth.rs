@@ -369,7 +369,7 @@ impl Evidence {
     /// field read as `double` prints `(double)p->field_0x8`, a value conversion of
     /// bits the binary reinterprets (`movsd 0x8(%rdi)`), where a byte array makes
     /// every access cast the address instead. An access with a value is kept, so
-    /// [`crate::kuna_fieldtype`] can read what every access of the widest width says.
+    /// [`crate::fieldtype`] can read what every access of the widest width says.
     fn record_access(
         &mut self,
         off: intb,
@@ -644,7 +644,7 @@ const MAX_ACCESS_USES: u32 = 256;
 /// both mean the object's width policy is unproven.
 #[doc(hidden)]
 pub fn every_access_through(data: &Funcdata, base: VarnodeId, width: int4) -> bool {
-    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut seen = crate::fasthash::FxHashSet::default();
     let mut stack = vec![base];
     let mut steps = 0u32;
     let mut any = false;
@@ -747,9 +747,9 @@ fn collect(data: &mut Funcdata) -> BTreeMap<VarnodeId, Evidence> {
     let keep_values = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::FieldType>()
+        .get::<crate::coreoptions::FieldType>()
         .0
-        || crate::kuna_fieldtype::trace_on();
+        || crate::fieldtype::trace_on();
 
     for opc in [OpCode::CPUI_LOAD, OpCode::CPUI_STORE] {
         let ops: Vec<_> = data.obank().iter_code(opc).collect();
@@ -1122,14 +1122,14 @@ fn synthesize(data: &mut Funcdata) -> bool {
     let nests = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_structsynth::StructSynthMode>()
+        .get::<crate::structsynth::StructSynthMode>()
         .nests();
     let ptrsize = types.get_size_of_pointer();
     let mut asks = Vec::new();
     let field_type = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::FieldType>()
+        .get::<crate::coreoptions::FieldType>()
         .0;
     for (base, e) in by_creation(data, &raw) {
         let mut e = e.pruned();
@@ -1143,7 +1143,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
                     .values()
                     .map(|s| (s.width, s.ctype.as_ref(), s.accesses.as_slice()))
                     .collect();
-                crate::kuna_fieldtype::pointer_fields(data, *base, &fields)
+                crate::fieldtype::pointer_fields(data, *base, &fields)
             };
             for (slot, p) in e.slots.values_mut().zip(chosen) {
                 slot.pointer = p;
@@ -1152,7 +1152,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
         let Some((mut fields, size)) = fields_for(types.as_ref(), &e) else {
             continue;
         };
-        if crate::kuna_fieldtype::trace_on() {
+        if crate::fieldtype::trace_on() {
             let rows: Vec<_> = fields
                 .iter()
                 .filter_map(|f| {
@@ -1161,7 +1161,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
                         .map(|s| (f, s.width, s.accesses.as_slice()))
                 })
                 .collect();
-            crate::kuna_fieldtype::trace(data, *base, &rows);
+            crate::fieldtype::trace(data, *base, &rows);
         }
         let selfs = if nests {
             let cx = nest::Nesting {
@@ -1189,7 +1189,7 @@ fn synthesize(data: &mut Funcdata) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_structsynth::StructSynthMode>()
+        .get::<crate::structsynth::StructSynthMode>()
         .locals()
     {
         asks.sort_by(|a, b| b.1.cmp(&a.1));
@@ -1249,12 +1249,12 @@ fn wants_settle_pass(data: &mut Funcdata) -> bool {
     let headless = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_structheadless::StructHeadlessMode>()
+        .get::<crate::structheadless::StructHeadlessMode>()
         .fires();
     let raw = collect(data);
     raw.iter().any(|(base, e)| {
         let e = e.pruned();
-        (is_lone_field(&e) || (headless && crate::kuna_structheadless::is_headless(e.slots.keys())))
+        (is_lone_field(&e) || (headless && crate::structheadless::is_headless(e.slots.keys())))
             && accepts(data, *base, &e)
     })
 }
@@ -1283,7 +1283,7 @@ fn answer(
             selfs,
             data.get_arch()
                 .kuna_options
-                .get::<crate::kuna_structmerge::StructMergeMode>(),
+                .get::<crate::structmerge::StructMergeMode>(),
         ),
     }
 }
@@ -1314,7 +1314,7 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
         && !(data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_structsynth::StructSynthMode>()
+            .get::<crate::structsynth::StructSynthMode>()
             .locals()
             && is_local_base(data, base, e))
     {
@@ -1334,16 +1334,16 @@ fn accepts(data: &mut Funcdata, base: VarnodeId, e: &Evidence) -> bool {
     };
     // (kuna `elfmain`) A `main`'s runtime `argv`/`envp` is the vector, however
     // few of its elements the body reads.
-    if crate::kuna_elfmaindecl::took_runtime_type(data, base, &ct) {
+    if crate::elfmaindecl::took_runtime_type(data, base, &ct) {
         return false;
     }
-    if crate::kuna_inputhints::took_hint_type(data, base, &ct) {
+    if crate::inputhints::took_hint_type(data, base, &ct) {
         return false;
     }
     let lone = data.kuna_calleevote_closed() && !pointee_is_given(data, base, &ct, e);
     let headless = lone
-        && crate::kuna_structheadless::admits(data, base, &ct)
-        && !(crate::kuna_structheadless::is_headless(e.slots.keys())
+        && crate::structheadless::admits(data, base, &ct)
+        && !(crate::structheadless::is_headless(e.slots.keys())
             && points_past(data, &[base], e.extent()));
     accepts_record(data, &ct, e, lone, headless)
 }
@@ -1596,7 +1596,7 @@ const MAX_OVERLAP_BACK: uintb = 16;
 /// nested field's: `ct` is the type the base already carries. `lone` admits a
 /// parameter read at one constant offset other than zero ([`is_lone_field`]),
 /// `headless` one read at two or more with none of them zero
-/// ([`crate::kuna_structheadless`]).
+/// ([`crate::structheadless`]).
 fn accepts_record(
     data: &Funcdata,
     ct: &Datatype,
@@ -1681,7 +1681,7 @@ fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidenc
     ) {
         return false;
     }
-    if crate::kuna_protoorder::handed_to_a_declared_pointer(data, base) {
+    if crate::protoorder::handed_to_a_declared_pointer(data, base) {
         return true;
     }
     let width = pointee.get_size() as intb;
@@ -1695,7 +1695,7 @@ fn pointee_is_given(data: &Funcdata, base: VarnodeId, ct: &Datatype, e: &Evidenc
         }
         _ => false,
     };
-    fits && crate::kuna_calleevote::took_stated_type(data, base, ct)
+    fits && crate::calleevote::took_stated_type(data, base, ct)
 }
 
 /// (kuna `calleevote fields`) Is `ct` a pointer to a synthesized record that
@@ -1815,7 +1815,7 @@ impl Action for ActionStructSynth {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_structsynth::StructSynthMode>()
+            .get::<crate::structsynth::StructSynthMode>()
             .fires()
             || self.fired
         {
@@ -1844,20 +1844,20 @@ impl Action for ActionStructSynth {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for StructSynthMode {
+impl crate::optionset::KunaOption for StructSynthMode {
     const NAME: &'static str = "structsynth";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_structsynth::StructSynthMode::Locals
+        crate::structsynth::StructSynthMode::Locals
     }
 
     fn shipped() -> Self {
-        crate::kuna_structsynth::StructSynthMode::Locals
+        crate::structsynth::StructSynthMode::Locals
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_structsynth::OptionStructSynth.apply(value)?)
+        Ok(crate::structsynth::OptionStructSynth.apply(value)?)
     }
 }
 

@@ -32,30 +32,30 @@
 //!
 //! Only the callee can say whether it wanted the register, and the statement
 //! this pass reads is the one `argclobber` reads in the other direction: the
-//! callee's own RECOVERED prototype, which [`crate::kuna_protoorder`]
+//! callee's own RECOVERED prototype, which [`crate::protoorder`]
 //! states for every callee `decompile-all` decompiled before its callers. For a
 //! register `R` at a direct, unlocked, non-variadic call ([`stated_width`]):
 //!
 //! * the stated prototype has a parameter starting at `R`, and the list is one
 //!   `protoorder`'s locking mode would accept as an arity claim
-//!   ([`crate::kuna_protoorder::RecoveredTypes::arity_sound`]): all in
+//!   ([`crate::protoorder::RecoveredTypes::arity_sound`]): all in
 //!   registers, the callee's body does not read the register the next parameter
 //!   would arrive in (a variadic's register-save prologue does), the list does not
 //!   end on the last argument register, and it sits where the convention puts
 //!   those types -- or else every register the list names is one the callee's
 //!   body takes;
 //! * the callee's own body READS `R` before writing it on some path, for a value
-//!   that reaches something ([`crate::kuna_calleedeadarg`]'s
+//!   that reaches something ([`crate::calleedeadarg`]'s
 //!   `proves_input`), or hands it on to a declared parameter or a callee that
 //!   takes it; where that bounded walk cannot finish, the registers the callee's
-//!   first heritage saw it read ([`crate::kuna_entryreads::callee_takes`]). A
+//!   first heritage saw it read ([`crate::entryreads::callee_takes`]). A
 //!   function calling itself asks its own body the same way. So the parameter is
 //!   not a recovery artifact of the callee;
 //!   a body that hands `R` unwritten to a direct call whose target takes it
 //!   on these same terms (`call f; ret`) reads it too, up to three calls deep
-//!   ([`crate::kuna_calleedeadarg::reads_through_calls`]);
+//!   ([`crate::calleedeadarg::reads_through_calls`]);
 //! * that read is for something other than a variadic tail
-//!   ([`crate::kuna_varargtail`]): a callee whose parameter only
+//!   ([`crate::varargtail`]): a callee whose parameter only
 //!   reaches an argument slot the ABI lets a caller leave unset says nothing
 //!   about what its callers put there -- openssh `xcalloc`'s third parameter is
 //!   gcc's `push %rdx` alignment filler at a variadic call, gnulib `open_safer`'s
@@ -135,12 +135,12 @@
 //! itself in another storage class ([`returns_own_value`]): `bl f;
 //! vadd.f32 s0,s16,s16; pop {r4,pc}` returns `s0`, not `f`'s leftover `r0`.
 
+use crate::calleedeadarg::FuncdataCalleedeadargExt;
+use crate::entryreads::FuncdataEntryreadsExt;
 pub use crate::fspec::NeutralScope;
-use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-use crate::kuna_entryreads::FuncdataEntryreadsExt;
-use crate::kuna_narrowret::FuncdataNarrowretExt;
-use crate::kuna_protoorder::FuncdataProtoorderExt;
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::narrowret::FuncdataNarrowretExt;
+use crate::protoorder::FuncdataProtoorderExt;
+use crate::rustabi::FuncdataRustabiExt;
 use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::marshal::ElementId;
@@ -202,7 +202,7 @@ pub struct PassThroughClaim {
 /// parameter, by its own recovered prototype and its own body.
 ///
 /// The stated prototype must have a parameter starting at `addr`, and the
-/// callee's body must take it ([`crate::kuna_entryreads::callee_takes`]); the
+/// callee's body must take it ([`crate::entryreads::callee_takes`]); the
 /// answer is the narrowest of the range, that parameter and what the body
 /// consumes, so a register the callee reads as `edi` is passed as the `int` it
 /// is. A call of the function to itself asks its own body instead
@@ -222,7 +222,7 @@ pub fn stated_width(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
         || size <= 0
         || data.kuna_passthrough_variadic()
@@ -272,7 +272,7 @@ pub fn stated_width(
         .iter()
         .find(|(a, _, _)| a == addr)
         .map(|(_, s, t)| (*s, t))?;
-    if crate::kuna_armfloatargs::partial_float(data, stated_size, stated_type, size) {
+    if crate::armfloatargs::partial_float(data, stated_size, stated_type, size) {
         return None;
     }
     let size = size.min(stated_size);
@@ -291,7 +291,7 @@ pub fn stated_width(
             .then_some(width);
     }
     let takes = |a: &Address, s: int4, strict: bool| {
-        crate::kuna_entryreads::callee_takes(data, entry, a, s, strict)
+        crate::entryreads::callee_takes(data, entry, a, s, strict)
     };
     let read = if stated.callers_vote {
         true
@@ -341,7 +341,7 @@ fn general_purpose(proto: &crate::fspec::FuncProto, addr: &Address, size: int4) 
 
 /// Does the function's own body take `[addr, addr+size)`: its complete entry
 /// decode reads it, or it hands it to a declared parameter; without a complete
-/// decode, its first heritage saw it read ([`crate::kuna_entryreads`]).
+/// decode, its first heritage saw it read ([`crate::entryreads`]).
 fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
     let Some(own) = data.kuna_entry_reads() else {
         return false;
@@ -352,7 +352,7 @@ fn self_takes(data: &Funcdata, addr: &Address, size: int4) -> bool {
     {
         Some(f) => {
             f.reads_low_byte(addr, size, false, true)
-                || crate::kuna_entryreads::overlaps(&own.declared, addr, size)
+                || crate::entryreads::overlaps(&own.declared, addr, size)
         }
         None => own.takes(addr, size),
     }
@@ -483,7 +483,7 @@ fn reads_the_vararg_count(data: &Funcdata) -> bool {
 
 /// [`reads_the_vararg_count`] without a read that only stores the register:
 /// clang's `push %rax` reserves an aligned stack slot, and is no
-/// `test %al,%al`. Read by [`crate::kuna_calleereadarg`].
+/// `test %al,%al`. Read by [`crate::calleereadarg`].
 #[doc(hidden)]
 pub fn tests_the_vararg_count(data: &Funcdata) -> bool {
     vararg_count_read(data, false)
@@ -698,10 +698,10 @@ pub fn claim_after_go_stack_guard(data: &mut Funcdata) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
         || !data.get_arch().source_lang.is_go()
-        || data.is_settled(crate::kuna_maturity::Fact::Ssa)
+        || data.is_settled(crate::maturity::Fact::Ssa)
         || data.num_calls() != 1
         || !go_register_model(proto)
         || proto.is_input_locked()
@@ -729,7 +729,7 @@ fn claim_untouched_registers_mode(data: &mut Funcdata, pass: ClaimPass) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return;
@@ -909,7 +909,7 @@ pub fn forwarded_own_input(data: &Funcdata, vn: VarnodeId, addr: &Address, size:
 
 /// Is the INDIRECT `ind` guarding a direct call (not a PLT stub) whose callee's
 /// fully decoded body is proven never to write `addr:size`
-/// ([`crate::kuna_rustabi::CalleeReturnWrites::proves_untouched_for`])?
+/// ([`crate::rustabi::CalleeReturnWrites::proves_untouched_for`])?
 fn call_leaves_alone(
     data: &Funcdata,
     ind: &crate::op::PcodeOp,
@@ -935,7 +935,7 @@ fn call_leaves_alone(
     !entry.is_invalid()
         && fc.plt_stub().is_none()
         && data.kuna_callee_ret_writes(entry).is_some_and(|w| {
-            w.proves_untouched_for(crate::kuna_rustabi::call_model(fc.proto()), addr, size)
+            w.proves_untouched_for(crate::rustabi::call_model(fc.proto()), addr, size)
         })
 }
 
@@ -959,7 +959,7 @@ fn own_input_varnode(data: &Funcdata, addr: &Address, size: int4) -> Option<Varn
 /// anything put a value in them. Every earlier stated register must therefore be
 /// one this function could be carrying -- already claimed here (so forwarded
 /// untouched), or one its own entry does not WRITE before reading on every path
-/// ([`crate::kuna_calleedeadarg::CalleeEntryDead::proves_dead`],
+/// ([`crate::calleedeadarg::CalleeEntryDead::proves_dead`],
 /// asked of this function's own body). A register the function loads for itself
 /// before the call is not a parameter, and a claim reaching across it prints an
 /// argument-less slot: the `protoorder` fixture's `overrec` sets `rsi` to 16 and
@@ -1038,7 +1038,7 @@ pub fn producing_call(data: &Funcdata, ret: OpId) -> Option<OpId> {
 /// Under `mixedtailret`, a RETURN reached from no call is no refusal when at
 /// least one RETURN is such a tail call and the value it returns in that one
 /// register is the one the function wrote and branched on to choose between
-/// them ([`crate::kuna_mixedtailret::returns_decided_value`]); the
+/// them ([`crate::mixedtailret::returns_decided_value`]); the
 /// register may then be touched anywhere. An argument register is taken only
 /// when no claimed callee reads it.
 fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId>, bool)> {
@@ -1066,7 +1066,7 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let narrow_tails = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_narrowret::NarrowRet>()
+        .get::<crate::narrowret::NarrowRet>()
         .0
         && !data
             .get_arch()
@@ -1076,7 +1076,7 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     let beside_own = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_mixedtailret::MixedTailRet>()
+        .get::<crate::mixedtailret::MixedTailRet>()
         .0;
     for &r in &rets {
         let Some(call) = producing_call(data, r) else {
@@ -1134,10 +1134,10 @@ fn stated_tail_return(data: &Funcdata) -> Option<(Vec<(Address, int4)>, Vec<OpId
     }
     if mixed {
         let argument = pieces.iter().any(|(a, s)| !return_only(proto, a, *s));
-        if (argument && crate::kuna_mixedtailret::feeds_tail_call(data, &producers, &pieces))
+        if (argument && crate::mixedtailret::feeds_tail_call(data, &producers, &pieces))
             || !own
                 .iter()
-                .all(|&r| crate::kuna_mixedtailret::returns_decided_value(data, r, &pieces, &paths))
+                .all(|&r| crate::mixedtailret::returns_decided_value(data, r, &pieces, &paths))
         {
             return None;
         }
@@ -1289,7 +1289,7 @@ pub fn returns_tail_result(data: &Funcdata, vn: VarnodeId, addr: &Address, size:
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return false;
@@ -1357,13 +1357,13 @@ fn is_tail_return_piece(data: &Funcdata, addr: &Address, size: int4) -> bool {
 /// function's. And the claim yields to a value the function computes itself in
 /// another storage class ([`returns_own_value`]), unless the claim also
 /// covers a value the function returns itself
-/// ([`crate::kuna_mixedtailret::claimed_beside_own`]). Inert with the
+/// ([`crate::mixedtailret::claimed_beside_own`]). Inert with the
 /// option off.
 pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamActive) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return;
@@ -1377,8 +1377,8 @@ pub fn keep_tail_return_whole(data: &Funcdata, active: &mut crate::fspec::ParamA
             )
         })
         .collect();
-    let own = !crate::kuna_mixedtailret::claimed_beside_own(data)
-        && returns_own_value(data, active, &claimed);
+    let own =
+        !crate::mixedtailret::claimed_beside_own(data) && returns_own_value(data, active, &claimed);
     if claimed.iter().any(|&i| !active.get_trial(i).is_active()) || own {
         for i in claimed {
             active.get_trial_mut(i).mark_inactive();
@@ -1511,7 +1511,7 @@ pub fn tail_return_type(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return None;
@@ -1576,7 +1576,7 @@ fn overlaps_claim(claims: &[PassThroughClaim], addr: &Address, size: int4) -> bo
 pub fn claimed_range(data: &Funcdata, addr: &Address, size: int4) -> bool {
     data.get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
         && holds_trials(data.kuna_passthrough_claims(), addr, size)
 }
@@ -1600,7 +1600,7 @@ pub fn forwarded_in_place(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return false;
@@ -1856,7 +1856,7 @@ pub fn neutral_in_chain(active: &ParamActive, i: int4, is_spacebase: bool) -> bo
 /// result in `r8` across `call sink` with `rsi`, `rdx` and `rcx` forwarded in
 /// front of it, and `sink` keeps its one argument), not the stack-protector
 /// wipe ([`set_before_branch`]), and not a register reloaded from the frame
-/// ([`crate::kuna_reloadarg`]): FreeRTOS `xTaskIncrementTick` is
+/// ([`crate::reloadarg`]): FreeRTOS `xTaskIncrementTick` is
 /// `push {r3,lr}; ...; ldmia sp!,{r3,lr}; b.w part`, and the r3 the pop
 /// restores is the function's own, not a fourth argument behind r0..r2.
 pub fn anchors_neutral_run(active: &ParamActive, trial: &ParamTrial, is_spacebase: bool) -> bool {
@@ -1888,7 +1888,7 @@ pub fn saves_own_register(data: &Funcdata, op: OpId, slot: int4, addr: &Address)
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
         || addr
             .get_space()
@@ -1929,7 +1929,7 @@ pub fn neutral_scope(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return None;
@@ -1996,7 +1996,7 @@ pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThr
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_passthrough::PassThrough>()
+        .get::<crate::passthrough::PassThrough>()
         .0
     {
         return None;
@@ -2025,7 +2025,7 @@ pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThr
             .unwrap_or(false)
             || forwarded_own_input(data, vn, &addr, size);
         if !own_input
-            && !crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, size)
+            && !crate::armfloatargs::is_forwarded_input(data, vn, &addr, size)
             && !reassembled(data, vn, &addr, size)
         {
             continue;
@@ -2046,7 +2046,7 @@ pub fn capture(fc: &mut FuncCallSpecs, data: &Funcdata) -> Option<PendingPassThr
 /// returned by a tail call that also takes the incoming `x0`)?
 fn reassembled(data: &Funcdata, vn: VarnodeId, addr: &Address, size: int4) -> bool {
     data.vbank().get(vn).is_some_and(|v| v.is_written())
-        && crate::kuna_armfloatargs::incoming_storage(data, vn)
+        && crate::armfloatargs::incoming_storage(data, vn)
             .is_some_and(|(a, s)| a == *addr && s == size)
 }
 
@@ -2108,7 +2108,7 @@ fn extend_one(data: &mut Funcdata, p: &PendingPassThrough) -> bool {
             .filter(|v| {
                 (v.is_input() && *v.get_addr() == addr)
                     || forwarded_own_input(data, vn, &addr, v.get_size())
-                    || crate::kuna_armfloatargs::is_forwarded_input(data, vn, &addr, width)
+                    || crate::armfloatargs::is_forwarded_input(data, vn, &addr, width)
                     || reassembled(data, vn, &addr, v.get_size())
             })
             .map(|v| v.get_size())
@@ -2185,8 +2185,8 @@ pub fn truncate_before(
     Some(out)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.passthrough_claim_after_go_stack_guard = Some(claim_after_go_stack_guard);
     hooks.passthrough_anchors_neutral_run = Some(anchors_neutral_run);
     hooks.passthrough_ends_rescued_run = Some(ends_rescued_run);
@@ -2197,42 +2197,36 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// (kuna `passthrough`) The register ranges `ActionFuncLink` made visible to heritage for a
 /// call whose callee states them, with the calls that own each; reset by `Funcdata::clear`.
 #[derive(Default)]
-struct ClaimsSlot(Vec<crate::kuna_passthrough::PassThroughClaim>);
+struct ClaimsSlot(Vec<crate::passthrough::PassThroughClaim>);
 crate::kuna_func_state!(ClaimsSlot, keep_across_clear: false);
 
 /// The `kuna_passthrough` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataPassthroughExt {
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    fn kuna_set_passthrough_claims(
-        &mut self,
-        claims: Vec<crate::kuna_passthrough::PassThroughClaim>,
-    );
+    fn kuna_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>);
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::kuna_passthrough::PassThroughClaim];
+    fn kuna_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim];
 }
 
 impl FuncdataPassthroughExt for crate::funcdata::Funcdata {
     /// (kuna `passthrough`) Record the register ranges claimed at `ActionFuncLink`.
-    fn kuna_set_passthrough_claims(
-        &mut self,
-        claims: Vec<crate::kuna_passthrough::PassThroughClaim>,
-    ) {
+    fn kuna_set_passthrough_claims(&mut self, claims: Vec<crate::passthrough::PassThroughClaim>) {
         self.kuna_state_mut::<ClaimsSlot>().0 = claims;
     }
     /// (kuna `passthrough`) The register ranges claimed at `ActionFuncLink`.
-    fn kuna_passthrough_claims(&self) -> &[crate::kuna_passthrough::PassThroughClaim] {
+    fn kuna_passthrough_claims(&self) -> &[crate::passthrough::PassThroughClaim] {
         &self.kuna_state::<ClaimsSlot>().0
     }
 }
 
 /// (kuna) A register forwarded untouched to a callee whose recovered
 /// prototype reads it becomes a parameter (option `passthrough`).  See
-/// [`crate::kuna_passthrough`].
+/// [`crate::passthrough`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PassThrough(pub bool);
 
-impl crate::kuna_optionset::KunaOption for PassThrough {
+impl crate::optionset::KunaOption for PassThrough {
     const NAME: &'static str = "passthrough";
     crate::kuna_option_id!();
 
@@ -2245,11 +2239,11 @@ impl crate::kuna_optionset::KunaOption for PassThrough {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_passthrough::OptionPassThrough.apply(value)?;
+        let (v, msg) = crate::passthrough::OptionPassThrough.apply(value)?;
         Ok((PassThrough(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_passthrough/tests.rs"]
+#[path = "passthrough/tests.rs"]
 mod tests;

@@ -8,7 +8,7 @@
 /// coverage, else the runtime spelling as is.
 pub fn display_class_name(runtime_name: &str) -> String {
     if is_swift_runtime_name(runtime_name) {
-        if let Some(d) = crate::demangle::kuna_swift::demangle_swift_name(runtime_name) {
+        if let Some(d) = crate::demangle::swift::demangle_swift_name(runtime_name) {
             return d;
         }
     }

@@ -112,7 +112,7 @@ impl AnalysisPass for ItaniumCtorsPass {
         let Some(listing) = ctx.listing else {
             return out;
         };
-        let classes = super::kuna_itaniumrtti::recovered_classes(ctx);
+        let classes = super::itaniumrtti::recovered_classes(ctx);
         if classes.is_empty() {
             return out;
         }
@@ -177,7 +177,7 @@ pub struct ClassVtables {
     /// Every vptr value of this class: the primary first, then each secondary.
     pub vptrs: Vec<u64>,
     /// The primary vtable starts with two null slots, GCC's destructor pair of an
-    /// abstract class (`kuna_itaniumrtti.rs (null_dtor_pair)`).
+    /// abstract class (`itaniumrtti.rs (null_dtor_pair)`).
     pub null_dtor_pair: bool,
 }
 

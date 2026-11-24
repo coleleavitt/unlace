@@ -28,8 +28,8 @@
 //!
 //! # What this pass does
 //!
-//! This is the **sibling** of [`crate::kuna_gotoreduce`]
-//! ([`ActionGotoReduce`](crate::kuna_gotoreduce::ActionGotoReduce)):
+//! This is the **sibling** of [`crate::gotoreduce`]
+//! ([`ActionGotoReduce`](crate::gotoreduce::ActionGotoReduce)):
 //! `gotoreduce` duplicates a tail that ends in `return` (a *closed* path — no
 //! fall-through to reconcile), while this pass duplicates a **non-return,
 //! fall-through** cross-jump tail, which additionally requires a
@@ -124,7 +124,7 @@ impl Action for ActionCrossJumpReverter {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
         {
             return 0;
@@ -214,7 +214,7 @@ impl Action for ActionCrossJumpReverter {
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
         // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
-        crate::kuna_gotolabel::release_converted_labels(data, &converted_targets);
+        crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
         0
@@ -348,7 +348,7 @@ impl OptionCrossJumpReverter {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RevertCrossJumps(pub bool);
 
-impl crate::kuna_optionset::KunaOption for RevertCrossJumps {
+impl crate::optionset::KunaOption for RevertCrossJumps {
     const NAME: &'static str = "crossjumprevert";
     crate::kuna_option_id!();
 
@@ -361,7 +361,7 @@ impl crate::kuna_optionset::KunaOption for RevertCrossJumps {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
+        let (v, msg) = crate::crossjumpreverter::OptionCrossJumpReverter.apply(value)?;
         Ok((RevertCrossJumps(v), msg))
     }
 }

@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::kuna_symbolnamechars::{NameChars, SYMBOLNAMECHARS_ENV};
+use unlace_decomp::symbolnamechars::{NameChars, SYMBOLNAMECHARS_ENV};
 
 /// Serializes the env-var flip + bootstrap across the concurrently-run tests
 /// (the guard `verify_symbolnamerepair.rs` / `verify_typedepth.rs` use): the

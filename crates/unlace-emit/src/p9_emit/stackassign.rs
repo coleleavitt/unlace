@@ -25,7 +25,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
     {
         return None;
@@ -87,7 +87,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
         .flatten()
         .is_some_and(|piece| {
             let storage = piece.get_partial_base().unwrap_or(piece);
-            super::kuna_bytearrayc::byte_array(&storage)
+            super::bytearrayc::byte_array(&storage)
         });
     if linked_symbol.is_some() && !byte_member {
         return None;
@@ -102,14 +102,14 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     let mut operand = matches!(operation.code(), OpCode::CPUI_COPY | OpCode::CPUI_CAST)
         .then(|| operation.get_in(0))
         .flatten();
-    let mut array_cast = operation.code() == OpCode::CPUI_CAST
-        && super::kuna_bytearrayc::byte_array(value.get_type());
+    let mut array_cast =
+        operation.code() == OpCode::CPUI_CAST && super::bytearrayc::byte_array(value.get_type());
     if byte_member {
         // The inserted array CAST describes storage, not a numeric conversion.
         // Copy the scalar representation underneath it into the declared member.
         while let Some(input) = operand {
             let value = fd.vbank().get(input)?;
-            if !value.is_implied() || !super::kuna_bytearrayc::byte_array(value.get_type()) {
+            if !value.is_implied() || !super::bytearrayc::byte_array(value.get_type()) {
                 break;
             }
             let Some(cast) = value.get_def().and_then(|id| fd.obank().get(id)) else {
@@ -131,7 +131,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     }
     let raw_constant = operand.is_some_and(|id| {
         fd.vbank().get(id).is_some_and(|value| value.is_constant())
-            && !crate::kuna_stackviews::pointer_origin(fd, id)
+            && !crate::stackviews::pointer_origin(fd, id)
     });
     let memory_source = byte_member
         && operand
@@ -147,7 +147,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
     } else if raw_constant {
         factory.get_base(size, type_metatype::TYPE_UINT).ok()?
     } else if let Some(input) = operand {
-        let ty = if crate::kuna_stackviews::pointer_origin(fd, input) {
+        let ty = if crate::stackviews::pointer_origin(fd, input) {
             let read_type = fd.vn_type_read_facing(input, op);
             if read_type.get_metatype() == type_metatype::TYPE_PTR {
                 read_type
@@ -165,7 +165,7 @@ pub fn assignment(fd: &Funcdata, op: OpId) -> Option<Assignment> {
         } else {
             return None;
         }
-    } else if crate::kuna_stackviews::pointer_origin(fd, output) {
+    } else if crate::stackviews::pointer_origin(fd, output) {
         factory
             .get_type_pointer(size, factory.get_type_void().ok()?, 1)
             .ok()?
@@ -194,7 +194,7 @@ fn incompatible_views(fd: &Funcdata, address: &Address, root: &Rc<Datatype>) -> 
     let Some(factory) = fd.get_arch().types() else {
         return false;
     };
-    crate::kuna_stackobjects::objects(fd).iter().any(|object| {
+    crate::stackobjects::objects(fd).iter().any(|object| {
         if object.address.get_space().map(|space| space.get_index())
             != address.get_space().map(|space| space.get_index())
         {
@@ -211,7 +211,7 @@ fn incompatible_views(fd: &Funcdata, address: &Address, root: &Rc<Datatype>) -> 
             return false;
         }
         object.uses.iter().any(|use_| {
-            let ty = crate::kuna_stackviews::scalar_piece(
+            let ty = crate::stackviews::scalar_piece(
                 factory,
                 Rc::clone(root),
                 offset as i32,

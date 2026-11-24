@@ -18,7 +18,7 @@
 //! [`keeps_apart`] refuses that join in the two optional
 //! merges that make it, the `COPY`'s copy-shadow merge and the adjacent-op merge,
 //! so the value keeps its own variable and the `COPY` prints as the store.
-//! `p3_dataflow/kuna_globalstorekeep.rs` keeps that `COPY` alive in the first
+//! `p3_dataflow/globalstorekeep.rs` keeps that `COPY` alive in the first
 //! place, where the binary stores, and keeps the binary's later loads of the
 //! global on the global.  A value that a load was let through to stands in for
 //! that load, so [`keeps_apart`] never splits it: printed apart, it would read
@@ -31,7 +31,7 @@
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
-use crate::kuna_globalstorekeep::{WALK_BOUND, passes_signedness, reads_signedness};
+use crate::globalstorekeep::{WALK_BOUND, passes_signedness, reads_signedness};
 use crate::merge::MergeContext;
 
 /// Must HighVariables `a` and `b` stay apart because one is a global and the
@@ -174,7 +174,7 @@ fn holds_global(ctx: &mut dyn MergeContext, value: HighVariableId, global: HighV
     true
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.globalvalue_keeps_apart = Some(keeps_apart);
 }

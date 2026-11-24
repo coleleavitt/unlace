@@ -57,7 +57,7 @@ use unlace_decomp::dtype::{Datatype, DatatypeKind, ELEM_TYPEREF, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 use unlace_decomp::funcdata_encode::ELEM_FUNCTION;
 use unlace_decomp::inject_sleigh::SleighInjectEngine;
-use unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES;
+use unlace_decomp::option_dispatch::KUNA_OPTION_NAMES;
 use unlace_decomp::options::OptionDatabase;
 use unlace_decomp::pcodeinject::{
     CALLFIXUP_TYPE, CALLOTHERFIXUP_TYPE, ELEM_CONTEXT, InjectContext,

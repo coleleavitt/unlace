@@ -88,12 +88,12 @@ impl AnalysisPass for LibgccSigsPass {
         seed_resolved_prototypes(
             &mut out,
             &helpers,
-            super::kuna_libcsigs::LIBC_EXT,
+            super::libcsigs::LIBC_EXT,
             types,
             word_size,
             L,
         );
-        super::kuna_softfpsigs::seed_big_endian_wide(ctx, &mut out);
+        super::softfpsigs::seed_big_endian_wide(ctx, &mut out);
         if !matches!(
             ctx.file.architecture(),
             Architecture::Sparc | Architecture::Sparc32Plus
@@ -110,7 +110,7 @@ impl AnalysisPass for LibgccSigsPass {
             types,
             word_size,
             L,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &imports, SIGNATURES, types, word_size, L);
         out

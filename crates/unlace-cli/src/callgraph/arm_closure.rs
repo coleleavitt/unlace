@@ -3,7 +3,7 @@
 //!
 //! A function's callers can be listed only when nothing takes its address and
 //! every branch to it is a call the decompiles saw. The decompiles themselves
-//! catch every address their analysis resolves (`kuna_callerargs::record`);
+//! catch every address their analysis resolves (`callerargs::record`);
 //! this scan covers the bytes no decompile reads, conservatively: a value is
 //! taken for an address wherever it could be one, and a branch is read at every
 //! offset an instruction could start at, so a coincidence only leaves a

@@ -19,7 +19,7 @@
 //! `propagateTypeEdge` will not carry a pointer back over.
 //!
 //! [`char_pointer_from_evidence`] collects that evidence directly, the way
-//! [`crate::kuna_ptrfromuse`] collects "this is a pointer at all": a bounded
+//! [`crate::ptrfromuse`] collects "this is a pointer at all": a bounded
 //! breadth-first walk over the candidate's transitive descendants through
 //! copy-like identity and constant-offset addition, asking of every terminal use
 //! whether it is about characters.  Three uses say yes:
@@ -61,7 +61,7 @@
 //! The walk refuses outright on any use a character pointer does not survive:
 //! a dereference wider than a byte, a `PTRADD` whose element is wider, a call
 //! argument the callee has declared as something other than a character pointer,
-//! and everything [`crate::kuna_ptrfromuse`] refuses (integer arithmetic, shifts,
+//! and everything [`crate::ptrfromuse`] refuses (integer arithmetic, shifts,
 //! float ops, a comparison against a non-zero literal).  A refusal withdraws the
 //! Varnode it was collected for and nothing else: the walk runs once per
 //! Varnode, the vote is folded per Varnode, and the type that reaches the reader
@@ -95,7 +95,7 @@ use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
 /// How many def-use hops the walk follows before giving up; the same bound
-/// [`crate::kuna_ptrfromuse`] uses.
+/// [`crate::ptrfromuse`] uses.
 const HOP_CAP: usize = 10;
 
 /// What the walk found.  Kept per kind so the `UNLACE_CHARPTR_CENSUS` dump can
@@ -456,7 +456,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId, offsetted: bool) -> Us
             if !is_const {
                 return Use::Neutral;
             }
-            if crate::kuna_ptrfromuse::constant_is_global_base(data, op, other_vn) {
+            if crate::ptrfromuse::constant_is_global_base(data, op, other_vn) {
                 return Use::Refuse("global-base");
             }
             let zero = data
@@ -541,7 +541,7 @@ fn classify_use(data: &Funcdata, op: OpId, vn: VarnodeId, offsetted: bool) -> Us
             Use::Refuse("compare-literal")
         }
         _ => {
-            if crate::kuna_ptrfromuse::is_float_op(opcode) {
+            if crate::ptrfromuse::is_float_op(opcode) {
                 Use::Refuse("float")
             } else {
                 Use::Neutral
@@ -695,7 +695,7 @@ crate::kuna_flag!(
     /// (kuna `charptr`) Commit a pointer-width parameter or stack local the
     /// program only ever uses on characters to `char *`; option
     /// `charptr on|off`.  The rule lives in
-    /// [`kuna_charptr`](crate::kuna_charptr).
+    /// [`kuna_charptr`](crate::charptr).
     CharPtr,
     "charptr",
     "character-pointer evidence",

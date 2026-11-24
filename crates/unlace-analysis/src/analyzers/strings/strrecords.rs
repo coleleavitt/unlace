@@ -169,7 +169,7 @@ pub(crate) fn read_word(bytes: &[u8]) -> u64 {
 /// whose companion `len` word is unrelocated raw bytes.
 fn scan_reloc_records(file: &object::File, regions: &[RoRegion], width: u64) -> Vec<StringFact> {
     let mut out = Vec::new();
-    let Some((r_relative, _, _)) = crate::loader::kuna_dynrelocs::reloc_triple(file.architecture())
+    let Some((r_relative, _, _)) = crate::loader::dynrelocs::reloc_triple(file.architecture())
     else {
         return out;
     };

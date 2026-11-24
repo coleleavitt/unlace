@@ -3284,7 +3284,7 @@ is followed. This is what puts the callees inside a `switch` on
 `unlace decompile-graph`'s callee list.
 
 A DEX file or an APK has no object-file view, so `unlace xrefs` answers for it from
-the `invoke` call graph instead (`kuna_dex/links.rs`): every method reference is
+the `invoke` call graph instead (`dex/links.rs`): every method reference is
 resolved across the APK's DEX files to the method it runs, through the
 superclass chain for an inherited method. `--to <method>` lists the call sites in
 every file; `--from <method>` lists what the method calls, a framework method no

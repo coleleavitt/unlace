@@ -53,8 +53,8 @@ use unlace_num::opcodes::OpCode::{self, *};
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_regioneval::{constant, copied_constant, eval, mask, op, size, taken};
 use crate::op::PcodeOp;
+use crate::regioneval::{constant, copied_constant, eval, mask, op, size, taken};
 use crate::userop::BUILTIN_STRLEN;
 
 /// The ops the body may compute besides the LOAD and its branch.
@@ -131,7 +131,7 @@ impl Action for ActionStrlenScan {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_strlenscan::StrlenScan>()
+                .get::<crate::strlenscan::StrlenScan>()
                 .0
         {
             return 0;
@@ -467,7 +467,7 @@ fn rewrite(data: &mut Funcdata, s: &Scan) -> unlace_base::error::KunaResult<()> 
 
 crate::kuna_flag!(
     /// (kuna) Collapse an inline `repnz scasb` string length into `strlen`
-    /// (option `strlenscan`).  See [`crate::kuna_strlenscan`].
+    /// (option `strlenscan`).  See [`crate::strlenscan`].
     StrlenScan,
     "strlenscan",
     "inline repnz scasb string length as strlen",
@@ -476,5 +476,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_strlenscan/tests.rs"]
+#[path = "strlenscan/tests.rs"]
 mod tests;

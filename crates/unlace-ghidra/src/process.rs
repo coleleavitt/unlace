@@ -1211,7 +1211,7 @@ fn apply_ghidra_mode_defaults(arch: &mut Architecture) {
     arch.name_style_ghidra = true;
     if let Some(overrides) = unlace_decomp::modes::mode_overrides("aggressive") {
         for (name, value) in overrides {
-            if unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(name) {
+            if unlace_decomp::option_dispatch::KUNA_OPTION_NAMES.contains(name) {
                 // Engine-tier knob: apply.  Unknown/analysis-tier names have
                 // no engine seam in ghidra mode and are skipped.
                 let _ = arch.set_kuna_option(name, value);

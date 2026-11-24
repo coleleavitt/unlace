@@ -232,7 +232,7 @@ pub fn decode_payloads(
 ) -> KunaResult<()> {
     use unlace_base::xml::DocumentStorage;
     let float = match abi {
-        HelperAbi::Arm { big_endian } => crate::kuna_aeabifloat::payload_xml(big_endian),
+        HelperAbi::Arm { big_endian } => crate::aeabifloat::payload_xml(big_endian),
         HelperAbi::X86 => Vec::new(),
     };
     for xml in payload_xml(abi).into_iter().chain(float) {
@@ -243,15 +243,15 @@ pub fn decode_payloads(
     Ok(())
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.arithhelpers_decode_payloads = Some(decode_payloads);
     hooks.arithhelpers_helper_abi = Some(helper_abi);
 }
 
 crate::kuna_flag!(
     /// (kuna `arithhelpers`) Install the arithmetic runtime-helper call-fixups
-    /// (`p2_lift/kuna_arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
+    /// (`p2_lift/arithhelpers.rs`) so a 32-bit call to `__udivdi3`,
     /// `__aeabi_uldivmod`, `_alldiv`, ... prints as the C operator it implements.
     /// Read by the analysis-tier call-fixup installer, like `msvc_ftol`.
     ArithHelpers,

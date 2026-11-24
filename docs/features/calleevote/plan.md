@@ -3,7 +3,7 @@
 ## 1. The option
 
 `calleevote off|types|fields`, default `fields`, P4 `prototype-source`
-(`decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleevote.rs`). It needs the
+(`decompiler/crates/kuna-decomp/src/p4_calls/calleevote.rs`). It needs the
 callee-first whole-binary pass `protoorder` drives, so it lives beside it and is
 inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
 `--jobs`, raw images, `--option protoorder off`).
@@ -35,7 +35,7 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
    order, re-record, decide again, up to 3 rounds. A redo that fails keeps the
    first body; one that moves arity keeps the first body and forgets the
    function's records.
-6. **`fields`** (`kuna_structsynth.rs` `is_lone_field`, `wants_settle_pass`,
+6. **`fields`** (`structsynth.rs` `is_lone_field`, `wants_settle_pass`,
    `points_at_lone_record`). A closed function's pointer parameter read at one
    non-zero constant offset, 4+ bytes wide, and not stepped through a loop from
    there (`address_walks`), is a one-field record; such a
@@ -44,13 +44,13 @@ inert wherever that pass is (single-function `kuna decompile`, narrowed runs,
 
 ## 3. Tests
 
-* Unit: `kuna_calleevote/tests.rs` (12: parse, committed/uncommitted, the
+* Unit: `calleevote/tests.rs` (12: parse, committed/uncommitted, the
   decision's agreement, storage, graph and recursion rules),
-  `kuna_structsynth/tests.rs` `a_lone_field_is_one_wide_access_away_from_the_base`,
+  `structsynth/tests.rs` `a_lone_field_is_one_wide_access_away_from_the_base`,
   `kuna-cli` `decompile_all.rs` `calleevote_stored_tests` (4: only an aligned
   word equal to an entry stores it, a relocatable object is open, every MIPS
   function is open, a table in a `.text` loaded at address 0 is read);
-  `kuna_calleevote/tests.rs` `a_forgotten_function_keeps_no_statement`,
+  `calleevote/tests.rs` `a_forgotten_function_keeps_no_statement`,
   `a_first_statement_that_repeats_the_callees_record_is_not_made`,
   `a_callers_record_replaces_the_callees_lone_record`,
   `a_statement_naming_a_superseded_record_is_forgotten`.

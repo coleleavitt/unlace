@@ -32,7 +32,7 @@
 //!   `LC_FUNCTION_STARTS`) + a selector Data symbol per distinct selector.
 //! - **`out.data_objects`** / **`out.const_ranges`** — the `selRef_`/`classRef_`/
 //!   `superRef_` reference slots and the `objc_msgSend$<sel>` stubs
-//!   (`kuna_objcrefs.rs`), with the rebase slots reported constant.
+//!   (`objcrefs.rs`), with the rebase slots reported constant.
 //!
 //! # Gating
 //!
@@ -53,19 +53,19 @@
 
 pub mod classt;
 pub mod encoding;
-mod kuna_objcblocks;
-mod kuna_objccache;
-pub mod kuna_objccats;
-pub mod kuna_objcdirect;
-pub mod kuna_objcivars;
-mod kuna_objcruntime;
-mod kuna_swiftclassnames;
-use kuna_swiftclassnames::display_class_name;
-pub mod kuna_objcprops;
-pub mod kuna_objcprotos;
-pub mod kuna_objcrefs;
-pub mod kuna_objcsdk;
+mod objcblocks;
+mod objccache;
+pub mod objccats;
+pub mod objcdirect;
+pub mod objcivars;
+mod objcruntime;
+mod swiftclassnames;
+use swiftclassnames::display_class_name;
 pub mod methods;
+pub mod objcprops;
+pub mod objcprotos;
+pub mod objcrefs;
+pub mod objcsdk;
 pub mod sections;
 
 use std::collections::HashMap;
@@ -117,7 +117,7 @@ impl AnalysisPass for ObjcMetadataPass {
         let mut img = MachoImage::with_fixups(ctx.file, fixups)
             .with_binds(binds)
             .with_method_symbols(ctx.file);
-        if let Some(cache) = ctx.image_path.and_then(kuna_objccache::CacheReader::open) {
+        if let Some(cache) = ctx.image_path.and_then(objccache::CacheReader::open) {
             let base = cache.selector_base();
             img = img.with_cache(Rc::new(move |va, n| cache.read(va, n)), base);
         }
@@ -126,14 +126,12 @@ impl AnalysisPass for ObjcMetadataPass {
         // The type-mapping context for IMP/ivar prototypes (PR-O2).
         let (ptr_size, word_size) = ctx.arch.data_org();
         let tctx = TypeCtx::new(ctx.arch.types(), ptr_size, word_size);
-        let sdk = match unlace_decomp::kuna_objcsdk::sdk_path() {
-            Some(root) => {
-                kuna_objcsdk::read(&root, &kuna_objcsdk::linked_frameworks(ctx.file, ctx.bytes))
-            }
-            None => kuna_objcsdk::Sdk::default(),
+        let sdk = match unlace_decomp::objcsdk::sdk_path() {
+            Some(root) => objcsdk::read(&root, &objcsdk::linked_frameworks(ctx.file, ctx.bytes)),
+            None => objcsdk::Sdk::default(),
         };
-        let mut selectors = kuna_objcrefs::Selectors::with_sdk(sdk.signatures);
-        out.prototypes_at.extend(kuna_objcruntime::prototypes(
+        let mut selectors = objcrefs::Selectors::with_sdk(sdk.signatures);
+        out.prototypes_at.extend(objcruntime::prototypes(
             ctx.file, ctx.bytes, ctx.arch, &tctx,
         ));
 
@@ -158,29 +156,29 @@ impl AnalysisPass for ObjcMetadataPass {
         }
         // The layouts are built only under `objcivars` (its load-time half): off,
         // no class struct is interned and no offset variable reported constant.
-        let objcivars = unlace_decomp::kuna_objcivars::objcivars_enabled();
+        let objcivars = unlace_decomp::objcivars::objcivars_enabled();
         // A Swift class's layout is left to `swifttypes` when the image carries
         // field descriptors and the Swift pass runs on it (the image reads as
         // Swift): they give the Swift names and types the ivar list encodes as
         // nothing. The record is declared here (the typed `self`, the `@"…"`
         // pointers) and completed there. Otherwise the ivar list builds it.
-        let swifttypes = unlace_decomp::kuna_loadoptions::swifttypes_enabled()
+        let swifttypes = unlace_decomp::loadoptions::swifttypes_enabled()
             && ctx
                 .file
                 .section_by_name(super::swift::descriptors::MACHO_SECTIONS.fieldmd)
                 .is_some()
             && crate::sourcelang::effective_compiler(ctx.file, ctx.bytes)
                 == crate::sourcelang::Compiler::Swift;
-        let layouts: HashMap<String, kuna_objcivars::Layout> = classes
+        let layouts: HashMap<String, objcivars::Layout> = classes
             .iter()
             .filter(|_| objcivars)
-            .filter(|(_, name)| !(swifttypes && kuna_swiftclassnames::is_swift_runtime_name(name)))
+            .filter(|(_, name)| !(swifttypes && swiftclassnames::is_swift_runtime_name(name)))
             .filter_map(|(class, name)| {
-                kuna_objcivars::layout(&img, class, name).map(|l| (name.clone(), l))
+                objcivars::layout(&img, class, name).map(|l| (name.clone(), l))
             })
             .collect();
-        let structs = kuna_objcivars::Structs::build(&tctx, &layouts);
-        let categories = kuna_objccats::categories(&img, ctx.file);
+        let structs = objcivars::Structs::build(&tctx, &layouts);
+        let categories = objccats::categories(&img, ctx.file);
 
         // Every declaration's encoding first — methods and properties of classes,
         // metaclasses, categories and protocols — so a getter emitted below takes
@@ -195,7 +193,7 @@ impl AnalysisPass for ObjcMetadataPass {
                     }
                 }
                 if let Some(list) = classt::base_properties(&img, ro) {
-                    for (sel, enc) in kuna_objcprops::declarations(&img, list) {
+                    for (sel, enc) in objcprops::declarations(&img, list) {
                         selectors.record_for_class(name, &sel, &enc);
                     }
                 }
@@ -214,7 +212,7 @@ impl AnalysisPass for ObjcMetadataPass {
                 .into_iter()
                 .flatten()
             {
-                for (sel, enc) in kuna_objcprops::declarations(&img, list) {
+                for (sel, enc) in objcprops::declarations(&img, list) {
                     match &cat.class {
                         Some(class) => selectors.record_for_class(class, &sel, &enc),
                         None => selectors.record(&sel, Some(&enc)),
@@ -222,7 +220,7 @@ impl AnalysisPass for ObjcMetadataPass {
                 }
             }
         }
-        let protocols = kuna_objcprotos::protocols(&img, ctx.file);
+        let protocols = objcprotos::protocols(&img, ctx.file);
         for proto in &protocols {
             for m in &proto.methods {
                 selectors.record_declared(&m.selector, m.types.as_deref());
@@ -232,7 +230,7 @@ impl AnalysisPass for ObjcMetadataPass {
             }
         }
 
-        let mut table = unlace_decomp::kuna_objcrettype::ObjcClassTable::default();
+        let mut table = unlace_decomp::objcrettype::ObjcClassTable::default();
         for (class, name) in &classes {
             let shown = display_class_name(name);
             table.class_at.insert(class.addr, shown.clone());
@@ -320,7 +318,7 @@ impl AnalysisPass for ObjcMetadataPass {
                 );
             }
         }
-        kuna_objcdirect::emit(
+        objcdirect::emit(
             &img,
             architecture,
             &tctx,
@@ -339,8 +337,8 @@ impl AnalysisPass for ObjcMetadataPass {
                 }
             }
         }
-        let refs = kuna_objcrefs::emit(&img, ctx.file, ctx.arch, &tctx, &mut selectors, &mut out);
-        kuna_objcblocks::emit(&img, ctx.file, &tctx, &mut out);
+        let refs = objcrefs::emit(&img, ctx.file, ctx.arch, &tctx, &mut selectors, &mut out);
+        objcblocks::emit(&img, ctx.file, &tctx, &mut out);
         {
             use object::ObjectSymbol;
             let mut creators: Vec<(u64, String)> = out
@@ -359,7 +357,7 @@ impl AnalysisPass for ObjcMetadataPass {
                         ))
                     }),
             );
-            kuna_objcblocks::stack_blocks(&img, ctx.file, ctx.bytes, &tctx, &creators, &mut out);
+            objcblocks::stack_blocks(&img, ctx.file, ctx.bytes, &tctx, &creators, &mut out);
         }
         if let Some(table) = out.objc_classes.as_mut() {
             table
@@ -387,13 +385,13 @@ impl AnalysisPass for ObjcMetadataPass {
 /// superclasses. Their records are declared so a result typed by one of them,
 /// or by a class one of their methods returns, is that class's pointer.
 fn add_sdk_classes(
-    table: &mut unlace_decomp::kuna_objcrettype::ObjcClassTable,
-    mut sdk: HashMap<String, unlace_decomp::kuna_objcrettype::ObjcClass>,
+    table: &mut unlace_decomp::objcrettype::ObjcClassTable,
+    mut sdk: HashMap<String, unlace_decomp::objcrettype::ObjcClass>,
     file: &object::File,
     tctx: &TypeCtx,
 ) {
     use object::read::ObjectSymbol;
-    use unlace_decomp::kuna_objcrettype::ObjcReturn;
+    use unlace_decomp::objcrettype::ObjcReturn;
     if sdk.is_empty() {
         return;
     }
@@ -444,7 +442,7 @@ impl ObjcMetadataPass {
         kind: char,
         list_va: u64,
         self_type: Option<&Rc<unlace_decomp::dtype::Datatype>>,
-        selectors: &mut kuna_objcrefs::Selectors,
+        selectors: &mut objcrefs::Selectors,
         out: &mut AnalysisOutput,
     ) {
         let owner = class.split('(').next().unwrap_or(class);
@@ -493,7 +491,7 @@ impl ObjcMetadataPass {
                     .methods
                     .insert(
                         (kind == '+', m.selector.clone()),
-                        unlace_decomp::kuna_objcrettype::ObjcMethod {
+                        unlace_decomp::objcrettype::ObjcMethod {
                             label: label.clone(),
                             imp: m.imp,
                             returns: None,

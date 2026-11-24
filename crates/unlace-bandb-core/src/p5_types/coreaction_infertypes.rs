@@ -40,9 +40,9 @@
 //! conservatively decline (return `None`/no-op), which is faithful — the C++ also
 //! returns null along those edges when the supporting surface doesn't apply.
 
+use crate::elemptr::FuncdataElemptrExt;
 use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
 use crate::funcdata_spacebase::FuncdataSpacebaseExt;
-use crate::kuna_elemptr::FuncdataElemptrExt;
 use std::rc::Rc;
 
 use unlace_base::address::{Address, calc_mask};
@@ -74,16 +74,16 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
     // `BUILTIN_STRINGDATA` CALLOTHER reports its char-pointer output token and
     // `ActionSetCasts` inserts no spurious cast around the rendered string literal.
     if o.code() == OpCode::CPUI_CALLOTHER {
-        if let Some(ty) = crate::kuna_octeoneffects::output_type(data, op) {
+        if let Some(ty) = crate::octeoneffects::output_type(data, op) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_atomics::output_type(data, op) {
+        if let Some(ty) = crate::atomics::output_type(data, op) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_roundingops::output_type(data, op) {
+        if let Some(ty) = crate::roundingops::output_type(data, op) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_repstring::output_type(data, op) {
+        if let Some(ty) = crate::repstring::output_type(data, op) {
             return ty;
         }
         let in0_off = o
@@ -165,7 +165,7 @@ pub fn output_type_local(data: &Funcdata, op: OpId) -> Rc<Datatype> {
                 .and_then(|v| data.vbank().get(v))
                 .map(|v| v.get_offset());
             let caught = handler.and_then(|h| {
-                let table = crate::kuna_javatry::CatchTable::new(data)?;
+                let table = crate::javatry::CatchTable::new(data)?;
                 let model = arch.dex.as_ref()?;
                 model
                     .java_type(&table.caught_descriptor(h), arch.types()?)
@@ -334,7 +334,7 @@ fn vector_userop_type_at(
         .binary_search_by_key(&uid, |(i, _)| *i)
         .ok()?;
     let kind = arch.vector_userops[at].1;
-    let Some(elem) = crate::kuna_neonintrin::variable_elem(kind) else {
+    let Some(elem) = crate::neonintrin::variable_elem(kind) else {
         return vector_userop_type(arch, id, size);
     };
     let o = data.obank().get(op)?;
@@ -343,7 +343,7 @@ fn vector_userop_type_at(
         return None;
     }
     let lane = u32::try_from(last.get_offset()).ok()?;
-    let name = crate::kuna_neonintrin::vector_type_name(size, elem, lane)?;
+    let name = crate::neonintrin::vector_type_name(size, elem, lane)?;
     arch.types()?
         .get_base_named(size, type_metatype::TYPE_UNKNOWN, &name)
         .ok()
@@ -361,7 +361,7 @@ fn vector_userop_type(
         .binary_search_by_key(&id, |(i, _)| *i)
         .ok()?;
     let kind = arch.vector_userops[at].1;
-    crate::kuna_avxintrin::vector_type(arch.types()?, size, kind)
+    crate::avxintrin::vector_type(arch.types()?, size, kind)
 }
 
 #[doc(hidden)]
@@ -412,16 +412,16 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
     }
 
     if opcode == OpCode::CPUI_CALLOTHER {
-        if let Some(ty) = crate::kuna_octeoneffects::input_type(data, op, slot) {
+        if let Some(ty) = crate::octeoneffects::input_type(data, op, slot) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_atomics::input_type(data, op, slot) {
+        if let Some(ty) = crate::atomics::input_type(data, op, slot) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_roundingops::input_type(data, op, slot) {
+        if let Some(ty) = crate::roundingops::input_type(data, op, slot) {
             return ty;
         }
-        if let Some(ty) = crate::kuna_repstring::input_type(data, op, slot) {
+        if let Some(ty) = crate::repstring::input_type(data, op, slot) {
             return ty;
         }
     }
@@ -559,7 +559,7 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
 
     // (kuna `swiftcall`) A Swift function's two-word result is its pair.
     if opcode == OpCode::CPUI_RETURN && slot >= 1 {
-        if let Some(ct) = crate::kuna_swiftinfer::pair_return_type(data, op, slot) {
+        if let Some(ct) = crate::swiftinfer::pair_return_type(data, op, slot) {
             return ct;
         }
     }
@@ -596,7 +596,7 @@ fn input_type_local_with(data: &Funcdata, op: OpId, slot: int4, recovered: bool)
 /// if parameter `slot-1` is type-locked (or a known `this` pointer to a struct),
 /// return that parameter's data-type when it fits the argument Varnode.  Otherwise,
 /// when `recovered`, the (kuna `protoorder`) vote of a callee decompiled earlier in
-/// the run ([`crate::kuna_protoorder::call_argument_vote`]).  `None` falls back to
+/// the run ([`crate::protoorder::call_argument_vote`]).  `None` falls back to
 /// the generic `getInputLocal`.
 fn call_input_type_local(
     data: &Funcdata,
@@ -632,7 +632,7 @@ fn call_input_type_local(
     let fc = fc?;
     // (kuna `com`) A COM request's out-parameter holds the interface its
     // interface-id argument names.
-    if let Some(ct) = crate::kuna_comtyping::out_param_type(data, op, fc, slot) {
+    if let Some(ct) = crate::comtyping::out_param_type(data, op, fc, slot) {
         return Some(ct);
     }
     // param = fc->getParam(slot - 1)
@@ -651,8 +651,8 @@ fn call_input_type_local(
                 // (kuna `libctypes`) A libc aggregate the caller reads past the end
                 // of is a larger object that starts with one; the vote (never the
                 // cast's required type) falls back to `void *`. See `kuna_libcfit`.
-                if recovered && crate::kuna_libcfit::overruns(data, op, slot, ct) {
-                    return crate::kuna_libcfit::width_stable_vote(data, ct);
+                if recovered && crate::libcfit::overruns(data, op, slot, ct) {
+                    return crate::libcfit::width_stable_vote(data, ct);
                 }
                 return Some(Rc::clone(ct));
             }
@@ -672,21 +672,21 @@ fn call_input_type_local(
         }
     }
     let vararg = if recovered {
-        crate::kuna_varargfloat::argument_vote(data, fc, op, slot)
+        crate::varargfloat::argument_vote(data, fc, op, slot)
     } else {
-        crate::kuna_varargfloat::argument_requirement(data, fc, op, slot)
+        crate::varargfloat::argument_requirement(data, fc, op, slot)
     };
     if vararg.is_some() {
         return vararg;
     }
     if !recovered {
-        return crate::kuna_floatreg::argument_requirement(data, fc, op, slot);
+        return crate::floatreg::argument_requirement(data, fc, op, slot);
     }
     if proto.is_input_locked() {
         return None;
     }
-    crate::kuna_protoorder::call_argument_vote(data, op, fc, slot, arg_size)
-        .or_else(|| crate::kuna_floatreg::argument_vote(data, fc, op, slot))
+    crate::protoorder::call_argument_vote(data, op, fc, slot, arg_size)
+        .or_else(|| crate::floatreg::argument_vote(data, fc, op, slot))
 }
 
 /// The locked-output arm of `TypeOpCall::getOutputLocal` (typeop.cc:722-738) /
@@ -736,11 +736,11 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
     let fc = fc?;
     // (kuna `objcrettype`) A message send's result is its receiver's class
     // before it is the stub's `id`.
-    if let Some(ct) = crate::kuna_objcrettype::instancetype(data, op, fc) {
+    if let Some(ct) = crate::objcrettype::instancetype(data, op, fc) {
         return Some(ct);
     }
     // (kuna `xnutables`) A typed allocation returns its view's struct.
-    if let Some(ct) = crate::kuna_kalloctype::allocated_type(data, op, fc) {
+    if let Some(ct) = crate::kalloctype::allocated_type(data, op, fc) {
         return Some(ct);
     }
     let proto = fc.proto();
@@ -751,12 +751,12 @@ fn call_output_type_local(data: &Funcdata, op: OpId, opcode: OpCode) -> Option<R
             .get_out()
             .and_then(|v| data.vbank().get(v))
             .map(|v| v.get_size())?;
-        return crate::kuna_passthrough::tail_return_type(data, op, size)
-            .or_else(|| crate::kuna_slotargs::declared_result_type(data, op, fc, size))
-            .or_else(|| crate::kuna_callrettype::stated_return_type(data, op, fc))
-            .or_else(|| crate::kuna_swiftinfer::pair_output_type(data, op))
-            .or_else(|| crate::kuna_narrowret::stated_type(data, op, fc, size))
-            .or_else(|| crate::kuna_floatreg::jump_result_type(data, op, size));
+        return crate::passthrough::tail_return_type(data, op, size)
+            .or_else(|| crate::slotargs::declared_result_type(data, op, fc, size))
+            .or_else(|| crate::callrettype::stated_return_type(data, op, fc))
+            .or_else(|| crate::swiftinfer::pair_output_type(data, op))
+            .or_else(|| crate::narrowret::stated_type(data, op, fc, size))
+            .or_else(|| crate::floatreg::jump_result_type(data, op, size));
     }
     let ct = proto.get_output_type()?;
     if ct.get_metatype() == type_metatype::TYPE_VOID {
@@ -816,16 +816,16 @@ fn get_local_type(data: &Funcdata, vn: VarnodeId) -> (Rc<Datatype>, bool) {
 /// is a W4 surface — absent symbols fall through to the plain `getLocalType`.)
 fn build_localtypes(data: &mut Funcdata) {
     let order: Vec<VarnodeId> = data.vbank().iter_loc().collect();
-    let mut elem_cache = crate::kuna_elemptr::Cache::default();
-    crate::kuna_armfloatreturn::unlock_unspelled(data);
-    let float_bits = crate::kuna_floatbits::Plan::of(data);
+    let mut elem_cache = crate::elemptr::Cache::default();
+    crate::armfloatreturn::unlock_unspelled(data);
+    let float_bits = crate::floatbits::Plan::of(data);
     if float_bits.types_a_return() {
         data.kuna_note_float_bits_return();
     }
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_elemptr::ElemPtr>()
+        .get::<crate::elemptr::ElemPtr>()
         .0
     {
         data.kuna_elemptr_begin_pass();
@@ -874,39 +874,39 @@ fn build_localtypes(data: &mut Funcdata) {
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_calleevote::input_vote(data, vn, &ct).unwrap_or(ct)
+            crate::calleevote::input_vote(data, vn, &ct).unwrap_or(ct)
         };
         // (kuna `elfmain`) An executable's own `main` gives the runtime arguments
         // its body reads their runtime types, unlocked. See `kuna_elfmaindecl`.
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_elfmaindecl::input_type(data, vn).unwrap_or(ct)
+            crate::elfmaindecl::input_type(data, vn).unwrap_or(ct)
         };
         // (kuna `swiftcall`) A hinted input takes its hinted type, unlocked.
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_inputhints::input_type(data, vn).unwrap_or(ct)
+            crate::inputhints::input_type(data, vn).unwrap_or(ct)
         };
         // (kuna `regnarrow`) A narrowed register value nothing else types is unsigned.
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_regnarrow::unsigned_vote(data, vn, &ct).unwrap_or(ct)
+            crate::regnarrow::unsigned_vote(data, vn, &ct).unwrap_or(ct)
         };
         // (kuna `narrowargs callers`) A parameter its callers narrow takes their extension's type.
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_callerargs::input_vote(data, vn, &ct).unwrap_or(ct)
+            crate::callerargs::input_vote(data, vn, &ct).unwrap_or(ct)
         };
         // (kuna `valuewitness`) The word before Swift type metadata, read at
         // a table offset, is the value witness table. See `kuna_valuewitness`.
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_valuewitness::output_vote(data, vn).unwrap_or(ct)
+            crate::valuewitness::output_vote(data, vn).unwrap_or(ct)
         };
         // (kuna `ptrfromuse`) A function input whose only memory role is to be a
         // LOAD/STORE base has no pointer candidate in the fold above, because
@@ -918,7 +918,7 @@ fn build_localtypes(data: &mut Funcdata) {
             let mode = data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_ptrfromuse::PtrFromUseMode>();
+                .get::<crate::ptrfromuse::PtrFromUseMode>();
             // A vote that is ALREADY a pointer came from real evidence (a callee's
             // locked prototype, DWARF, an offset-0 dereference), and it names a
             // pointee this rule cannot know.  Use evidence adds nothing there, and
@@ -928,8 +928,8 @@ fn build_localtypes(data: &mut Funcdata) {
             if ct.get_metatype() == type_metatype::TYPE_PTR {
                 ct
             } else {
-                match crate::kuna_ptrfromuse::pointer_from_use(data, vn, mode) {
-                    Some(cand) if crate::kuna_ptrfromuse::folds_over(&cand, &ct) => cand,
+                match crate::ptrfromuse::pointer_from_use(data, vn, mode) {
+                    Some(cand) if crate::ptrfromuse::folds_over(&cand, &ct) => cand,
                     _ => ct,
                 }
             }
@@ -944,13 +944,13 @@ fn build_localtypes(data: &mut Funcdata) {
             || !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_ptrfromuse::PtrFromLocal>()
+                .get::<crate::ptrfromuse::PtrFromLocal>()
                 .0
         {
             ct
         } else {
-            match crate::kuna_ptrfromuse::pointer_from_local_use(data, vn) {
-                Some(cand) if crate::kuna_ptrfromuse::folds_over(&cand, &ct) => cand,
+            match crate::ptrfromuse::pointer_from_local_use(data, vn) {
+                Some(cand) if crate::ptrfromuse::folds_over(&cand, &ct) => cand,
                 _ => ct,
             }
         };
@@ -965,15 +965,15 @@ fn build_localtypes(data: &mut Funcdata) {
             let on = data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_charptr::CharPtr>()
+                .get::<crate::charptr::CharPtr>()
                 .0;
             if from_seed {
                 ct
             } else {
-                match crate::kuna_charptr::char_pointer_from_evidence(data, vn, &ct, on) {
+                match crate::charptr::char_pointer_from_evidence(data, vn, &ct, on) {
                     Some(cand)
                         if ct.get_metatype() == type_metatype::TYPE_PTR
-                            || crate::kuna_charptr::folds_over(&cand, &ct) =>
+                            || crate::charptr::folds_over(&cand, &ct) =>
                     {
                         cand
                     }
@@ -988,7 +988,7 @@ fn build_localtypes(data: &mut Funcdata) {
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_elemptr::element_pointer(data, vn, &ct, &mut elem_cache).unwrap_or(ct)
+            crate::elemptr::element_pointer(data, vn, &ct, &mut elem_cache).unwrap_or(ct)
         };
         // (kuna `boolbyte`) A byte whose every read is a truth test has no `bool`
         // candidate in the fold above: `TYPE_BOOL` is only ever an op's OUTPUT type,
@@ -1000,12 +1000,12 @@ fn build_localtypes(data: &mut Funcdata) {
         let ct = if data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_boolbyte::BoolByte>()
+            .get::<crate::boolbyte::BoolByte>()
             .0
             && vn_size == 1
             && !from_seed
         {
-            match crate::kuna_boolbyte::truth_value_type(data, vn, &ct) {
+            match crate::boolbyte::truth_value_type(data, vn, &ct) {
                 Some(cand) => cand,
                 None => ct,
             }
@@ -1015,15 +1015,15 @@ fn build_localtypes(data: &mut Funcdata) {
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_floatreg::float_register_vote(data, vn, &ct)
-                .or_else(|| crate::kuna_floatreg::float_input_vote(data, vn, &ct))
+            crate::floatreg::float_register_vote(data, vn, &ct)
+                .or_else(|| crate::floatreg::float_input_vote(data, vn, &ct))
                 .or_else(|| float_bits.vote(data, vn, &ct))
                 .unwrap_or(ct)
         };
         let ct = if from_seed {
             ct
         } else {
-            crate::kuna_zextreturn::unsigned_return_vote(data, vn, &ct).unwrap_or(ct)
+            crate::zextreturn::unsigned_return_vote(data, vn, &ct).unwrap_or(ct)
         };
         let v = data
             .vbank_mut()
@@ -1117,7 +1117,7 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         None => return false,
     };
     let backing_store =
-        crate::kuna_stackwordtypes::backing_store(data, op, inslot, outslot, invn, &alttype);
+        crate::stackwordtypes::backing_store(data, op, inslot, outslot, invn, &alttype);
     // (C++ coreaction.cc:5335-5341)  Always give the incoming union/relative-pointer
     // a chance to resolve so the field choice is cached for later facing lookups,
     // but only adopt the resolved type for the propagation when `op` is not a MULTIEQUAL
@@ -1133,7 +1133,7 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         }
     }
     if backing_store {
-        alttype = crate::kuna_stackwordtypes::stored_word(data, invn, alttype);
+        alttype = crate::stackwordtypes::stored_word(data, invn, alttype);
     }
 
     // Resolve the outgoing Varnode.
@@ -1184,7 +1184,7 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         match data
             .get_arch()
             .types()
-            .and_then(|tlst| crate::kuna_ptrdepth::cap_pointer_depth(tlst, &newtype))
+            .and_then(|tlst| crate::ptrdepth::cap_pointer_depth(tlst, &newtype))
         {
             Some(capped) => capped,
             None => newtype,
@@ -1201,25 +1201,25 @@ fn propagate_type_edge(data: &mut Funcdata, op: OpId, inslot: int4, outslot: int
         Some(t) => t,
         None => return false,
     };
-    crate::kuna_charbyte::note_edge(data, op, inslot, outslot, invn, outvn, &newtype, &cur); // (kuna `charbyte`)
+    crate::charbyte::note_edge(data, op, inslot, outslot, invn, outvn, &newtype, &cur); // (kuna `charbyte`)
     // (kuna `elemptr`) A value stored through a pointer `elemptr` typed keeps
-    // its own sign; see `kuna_elemptr::keeps_stored_sign`.
-    if crate::kuna_elemptr::keeps_stored_sign(data, op, inslot, outslot, &newtype, &cur) {
+    // its own sign; see `elemptr::keeps_stored_sign`.
+    if crate::elemptr::keeps_stored_sign(data, op, inslot, outslot, &newtype, &cur) {
         return false;
     }
     // (kuna `elfmain`) A runtime argument of an executable's own `main` keeps its
     // runtime type, without the type lock that would make it a realistic input
     // to the next call. See `kuna_elfmaindecl`.
-    if crate::kuna_elfmaindecl::took_runtime_type(data, outvn, &cur) {
+    if crate::elfmaindecl::took_runtime_type(data, outvn, &cur) {
         return false;
     }
-    if crate::kuna_inputhints::took_hint_type(data, outvn, &cur) {
+    if crate::inputhints::took_hint_type(data, outvn, &cur) {
         return false;
     }
     if 0 > newtype.type_order(&cur).unwrap_or(0) {
         // (kuna `libctypes`) A libc aggregate pointer is not carried onto a Varnode
         // the function reads past that aggregate's end. See `kuna_libcfit`.
-        if crate::kuna_libcfit::refuses(data, outvn, &newtype) {
+        if crate::libcfit::refuses(data, outvn, &newtype) {
             return false;
         }
         let is_mark = data.vbank().get(outvn).map(|v| v.is_mark()).unwrap_or(true);
@@ -1293,7 +1293,7 @@ fn propagate_from_pointer(
         return None;
     }
     if ptrto.get_size() == sz {
-        return Some(crate::kuna_typequal::unqualified_value(ptrto));
+        return Some(crate::typequal::unqualified_value(ptrto));
     }
     // Size mismatch: only propagate (partial) enumerations.
     if dt.is_pointer_rel() {
@@ -1410,7 +1410,7 @@ fn propagate_type(
             if invn_is_spacebase {
                 spacebase_pointer(data, alttype.get_size())
             } else {
-                Some(crate::kuna_typequal::unqualified_value(alttype))
+                Some(crate::typequal::unqualified_value(alttype))
             }
         }
         OpCode::CPUI_INDIRECT => {
@@ -1431,7 +1431,7 @@ fn propagate_type(
             if invn_is_spacebase {
                 spacebase_pointer(data, alttype.get_size())
             } else {
-                Some(crate::kuna_typequal::unqualified_value(alttype))
+                Some(crate::typequal::unqualified_value(alttype))
             }
         }
         // TypeOpEqual / TypeOpNotEqual / TypeOpIntLess / TypeOpIntLessEqual all
@@ -1626,7 +1626,7 @@ fn propagate_load_store(
         let spc = space_from_const(data, op, 0)?;
         // (kuna `vtabletypes`) A `C_vtbl *` value's pointer is a `C *`.
         if let Some(class) =
-            crate::kuna_vtblbase::class_pointer(data, tlst, &alttype, out_size, spc.get_word_size())
+            crate::vtblbase::class_pointer(data, tlst, &alttype, out_size, spc.get_word_size())
         {
             return Some(class);
         }
@@ -1638,7 +1638,7 @@ fn propagate_load_store(
         // `propagate_from_pointer`, whose C++ body (typeop.cc:207) has no such
         // case.
         if let Some(ptrto) = alttype.get_ptr_to() {
-            if crate::kuna_codescalar::blocks_value_type(&ptrto) {
+            if crate::codescalar::blocks_value_type(&ptrto) {
                 return None;
             }
         }
@@ -1647,7 +1647,7 @@ fn propagate_load_store(
             value => crate::bitfield::whole_byte_field_value(tlst, &alttype, out_size).or(value)?,
         };
         // (kuna `structsynth nest`) A record's pointer to itself names its shell.
-        Some(crate::kuna_structsynth::resolve_self_pointer(tlst, &value).unwrap_or(value))
+        Some(crate::structsynth::resolve_self_pointer(tlst, &value).unwrap_or(value))
     }
 }
 
@@ -1668,11 +1668,11 @@ fn float_pointee_admits(data: &Funcdata, op: OpId, value_size: int4) -> bool {
     let Some(pointer) = data.obank().get(op).and_then(|o| o.get_in(1)) else {
         return false;
     };
-    let Some((base, _dynamic, _stride)) = crate::kuna_structsynth::peel_base_stride(data, pointer)
+    let Some((base, _dynamic, _stride)) = crate::structsynth::peel_base_stride(data, pointer)
     else {
         return false;
     };
-    crate::kuna_structsynth::every_access_through(data, base, value_size)
+    crate::structsynth::every_access_through(data, base, value_size)
 }
 
 /// C++ `TypeOpPiece::propagateType` (typeop.cc:2076).
@@ -1897,7 +1897,7 @@ fn propagate_int_add(
         Some(alttype)
     } else if inslot == -1 {
         None // Don't propagate pointer types output -> input
-    } else if crate::kuna_valuewitness::outside_header(data, op, inslot, &alttype) {
+    } else if crate::valuewitness::outside_header(data, op, inslot, &alttype) {
         None
     } else {
         propagate_add_in2_out(data, alttype, op, inslot)
@@ -2615,17 +2615,17 @@ pub fn run_infer_types(data: &mut Funcdata) -> bool {
     // input-Varnode type recommendations (the `this`-pointer collection is the
     // merged tree's only source; a no-op on a recommendation-free function).
     data.apply_type_recommendations();
-    crate::kuna_stablenames::lock_retyped(data);
-    crate::kuna_charbyte::begin(data);
+    crate::stablenames::lock_retyped(data);
+    crate::charbyte::begin(data);
     build_localtypes(data);
     propagate_all(data);
     // (kuna `charbyte`) re-seed the bytes a `char *` reached and propagate again.
-    if let Some(bytes) = crate::kuna_charbyte::take_noted() {
-        let upstream = crate::kuna_charbyte::snapshot(data);
+    if let Some(bytes) = crate::charbyte::take_noted() {
+        let upstream = crate::charbyte::snapshot(data);
         build_localtypes(data);
-        crate::kuna_charbyte::seed_char(data, &bytes);
+        crate::charbyte::seed_char(data, &bytes);
         propagate_all(data);
-        crate::kuna_charbyte::keep_or_restore(data, upstream);
+        crate::charbyte::keep_or_restore(data, upstream);
     }
     write_back(data)
 }
@@ -2665,8 +2665,8 @@ fn propagate_all(data: &mut Funcdata) {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.coreaction_infertypes_propagate_type_pub = Some(propagate_type_pub);
 }
 
@@ -2678,7 +2678,7 @@ crate::kuna_flag!(
     /// `p = obj.ptr` -- a LOAD from the same address -- on the other), so the
     /// propagation adds one pointer level per pass until the seven-pass ceiling
     /// and declares the object `unsigned long long *****`.  When set, every
-    /// candidate type is put through `kuna_ptrdepth::cap_pointer_depth`, which is
+    /// candidate type is put through `ptrdepth::cap_pointer_depth`, which is
     /// upstream `TypeFactory::getTypePointerNoDepth`'s rule (`type.cc:1509`)
     /// applied at the propagation funnel rather than only at LOAD/STORE.
     Ptrdepthcap,

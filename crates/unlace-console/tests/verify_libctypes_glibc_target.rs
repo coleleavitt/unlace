@@ -32,7 +32,7 @@ use std::sync::Mutex;
 
 use unlace_base::address::Address;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
-use unlace_decomp::kuna_libctypes::LIBCTYPES_ENV;
+use unlace_decomp::libctypes::LIBCTYPES_ENV;
 
 /// `bump` in the MIPS fixture; `next_byte` in the x86-64 one. Any code address
 /// does — the declaration is what is under test, not the body.

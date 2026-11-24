@@ -79,10 +79,10 @@ use std::rc::Rc;
 
 use unlace_num::opcodes::OpCode;
 
+use crate::castwiden::{CastWidenMode, Plan, narrow_operand, plain_int, store_pointee};
 use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castwiden::{CastWidenMode, Plan, narrow_operand, plain_int, store_pointee};
 
 /// What the printer knows about how an op prints, which the IR alone does not say.
 #[doc(hidden)]
@@ -159,9 +159,9 @@ pub struct ImpliedCasts {
 
 impl ImpliedCasts {
     /// Start a function: forget the previous one's declarations.  `arms` turns on
-    /// `castternary` ([`crate::kuna_castternary`]), `widen` sets `castwiden`
-    /// ([`crate::kuna_castwiden`]), `narrow` turns on `castnarrow`
-    /// ([`crate::kuna_castnarrow`]).
+    /// `castternary` ([`crate::castternary`]), `widen` sets `castwiden`
+    /// ([`crate::castwiden`]), `narrow` turns on `castnarrow`
+    /// ([`crate::castnarrow`]).
     #[doc(hidden)]
     pub fn begin(
         &mut self,
@@ -238,7 +238,7 @@ impl ImpliedCasts {
         if let Some(pl) = self.plans.borrow().get(&r) {
             return *pl;
         }
-        let pl = crate::kuna_castwiden::plan(self, p, fd, r, depth);
+        let pl = crate::castwiden::plan(self, p, fd, r, depth);
         self.plans.borrow_mut().insert(r, pl);
         pl
     }
@@ -336,7 +336,7 @@ impl ImpliedCasts {
                 return true;
             }
         }
-        self.narrow && crate::kuna_castnarrow::drops(self, p, fd, op, read_op)
+        self.narrow && crate::castnarrow::drops(self, p, fd, op, read_op)
     }
 
     /// The spelling the printer declared the function's return type with.
@@ -623,7 +623,7 @@ impl ImpliedCasts {
         if !fd
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_elemptr::ElemPtr>()
+            .get::<crate::elemptr::ElemPtr>()
             .0
         {
             return None;
@@ -946,7 +946,7 @@ crate::kuna_flag!(
     /// perform: a value-preserving integer widening passed to a trusted
     /// parameter, assigned to or returned as exactly its type, or stacked under
     /// another conversion that fixes the result type.  See
-    /// [`crate::kuna_castimplied`].
+    /// [`crate::castimplied`].
     CastImplied,
     "castimplied",
     "C-implied cast elision",
@@ -955,5 +955,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_castimplied/tests.rs"]
+#[path = "castimplied/tests.rs"]
 mod tests;

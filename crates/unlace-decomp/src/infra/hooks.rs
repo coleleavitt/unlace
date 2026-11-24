@@ -34,7 +34,7 @@ use crate::action::{
     Action, ActionBase, ActionContext, ActionGroupList, ApplyResult, Rule, RuleState,
 };
 use crate::funcdata::Funcdata;
-use crate::kuna_phases::KunaPhase;
+use crate::phases::KunaPhase;
 use crate::universalaction::{RuleRow, SchedNode, universal_sched};
 
 /// A callback run at a phase boundary.
@@ -230,7 +230,7 @@ crate::kuna_arch_table!(HookRegistry);
 
 /// Register `rule` on the architecture's registry ([`HookRegistry::add_rule`]).
 fn add_rule_to(
-    tables: &mut crate::kuna_archstate::ArchTables,
+    tables: &mut crate::archstate::ArchTables,
     after_group: &str,
     state: RuleState,
     rule: Box<dyn Rule>,
@@ -242,15 +242,15 @@ fn add_rule_to(
 
 /// Register `callback` on the architecture's registry ([`HookRegistry::on_phase`]).
 fn on_phase_of(
-    tables: &mut crate::kuna_archstate::ArchTables,
+    tables: &mut crate::archstate::ArchTables,
     phase: KunaPhase,
     callback: PhaseCallback,
 ) -> KunaResult<()> {
     tables.get_mut::<HookRegistry>().on_phase(phase, callback)
 }
 
-/// Fill this module's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this module's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.hooks_add_rule = Some(add_rule_to);
     hooks.hooks_on_phase = Some(on_phase_of);
 }

@@ -93,10 +93,10 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId};
 use crate::funcdata::Funcdata;
-use crate::kuna_x64syscall::overlaps;
 use crate::op::{PcodeOpBank, pcodeop_flags};
 use crate::userop::BUILTIN_SYSCALL_ERROR;
 use crate::varnode::VarnodeBank;
+use crate::x64syscall::overlaps;
 
 /// How many basic blocks one register's walk may visit before it gives up and
 /// leaves the register unread.
@@ -106,7 +106,7 @@ const BLOCK_WALK_LIMIT: usize = 256;
 /// `a0`..`a3`.
 const MIPS_UNKNOWN_ARGS: usize = 4;
 
-pub use crate::kuna_coreoptions::{OptionSyscallRegs, SyscallRegsMode};
+pub use crate::coreoptions::{OptionSyscallRegs, SyscallRegsMode};
 
 pub use crate::context::SyscallFamily;
 
@@ -610,8 +610,8 @@ pub fn userop_ids(
 
 mod mips_args;
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.syscallregs_is_error_flag_op = Some(is_error_flag_op);
     hooks.syscallregs_is_error_flag = Some(is_error_flag);
     hooks.syscallregs_reads_as_argument = Some(reads_as_argument);

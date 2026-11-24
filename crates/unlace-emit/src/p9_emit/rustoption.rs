@@ -5,7 +5,7 @@ use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
 use crate::funcdata_facing::FuncdataFacingExt;
-use crate::kuna_lang::OutLang;
+use crate::lang::OutLang;
 use crate::prettyprint::{Emit, SyntaxHighlight};
 use crate::printc::PrintC;
 use unlace_base::address::Address;
@@ -60,7 +60,7 @@ fn option_u64_layout(arch: &Architecture) -> Option<()> {
         && (ty.get_metatype(), ty.get_size()) == (type_metatype::TYPE_UINT, 8)
         && !ty.is_enum_type()
         && !ty.is_incomplete()
-        && !crate::kuna_typequal::is_volatile(ty))
+        && !crate::typequal::is_volatile(ty))
     .then_some(())
 }
 
@@ -120,7 +120,7 @@ fn producer(fd: &Funcdata, arch: &Architecture, value: VarnodeId, extract: OpId)
         || ty.get_metatype() != type_metatype::TYPE_STRUCT
         || ty.get_size() != 16
         || ty.is_incomplete()
-        || crate::kuna_typequal::is_volatile(ty)
+        || crate::typequal::is_volatile(ty)
         || !matches!(ty.compare(&fd.vn_type_def_facing(value), 10), Ok(0))
         || !scalar_pair(arch, node.get_addr())
     {

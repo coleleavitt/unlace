@@ -16,11 +16,11 @@ pub enum View {
 
 fn byte_array(ty: &Datatype) -> bool {
     ty.get_metatype() == type_metatype::TYPE_ARRAY
-        && !crate::kuna_typequal::is_volatile(ty)
+        && !crate::typequal::is_volatile(ty)
         && ty.get_array_base().is_some_and(|base| {
             base.get_size() == 1
                 && base.get_align_size() == 1
-                && !crate::kuna_typequal::is_volatile(&base)
+                && !crate::typequal::is_volatile(&base)
                 && matches!(
                     base.get_metatype(),
                     type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -30,7 +30,7 @@ fn byte_array(ty: &Datatype) -> bool {
 
 fn whole_view(container: &Datatype, value: &Datatype, offset: i64, size: i32) -> Option<bool> {
     if !byte_array(container)
-        || crate::kuna_typequal::is_volatile(value)
+        || crate::typequal::is_volatile(value)
         || offset < 0
         || size <= 0
         || value.get_size() != size
@@ -53,7 +53,7 @@ fn whole_view(container: &Datatype, value: &Datatype, offset: i64, size: i32) ->
 }
 
 fn value_type(ty: Rc<Datatype>) -> Option<Rc<Datatype>> {
-    if crate::kuna_typequal::is_volatile(&ty) {
+    if crate::typequal::is_volatile(&ty) {
         return None;
     }
     if ty.get_metatype() != type_metatype::TYPE_PARTIALSTRUCT {
@@ -101,7 +101,7 @@ pub fn plan(
     }
     if (ty.get_metatype() == type_metatype::TYPE_UNKNOWN
         || facing.get_metatype() == type_metatype::TYPE_UNKNOWN)
-        && crate::kuna_partialaccess::carries_float(fd, vn, op)
+        && crate::partialaccess::carries_float(fd, vn, op)
     {
         return None;
     }
@@ -161,19 +161,16 @@ mod tests {
         let float = types.get_base(8, type_metatype::TYPE_FLOAT).unwrap();
         assert_eq!(whole_view(&array, &float, 0, 8), None);
         let volatile = types
-            .get_qualified_type(array.clone(), crate::kuna_typequal::VOLATILE)
+            .get_qualified_type(array.clone(), crate::typequal::VOLATILE)
             .unwrap();
         assert_eq!(whole_view(&volatile, &word, 0, 8), None);
         let volatile = types
-            .get_qualified_type(word.clone(), crate::kuna_typequal::VOLATILE)
+            .get_qualified_type(word.clone(), crate::typequal::VOLATILE)
             .unwrap();
         assert_eq!(whole_view(&array, &volatile, 0, 8), None);
         assert!(value_type(volatile).is_none());
         let volatile = types
-            .get_qualified_type(
-                array.get_array_base().unwrap(),
-                crate::kuna_typequal::VOLATILE,
-            )
+            .get_qualified_type(array.get_array_base().unwrap(), crate::typequal::VOLATILE)
             .unwrap();
         let volatile = types.get_type_array(16, volatile).unwrap();
         assert_eq!(whole_view(&volatile, &word, 0, 8), None);

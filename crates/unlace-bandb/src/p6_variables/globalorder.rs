@@ -5,7 +5,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_indexaliasguard::LEVEL_GLOBAL;
+use crate::indexaliasguard::LEVEL_GLOBAL;
 use crate::merge::MergeContext;
 
 pub fn keeps_apart(ctx: &mut dyn MergeContext, vn1: VarnodeId, vn2: VarnodeId) -> bool {
@@ -30,7 +30,7 @@ pub fn copy_moves_write(data: &Funcdata, global: HighVariableId, value: HighVari
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -74,7 +74,7 @@ pub fn copy_moves_write(data: &Funcdata, global: HighVariableId, value: HighVari
             continue;
         };
         if write_moves(data, copy, source)
-            && !crate::kuna_globalstorekeep::old_value_read_after(data, global_vn)
+            && !crate::globalstorekeep::old_value_read_after(data, global_vn)
         {
             return true;
         }
@@ -206,8 +206,8 @@ fn observes(data: &Funcdata, op: OpId, global: &crate::varnode::Varnode) -> bool
     pointer.get_offset() < global_end && global.get_offset() < access_end
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.globalorder_copy_moves_write = Some(copy_moves_write);
     hooks.globalorder_keeps_apart = Some(keeps_apart);
 }

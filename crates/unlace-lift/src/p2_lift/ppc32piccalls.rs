@@ -131,7 +131,7 @@ fn load(data: &Funcdata, engine: &Architecture, op: OpId, state: &State) -> Opti
     }
     engine
         .kuna_tables
-        .get::<crate::kuna_ppc32piccalls::PicImports>()
+        .get::<crate::ppc32piccalls::PicImports>()
         .contains_key(&offset)
         .then_some(Value::Slot(offset))
 }
@@ -203,7 +203,7 @@ fn direct_slot(
     };
     engine
         .kuna_tables
-        .get::<crate::kuna_ppc32piccalls::PicImports>()
+        .get::<crate::ppc32piccalls::PicImports>()
         .contains_key(&u64::from(slot))
         .then_some(u64::from(slot))
 }
@@ -260,7 +260,7 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
     if !engine.analysis_ppc32picimports.scoped()
         || engine
             .kuna_tables
-            .get::<crate::kuna_ppc32piccalls::PicImports>()
+            .get::<crate::ppc32piccalls::PicImports>()
             .is_empty()
         || !engine.archid.starts_with("PowerPC:")
         || !engine.archid.contains(":32:")
@@ -338,12 +338,12 @@ fn prove_inner(data: &Funcdata, engine: &Architecture) -> Option<BTreeMap<u64, C
                     };
                     let mut import = engine
                         .kuna_tables
-                        .get::<crate::kuna_ppc32piccalls::PicImports>()
+                        .get::<crate::ppc32piccalls::PicImports>()
                         .get(&slot)?
                         .clone();
                     import.no_return &= engine
                         .kuna_options
-                        .get::<crate::kuna_analysisgates::NoreturnKnown>()
+                        .get::<crate::analysisgates::NoreturnKnown>()
                         .0;
                     let tail = o.code() == OpCode::CPUI_BRANCHIND;
                     if tail && !import.no_return {
@@ -475,7 +475,7 @@ pub fn clear_stale_warnings(db: &mut crate::architecture::CommentDatabase, entry
 
 /// (kuna `ppc32piccalls`) The proved PIC call bindings, by call address. They belong to this entry's flow only and are rebuilt after a clear or restart.
 #[derive(Default)]
-struct BindingsSlot(std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>);
+struct BindingsSlot(std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding>);
 crate::kuna_func_state!(BindingsSlot, keep_across_clear: false);
 
 /// The `kuna_ppc32piccalls` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -483,33 +483,33 @@ crate::kuna_func_state!(BindingsSlot, keep_across_clear: false);
 pub trait FuncdataPpc32piccallsExt {
     fn ppc32_pic_calls(
         &self,
-    ) -> &std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>;
+    ) -> &std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding>;
     fn ppc32_pic_calls_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding>;
+    ) -> &mut std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding>;
     /// The caller-local PPC32 import calls this entry's flow applied.
-    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding>;
+    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::ppc32piccalls::CallBinding>;
 }
 
 impl FuncdataPpc32piccallsExt for crate::funcdata::Funcdata {
     fn ppc32_pic_calls(
         &self,
-    ) -> &std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
+    ) -> &std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding> {
         &self.kuna_state::<BindingsSlot>().0
     }
     fn ppc32_pic_calls_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<u64, crate::kuna_ppc32piccalls::CallBinding> {
+    ) -> &mut std::collections::BTreeMap<u64, crate::ppc32piccalls::CallBinding> {
         &mut self.kuna_state_mut::<BindingsSlot>().0
     }
     /// The caller-local PPC32 import calls this entry's flow applied.
-    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::kuna_ppc32piccalls::CallBinding> {
+    fn ppc32_import_calls(&self) -> impl Iterator<Item = &crate::ppc32piccalls::CallBinding> {
         self.ppc32_pic_calls().values()
     }
 }
 
 /// (kuna `ppc32picimports`) The PIC import slots the loader found, by address; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type PicImports = std::collections::BTreeMap<u64, ImportSlot>;
 crate::kuna_arch_table!(PicImports);
 

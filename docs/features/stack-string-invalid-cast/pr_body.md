@@ -40,7 +40,7 @@ stack strings, `memsetcopy` for constant-fill runs), and it had no owner.
 ## Mechanism
 
 New S5 constsequence rule `RuleRodataStringCopy`
-(`decompiler/crates/kuna-decomp/src/p5_types/kuna_rodatastring.rs`), option
+(`decompiler/crates/kuna-decomp/src/p5_types/rodatastring.rs`), option
 **`rodatastring on|off`, default `on`** (DIV-113). It gathers the same-block run and claims
 it only when every step is a fact rather than an inference:
 

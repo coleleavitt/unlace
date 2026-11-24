@@ -62,10 +62,10 @@
 
 use unlace_num::opcodes::OpCode;
 
+use crate::castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_castimplied::{CType, ImpliedCasts, PrintedForms, int_range, preserves};
 
 /// Promoted C integer types, as bits of a set: `int`, `unsigned int`, and the
 /// signed and unsigned 8-byte integers (`long` where it is 8 bytes, else
@@ -389,7 +389,7 @@ crate::kuna_flag!(
     /// (kuna `castternary`) Leave out an integer widening on an arm of an
     /// `iteregion` conditional when the conditional converts the arm to that same
     /// type itself (its type under the usual arithmetic conversions is the cast's
-    /// target with and without the cast).  See [`crate::kuna_castternary`].
+    /// target with and without the cast).  See [`crate::castternary`].
     CastTernary,
     "castternary",
     "conditional-arm cast elision",
@@ -398,5 +398,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_castternary/tests.rs"]
+#[path = "castternary/tests.rs"]
 mod tests;

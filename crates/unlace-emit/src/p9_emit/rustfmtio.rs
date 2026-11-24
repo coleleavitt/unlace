@@ -42,7 +42,7 @@ pub struct Writer {
 pub struct Plan {
     pub writer: Writer,
     pub signed_result: bool,
-    pub format: super::kuna_rustfmtargs::Plan,
+    pub format: super::rustfmtargs::Plan,
 }
 
 #[doc(hidden)]
@@ -79,13 +79,13 @@ pub static WITH_SIGNED_RESULT: OpToken = OpToken {
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .writers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || arch.rustc_stable_version != Some((1, 93, 1))
         || arch
             .kuna_tables
-            .get::<crate::kuna_rustfmtio::WriterProfiles>()
+            .get::<crate::rustfmtio::WriterProfiles>()
             .is_empty()
     {
         return None;
@@ -97,7 +97,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     let spec = fd.get_call_specs(fd.get_call_specs_index(id)?);
     let profile = arch
         .kuna_tables
-        .get::<crate::kuna_rustfmtio::WriterProfiles>()
+        .get::<crate::rustfmtio::WriterProfiles>()
         .get(&spec.get_entry_address().get_offset())?;
     let output = fd.vbank().get(call.get_out()?)?;
     if output.get_size() != 8 {
@@ -110,7 +110,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     };
     let writer = call.get_in(1)?;
     let value = fd.vbank().get(writer)?;
-    if value.get_size() != 8 || super::kuna_rustfmtargs::constant_word(fd, writer) == Some(0) {
+    if value.get_size() != 8 || super::rustfmtargs::constant_word(fd, writer) == Some(0) {
         return None;
     }
     let pointer_bridge = match value.get_type_read_facing(id).get_metatype() {
@@ -118,16 +118,15 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => false,
         _ => return None,
     };
-    let literal_bytes =
-        super::kuna_rustfmtliteral::literal_bytes(fd, call.get_in(2)?, call.get_in(3)?);
+    let literal_bytes = super::rustfmtliteral::literal_bytes(fd, call.get_in(2)?, call.get_in(3)?);
     if literal_bytes.as_ref().is_some_and(Vec::is_empty) {
         return None;
     }
     let literal = literal_bytes
         .and_then(|bytes| String::from_utf8(bytes).ok())
         .map(|text| {
-            let (name, literal) = super::kuna_rustfmtliteral::render(&text, false);
-            super::kuna_rustfmtargs::Plan {
+            let (name, literal) = super::rustfmtliteral::render(&text, false);
+            super::rustfmtargs::Plan {
                 name: if name == "println!" {
                     "writeln!"
                 } else {
@@ -138,13 +137,13 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
             }
         });
     let format = literal.or_else(|| {
-        super::kuna_rustfmtargs::recover_inputs_at(
+        super::rustfmtargs::recover_inputs_at(
             fd,
             arch,
             id,
             2,
             3,
-            super::kuna_rustfmtargs::MacroKind::Write,
+            super::rustfmtargs::MacroKind::Write,
         )
     })?;
     if !profile_unchanged(fd, profile) {
@@ -210,7 +209,7 @@ pub fn push_writer(
 ) {
     use crate::printc::{op_key, tokens};
     let key = Some(op_key(op));
-    printer.push_op(&super::kuna_langrust::rust_tokens::ADDRESSOF_MUT, key);
+    printer.push_op(&super::langrust::rust_tokens::ADDRESSOF_MUT, key);
     match writer.receiver {
         ReceiverAbi::ReferenceCell => printer.push_op(&tokens::DEREFERENCE, key),
         ReceiverAbi::PromotedInner => {
@@ -245,6 +244,6 @@ pub fn push_writer(
 }
 
 /// (kuna `rustfmtio`) The image's `io::Write` writer profiles, by address; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type WriterProfiles = std::collections::BTreeMap<u64, WriterProfile>;
 crate::kuna_arch_table!(WriterProfiles);

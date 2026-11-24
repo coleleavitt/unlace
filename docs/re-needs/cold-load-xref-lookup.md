@@ -164,7 +164,7 @@ _not yet refuted_
   that is a merged PR and an open need, exactly like #380.
 - round 2 B_PLAN (captain): `touches` widened from `[unlace-cli]` to `[unlace-cli, unlace-analysis,
   unlace-sleigh]` to match what attempt 1's diff actually edits (`listing/xrefs.rs`,
-  `listing/kuna_picbase.rs`, `sleigh.rs`). No new resource lease results — `perf` is not in
+  `listing/picbase.rs`, `sleigh.rs`). No new resource lease results — `perf` is not in
   `TRACK_RESOURCES` and none of those paths map to a counter — so this only makes the siblings'
   contracts file honest.
 - closed: acceptance a-6763a70e69bc now PASSES at 8ff1b4ecb1c7

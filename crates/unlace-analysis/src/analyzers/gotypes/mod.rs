@@ -78,24 +78,24 @@ use object::read::Object;
 
 use unlace_base::types::int4;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
-use unlace_decomp::kuna_gotypes::GOTYPES_MAX_TYPELINKS;
-use unlace_decomp::kuna_langfacet::LangFacet;
+use unlace_decomp::gotypes::GOTYPES_MAX_TYPELINKS;
+use unlace_decomp::langfacet::LangFacet;
 
 use crate::loader::gobuildinfo::{buildinfo_blob, go_version};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 use crate::pclntab::locate_header;
-use kuna_layout::GoImage;
+use layout::GoImage;
 
-mod kuna_fieldtypes;
-mod kuna_ifacefields;
-pub mod kuna_itabargs;
-mod kuna_itabs;
-mod kuna_itabtypes;
-mod kuna_layout;
-pub mod kuna_pointermethods;
-mod kuna_structorder;
-mod kuna_typeglobals;
-use kuna_fieldtypes::field_type;
+mod fieldtypes;
+mod ifacefields;
+pub mod itabargs;
+mod itabs;
+mod itabtypes;
+mod layout;
+pub mod pointermethods;
+mod structorder;
+mod typeglobals;
+use fieldtypes::field_type;
 
 /// Go `kind` byte values (`internal/abi.Kind`), masked by [`KIND_MASK`].
 const KIND_MASK: u8 = 0x1f;
@@ -640,7 +640,7 @@ fn intern_named_structs(
         }
     }
     // Pass 2: fill value dependencies before their enclosing layouts.
-    let structs = kuna_structorder::complete_order(tf, img, meta, structs);
+    let structs = structorder::complete_order(tf, img, meta, structs);
     for t in &structs {
         // A layout-ambiguous name must not be completed to one of its
         // conflicting layouts — the client refuses it regardless, and leaving
@@ -797,13 +797,13 @@ pub(crate) fn static_itab_interfaces(file: &object::File) -> Vec<(u64, String)> 
     else {
         return Vec::new();
     };
-    kuna_itabs::locate_itabs(&img, anchor, meta.types, meta.etypes)
+    itabs::locate_itabs(&img, anchor, meta.types, meta.etypes)
         .unwrap_or_default()
         .into_iter()
         .filter_map(|vma| {
-            let (_, inter) = kuna_itabs::read_itab(&img, meta.types, meta.etypes, vma)?;
-            let name = kuna_typeglobals::linker_name(&img, &meta, &inter);
-            kuna_typeglobals::global_name_ok(&name).then_some((vma, name))
+            let (_, inter) = itabs::read_itab(&img, meta.types, meta.etypes, vma)?;
+            let name = typeglobals::linker_name(&img, &meta, &inter);
+            typeglobals::global_name_ok(&name).then_some((vma, name))
         })
         .collect()
 }
@@ -850,7 +850,7 @@ impl AnalysisPass for GoTypesPass {
         intern_header_shells(tf, img.word_size as int4);
         let (walked, interned) = intern_named_structs(tf, &img, &meta, version);
         let _ = (walked, interned);
-        let globals = kuna_typeglobals::collect(tf, &img, &meta);
+        let globals = typeglobals::collect(tf, &img, &meta);
         // Addresses the image already names (unstripped binaries) — the itab
         // naming defers to them so it only ever ADDS symbols stripping removed.
         let occupied: std::collections::HashSet<u64> = ctx
@@ -859,17 +859,17 @@ impl AnalysisPass for GoTypesPass {
             .filter(|s| s.name().map(|n| !n.is_empty()).unwrap_or(false))
             .map(|s| s.address())
             .collect();
-        let itabs = kuna_itabs::collect(&img, &meta, anchor, &occupied);
+        let itabs = itabs::collect(&img, &meta, anchor, &occupied);
         // (kuna `goitabcalls`) One record per interface naming its method slots;
         // output-neutral until the option binds it.
         let go_abi = ctx
             .arch
             .default_fp()
             .is_some_and(|model| model.get_name() == "abi-internal");
-        let _ = kuna_itabtypes::intern(tf, &img, &meta, anchor, go_abi);
-        let _ = kuna_ifacefields::register(tf, &img, &meta, version);
+        let _ = itabtypes::intern(tf, &img, &meta, anchor, go_abi);
+        let _ = ifacefields::register(tf, &img, &meta, version);
         let go_pointer_methods =
-            kuna_pointermethods::collect(ctx.file, &img, &meta, header_vma, anchor, version)
+            pointermethods::collect(ctx.file, &img, &meta, header_vma, anchor, version)
                 .unwrap_or_default();
         AnalysisOutput {
             go_type_globals: globals,

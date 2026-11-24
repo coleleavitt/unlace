@@ -65,7 +65,7 @@ pub fn model(model: &Rc<ProtoModel>, manager: &AddrSpaceManager) -> Rc<ProtoMode
     Rc::new(result)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.vectorabi_model = Some(model);
 }

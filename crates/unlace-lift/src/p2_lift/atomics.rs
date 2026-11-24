@@ -17,10 +17,10 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
+use crate::atomicops::{AtomicUserops, Atomics, LlscFold};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_atomicops::{AtomicUserops, Atomics, LlscFold};
 use crate::userop::{
     BUILTIN_ATOMIC_COMPARE_SWAP, BUILTIN_ATOMIC_EXCHANGE, BUILTIN_ATOMIC_FETCH_ADD,
     BUILTIN_ATOMIC_FETCH_AND, BUILTIN_ATOMIC_FETCH_OR, BUILTIN_ATOMIC_FETCH_SUB,
@@ -2730,8 +2730,8 @@ fn pair_update(v0: &Expr, v1: &Expr, lo: &Expr, hi: &Expr, w: i32) -> Option<(u3
     (seen_hi && seen_carry && !x1.has_old()).then(|| (BUILTIN_ATOMIC_FETCH_ADD, x0, x1.clone()))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.atomics_input_type = Some(input_type);
     hooks.atomics_output_type = Some(output_type);
 }

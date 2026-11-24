@@ -7,7 +7,7 @@
 //! own scalar and the printed subscript runs off the declared array.
 //!
 //! At `bound`, an indexed base whose pointer is the stack base plus constants
-//! plus indices whose known bits bound them (`kuna_storereach.rs
+//! plus indices whose known bits bound them (`storereach.rs
 //! (pointer_pieces)`), and which the function only dereferences, gets room for
 //! every element those dereferences may touch.
 //!
@@ -55,7 +55,7 @@ const MAX_FOLLOW: int4 = 256;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArrayExtent(pub int4);
 
-impl crate::kuna_optionset::KunaOption for ArrayExtent {
+impl crate::optionset::KunaOption for ArrayExtent {
     const NAME: &'static str = "arrayextent";
     crate::kuna_option_id!();
 
@@ -131,7 +131,7 @@ pub fn bounded_items(
     }
     let sb = fd.find_spacebase_input(space)?;
     let access = access_size(fd, base)?;
-    let pieces = super::kuna_storereach::pointer_pieces(fd, base, sb, 0)?;
+    let pieces = super::storereach::pointer_pieces(fd, base, sb, 0)?;
     let [(off, Some(extra))] = pieces.as_slice() else {
         return None;
     };
@@ -486,7 +486,7 @@ fn observed(fd: &Funcdata, space: &Rc<AddrSpace>, start: intb, slot: intb, elem:
         if !frame_slot(vn).is_some_and(|(s, e)| s < end && slot < e) {
             return false;
         }
-        if super::kuna_storereach::is_read(fd, vn) {
+        if super::storereach::is_read(fd, vn) {
             return true;
         }
         let Some(def) = fd.vbank().get(vn).and_then(|v| v.get_def()) else {
@@ -515,8 +515,8 @@ fn observed(fd: &Funcdata, space: &Rc<AddrSpace>, start: intb, slot: intb, elem:
     })
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.arrayextent_settle = Some(settle);
 }
 

@@ -122,21 +122,21 @@ pub fn declared(
 #[doc(hidden)]
 pub fn apply(data: &mut Funcdata) -> KunaResult<()> {
     if data
-        .kuna_state::<crate::kuna_callmechanisms::State>()
+        .kuna_state::<crate::callmechanisms::State>()
         .register_slots
         || data.bblocks_get_size() == 0
         || data.get_func_proto().has_custom_storage()
     {
         return Ok(());
     }
-    let Some(model) = crate::kuna_callmechanisms::evaluation_model(data) else {
+    let Some(model) = crate::callmechanisms::evaluation_model(data) else {
         return Ok(());
     };
     let Some(input) = model.input_opt() else {
         return Ok(());
     };
     let candidates: Vec<_> = extensions(input.get_entry()).cloned().collect();
-    data.kuna_state_mut::<crate::kuna_callmechanisms::State>()
+    data.kuna_state_mut::<crate::callmechanisms::State>()
         .register_slots = true;
     if candidates.is_empty() {
         return Ok(());
@@ -210,7 +210,7 @@ pub fn apply_return(data: &mut Funcdata, index: i32) -> KunaResult<()> {
     }
     let model = model.clone();
     let mut filled = VarnodeData::default();
-    let (opcode, _) = crate::kuna_narrowext::or_model(
+    let (opcode, _) = crate::narrowext::or_model(
         data.get_arch().narrow_ext.output,
         model.output(),
         &addr,
@@ -335,8 +335,8 @@ pub fn guard_output(
     true
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.registerslots_assumed = Some(assumed);
     hooks.registerslots_decode = Some(decode);
     hooks.registerslots_guard_output = Some(guard_output);

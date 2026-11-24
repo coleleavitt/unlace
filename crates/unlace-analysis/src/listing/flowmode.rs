@@ -97,14 +97,14 @@ impl FlowMode {
     ) -> Option<FlowMode> {
         if !arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+            .get::<unlace_decomp::analysisgates::FlowMode>()
             .on
             || arch.input_arm_isa_override
             || file.format() != object::BinaryFormat::Elf
             || file.architecture() != object::Architecture::Arm
             || file.kind() == ObjectKind::Relocatable
             || painter.paints("TMode")
-            || crate::loader::kuna_armfloatabi::thumb_only(file)
+            || crate::loader::armfloatabi::thumb_only(file)
         {
             return None;
         }
@@ -135,7 +135,7 @@ impl FlowMode {
             words: usize::try_from(words).ok()?,
             after_call: arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::FlowMode>()
+                .get::<unlace_decomp::analysisgates::FlowMode>()
                 .after_call,
             seeds,
         })

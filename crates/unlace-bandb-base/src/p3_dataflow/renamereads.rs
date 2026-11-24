@@ -15,9 +15,9 @@
 //! deadline) gets upstream's placeholder when the pass finishes.
 
 use crate::context::{OpId, VarnodeId};
+use crate::fasthash::FxHashMap;
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::op_iop_encode;
-use crate::kuna_fasthash::FxHashMap;
 use crate::op::pcodeop_addlflags::kuna_rename_read;
 use unlace_base::address::Address;
 use unlace_base::types::{int4, uint4};
@@ -137,8 +137,8 @@ pub fn finish(fd: &mut Funcdata, pending: &mut Vec<(OpId, uint4)>) {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.renamereads_finish = Some(finish);
     hooks.renamereads_mark = Some(mark);
     hooks.renamereads_new_indirect = Some(new_indirect);

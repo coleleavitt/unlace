@@ -1,13 +1,13 @@
 //! Match primitive Go and Rust arguments to the emitted callee's integer type.
 
-use crate::kuna_protoorder::FuncdataProtoorderExt;
+use crate::protoorder::FuncdataProtoorderExt;
 use std::rc::Rc;
 
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_lang::OutLang;
+use crate::lang::OutLang;
 use crate::printc::{PrintC, op_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
 use unlace_base::space::spacetype;

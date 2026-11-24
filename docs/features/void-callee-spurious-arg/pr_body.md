@@ -34,7 +34,7 @@ to the same callee, they are only ever additive, and there is one call site.
 
 ## Mechanism — `option calleedeadarg on|off`, default on (DIV-112)
 
-New module `decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleedeadarg.rs`. The veto
+New module `decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg.rs`. The veto
 needs **two independent conditions**, and the pass is only as safe as their conjunction:
 
 1. **The callee's own body proves the register dead at its entry.** A bounded decode from
@@ -144,7 +144,7 @@ decoded instructions; both are re-pinned with that reason in the comment.
 * `tests/stages/kuna-calleedeadarg.toml` — hand-assembled AArch64 two-pass fixture
   (`caller` → `producer` → `target`): `option off` renders `target(producer())` (the bug),
   `option on` renders `producer(); target();`.
-* `decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleedeadarg/tests.rs` — option
+* `decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg/tests.rs` — option
   parsing, registration, and the incomplete-summary contract.
 * Prose in `docs/spec/04-calls-and-prototypes.md` (`ActionActiveParam` trial scoring),
   DIV-112 in `docs/history.md`, full record in

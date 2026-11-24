@@ -25,10 +25,10 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
 use crate::context::{ArchContext, OpId, VarnodeId};
+use crate::emittedop::Operation;
 use crate::funcdata::Funcdata;
 use crate::inject_sleigh::{PcodeInjectLibrarySleigh, SleighInjectEngine, SleighPayload};
 use crate::jumptable::{JumpModel, JumpTable, LoadTable, NO_LABEL};
-use crate::kuna_emittedop::Operation;
 use crate::pcodeinject::InjectContext;
 use crate::userop::UserOpManage;
 
@@ -487,8 +487,8 @@ pub fn recover(
     Ok(None)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.jumpassist_recover = Some(recover);
     hooks.jumpassist_load = Some(load);
 }
@@ -497,11 +497,7 @@ crate::kuna_arch_state!(JumpAssists);
 
 /// The compiled `<jumpassist>` scripts, when the option is on and the specs declare any.
 fn assists(glb: &ArchContext) -> Option<&JumpAssists> {
-    if !glb
-        .kuna_options
-        .get::<crate::kuna_coreoptions::JumpAssist>()
-        .0
-    {
+    if !glb.kuna_options.get::<crate::coreoptions::JumpAssist>().0 {
         return None;
     }
     glb.kuna_states.get::<JumpAssists>()

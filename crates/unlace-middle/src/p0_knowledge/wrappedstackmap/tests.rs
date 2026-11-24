@@ -1,5 +1,5 @@
 use super::*;
-use crate::p0_knowledge::kuna_wrappedstackmap::{is_wrapped_join, pieces};
+use crate::p0_knowledge::wrappedstackmap::{is_wrapped_join, pieces};
 use unlace_base::marshal::{Decoder, IdRegistry, XmlDecode, XmlEncode};
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, JoinSpace, SpacebaseSpace, UniqueSpace,
@@ -305,7 +305,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
     assert_eq!(wire, repeated);
     assert_eq!(fd.kuna_wrapped_wire_storage, carriers);
     let first_id = *carriers.keys().next().unwrap();
-    super::super::kuna_wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
+    super::super::wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
     let grown = fd.kuna_wrapped_wire_storage[&first_id].clone();
     assert_eq!(grown.1, 76);
     assert!(
@@ -313,7 +313,7 @@ fn wire_storage_keeps_same_size_join_identities_distinct() {
             .iter()
             .all(|addr| grown.0.get_offset() >= addr.get_offset() + 72)
     );
-    super::super::kuna_wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
+    super::super::wrappedstackmap::reserve_wire_storage(&mut fd, first_id, 76);
     assert_eq!(fd.kuna_wrapped_wire_storage[&first_id], grown);
     let next = fd.new_unique(4, None);
     let next_addr = fd.vbank().get(next).unwrap().get_addr();

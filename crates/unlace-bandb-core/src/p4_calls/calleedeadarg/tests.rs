@@ -213,7 +213,7 @@ fn a_target_takes_only_what_it_stated() {
         Address::new(Rc::clone(&reg), 0x38),
         Address::new(Rc::clone(&reg), 0x30),
     );
-    let stated = crate::kuna_protoorder::RecoveredTypes {
+    let stated = crate::protoorder::RecoveredTypes {
         inputs: vec![(rdi.clone(), 8, Rc::clone(&long)), (rsi.clone(), 8, long)],
         arity_sound: true,
         output: None,

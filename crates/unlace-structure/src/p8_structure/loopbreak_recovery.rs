@@ -242,7 +242,7 @@ impl OptionLoopBreakRecovery {
 #[derive(Clone, Debug, PartialEq)]
 pub struct RecoverLoopBreak(pub bool);
 
-impl crate::kuna_optionset::KunaOption for RecoverLoopBreak {
+impl crate::optionset::KunaOption for RecoverLoopBreak {
     const NAME: &'static str = "loopbreak_recovery";
     crate::kuna_option_id!();
 
@@ -255,7 +255,7 @@ impl crate::kuna_optionset::KunaOption for RecoverLoopBreak {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_loopbreak_recovery::OptionLoopBreakRecovery.apply(value)?;
+        let (v, msg) = crate::loopbreak_recovery::OptionLoopBreakRecovery.apply(value)?;
         Ok((RecoverLoopBreak(v), msg))
     }
 }

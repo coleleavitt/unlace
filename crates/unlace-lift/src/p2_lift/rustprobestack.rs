@@ -10,7 +10,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_x64syscall::overlaps;
+use crate::x64syscall::overlaps;
 
 const PROBE: [u8; 57] = [
     0x55, 0x48, 0x89, 0xe5, 0x49, 0x89, 0xc3, 0x49, 0x81, 0xfb, 0x00, 0x10, 0x00, 0x00, 0x76, 0x1c,
@@ -28,7 +28,7 @@ pub enum RustProbestackMode {
     Always,
 }
 
-impl crate::kuna_optionset::KunaOption for RustProbestackMode {
+impl crate::optionset::KunaOption for RustProbestackMode {
     const NAME: &'static str = "rustprobestack";
     crate::kuna_option_id!();
 
@@ -338,12 +338,12 @@ impl Action for ActionRustProbestack {
             RustProbestackMode::Auto if !data.get_arch().source_lang.is_rust() => return 0,
             _ => {}
         }
-        if data.is_settled(crate::kuna_maturity::Fact::Ssa)
+        if data.is_settled(crate::maturity::Fact::Ssa)
             || data.num_calls() == 0
             || data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::StackViews>()
+                .get::<crate::coreoptions::StackViews>()
                 .0
             || data
                 .get_arch()

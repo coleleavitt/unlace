@@ -43,7 +43,7 @@
 //! walk a LOAD reads nothing and a STORE may write all of the range, which is
 //! what each is until it folds. A return reads the range too (its persist
 //! COPY), so the call before it keeps its guard. A system call or Octeon
-//! operation that guards memory ([`crate::kuna_memoryguard::memory_ops`]) reads
+//! operation that guards memory ([`crate::memoryguard::memory_ops`]) reads
 //! and writes the range through its own INDIRECT, so it counts as a STORE.
 //!
 //! What is left is a value that crosses skipped calls only into a kept guard's
@@ -66,8 +66,8 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::fasthash::FxHashSet;
 use crate::funcdata::Funcdata;
-use crate::kuna_fasthash::FxHashSet;
 
 const USE: u8 = 0;
 const KILL: u8 = 1;
@@ -114,9 +114,7 @@ fn collect(memory: &mut MemoryOps, fd: &Funcdata, space: i32) {
             }
         }
     }
-    memory
-        .stores
-        .extend(crate::kuna_memoryguard::memory_ops(fd));
+    memory.stores.extend(crate::memoryguard::memory_ops(fd));
 }
 
 /// Does the range `addr` with properties `fl` take sparse call guards: it is
@@ -718,8 +716,8 @@ fn solve(
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.persistcalls_applies = Some(applies);
     hooks.persistcalls_crosses_skipped = Some(crosses_skipped);
     hooks.persistcalls_keep = Some(keep);

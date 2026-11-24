@@ -1,7 +1,7 @@
 use super::*;
 use crate::context::ArchContext;
 use crate::fspec::ParameterPieces;
-use crate::kuna_localstackviews::FuncdataLocalstackviewsExt;
+use crate::localstackviews::FuncdataLocalstackviewsExt;
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, SpacebaseSpace, UniqueSpace, addrspace_flags,
     spacetype,
@@ -50,7 +50,7 @@ fn frame_data_with_views(full_views: bool) -> (Funcdata, Rc<AddrSpace>) {
     let mut context = ArchContext::new(manage);
     context
         .kuna_options
-        .set(crate::kuna_coreoptions::StackViews(full_views));
+        .set(crate::coreoptions::StackViews(full_views));
     let mut fd = Funcdata::new(
         "early_views",
         "early_views",
@@ -543,7 +543,7 @@ fn unrepresented_frame_publication_refuses_the_whole_candidate() {
     fd.op_set_input(add, offset, 1).unwrap();
     let pointer = fd.new_unique_out(8, add).unwrap();
     fd.obank_mut().mark_alive(add);
-    assert!(crate::kuna_stackranges::frame_address(&fd, pointer).is_some());
+    assert!(crate::stackranges::frame_address(&fd, pointer).is_some());
     let op = store(&mut fd, 0x1001);
     let space = fd.new_constant(8, ram.get_index() as u64);
     fd.op_set_input(op, space, 0).unwrap();

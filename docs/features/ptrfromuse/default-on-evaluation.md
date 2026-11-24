@@ -206,7 +206,7 @@ parameter is a pointer too, the two votes agree in class, the more specific
 integer as an array of bytes, so a constant stored through it is split into one
 store per byte.
 
-That refusal shipped in #669 (`kuna_protoorder.rs` `pointee_refuses`: a vote
+That refusal shipped in #669 (`protoorder.rs` `pointee_refuses`: a vote
 whose pointee is a non-character integer, `bool` or pointer is refused when the
 caller stores a constant wider than it through the pointer), so it is on main
 and not in this branch. The sweep above is the tree with it, and the split is

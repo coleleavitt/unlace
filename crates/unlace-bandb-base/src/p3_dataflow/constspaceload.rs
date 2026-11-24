@@ -212,5 +212,5 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 #[cfg(test)]
-#[path = "kuna_constspaceload/tests.rs"]
+#[path = "constspaceload/tests.rs"]
 mod tests;

@@ -83,7 +83,7 @@ Castbench per function (kuna off -> on, IDA): fillbuf 22 -> 19 (28), free_ent
 field kuna reads by the word: `*(int8 *)(a0->field_0x18 + 0x140)` becomes
 `a0->field_0x18[0x28]`, the same address.
 
-## 2. The rule (`p5_types/kuna_fieldtype.rs`)
+## 2. The rule (`p5_types/fieldtype.rs`)
 
 - structsynth keeps every access of a field's widest width with its value
   (`Evidence::record_access`).
@@ -143,7 +143,7 @@ Variants measured and not taken:
   `fillbuf`'s `char *` buffer became memmove's `void *` and gained casts; the
   first access now wins when its pointee outranks the proof.
 
-## 3. The convergence sweep fix (`p4_calls/kuna_calleevote.rs`)
+## 3. The convergence sweep fix (`p4_calls/calleevote.rs`)
 
 Measuring the option exposed a pre-existing defect: the batch's convergence
 sweep forgot a callee's whole caller statement when one input named a

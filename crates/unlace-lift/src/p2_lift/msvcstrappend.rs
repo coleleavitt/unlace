@@ -1647,7 +1647,7 @@ impl Action for ActionMsvcStrAppend {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_msvcstrappend::MsvcStrAppend>()
+            .get::<crate::msvcstrappend::MsvcStrAppend>()
             .0
             || data.num_calls() == 0
         {
@@ -1687,7 +1687,7 @@ crate::kuna_flag!(
     /// (kuna `msvcstrappend`) Collapse each inlined MSVC x64 `std::string`
     /// `push_back` / literal `append` capacity diamond into one call on a locked
     /// `std::string::push_back` / `std::string::append` prototype (`option
-    /// msvcstrappend`).  See [`crate::p2_lift::kuna_msvcstrappend`].
+    /// msvcstrappend`).  See [`crate::p2_lift::msvcstrappend`].
     MsvcStrAppend,
     "msvcstrappend",
     "MSVC std::string inlined append collapsing",
@@ -1696,5 +1696,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_msvcstrappend/tests.rs"]
+#[path = "msvcstrappend/tests.rs"]
 mod tests;

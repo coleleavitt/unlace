@@ -27,7 +27,7 @@ ablation reads `--option castternary off` with `castimplied` unchanged. It reuse
 `def_type`, `explicit_type`) and for value preservation (`preserves`), and works
 whether or not `castimplied` is on.
 
-## The decision (kuna_castternary.rs)
+## The decision (castternary.rs)
 
 1. The conditional must be assigned to a variable the printer declared with an
    integer type (`explicit_type` of `dest` is `Known` and an integer).
@@ -50,7 +50,7 @@ whether or not `castimplied` is on.
 
 ## Tests
 
-- `kuna_castternary/tests.rs`: the conversions (`usual`, `common`), the pair
+- `castternary/tests.rs`: the conversions (`usual`, `common`), the pair
   choice (`choose`), and literal typing (`literal_type`), including ILP32/LLP64.
 - `tests/stages/kuna-castternary.toml`: two passes over a base64 quantum and five
   small functions (`option iteexpr on` in both passes).

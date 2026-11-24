@@ -367,7 +367,7 @@ fn imports(bytes: &[u8]) -> Vec<(u64, String)> {
 /// are untouched.
 #[test]
 fn auxiliary_collection_resolves_into_the_boot_collection_beside_it() {
-    use unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot;
+    use unlace_decomp::kernelcacheboot::KernelcacheBoot;
     let dir = linked_dir(
         "beside",
         &["AuxiliaryKernelExtensions.kc", "BootKernelExtensions.kc"],
@@ -435,7 +435,7 @@ fn auxiliary_collection_resolves_into_the_boot_collection_beside_it() {
 /// nothing is named, and the note counts them and says why.
 #[test]
 fn auxiliary_collection_without_its_boot_collection_stays_unresolved() {
-    use unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot;
+    use unlace_decomp::kernelcacheboot::KernelcacheBoot;
     let raw = fixture("linked/AuxiliaryKernelExtensions.kc");
     let dir = linked_dir("alone", &["AuxiliaryKernelExtensions.kc"]);
     let input = dir.join("AuxiliaryKernelExtensions.kc");
@@ -487,7 +487,7 @@ fn auxiliary_collection_without_its_boot_collection_stays_unresolved() {
 /// a device named by path is not read.
 #[test]
 fn a_linked_collection_is_a_regular_file_other_than_the_input() {
-    use unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot;
+    use unlace_decomp::kernelcacheboot::KernelcacheBoot;
     let dir = linked_dir("self", &[]);
     let input = dir.join("AuxiliaryKernelExtensions.kc");
     let mut aux = fixture("linked/AuxiliaryKernelExtensions.kc");
@@ -658,7 +658,7 @@ fn branch_stub_segments_load_with_the_entry() {
 /// kext. The cut-out image alone has no signing context left.
 #[test]
 fn fileset_signed_slots_resolve_kernel_virtual_calls() {
-    use crate::rtti::kuna_arm64evcall::{VcallSite, resolve, resolve_signed};
+    use crate::rtti::arm64evcall::{VcallSite, resolve, resolve_signed};
     let base = 0xffff_fff0_0700_4000u64;
     let kernel = peel(fixture("fileset_vcall.macho"), &KernelcacheChoice::Auto).unwrap();
     let signed = kernel.signed.expect("signed slots");

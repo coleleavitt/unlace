@@ -155,7 +155,7 @@ pub fn specs() -> Vec<RuleSpec> {
 
 // ---------------------------------------------------------------------------
 // Local IR read helpers (the C++ `vn->isConstant()` / `op->getIn(i)` cascade).
-// These mirror the established `kuna_v850indbranch.rs` access pattern through the
+// These mirror the established `v850indbranch.rs` access pattern through the
 // op/varnode banks.
 // ---------------------------------------------------------------------------
 
@@ -206,5 +206,5 @@ fn vn_nzmask(data: &Funcdata, vn: VarnodeId) -> uintb {
 }
 
 #[cfg(test)]
-#[path = "kuna_booleanmask/tests.rs"]
+#[path = "booleanmask/tests.rs"]
 mod tests;

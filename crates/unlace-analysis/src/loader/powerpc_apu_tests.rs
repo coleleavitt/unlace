@@ -1,4 +1,4 @@
-use super::kuna_ppcaputarget::{language_id_when, notes_when};
+use super::ppcaputarget::{language_id_when, notes_when};
 use crate::loadimage_object::ObjectLoadImage;
 use object::{Architecture, BinaryFormat, Endianness, FileFlags, SectionKind, write::Object};
 use unlace_sleigh::loadimage::LoadImage;

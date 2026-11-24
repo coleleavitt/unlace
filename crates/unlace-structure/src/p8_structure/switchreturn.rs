@@ -1,5 +1,5 @@
 //! S8 **switch const-case return hoisting** — the direct continuation of
-//! [`ActionEarlyReturn`](crate::kuna_earlyreturn), extended from the narrow
+//! [`ActionEarlyReturn`](crate::earlyreturn), extended from the narrow
 //! if/else-if diamond to the **multi-way switch** const-phi return (angr's SAILR
 //! `ReturnDuplicatorHigh`, per-edge const narrowing; Basque et al., USENIX Security 2024).
 //!
@@ -25,7 +25,7 @@
 //!
 //! # Why the shipped `earlyreturn` cannot reach it
 //!
-//! [`ActionEarlyReturn`](crate::kuna_earlyreturn) already runs the exact same
+//! [`ActionEarlyReturn`](crate::earlyreturn) already runs the exact same
 //! per-edge const-peel machinery ([`Funcdata::earlyreturn_const_edges`] +
 //! [`Funcdata::node_split`]) and DOES recover per-case returns for a switch whose merge block
 //! has ≤ `MAX_EARLYRETURN_INEDGES` (16) predecessors (e.g. findutils `get_fts_info_name`, a
@@ -114,7 +114,7 @@ impl Action for ActionSwitchReturn {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_switchreturn::SwitchReturn>()
+            .get::<crate::switchreturn::SwitchReturn>()
             .0
         {
             return 0;
@@ -163,7 +163,7 @@ impl OptionSwitchReturn {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwitchReturn(pub bool);
 
-impl crate::kuna_optionset::KunaOption for SwitchReturn {
+impl crate::optionset::KunaOption for SwitchReturn {
     const NAME: &'static str = "switchreturn";
     crate::kuna_option_id!();
 
@@ -176,7 +176,7 @@ impl crate::kuna_optionset::KunaOption for SwitchReturn {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_switchreturn::OptionSwitchReturn.apply(value)?;
+        let (v, msg) = crate::switchreturn::OptionSwitchReturn.apply(value)?;
         Ok((SwitchReturn(v), msg))
     }
 }

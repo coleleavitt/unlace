@@ -56,7 +56,7 @@ impl Mode {
     }
 
     pub fn from_env() -> Self {
-        crate::kuna_loadoptions::env::ppc32picimports()
+        crate::loadoptions::env::ppc32picimports()
     }
 
     /// The mode a new `Architecture` starts in.
@@ -76,8 +76,8 @@ impl Mode {
 
 /// Whether the load in progress asks for `abi`.
 pub fn abi_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.ppc32picimports)
-        .unwrap_or_else(crate::kuna_loadoptions::env::ppc32picimports)
+    crate::loadoptions::scoped(|o| o.ppc32picimports)
+        .unwrap_or_else(crate::loadoptions::env::ppc32picimports)
         == Mode::Abi
 }
 

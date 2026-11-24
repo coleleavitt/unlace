@@ -78,22 +78,22 @@ impl DeclaredSlots {
         let print = arch.print();
         let through = print.declared_through();
         let mut slots: HashMap<(i64, i64), Vec<Declared>> = HashMap::new();
-        for local in crate::kuna_reglocals::declarations_of(print, fd) {
-            if !crate::kuna_reglocals::declares_high_of(fd, local) {
+        for local in crate::reglocals::declarations_of(print, fd) {
+            if !crate::reglocals::declares_high_of(fd, local) {
                 continue;
             }
             let Some(ty) = &local.ty else { continue };
             let size = i64::from(ty.get_size());
             let mut homes: Vec<i64> = std::iter::once(local.high)
                 .chain(through.get(&local.high).into_iter().flatten().copied())
-                .flat_map(|high| crate::kuna_varsources::high_stack_homes(fd, high))
+                .flat_map(|high| crate::varsources::high_stack_homes(fd, high))
                 .filter(|&(_, s)| i64::from(s) == size)
                 .map(|(o, _)| o)
                 .collect();
             homes.sort_unstable();
             homes.dedup();
             let type_name =
-                (!byte_scalar(ty)).then(|| crate::kuna_bytehonest::exported_type_name(arch, ty));
+                (!byte_scalar(ty)).then(|| crate::bytehonest::exported_type_name(arch, ty));
             let pointer_or_float = {
                 use crate::dtype::type_metatype::{TYPE_FLOAT, TYPE_PTR, TYPE_PTRREL};
                 matches!(ty.get_metatype(), TYPE_PTR | TYPE_PTRREL | TYPE_FLOAT)

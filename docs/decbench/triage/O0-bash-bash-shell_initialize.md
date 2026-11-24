@@ -145,7 +145,7 @@ void t(void) // ternary x2
 ```
 
 Both passes share `match_*`'s preconditions and the leaf helpers in
-`p8_structure/kuna_iteregion.rs` (`leaf_bblock`, `printed_ops`, `same_storage`), so
+`p8_structure/iteregion.rs` (`leaf_bblock`, `printed_ops`, `same_storage`), so
 the failing predicate is in the shared half, not in `iteboolean`'s `BlockCondition`
 requirement. It is also independent of the structurer: `--option regionstructure off`
 alternates too (it just alternates on a different phase).
@@ -167,7 +167,7 @@ So: **an immediately preceding structured `if` statement suppresses the rewrite 
 the very next diamond.** A chain of diamonds is exactly that situation repeated,
 which produces the parity.
 
-That is the signature of `leaf_bblock` (`kuna_iteregion.rs:232`) declining a
+That is the signature of `leaf_bblock` (`iteregion.rs:232`) declining a
 multi-component list:
 
 ```rust
@@ -229,14 +229,14 @@ one third -O0 and -O0 materializes booleans everywhere).
 ## Proposed fix
 
 **Slug `itecondlist`, P8, one module** —
-`decompiler/crates/unlace-decomp/src/p8_structure/kuna_iteregion.rs`.
+`decompiler/crates/unlace-decomp/src/p8_structure/iteregion.rs`.
 
 Mechanism: in the **condition position only**, let the matcher descend a
 multi-component `Ls`/`Graph` to its **last** component and take that as the condition
 leaf. Concretely, add a `cond_leaf_bblock` next to `leaf_bblock` that on
 `BlockType::Ls | BlockType::Graph` recurses into `get_block(size-1)` instead of
-bailing, and call it from `cond_cbranch` (`kuna_iteregion.rs:260`) and
-`cond_terminal_cbranch` (`kuna_iteboolean.rs:265`). The **arms** keep the strict
+bailing, and call it from `cond_cbranch` (`iteregion.rs:260`) and
+`cond_terminal_cbranch` (`iteboolean.rs:265`). The **arms** keep the strict
 `leaf_bblock` (an arm must remain a single statement — that is what makes the
 rewrite sound). `iteboolean`'s `BlockType::Condition` requirement then applies to
 that same tail node.

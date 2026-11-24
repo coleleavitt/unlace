@@ -7,7 +7,7 @@
 //! target/release/unlace catalog --markdown > docs/options.md
 //! ```
 
-use unlace_decomp::kuna_phases::emit_catalog_markdown;
+use unlace_decomp::phases::emit_catalog_markdown;
 
 const COMMITTED: &str = include_str!("../../../docs/options.md");
 

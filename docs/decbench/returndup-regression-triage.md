@@ -303,7 +303,7 @@ tested (uniform / void / distinct-returns), which is +1,067 at O0 and -395 at th
 optimized levels, i.e. an opt-level trade dressed as a discriminator.
 
 **The gate was built and shipped** as `option orchain` (DIV-69), as a **pre-split CFG
-predicate** rather than the post-hoc signal above -- `p8_structure/kuna_orchain.rs
+predicate** rather than the post-hoc signal above -- `p8_structure/orchain.rs
 (shortcircuit_shared_targets)` replays `collapse_conditions` read-only on the bblocks CFG
 and mirrors `ruleBlockOr`'s own admission test. Measured on the same corpus:
 

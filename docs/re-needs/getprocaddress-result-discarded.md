@@ -210,7 +210,7 @@ WHAT IT CONTAINS -- a coherent mechanism, plumbed end to end (98 insertions, 6 f
   `reset_defaults` + the `apply` arm), `substrate/context.rs` (the `ArchContext` field **and** the
   ArchSeam copy -- the seam that silently drops per-function flags if you forget it),
   `p0_knowledge/options.rs` (`KUNA_OPTION_NAMES`);
-- `p3_dataflow/kuna_tiedstorekeep.rs`, a `declines()` predicate plus a written-out diagnosis:
+- `p3_dataflow/tiedstorekeep.rs`, a `declines()` predicate plus a written-out diagnosis:
   `RulePropagateCopy` rewrites the readers of an address-tied `COPY` output to read the register
   directly; when the LAST remaining reader is a *marker* (`INDIRECT`/`MULTIEQUAL`, which never
   print), the `COPY` loses every descendant and dies to dead-code elimination, so the

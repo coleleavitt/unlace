@@ -65,7 +65,7 @@ parameters as a matter of course.
 ## The mechanism
 
 New option **`inputparamgap`** (`on|off`, default **on**, DIV-114,
-`decompiler/crates/kuna-decomp/src/p4_calls/kuna_inputparamgap.rs`): during the function's own
+`decompiler/crates/kuna-decomp/src/p4_calls/inputparamgap.rs`): during the function's own
 input recovery, an **ACTIVE trial whose `ParamEntry` is an exclusion (register) entry is never
 demoted by `forceInactiveChain`**. The active trials past the hole survive and the rule's
 existing tail loop promotes the filler trials `buildTrialMap` had already built:

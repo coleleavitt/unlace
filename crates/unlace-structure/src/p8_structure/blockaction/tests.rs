@@ -1095,23 +1095,23 @@ fn build_nested_condition(
 }
 
 /// A `CondFoldSets` admitting `bb` under **Rule A** (bounded prefix) only.
-fn prefix_only(bb: BlockId) -> crate::kuna_condfold::CondFoldSets {
-    let mut s = crate::kuna_condfold::CondFoldSets::default();
+fn prefix_only(bb: BlockId) -> crate::condfold::CondFoldSets {
+    let mut s = crate::condfold::CondFoldSets::default();
     s.prefix.insert(bb);
     s
 }
 
 /// A `CondFoldSets` admitting each `(bb, scored_statements)` under **Rule B**
 /// (statement shape) only.
-fn shape_only(entries: &[(BlockId, int4)]) -> crate::kuna_condfold::CondFoldSets {
-    let mut s = crate::kuna_condfold::CondFoldSets::default();
+fn shape_only(entries: &[(BlockId, int4)]) -> crate::condfold::CondFoldSets {
+    let mut s = crate::condfold::CondFoldSets::default();
     for &(bb, n) in entries {
         // `printed` is not consulted at the fold site (the printed-width budget is
         // enforced when `condfold_sets` is built, per block); mirror `scored` so the
         // fixture stays self-consistent.
         s.shape.insert(
             bb,
-            crate::kuna_condfold::ShapeVerdict {
+            crate::condfold::ShapeVerdict {
                 scored: n,
                 printed: n,
             },
@@ -1259,7 +1259,7 @@ fn condfold_rule_b_enforces_the_total_statement_cap() {
     // The S4 expression-size cap: two leaves each scored at the per-block maximum
     // exceed MAX_JOIN_TOTAL_STMTS once `bl`'s own charge is added, so the fold is
     // declined even though every leaf is individually admissible.
-    use crate::kuna_condfold::{MAX_JOIN_TOTAL_STMTS, MAX_SHAPE_STMTS};
+    use crate::condfold::{MAX_JOIN_TOTAL_STMTS, MAX_SHAPE_STMTS};
     let (mut g, root, bl, _orblock, bb_bl, bb_or) = build_block_or_shape();
     let bb_x = g.new_block_basic(root);
     let nested = build_nested_condition(&mut g, root, bb_x, bb_or);

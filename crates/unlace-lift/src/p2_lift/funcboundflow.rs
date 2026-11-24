@@ -37,7 +37,7 @@
 //! the fall-through edge — is driven by `flow.rs` at the fall-through-push site
 //! of `process_instruction`, mirroring the `check_for_flow_modification`
 //! no-return-halt idiom.  This is the same hook class as
-//! [`kuna_tailcalljump`](crate::kuna_tailcalljump) (a `FlowEnvironment`
+//! [`kuna_tailcalljump`](crate::tailcalljump) (a `FlowEnvironment`
 //! predicate consulted inside the flow walk, gated by an `Architecture` bool
 //! flag).
 //!
@@ -176,5 +176,5 @@ pub fn kuna_should_bound_at_pool(pad: Option<u64>, pad_is_padding: bool) -> bool
 }
 
 #[cfg(test)]
-#[path = "kuna_funcboundflow/tests.rs"]
+#[path = "funcboundflow/tests.rs"]
 mod tests;

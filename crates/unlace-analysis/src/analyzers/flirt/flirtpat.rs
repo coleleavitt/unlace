@@ -9,7 +9,7 @@
 //! [`MIN_FIXED`] fixed bytes in the leading [`PATTERN_LEN`] yield no pattern.
 //!
 //! [`write_pat`] renders the patterns as `.pat` text; the `.sig` tree is
-//! [`super::kuna_flirtsig`].
+//! [`super::flirtsig`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;

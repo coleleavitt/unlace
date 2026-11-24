@@ -6,12 +6,12 @@
 //! action chain (cleanup, `catch (T)` named from the `typeinfo` symbol or its
 //! name string, `catch (...)`, exception specification). The selector
 //! value of a clause is its action filter, which is what the pad compares the
-//! selector register against. Flow consumes the table (`p2_lift/kuna_itaniumeh.rs`).
+//! selector register against. Flow consumes the table (`p2_lift/itaniumeh.rs`).
 
 use std::collections::HashMap;
 
 use object::{Object, ObjectSection, ObjectSymbol, ObjectSymbolTable, SectionKind};
-use unlace_decomp::kuna_itaniumeh::{EhCallSite, EhClause};
+use unlace_decomp::itaniumeh::{EhCallSite, EhClause};
 
 use super::{DW_EH_PE_OMIT, Lsda, decode_lsda, encoded_size, for_each_fde_lsda, read_sleb128};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
@@ -49,7 +49,7 @@ pub fn collect_call_sites(file: &object::File) -> Vec<EhCallSite> {
         lsdas.push((pc_begin, lsda))
     });
     lsdas.extend(
-        super::kuna_armexidx::scan(file)
+        super::armexidx::scan(file)
             .into_iter()
             .filter_map(|e| Some((e.start, e.lsda?))),
     );

@@ -14,7 +14,7 @@ fn assert_pic_proof_runs() {
             let bytes = fixture.bytes();
             let file = object::File::parse(bytes.as_slice()).unwrap();
             assert!(unlace_analysis::loader::format::resolve_imports(&file, &bytes).is_empty());
-            let enabled = unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(&file);
+            let enabled = unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(&file);
             assert_eq!(
                 enabled.len(),
                 1,
@@ -31,7 +31,7 @@ fn resolve_imports_in_both_modes(
     bytes: &[u8],
 ) -> Vec<unlace_analysis::loader::format::ImportSym> {
     let mut imports = unlace_analysis::loader::format::resolve_imports(file, bytes);
-    imports.extend(unlace_analysis::loader::kuna_ppc32_imports::resolve_with_pic_abi(file));
+    imports.extend(unlace_analysis::loader::ppc32_imports::resolve_with_pic_abi(file));
     imports
 }
 
@@ -435,7 +435,7 @@ fn ppc32_got_metadata_does_not_establish_r30() {
 /// bounds correction that needs it, not to this option.
 #[test]
 fn ppc32_pic_recovery_leaves_default_fde_filtering_alone() {
-    use unlace_analysis::analyzers::entry::kuna_fdeinterior::eligible_fde_bodies;
+    use unlace_analysis::analyzers::entry::fdeinterior::eligible_fde_bodies;
     let mut f = Fixture::new(Plt::Short);
     f.little = true;
     f.unwind_only = true;

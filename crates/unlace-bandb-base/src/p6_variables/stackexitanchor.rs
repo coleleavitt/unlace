@@ -35,7 +35,7 @@ pub fn record(data: &mut Funcdata, sb_addr: &Address) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_stackexitanchor::StackExitAnchor>()
+        .get::<crate::stackexitanchor::StackExitAnchor>()
         .0
     {
         return;

@@ -212,7 +212,7 @@ fn a_provably_dead_trailing_parameter_is_trimmed() {
             .map(|b| (reg.get_index(), b))
             .collect::<Vec<_>>(),
     ];
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
+    let facts = crate::calleedeadarg::CalleeEntryDead::from_parts(
         reg.get_index(),
         // The first two parameters' registers are read before they are written.
         vec![(reg.get_index(), 0x38, 8), (reg.get_index(), 0x30, 8)],
@@ -248,7 +248,7 @@ fn a_trailing_parameter_the_body_never_reads_is_trimmed() {
             .map(|b| (reg.get_index(), b))
             .collect::<Vec<_>>(),
     ];
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
+    let facts = crate::calleedeadarg::CalleeEntryDead::from_parts(
         reg.get_index(),
         vec![(reg.get_index(), 0x38, 8)],
         cuts,
@@ -280,7 +280,7 @@ fn a_stack_tail_parameter_is_trimmed() {
         int8(),
     );
     let (mut pieces, mut storage) = recovered_pieces(&fp, "sub_7300").expect("accepted");
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
+    let facts = crate::calleedeadarg::CalleeEntryDead::from_parts(
         reg.get_index(),
         vec![(reg.get_index(), 0x38, 8)],
         vec![Vec::new()],
@@ -306,7 +306,7 @@ fn an_interior_dead_parameter_is_left_alone() {
             .map(|b| (reg.get_index(), b))
             .collect::<Vec<_>>(),
     ];
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
+    let facts = crate::calleedeadarg::CalleeEntryDead::from_parts(
         reg.get_index(),
         vec![(reg.get_index(), 0x30, 8)],
         cuts,
@@ -328,12 +328,8 @@ fn an_incomplete_walk_trims_nothing() {
             .map(|b| (reg.get_index(), b))
             .collect::<Vec<_>>(),
     ];
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
-        reg.get_index(),
-        Vec::new(),
-        cuts,
-        false,
-    );
+    let facts =
+        crate::calleedeadarg::CalleeEntryDead::from_parts(reg.get_index(), Vec::new(), cuts, false);
     assert_eq!(trim_unjustified_tail(&mut pieces, &mut storage, &facts), 0);
     assert_eq!(pieces.intypes.len(), 1);
 }
@@ -344,7 +340,7 @@ fn an_incomplete_walk_trims_nothing() {
 #[test]
 fn a_read_of_the_next_argument_register_is_under_recovery() {
     let reg = reg_space();
-    let facts = crate::kuna_calleedeadarg::CalleeEntryDead::from_parts(
+    let facts = crate::calleedeadarg::CalleeEntryDead::from_parts(
         reg.get_index(),
         vec![(reg.get_index(), 0x30, 8)],
         vec![Vec::new()],

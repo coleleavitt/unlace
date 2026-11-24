@@ -10,7 +10,7 @@ mod module_scope {
         Datatype, TypeFactory, metatype2typeclass, type_class, type_metatype,
     };
     pub(super) use crate::funcdata::Funcdata;
-    pub(super) use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
+    pub(super) use crate::restartlog::{KunaRestartReason, RestartLog};
     pub(super) use unlace_base::address::{Address, RangeList};
     pub(super) use unlace_base::error::{KunaError, KunaResult};
     pub(super) use unlace_base::space::{
@@ -23,8 +23,8 @@ mod module_scope {
 use crate::dtype::{Datatype, TypeFactory, type_class, type_metatype};
 use crate::fspec::*;
 use crate::funcdata::Funcdata;
-use crate::kuna_restartlog::RestartLog;
 use crate::op::pcodeop_flags;
+use crate::restartlog::RestartLog;
 use crate::varnode::DefOpInfo;
 use module_scope::*;
 use unlace_base::address::Address;

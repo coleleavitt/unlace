@@ -104,7 +104,7 @@ pub fn readable(ct: &Datatype, size: int4) -> bool {
         )
 }
 
-pub(crate) use crate::kuna_ptrfromuse::carries_float;
+pub(crate) use crate::ptrfromuse::carries_float;
 
 impl Piece {
     /// Plan the access of `size` bytes at `off` inside `container`, the type the
@@ -162,7 +162,7 @@ impl Piece {
         let pointee = match pointee {
             Pointee::Typed(ptr) if volatile => {
                 let target = types
-                    .get_qualified_type(ptr.get_ptr_to()?, crate::kuna_typequal::VOLATILE)
+                    .get_qualified_type(ptr.get_ptr_to()?, crate::typequal::VOLATILE)
                     .ok()?;
                 Pointee::Typed(types.get_type_pointer(ptr_size, target, 1).ok()?)
             }

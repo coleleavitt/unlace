@@ -12,9 +12,7 @@ use unlace_base::space::AddrSpace;
 use unlace_decomp::architecture::Architecture;
 use unlace_sleigh::translate::Translate;
 
-use super::{
-    GapDecoder, MAX_FOLLOW_INSNS, kuna_aifbracket::BracketEvidence, kuna_framecache::ArmFrames,
-};
+use super::{GapDecoder, MAX_FOLLOW_INSNS, aifbracket::BracketEvidence, framecache::ArmFrames};
 use crate::listing::{FlowKind, Listing, RefKind};
 
 /// The frameless inventory: the walk after the Thumb prologue scan (`walked`)
@@ -36,7 +34,7 @@ pub(crate) fn prior_inventory(
     translate: &dyn Translate,
     code_space: &Rc<AddrSpace>,
     bracket: Option<&BracketEvidence>,
-    memo: &Rc<crate::listing::kuna_decodememo::DecodeMemo>,
+    memo: &Rc<crate::listing::decodememo::DecodeMemo>,
 ) -> Prior {
     let _scope = translate.context_scope();
     let mut thumb = seeds.to_vec();
@@ -55,15 +53,15 @@ pub(crate) fn prior_inventory(
     let mut entries = walked.clone();
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_aif::AifMode>()
+        .get::<unlace_decomp::aif::AifMode>()
         .enabled()
     {
         let pointers = if arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+            .get::<unlace_decomp::analysisgates::Ptrentry>()
             .0
         {
-            super::kuna_ptrentry::pointer_entry_seeds(
+            super::ptrentry::pointer_entry_seeds(
                 file,
                 base,
                 translate,
@@ -73,7 +71,7 @@ pub(crate) fn prior_inventory(
         } else {
             Vec::new()
         };
-        let checked = super::kuna_entrychecks::run(
+        let checked = super::entrychecks::run(
             base,
             None,
             arch,

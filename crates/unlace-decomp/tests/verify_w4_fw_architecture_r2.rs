@@ -98,7 +98,7 @@ fn name_function_oracle(addr_size: u32, wordsize: u32, offset: u64) -> String {
 fn name_via_port(space: Rc<AddrSpace>, offset: u64) -> String {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::NameStyleAngr(false));
+        .set(unlace_decomp::coreoptions::NameStyleAngr(false));
     arch.name_function(&Address::new(space, offset))
 }
 

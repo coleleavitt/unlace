@@ -13,8 +13,8 @@
 
 use crate::block::{BlockKind, BlockType};
 use crate::context::{BlockId, OpId};
+use crate::ctree::{CMaturity, CTree, ExprKind, StmtId, StmtKind};
 use crate::funcdata::Funcdata;
-use crate::kuna_ctree::{CMaturity, CTree, ExprKind, StmtId, StmtKind};
 
 /// More ops than this in one leaf are not split (the walk is bounded on hostile input).
 const MAX_LEAF_OPS: usize = 1 << 20;

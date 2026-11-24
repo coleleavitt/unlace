@@ -16,7 +16,7 @@
 //! stays a callable slot, as before.
 
 use object::read::Object;
-use unlace_decomp::kuna_symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
+use unlace_decomp::symbolnamechars::{sanitize_symbol_name_bytes, symbolnamechars_mode};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
@@ -51,7 +51,7 @@ pub(crate) fn is_data_import(raw: &[u8]) -> bool {
             return data;
         }
         let data = if swift {
-            crate::demangle::kuna_swift::is_data_symbol(name).unwrap_or(false)
+            crate::demangle::swift::is_data_symbol(name).unwrap_or(false)
         } else {
             itanium_is_data(name)
         };

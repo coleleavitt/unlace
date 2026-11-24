@@ -20,7 +20,7 @@
 //! pinning a fragile exact tree shape.
 
 use unlace_decomp::context::BlockId;
-use unlace_decomp::kuna_regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
+use unlace_decomp::regionid::{KunaGraphRegion, KunaRegionIdentifier, KunaRegionVisitor};
 
 /// Visitor that records the leaf-block addresses (in walk order) and, for every
 /// cyclic region, its body block addresses (sorted).  Mirrors the in-module

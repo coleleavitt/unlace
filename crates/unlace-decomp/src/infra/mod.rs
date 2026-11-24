@@ -9,7 +9,7 @@ mod bandb_tests;
 pub mod callgraph;
 pub mod decompile_drive;
 pub mod graph;
-pub mod kuna_hooks;
+pub mod hooks;
 pub mod libdecomp;
 #[cfg(test)]
 mod lift_tests;

@@ -7,7 +7,7 @@
 //!
 //! ```text
 //! 0x00000000  linear memory 0, its minimum size, data segments placed in it
-//! 0x80000000  code: every body in register form (`loader::kuna_wasmlower`)
+//! 0x80000000  code: every body in register form (`loader::wasmlower`)
 //! 0xd0000000  globals, 16 bytes apart, holding their initial values
 //! 0xe0100000  tables, as 4-byte code addresses filled from element segments
 //! 0xf0000000  imported functions, 16 bytes apart, with no bytes behind them
@@ -33,7 +33,7 @@ use unlace_decomp::fspec::PrototypePieces;
 use unlace_sleigh::loadimage::{LoadImage, LoadImageFunc, LoadImageSection, section_flags};
 
 use crate::loader::format::wasm::{ConstExpr, ExportKind, FuncType, ImportKind, Module, ValType};
-use crate::loader::kuna_wasmlower::{Fix, Lowered, Lowering};
+use crate::loader::wasmlower::{Fix, Lowered, Lowering};
 use crate::loadimage_object::ObjectSectionMetadata;
 use crate::pass::TypedDataFact;
 

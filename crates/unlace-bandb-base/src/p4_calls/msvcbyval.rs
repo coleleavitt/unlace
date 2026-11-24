@@ -85,7 +85,7 @@ pub enum Builder {
 /// MSVC-declared builders by entry `(space index, offset)`.
 pub type Builders = BTreeMap<(int4, uintb), Builder>;
 
-pub use crate::kuna_funcslots::ByvalSite;
+pub use crate::funcslots::ByvalSite;
 
 /// Most argument bytes a single cleanup is read as, as for `calleepop`.
 const MAX_ARG_BYTES: int4 = 256;
@@ -725,8 +725,8 @@ pub fn keeps_slot_mapped(data: &Funcdata, op: OpId, param: int4) -> bool {
         .any(|s| s.call == op && s.param as int4 == param && s.mapped)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.msvcbyval_constructed_ranges = Some(constructed_ranges);
     hooks.msvcbyval_constructs = Some(constructs);
 }
@@ -735,12 +735,12 @@ crate::kuna_arch_state!(ByvalDecls);
 crate::kuna_arch_state!(Builders);
 
 /// The image's MSVC by-value declarations, shared through the architecture's states.
-pub fn byval_decls(states: &crate::kuna_archstate::ArchStates) -> std::rc::Rc<ByvalDecls> {
+pub fn byval_decls(states: &crate::archstate::ArchStates) -> std::rc::Rc<ByvalDecls> {
     states.get_rc::<ByvalDecls>().unwrap_or_default()
 }
 
 /// The image's MSVC-declared builders, shared through the architecture's states.
-pub fn builders(states: &crate::kuna_archstate::ArchStates) -> std::rc::Rc<Builders> {
+pub fn builders(states: &crate::archstate::ArchStates) -> std::rc::Rc<Builders> {
     states.get_rc::<Builders>().unwrap_or_default()
 }
 

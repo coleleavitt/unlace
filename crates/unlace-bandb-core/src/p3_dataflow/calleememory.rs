@@ -452,7 +452,7 @@ fn memory(
                     .spills
                     .iter()
                     .filter_map(|(&(at, width), &value)| {
-                        if width == stack.size && crate::kuna_calleehomes::is_home_slot(at, width) {
+                        if width == stack.size && crate::calleehomes::is_home_slot(at, width) {
                             if let Value::Pointer(root, _) = value {
                                 return Some(DeferredFrameEscape {
                                     offset: at,
@@ -469,7 +469,7 @@ fn memory(
                 } else {
                     state.spills.retain(|&(at, width), &mut value| {
                         width == stack.size
-                            && (crate::kuna_calleehomes::is_home_slot(at, width)
+                            && (crate::calleehomes::is_home_slot(at, width)
                                 || (at < 0
                                     && at
                                         .checked_add(i64::from(width))
@@ -551,7 +551,7 @@ fn walk(
             return None;
         }
         let mut ends = false;
-        let flag_only = super::kuna_calleeflags::flag_only_results(&ops);
+        let flag_only = super::calleeflags::flag_only_results(&ops);
         for (op_index, op) in ops.into_iter().enumerate() {
             result.global_ineligible |= op.inputs.iter().chain(op.out.iter()).any(|value| {
                 value.space.as_ref().is_none_or(|space| {
@@ -708,15 +708,12 @@ fn walk(
 }
 
 pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
-    if !arch
-        .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
-        .0
+    if !arch.kuna_options.get::<crate::coreoptions::StackViews>().0
         && !arch
             .kuna_options
             .get::<crate::heritage::StackAliasDeadstore>()
             .0
-        && !super::kuna_globalcallranges::should_seed(fd)
+        && !super::globalcallranges::should_seed(fd)
     {
         return;
     }
@@ -763,7 +760,7 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
         let key = (space.get_index(), entry.get_offset());
         if !arch
             .kuna_tables
-            .get::<crate::kuna_calleememory::CalleeMemoryCache>()
+            .get::<crate::calleememory::CalleeMemoryCache>()
             .contains_key(&key)
         {
             let translator = arch.translate();
@@ -781,12 +778,12 @@ pub fn seed(arch: &mut crate::architecture::Architecture, fd: &mut Funcdata) {
             )
             .unwrap_or_default();
             arch.kuna_tables
-                .get_mut::<crate::kuna_calleememory::CalleeMemoryCache>()
+                .get_mut::<crate::calleememory::CalleeMemoryCache>()
                 .insert(key, Rc::new(summary));
         }
         if let Some(summary) = arch
             .kuna_tables
-            .get::<crate::kuna_calleememory::CalleeMemoryCache>()
+            .get::<crate::calleememory::CalleeMemoryCache>()
             .get(&key)
         {
             fd.callee_memory_mut().insert(key, Rc::clone(summary));
@@ -861,7 +858,7 @@ fn reaches(
         if fd.vbank().get(input)?.is_constant() {
             return Some(false);
         }
-        let address = crate::kuna_stackranges::frame_address(fd, input)?;
+        let address = crate::stackranges::frame_address(fd, input)?;
         (address.first, address.last)
     };
     let mask = unlace_base::address::calc_mask(space.get_addr_size() as i32);
@@ -884,7 +881,7 @@ fn for_call<'a>(
     if (!fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         && !fd
             .get_arch()
@@ -905,7 +902,7 @@ fn for_call<'a>(
         return None;
     }
     let space = fd.get_scope_local()?.get_space_id();
-    let mut floor = i64::from(crate::kuna_calleeprotostack::declared_caller_frame_floor(
+    let mut floor = i64::from(crate::calleeprotostack::declared_caller_frame_floor(
         call.proto(),
     )?);
     for slot in 0..call.proto().num_params() {
@@ -920,7 +917,7 @@ fn for_call<'a>(
         }
     }
     let floor = i32::try_from(floor).ok()?;
-    if !crate::kuna_calleeprotostack::above_callee_frame(
+    if !crate::calleeprotostack::above_callee_frame(
         space.wrap_offset(start.wrapping_sub(call.get_spacebase_offset())),
         size,
         space.get_addr_size() as i32,
@@ -940,7 +937,7 @@ fn for_call<'a>(
             return None;
         }
         let (start, size) =
-            crate::kuna_calleehomes::callee_frame_cell(fd, call, 0, return_address.size)?;
+            crate::calleehomes::callee_frame_cell(fd, call, 0, return_address.size)?;
         if !(1..=16).contains(&size) {
             return None;
         }
@@ -957,7 +954,7 @@ fn for_call<'a>(
             return None;
         }
         let (home_start, home_size) =
-            crate::kuna_calleehomes::callee_frame_cell(fd, call, home.offset, home.size)?;
+            crate::calleehomes::callee_frame_cell(fd, call, home.offset, home.size)?;
         if !(1..=16).contains(&home_size) {
             return None;
         }
@@ -968,7 +965,7 @@ fn for_call<'a>(
     }
     for &(cell, effect) in &summary.private_write_conditions {
         let (start, size) =
-            crate::kuna_calleehomes::callee_frame_cell(fd, call, cell.offset, cell.size)?;
+            crate::calleehomes::callee_frame_cell(fd, call, cell.offset, cell.size)?;
         if !(1..=16).contains(&size) || reaches(fd, call, effect, start, size, (1u32 << size) - 1)?
         {
             return None;
@@ -977,8 +974,8 @@ fn for_call<'a>(
     Some(summary)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleememory_preserves = Some(preserves);
 }
 
@@ -1002,7 +999,7 @@ pub fn preserves(fd: &Funcdata, call: &FuncCallSpecs, address: &Address, size: i
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         || !(1..=16).contains(&size)
         || address.get_space().map(|s| s.get_index())
@@ -1149,7 +1146,7 @@ fn unobserved_inner(
             return None;
         }
         let (home_start, home_size) =
-            crate::kuna_calleehomes::caller_home_cell(fd, call, deferred.offset, deferred.size)?;
+            crate::calleehomes::caller_home_cell(fd, call, deferred.offset, deferred.size)?;
         if home_discharge_returns_pointer(fd, call, summary, deferred.root)? {
             return None;
         }
@@ -1183,7 +1180,7 @@ fn unobserved_inner(
         let home_is_unobserved = *caller_home_scan_cache
             .entry((home_start, home_size))
             .or_insert_with(|| {
-                crate::kuna_calleehomes::caller_home_unobserved(fd, id, home_start, home_size)
+                crate::calleehomes::caller_home_unobserved(fd, id, home_start, home_size)
             });
         if !home_is_unobserved {
             return None;
@@ -1220,7 +1217,7 @@ fn unobserved_inner(
 struct SummariesSlot(
     std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+        std::rc::Rc<crate::calleememory::CalleeMemory>,
     >,
 );
 crate::kuna_func_state!(SummariesSlot, keep_across_clear: false);
@@ -1232,13 +1229,13 @@ pub trait FuncdataCalleememoryExt {
         &self,
     ) -> &std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+        std::rc::Rc<crate::calleememory::CalleeMemory>,
     >;
     fn callee_memory_mut(
         &mut self,
     ) -> &mut std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+        std::rc::Rc<crate::calleememory::CalleeMemory>,
     >;
 }
 
@@ -1247,7 +1244,7 @@ impl FuncdataCalleememoryExt for crate::funcdata::Funcdata {
         &self,
     ) -> &std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+        std::rc::Rc<crate::calleememory::CalleeMemory>,
     > {
         &self.kuna_state::<SummariesSlot>().0
     }
@@ -1255,26 +1252,26 @@ impl FuncdataCalleememoryExt for crate::funcdata::Funcdata {
         &mut self,
     ) -> &mut std::collections::HashMap<
         (unlace_base::types::int4, unlace_base::types::uintb),
-        std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+        std::rc::Rc<crate::calleememory::CalleeMemory>,
     > {
         &mut self.kuna_state_mut::<SummariesSlot>().0
     }
 }
 
 /// (kuna `calleememory`) The run-wide cache of callee memory summaries, by callee
-/// `(space index, entry offset)`; an [`ArchTable`](crate::kuna_archstate::ArchTable).
+/// `(space index, entry offset)`; an [`ArchTable`](crate::archstate::ArchTable).
 pub type CalleeMemoryCache = std::collections::HashMap<
     (unlace_base::types::int4, unlace_base::types::uintb),
-    std::rc::Rc<crate::kuna_calleememory::CalleeMemory>,
+    std::rc::Rc<crate::calleememory::CalleeMemory>,
 >;
 crate::kuna_arch_table!(CalleeMemoryCache);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::calleehomes::tests::{Fx, Out, call_with_r8_argument, locked_home_call_on};
     use crate::dtype::{Datatype, type_metatype};
     use crate::fspec::ParameterPieces;
-    use crate::kuna_calleehomes::tests::{Fx, Out, call_with_r8_argument, locked_home_call_on};
     use unlace_base::space::{AddrSpace, addrspace_flags};
 
     struct Program {
@@ -2369,16 +2366,12 @@ mod tests {
         let index = fx.fd.get_call_specs_index(call).unwrap();
         let call_specs = fx.fd.get_call_specs(index);
         assert!(
-            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, 8,)
+            crate::calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, 8,)
                 .is_some_and(|(start, size)| start == ((-48i64) as u64) && size == 8)
         );
-        assert!(crate::kuna_calleehomes::caller_home_cell(&fx.fd, call_specs, 16, 8,).is_none());
-        assert!(
-            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, i64::MIN, 8,).is_none()
-        );
-        assert!(
-            crate::kuna_calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, u32::MAX,).is_none()
-        );
+        assert!(crate::calleehomes::caller_home_cell(&fx.fd, call_specs, 16, 8,).is_none());
+        assert!(crate::calleehomes::callee_frame_cell(&fx.fd, call_specs, i64::MIN, 8,).is_none());
+        assert!(crate::calleehomes::callee_frame_cell(&fx.fd, call_specs, 16, u32::MAX,).is_none());
         assert!(test_call_summary_is_usable(&fx.fd, call, query, 8));
         assert_eq!(unobserved(&fx.fd, call, query, 8, 0xff), None);
 
@@ -3267,7 +3260,7 @@ mod tests {
             (0x8024, 8, true),
         ] {
             assert_eq!(
-                super::super::kuna_globalcallranges::preserves(
+                super::super::globalcallranges::preserves(
                     &mut cache,
                     &fx.fd,
                     &call,
@@ -3292,7 +3285,7 @@ mod tests {
             let index = fx.fd.get_call_specs_index(op).unwrap();
             let call = fx.fd.replace_call_specs(index);
             let mut cache = crate::heritage::GlobalCallRanges::default();
-            assert!(!super::super::kuna_globalcallranges::preserves(
+            assert!(!super::super::globalcallranges::preserves(
                 &mut cache,
                 &fx.fd,
                 &call,
@@ -3311,16 +3304,16 @@ mod tests {
         let call = fx.fd.replace_call_specs(index);
         let mut cache = crate::heritage::GlobalCallRanges::default();
         let watched = Address::new(space, 0x9000);
-        assert!(!super::super::kuna_globalcallranges::preserves(
+        assert!(!super::super::globalcallranges::preserves(
             &mut cache, &fx.fd, &call, &watched, 8
         ));
         let known = fx.constant(8, 0x8000);
         fx.fd.op_set_input(op, known, 1).unwrap();
-        assert!(!super::super::kuna_globalcallranges::preserves(
+        assert!(!super::super::globalcallranges::preserves(
             &mut cache, &fx.fd, &call, &watched, 8
         ));
         cache.clear();
-        assert!(super::super::kuna_globalcallranges::preserves(
+        assert!(super::super::globalcallranges::preserves(
             &mut cache, &fx.fd, &call, &watched, 8
         ));
         fx.fd.restore_call_specs_at(index, call);
@@ -3353,7 +3346,7 @@ mod tests {
             }
             let mut cache = crate::heritage::GlobalCallRanges::default();
             assert_eq!(
-                super::super::kuna_globalcallranges::preserves(
+                super::super::globalcallranges::preserves(
                     &mut cache,
                     &fx.fd,
                     &call,
@@ -3379,14 +3372,14 @@ mod tests {
         let index = fx.fd.get_call_specs_index(op).unwrap();
         let mut call = fx.fd.replace_call_specs(index);
         let mut cache = crate::heritage::GlobalCallRanges::default();
-        assert!(super::super::kuna_globalcallranges::preserves(
+        assert!(super::super::globalcallranges::preserves(
             &mut cache, &fx.fd, &call, &watched, 8
         ));
         let mut unknown_frame =
             crate::fspec::FuncCallSpecs::new(op, call.get_entry_address().clone());
         unknown_frame.proto_mut().copy(call.proto());
         cache.clear();
-        assert!(!super::super::kuna_globalcallranges::preserves(
+        assert!(!super::super::globalcallranges::preserves(
             &mut cache,
             &fx.fd,
             &unknown_frame,
@@ -3403,7 +3396,7 @@ mod tests {
                 crate::fspec::effect_type::UNKNOWN_EFFECT,
             ));
         cache.clear();
-        assert!(!super::super::kuna_globalcallranges::preserves(
+        assert!(!super::super::globalcallranges::preserves(
             &mut cache, &fx.fd, &call, &watched, 8
         ));
         fx.fd.restore_call_specs_at(index, call);

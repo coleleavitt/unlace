@@ -253,9 +253,9 @@ fn render_one(stem: &str, which: usize) -> Result<String, String> {
         .clone();
     let entry = Address::new(space, off);
     arch.kuna_options
-        .set(unlace_decomp::kuna_earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
+        .set(unlace_decomp::earlyreturn::EarlyReturn(false)); // (kuna) C++-parity test: opt out of earlyreturn (DIV-23 default-on)
     arch.kuna_options
-        .set(unlace_decomp::kuna_switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
+        .set(unlace_decomp::switchreturn::SwitchReturn(false)); // (kuna) also opt out of switchreturn (DIV-25 default-on)
     let fd = decompile_func(arch, &name, entry, 0).map_err(|e| format!("decompile: {e}"))?;
     // (kuna DIV-37) The frozen C++ oracles pin the upstream braced
     // single-statement if-body form; reset braceelide for the comparison.

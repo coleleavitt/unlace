@@ -14,7 +14,7 @@ fn is_resolver_stub(bytes: &[u8], little: bool, index: u64) -> bool {
     let Some(raw) = bytes.get(..STUB_BYTES as usize) else {
         return false;
     };
-    let words: Vec<u32> = super::kuna_mipsabi::words(raw, little).collect();
+    let words: Vec<u32> = super::mipsabi::words(raw, little).collect();
     matches!(words[0], 0x8f998010 | 0xdf998010)
         && matches!(words[1], 0x03e07825 | 0x03e0782d | 0x03e07821)
         && words[2] == 0x0320f809
@@ -37,13 +37,12 @@ pub struct MipsLinkage {
 /// The class and byte order of a MIPS ELF, with no stubs: what a relocatable
 /// object, which has none, contributes. `None` off MIPS ELF.
 pub fn class_linkage(file: &object::File<'_>) -> Option<MipsLinkage> {
-    (file.format() == object::BinaryFormat::Elf
-        && super::kuna_mipsabi::is_mips(file.architecture()))
-    .then(|| MipsLinkage {
-        elf32: !file.is_64(),
-        little: file.is_little_endian(),
-        ..MipsLinkage::default()
-    })
+    (file.format() == object::BinaryFormat::Elf && super::mipsabi::is_mips(file.architecture()))
+        .then(|| MipsLinkage {
+            elf32: !file.is_64(),
+            little: file.is_little_endian(),
+            ..MipsLinkage::default()
+        })
 }
 
 /// The linkage of a linked MIPS ELF; `None` off MIPS ELF.

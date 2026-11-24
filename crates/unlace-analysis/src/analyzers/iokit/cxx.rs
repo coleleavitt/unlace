@@ -1,7 +1,7 @@
 //! (kuna `iokitclasses on`) The recovered IOKit classes as C++ types.
 //!
 //! Each class with a vtable becomes a [`VtableClass`] the typed-vtable commit
-//! installs ([`unlace_decomp::kuna_vtabletypes`]): the class structure `C`
+//! installs ([`unlace_decomp::vtabletypes`]): the class structure `C`
 //! laid out to its `OSMetaClass` instance size with a first field
 //! `C_vtbl *vtable`, and `C_vtbl` one method pointer per slot. A slot is
 //! named after the method its function's name gives (`release`; `dtor` and
@@ -17,10 +17,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use unlace_decomp::kuna_vtabletypes::{VtableClass, VtableSlot};
+use unlace_decomp::vtabletypes::{VtableClass, VtableSlot};
 
 use super::{Recovered, in_ranges};
-use crate::rtti::kuna_vtabletypes::VtableFacts;
+use crate::rtti::vtabletypes::VtableFacts;
 
 /// The IOKit classes to type and the class of each member's `this`.
 #[derive(Clone, Debug, Default)]

@@ -4,7 +4,7 @@
 //! code that loads them, and a function whose last act is a call kuna cannot
 //! prove no-return is followed by its own pool. The decompiler's flow walk
 //! takes that call's fall-through and decodes the pool as instructions; the
-//! `funcboundflow` bound (`unlace_decomp::kuna_funcboundflow`) needs to know where
+//! `funcboundflow` bound (`unlace_decomp::funcboundflow`) needs to know where
 //! the pools are before it walks, from evidence the walk itself cannot taint.
 //!
 //! The Listing walk takes the same fall-throughs, so neither "this word was
@@ -22,7 +22,7 @@
 //!
 //! A pool word is then a 4-aligned executable word some trusted whole-word
 //! load reads at a fixed address (the resolved `[0x…]` and `[pc,#imm]` forms
-//! `aif::kuna_poolentry` parses, both words of a 64-bit literal), covered by no
+//! `aif::poolentry` parses, both words of a 64-bit literal), covered by no
 //! trusted instruction and the static target of none. That judgement is made
 //! twice, under two notions of trust, and a word that passes either is a pool
 //! word: the one above, and a strict one whose trust crosses no call
@@ -68,7 +68,7 @@
 
 use std::collections::BTreeSet;
 
-use unlace_decomp::kuna_fasthash::{FxHashMap, FxHashSet};
+use unlace_decomp::fasthash::{FxHashMap, FxHashSet};
 
 use super::model::{DiscoveredFunction, FlowKind, Insn};
 use super::{CodeUnit, Listing};
@@ -499,5 +499,5 @@ fn pool_words(listing: &Listing, trusted: &Trusted, loads: &Loads) -> BTreeSet<u
 }
 
 #[cfg(test)]
-#[path = "kuna_poolextents/tests.rs"]
+#[path = "poolextents/tests.rs"]
 mod tests;

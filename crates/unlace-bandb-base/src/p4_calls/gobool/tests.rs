@@ -1,4 +1,4 @@
-// Tests for `kuna_gobool` (included into `mod tests` in kuna_gobool.rs).
+// Tests for `kuna_gobool` (included into `mod tests` in gobool.rs).
 //
 // Covered:
 //   - `GoBoolMode`: parse vocabulary, u8 round-trip, default.
@@ -18,7 +18,7 @@ use unlace_base::space::{
 };
 
 use crate::context::ArchContext;
-use crate::kuna_sourcelang::SourceLang;
+use crate::sourcelang::SourceLang;
 
 fn build_fd(mode: GoBoolMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();

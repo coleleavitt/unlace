@@ -1,6 +1,6 @@
-//! Tests for the kuna stage-model console commands (W9, `kuna_console.rs`).
+//! Tests for the kuna stage-model console commands (W9, `console.rs`).
 //!
-//! The kuna registry (`unlace_decomp::kuna_phases`) is pure static data, so the
+//! The kuna registry (`unlace_decomp::phases`) is pure static data, so the
 //! registry-only commands (`phase list`/`map`/`catalog`, the `kassert`
 //! validation core) produce their exact bytes with no program loaded — that is
 //! what these tests pin. The `phase catalog` test compares against the **W4
@@ -21,7 +21,7 @@ use super::*;
 use crate::ifacedecomp::register_decomp_commands;
 use crate::ifaceterm::ConsoleCommands;
 use crate::interface::IfaceStatus;
-use unlace_decomp::kuna_phases::{emit_catalog_json, emit_catalog_json_one};
+use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one};
 
 /// A console wired like the datatest runner: a `ConsoleCommands` feed with the
 /// full decompiler command set **and** the kuna stage commands registered.

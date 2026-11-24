@@ -40,12 +40,12 @@ pub fn storage_transfer(fd: &Funcdata, op: OpId) -> Option<Transfer> {
         .get(output)
         .filter(|value| !value.is_implied())
         .and_then(|_| {
-            crate::kuna_stackviews::access_type(fd, output, op, -1)
-                .or_else(|| crate::kuna_bitcast::declared_member_type(fd, output))
+            crate::stackviews::access_type(fd, output, op, -1)
+                .or_else(|| crate::bitcast::declared_member_type(fd, output))
         })
         .unwrap_or_else(|| fd.vn_type_def_facing(output));
-    let source = crate::kuna_stackviews::access_type(fd, input, op, operation.get_slot(input))
-        .or_else(|| crate::kuna_bitcast::declared_member_type(fd, input))
+    let source = crate::stackviews::access_type(fd, input, op, operation.get_slot(input))
+        .or_else(|| crate::bitcast::declared_member_type(fd, input))
         .unwrap_or_else(|| fd.vn_type_read_facing(input, op));
     if fd.vbank().get(input)?.is_constant()
         && matches!(

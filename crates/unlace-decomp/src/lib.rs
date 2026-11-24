@@ -75,53 +75,53 @@ pub use unlace_structure::*;
 
 /// The pass hooks the driver's own modules provide (the option dispatch and the embedder
 /// hooks); [`PASS_HOOKS`] adds every lower crate's `provide_all` and the universal action.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
-    crate::kuna_option_dispatch::provide(slots);
-    crate::kuna_hooks::provide(slots);
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+    crate::option_dispatch::provide(slots);
+    crate::hooks::provide(slots);
 }
 
 /// The `Funcdata`/`Datatype` extension traits whose methods were inherent before they moved
 /// out of the IR module; `use unlace_decomp::prelude::*;` brings every one into scope.
 pub mod prelude {
+    pub use crate::atomicxadd::FuncdataAtomicxaddExt;
+    pub use crate::bejoin::FuncdataBejoinExt;
+    pub use crate::bejoin::WidePairEvidenceExt;
+    pub use crate::calleedeadarg::FuncdataCalleedeadargExt;
+    pub use crate::calleememory::FuncdataCalleememoryExt;
+    pub use crate::calleevote::FuncdataCalleevoteExt;
+    pub use crate::callerargs::FuncdataCallerargsExt;
+    pub use crate::callrettype::FuncdataCallrettypeExt;
+    pub use crate::calltargettype::FuncdataCalltargettypeExt;
+    pub use crate::calltransport::FuncdataCallTransportExt;
+    pub use crate::callwide::FuncdataCallwideExt;
     pub use crate::coreaction_casts::FuncdataCastExt;
+    pub use crate::elemptr::FuncdataElemptrExt;
+    pub use crate::elfmaindecl::FuncdataElfmaindeclExt;
+    pub use crate::entryreads::FuncdataEntryreadsExt;
     pub use crate::funcdata_facing::FuncdataFacingExt;
     pub use crate::funcdata_merge::FuncdataMergeExt;
     pub use crate::funcdata_resolveflow::FuncdataResolveFlowExt;
     pub use crate::funcdata_spacebase::FuncdataAliasExt;
     pub use crate::funcdata_spacebase::FuncdataSpacebaseExt;
     pub use crate::funcdata_union::FuncdataUnionExt;
-    pub use crate::kuna_atomicxadd::FuncdataAtomicxaddExt;
-    pub use crate::kuna_bejoin::FuncdataBejoinExt;
-    pub use crate::kuna_bejoin::WidePairEvidenceExt;
-    pub use crate::kuna_calleedeadarg::FuncdataCalleedeadargExt;
-    pub use crate::kuna_calleememory::FuncdataCalleememoryExt;
-    pub use crate::kuna_calleevote::FuncdataCalleevoteExt;
-    pub use crate::kuna_callerargs::FuncdataCallerargsExt;
-    pub use crate::kuna_callrettype::FuncdataCallrettypeExt;
-    pub use crate::kuna_calltargettype::FuncdataCalltargettypeExt;
-    pub use crate::kuna_calltransport::FuncdataCallTransportExt;
-    pub use crate::kuna_callwide::FuncdataCallwideExt;
-    pub use crate::kuna_elemptr::FuncdataElemptrExt;
-    pub use crate::kuna_elfmaindecl::FuncdataElfmaindeclExt;
-    pub use crate::kuna_entryreads::FuncdataEntryreadsExt;
-    pub use crate::kuna_inputhints::FuncdataInputhintsExt;
-    pub use crate::kuna_libcnames::FuncdataLibcnamesExt;
-    pub use crate::kuna_localstackviews::FuncdataLocalstackviewsExt;
-    pub use crate::kuna_narrowret::FuncdataNarrowretExt;
-    pub use crate::kuna_passthrough::FuncdataPassthroughExt;
-    pub use crate::kuna_ppc32piccalls::FuncdataPpc32piccallsExt;
-    pub use crate::kuna_protoorder::FuncdataProtoorderExt;
-    pub use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
-    pub use crate::kuna_rustabi::FuncdataRustabiExt;
-    pub use crate::kuna_slotptr::FuncdataSlotptrExt;
-    pub use crate::kuna_stablenames::FuncdataStablenamesExt;
-    pub use crate::kuna_stackobjectasserts::FuncdataStackobjectassertsExt;
-    pub use crate::kuna_stackobjects::FuncdataStackobjectsExt;
-    pub use crate::kuna_stackreadscope::FuncdataStackreadscopeExt;
-    pub use crate::kuna_stackstruct::FuncdataStackstructExt;
-    pub use crate::kuna_stackviews::FuncdataStackviewsExt;
-    pub use crate::kuna_storereach::FuncdataStorereachExt;
-    pub use crate::kuna_typequal::DatatypeQualExt;
-    pub use crate::kuna_voidret::FuncdataVoidretExt;
+    pub use crate::inputhints::FuncdataInputhintsExt;
+    pub use crate::libcnames::FuncdataLibcnamesExt;
+    pub use crate::localstackviews::FuncdataLocalstackviewsExt;
+    pub use crate::narrowret::FuncdataNarrowretExt;
+    pub use crate::passthrough::FuncdataPassthroughExt;
+    pub use crate::ppc32piccalls::FuncdataPpc32piccallsExt;
+    pub use crate::protoorder::FuncdataProtoorderExt;
+    pub use crate::retpushedhalf::FuncdataRetpushedhalfExt;
+    pub use crate::rustabi::FuncdataRustabiExt;
+    pub use crate::slotptr::FuncdataSlotptrExt;
+    pub use crate::stablenames::FuncdataStablenamesExt;
+    pub use crate::stackobjectasserts::FuncdataStackobjectassertsExt;
+    pub use crate::stackobjects::FuncdataStackobjectsExt;
+    pub use crate::stackreadscope::FuncdataStackreadscopeExt;
+    pub use crate::stackstruct::FuncdataStackstructExt;
+    pub use crate::stackviews::FuncdataStackviewsExt;
+    pub use crate::storereach::FuncdataStorereachExt;
+    pub use crate::typequal::DatatypeQualExt;
     pub use crate::unionresolve::FuncdataUnionresolveExt;
+    pub use crate::voidret::FuncdataVoidretExt;
 }

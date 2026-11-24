@@ -17,8 +17,8 @@
   "div": "DIV-122",
   "scope": "small",
   "files": [
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_arraycoverwidth.rs",
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_arraycoverwidth/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/arraycoverwidth.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/arraycoverwidth/tests.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",

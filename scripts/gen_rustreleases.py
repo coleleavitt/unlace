@@ -2,7 +2,7 @@
 """Regenerate the stable Rust release-commit table.
 
 Reads the `1.x.y` release tags of rust-lang/rust and writes
-`crates/unlace-analysis/src/analyzers/sourcelang/kuna_rustreleases.rs`,
+`crates/unlace-analysis/src/analyzers/sourcelang/rustreleases.rs`,
 sorted by commit hash for binary search.
 
     python3 scripts/gen_rustreleases.py
@@ -15,7 +15,7 @@ import subprocess
 REMOTE = "https://github.com/rust-lang/rust"
 OUT = (
     pathlib.Path(__file__).resolve().parent.parent
-    / "crates/unlace-analysis/src/analyzers/sourcelang/kuna_rustreleases.rs"
+    / "crates/unlace-analysis/src/analyzers/sourcelang/rustreleases.rs"
 )
 TAG = re.compile(r"^([0-9a-f]{40})\trefs/tags/(1\.\d+\.\d+)(\^\{\})?$")
 

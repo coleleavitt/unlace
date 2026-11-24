@@ -122,8 +122,8 @@
     "baseline-stages": "re-recorded on the rebased tree: 1100 -> 1103, the three hideshadow assertions and nothing else"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_hideshadow.rs (new)",
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_hideshadow/tests.rs (new)",
+    "decompiler/crates/kuna-decomp/src/p6_variables/hideshadow.rs (new)",
+    "decompiler/crates/kuna-decomp/src/p6_variables/hideshadow/tests.rs (new)",
     "decompiler/crates/kuna-decomp/src/p6_variables/coreaction_cleanup.rs (ActionHideShadow body)",
     "decompiler/crates/kuna-decomp/src/p6_variables/merge.rs (Merge::hide_shadows cover refresh)",
     "decompiler/crates/kuna-decomp/src/p6_variables/mod.rs",

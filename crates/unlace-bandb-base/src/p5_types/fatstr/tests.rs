@@ -1,4 +1,4 @@
-// Tests for `kuna_fatstr` (included into `mod tests` in kuna_fatstr.rs).
+// Tests for `kuna_fatstr` (included into `mod tests` in fatstr.rs).
 //
 // Covered:
 //   - `FatStrMode`: parse vocabulary, u8 round-trip, default.
@@ -18,8 +18,8 @@ use unlace_base::space::{
 
 use crate::context::ArchContext;
 use crate::dtype::TypeFactoryImpl;
-use crate::kuna_langfacet::LangFacet;
-use crate::kuna_sourcelang::SourceLang;
+use crate::langfacet::LangFacet;
+use crate::sourcelang::SourceLang;
 
 fn build_fd(mode: FatStrMode, lang: SourceLang) -> Funcdata {
     let mut m = AddrSpaceManager::new();

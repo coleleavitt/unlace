@@ -12,7 +12,7 @@ use unlace_num::opcodes::OpCode;
 
 use super::*;
 use crate::context::{ArchContext, TypeOp};
-use crate::p2_lift::kuna_loweredswitch::{ActionLowerSwitchDetect, KunaLoweredSwitchRecord};
+use crate::p2_lift::loweredswitch::{ActionLowerSwitchDetect, KunaLoweredSwitchRecord};
 
 fn build_manager() -> AddrSpaceManager {
     let mut m = AddrSpaceManager::new();
@@ -134,7 +134,7 @@ fn record(
         case_targets: cases.iter().map(|c| ram(fd, c.1)).collect(),
         default_target: ram(fd, default),
         signed_labels: false,
-        value: crate::p2_lift::kuna_loweredswitchvalue::ValueCheck::default(),
+        value: crate::p2_lift::loweredswitchvalue::ValueCheck::default(),
     }
 }
 
@@ -643,7 +643,7 @@ fn two_labels_for_one_value_are_refused() {
 
 #[test]
 fn a_later_head_is_refused_when_a_body_is_entered_from_outside_the_tree() {
-    use crate::p2_lift::kuna_loweredswitchheads::case_body_entered_elsewhere;
+    use crate::p2_lift::loweredswitchheads::case_body_entered_elsewhere;
     let mut fd = build_fd();
     let v = switch_var(&mut fd, 4);
     let b0 = new_block(&mut fd, 0x1000);

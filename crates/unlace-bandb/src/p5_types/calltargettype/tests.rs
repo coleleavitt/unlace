@@ -70,7 +70,7 @@ fn spellable_types_have_the_width_and_a_c_name() {
 /// local handed to one is not retyped.
 #[test]
 fn library_callback_slots_are_known() {
-    use crate::kuna_callbacktype::is_callback_slot;
+    use crate::callbacktype::is_callback_slot;
     assert!(is_callback_slot("qsort", 3));
     assert!(is_callback_slot("signal", 1));
     assert!(!is_callback_slot("qsort", 0));

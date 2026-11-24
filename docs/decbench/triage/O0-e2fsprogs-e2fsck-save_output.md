@@ -238,7 +238,7 @@ Textual ablations against the fresh block, each measured with the real GED:
 ## Proposed fix
 
 **Feature `paramcopyhoist` (P6, default-off), new module
-`decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs`.**
+`decompiler/crates/unlace-decomp/src/p6_variables/paramcopyhoist.rs`.**
 
 Mechanism: in `trim_op_input_prep`
 (`p6_variables/funcdata_merge.rs:838-849`), when the MULTIEQUAL input being
@@ -250,7 +250,7 @@ spill store, which the varmap still knows) instead of `block_stop_addr(pred)`.
 a `(block, addr, after_op)` triple, so only the anchor computation changes.
 
 Owning files:
-- `decompiler/crates/unlace-decomp/src/p6_variables/kuna_paramcopyhoist.rs` (new: eligibility + anchor)
+- `decompiler/crates/unlace-decomp/src/p6_variables/paramcopyhoist.rs` (new: eligibility + anchor)
 - `decompiler/crates/unlace-decomp/src/p6_variables/funcdata_merge.rs` (`trim_op_input_prep` calls it)
 - `decompiler/crates/unlace-decomp/phases.toml` + `src/p0_knowledge/options.rs` (option row)
 - `docs/spec/` P6 chapter; `tests/stages/` two-pass testcase; catalog count bumps

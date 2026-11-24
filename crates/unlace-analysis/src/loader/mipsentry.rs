@@ -45,7 +45,7 @@ fn frame_prefix(word: u32) -> bool {
 }
 
 fn has_setup(bytes: &[u8], little: bool) -> bool {
-    let words: Vec<u32> = super::kuna_mipsabi::words(bytes, little).take(16).collect();
+    let words: Vec<u32> = super::mipsabi::words(bytes, little).take(16).collect();
     for index in 0..words.len() {
         if setup(&words[index..]) {
             return true;

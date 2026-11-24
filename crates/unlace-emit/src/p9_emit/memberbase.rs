@@ -11,7 +11,7 @@ pub fn needs_cast(fd: &Funcdata, base: VarnodeId, pointer: &Rc<Datatype>) -> boo
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         || !fd.get_func_proto().has_store()
         || pointer.is_formal_pointer_rel()

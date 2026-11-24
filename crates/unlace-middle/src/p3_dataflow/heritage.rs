@@ -86,9 +86,9 @@ use unlace_base::space::{AddrSpace, spacetype};
 use unlace_base::types::{int4, uint4, uintb};
 
 use crate::context::BlockId;
-use crate::kuna_coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
-use crate::kuna_restartlog::{KunaRestartReason, RestartLog};
+use crate::coreoptions::{LEVEL_FULL, LEVEL_GLOBAL, LEVEL_OFF};
 use crate::overrides::Override;
+use crate::restartlog::{KunaRestartReason, RestartLog};
 use crate::varnode::varnode_flags;
 
 /// How many global STORE guards one function's heritage builds before it stops
@@ -856,7 +856,7 @@ pub const PERSIST_CROSS_PRODUCT: u64 = 1 << 16;
 
 /// (kuna `globalcallranges`) The exact caller-side memory intervals resolved for each call
 /// of a completely decoded leaf callee, cached for one heritage pass
-/// (`p3_dataflow/kuna_globalcallranges.rs`).
+/// (`p3_dataflow/globalcallranges.rs`).
 #[derive(Debug, Default)]
 pub struct GlobalCallRanges {
     pub resolved: slotmap::SecondaryMap<crate::context::OpId, Option<Vec<(u64, u64)>>>,
@@ -940,7 +940,7 @@ pub struct Heritage {
     load_copy_ops: Vec<crate::context::OpId>,
     /// (kuna) `calleeprotostack` — the local-alias checker this pass answers
     /// "can a pointer reach this stack slot?" with, gathered at most once per
-    /// pass.  See [`crate::p4_calls::kuna_calleeprotostack`].
+    /// pass.  See [`crate::p4_calls::calleeprotostack`].
     protostack_alias: Option<Option<crate::varmap::AliasChecker>>,
     /// Positive evidence of nested frame setup, retained across passes.
     protostack_frame_reload: Option<bool>,
@@ -966,10 +966,10 @@ pub struct Heritage {
         usize,
         Vec<BlockId>,
         Vec<crate::context::OpId>,
-        crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
+        crate::fasthash::FxHashSet<crate::context::OpId>,
     )>,
     /// (kuna) This pass's user operations with memory effects
-    /// ([`super::kuna_memoryguard::memory_ops`]), found at most once.
+    /// ([`super::memoryguard::memory_ops`]), found at most once.
     memory_ops: Option<Vec<crate::context::OpId>>,
     /// (kuna `haltloopguard`) This pass's exitless loops, found at most once.
     halt_loops: Option<Vec<BlockId>>,
@@ -1004,12 +1004,12 @@ pub struct Heritage {
     global_load_ranges: Vec<(Rc<AddrSpace>, u64, u64)>,
     partial_global_loads: Vec<Guard>,
     /// (kuna `loadguardreads`) This pass's LOAD guards, read at renaming.
-    load_reads: super::kuna_loadguardreads::Reads,
+    load_reads: super::loadguardreads::Reads,
     /// This pass's ops whose reads of their own storage renaming fills
-    /// ([`super::kuna_renamereads`]).
+    /// ([`super::renamereads`]).
     rename_reads: Vec<(crate::context::OpId, uint4)>,
     /// This pass's effect annotation per guarded call or store, shared by its guards.
-    guard_iops: crate::kuna_fasthash::FxHashMap<crate::context::OpId, crate::context::VarnodeId>,
+    guard_iops: crate::fasthash::FxHashMap<crate::context::OpId, crate::context::VarnodeId>,
     /// (kuna) C++ `Heritage::splitmanage`: the compiler spec's preferred
     /// register splits, run once at heritage pass 0.
     splitmanage: crate::prefersplit::PreferSplitManager,
@@ -1797,7 +1797,7 @@ impl Heritage {
             let level = fd
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_coreoptions::IndexAliasGuard>()
+                .get::<crate::coreoptions::IndexAliasGuard>()
                 .0;
             let high_ptr_possible = level != LEVEL_OFF
                 && addr
@@ -1898,7 +1898,7 @@ impl Heritage {
         if fd
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::StackViews>()
+            .get::<crate::coreoptions::StackViews>()
             .0
             || fd
                 .get_arch()
@@ -1932,7 +1932,7 @@ impl Heritage {
     /// (kuna `persistcalls`) With `sparse` (the range's free reads and its full
     /// and partial writes), a persistent global's unknown-effect guards are
     /// built after the loop, only at the calls
-    /// [`kuna_persistcalls::keep`](super::kuna_persistcalls::keep) keeps.
+    /// [`persistcalls::keep`](super::persistcalls::keep) keeps.
     fn guard_calls(
         &mut self,
         fd: &mut crate::funcdata::Funcdata,
@@ -1957,11 +1957,11 @@ impl Heritage {
             self.readonly_unguarded && (fl & varnode_flags::readonly) != 0 && write.is_empty();
         let mut pruned = false;
         // (kuna) `option calloverlap off|auto|in|full` — the two upstream partial-range
-        // overlap guards.  See [`crate::p3_dataflow::kuna_calloverlap`].
+        // overlap guards.  See [`crate::p3_dataflow::calloverlap`].
         let overlap_level = fd
             .get_arch()
             .kuna_options
-            .get::<crate::p3_dataflow::kuna_calloverlap::CallOverlap>()
+            .get::<crate::p3_dataflow::calloverlap::CallOverlap>()
             .0;
         // Lift the call specs out so each trial-registering mutation can also take
         // `&mut Funcdata` (the C++ mutates `fd` through the `FuncCallSpecs *`).
@@ -1974,7 +1974,7 @@ impl Heritage {
             }
         };
         // (kuna) `msvcbyval`: the stack ranges a constructor call builds as a
-        // later call's by-value argument.  See [`crate::p4_calls::kuna_msvcbyval`].
+        // later call's by-value argument.  See [`crate::p4_calls::msvcbyval`].
         let constructed = if fd.kuna_msvc_byval_sites().is_empty()
             || spc.get_type() != spacetype::IPTR_SPACEBASE
         {
@@ -2046,7 +2046,7 @@ impl Heritage {
             // and nothing above them.  A caller slot above that floor is reachable
             // only through a pointer, so the range is left unguarded unless the
             // local-alias checker says a pointer could reach it.  See
-            // [`crate::p4_calls::kuna_calleeprotostack`].
+            // [`crate::p4_calls::calleeprotostack`].
             if effecttype == effect_type::UNKNOWN_EFFECT
                 && spc.get_type() == spacetype::IPTR_SPACEBASE
                 && tryregister
@@ -2081,13 +2081,13 @@ impl Heritage {
             // is skipped for the same range: a register the callee provably
             // never writes cannot be carrying its return value either, so
             // registering an output trial for it would put the clobber straight
-            // back.  See [`crate::p4_calls::kuna_calleepreserves`].
+            // back.  See [`crate::p4_calls::calleepreserves`].
             // (kuna) The same evidence, asked of the
             // call's RETURN storage, where the register arm's own
             // positive-evidence gate (the callee must write a register the
             // convention promises is preserved) declines a helper that clobbers
             // only what it is allowed to.  See
-            // [`crate::p4_calls::kuna_calleeretpreserves`].
+            // [`crate::p4_calls::calleeretpreserves`].
             let exact_cookie_site = fd.get_override().is_msvc_cookie_call(
                 fd.obank()
                     .get(op)
@@ -2216,9 +2216,8 @@ impl Heritage {
                             &trans_addr,
                             size,
                             write,
-                        ) || ((overlap_level
-                            >= crate::p3_dataflow::kuna_calloverlap::LEVEL_FULL
-                            || (overlap_level == super::kuna_calloverlap::LEVEL_AUTO
+                        ) || ((overlap_level >= crate::p3_dataflow::calloverlap::LEVEL_FULL
+                            || (overlap_level == super::calloverlap::LEVEL_AUTO
                                 && (fd.hooks().calloverlap_auto_register)(
                                     fd.get_arch().manage(),
                                     fc.proto(),
@@ -2451,9 +2450,9 @@ impl Heritage {
     /// its inputs, and append its argument Varnode to the CALL op
     /// (`heritage.cc:1496-1510`).  (kuna) Also reached for a range the call's own
     /// output covers exactly, which upstream skips whole, when a variadic call
-    /// passes an argument there ([`crate::kuna_varargretreg`]).  A range the call
+    /// passes an argument there ([`crate::varargretreg`]).  A range the call
     /// may not take whole still yields the single-precision pieces its stated
-    /// prototype names ([`crate::kuna_armfloatargs`]).
+    /// prototype names ([`crate::armfloatargs`]).
     #[doc(hidden)]
     pub fn guard_call_input(
         fd: &mut crate::funcdata::Funcdata,
@@ -2532,8 +2531,8 @@ impl Heritage {
                     return;
                 }
             }
-            if overlap_level >= crate::p3_dataflow::kuna_calloverlap::LEVEL_IN
-                || (overlap_level == super::kuna_calloverlap::LEVEL_AUTO
+            if overlap_level >= crate::p3_dataflow::calloverlap::LEVEL_IN
+                || (overlap_level == super::calloverlap::LEVEL_AUTO
                     && (fd.hooks().calloverlap_auto_register)(
                         fd.get_arch().manage(),
                         fc.proto(),
@@ -2549,7 +2548,7 @@ impl Heritage {
 
     /// (kuna) Register the 8-byte input trial of a floating-point register the
     /// variadic call's caller counts as filled
-    /// ([`crate::kuna_varargretreg::counted_float_entry`]) when the heritaged
+    /// ([`crate::varargretreg::counted_float_entry`]) when the heritaged
     /// register range is not that register.  A range that contains it passes
     /// its low part, as `guard_call_overlapping_input` does.  A range that is
     /// its first piece passes the PIECE of that range and the ranges of this
@@ -3263,7 +3262,7 @@ impl Heritage {
     /// Guard the biggest model output contained by a wider heritaged range. On a
     /// model whose four-byte pair returns the high word first, also guard every
     /// other contained output: a locked register-pair call result covers both
-    /// words, and [`crate::kuna_retcallhalf::whole_pair`] may need the second one.
+    /// words, and [`crate::retcallhalf::whole_pair`] may need the second one.
     fn guard_returns_overlapping(
         &mut self,
         fd: &mut crate::funcdata::Funcdata,
@@ -3484,9 +3483,9 @@ impl Heritage {
 
     /// (kuna `stackstoreguard`) An `indirect_store` INDIRECT on a written stack
     /// range at each indexed stack STORE, of any width, that may write it and
-    /// is not in `guarded` (`kuna_stackstoreguard.rs (indexed_stores)`).
+    /// is not in `guarded` (`stackstoreguard.rs (indexed_stores)`).
     /// Heritage drops the ones its analyzed windows rule out once the pass is
-    /// renamed (`kuna_stackstoreguard.rs (prune_indexed)`).
+    /// renamed (`stackstoreguard.rs (prune_indexed)`).
     fn guard_indexed_stores(
         &mut self,
         fd: &mut crate::funcdata::Funcdata,
@@ -4161,7 +4160,7 @@ impl Heritage {
         if !proto.has_model()
             || proto.is_input_locked()
             || proto.possible_input_param(addr, size)
-            || crate::kuna_armpairparam::joined_pair(fd, addr, size)
+            || crate::armpairparam::joined_pair(fd, addr, size)
         {
             return None;
         }
@@ -4777,7 +4776,7 @@ impl Heritage {
     /// dom-children, then popping this block's writes.
     ///
     /// The input-creation sites use `new_entry_input` for complete ABI slots,
-    /// then [`kuna_inputtile::new_tiled_input`](crate::p3_dataflow::kuna_inputtile::new_tiled_input)
+    /// then [`inputtile::new_tiled_input`](crate::p3_dataflow::inputtile::new_tiled_input)
     /// to reconcile existing tiles, so a request that lands on
     /// `guard_input`'s leftover write-masked pieces is reconciled instead of
     /// aborting the function.
@@ -5390,7 +5389,7 @@ impl Heritage {
 
     /// (kuna) Split each read, write and input among `ids` that runs past the
     /// top of `space` into the piece below the top and the piece from offset 0
-    /// ([`kuna_wrapsplit`](super::kuna_wrapsplit)). Returns whether any was split.
+    /// ([`kuna_wrapsplit`](super::wrapsplit)). Returns whether any was split.
     fn split_wrapped(
         &self,
         fd: &mut crate::funcdata::Funcdata,
@@ -5574,7 +5573,7 @@ impl Heritage {
         // (kuna `splitstorekeep`) The partition cells are fresh Varnodes, so
         // without this the `stack_store` mark `RuleStoreVarnode` put on the
         // store's output does not reach them and `ActionDirectWrite` declines
-        // every piece.  See [`crate::p3_dataflow::kuna_splitstorekeep`].
+        // every piece.  See [`crate::p3_dataflow::splitstorekeep`].
         (fd.hooks().splitstorekeep_keep_store_mark)(fd, vn, newvn);
         let (vnsize, vnaddr) = {
             let v = fd.vbank().get(vn).expect("refine_write: vn");
@@ -5634,7 +5633,7 @@ impl Heritage {
     /// `removevars` are the earlier pass's markers `collect` set aside.  A
     /// marker the partition would cut is retired first, against the
     /// partitions it spans, and the read that replaces it is refined with the
-    /// others ([`kuna_revisitrefine`](super::kuna_revisitrefine)), so every
+    /// others ([`kuna_revisitrefine`](super::revisitrefine)), so every
     /// Varnode of each partition lies inside it.
     #[allow(clippy::too_many_arguments)]
     fn refinement(
@@ -5702,7 +5701,7 @@ impl Heritage {
         let mut retired = Vec::new();
         let mut spans = Vec::new();
         if !removevars.is_empty() {
-            let parts = super::kuna_revisitrefine::Partitions::new(&refine);
+            let parts = super::revisitrefine::Partitions::new(&refine);
             let space = addr.get_space().expect("refinement: space").clone();
             let cut: Vec<_> = removevars
                 .iter()
@@ -5973,7 +5972,7 @@ impl Heritage {
             // order upstream places them and keep their numbers.
             let merge_blocks: Vec<(BlockId, bool)> = match skipped {
                 Some(full) => {
-                    let kept: crate::kuna_fasthash::FxHashSet<BlockId> =
+                    let kept: crate::fasthash::FxHashSet<BlockId> =
                         self.merge.iter().copied().collect();
                     full.into_iter()
                         .map(|bl| (bl, kept.contains(&bl)))
@@ -6110,9 +6109,9 @@ impl Heritage {
     /// (unlace decompile-all watchdog) Has the running pass's budget run out —
     /// its deadline passed, or its drive over the memory limit?
     fn deadline_passed(&self) -> bool {
-        let passed = self.deadline.is_some_and(crate::kuna_budget::budget_spent);
+        let passed = self.deadline.is_some_and(crate::budget::budget_spent);
         if passed {
-            crate::kuna_budget::note_budget_site(|| "heritage".to_string());
+            crate::budget::note_budget_site(|| "heritage".to_string());
         }
         passed
     }
@@ -7269,7 +7268,7 @@ pub fn kuna_jt_trace() -> bool {
 
 /// The calls that keep their guard for one stack range.
 pub struct LiveCalls {
-    pub keep: crate::kuna_fasthash::FxHashSet<crate::context::OpId>,
+    pub keep: crate::fasthash::FxHashSet<crate::context::OpId>,
 }
 
 impl LiveCalls {
@@ -7290,7 +7289,7 @@ impl MemoryOps {
 }
 
 /// The bytes `[lo, last]` each indexed STORE may write by its pointer's own
-/// bound (`kuna_storereach.rs (store_window)`), computed once per heritage pass.
+/// bound (`storereach.rs (store_window)`), computed once per heritage pass.
 pub type StoreBounds = std::collections::HashMap<crate::context::OpId, Option<(u64, u64)>>;
 
 #[derive(Debug)]
@@ -7326,7 +7325,7 @@ fn parse_guard_threshold(value: &str) -> KunaResult<Option<u64>> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReadonlyCalls(pub Option<u64>);
 
-impl crate::kuna_optionset::KunaOption for ReadonlyCalls {
+impl crate::optionset::KunaOption for ReadonlyCalls {
     const NAME: &'static str = "readonlycalls";
     crate::kuna_option_id!();
 
@@ -7357,7 +7356,7 @@ impl crate::kuna_optionset::KunaOption for ReadonlyCalls {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PersistCalls(pub Option<u64>);
 
-impl crate::kuna_optionset::KunaOption for PersistCalls {
+impl crate::optionset::KunaOption for PersistCalls {
     const NAME: &'static str = "persistcalls";
     crate::kuna_option_id!();
 

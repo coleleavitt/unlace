@@ -107,7 +107,7 @@ pub enum PebNamesMode {
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for PebNamesMode {
+impl crate::optionset::KunaOption for PebNamesMode {
     const NAME: &'static str = "pebnames";
     crate::kuna_option_id!();
 

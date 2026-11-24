@@ -3,7 +3,7 @@
 //! A byte scan of the executable sections of an x86-64 ELF for `call rel32`
 //! into a PLT stub. The sites are committed to the architecture; the engine
 //! reads them only when a function tail-calls an import no declaration reached
-//! ([`unlace_decomp::kuna_importvote`]), so the scan is all a run pays up front.
+//! ([`unlace_decomp::importvote`]), so the scan is all a run pays up front.
 
 use std::collections::BTreeMap;
 

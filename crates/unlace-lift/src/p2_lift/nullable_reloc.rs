@@ -347,11 +347,11 @@ fn emit(
 }
 
 /// The image's nullable relocations, by field address; an
-/// [`ArchState`](crate::kuna_archstate::ArchState) shared with every function's context.
+/// [`ArchState`](crate::archstate::ArchState) shared with every function's context.
 pub type Relocations = std::collections::BTreeMap<u64, Vec<NullableRelocation>>;
 crate::kuna_arch_state!(Relocations);
 
 /// The image's nullable relocations; empty before the loader commits them.
-pub fn relocations(states: &crate::kuna_archstate::ArchStates) -> std::rc::Rc<Relocations> {
+pub fn relocations(states: &crate::archstate::ArchStates) -> std::rc::Rc<Relocations> {
     states.get_rc::<Relocations>().unwrap_or_default()
 }

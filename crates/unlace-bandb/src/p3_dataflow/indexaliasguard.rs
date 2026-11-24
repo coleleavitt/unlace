@@ -51,7 +51,7 @@
 //!   `ActionDeadCode` deletes it.  Only a writable range with at least two
 //!   writes other than `INDIRECT`s is guarded (a single write reaches the
 //!   return guard). For a range written in smaller pieces,
-//!   [`crate::kuna_partialglobalload::apply`] keeps the original real writes at their widths
+//!   [`crate::partialglobalload::apply`] keeps the original real writes at their widths
 //!   instead of forcing artificial full-width PIECEs. A heritage pass stops
 //!   guarding new ranges at [`GLOBAL_LOAD_BUDGET`] reads.
 //!   [`keeps_forced_self_copy`] and [`keeps_forced_join`] keep the rules from
@@ -78,7 +78,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 
-pub use crate::kuna_coreoptions::{
+pub use crate::coreoptions::{
     IndexAliasGuard, LEVEL_FULL, LEVEL_GLOBAL, LEVEL_LOAD, LEVEL_OFF, OptionIndexAliasGuard,
 };
 
@@ -183,7 +183,7 @@ pub fn keeps_forced_self_copy(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool 
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
     {
@@ -219,7 +219,7 @@ pub fn keeps_forced_join(data: &Funcdata, out: VarnodeId, a: VarnodeId, b: Varno
     };
     data.get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         >= LEVEL_GLOBAL
         && data.vbank().get(out).is_some_and(|o| o.is_persist())
@@ -241,7 +241,7 @@ pub fn load_crosses_global_store(data: &Funcdata, vn: VarnodeId) -> bool {
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         < LEVEL_GLOBAL
     {
@@ -379,7 +379,7 @@ pub fn keeps_store_guard_input(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -411,7 +411,7 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
     if data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_indexaliasguard::IndexAliasGuard>()
+        .get::<crate::indexaliasguard::IndexAliasGuard>()
         .0
         != LEVEL_GLOBAL
     {
@@ -505,7 +505,7 @@ pub fn keeps_store_before_load(data: &Funcdata, op: OpId, vn: VarnodeId) -> bool
         Some(false) => {}
         None => push(start, &mut work),
     }
-    let mut seen = crate::kuna_fasthash::FxHashSet::default();
+    let mut seen = crate::fasthash::FxHashSet::default();
     while let Some(blk) = work.pop() {
         if !seen.insert(blk) {
             continue;
@@ -682,8 +682,8 @@ fn loads_from_hook(
     loads_from(fd, spc, load_space)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.indexaliasguard_stores_into = Some(stores_into_hook);
     hooks.indexaliasguard_loads_from = Some(loads_from_hook);
 }

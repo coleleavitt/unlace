@@ -94,7 +94,7 @@ impl Loaded {
     fn aif(&self, listing: &Listing) -> Vec<u64> {
         let file = object::File::parse(&*self.bytes).expect("parse stripped i386 fixture");
         let arch = self.prog.arch();
-        let bracket = unlace_analysis::aif::kuna_aifbracket::BracketEvidence::from_object(
+        let bracket = unlace_analysis::aif::aifbracket::BracketEvidence::from_object(
             &file,
             listing.exec_ranges(),
         );

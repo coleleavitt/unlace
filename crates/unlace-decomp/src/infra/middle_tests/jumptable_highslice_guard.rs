@@ -12,9 +12,9 @@ use crate::context::TypeOp;
 use crate::context::VarnodeId;
 use crate::dtype::Datatype;
 use crate::dtype::type_metatype;
+use crate::emulatefunction::EmulateFunction;
 use crate::funcdata::Funcdata;
 use crate::jumptable::*;
-use crate::kuna_emulatefunction::EmulateFunction;
 use crate::op::pcodeop_flags;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -244,7 +244,7 @@ fn highslice_guard_preserves_unsigned_signed_and_wrapping_ranges() {
                 let index_width = fd.vbank().get(index_vn).unwrap().get_size();
                 let index_end = if reverse { 0 } else { mask + 1 };
                 let mut range = CircleRange::new(0, index_end, index_width, 1);
-                crate::kuna_switchguardrange::intersect(&fd, &guards, index_vn, &mut range);
+                crate::switchguardrange::intersect(&fd, &guards, index_vn, &mut range);
                 for value in [
                     0,
                     1,
@@ -296,5 +296,5 @@ fn highslice_guard_preserves_unsigned_signed_and_wrapping_ranges() {
 fn highslice_guard_requires_explicit_enablement() {
     let (fd, shift, slice) = pair_with_gate(8, 4, 4, 32, false);
     assert_match(&fd, shift, slice, 0);
-    assert!(crate::kuna_highslice_guard::matches(&fd, shift, slice));
+    assert!(crate::highslice_guard::matches(&fd, shift, slice));
 }

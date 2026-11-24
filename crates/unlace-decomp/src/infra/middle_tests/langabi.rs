@@ -3,8 +3,8 @@
 
 #![allow(unused_imports, dead_code)]
 
-use crate::kuna_lang::OutLang;
-use crate::kuna_lang::OutLangExt;
+use crate::lang::OutLang;
+use crate::lang::OutLangExt;
 
 /// The rule that makes this seam load-bearing rather than decorative: rustc
 /// rejects a C-variadic on anything but an `unsafe extern "C" fn`.

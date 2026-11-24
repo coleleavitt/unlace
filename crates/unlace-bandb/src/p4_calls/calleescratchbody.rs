@@ -44,7 +44,7 @@
 //! # Why the value is lost
 //!
 //! Not for the reason the shape suggests.
-//! [`calleepreserves`](crate::kuna_calleepreserves) exists for exactly
+//! [`calleepreserves`](crate::calleepreserves) exists for exactly
 //! this and its evidence is already sufficient: the callee-body write probe
 //! walks all nineteen instructions of the probe, completes, and proves `RAX`
 //! untouched. What declines is the pass's *positive-evidence* gate. That gate
@@ -68,7 +68,7 @@
 //! * **The body wrote a register other than the stack pointer.** Every `RET`
 //!   writes the stack pointer, so a summary carrying only it is the vacuous
 //!   one, not a description of work — the same exclusion the shipped gate and
-//!   [`calleeretpreserves`](crate::kuna_calleeretpreserves) make.
+//!   [`calleeretpreserves`](crate::calleeretpreserves) make.
 //!
 //! Between them a `ret`, an `endbr64; ret` (how the `ghdec-*` fixtures stub
 //! every callee outside the chunk under test), a placeholder and an entry
@@ -104,13 +104,10 @@ const MIN_HELPER_INSTRUCTIONS: u32 = 2;
 /// Did this body do work no stub can fake — a memory write, plus a register
 /// write that is not the stack pointer?
 ///
-/// The second half of [`crate::kuna_calleepreserves`]'s
+/// The second half of [`crate::calleepreserves`]'s
 /// positive-evidence gate, for the callee that clobbers only what the
 /// convention already allows.
-pub fn scratch_body_is_a_body(
-    data: &Funcdata,
-    w: &crate::kuna_rustabi::CalleeReturnWrites,
-) -> bool {
+pub fn scratch_body_is_a_body(data: &Funcdata, w: &crate::rustabi::CalleeReturnWrites) -> bool {
     if w.instruction_count() < MIN_HELPER_INSTRUCTIONS {
         return false;
     }
@@ -140,5 +137,5 @@ fn overlaps(reg: Option<(int4, u64, u64)>, idx: int4, off: u64, sz: int4) -> boo
 }
 
 #[cfg(test)]
-#[path = "kuna_calleescratchbody/tests.rs"]
+#[path = "calleescratchbody/tests.rs"]
 mod tests;

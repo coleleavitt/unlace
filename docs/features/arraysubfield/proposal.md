@@ -89,7 +89,7 @@ defect whose fix moves kuna back onto upstream's default earns no DIV row").
 Would make `return v1 << 0x40;` legal by typing the value a scalar instead of
 `undefined1[16]`. **Blocked on there being no C spelling for it.**
 `substrate/dtype.rs:6088` (`if s > self.max_basetype_size.get()` → array of unknown bytes)
-is the right site and the change there is small, but `p9_emit/kuna_ctypes.rs:109
+is the right site and the change there is small, but `p9_emit/ctypes.rs:109
 (integer_spelling)` only knows `int_size` / `long_size` / `long_long_size` — there is no
 16-byte entry, so a scalar 16-byte `TYPE_INT` prints as `uint16`, a kuna type name and
 still not compilable C. Option B needs an `__int128` spelling added to the ctypes table

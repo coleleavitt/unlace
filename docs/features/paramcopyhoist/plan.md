@@ -5,7 +5,7 @@
 One new module + one new Action; the ported merge core is untouched apart from a
 single visibility widening:
 
-* `decompiler/crates/kuna-decomp/src/p6_variables/kuna_paramcopyhoist.rs`
+* `decompiler/crates/kuna-decomp/src/p6_variables/paramcopyhoist.rs`
   (`ELEM_PARAMCOPYHOIST` = 4120, `OptionParamCopyHoist`, `ActionParamCopyHoist`).
 * Registered in `infra/universalaction.rs` as the **last** action before
   `ActionPrototypeWarnings`.

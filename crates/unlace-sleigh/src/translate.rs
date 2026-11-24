@@ -436,13 +436,13 @@ pub trait Translate: RegisterLookup {
 
     /// Isolate speculative context writes until the returned scope is committed.
     /// Stateless translators need no scope.
-    fn context_scope(&self) -> Option<crate::kuna_contextscope::ContextScope<'_>> {
+    fn context_scope(&self) -> Option<crate::contextscope::ContextScope<'_>> {
         None
     }
 
     /// Isolate decoder commits with an undo journal, restoring them on scope exit.
     /// Do not change defaults, registered variables or tracked registers here.
-    fn decode_context_scope(&self) -> Option<crate::kuna_contextscope::DecodeContextScope<'_>> {
+    fn decode_context_scope(&self) -> Option<crate::contextscope::DecodeContextScope<'_>> {
         None
     }
 

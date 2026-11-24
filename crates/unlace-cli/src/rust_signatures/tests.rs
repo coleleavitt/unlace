@@ -1,5 +1,5 @@
 use super::*;
-use unlace_analysis::flirt::kuna_rustprofiles::{CompilerProvenance, Report};
+use unlace_analysis::flirt::rustprofiles::{CompilerProvenance, Report};
 
 const TINY: &str = "49444153474e0600000000000000000000000000000000000000000000000000000007000001000000746573746c6962010400554889e50004bc1628006d7966756e6300";
 

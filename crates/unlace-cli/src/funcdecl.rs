@@ -41,8 +41,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
+use unlace_console::declaredbytes::DeclaredBytes;
 use unlace_console::engine::ConsoleProgram;
-use unlace_console::kuna_declaredbytes::DeclaredBytes;
 
 use crate::jsonfmt::Json;
 
@@ -180,7 +180,7 @@ pub(crate) fn json_notes(prog: &ConsoleProgram, notes: &[String]) -> Vec<String>
 pub(crate) struct Declared {
     bytes: BTreeMap<u64, DeclaredBytes>,
     notes: Vec<String>,
-    fid_databases: Vec<unlace_analysis::fid::kuna_fidapply::FidDbReport>,
+    fid_databases: Vec<unlace_analysis::fid::fidapply::FidDbReport>,
 }
 
 impl Declared {
@@ -224,7 +224,7 @@ impl Declared {
         crate::fid::report::field(&self.fid_databases)
     }
 
-    pub(crate) fn fid_databases(&self) -> &[unlace_analysis::fid::kuna_fidapply::FidDbReport] {
+    pub(crate) fn fid_databases(&self) -> &[unlace_analysis::fid::fidapply::FidDbReport] {
         &self.fid_databases
     }
 }

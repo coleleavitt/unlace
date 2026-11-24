@@ -7,7 +7,7 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_langtypes::SpellCtx;
+use crate::langtypes::SpellCtx;
 use crate::printc::{PrintC, op_key, op_token, tokens};
 use crate::printlanguage::{Atom, OpToken, SyntaxHighlight, TagType, TokenType};
 use unlace_num::opcodes::OpCode;
@@ -66,7 +66,7 @@ fn call_fields(cx: &SpellCtx, fd: &Funcdata, op: OpId) -> Option<[Rc<Datatype>; 
 pub fn call_projection(fd: &Funcdata, arch: &Architecture, op: OpId) -> Option<usize> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_analysisgates::Godwarfsig>()
+        .get::<crate::analysisgates::Godwarfsig>()
         .0
     {
         return None;

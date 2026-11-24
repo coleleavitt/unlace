@@ -52,8 +52,8 @@
   "ablation_changed": 0,
   "parity": "make test PARITY OK 675/675; make test-stages PARITY OK 628/628 (620 + this feature's 8, no per-test opt-out); make check-spec OK; kuna catalog --check OK; tests/cli 29/29; acceptance probe PASS (11,264 bytes, SUB161 absent)",
   "owning_file": [
-    "decompiler/crates/kuna-decomp/src/p3_dataflow/kuna_simdlane.rs",
-    "decompiler/crates/kuna-decomp/src/p8_structure/kuna_retsplitglobal.rs"
+    "decompiler/crates/kuna-decomp/src/p3_dataflow/simdlane.rs",
+    "decompiler/crates/kuna-decomp/src/p8_structure/retsplitglobal.rs"
   ],
   "owning_function": [
     "RuleSimdShuffleLane::apply_op",

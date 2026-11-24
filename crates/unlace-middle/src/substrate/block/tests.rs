@@ -657,7 +657,7 @@ fn w10_build_copy_from_empty_source() {
 
 // ---------------------------------------------------------------------------
 // kuna_flatten_ifelse — the if-else-flattening print-tree splice
-// (angr IfElseFlattener; p8_structure::kuna_ifelseflatten)
+// (angr IfElseFlattener; p8_structure::ifelseflatten)
 // ---------------------------------------------------------------------------
 
 /// Insert a leaf and parent it under `graph`'s `list`.
@@ -786,7 +786,7 @@ fn flatten_ifelse_refuses_non_list_parent() {
 
 // ---------------------------------------------------------------------------
 // goto labels — mark_unstructured and the carrier census the goto-reduction
-// passes clear labels against (p8_structure::kuna_gotolabel)
+// passes clear labels against (p8_structure::gotolabel)
 // ---------------------------------------------------------------------------
 
 /// `mark_unstructured` labels a `BlockGoto`'s target even when the target is the

@@ -27,7 +27,7 @@ pub(crate) fn take_global_image(argv: &mut Vec<String>) -> Result<(), String> {
             i += 1;
             continue;
         };
-        unlace_decomp::kuna_dyldcache::set_dyldimage_env(&value);
+        unlace_decomp::dyldcache::set_dyldimage_env(&value);
     }
     Ok(())
 }
@@ -50,7 +50,7 @@ pub(crate) fn take_option(argv: &[String], i: &mut usize) -> Result<(String, Str
     crate::optname::check(name)?;
     let value = &argv[*i + 2];
     if name == "kernelcache" {
-        unlace_decomp::kuna_kernelcache::parse_kernelcache(value)
+        unlace_decomp::kernelcache::parse_kernelcache(value)
             .map_err(|e| format!("option kernelcache: {}", e.explain()))?;
     }
     *i += 2;

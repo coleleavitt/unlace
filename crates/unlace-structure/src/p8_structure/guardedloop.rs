@@ -31,7 +31,7 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::{BlockId, HighVariableId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_regioneval::taken;
+use crate::regioneval::taken;
 
 /// The basic block of the last leaf of `id`, through lists only.
 fn last_basic(graph: &BlockGraph, id: BlockId) -> Option<BlockId> {
@@ -632,7 +632,7 @@ fn empty_body(data: &Funcdata, w: BlockId) -> bool {
         return false;
     };
     branch_to(data, bb, bb).is_some()
-        && crate::kuna_condfold::printed_shape(data, &data.bb_ops(bb)).is_some_and(|s| s.stmts == 1)
+        && crate::condfold::printed_shape(data, &data.bb_ops(bb)).is_some_and(|s| s.stmts == 1)
 }
 
 /// Print each qualifying guarded do-while as a while loop (see the module docs);
@@ -642,7 +642,7 @@ pub fn guardedloop_apply(data: &mut Funcdata) -> i32 {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::GuardedLoop>()
+        .get::<crate::coreoptions::GuardedLoop>()
         .0
         || data.sblocks_get_size() == 0
     {

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use unlace_decomp::kuna_namespaces::plain_scope;
+use unlace_decomp::namespaces::plain_scope;
 
 use crate::pass::{SymFact, SymKind};
 

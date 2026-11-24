@@ -5,7 +5,7 @@
   "option": null,
   "div": null,
   "phase": null,
-  "module": "decompiler/crates/kuna-analysis/src/analyzers/strings/kuna_utf8strings.rs (scan_utf8_runs), consumed by kuna_stringinv.rs (inventory) and reached by `kuna strings --encoding utf8|all`",
+  "module": "decompiler/crates/kuna-analysis/src/analyzers/strings/utf8strings.rs (scan_utf8_runs), consumed by stringinv.rs (inventory) and reached by `kuna strings --encoding utf8|all`",
   "default": "`--encoding ascii` (the default) is untouched; `utf8` is a new value and `all` now takes it in place of the ascii reading. Nothing here can change emitted C -- the markup passes (StringLiteralPass / scan_wide_strings) still scan at the ASCII and 2-byte widths only -- so no phases.toml row, no options.rs registration and no catalog counter (docs/agents.md scopes the option rule to behaviour that CAN change emitted C).",
   "decisions": [
     "The filed hypothesis -- 'the matcher supports ASCII and limited UTF-16 but lacks UTF-8 decoding' -- is UPHELD, and so is the refuter's sharpening that the second half of the symptom is a consequence rather than a second defect. `kuna xrefs --to 0x2000` answered count 1 on the unpatched tree while the strings row claimed 0x200c; the reference machinery had the literal's true start all along, so decoding the prefix fills xrefs_count and functions with no separate work.",
@@ -67,8 +67,8 @@
     "promotion_note": "The witness is a dataset binary, so the promoted probe is re-pointed at the vendored 9 KB utf8prompt_x86_64 fixture (CI has no dataset) -- same shape, same filter word, prompt at 0x101000 with its ASCII suffix at 0x10100c. Unfixed, the base commit's kuna answers 0x10100c / 43 chars / no functions on that fixture too."
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/strings/kuna_utf8strings.rs",
-    "decompiler/crates/kuna-analysis/src/analyzers/strings/kuna_stringinv.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/strings/utf8strings.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/strings/stringinv.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/strings/mod.rs",
     "decompiler/crates/kuna-cli/src/strings.rs",
     "decompiler/crates/kuna-cli/tests/strings_cli.rs",

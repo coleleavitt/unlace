@@ -88,7 +88,7 @@ use object::{BinaryFormat, RelocationTarget};
 use crate::demangle::demangle_typeinfo_name;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 
-use super::kuna_itaniumctors::ClassVtables;
+use super::itaniumctors::ClassVtables;
 use super::models::ImageBytes;
 use super::refkind::{End, RefKind};
 use super::vftable::TextRanges;
@@ -418,7 +418,7 @@ impl MachoSlots {
 }
 
 /// The recovered classes' vtables, as the constructor/destructor recovery
-/// ([`super::kuna_itaniumctors`]) reads them; empty on an image without the
+/// ([`super::itaniumctors`]) reads them; empty on an image without the
 /// Itanium graph.
 pub(super) fn recovered_classes(ctx: &AnalysisCtx) -> Vec<ClassVtables> {
     recover(ctx).map_or_else(Vec::new, |rec| {
@@ -1086,13 +1086,13 @@ fn ancestors_of(addr: u64, by_addr: &HashMap<u64, &TypeInfo>) -> HashSet<u64> {
 /// ```
 ///
 /// The implementation is shared with the `symbolnamechars` option's `ident` mode
-/// ([`unlace_decomp::kuna_symbolnamechars::sanitize_ident_chain`]), which is the
+/// ([`unlace_decomp::symbolnamechars::sanitize_ident_chain`]), which is the
 /// same reduction asked of a loader symbol name. It is applied here
 /// UNCONDITIONALLY, gate or no gate: this recovery invents the class string
 /// itself out of a `_ZTS` type-descriptor, and the string it invents has to be a
 /// legal name for a type and a scope before anything downstream sees it.
 fn sanitize_class_name(class: &str) -> String {
-    unlace_decomp::kuna_symbolnamechars::sanitize_ident_chain(class)
+    unlace_decomp::symbolnamechars::sanitize_ident_chain(class)
 }
 
 /// Read a pointer-width word at `vma`, or `None` if it is not in a loaded section.

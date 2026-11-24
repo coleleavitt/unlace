@@ -3,7 +3,7 @@
 //!
 //! `option bejoin` decides the order of a function's returned pair from that
 //! function's own verdict, and the order of a call's output pair from its
-//! callee's verdict ([`crate::kuna_bejoin::call_join_order`]). A pair that
+//! callee's verdict ([`crate::bejoin::call_join_order`]). A pair that
 //! passes from one to the other unchanged is judged twice, and the two
 //! verdicts can disagree:
 //!
@@ -46,7 +46,7 @@
 //! mode of `bejoin` (`evidence`, `callers`); `off` leaves both sides to their
 //! own verdicts.
 
-use crate::kuna_bejoin::FuncdataBejoinExt;
+use crate::bejoin::FuncdataBejoinExt;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -72,7 +72,7 @@ pub enum BeJoinPassMode {
     High,
 }
 
-impl crate::kuna_optionset::KunaOption for BeJoinPassMode {
+impl crate::optionset::KunaOption for BeJoinPassMode {
     const NAME: &'static str = "bejoinpass";
     crate::kuna_option_id!();
 
@@ -123,8 +123,8 @@ fn mode(data: &Funcdata) -> BeJoinPassMode {
 
 /// The model's pair, when it is two four-byte registers the ABI returns high
 /// word first and both options are live.
-fn word_pair(data: &Funcdata) -> Option<crate::kuna_bejoin::WidePair> {
-    if mode(data) == BeJoinPassMode::Off || !crate::kuna_bejoin::mode(data).proves() {
+fn word_pair(data: &Funcdata) -> Option<crate::bejoin::WidePair> {
+    if mode(data) == BeJoinPassMode::Off || !crate::bejoin::mode(data).proves() {
         return None;
     }
     let pair = data.kuna_wide()?.pair.clone();
@@ -228,7 +228,7 @@ fn handing_call(
     data: &Funcdata,
     hi: VarnodeId,
     lo: VarnodeId,
-    pair: &crate::kuna_bejoin::WidePair,
+    pair: &crate::bejoin::WidePair,
 ) -> Option<(OpId, bool)> {
     let def = |vn: VarnodeId| {
         data.vbank()
@@ -300,7 +300,7 @@ pub fn settle_return(data: &Funcdata, active: &mut ParamActive, return_ops: &[Op
     if data.get_func_proto().is_output_locked() {
         return false;
     }
-    let proven = crate::kuna_bejoin::proven_here(data);
+    let proven = crate::bejoin::proven_here(data);
     let (Some(hi), Some(lo)) = (trial_on(active, &pair.hi), trial_on(active, &pair.lo)) else {
         return false;
     };
@@ -320,8 +320,7 @@ pub fn settle_return(data: &Funcdata, active: &mut ParamActive, return_ops: &[Op
         let Some(ret) = data.obank().get(op) else {
             return false;
         };
-        if ret.is_dead() || ret.get_halt_type() != 0 || crate::kuna_bejoin::never_reached(data, op)
-        {
+        if ret.is_dead() || ret.get_halt_type() != 0 || crate::bejoin::never_reached(data, op) {
             continue;
         }
         live += 1;
@@ -332,7 +331,7 @@ pub fn settle_return(data: &Funcdata, active: &mut ParamActive, return_ops: &[Op
         let proven_call = &mut |h: VarnodeId, l: VarnodeId| match handing_call(data, h, l, &pair) {
             Some((_, true)) => true,
             Some((call, false)) => data.get_call_specs_index(call).is_some_and(|i| {
-                crate::kuna_bejoin::proven_callee(data, data.get_call_specs(i).get_entry_address())
+                crate::bejoin::proven_callee(data, data.get_call_specs(i).get_entry_address())
             }),
             None => false,
         };

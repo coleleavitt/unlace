@@ -253,7 +253,7 @@ pub(super) fn emit(
     for va in section_slots(file, SEC_PROTOREFS, ps) {
         let name = match img.rebase_ptr(va) {
             Some(proto_va) => {
-                let Some(name) = super::kuna_objcprotos::protocol_name(img, proto_va) else {
+                let Some(name) = super::objcprotos::protocol_name(img, proto_va) else {
                     continue;
                 };
                 push_slot(&mut const_slots, va, ps);

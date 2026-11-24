@@ -7,7 +7,7 @@ SLEIGH user-ops around plain p-code (`LOCK(); *p = *p + 1; UNLOCK();`, from `def
 `specs/Ghidra/Processors/x86/data/languages/ia.sinc:783`), an AArch64 LSE `CAS` as a compare, a branch and
 a store (the `:cas` constructor in `AARCH64base.sinc` is `if (data != comparevalue) goto <skip>; *p = newvalue;`),
 and `LDAXR`/`STLXR` as an ordinary load and store. The atomicity, which is what a reader needs to see in
-a refcount, a lock or a lock-free queue, is gone. The one exception is Go: `p2_lift/kuna_atomicxadd.rs`
+a refcount, a lock or a lock-free queue, is gone. The one exception is Go: `p2_lift/atomicxadd.rs`
 captures the `LOCK ... UNLOCK` envelope of one `XADD` for `kuna_goatomicreturn`.
 
 ## 1. What Hex-Rays does
@@ -54,7 +54,7 @@ instruction; verify).
 
 | step | what | where | size |
 |---|---|---|---|
-| 1 | **x86 locked RMW.** Generalise the `kuna_atomicxadd` envelope match (`LOCK` callother, one load, one store to the same storage, `UNLOCK`) to every locked `add/sub/and/or/xor/inc/dec/xadd/neg/not/bts/btr/btc` and to `xchg` with memory (implicitly locked, no `LOCK` op: match the instruction). Replace the envelope with one user-op call `_InterlockedAdd(p, v)` etc. / `__atomic_fetch_add(p, v, __ATOMIC_SEQ_CST)`, its result the old value. | `unlace-lift` `p2_lift/kuna_atomics.rs` (beside `kuna_atomicxadd.rs`), names in the emitter | M |
+| 1 | **x86 locked RMW.** Generalise the `kuna_atomicxadd` envelope match (`LOCK` callother, one load, one store to the same storage, `UNLOCK`) to every locked `add/sub/and/or/xor/inc/dec/xadd/neg/not/bts/btr/btc` and to `xchg` with memory (implicitly locked, no `LOCK` op: match the instruction). Replace the envelope with one user-op call `_InterlockedAdd(p, v)` etc. / `__atomic_fetch_add(p, v, __ATOMIC_SEQ_CST)`, its result the old value. | `unlace-lift` `p2_lift/atomics.rs` (beside `atomicxadd.rs`), names in the emitter | M |
 | 2 | **x86 compare-exchange.** `lock cmpxchg`, `cmpxchg8b`, `cmpxchg16b`: one call `_InterlockedCompareExchange(p, new, expected)` returning the old value; the ZF the SLEIGH body sets becomes `old == expected` so a following `jne` retry loop reads as a CAS loop. | same | S-M |
 | 3 | **AArch64 LSE.** Recognise the p-code shape of `CAS{,A,AL,L}`, `CASP`, `SWP`, `LDADD/LDCLR/LDEOR/LDSET` (and their acquire/release variants, which map to the memory-order argument) per instruction, and emit `atomic_compare_exchange_strong`/`atomic_exchange`/`atomic_fetch_add/and/xor/or` (LDCLR = fetch_and with `~v`). Type the pointer `_Atomic uintN_t *` like `sub_899B0`. Instruction-level, so match on the instruction's address range in the lifted ops, not on a pattern across instructions. | `unlace-lift` (same module), types in P5 | M |
 | 4 | **Exclusive pairs.** Print `LDXR/LDAXR/STXR/STLXR` (and ARM32 `LDREX/STREX`) as `__ldaxr(p)`/`__stlxr(v, p)` user-ops with the status result, as Hex-Rays does, instead of plain memory. | SLEIGH user-op injection or a P2 rewrite | S |

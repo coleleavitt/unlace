@@ -50,7 +50,7 @@
 //! table: its one CODE range is the whole load module, DGROUP and far data
 //! segments included, so the clip ran a function that data follows on to the
 //! next entry. There the raw discovery measures where each entry's flow ends
-//! (`unlace_analysis::listing::kuna_rawextent`) and [`bound_by_flow`] cuts the
+//! (`unlace_analysis::listing::rawextent`) and [`bound_by_flow`] cuts the
 //! clip there; an address past its function's flow has no extent.
 //!
 //! # LOSS
@@ -127,7 +127,7 @@ pub(crate) fn extent_at(entry: u64, ascending_entries: &[u64], code: &[CodeSpan]
 }
 
 /// (kuna #1288) The extent of `vma` on an image that measured its functions'
-/// flow ends (`unlace_analysis::listing::kuna_rawextent`): `clip` cut at the end
+/// flow ends (`unlace_analysis::listing::rawextent`): `clip` cut at the end
 /// of the flow of `owner`, the greatest entry at or below `vma`.
 ///
 /// An owner whose flow was not measured keeps the clip. An address past its

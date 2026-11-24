@@ -19,7 +19,7 @@
 
 use crate::block::{BlockGraph, BlockKind, BlockType, block_flags};
 use crate::context::BlockId;
-use crate::kuna_switchmerge::SwitchPlans;
+use crate::switchmerge::SwitchPlans;
 use std::collections::BTreeSet;
 
 #[derive(Default)]

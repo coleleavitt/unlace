@@ -102,7 +102,7 @@ impl TypeLib {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for TypeLib {
+impl crate::optionset::KunaOption for TypeLib {
     const NAME: &'static str = "typelib";
     crate::kuna_option_id!();
 

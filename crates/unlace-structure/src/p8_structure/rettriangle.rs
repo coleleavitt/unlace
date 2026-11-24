@@ -1,7 +1,7 @@
 //! (kuna `rettriangle`) Decline a `returndup` split at the join of a one-block
 //! `if`.
 //!
-//! [`returndup`](crate::kuna_returndup) gives every predecessor of
+//! [`returndup`](crate::returndup) gives every predecessor of
 //! a shared constant-return block its own copy of the return, which recovers a
 //! source's early-return guards.  When the two predecessors are the two arms of a
 //! one-block `if` -- a condition `C` that goes either straight to the return `R`
@@ -76,7 +76,7 @@ impl OptionRetTriangle {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.rettriangle_is_triangle_join = Some(is_triangle_join);
 }

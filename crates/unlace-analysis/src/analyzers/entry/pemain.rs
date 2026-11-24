@@ -89,7 +89,7 @@ pub(crate) fn pe_main(file: &object::File, bytes: &[u8]) -> Option<(u64, &'stati
     let local =
         |t: u64| in_executable_section(&execs, t) && import_addrs.binary_search(&t).is_err();
     let (site_target, name) =
-        if let Some((t, _)) = super::kuna_entrymainproto::ucrt_main_call(file, bytes, &execs) {
+        if let Some((t, _)) = super::entrymainproto::ucrt_main_call(file, bytes, &execs) {
             let wide = named("__p___wargv") || named("_get_initial_wide_environment");
             (t, if wide { "wmain" } else { "main" })
         } else if let Some(hit) = winmain_call(file, &execs, &imports, &local) {

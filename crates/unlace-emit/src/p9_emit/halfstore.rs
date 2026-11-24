@@ -47,7 +47,7 @@ pub fn plan(fd: &Funcdata, op: OpId) -> Option<HalfStore> {
         fd.vbank().get(lo)?,
     );
     if ov.get_space().is_big_endian()
-        || !crate::kuna_partialaccess::is_scalar_width(lv.get_size())
+        || !crate::partialaccess::is_scalar_width(lv.get_size())
         || hv.get_size() + lv.get_size() != ov.get_size()
         || !hv.is_implied()
     {

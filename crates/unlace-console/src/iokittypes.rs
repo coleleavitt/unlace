@@ -1,5 +1,5 @@
 //! (kuna `iokitclasses on`) Commit what the typed IOKit classes say about
-//! functions and data, once [`unlace_decomp::kuna_vtabletypes::install`] has
+//! functions and data, once [`unlace_decomp::vtabletypes::install`] has
 //! built the class structures.
 //!
 //! Each virtual member, constructor and destructor gets an unlocked `x0`
@@ -16,7 +16,7 @@ use unlace_base::address::Address;
 use unlace_base::error::KunaResult;
 use unlace_base::space::AddrSpace;
 use unlace_decomp::dtype::Datatype;
-use unlace_decomp::kuna_inputhints::InputHint;
+use unlace_decomp::inputhints::InputHint;
 use unlace_decomp::varnode::varnode_flags;
 
 use crate::engine::ConsoleProgram;
@@ -68,7 +68,7 @@ pub(crate) fn commit(
         }
         prog.arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_inputhints::ThisHints>()
+            .get_mut::<unlace_decomp::inputhints::ThisHints>()
             .0 = hints;
     }
 

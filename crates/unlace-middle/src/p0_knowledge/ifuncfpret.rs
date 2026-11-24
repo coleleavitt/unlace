@@ -32,8 +32,7 @@ pub const IFUNCFPRET_ENV: &str = "UNLACE_IFUNCFPRET";
 /// Whether IFUNC PLT-stub naming is enabled for this process (the loader gate).
 /// Default **on**: only an explicit off-token in [`IFUNCFPRET_ENV`] disables it.
 pub fn ifuncfpret_enabled() -> bool {
-    crate::kuna_loadoptions::scoped(|o| o.ifuncfpret)
-        .unwrap_or_else(crate::kuna_loadoptions::env::ifuncfpret)
+    crate::loadoptions::scoped(|o| o.ifuncfpret).unwrap_or_else(crate::loadoptions::env::ifuncfpret)
 }
 
 /// Export a `set_kuna_option("ifuncfpret", val)` toggle to [`IFUNCFPRET_ENV`] so a

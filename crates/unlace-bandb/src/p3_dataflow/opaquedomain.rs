@@ -123,7 +123,7 @@ impl<'a> Tree<'a> {
         if let Some(&index) = self.memo.get(&vn) {
             return Some(index);
         }
-        if let Some(value) = crate::kuna_opaqueglobals::constant_read(self.data, vn) {
+        if let Some(value) = crate::opaqueglobals::constant_read(self.data, vn) {
             self.globals += 1;
             return self.push(Node::Const(value));
         }

@@ -49,5 +49,5 @@
       }
     ]
   },
-  "notes": "Promoted acceptance of arm-pic-got-xrefs. `arm_timers` reads `on_expire`'s GOT slot with `ldr r3,[r6,r3]` at 0x10144, through a base made by `ldr r6,[pc]; add r6,pc,r6` around a call. The linker filled the slot with no relocation, so before the fix nothing referenced the callback. The join and refusal cases are in verify_gotxref.rs and kuna_picpool.rs."
+  "notes": "Promoted acceptance of arm-pic-got-xrefs. `arm_timers` reads `on_expire`'s GOT slot with `ldr r3,[r6,r3]` at 0x10144, through a base made by `ldr r6,[pc]; add r6,pc,r6` around a call. The linker filled the slot with no relocation, so before the fix nothing referenced the callback. The join and refusal cases are in verify_gotxref.rs and picpool.rs."
 }

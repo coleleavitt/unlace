@@ -80,7 +80,7 @@ callee's prototype says).
 ## Owning phase
 
 **P1 program-prep / external-refinement** -- `docs/spec/01-program-prep.md`. The new
-pass is `decompiler/crates/kuna-analysis/src/loader/kuna_peimportcall.rs`; the two
+pass is `decompiler/crates/kuna-analysis/src/loader/peimportcall.rs`; the two
 ported-core anchors it feeds are `substrate/context.rs` (`GlobalEntry` /
 `query_function`) and `p0_knowledge/database.rs` (`build_global_query`).
 `p9_emit/coreaction_render.rs` (`ActionDeindirect`) and `p4_calls/fspec.rs`

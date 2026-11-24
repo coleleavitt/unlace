@@ -631,19 +631,14 @@ impl SubvariableFlow {
         // same value -- it deletes the other register, which is where a Rust
         // `Result`/`Option` keeps its payload.
         if let Some(vn) = self.rv(rvn).vn {
-            if crate::kuna_rustabi::holds_scalar_pair(data, vn) {
+            if crate::rustabi::holds_scalar_pair(data, vn) {
                 return Ok(false);
             }
             if returns_integer_pair(data, vn) {
                 return Ok(false);
             }
-            if crate::kuna_zextreturn::zero_extended_word(
-                data,
-                vn,
-                vn,
-                self.rv(rvn).mask,
-                self.flowsize,
-            ) {
+            if crate::zextreturn::zero_extended_word(data, vn, vn, self.rv(rvn).mask, self.flowsize)
+            {
                 return Ok(false);
             }
         }
@@ -700,7 +695,7 @@ impl SubvariableFlow {
                 {
                     // Trace won't revisit this RETURN, so generate the patch now.
                     if let Some(storage) = self.rv(rvn).vn {
-                        if crate::kuna_zextreturn::zero_extended_word(
+                        if crate::zextreturn::zero_extended_word(
                             data,
                             retvn,
                             storage,
@@ -709,7 +704,7 @@ impl SubvariableFlow {
                         ) {
                             return Ok(false);
                         }
-                        if crate::kuna_zextreturn::unsigned_trim(
+                        if crate::zextreturn::unsigned_trim(
                             data,
                             retvn,
                             storage,
@@ -732,9 +727,9 @@ impl SubvariableFlow {
             self.returns_traversed = true;
         }
         let r = self.rv(rvn);
-        if r.vn.is_some_and(|vn| {
-            crate::kuna_zextreturn::unsigned_trim(data, vn, vn, r.mask, self.flowsize)
-        }) {
+        if r.vn
+            .is_some_and(|vn| crate::zextreturn::unsigned_trim(data, vn, vn, r.mask, self.flowsize))
+        {
             self.zext_returns.push(op);
         }
         self.patchlist.push(PatchRecord {
@@ -3068,14 +3063,14 @@ impl SubvariableFlow {
                     let slot = self.patchlist[piter].slot;
                     if let Some(before) = data.obank().get(pullop).and_then(|o| o.get_in(slot)) {
                         let mask = self.rv(in1).mask;
-                        crate::kuna_narrowret::note_trim(data, pullop, before, mask);
+                        crate::narrowret::note_trim(data, pullop, before, mask);
                     }
                     let v = self.get_replace_varnode(data, in1)?;
                     data.op_set_input(pullop, v, slot)?;
                     let zext = self.zext_pulls.contains(&(pullop, slot));
                     note_trimmed_arg(data, pullop, slot, zext);
                     let unsigned = self.zext_returns.contains(&pullop);
-                    crate::kuna_zextreturn::note_trimmed_return(data, pullop, unsigned);
+                    crate::zextreturn::note_trimmed_return(data, pullop, unsigned);
                 }
                 PatchType::ExtensionPatch => {
                     // operations that flow the small variable into a bigger variable
@@ -3532,7 +3527,7 @@ impl Rule for RuleSubvarZext {
         let mask = calc_mask(invsize);
         let (applied, returned) = run_subflow_returning(data, vn, mask, false, false, false);
         if returned {
-            crate::kuna_callrettype::note_returned_extension(data, false, invsize);
+            crate::callrettype::note_returned_extension(data, false, invsize);
         }
         applied
     }
@@ -3582,7 +3577,7 @@ impl Rule for RuleSubvarSext {
         let (applied, returned) =
             run_subflow_returning(data, vn, mask, self.isaggressive != 0, true, false);
         if returned {
-            crate::kuna_callrettype::note_returned_extension(data, true, invsize);
+            crate::callrettype::note_returned_extension(data, true, invsize);
         }
         applied
     }
@@ -4974,7 +4969,7 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
-            let val = crate::kuna_constantbytes::pair(hi, lo, losize, sa, dt.get_size());
+            let val = crate::constantbytes::pair(hi, lo, losize, sa, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
             data.vbank_mut()
@@ -5004,7 +4999,7 @@ impl SplitDatatype {
             } else {
                 self.data_type_pieces[i].offset
             };
-            let val = crate::kuna_constantbytes::word(base_val, off, dt.get_size());
+            let val = crate::constantbytes::word(base_val, off, dt.get_size());
             let out_vn = data.new_constant(dt.get_size(), val);
             in_varnodes.push(out_vn);
             data.vbank_mut()
@@ -5060,7 +5055,7 @@ impl SplitDatatype {
                 .expect("stale sub out")
                 .update_type(dt);
             data.op_insert_before(subpiece, follow_op);
-            crate::kuna_aggregatefields::collapse_split_truncation(data, subpiece);
+            crate::aggregatefields::collapse_split_truncation(data, subpiece);
         }
         Ok(())
     }
@@ -5456,7 +5451,7 @@ impl SplitDatatype {
             // resolver.inheritResolution — no-op for non-union types.
         }
         data.op_destroy(copy_op);
-        crate::kuna_aggregatefields::discard_unused_truncations(data, in_vn);
+        crate::aggregatefields::discard_unused_truncations(data, in_vn);
         Ok(true)
     }
 
@@ -5773,7 +5768,7 @@ impl SplitDatatype {
             load_root.free_pointer_chain(data);
         }
         store_root.free_pointer_chain(data);
-        crate::kuna_aggregatefields::discard_unused_truncations(data, in_vn);
+        crate::aggregatefields::discard_unused_truncations(data, in_vn);
         Ok(true)
     }
 
@@ -6951,7 +6946,7 @@ impl SubfloatFlow {
                 }
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
                 let constant = iv.is_constant().then(|| iv.get_offset());
-                if !crate::kuna_intfloatround::lowers(
+                if !crate::intfloatround::lowers(
                     &self.arch,
                     iv.get_size(),
                     constant,
@@ -6975,8 +6970,7 @@ impl SubfloatFlow {
                     .expect("in0");
                 let iv = data.vbank().get(invn).expect("stale invn");
                 let original_size = data.vbank().get(origvn).expect("stale origvn").get_size();
-                if iv.get_size() == self.precision && !crate::kuna_floatquiet::can_elide(data, invn)
-                {
+                if iv.get_size() == self.precision && !crate::floatquiet::can_elide(data, invn) {
                     return Ok(false);
                 }
                 if iv.get_size() > original_size && self.precision < original_size {
@@ -9198,7 +9192,7 @@ mod tests {
                 splitter
                     .build_in_subpieces(&mut fd, source, copy, &mut parts)
                     .unwrap();
-                crate::kuna_aggregatefields::discard_unused_truncations(&mut fd, source);
+                crate::aggregatefields::discard_unused_truncations(&mut fd, source);
                 if truncated {
                     let def = fd.vbank().get(source).unwrap().get_def().unwrap();
                     assert!(
@@ -9222,7 +9216,7 @@ mod tests {
                 }
                 let def = fd.vbank().get(source).unwrap().get_def();
                 fd.op_destroy(copy);
-                crate::kuna_aggregatefields::discard_unused_truncations(&mut fd, source);
+                crate::aggregatefields::discard_unused_truncations(&mut fd, source);
                 if let Some(def) = def {
                     assert!(fd.obank().get(def).is_none_or(|op| op.is_dead()));
                 }

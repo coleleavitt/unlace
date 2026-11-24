@@ -456,5 +456,5 @@ fn vn_nzmask(data: &Funcdata, vn: VarnodeId) -> uintb {
 }
 
 #[cfg(test)]
-#[path = "kuna_flagcompare/tests.rs"]
+#[path = "flagcompare/tests.rs"]
 mod tests;

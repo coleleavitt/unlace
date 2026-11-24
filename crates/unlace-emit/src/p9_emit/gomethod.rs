@@ -7,7 +7,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-use super::kuna_langgo::identifier;
+use super::langgo::identifier;
 
 #[doc(hidden)]
 pub struct DirectMethod<'a> {
@@ -37,7 +37,7 @@ pub fn direct_method<'a>(
 ) -> Option<DirectMethod<'a>> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_analysisgates::Godwarfsig>()
+        .get::<crate::analysisgates::Godwarfsig>()
         .0
         || !fd.get_arch().source_lang.is_go()
     {
@@ -57,7 +57,7 @@ pub fn direct_method<'a>(
     let receiver = arch
         .symboltab
         .go_pointer_receiver(call.get_entry_address())?;
-    let package = super::kuna_gopackage::function_package(fd.get_name())?;
+    let package = super::gopackage::function_package(fd.get_name())?;
     if package != receiver.package
         || call.get_name() != receiver.symbol
         || !receiver.matches(arch, call.proto())
@@ -69,7 +69,7 @@ pub fn direct_method<'a>(
     {
         return None;
     }
-    let name = super::kuna_gopackage::local_type_name(Some(package), &receiver.type_name);
+    let name = super::gopackage::local_type_name(Some(package), &receiver.type_name);
     Some(DirectMethod {
         receiver: op.get_in(1)?,
         type_name: identifier(name),

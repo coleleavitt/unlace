@@ -16,8 +16,8 @@ pub const OBJCSDK_ENV: &str = "UNLACE_OBJCSDK";
 /// The header root the load in progress names (`LoadOptions::objcsdk`, else
 /// [`OBJCSDK_ENV`]), if any.
 pub fn sdk_path() -> Option<PathBuf> {
-    crate::kuna_loadoptions::scoped(|o| o.objcsdk.clone())
-        .unwrap_or_else(crate::kuna_loadoptions::env::objcsdk)
+    crate::loadoptions::scoped(|o| o.objcsdk.clone())
+        .unwrap_or_else(crate::loadoptions::env::objcsdk)
 }
 
 /// The header root [`OBJCSDK_ENV`] names, if any. Reads only the environment;

@@ -411,7 +411,7 @@ pub fn lookup(
             size,
             unclaimed,
             selfs,
-            crate::kuna_structmerge::StructMergeMode::Off,
+            crate::structmerge::StructMergeMode::Off,
         );
         handle.borrow_mut().own_answer(answer.as_deref(), request);
         return answer;

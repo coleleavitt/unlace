@@ -190,7 +190,7 @@ pub struct IfaceDecompData {
     /// Explicit stable local renames and retypes, keyed by the function's entry.
     pub local_edit_names: std::collections::BTreeMap<
         unlace_base::address::Address,
-        unlace_decomp::kuna_stablenames::PriorNames,
+        unlace_decomp::stablenames::PriorNames,
     >,
     /// (kuna) What the last `load function` / `load addr` followed, so the very
     /// next `decompile` can adopt that IR instead of following the same flow a
@@ -331,7 +331,7 @@ impl IfaceDecompData {
 
     fn remember_local_edit(&mut self) {
         let Some(fd) = self.fd.as_ref() else { return };
-        let names = unlace_decomp::kuna_stablenames::carry(fd);
+        let names = unlace_decomp::stablenames::carry(fd);
         if names.renames.is_empty() && names.symbol_renames.is_empty() && names.retypes.is_empty() {
             self.local_edit_names.remove(fd.get_address());
         } else {
@@ -340,11 +340,11 @@ impl IfaceDecompData {
         }
     }
 
-    fn local_names_for_rebuild(&self) -> unlace_decomp::kuna_stablenames::PriorNames {
+    fn local_names_for_rebuild(&self) -> unlace_decomp::stablenames::PriorNames {
         let Some(fd) = self.fd.as_ref() else {
             return Default::default();
         };
-        let names = unlace_decomp::kuna_stablenames::carry(fd);
+        let names = unlace_decomp::stablenames::carry(fd);
         if names.is_empty() {
             self.local_edit_names
                 .get(fd.get_address())
@@ -830,14 +830,14 @@ fn run_parse_c(status: &mut IfaceStatus, content: &str) -> IfaceResult<()> {
                     .map_err(IfaceError::execution)?;
                 let model = crate::assertions::declared_model(prog, &model);
                 crate::assertions::park_prototype(prog, &target, &mut pieces, model.as_ref());
-                crate::kuna_callwide::target_declaration(
+                crate::callwide::target_declaration(
                     prog,
                     &target,
                     &pieces,
                     model,
-                    unlace_decomp::kuna_callwide::DeclarationSource::Parsed,
+                    unlace_decomp::callwide::DeclarationSource::Parsed,
                 );
-                crate::kuna_qualifiedstorage::remember(
+                crate::qualifiedstorage::remember(
                     &mut dcp.pending_prototypes,
                     &mut dcp.pending_prototype_entries,
                     &target,
@@ -907,7 +907,7 @@ fn bind_func_param(
         .types()
         .get_base(addr_size, unlace_decomp::dtype::type_metatype::TYPE_UNKNOWN)
         .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-    crate::kuna_qualifiedstorage::update(
+    crate::qualifiedstorage::update(
         prog,
         &mut dcp.pending_prototypes,
         &mut dcp.pending_prototype_entries,
@@ -944,7 +944,7 @@ fn bind_func_return(
         .conf
         .as_mut()
         .ok_or_else(|| IfaceError::execution("No load image present"))?;
-    crate::kuna_qualifiedstorage::update(
+    crate::qualifiedstorage::update(
         prog,
         &mut dcp.pending_prototypes,
         &mut dcp.pending_prototype_entries,
@@ -991,7 +991,7 @@ fn parse_storage_and_type(
 
 /// (kuna) Bind a parsed C prototype to `func`, whatever name the declaration
 /// carries — the console spelling of `--assert 'prototype <func> <decl>'`
-/// (`map prototype`, registered in [`crate::kuna_console`]).
+/// (`map prototype`, registered in [`crate::console`]).
 ///
 /// `parse line extern <decl>` keys the prototype by the DECLARATION's name, so a
 /// declaration that renames the function ("this `sub_1400055e0` is really
@@ -1049,14 +1049,14 @@ pub(crate) fn bind_prototype(status: &mut IfaceStatus, func: &str, decl: &str) -
         crate::assertions::resolve_proto_target(prog, func).map_err(IfaceError::execution)?;
     let model = crate::assertions::declared_model(prog, &model);
     crate::assertions::park_prototype(prog, &target, &mut pieces, model.as_ref());
-    crate::kuna_callwide::target_declaration(
+    crate::callwide::target_declaration(
         prog,
         &target,
         &pieces,
         model,
-        unlace_decomp::kuna_callwide::DeclarationSource::Parsed,
+        unlace_decomp::callwide::DeclarationSource::Parsed,
     );
-    crate::kuna_qualifiedstorage::remember(
+    crate::qualifiedstorage::remember(
         &mut dcp.pending_prototypes,
         &mut dcp.pending_prototype_entries,
         &target,
@@ -1139,7 +1139,7 @@ decomp_command!(
         if dcp.conf.is_none() {
             s.skip_ws();
             let value = s.read_token();
-            let Some(res) = unlace_decomp::kuna_dyldcache::set_option(&optname, &value) else {
+            let Some(res) = unlace_decomp::dyldcache::set_option(&optname, &value) else {
                 return Err(IfaceError::execution("No load image present"));
             };
             let res = res.map_err(|e| IfaceError::execution(e.explain().to_string()))?;
@@ -1171,7 +1171,7 @@ decomp_command!(
         // `Architecture::set_kuna_option`, which validates the value and writes
         // the live flag the consuming action/printer reads.  Upstream options
         // fall through to the byte-identical `OptionDatabase` path below.
-        if unlace_decomp::kuna_option_dispatch::KUNA_OPTION_NAMES.contains(&optname.as_str()) {
+        if unlace_decomp::option_dispatch::KUNA_OPTION_NAMES.contains(&optname.as_str()) {
             let prog = dcp.conf.as_mut().expect("conf checked non-None above");
             let res = prog
                 .arch_mut()
@@ -1420,8 +1420,8 @@ decomp_command!(
         // spelling the symbol table and the listing use, so a name the binary
         // spells past the scope bound both RESOLVES and renders as one name.
         // Idempotent, and a no-op for every real name.
-        let funcname = unlace_decomp::kuna_symbolnamebound::bound_scope_path(&s.read_token(), "::")
-            .into_owned();
+        let funcname =
+            unlace_decomp::symbolnamebound::bound_scope_path(&s.read_token(), "::").into_owned();
         let command_seq = status.command_seq;
         let dcp = dcp_mut(status)?;
         if dcp.conf.is_none() {
@@ -1443,7 +1443,7 @@ decomp_command!(
         prog.commit_pending_analysis()
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
         let selector = crate::engine::EntrySelector::parse(&funcname);
-        crate::kuna_callwide::prepare(prog);
+        crate::callwide::prepare(prog);
         let selected = prog
             .resolve_body_entry(&selector)
             .map_err(|error| IfaceError::execution(error.to_string()))?;
@@ -1524,7 +1524,7 @@ decomp_command!(
         // a session reaches `load addr` without an explicit `read symbols`.
         prog.commit_pending_analysis()
             .map_err(|e| IfaceError::execution(e.explain().to_string()))?;
-        crate::kuna_callwide::prepare(prog);
+        crate::callwide::prepare(prog);
         // C++ Address offset = parse_machaddr(s,size,*dcp->conf->types) — the full
         // console address grammar over the engine spaces.
         let (requested, parsed_size) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
@@ -2390,7 +2390,7 @@ decomp_command!(
                     // The console-added `map hash` dynamic symbols (likewise carried
                     // across so `ActionDynamicSymbols` can name the matched temps).
                     crate::assertions::carried_dynamic_symbols(fd),
-                    unlace_decomp::kuna_stackobjectasserts::specs(fd).to_vec(),
+                    unlace_decomp::stackobjectasserts::specs(fd).to_vec(),
                 ),
             };
             // The `parse line extern <decl>` prototype stashed for this function
@@ -2456,12 +2456,12 @@ decomp_command!(
             .collect();
         for (mut name, ty, addr, flags) in dwarf_locals {
             if mapped_before.iter().any(|(mapped, size)| {
-                crate::kuna_dwarfstack::overlaps(&addr, ty.get_size(), mapped, *size)
+                crate::dwarfstack::overlaps(&addr, ty.get_size(), mapped, *size)
             }) {
                 continue;
             }
             if ty.get_name().starts_with("dwarf_stack_") {
-                name = crate::kuna_dwarfstack::local_name(&name, &mapped_names, &reserved_names);
+                name = crate::dwarfstack::local_name(&name, &mapped_names, &reserved_names);
             }
             mapped_names.insert(name.clone());
             mapped_symbols.push((name, ty, addr, flags));
@@ -2515,7 +2515,7 @@ decomp_command!(
             let carried = dcp
                 .fd
                 .as_ref()
-                .map(|fd| crate::kuna_paramasserts::carried(fd, &original))
+                .map(|fd| crate::paramasserts::carried(fd, &original))
                 .unwrap_or(original);
             if !carried.is_empty() {
                 dcp.pending_param_maps.insert(name.clone(), carried.clone());
@@ -2559,7 +2559,7 @@ decomp_command!(
                 "flow or call-site prototype overrides require a new complete image proof",
             );
         }
-        crate::kuna_callwide::prepare(&mut prog);
+        crate::callwide::prepare(&mut prog);
         if has_no_code {
             dcp_mut(status)?.conf = Some(prog);
             status.out(&format!("No code for {name}\n"));
@@ -2626,7 +2626,7 @@ decomp_command!(
             let same_config = !prog
                 .arch()
                 .kuna_options
-                .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+                .get::<unlace_decomp::formatstring::FormatStringMode>()
                 .loop_pass()
                 && prog.arch().kuna_fn_budget.is_none()
                 && prog.arch().kuna_pending_name_recs.is_empty()
@@ -2659,7 +2659,7 @@ decomp_command!(
         *prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() = prior_names;
+            .get_mut::<unlace_decomp::stablenames::PriorNames>() = prior_names;
         prog.arch_mut().kuna_record_names = true;
         let step = crate::decompile_step::decompile_one_prefollowed(
             prog.arch_mut(),
@@ -2682,7 +2682,7 @@ decomp_command!(
         *prog
             .arch_mut()
             .kuna_tables
-            .get_mut::<unlace_decomp::kuna_stablenames::PriorNames>() = Default::default();
+            .get_mut::<unlace_decomp::stablenames::PriorNames>() = Default::default();
         prog.arch_mut().kuna_record_names = false;
         let result = step.result;
         if !step.discovered.is_empty() {
@@ -2769,17 +2769,17 @@ decomp_command!(
                         format_checks
                             .iter()
                             .filter(|(at, format, value)| {
-                                !crate::kuna_constformat::holds(&fd, at, format, *value)
+                                !crate::constformat::holds(&fd, at, format, *value)
                             })
                             .map(|(at, format, value)| {
                                 format!(
                                     "Rejected {}: {}\n",
-                                    crate::kuna_constformat::console_line(
+                                    crate::constformat::console_line(
                                         at.get_offset(),
                                         format,
                                         *value
                                     ),
-                                    crate::kuna_constformat::NOT_REPLAYED
+                                    crate::constformat::NOT_REPLAYED
                                 )
                             }),
                     )
@@ -3017,7 +3017,7 @@ decomp_command!(
                 .fd
                 .as_ref()
                 .ok_or_else(|| IfaceError::execution("No function selected"))?;
-            unlace_decomp::kuna_stackobjects::describe(fd)
+            unlace_decomp::stackobjects::describe(fd)
         };
         status.file_out(&text);
         Ok(())
@@ -3296,7 +3296,7 @@ decomp_command!(
 decomp_command!(
     /// C++ `IfcRename`: `rename <oldname> <newname>` (ifacedecomp.cc:1332).
     ///
-    /// (kuna) Resolved by `crate::kuna_hightarget::apply_local`, which also
+    /// (kuna) Resolved by `crate::hightarget::apply_local`, which also
     /// reaches a register-resident local (a HighVariable the printer named, with
     /// no Symbol behind it) and reads `oldname` against the output the renames
     /// since the last `decompile` started from.
@@ -3314,13 +3314,13 @@ decomp_command!(
             return Err(IfaceError::parse("Missing new name"));
         }
         let dcp = dcp_mut(status)?;
-        let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+        let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
         dcp.local_symbol_fd(&oldname)?;
         let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
             return Err(IfaceError::execution("no function selected"));
         };
         let symbol =
-            crate::kuna_hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
+            crate::hightarget::apply_local(fd, &oldname, &newname, None, maxduplicates, arch)
                 .map_err(IfaceError::execution)?;
         dcp.remember_local_edit();
         if let Some(symbol) = symbol {
@@ -3378,12 +3378,12 @@ decomp_command!(
             (ct, newname, typetext)
         };
         let dcp = dcp_mut(status)?;
-        let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+        let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
         dcp.local_symbol_fd(&name)?;
         let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
             return Err(IfaceError::execution("no function selected"));
         };
-        let symbol = crate::kuna_hightarget::apply_local(
+        let symbol = crate::hightarget::apply_local(
             fd,
             &name,
             &newname,
@@ -3406,7 +3406,7 @@ decomp_command!(
 
 decomp_command!(
     /// C++ `IfcIsolate`: `isolate <name>` (ifacedecomp.cc:1423), resolved as
-    /// `IfcRename` resolves its name (`crate::kuna_hightarget::isolate_local`).
+    /// `IfcRename` resolves its name (`crate::hightarget::isolate_local`).
     IfcIsolate,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         s.skip_ws();
@@ -3415,12 +3415,12 @@ decomp_command!(
             return Err(IfaceError::parse("Missing symbol name"));
         }
         let dcp = dcp_mut(status)?;
-        let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+        let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
         dcp.local_symbol_fd(&symbol_name)?;
         let (Some(fd), arch) = (dcp.fd.as_mut(), dcp.conf.as_ref().map(|p| p.arch())) else {
             return Err(IfaceError::execution("no function selected"));
         };
-        crate::kuna_hightarget::isolate_local(fd, &symbol_name, maxduplicates, arch)
+        crate::hightarget::isolate_local(fd, &symbol_name, maxduplicates, arch)
             .map_err(IfaceError::execution)?;
         Ok(())
     }
@@ -3583,7 +3583,7 @@ decomp_command!(
         // The DynamicHash collision budget and the EquateSymbol's
         // getBase(1,TYPE_UNKNOWN) type are the two merged-tree boundaries
         // build_dynamic_symbol takes as parameters.
-        let maxduplicates: u32 = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+        let maxduplicates: u32 = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
         let base1 = prog
             .arch()
             .types()
@@ -3642,7 +3642,7 @@ decomp_command!(
 decomp_command!(
     /// (kuna) `force constant <addr> <format> [<value>]`: `force varnode` for
     /// the constant the instruction at `addr` reads, named without a p-code
-    /// sequence number (`crate::kuna_constformat`).
+    /// sequence number (`crate::constformat`).
     IfcForceConstant,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
         if dcp_mut(status)?.fd.is_none() {
@@ -3660,13 +3660,13 @@ decomp_command!(
         let value = match s.read_token().as_str() {
             "" => None,
             token => Some(
-                crate::kuna_constformat::parse_value(token)
+                crate::constformat::parse_value(token)
                     .ok_or_else(|| IfaceError::parse("Bad constant value"))?,
             ),
         };
-        let maxduplicates = unlace_decomp::kuna_dynamichashmax::MAX_DUPLICATES;
+        let maxduplicates = unlace_decomp::dynamichashmax::MAX_DUPLICATES;
         let fd = dcp.fd.as_mut().expect("fd checked Some above");
-        crate::kuna_constformat::apply(fd, prog.arch(), &addr, &format, value, maxduplicates)
+        crate::constformat::apply(fd, prog.arch(), &addr, &format, value, maxduplicates)
             .map_err(IfaceError::execution)?;
         dcp.pending_format_checks.push((addr, format, value));
         status.out("Successfully forced format display\n");
@@ -3787,13 +3787,13 @@ decomp_command!(
         let prog = dcp.conf.as_ref().expect("conf present when fd present");
         let (callpoint, _size) = parse_machaddr(prog, s, false).map_err(IfaceError::parse)?;
         let fd = dcp.fd.as_ref().expect("fd present");
-        if !crate::kuna_callproto::has_call_at(fd, &callpoint) {
-            return Err(IfaceError::execution(crate::kuna_callproto::NO_CALL));
+        if !crate::callproto::has_call_at(fd, &callpoint) {
+            return Err(IfaceError::execution(crate::callproto::NO_CALL));
         }
         // C++ parse_protopieces(pieces,s,dcp->conf) — the remainder of the line.
         s.skip_ws();
         let decl = s.rest().trim().to_string();
-        let pieces = crate::kuna_callproto::parse(prog, &decl).map_err(IfaceError::execution)?;
+        let pieces = crate::callproto::parse(prog, &decl).map_err(IfaceError::execution)?;
         // C++ builds a FuncProto (setInternal + setPieces) and
         // insertProtoOverride(callpoint, newproto).  The W4 `applyPrototype` consume
         // (FlowInfo::queryCall) is still stubbed (LOSS-031 neighborhood), so the
@@ -3879,12 +3879,12 @@ decomp_command!(
         let chained = if type_ == unlace_decomp::overrides::flow_type::CALL
             || type_ == unlace_decomp::overrides::flow_type::CALL_RETURN
         {
-            crate::kuna_retcallchain::kuna_chain_sites(
+            crate::retcallchain::kuna_chain_sites(
                 prog.arch().translate(),
                 &entry,
                 &addr,
-                crate::kuna_retcallchain::CHAIN_MAX_SITES,
-                crate::kuna_retcallchain::CHAIN_MAX_INSNS,
+                crate::retcallchain::CHAIN_MAX_SITES,
+                crate::retcallchain::CHAIN_MAX_INSNS,
             )
         } else {
             Vec::new()
@@ -3912,7 +3912,7 @@ decomp_command!(
         if !chained.is_empty() {
             status.out(&format!(
                 "Extended it along the ret-call chain to {}\n",
-                crate::kuna_retcallchain::kuna_render_sites(&chained)
+                crate::retcallchain::kuna_render_sites(&chained)
             ));
         }
         Ok(())
@@ -3921,8 +3921,8 @@ decomp_command!(
 
 decomp_command!(
     /// (kuna) `override indirect <callsite> <name|address>`: the indirect call
-    /// at `<callsite>` goes to that function ([`crate::kuna_calleeoverride`]).
-    /// Not a C++ command, so [`crate::kuna_console::register_kuna_commands`]
+    /// at `<callsite>` goes to that function ([`crate::calleeoverride`]).
+    /// Not a C++ command, so [`crate::console::register_kuna_commands`]
     /// registers it.
     IfcOverrideIndirect,
     fn execute(&self, status: &mut IfaceStatus, s: &mut CommandStream) -> IfaceResult<()> {
@@ -3939,7 +3939,7 @@ decomp_command!(
         if callee.is_empty() {
             return Err(IfaceError::parse("Missing callee"));
         }
-        crate::kuna_calleeoverride::plant(prog, &entry, &site, &callee)
+        crate::calleeoverride::plant(prog, &entry, &site, &callee)
             .map_err(IfaceError::execution)?;
         prog.callwide_unavailable("indirect-call override requires a new complete image proof");
         dcp.pending_callee_overrides
@@ -4490,7 +4490,7 @@ decomp_command!(
 decomp_command!(
     /// (kuna) `override bytes <addr> <hex>`: the bytes mapped at `<addr>` are
     /// `<hex>`, whatever the image file holds there.  Not a C++ command, so it is
-    /// registered by [`crate::kuna_console::register_kuna_commands`] rather than
+    /// registered by [`crate::console::register_kuna_commands`] rather than
     /// here — `CPP_REGISTER_ORDER` is a transcription of upstream's own list.
     ///
     /// The statement a static loader cannot derive.  A stage-1 unpacker's output

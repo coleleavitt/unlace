@@ -122,5 +122,5 @@ pub fn kuna_is_function_entry(
 }
 
 #[cfg(test)]
-#[path = "kuna_inferfuncentry/tests.rs"]
+#[path = "inferfuncentry/tests.rs"]
 mod tests;

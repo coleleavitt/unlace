@@ -46,7 +46,7 @@
 //! as its first pushed argument instead, so a call whose last push stores the
 //! object keeps the default.
 
-use crate::kuna_entryreads::FuncdataEntryreadsExt;
+use crate::entryreads::FuncdataEntryreadsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -103,10 +103,10 @@ pub fn model_name(inputs: u8) -> Option<&'static str> {
 pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int4, Address)> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
         || !arch.archid.starts_with("x86:LE:32:")
-        || !crate::kuna_fastfailnoreturn::archid_is_windows(&arch.archid)
+        || !crate::fastfailnoreturn::archid_is_windows(&arch.archid)
     {
         return None;
     }
@@ -144,7 +144,7 @@ pub fn virtual_this(arch: &Architecture) -> Option<(Rc<ProtoModel>, Address, int
 /// ([`Values`]): a call clobbers ECX, so a register copied from ECX before it
 /// is not the object.
 pub fn virtual_call(data: &Funcdata, call: OpId) -> Option<Rc<ProtoModel>> {
-    use crate::kuna_swiftcall::defining_op;
+    use crate::swiftcall::defining_op;
     let (model, ecx, ecx_size, eax) = data.get_arch().virtual_this.as_ref()?;
     let op = data
         .obank()
@@ -342,7 +342,7 @@ pub fn callind_cleanup(arch: &Architecture, call_at: &Address) -> u32 {
     if virtual_this(arch).is_none() {
         return 0;
     }
-    crate::kuna_calleepurge::own_cleanup(arch, call_at)
+    crate::calleepurge::own_cleanup(arch, call_at)
 }
 
 /// Ops [`virtual_call`] reads back from the call.
@@ -382,7 +382,7 @@ pub fn own_register_model(
 fn register_model_for(arch: &Architecture, entry: &Address) -> Option<Rc<ProtoModel>> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
     {
         return None;
@@ -422,14 +422,14 @@ pub const KEY_CUSTOM_SHIFT: u16 = 2;
 /// costs nothing off its target.
 pub fn custom_applies(arch: &Architecture) -> bool {
     arch.kuna_options
-        .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+        .get::<crate::calleereginputs::CalleeRegInputs>()
         .on
         && arch
             .kuna_options
-            .get::<crate::kuna_calleereginputs::CalleeRegInputs>()
+            .get::<crate::calleereginputs::CalleeRegInputs>()
             .custom
         && arch.archid.starts_with("x86:LE:32:")
-        && crate::kuna_fastfailnoreturn::archid_is_windows(&arch.archid)
+        && crate::fastfailnoreturn::archid_is_windows(&arch.archid)
         && arch.default_fp().map(|m| m.get_extra_pop()) == Some(EXTRAPOP_UNKNOWN)
 }
 
@@ -553,7 +553,7 @@ pub fn skips_read_operands(data: &Funcdata) -> bool {
     data.call_specs()
         .iter()
         .any(|fc| fc.callee_reg_model().is_some())
-        && !crate::kuna_calleepurge::every_pop_settled(data)
+        && !crate::calleepurge::every_pop_settled(data)
 }
 
 /// Is `vn`, read by the call `op` while its trials are scored, the operand of
@@ -602,7 +602,7 @@ pub fn argument_registers(arch: &Architecture, entry: &Address) -> u8 {
 /// in [`REGISTERS`] order.
 pub fn callee_register_inputs(arch: &Architecture, entry: &Address) -> Option<u8> {
     if !arch.archid.starts_with("x86:LE:32:")
-        || !crate::kuna_fastfailnoreturn::archid_is_windows(&arch.archid)
+        || !crate::fastfailnoreturn::archid_is_windows(&arch.archid)
         || entry.is_invalid()
     {
         return None;
@@ -831,8 +831,8 @@ fn walk(arch: &Architecture, entry: &Address) -> Option<u8> {
     Some(read)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.calleereginputs_virtual_this = Some(virtual_this);
     hooks.calleereginputs_reads_register = Some(reads_register);
 }
@@ -859,7 +859,7 @@ impl CalleeRegInputs {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for CalleeRegInputs {
+impl crate::optionset::KunaOption for CalleeRegInputs {
     const NAME: &'static str = "calleereginputs";
     crate::kuna_option_id!();
 

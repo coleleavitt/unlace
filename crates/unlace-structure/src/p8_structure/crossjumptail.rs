@@ -1,6 +1,6 @@
 //! S8 shared-run duplication: `crossjumprevert` past one block.
 //!
-//! [`crate::kuna_crossjumpreverter`] duplicates one cross-jump
+//! [`crate::crossjumpreverter`] duplicates one cross-jump
 //! tail block into a plain `goto`.  Cross-jumping also shares longer runs: a
 //! statement or two, an `if`, a call, reached by `goto` from inside nested
 //! arms, and the latch of a loop, reached from deep in its body.  On the final
@@ -516,7 +516,7 @@ fn has_exceptional_if(data: &Funcdata, root: BlockId) -> bool {
     let mut stack = vec![root];
     while let Some(id) = stack.pop() {
         let b = graph.block(id);
-        if b.get_type() == BlockType::If && crate::kuna_gotosink::exceptional_if(data, id) {
+        if b.get_type() == BlockType::If && crate::gotosink::exceptional_if(data, id) {
             return true;
         }
         stack.extend((0..b.get_size()).map(|i| b.get_block(i)));
@@ -531,19 +531,19 @@ pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
     let gates = Gates {
         tails: arch
             .kuna_options
-            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0,
         latch: arch
             .kuna_options
-            .get::<crate::kuna_crossjumpreverter::RevertCrossJumps>()
+            .get::<crate::crossjumpreverter::RevertCrossJumps>()
             .0
             && arch
                 .kuna_options
-                .get::<crate::kuna_loopcontinue::LoopContinue>()
+                .get::<crate::loopcontinue::LoopContinue>()
                 .0,
         brk: arch
             .kuna_options
-            .get::<crate::kuna_loopbreak_recovery::RecoverLoopBreak>()
+            .get::<crate::loopbreak_recovery::RecoverLoopBreak>()
             .0,
         do_while_continue: arch.do_while_continue,
     };
@@ -563,7 +563,7 @@ pub fn crossjumptail_apply(data: &mut Funcdata) -> i32 {
         }
     }
     if !targets.is_empty() {
-        crate::kuna_gotosink::release_labels(data, &targets);
+        crate::gotosink::release_labels(data, &targets);
     }
     targets.len() as i32
 }

@@ -30,7 +30,7 @@ pub enum DeclOrder {
     Natural,
 }
 
-impl crate::kuna_optionset::KunaOption for DeclOrder {
+impl crate::optionset::KunaOption for DeclOrder {
     const NAME: &'static str = "declorder";
     crate::kuna_option_id!();
 
@@ -126,5 +126,5 @@ pub fn order_decls<T>(decls: &mut [(T, String)], mode: DeclOrder, angr_names: bo
 }
 
 #[cfg(test)]
-#[path = "kuna_declorder/tests.rs"]
+#[path = "declorder/tests.rs"]
 mod tests;

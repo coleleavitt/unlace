@@ -37,7 +37,7 @@ impl AnalysisPass for ArmBasePcsPass {
         let mut out = AnalysisOutput::default();
         if ctx.file.format() != object::BinaryFormat::Elf
             || ctx.file.architecture() != object::Architecture::Arm
-            || super::kuna_armfloatabi::args_evidence(ctx.file) != Some(false)
+            || super::armfloatabi::args_evidence(ctx.file) != Some(false)
         {
             return out;
         }

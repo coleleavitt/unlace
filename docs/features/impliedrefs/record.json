@@ -1,6 +1,6 @@
 {
   "opportunity": "The two thresholds ActionMarkExplicit uses to decide whether a computed value gets its own declared local or is inlined at every use (Architecture::max_implied_ref and max_term_duplication) were compiled-in constants, both 2, with no command reaching either. Upstream's own comments next to them read '2 is best, in specific cases a higher number might be good' and '2 and 3 (4) are reasonable' -- values it expects to be tried. Exposing them turns a rebuild into a per-run flag, and gives the variable-count lane its ablation lever.",
-  "test_name": "tests/stages/kuna-impliedrefs.xml (6 assertions, two synthetic gcc -O2 functions, four passes) + 3 unit tests in p6_variables/kuna_impliedrefs.rs",
+  "test_name": "tests/stages/kuna-impliedrefs.xml (6 assertions, two synthetic gcc -O2 functions, four passes) + 3 unit tests in p6_variables/impliedrefs.rs",
   "binary": "decbench full_run_address_2026-09-11/O2/coreutils/stripped/fmt",
   "selector": "0x26a0",
   "func_addr": "0x26a0",
@@ -25,7 +25,7 @@
   "ablation_changed": 0,
   "parity": "OK",
   "root_cause": "Not a defect: the constants were simply never surfaced. The reading sites (base_explicit, process_multiplier) already took both off the per-function ArchSeam context, which Architecture refreshes from these fields at every function, so the options write the fields and the pass is untouched.",
-  "coupling": "max_implied_ref is a program-wide tunable, not private to explicit-marking: Funcdata::bb_is_complex (upstream BlockBasic::isComplex, the OR-clause absorb test of CollapseStructure::rule_block_or) and p8_structure/kuna_condfold.rs bound a condition block's printed statements with the same field, so `impliedrefs` loosens those two structure tests along with the marking. Stated in the catalog row and docs/spec/06-variables-and-merge.md rather than split into a second field.",
+  "coupling": "max_implied_ref is a program-wide tunable, not private to explicit-marking: Funcdata::bb_is_complex (upstream BlockBasic::isComplex, the OR-clause absorb test of CollapseStructure::rule_block_or) and p8_structure/condfold.rs bound a condition block's printed statements with the same field, so `impliedrefs` loosens those two structure tests along with the marking. Stated in the catalog row and docs/spec/06-variables-and-merge.md rather than split into a second field.",
   "ablation": {
     "method": "kuna decompile-all <bin> --option <name> <value>, declared locals counted out of the emitted C (a declaration-block line naming a vN local); functions_changed is per-function text inequality against the default dump",
     "binary": "decbench full_run_address_2026-09-11/O2/coreutils/stripped/fmt (151 functions in decompile-all)",
@@ -163,11 +163,11 @@
     "option_values_live_value_present_for_85": "unchanged -- a 3+-valued option carries no live_field (the codegen live reader is a bool ternary), so both names join the no-live-reader allow-list next to int3pad/warnstyle/namestyle"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_impliedrefs.rs (new)",
+    "decompiler/crates/kuna-decomp/src/p6_variables/impliedrefs.rs (new)",
     "decompiler/crates/kuna-decomp/src/p6_variables/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_phases/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p0_knowledge/phases/tests.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",

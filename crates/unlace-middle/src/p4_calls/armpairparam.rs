@@ -26,7 +26,7 @@ use crate::funcdata::Funcdata;
 
 crate::kuna_flag!(
     /// (kuna) Join an unprototyped 64-bit parameter in an aligned register
-    /// pair (option `armpairparam`). See [`crate::kuna_armpairparam`].
+    /// pair (option `armpairparam`). See [`crate::armpairparam`].
     ArmPairParams,
     "armpairparam",
     "register-pair parameter joining",

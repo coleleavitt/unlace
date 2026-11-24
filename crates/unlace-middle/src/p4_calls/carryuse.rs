@@ -79,7 +79,7 @@ pub fn carry_test(data: &Funcdata, opmatch: OpId, compare: OpId, vn: VarnodeId) 
     (0..2).any(|slot| add.get_in(slot).is_some_and(|a| same(data, a, other)))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.carryuse_carry_test = Some(carry_test);
 }

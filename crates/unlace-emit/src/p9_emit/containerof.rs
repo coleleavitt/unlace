@@ -51,7 +51,7 @@ impl ContainerOf {
     }
 }
 
-impl crate::kuna_optionset::KunaOption for ContainerOf {
+impl crate::optionset::KunaOption for ContainerOf {
     const NAME: &'static str = "containerof";
     crate::kuna_option_id!();
 
@@ -244,7 +244,7 @@ impl PrintC {
     /// Push `container_of(p, S, m)` for the CAST `op` when `option containerof` is on
     /// and the CAST is the container idiom.
     pub fn push_container_of(&mut self, fd: &Funcdata, arch: &Architecture, op: OpId) -> bool {
-        if self.out_lang != crate::kuna_lang::OutLang::C {
+        if self.out_lang != crate::lang::OutLang::C {
             return false;
         }
         let ctx = fd.get_arch();

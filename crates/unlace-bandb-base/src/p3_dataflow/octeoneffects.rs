@@ -22,10 +22,10 @@ use crate::{
     funcdata::Funcdata,
 };
 
-pub use crate::kuna_octeonops::{Effect, Fixup, Kind, OcteonEffectsMode, UPSTREAM, userop_ids};
+pub use crate::octeonops::{Effect, Fixup, Kind, OcteonEffectsMode, UPSTREAM, userop_ids};
 
 #[cfg(test)]
-use crate::{kuna_octeonops::OPERATIONS, userop::UserOpManage};
+use crate::{octeonops::OPERATIONS, userop::UserOpManage};
 
 pub fn effect(data: &Funcdata, op: OpId) -> Option<Effect> {
     let known = &data.get_arch().octeon_memory_userops;
@@ -52,7 +52,7 @@ pub fn guards(data: &Funcdata, op: OpId) -> bool {
             || data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_octeoneffects::OcteonEffectsMode>()
+                .get::<crate::octeoneffects::OcteonEffectsMode>()
                 == OcteonEffectsMode::Ordered
     })
 }
@@ -224,8 +224,8 @@ fn result_metatype(size: int4) -> type_metatype {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.octeoneffects_input_type = Some(input_type);
     hooks.octeoneffects_output_type = Some(output_type);
 }

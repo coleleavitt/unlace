@@ -20,10 +20,10 @@
   "branch": "feat/re-get-pc-helper-loses",
   "hypothesis_status": "upheld as filed and as measured by the captain at T_REFUTE: an ordinary caller-clobbering ABI model applied to a register-preserving helper. Two refinements the record did not have. (1) Downgrading the effect is only half the fix: guardCalls's output-active branch re-promotes the range to killedbycall whenever it characterizes as return storage, which on i386 EDX does (the EAX:EDX join pentry), so the output arm has to be skipped for the same range. (2) The general form the captain scoped -- 'trust a fully decoded, non-recursive, call-free callee' -- is NOT sound on its own: it regressed 24 stage assertions across 7 testcases, every one a fixture whose callee is a deliberate one-byte `ret` placeholder. Absence of a write needed a positive counterpart (the callee must write a callee-saved register).",
   "files": [
-    "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleepreserves.rs",
-    "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleepreserves/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p4_calls/calleepreserves.rs",
+    "decompiler/crates/kuna-decomp/src/p4_calls/calleepreserves/tests.rs",
     "decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs",
-    "decompiler/crates/kuna-decomp/src/p4_calls/kuna_rustabi.rs",
+    "decompiler/crates/kuna-decomp/src/p4_calls/rustabi.rs",
     "decompiler/crates/kuna-decomp/src/p4_calls/fspec.rs",
     "decompiler/crates/kuna-decomp/src/infra/decompile_drive.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",

@@ -10,7 +10,7 @@
 //! from a file, and the parser recurses once per bracket level, so a
 //! declaration nested deeper than [`MAX_NESTING`] is not parsed at all. The
 //! decompile drive checks a parked one against the body
-//! ([`unlace_decomp::kuna_fidproto`]).
+//! ([`unlace_decomp::fidproto`]).
 
 use std::collections::BTreeSet;
 use std::rc::Rc;

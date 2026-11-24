@@ -89,9 +89,9 @@ use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyRes
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_regioneval::eval;
-use crate::kuna_strlenscan::PURE;
 use crate::op::PcodeOp;
+use crate::regioneval::eval;
+use crate::strlenscan::PURE;
 use crate::userop::{
     BUILTIN_MEMCMP, BUILTIN_MEMCPY, BUILTIN_MEMSET, BUILTIN_MEMSET16, BUILTIN_MEMSET32,
     BUILTIN_MEMSET64,
@@ -129,7 +129,7 @@ impl Action for ActionRepString {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_repstring::RepString>()
+            .get::<crate::repstring::RepString>()
             .0
         {
             return 0;
@@ -1088,7 +1088,7 @@ pub fn output_type(data: &Funcdata, op_id: OpId) -> Option<Rc<Datatype>> {
 crate::kuna_flag!(
     /// (kuna) Collapse an x86 `rep movs`/`rep stos`/`repz cmpsb` loop into a
     /// copy, fill or compare builtin (option `repstring`).  See
-    /// [`crate::kuna_repstring`].
+    /// [`crate::repstring`].
     RepString,
     "repstring",
     "rep movs/stos/cmps loops as copy, fill and compare builtins",

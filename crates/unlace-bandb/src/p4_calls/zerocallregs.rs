@@ -41,7 +41,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::fspec::{ParamActive, ParamEntry};
 use crate::funcdata::Funcdata;
-use crate::kuna_zeroidiomuse::same_value_at;
+use crate::zeroidiomuse::same_value_at;
 
 /// How many defining ops one zero is traced through.
 const MAX_DEPTH: u32 = 8;
@@ -98,8 +98,7 @@ pub fn drop_epilogue_zeros(data: &Funcdata, active: &mut ParamActive, returns: &
     }
     for i in 0..active.get_num_trials() {
         let trial = active.get_trial(i);
-        if !trial.is_active()
-            || crate::kuna_voidret::forced(data, trial.get_address(), trial.get_size())
+        if !trial.is_active() || crate::voidret::forced(data, trial.get_address(), trial.get_size())
         {
             continue;
         }
@@ -352,5 +351,5 @@ fn slice_of_zero(
 }
 
 #[cfg(test)]
-#[path = "kuna_zerocallregs/tests.rs"]
+#[path = "zerocallregs/tests.rs"]
 mod tests;

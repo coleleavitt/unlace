@@ -39,7 +39,7 @@ use unlace_decomp::context::{ArchContext, BlockId, OpId, TypeOp, VarnodeId};
 use unlace_decomp::dtype::{Datatype, type_metatype};
 use unlace_decomp::dynamic::DynamicHash;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_stackguard::{ActionStripStackGuard, StackGuardOption};
+use unlace_decomp::stackguard::{ActionStripStackGuard, StackGuardOption};
 
 // --- fd builder (mirrors the in-crate test harness) ---------------------------
 

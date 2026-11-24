@@ -358,7 +358,7 @@ fn wrapped_frame_offsets_and_exhausted_queries_stay_bounded() {
 
 #[test]
 fn integer_frame_addresses_keep_unbounded_positive_parameter_aliases() {
-    use crate::kuna_stackranges::{frame_address, may_alias};
+    use crate::stackranges::{frame_address, may_alias};
     for width in [4, 8] {
         let mut f = Fixture::new(false, width);
         let block = f.block();
@@ -411,7 +411,7 @@ fn wide_duplicate_pointer_choices_exhaust_the_alias_proof() {
         None,
     );
     let address = f.fd.new_unique_out(8, op).unwrap();
-    assert!(crate::kuna_stackranges::may_alias(&f.fd, address, 8, 8));
+    assert!(crate::stackranges::may_alias(&f.fd, address, 8, 8));
 }
 
 #[test]
@@ -441,7 +441,7 @@ fn absent_call_contracts_keep_frame_effects_and_later_locked_views() {
             ]);
             4
         ];
-        assert!(crate::kuna_stackuses::declared_view(&f.fd, call, 1).is_none());
+        assert!(crate::stackuses::declared_view(&f.fd, call, 1).is_none());
         assert!(!f.fd.get_call_specs(index).proto().has_store());
         assert_eq!(f.bytes(point, 0x20, 4), expected);
 
@@ -465,11 +465,11 @@ fn absent_call_contracts_keep_frame_effects_and_later_locked_views() {
                 flags: 0,
             },
         );
-        assert!(crate::kuna_stackuses::declared_view(&f.fd, call, 1).is_none());
+        assert!(crate::stackuses::declared_view(&f.fd, call, 1).is_none());
         f.fd.get_call_specs_mut(index)
             .proto_mut()
             .set_input_lock(true);
-        let view = crate::kuna_stackuses::declared_view(&f.fd, call, 1).unwrap();
+        let view = crate::stackuses::declared_view(&f.fd, call, 1).unwrap();
         assert!(Rc::ptr_eq(&view, &value_type));
         assert_eq!(f.bytes(point, 0x20, 4), expected);
     }

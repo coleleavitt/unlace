@@ -7,7 +7,7 @@ use unlace_console::{
     engine::{EntrySelector, bootstrap_program},
     project::decompile_targets,
 };
-use unlace_decomp::kuna_octeoneffects::OcteonEffectsMode;
+use unlace_decomp::octeoneffects::OcteonEffectsMode;
 
 fn decompile(words: &[u32], n32: bool, prototype: &str) -> String {
     decompile_config(words, n32, Some(prototype), false)

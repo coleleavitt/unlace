@@ -36,7 +36,7 @@ pub fn span_key(
     if calls.is_empty() {
         return None;
     }
-    let (addr, size) = crate::kuna_typemerge::single_storage(ctx, high)?;
+    let (addr, size) = crate::typemerge::single_storage(ctx, high)?;
     if addr.get_space()?.get_type() != spacetype::IPTR_PROCESSOR {
         return None;
     }
@@ -79,7 +79,7 @@ impl OptionCalleeSaved {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CalleeSavedSplit(pub bool);
 
-impl crate::kuna_optionset::KunaOption for CalleeSavedSplit {
+impl crate::optionset::KunaOption for CalleeSavedSplit {
     const NAME: &'static str = "calleesaved";
     crate::kuna_option_id!();
 
@@ -100,7 +100,7 @@ impl crate::kuna_optionset::KunaOption for CalleeSavedSplit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kuna_optionset::KunaOption;
+    use crate::optionset::KunaOption;
 
     #[test]
     fn option_parses_and_ships_off() {

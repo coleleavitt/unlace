@@ -25,7 +25,7 @@
 //!
 //! ## Why the trigger is a name, and why that keeps it inert on C
 //!
-//! Unlike the sibling [`kuna_stackguard`](crate::kuna_stackguard) pass — whose
+//! Unlike the sibling [`kuna_stackguard`](crate::stackguard) pass — whose
 //! callee is an unnamed PLT stub, so the canary has to be pinned by its
 //! *compare* — every helper here is a **Rust-only symbol**.  Matching the callee
 //! name is therefore both the faithful port (angr matches the same seven paths)
@@ -243,7 +243,7 @@ impl Action for ActionRemoveSecurityCheck {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_securitycheck::StripSecurityCheck>()
+                .get::<crate::securitycheck::StripSecurityCheck>()
                 .0
         {
             return 0; // P0 assertion not set
@@ -343,5 +343,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_securitycheck/tests.rs"]
+#[path = "securitycheck/tests.rs"]
 mod tests;

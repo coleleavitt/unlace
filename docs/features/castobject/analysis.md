@@ -105,7 +105,7 @@ addresses this option changes.
 
 ## 2. The mechanism
 
-`p6_variables/kuna_castobject.rs` re-types the frame hints of one slot to the
+`p6_variables/castobject.rs` re-types the frame hints of one slot to the
 pointee the callee declares, before the layout decision, when:
 
 - every alias-checker base landing on the slot is a plain `&local` read only

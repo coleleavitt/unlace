@@ -68,7 +68,7 @@ pub fn returns_cached(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_cachereturn::CacheReturn>()
+        .get::<crate::cachereturn::CacheReturn>()
         .0
         || !data.get_arch().source_lang.is_swift()
         || data.get_func_proto().is_output_locked()
@@ -198,7 +198,7 @@ fn stack_rooted(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool {
     if node.is_spacebase() {
         return true;
     }
-    if let Some(sp) = crate::kuna_spillargtrial::stack_pointer_storage(data) {
+    if let Some(sp) = crate::spillargtrial::stack_pointer_storage(data) {
         if !node.is_constant()
             && sp
                 .space
@@ -313,11 +313,11 @@ fn constant(data: &Funcdata, vn: VarnodeId, depth: usize) -> Option<u64> {
 
 /// (kuna) A return register that holds one memory cell's value on every
 /// path is the return value (option `cachereturn`).  See
-/// [`crate::kuna_cachereturn`].
+/// [`crate::cachereturn`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct CacheReturn(pub bool);
 
-impl crate::kuna_optionset::KunaOption for CacheReturn {
+impl crate::optionset::KunaOption for CacheReturn {
     const NAME: &'static str = "cachereturn";
     crate::kuna_option_id!();
 
@@ -330,7 +330,7 @@ impl crate::kuna_optionset::KunaOption for CacheReturn {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_cachereturn::OptionCacheReturn.apply(value)?;
+        let (v, msg) = crate::cachereturn::OptionCacheReturn.apply(value)?;
         Ok((CacheReturn(v), msg))
     }
 }

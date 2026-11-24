@@ -11,7 +11,7 @@ use unlace_num::opcodes::OpCode;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_stackobjects::SourcePoint;
+use crate::stackobjects::SourcePoint;
 
 const MAX_RECORDS: usize = 4096;
 const MAX_FOOTPRINTS: usize = 32;
@@ -63,7 +63,7 @@ fn invalidate(fd: &mut Funcdata) {
 fn enabled(fd: &Funcdata) -> bool {
     !fd.get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
 }
 
@@ -117,7 +117,7 @@ fn overlaps(start: u64, size: i32, other: u64, width: i32) -> bool {
 }
 
 fn fixed(fd: &Funcdata, input: VarnodeId, size: i32) -> Option<u64> {
-    let frame = crate::kuna_stackranges::frame_address(fd, input)?;
+    let frame = crate::stackranges::frame_address(fd, input)?;
     let stack = fd.get_arch().manage().get_stack_space()?;
     if frame.pointer_size as u32 != stack.get_addr_size()
         || frame.first != frame.last
@@ -289,7 +289,7 @@ fn published_input(fd: &Funcdata, id: OpId) -> Option<(i32, VarnodeId)> {
             let space = fd.vbank().get(op.get_in(0)?)?;
             if !space.is_constant()
                 || space.get_offset() == stack.get_index() as u64
-                || crate::kuna_stackranges::frame_address(fd, op.get_in(1)?).is_some()
+                || crate::stackranges::frame_address(fd, op.get_in(1)?).is_some()
             {
                 return None;
             }
@@ -312,7 +312,7 @@ fn collect(fd: &mut Funcdata) {
             let call = matches!(op.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND);
             let receiver = native_receiver(fd, id);
             if let Some((_, input)) = published_input(fd, id) {
-                if crate::kuna_stackranges::frame_address(fd, input).is_some() {
+                if crate::stackranges::frame_address(fd, input).is_some() {
                     frame_publications.push(id);
                 }
             }
@@ -320,7 +320,7 @@ fn collect(fd: &mut Funcdata) {
                 continue;
             }
             for slot in 0..op.num_input() {
-                let Some(ty) = crate::kuna_stackuses::declared_view(fd, id, slot) else {
+                let Some(ty) = crate::stackuses::declared_view(fd, id, slot) else {
                     continue;
                 };
                 let aggregate = matches!(
@@ -518,8 +518,7 @@ pub fn publication(fd: &Funcdata, value: VarnodeId) -> bool {
             .and_then(|op| op.get_in(0))
             .and_then(|input| fixed(fd, input, p.pointee.get_size()))
             == Some(p.start)
-        && crate::kuna_stackuses::declared_view(fd, id, 0)
-            .is_some_and(|ty| Rc::ptr_eq(&ty, &p.pointee))
+        && crate::stackuses::declared_view(fd, id, 0).is_some_and(|ty| Rc::ptr_eq(&ty, &p.pointee))
 }
 
 #[doc(hidden)]
@@ -667,7 +666,7 @@ fn receiver_reaches(fd: &Funcdata, publication: OpId, reader: OpId, p: &Publicat
         if op.code() == OpCode::CPUI_STORE
             && op
                 .get_in(1)
-                .and_then(|id| crate::kuna_stackranges::frame_address(fd, id))
+                .and_then(|id| crate::stackranges::frame_address(fd, id))
                 .is_none_or(|address| {
                     fd.get_arch()
                         .manage()
@@ -769,7 +768,7 @@ fn accesses_fit_early(
         let extent = if index == stack.get_index() as u64 && pointer_vn.is_constant() {
             Some((pointer_vn.get_offset(), bytes))
         } else {
-            crate::kuna_stackranges::frame_address(fd, pointer)
+            crate::stackranges::frame_address(fd, pointer)
                 .filter(|address| address.pointer_size as u32 == stack.get_addr_size())
                 .and_then(|address| address.extent(bytes))
         };
@@ -804,7 +803,7 @@ fn accesses_fit_early(
                 related |= receiver_reaches(fd, publication_id, reader, publication);
             }
         }
-        if !related && crate::kuna_stackranges::may_alias(fd, pointer, start, size) {
+        if !related && crate::stackranges::may_alias(fd, pointer, start, size) {
             return Err(Refusal::Unavailable);
         }
     }
@@ -860,7 +859,7 @@ fn stores_fit(fd: &Funcdata, start: u64, size: i32) -> bool {
         let extent = if index == stack.get_index() as u64 && pointer.is_constant() {
             Some((pointer.get_offset(), width))
         } else {
-            crate::kuna_stackranges::frame_address(fd, op.get_in(1).unwrap())
+            crate::stackranges::frame_address(fd, op.get_in(1).unwrap())
                 .filter(|address| address.pointer_size as u32 == stack.get_addr_size())
                 .and_then(|address| address.extent(width))
         };
@@ -949,27 +948,27 @@ pub fn views(fd: &Funcdata) -> Vec<(u64, Rc<Datatype>)> {
         .collect()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.localstackviews_record_native = Some(record_native);
     hooks.localstackviews_preserves_range = Some(preserves_range);
 }
 
-crate::kuna_func_state!(crate::kuna_localstackviews::LocalStackViews, keep_across_clear: false);
+crate::kuna_func_state!(crate::localstackviews::LocalStackViews, keep_across_clear: false);
 
 /// The `kuna_localstackviews` pass's methods on [`Funcdata`], as an extension trait so the type can
 /// live in a lower crate.
 pub trait FuncdataLocalstackviewsExt {
-    fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews;
-    fn local_stack_views_mut(&mut self) -> &mut crate::kuna_localstackviews::LocalStackViews;
+    fn local_stack_views(&self) -> &crate::localstackviews::LocalStackViews;
+    fn local_stack_views_mut(&mut self) -> &mut crate::localstackviews::LocalStackViews;
 }
 
 impl FuncdataLocalstackviewsExt for crate::funcdata::Funcdata {
-    fn local_stack_views(&self) -> &crate::kuna_localstackviews::LocalStackViews {
-        self.kuna_state::<crate::kuna_localstackviews::LocalStackViews>()
+    fn local_stack_views(&self) -> &crate::localstackviews::LocalStackViews {
+        self.kuna_state::<crate::localstackviews::LocalStackViews>()
     }
-    fn local_stack_views_mut(&mut self) -> &mut crate::kuna_localstackviews::LocalStackViews {
-        self.kuna_state_mut::<crate::kuna_localstackviews::LocalStackViews>()
+    fn local_stack_views_mut(&mut self) -> &mut crate::localstackviews::LocalStackViews {
+        self.kuna_state_mut::<crate::localstackviews::LocalStackViews>()
     }
 }
 

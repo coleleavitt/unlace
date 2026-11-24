@@ -69,13 +69,13 @@
     "strengthened": "the filed acceptance (`stdout_absent: = \"\";` + `stdout_matches: 0x403550`) says nothing about the genuine empty literal beside the blob, so the promoted probe asserts both directions on one function"
   },
   "files": [
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_emptystrconst.rs",
-    "decompiler/crates/kuna-decomp/src/p9_emit/kuna_emptystrconst/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/emptystrconst.rs",
+    "decompiler/crates/kuna-decomp/src/p9_emit/emptystrconst/tests.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/printc.rs",
     "decompiler/crates/kuna-decomp/src/p9_emit/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_phases/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p0_knowledge/phases/tests.rs",
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",

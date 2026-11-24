@@ -8,14 +8,14 @@ mod module_scope {
     pub(super) use unlace_num::opcodes::OpCode;
 }
 #[allow(unused_imports)]
-use crate::kuna_registerepochs::*;
+use crate::registerepochs::*;
 #[allow(unused_imports)]
 use module_scope::*;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
 use crate::funcdata_spacebase::spacebase_tests::{build_fd, reg_addr};
-use crate::kuna_registerepochs::single_family;
+use crate::registerepochs::single_family;
 use unlace_num::opcodes::OpCode;
 
 struct Fixture {

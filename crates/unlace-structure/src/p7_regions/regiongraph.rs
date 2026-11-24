@@ -42,7 +42,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::kuna_fasthash::{FxHashMap, FxHashSet};
+use crate::fasthash::{FxHashMap, FxHashSet};
 
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{Wrap, int4, uint4, uintb};
@@ -99,7 +99,7 @@ pub struct KunaRegionNode {
     /// STUB(W7): the C++ `endsWithBranchindOrCbranch` reaches
     /// `FlowBlock::lastOp()->code()` live; the basic-block CFG never mutates
     /// during region identification, so the block-graph adapter
-    /// ([`crate::kuna_regionid::KunaRegionIdentifier::build_from_block_graph`])
+    /// ([`crate::regionid::KunaRegionIdentifier::build_from_block_graph`])
     /// precomputes the predicate once per real block and parks it here.  Always
     /// `false` for synthetic test nodes (no block); for `k_multi`/`k_region`
     /// wrappers the predicate consults the last chain member's flag, not this.

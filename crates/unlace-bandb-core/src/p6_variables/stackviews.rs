@@ -36,7 +36,7 @@ pub struct StorageView {
 pub fn enabled(fd: &Funcdata) -> bool {
     fd.get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0
         || !fd.stack_write_views().is_empty()
 }
@@ -58,7 +58,7 @@ impl OptionStackViews {
 
 #[doc(hidden)]
 pub fn declared_view(fd: &Funcdata, call: OpId, slot: i32) -> Option<Rc<Datatype>> {
-    crate::kuna_stackuses::declared_view(fd, call, slot)
+    crate::stackuses::declared_view(fd, call, slot)
 }
 
 fn indexed_width(fd: &Funcdata, base: crate::context::VarnodeId) -> Option<i32> {
@@ -352,14 +352,14 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let full_views = fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_coreoptions::StackViews>()
+        .get::<crate::coreoptions::StackViews>()
         .0;
     let reused = if full_views {
         Vec::new()
     } else {
-        crate::kuna_stackparamviews::wider_scalar_parameters(fd)
+        crate::stackparamviews::wider_scalar_parameters(fd)
     };
-    let local_views = crate::kuna_localstackviews::views(fd);
+    let local_views = crate::localstackviews::views(fd);
     if !full_views && reused.is_empty() && local_views.is_empty() {
         return;
     }
@@ -386,7 +386,7 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     let mut unresolved_index = false;
     for (offset, reference) in &refs {
         if reference.index.is_some() {
-            let extent = crate::kuna_stackranges::frame_address(fd, reference.base)
+            let extent = crate::stackranges::frame_address(fd, reference.base)
                 .and_then(|address| address.extent(indexed_width(fd, reference.base)?));
             if let Some((start, size)) = extent {
                 extents.push((start, size, Vec::new()));
@@ -491,11 +491,11 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
         let scalar_parameter = reused
             .iter()
             .any(|&(at, width)| contains(start, size, at, width));
-        let local_backing = crate::kuna_localstackviews::backing(fd, start, size);
+        let local_backing = crate::localstackviews::backing(fd, start, size);
         if !full_views && !local_backing && (!scalar_parameter || size > 4) {
             continue;
         }
-        for assertion in crate::kuna_stackobjectasserts::specs(fd) {
+        for assertion in crate::stackobjectasserts::specs(fd) {
             let at = assertion.address.get_offset();
             if !contains(start, size, at, assertion.size) {
                 continue;
@@ -539,11 +539,10 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
                             | type_metatype::TYPE_FLOAT
                     )
                 })
-                || crate::kuna_stackparamviews::needs_backing(fd, start, size))
-            && crate::kuna_stackparamviews::can_map_backing(fd, start, size);
+                || crate::stackparamviews::needs_backing(fd, start, size))
+            && crate::stackparamviews::can_map_backing(fd, start, size);
         if parameter {
-            for (offset, datatype) in crate::kuna_stackparamviews::parameter_types(fd, start, size)
-            {
+            for (offset, datatype) in crate::stackparamviews::parameter_types(fd, start, size) {
                 insert_view(&mut views, offset, datatype);
             }
         }
@@ -571,7 +570,7 @@ pub fn gather(fd: &mut Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
         }
     }
     for (start, union, parameter) in recovered {
-        if parameter && !crate::kuna_stackparamviews::map_backing(fd, start, Rc::clone(&union)) {
+        if parameter && !crate::stackparamviews::map_backing(fd, start, Rc::clone(&union)) {
             continue;
         }
         let address = Address::new(Rc::clone(space), start);
@@ -722,16 +721,16 @@ pub fn prepare_casts(fd: &mut Funcdata) {
             objects.insert(v.get_offset().wrapping_sub(info.sym_off as u64), backing);
         }
     }
-    crate::kuna_stackvaluecopies::prepare(fd, factory.as_ref());
+    crate::stackvaluecopies::prepare(fd, factory.as_ref());
     for (start, backing) in objects {
         seed_writes(fd, &space, start, &backing, factory.as_ref());
-        crate::kuna_stackobjectasserts::seed_writes(fd, start, &backing, factory.as_ref());
+        crate::stackobjectasserts::seed_writes(fd, start, &backing, factory.as_ref());
     }
-    crate::kuna_stackvalueviews::prepare(fd, factory.as_ref());
-    crate::kuna_stackobjects::finish(fd);
-    crate::kuna_stackparamviews::prepare_casts(fd);
-    crate::kuna_stackobjectasserts::prepare_casts(fd, factory.as_ref());
-    crate::kuna_stackuses::prepare_casts(fd, factory.as_ref());
+    crate::stackvalueviews::prepare(fd, factory.as_ref());
+    crate::stackobjects::finish(fd);
+    crate::stackparamviews::prepare_casts(fd);
+    crate::stackobjectasserts::prepare_casts(fd, factory.as_ref());
+    crate::stackuses::prepare_casts(fd, factory.as_ref());
 }
 
 /// Casts must use the selected storage view, even if the SSA value's preferred
@@ -893,15 +892,15 @@ pub fn pointer_origin(fd: &Funcdata, mut id: crate::context::VarnodeId) -> bool 
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stackviews_enabled = Some(enabled);
 }
 
 /// (kuna `stackviews`) The storage view each stack write was given; reset by `Funcdata::clear`.
 #[derive(Default)]
 struct WriteViewsSlot(
-    std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>,
+    std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView>,
 );
 crate::kuna_func_state!(WriteViewsSlot, keep_across_clear: false);
 
@@ -910,23 +909,21 @@ crate::kuna_func_state!(WriteViewsSlot, keep_across_clear: false);
 pub trait FuncdataStackviewsExt {
     fn stack_write_views(
         &self,
-    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>;
+    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView>;
     fn stack_write_views_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>;
+    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView>;
 }
 
 impl FuncdataStackviewsExt for crate::funcdata::Funcdata {
     fn stack_write_views(
         &self,
-    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
-    {
+    ) -> &std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView> {
         &self.kuna_state::<WriteViewsSlot>().0
     }
     fn stack_write_views_mut(
         &mut self,
-    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::kuna_stackviews::StorageView>
-    {
+    ) -> &mut std::collections::BTreeMap<crate::context::OpId, crate::stackviews::StorageView> {
         &mut self.kuna_state_mut::<WriteViewsSlot>().0
     }
 }

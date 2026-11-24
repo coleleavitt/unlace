@@ -9,24 +9,24 @@ structure-recovery`, tier `transform`, default `off`. Registered in
 
 ## Code
 
-* `p5_types/kuna_structmerge.rs` -- the mode, the option parse, and `merge()`:
+* `p5_types/structmerge.rs` -- the mode, the option parse, and `merge()`:
   the compatibility test (`shared_claims`), the evidence bar
   (`agreement_is_evidence`), the merged member list (`plan`), and the partner
   choice (most shared claims, then smallest, then first minted).
-* `p5_types/kuna_structsynth/ledger.rs` -- `lookup_or_mint` takes the mode and
+* `p5_types/structsynth/ledger.rs` -- `lookup_or_mint` takes the mode and
   calls `kuna_structmerge::merge` when nothing held answers and before minting
   the layout alone; `merge_window` bounds the partner search by size. The
   layout algebra (`FieldKey`, `Layout`, `Member`, `layout_of`,
   `layout_of_fields`, `keeps_unclaimed`, `answers_for`) widens from
   `pub(super)` to `pub(crate)` so the new module can use it.
-* `p5_types/kuna_structsynth/shard.rs` -- a worker's recording lookup passes
+* `p5_types/structsynth/shard.rs` -- a worker's recording lookup passes
   `Off`, so a `--jobs N` run never merges.
 * `KUNA_STRUCTMERGE_TRACE=1` prints one line per candidate considered, with the
   number of shared claims and the verdict.
 
 ## Tests
 
-* `p5_types/kuna_structmerge/tests.rs` -- seven unit tests: the option surface,
+* `p5_types/structmerge/tests.rs` -- seven unit tests: the option surface,
   the union of two overlapping readers (with the first record superseded), a
   contradicted claim at the same offset and one over the same bytes at a
   different offset, a single shared claim, the growth bound, the unclaimed-bytes

@@ -61,7 +61,7 @@
 //! An unwritten Varnode that is a **formal input parameter** is the one exception
 //! — the function was handed that value, so handing it back is a real return.
 //! That carve-out lives in
-//! [`crate::kuna_retinputhalf`]; without it a returned pair whose high half is a
+//! [`crate::retinputhalf`]; without it a returned pair whose high half is a
 //! passthrough argument loses the half *and* the argument.
 //!
 //! "Did not compute" is decided by a bounded walk back through the operations
@@ -75,7 +75,7 @@
 //! answer.
 //!
 //! The global carve-out holds only for a pair joined in its ABI's order. On an
-//! ABI that returns the first register high, a pair [`crate::kuna_bejoin`] does
+//! ABI that returns the first register high, a pair [`crate::bejoin`] does
 //! not prove to be one value is joined first register low
 //! ([`Funcdata::kuna_pairs_first_low`]), on the reading that the second register
 //! is a leftover this repair drops; keeping it there would return the halves
@@ -149,7 +149,7 @@ const MAX_NODES: u32 = 4096;
 /// function instead of once per returned register pair.
 ///
 /// Running out of budget answers `false`, not `true`: the answer is read by
-/// [`crate::kuna_protoorder`]'s `recovered_output`, where `true` states
+/// [`crate::protoorder`]'s `recovered_output`, where `true` states
 /// the callee's return to every caller ahead of it and `false` states nothing at
 /// all, so the unfinished walk has to take the second.
 fn computes_everywhere(
@@ -184,7 +184,7 @@ fn computes_everywhere(
             if globals && v.is_persist() {
                 continue;
             }
-            if !crate::kuna_retinputhalf::is_input_parameter(data, cur) {
+            if !crate::retinputhalf::is_input_parameter(data, cur) {
                 return false;
             }
             continue;
@@ -218,9 +218,9 @@ fn computes_everywhere(
 /// register passing straight through untouched -- leftover, and exactly what this
 /// module exists to drop. `None` drops the placement test: the pair repair asks
 /// it of a half the function moved out of its register and back
-/// ([`crate::kuna_retinputhalf::is_moved_back`]) and of the low half beside one,
+/// ([`crate::retinputhalf::is_moved_back`]) and of the low half beside one,
 /// and the unit tests ask the shape-only question with it. See
-/// [`crate::kuna_retinputhalf`].
+/// [`crate::retinputhalf`].
 fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&Address>) -> bool {
     if depth >= MAX_DEPTH {
         return true;
@@ -245,7 +245,7 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
         if v.is_persist() && !data.kuna_pairs_first_low() {
             return true;
         }
-        return crate::kuna_retinputhalf::is_input_parameter(data, vn);
+        return crate::retinputhalf::is_input_parameter(data, vn);
     };
     let Some(op) = data.obank().get(def) else {
         return true;
@@ -284,7 +284,7 @@ fn computes_from(data: &Funcdata, vn: VarnodeId, depth: u32, placed_at: Option<&
 /// `__fprintf_chk` and keeps that call's `RAX` clobber -- an INDIRECT creation --
 /// as its "result", so kuna recovers it as returning `long`. A caller has no way
 /// to see that from the recovered prototype alone, which is why `passthrough`
-/// asks this question of the callee (see [`crate::kuna_passthrough`]).
+/// asks this question of the callee (see [`crate::passthrough`]).
 ///
 /// `false` means at least one RETURN hands back a terminal the function never
 /// computed. A function with no live RETURN answers `true`, the no-change answer.
@@ -295,7 +295,7 @@ pub fn every_return_computes(data: &Funcdata) -> bool {
 /// [`every_return_computes`], with a value read out of global memory
 /// (`return stdout;`) counted as computed when `globals`: the program's own
 /// data, not a register or frame slot the caller left behind.  `callrettype`
-/// asks it this way ([`crate::kuna_callrettype`]).
+/// asks it this way ([`crate::callrettype`]).
 pub fn every_return_computes_with(data: &Funcdata, globals: bool) -> bool {
     for retop in data
         .obank()
@@ -401,7 +401,7 @@ fn zero_low_pair(data: &Funcdata, def: OpId) -> Option<(VarnodeId, i32, VarnodeI
 ///
 /// A pair joined with its first register as the high half is left alone:
 /// return recovery joins that way only a pair whose low word the function
-/// returns on purpose ([`crate::kuna_bejoin`]). The second register of an i386
+/// returns on purpose ([`crate::bejoin`]). The second register of an i386
 /// `EDX:EAX` join is never kept on its own; that RETURN returns nothing.
 ///
 /// A pair joined first register low on an ABI that returns the first register
@@ -418,7 +418,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     let every_path = data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_returnuncomputed::RetPairPaths>()
+        .get::<crate::returnuncomputed::RetPairPaths>()
         .0;
     // Collect first: the rewrite mutates the op bank.
     let mut fixes: Vec<(OpId, VarnodeId, OpId)> = Vec::new();
@@ -426,8 +426,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
     let mut drops: Vec<(OpId, OpId)> = Vec::new();
     let mut zeros: Vec<(OpId, i32, OpId)> = Vec::new();
     let moved = |data: &Funcdata, vn: VarnodeId, slot: &Address, size: i32| {
-        crate::kuna_retinputhalf::is_moved_back(data, slot, size)
-            && computes_from(data, vn, 0, None)
+        crate::retinputhalf::is_moved_back(data, slot, size) && computes_from(data, vn, 0, None)
     };
     for retop in data
         .obank()
@@ -472,7 +471,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
         else {
             continue;
         };
-        if crate::kuna_bejoin::first_register_holds_high(data, whole) {
+        if crate::bejoin::first_register_holds_high(data, whole) {
             continue;
         }
         let (hi_addr, hi_size, lo_addr, lo_size) =
@@ -519,7 +518,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
             }
             // The high register of an i386 `EDX:EAX` join is never a return
             // value alone: the RETURN returns nothing.
-            (true, false) if crate::kuna_retcallhalf::in_pair_second(data, &hi_slot, hi_size) => {
+            (true, false) if crate::retcallhalf::in_pair_second(data, &hi_slot, hi_size) => {
                 drops.push((retop, def));
                 continue;
             }
@@ -593,7 +592,7 @@ pub fn strip_uncomputed_return_piece(data: &mut Funcdata) -> bool {
 /// last call's register argument in it, and was recovered as `return
 /// CONCAT44(a1,v1);`. Any other storage answers `true`, today's answer.
 fn second_half_on_every_path(data: &Funcdata, hi: VarnodeId, slot: &Address, size: i32) -> bool {
-    !crate::kuna_retcallhalf::in_pair_second(data, slot, size)
+    !crate::retcallhalf::in_pair_second(data, slot, size)
         || computes_everywhere(data, hi, Some(slot), !data.kuna_pairs_first_low())
 }
 
@@ -608,5 +607,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_returnuncomputed/tests.rs"]
+#[path = "returnuncomputed/tests.rs"]
 mod tests;

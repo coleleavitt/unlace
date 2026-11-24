@@ -1,6 +1,6 @@
 //! Declared pointer contracts at address uses, including escaped frame views.
 
-use crate::kuna_stackobjects::FuncdataStackobjectsExt;
+use crate::stackobjects::FuncdataStackobjectsExt;
 use std::rc::Rc;
 
 use unlace_base::address::Address;
@@ -175,7 +175,7 @@ pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         }
     }
     for (id, slot, ty) in uses {
-        let Some(point) = crate::kuna_stackobjects::SourcePoint::op(fd, id) else {
+        let Some(point) = crate::stackobjects::SourcePoint::op(fd, id) else {
             continue;
         };
         if fd.stack_object_bound_uses().contains(&(point, slot)) {
@@ -184,7 +184,7 @@ pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         let Some(input) = fd.obank().get(id).and_then(|op| op.get_in(slot)) else {
             continue;
         };
-        let Some(address) = crate::kuna_stackranges::frame_address(fd, input) else {
+        let Some(address) = crate::stackranges::frame_address(fd, input) else {
             continue;
         };
         if address.first != address.last || !address.terms.is_empty() {
@@ -220,7 +220,7 @@ pub fn prepare_casts(fd: &mut Funcdata, factory: &dyn TypeFactory) {
         let Some(member) = member else { continue };
         let width = fd.vbank().get(input).unwrap().get_size();
         if let Some(value) =
-            crate::kuna_stackobjectasserts::backing_view(fd, id, width, &info, member, &ty, factory)
+            crate::stackobjectasserts::backing_view(fd, id, width, &info, member, &ty, factory)
         {
             if fd.op_set_input(id, value, slot).is_ok() {
                 fd.stack_object_bound_uses_mut().insert((point, slot));

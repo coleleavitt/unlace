@@ -177,7 +177,7 @@ fn is_named_guard(vn: VarnodeId, data: &Funcdata) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_stackguard::CanaryGlobal>()
+        .get::<crate::stackguard::CanaryGlobal>()
         .0
     {
         return false;
@@ -463,7 +463,7 @@ pub fn collect_value_slots(inits: &[OpId], data: &Funcdata, slots: &mut Vec<(Add
 /// `canary_slot = *(fs:0x28)` init store (GH-183).
 ///
 /// Shared with the MSVC `/GS` sibling
-/// [`kuna_msvcstackguard`](crate::kuna_msvcstackguard), which resolves its own
+/// [`kuna_msvcstackguard`](crate::msvcstackguard), which resolves its own
 /// cookie slot and releases it here: the step is about the slot's liveness, not
 /// about which protector wrote it.
 ///
@@ -607,7 +607,7 @@ impl Action for ActionStripStackGuard {
             && !data
                 .get_arch()
                 .kuna_options
-                .get::<crate::kuna_stackguard::StripStackGuard>()
+                .get::<crate::stackguard::StripStackGuard>()
                 .0
         {
             return 0; // P0 assertion not set
@@ -790,5 +790,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_stackguard/tests.rs"]
+#[path = "stackguard/tests.rs"]
 mod tests;

@@ -485,7 +485,7 @@ impl Rule for RuleCompareMerge {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_cmpmerge::CmpMerge>()
+            .get::<crate::cmpmerge::CmpMerge>()
             .0
         {
             return 0;
@@ -718,7 +718,7 @@ impl Action for ActionBranchMerge {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_cmpmerge::CmpMerge>()
+            .get::<crate::cmpmerge::CmpMerge>()
             .0
         {
             return 0;

@@ -92,7 +92,7 @@ use crate::options::on_or_off;
 /// Marshalling element id for the option (kuna 4000+ range).
 pub const ELEM_RETSPLITGLOBAL: ElementId = ElementId::new("retsplitglobal", 4143);
 
-/// The `retsplitglobal on|off` option (`kuna_coreoptions::RetSplitGlobal`).
+/// The `retsplitglobal on|off` option (`coreoptions::RetSplitGlobal`).
 pub struct OptionRetSplitGlobal;
 
 impl OptionRetSplitGlobal {
@@ -157,12 +157,12 @@ pub fn split_is_declined(gate: bool, stores: usize) -> bool {
     gate && stores > MAX_CLONED_GLOBAL_STORES
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.retsplitglobal_is_global_store = Some(is_global_store);
     hooks.retsplitglobal_split_is_declined = Some(split_is_declined);
 }
 
 #[cfg(test)]
-#[path = "kuna_retsplitglobal/tests.rs"]
+#[path = "retsplitglobal/tests.rs"]
 mod tests;

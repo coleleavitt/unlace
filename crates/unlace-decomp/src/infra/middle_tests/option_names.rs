@@ -3,9 +3,9 @@
 
 use std::collections::BTreeSet;
 
-use crate::kuna_option_dispatch::KUNA_OPTION_NAMES;
-use crate::kuna_phases::SETTABLE_TABLE;
 use crate::modes::MODE_TABLE;
+use crate::option_dispatch::KUNA_OPTION_NAMES;
+use crate::phases::SETTABLE_TABLE;
 
 #[test]
 fn every_override_names_a_real_option() {

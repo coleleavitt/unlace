@@ -77,7 +77,7 @@ void sub_1408dcdf8(unsigned long long *a0,uint4 a1,char *a2,uint8 a3)
 `__chkstk` verbatim behind the real calling sequence, with `calleescratchbody
 off` pinning the bug and the default pinning the fix, plus an `endbr64; ret`
 negative control that must render identically in both passes. Five unit tests in
-`kuna_calleescratchbody/tests.rs` pin each way the clause fails closed.
+`calleescratchbody/tests.rs` pin each way the clause fails closed.
 
 `tests/cli/rax-preserving-stack-probe.json` runs the same shape end to end
 through the CLI against a new 4,768-byte fixture,

@@ -4,9 +4,9 @@ use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_rustintegers::needs_integer_context;
 use crate::printc::{PrintC, op_key};
 use crate::printlanguage::{Atom, SyntaxHighlight, TagType};
+use crate::rustintegers::needs_integer_context;
 
 impl PrintC {
     #[doc(hidden)]

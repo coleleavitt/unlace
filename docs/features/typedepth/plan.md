@@ -3,7 +3,7 @@
 ## 1. The change — restore upstream's guard, do not raise the cap
 
 Replace `build_datatype`'s `depth: u32` parameter with a recursion guard threaded
-through the walk (`analyzers/dwarf/kuna_typedepth.rs`):
+through the walk (`analyzers/dwarf/typedepth.rs`):
 
 ```rust
 pub(super) enum TypeWalk {
@@ -41,13 +41,13 @@ runs upstream of every `option` command — so the live gate is a process env va
 (`kuna_decomp::kuna_typedepth::TYPEDEPTH_ENV`), the `relocobjects` /
 `i386_pie_plt` pattern:
 
-- `p0_knowledge/kuna_typedepth.rs` — `TYPEDEPTH_ENV`, `typedepth_enabled()`,
+- `p0_knowledge/typedepth.rs` — `TYPEDEPTH_ENV`, `typedepth_enabled()`,
   `set_typedepth_env()`.
 - `Architecture::analysis_typedepth` + a `set_kuna_option` arm that also writes the
   env var (for `option typedepth off` *before* `load file` in one process).
 - `kuna decompile` exports it onto the `decomp_dbg` subprocess;
   `kuna decompile-all` adds it to `apply_loadtime_env` + `is_loadtime_gate`.
-- `kuna_console.rs` maps it for `phase catalog`'s live `current` field.
+- `console.rs` maps it for `phase catalog`'s live `current` field.
 
 Full `settableTable` row in `phases.toml` (every field incl. `tier` + `symptoms`)
 plus registration in `p0_knowledge/options.rs`.
@@ -72,7 +72,7 @@ mapping byte for byte.
   `verify_cppsig.rs` #266). The gate is set through the env var **before**
   `bootstrap_from_object`, serialized by a mutex, because the mapping happens at
   load.
-- Hermetic unit tests in `kuna_typedepth.rs` (the guard's own algebra) and in
+- Hermetic unit tests in `typedepth.rs` (the guard's own algebra) and in
   `dwarf/mod.rs` — a **forged** `.debug_info` whose type chain closes on itself
   (self-pointer, mutually pointing `typedef`/`const`, self-referential array) must
   terminate under both arms, and the four-DIE `const int *const *` must resolve

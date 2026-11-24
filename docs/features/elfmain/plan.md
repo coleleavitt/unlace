@@ -3,8 +3,8 @@
 ## 1. The change
 
 One new P1 analysis pass,
-`decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_elfmain.rs`
-(`ElfMainPass`), structured like its Mach-O counterpart `kuna_machomain.rs`: the
+`decompiler/crates/kuna-analysis/src/analyzers/entry/elfmain.rs`
+(`ElfMainPass`), structured like its Mach-O counterpart `machomain.rs`: the
 facts are computed at LOAD and applied at the commit boundary only when the gate
 is on, so `--option elfmain off` restores the previous output exactly.
 
@@ -68,8 +68,8 @@ still resolves through them.
 `phases.toml` `[[settable]]` row (tier `analysis`, change_kind `correctness-fix`,
 subphase `prototype-source`) · `p0_knowledge/options.rs` registration ·
 `Architecture::analysis_elfmain` + `set_kuna_option` arm + the default-ON line ·
-`engine.rs::analysis_pass_enabled` arm · `kuna_console.rs` live-value arm · the
-`PASS_GATES` allowlist in `kuna_phases/tests.rs` (analysis-tier gate, no
+`engine.rs::analysis_pass_enabled` arm · `console.rs` live-value arm · the
+`PASS_GATES` allowlist in `phases/tests.rs` (analysis-tier gate, no
 `live_field`) · counters `--fix` (settables 205→206, analysis tier 61→62) +
 `phase_catalog.json` recapture · `docs/options.md` regenerated.
 

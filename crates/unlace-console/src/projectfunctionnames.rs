@@ -73,7 +73,7 @@ fn display_at(
     address: &unlace_base::address::Address,
     original: &str,
 ) -> Option<String> {
-    if arch.print().out_lang() != unlace_decomp::kuna_lang::OutLang::C || !identifier(original) {
+    if arch.print().out_lang() != unlace_decomp::lang::OutLang::C || !identifier(original) {
         return None;
     }
     let db = &arch.symboltab;
@@ -196,7 +196,7 @@ pub(crate) fn reserve(
     };
     let symbols = local.database().scope_symbol_storage(local.scope_id());
     let mut used: BTreeSet<_> = symbols.iter().map(|(_, _, _, name)| name.clone()).collect();
-    if arch.print().out_lang() != unlace_decomp::kuna_lang::OutLang::C {
+    if arch.print().out_lang() != unlace_decomp::lang::OutLang::C {
         return Ok(());
     }
     used.extend(

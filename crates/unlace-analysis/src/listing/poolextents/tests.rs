@@ -167,11 +167,11 @@ fn plt(addr: u64) -> Insn {
 }
 
 fn literal(_: u64, operands: &str) -> Option<u64> {
-    crate::aif::kuna_poolentry::absolute_literal_target(operands)
+    crate::aif::poolentry::absolute_literal_target(operands)
 }
 
 fn extents(listing: &Listing) -> Vec<(u64, u64)> {
-    pool_extents(listing, &literal, &crate::aif::kuna_poolentry::wide)
+    pool_extents(listing, &literal, &crate::aif::poolentry::wide)
 }
 
 #[test]

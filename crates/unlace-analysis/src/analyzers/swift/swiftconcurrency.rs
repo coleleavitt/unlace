@@ -12,7 +12,7 @@
 //!
 //! Left to recovery (a type the table has no word for): `swift_task_invokeSwiftIsIsolatingCurrentContext`, `swift_task_isIsolatingCurrentContext`.
 
-use super::kuna_swiftruntime::Ty::{self, *};
+use super::swiftruntime::Ty::{self, *};
 
 pub struct Entry {
     pub name: &'static str,

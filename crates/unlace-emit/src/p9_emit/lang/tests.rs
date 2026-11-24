@@ -6,7 +6,7 @@
 //! re-pinning `docs/baseline.json`.
 
 use super::*;
-use crate::kuna_lang::OutLangExt;
+use crate::lang::OutLangExt;
 
 #[test]
 fn profile_matches_legacy_constants() {
@@ -187,10 +187,7 @@ fn c_ladder_reproduces_the_ported_token_table() {
 /// twice with different ranks).
 #[test]
 fn ladders_are_ordered_and_unambiguous() {
-    for (name, ladder) in [
-        ("C", &C_LADDER),
-        ("Rust", &crate::kuna_langrust::RUST_LADDER),
-    ] {
+    for (name, ladder) in [("C", &C_LADDER), ("Rust", &crate::langrust::RUST_LADDER)] {
         let mut seen: Vec<Prec> = Vec::new();
         let mut last = int4::MIN;
         for (tier, rank) in ladder.tiers() {
@@ -212,7 +209,7 @@ fn ladders_are_ordered_and_unambiguous() {
 /// mis-parenthesisation.
 #[test]
 fn a_tier_a_language_does_not_move_keeps_its_c_rank() {
-    let rust = &crate::kuna_langrust::RUST_LADDER;
+    let rust = &crate::langrust::RUST_LADDER;
     // The four tiers Rust genuinely relocates, plus Cast which it gives a tier
     // of its own. Everything else must match C.
     let moved = [

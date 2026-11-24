@@ -3,7 +3,7 @@
 ## 1. The value
 
 `protoorder` gains a fourth value, `cycles` (`ProtoOrderMode::Cycles`,
-`p4_calls/kuna_protoorder.rs`): `types` for the members of a recursive component
+`p4_calls/protoorder.rs`): `types` for the members of a recursive component
 too. `ProtoOrderMode::states_types_only` (`types` | `cycles`) routes the park to
 `state_recovered_types`; `states_in_cycles` is read by the driver only. `lock` is
 untouched and keeps refusing components.
@@ -36,7 +36,7 @@ evaluation is `default-on-evaluation.md`.
 ## 4. Tests
 
 - unit: `callee_first_plan_tests` (5) in `decompile_all.rs`; value parsing and the
-  mode predicates in `kuna_protoorder/tests.rs`;
+  mode predicates in `protoorder/tests.rs`;
 - integration: `recursive_callees_state_their_types_under_cycles`
   (`kuna-cli/tests/decompile_all_cli.rs`) over the new fixture
   `protoorder_cycles_x86_64` (`as && ld`, symbols kept), and

@@ -139,5 +139,5 @@ pub fn is_large_literal_head(head: &[u8]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "kuna_swiftstrobj/tests.rs"]
+#[path = "swiftstrobj/tests.rs"]
 mod tests;

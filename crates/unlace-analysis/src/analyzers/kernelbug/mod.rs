@@ -1,6 +1,6 @@
 //! (kuna `kernelbug`) Read a Linux kernel image's `__bug_table`: one
 //! [`KernelBugSite`] per `struct bug_entry`, so the flow renders each `WARN`/`BUG`
-//! trap as the statement it is (`unlace_decomp::kuna_kernelbug`). Inert on every
+//! trap as the statement it is (`unlace_decomp::kernelbug`). Inert on every
 //! image without that section.
 //!
 //! # The table
@@ -55,7 +55,7 @@
 use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::{ObjectKind, RelocationKind, RelocationTarget, SectionKind, SymbolSection};
 
-use unlace_decomp::kuna_kernelbug::KernelBugSite;
+use unlace_decomp::kernelbug::KernelBugSite;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 

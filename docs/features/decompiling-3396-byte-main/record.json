@@ -17,7 +17,7 @@
   ],
   "phase": "P1",
   "modules": [
-    "decompiler/crates/kuna-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
+    "decompiler/crates/kuna-analysis/src/analyzers/entry/pdatainterior.rs"
   ],
   "change_kind": "correctness-fix",
   "option": "pdatainterior",

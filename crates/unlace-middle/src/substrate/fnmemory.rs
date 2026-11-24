@@ -32,7 +32,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::kuna_hostmem::{capped_cgroups, resident_bytes, unreclaimable_bytes};
+use crate::hostmem::{capped_cgroups, resident_bytes, unreclaimable_bytes};
 
 /// How often an armed drive reads the resident set.
 const SAMPLE_EVERY: Duration = Duration::from_millis(50);

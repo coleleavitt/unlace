@@ -21,7 +21,7 @@
 use object::read::Object;
 
 /// Read an image file as the loader sees it: an Apple firmware container or
-/// kernel collection reduced to one Mach-O ([`super::kuna_kernelcache::peel`]), a
+/// kernel collection reduced to one Mach-O ([`super::kernelcache::peel`]), a
 /// fat / universal Mach-O peeled to one arch slice ([`super::macho_fat::peel_fat_image`]) and the header-tolerance
 /// repairs applied -- [`tolerate_unusable_section_table`] for ELF,
 /// [`super::pe_dosmagic::tolerate_corrupt_dos_magic`] and
@@ -69,7 +69,7 @@ pub struct SelectedImage {
     pub repaired: bool,
     /// The kernel collection's entry map, when the image is an `MH_FILESET`
     /// entry cut out per the `kernelcache` choice.
-    pub fileset: Option<super::kuna_kernelcache::FilesetMap>,
+    pub fileset: Option<super::kernelcache::FilesetMap>,
 }
 
 /// [`read_image_sliced_repaired`], and the entry map of the kernel collection
@@ -78,19 +78,19 @@ pub fn read_image_selected(
     path: &str,
     pref: super::macho_fat::SlicePref,
 ) -> std::io::Result<SelectedImage> {
-    let (bytes, extracted) =
-        match super::kuna_dyldcache::read_selected_image(std::path::Path::new(path)) {
-            Some(image) => (image.map_err(std::io::Error::other)?, true),
-            None => (std::fs::read(path)?, false),
-        };
-    let choice = unlace_decomp::kuna_kernelcache::KernelcacheChoice::in_force();
-    let peeled = super::kuna_kernelcache::peel_file(std::path::Path::new(path), bytes, &choice)
+    let (bytes, extracted) = match super::dyldcache::read_selected_image(std::path::Path::new(path))
+    {
+        Some(image) => (image.map_err(std::io::Error::other)?, true),
+        None => (std::fs::read(path)?, false),
+    };
+    let choice = unlace_decomp::kernelcache::KernelcacheChoice::in_force();
+    let peeled = super::kernelcache::peel_file(std::path::Path::new(path), bytes, &choice)
         .map_err(std::io::Error::other)?;
     let extracted = extracted || peeled.note.is_some();
     let bytes = super::macho_fat::peel_fat_image(peeled.bytes, pref);
     let (bytes, shdr) = tolerate_unusable_section_table(bytes);
     let (bytes, magic) = super::pe_dosmagic::tolerate_corrupt_dos_magic(bytes);
-    let (bytes, clamped) = super::kuna_machotolerance::clamp_out_of_file_ranges(bytes);
+    let (bytes, clamped) = super::machotolerance::clamp_out_of_file_ranges(bytes);
     let (bytes, dirs) = super::pe_datadirs::tolerate_oversized_data_directories(bytes);
     let repaired =
         extracted || shdr.is_some() || magic.is_some() || clamped.is_some() || dirs.is_some();

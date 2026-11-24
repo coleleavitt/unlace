@@ -1,10 +1,10 @@
 //! (kuna) `kuna_tailcallsaved` — a stack teardown that never restores what the
 //! entry block saved is argument cleanup, not a frame teardown (S2 flow
-//! classification).  Narrows [`kuna_tailcallframe`](crate::kuna_tailcallframe).
+//! classification).  Narrows [`kuna_tailcallframe`](crate::tailcallframe).
 //!
 //! ## The shape this rejects
 //!
-//! [`kuna_tailcallframe`](crate::kuna_tailcallframe) reads a direct `jmp` as a
+//! [`kuna_tailcallframe`](crate::tailcallframe) reads a direct `jmp` as a
 //! tail call when the straight-line run ending at it raises the stack pointer by
 //! exactly what the straight-line run leaving the entry address lowered it by.
 //! Those two runs are measured where they sit, and on a cdecl caller the second
@@ -144,5 +144,5 @@ fn is_stack_pointer(
 }
 
 #[cfg(test)]
-#[path = "kuna_tailcallsaved/tests.rs"]
+#[path = "tailcallsaved/tests.rs"]
 mod tests;

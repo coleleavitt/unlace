@@ -20,13 +20,13 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use unlace_console::console::register_kuna_commands;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
 use unlace_console::interface::IfaceStatus;
-use unlace_console::kuna_console::register_kuna_commands;
 use unlace_decomp::decompile_drive::{
     DrivePurpose, build_and_follow_flow_within_budget,
     decompile_func_full_with_override_dyn_prefollowed, is_budget_stop, set_default_fn_budget_secs,

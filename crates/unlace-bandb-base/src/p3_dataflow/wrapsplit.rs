@@ -45,8 +45,8 @@ pub fn wrap_refinement(size: int4, cut: int4) -> Vec<int4> {
     refine
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.wrapsplit_wrap_cut = Some(wrap_cut);
     hooks.wrapsplit_wrap_floor = Some(wrap_floor);
     hooks.wrapsplit_wrap_refinement = Some(wrap_refinement);

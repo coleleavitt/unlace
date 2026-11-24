@@ -70,7 +70,7 @@ O2-noinline `main`, `scp` `sub_167b0` and `sub_17720`, `pr` O2-noinline `main`,
 dropped an `int`/`char` narrowing in the same way.
 
 The discount now declines unless the call's output carries everything the
-callee returns (`kuna_foldcallretphi.rs` `call_output_is_full_width`): a locked
+callee returns (`foldcallretphi.rs` `call_output_is_full_width`): a locked
 output (a declared or library prototype) qualifies, and an unlocked one
 qualifies only when it is as wide as the prototype model's return entry that
 holds it. An unlocked `eax` read out of `rax` keeps its spill. On the same 32

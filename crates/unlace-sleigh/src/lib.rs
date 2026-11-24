@@ -5,22 +5,22 @@
 //! `unlace-slacomp`, which owns the SLEIGH source parser and compiler driver.
 //! P-code expression construction is shared with the runtime snippet parser.
 pub mod context;
+pub mod contextscope;
+pub mod ctxsnapshot;
 pub mod emulate;
 pub mod emulateutil;
+mod expressionplan;
 pub mod globalcontext;
-pub mod kuna_contextscope;
-pub mod kuna_ctxsnapshot;
-mod kuna_expressionplan;
-mod kuna_handleview;
-mod kuna_instructionbytes;
-pub mod kuna_lazytemplates;
-pub mod kuna_sharedbytes;
+mod handleview;
+mod instructionbytes;
+pub mod lazytemplates;
 pub mod loadimage;
 pub mod loadimage_xml;
 pub mod memstate;
 pub mod pcodecompile;
 pub mod pcodeparse;
 pub mod semantics;
+pub mod sharedbytes;
 pub mod slaformat;
 pub mod sleigh;
 pub mod sleighbase;

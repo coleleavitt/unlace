@@ -46,7 +46,7 @@
 //! byte-identical `void *` tables.
 
 /// Environment variable that gates the named libc aggregate types (read by
-/// `unlace-analysis::analyzers::protos::kuna_libctypes`). Absent or any value
+/// `unlace-analysis::analyzers::protos::libctypes`). Absent or any value
 /// other than the off-tokens ⇒ **enabled**; set to `off`/`0`/`false` ⇒ disabled
 /// (the `void *` tables); set to `glibc` ⇒ enabled with the published field
 /// layouts (see [`LibcTypesLayout`]).
@@ -68,7 +68,7 @@ pub enum LibcTypesLayout {
     Opaque,
     /// Named shells plus the published glibc x86-64 field layouts, on a target
     /// the layouts are true of (the decision is the analysis pass's:
-    /// `kuna_libctypes::glibc::target_is_glibc_x86_64`).
+    /// `libctypes::glibc::target_is_glibc_x86_64`).
     Glibc,
 }
 
@@ -78,8 +78,7 @@ pub enum LibcTypesLayout {
 /// validator — `Architecture::set_kuna_option` rejects a bad value at the
 /// `option` line, where the operator can see it.
 pub fn libctypes_layout() -> LibcTypesLayout {
-    crate::kuna_loadoptions::scoped(|o| o.libctypes)
-        .unwrap_or_else(crate::kuna_loadoptions::env::libctypes)
+    crate::loadoptions::scoped(|o| o.libctypes).unwrap_or_else(crate::loadoptions::env::libctypes)
 }
 
 /// Whether the named libc aggregate types are enabled for this process.
@@ -137,7 +136,7 @@ pub fn set_libctypes_env_layout(layout: LibcTypesLayout) {
     };
 }
 
-impl crate::kuna_optionset::KunaOption for LibcTypesLayout {
+impl crate::optionset::KunaOption for LibcTypesLayout {
     const NAME: &'static str = "libctypes";
     crate::kuna_option_id!();
 

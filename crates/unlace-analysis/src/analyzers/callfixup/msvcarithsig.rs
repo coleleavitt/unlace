@@ -8,7 +8,7 @@
 //! helper's own body as a `CONCAT44` of its halves. Each recognized entry is
 //! reported as a function symbol under its CRT name and as a [`CallFixupFact`],
 //! which the commit resolves by that name, exactly as
-//! [`super::kuna_msvcftolsig`] does for the `__ftol` family.
+//! [`super::msvcftolsig`] does for the `__ftol` family.
 //!
 //! Signatures are the complete instruction streams of the CRT's `llmul.asm`,
 //! `lldiv.asm`, `llrem.asm`, `lldvrm.asm`, `ulldiv.asm`, `ullrem.asm`,

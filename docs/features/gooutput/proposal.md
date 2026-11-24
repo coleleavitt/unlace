@@ -6,7 +6,7 @@ images and recovers runtime metadata, but its output-language registry contains
 only C and Rust. Even `main.add` cannot be requested in Go syntax.
 
 Extend the existing OutLang/LangProfile/TypeSpeller plane with Go. Keep the shared
-RPN printer, IR and structured blocks. A new P9 `kuna_langgo.rs` owns the Go
+RPN printer, IR and structured blocks. A new P9 `langgo.rs` owns the Go
 profile, precedence tokens, type spelling and language-specific PrintC methods;
 existing dispatch sites select those methods. Do not fork the C printer.
 

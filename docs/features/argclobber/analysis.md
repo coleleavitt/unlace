@@ -210,7 +210,7 @@ real struct half at an under-recovered callee.
 
 ## Why `destructive = true` even as a default
 
-`kuna_phases.rs` defines `destructive` as "not safe as a global default". What
+`phases.rs` defines `destructive` as "not safe as a global default". What
 this option drops is an *argument*: a wrong drop is a deleted expression, which
 is the kind of wrong output a reader cannot see. Seven other options ship
 `destructive = true` with a non-`off` default for the same reason — the field

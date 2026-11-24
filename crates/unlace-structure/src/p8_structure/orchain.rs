@@ -1,10 +1,10 @@
 //! S8 **short-circuit operand-chain protection** for
-//! [`returndup`](crate::kuna_returndup) — decline the one split that
+//! [`returndup`](crate::returndup) — decline the one split that
 //! permanently destroys a `||`/`&&` fold.
 //!
 //! # The structural gap
 //!
-//! [`ActionReturnDup`](crate::kuna_returndup::ActionReturnDup) gives
+//! [`ActionReturnDup`](crate::returndup::ActionReturnDup) gives
 //! every predecessor of a shared bare-epilogue RETURN block its own private return,
 //! which is exactly how the source's early-return guards are recovered.  But the
 //! operand blocks of a short-circuit expression are *also* predecessors of a shared
@@ -233,7 +233,7 @@ crate::kuna_flag!(
     shipped: false
 );
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.orchain_shortcircuit_shared_targets = Some(shortcircuit_shared_targets);
 }

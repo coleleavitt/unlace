@@ -8,7 +8,7 @@ inputs and output are cast. No new `Action`, so `universal_sched` and its listin
 oracle are untouched; the ported `CastStrategyC` is not modified. `cast_output` gains a
 twin, `cast_output_token`, that takes the output token instead of computing it.
 
-## 2. The rules (`p9_emit/kuna_castarith.rs`)
+## 2. The rules (`p9_emit/castarith.rs`)
 
 - `element` (factored out of `castarith`'s `plan`, unchanged): the `T` a sum used as a
   `T *` steps in, and how it is used (a lone access, a value of its own type, a
@@ -36,7 +36,7 @@ twin, `cast_output_token`, that takes the output token instead of computing it.
 - `tests/stages/kuna-castindex.toml`: pass 1 `option castindex off` (the bug), pass 2
   on: an `int`, a `long` and a byte index, a 16-byte stride that keeps the integer form
   in both passes, a `strchr(s,c) - s` difference.
-- 12 unit tests in `p9_emit/kuna_castarith/tests.rs`: every width and index kind, a
+- 12 unit tests in `p9_emit/castarith/tests.rs`: every width and index kind, a
   shifted index, a byte element, scales that are not the element, non-integer indexes,
   a sum used as a subscript, a scale not yet cast, a value use with and without a
   saving, byte-pointer differences of every signedness, other differences, a difference

@@ -124,7 +124,7 @@ fn call_read(
         if offset <= start
             || offset < minimum
             || offset + v.get_size() as intb > end
-            || !super::kuna_storereach::is_read(fd, vn)
+            || !super::storereach::is_read(fd, vn)
         {
             return false;
         }
@@ -145,7 +145,7 @@ fn has_independent_value(fd: &Funcdata, space: &Rc<AddrSpace>, start: intb, end:
         let offset = sign_extend(v.get_offset() as intb, bits);
         if offset < start
             || offset + v.get_size() as intb > end
-            || !super::kuna_storereach::is_read(fd, vn)
+            || !super::storereach::is_read(fd, vn)
         {
             return false;
         }
@@ -290,9 +290,9 @@ pub fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<
     if fd
         .get_arch()
         .kuna_options
-        .get::<super::kuna_arrayextent::ArrayExtent>()
+        .get::<super::arrayextent::ArrayExtent>()
         .0
-        < super::kuna_arrayextent::LEVEL_ON
+        < super::arrayextent::LEVEL_ON
         || space.get_addr_size() != 4
         || !space.is_big_endian()
         || !fd
@@ -372,7 +372,7 @@ pub fn coalesce_delay_slot_init(fd: &Funcdata, state: &mut MapState, space: &Rc<
                 })
             };
             initialized(offset, false) && initialized(tail_off, true)
-        }) || slots().any(|id| super::kuna_storereach::is_read(fd, id))
+        }) || slots().any(|id| super::storereach::is_read(fd, id))
         {
             continue;
         }
@@ -403,7 +403,7 @@ pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_callarrayextent::CallArrayExtent>()
+        .get::<crate::callarrayextent::CallArrayExtent>()
         .0
     {
         return;
@@ -460,7 +460,7 @@ pub fn coalesce(fd: &Funcdata, state: &mut MapState, space: &Rc<AddrSpace>) {
         }
         let offset = *offset;
         let call_start = signed(offset);
-        let end = super::kuna_arrayextent::next_base(space, &offsets, offset)
+        let end = super::arrayextent::next_base(space, &offsets, offset)
             .map(signed)
             .unwrap_or(frame_end)
             .min(frame_end)

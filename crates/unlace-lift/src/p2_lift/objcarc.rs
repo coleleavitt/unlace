@@ -135,7 +135,7 @@ pub fn decode_payload(
 
 crate::kuna_flag!(
     /// (kuna `objcarc`) Install the Objective-C ARC call-fixups
-    /// (`p2_lift/kuna_objcarc.rs`): retain/autorelease pass-throughs become
+    /// (`p2_lift/objcarc.rs`): retain/autorelease pass-throughs become
     /// copies, releases vanish, `objc_storeStrong` is its store. Default on;
     /// read by the analysis-tier call-fixup installer like `msvc_ftol`.
     ObjcArc,
@@ -145,8 +145,8 @@ crate::kuna_flag!(
     shipped: true
 );
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.objcarc_decode_payload = Some(decode_payload);
     hooks.objcarc_payload_xml = Some(payload_xml);
 }

@@ -352,8 +352,8 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
             let raw = unlace_analysis::loadimage_object::parse_object(&*bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
-            let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-            let (file, _) = unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
+            let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
+            let (file, _) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
             Ok(data::uses_json(
                 binary,
                 &prog,
@@ -385,9 +385,8 @@ pub fn run_request(req: &Request) -> Result<String, String> {
                 .map_err(|e| format!("could not read {binary}: {e}"))?;
             let raw = unlace_analysis::loadimage_object::parse_object(&*bytes)
                 .map_err(|e| format!("could not parse {binary}: {e}"))?;
-            let view = unlace_analysis::loader::kuna_relocrebase::rebased_view(&raw, &bytes);
-            let (file, scanned) =
-                unlace_analysis::loader::kuna_relocrebase::select(raw, &bytes, &view);
+            let view = unlace_analysis::loader::relocrebase::rebased_view(&raw, &bytes);
+            let (file, scanned) = unlace_analysis::loader::relocrebase::select(raw, &bytes, &view);
             let rebased = view
                 .as_ref()
                 .filter(|v| v.bytes.as_ptr() == scanned.as_ptr());
@@ -563,11 +562,11 @@ fn resolve_language(
     let explicit = match requested {
         None | Some("auto") | Some("") => None,
         Some(name) => Some(
-            unlace_decomp::kuna_lang::OutLang::from_print_name(name)
+            unlace_decomp::lang::OutLang::from_print_name(name)
                 .ok_or_else(|| {
                     format!(
                         "unknown output language {name:?} (expected auto, or one of: {})",
-                        unlace_decomp::kuna_lang::OutLang::names().join(", ")
+                        unlace_decomp::lang::OutLang::names().join(", ")
                     )
                 })?
                 .print_name(),
@@ -627,7 +626,7 @@ fn load_program(
     directives: &[Directive],
     discovery: bool,
 ) -> Result<ConsoleProgram, String> {
-    let arm64e_env = unlace_decomp::kuna_macho_arm64e::MACHO_ARM64E_ENV;
+    let arm64e_env = unlace_decomp::macho_arm64e::MACHO_ARM64E_ENV;
     let arm64e = overrides
         .iter()
         .filter(|(option, _)| *option == "macho-arm64e")
@@ -818,7 +817,7 @@ fn list_json(
 }
 
 /// A function's `warnings`, each `{kind,message,line,address}`.
-pub(crate) fn warnings_json(warnings: &[unlace_decomp::kuna_functionwarnings::Warning]) -> String {
+pub(crate) fn warnings_json(warnings: &[unlace_decomp::functionwarnings::Warning]) -> String {
     arr(warnings.iter().map(|w| {
         Obj::new()
             .str("kind", &w.kind())

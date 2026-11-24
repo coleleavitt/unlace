@@ -857,7 +857,7 @@ impl Cache {
         if let Some(&r) = self.first_reads.get(&key.1) {
             return r;
         }
-        if crate::kuna_calleenoreturn::is_no_return(arch, &index.at(key.1)) {
+        if crate::calleenoreturn::is_no_return(arch, &index.at(key.1)) {
             self.first_reads.insert(key.1, false);
             return false;
         }
@@ -935,7 +935,7 @@ fn facts(
     layouts: &mut BTreeMap<u64, Option<Layout>>,
 ) -> Facts {
     let mut out = Facts::default();
-    if crate::kuna_calleenoreturn::is_no_return(arch, &index.at(callee)) {
+    if crate::calleenoreturn::is_no_return(arch, &index.at(callee)) {
         return out;
     }
     for site in index.sites(callee).take(MAX_SITES) {
@@ -1704,7 +1704,7 @@ fn scan_function(arch: &Architecture, index: &Index, lo: Key, entry: u64) -> Sca
         return out;
     };
     let base = tracked(arch, index, start);
-    let noreturn = |t: u64| crate::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
+    let noreturn = |t: u64| crate::calleenoreturn::is_no_return(arch, &index.at(t));
     let mut todo = vec![start];
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     let (mut direct, mut in_window) = (false, false);
@@ -1810,7 +1810,7 @@ fn layout_of(arch: &Architecture, index: &Index, func: (u64, u64)) -> Option<Lay
         return None;
     }
     let base = tracked(arch, index, start);
-    let noreturn = |t: u64| crate::kuna_calleenoreturn::is_no_return(arch, &index.at(t));
+    let noreturn = |t: u64| crate::calleenoreturn::is_no_return(arch, &index.at(t));
     let mut todo = vec![start];
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     let mut out = Layout::default();

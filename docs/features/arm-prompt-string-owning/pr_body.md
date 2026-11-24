@@ -34,7 +34,7 @@ prompt, `main` at `0x8cf8`, is not in the inventory.
   idiom on ARM — but only the PIE form, because it identifies the GOT slot by the
   `R_ARM_RELATIVE` that relocates it. A non-PIE executable carries no such
   relocation; the linker knows the final address and stores it. The new pass
-  (`kuna_armlibcmain.rs`) is the arm of that oracle that reads the value out of
+  (`armlibcmain.rs`) is the arm of that oracle that reads the value out of
   the image instead of out of the relocation table.
 - It decodes both shapes glibc's ARM `crt1.o` ships: the classic literal-pool
   word (`ldr r0,[pc,#imm]`), and the GOT-indexed slot a modern `-no-pie` link

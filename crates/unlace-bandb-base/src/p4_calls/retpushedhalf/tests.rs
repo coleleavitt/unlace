@@ -7,7 +7,7 @@
 //! `tests/stages/kuna-retpushedhalf.toml`.
 
 use super::*;
-use crate::kuna_retpushedhalf::FuncdataRetpushedhalfExt;
+use crate::retpushedhalf::FuncdataRetpushedhalfExt;
 
 use std::rc::Rc;
 

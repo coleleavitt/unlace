@@ -7,13 +7,13 @@
 mod module_scope {
     pub(super) use crate::architecture::Architecture;
     pub(super) use crate::funcdata::Funcdata;
-    pub(super) use crate::kuna_narrowret::FuncdataNarrowretExt;
+    pub(super) use crate::narrowret::FuncdataNarrowretExt;
     pub(super) use std::collections::{BTreeMap, BTreeSet};
     pub(super) use unlace_base::address::Address;
     pub(super) use unlace_base::space::spacetype;
     pub(super) use unlace_base::types::{int4, uintb};
 }
-use crate::kuna_voidret::*;
+use crate::voidret::*;
 use module_scope::*;
 use unlace_base::error::{KunaError, KunaResult};
 use unlace_sleigh::globalcontext::ContextInternal;
@@ -51,17 +51,17 @@ fn a_displaced_float_return_is_withdrawn_once_its_forced_decompile_is_discarded(
     let mut arch = arch();
     let (put, main) = ((1, 0x1270), (1, 0x1080));
     arch.kuna_tables
-        .get_mut::<crate::kuna_voidret::Ledger>()
+        .get_mut::<crate::voidret::Ledger>()
         .returns
         .insert(put, Returns::Float);
     arch.kuna_tables
-        .get_mut::<crate::kuna_voidret::Ledger>()
+        .get_mut::<crate::voidret::Ledger>()
         .float_refused
         .entry(put)
         .or_default()
         .insert(main);
     arch.kuna_tables
-        .get_mut::<crate::kuna_voidret::Ledger>()
+        .get_mut::<crate::voidret::Ledger>()
         .displacing
         .insert(put);
     assert!(
@@ -72,7 +72,7 @@ fn a_displaced_float_return_is_withdrawn_once_its_forced_decompile_is_discarded(
     assert!(
         !arch
             .kuna_tables
-            .get::<crate::kuna_voidret::Ledger>()
+            .get::<crate::voidret::Ledger>()
             .displacing
             .contains(&put)
     );

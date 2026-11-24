@@ -56,7 +56,7 @@
     "kuna catalog --check": "catalog OK"
   },
   "files": [
-    "decompiler/crates/kuna-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs",
+    "decompiler/crates/kuna-analysis/src/analyzers/rtti/itaniumrtti.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/rtti/mod.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/rtti/models.rs",
     "decompiler/crates/kuna-analysis/src/analyzers/rtti/vftable.rs",
@@ -69,7 +69,7 @@
     "decompiler/crates/kuna-decomp/phases.toml",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/p0_knowledge/options.rs",
-    "decompiler/crates/kuna-decomp/src/p0_knowledge/kuna_phases/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p0_knowledge/phases/tests.rs",
     "decompiler/crates/kuna-decomp/tests/catalog_bytecompat.rs",
     "decompiler/crates/kuna-decomp/tests/fixtures/phase_catalog.json",
     "docs/options.md",
@@ -80,7 +80,7 @@
     "tiers": "(20 core, 41 transform, 32 analysis) -> (20, 41, 33)",
     "catalog_json_rows": "92 -> 93",
     "phase_catalog.json fixture": "93 -> 94 (recaptured from a fresh release decomp_dbg)",
-    "rebase_hazard": "#268 and this PR made the identical `92 -> 93` edit to the same assertions. git auto-merged catalog_bytecompat.rs and phase_catalog.json with no conflict, leaving every counter short by one; only kuna_phases/tests.rs conflicted, and only on the COMMENT lines -- the assert_eq! numbers sat outside the conflict markers. Every counter was re-derived from a fresh green build."
+    "rebase_hazard": "#268 and this PR made the identical `92 -> 93` edit to the same assertions. git auto-merged catalog_bytecompat.rs and phase_catalog.json with no conflict, leaving every counter short by one; only phases/tests.rs conflicted, and only on the COMMENT lines -- the assert_eq! numbers sat outside the conflict markers. Every counter was re-derived from a fresh green build."
   },
   "div_row": "DIV-64 (docs/history.md): `aggressive` preset carries `itaniumrtti`. The OPTION diverges from nothing (default-off; `--mode reliable` is byte-identical), but preset membership makes it the default rendering on ELF C++ with RTTI -- a default-output change that NO parity oracle can see, which is exactly why DIV-43 exists for the symmetric removal of `dwarf_lines` from the same preset. Without preset membership this would correctly carry no DIV row. #268 took DIV-63.",
   "option_decision": "A NEW option rather than widening the PE-only `rtti`. The two paths have different default-ON trajectories: the MSVC path is a byte-pattern heuristic that will plausibly stay opt-in forever, while the Itanium path is relocation-anchored and exact with a measured 0-change footprint on 14 plain-C binaries -- a real default-ON candidate once an -frtti corpus exists. Sharing one flag would chain the sound recovery to the unsound one permanently. Secondary: the two are mutually exclusive by format anyway (MSVC RTTI only in PE, Itanium only in ELF), so a shared flag buys no user simplification, and widening a shipped option silently changes what it means on ELF inputs.",

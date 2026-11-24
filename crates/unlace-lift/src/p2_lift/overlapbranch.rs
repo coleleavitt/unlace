@@ -81,7 +81,7 @@
 //! [`kuna_overlaps_pending_branch`] is the *decision* only.  The truncation
 //! (`delete_remaining_ops` + `artificial_halt` + `step = 1`) is driven by
 //! `flow.rs` inside `process_instruction`, the same hook class as
-//! [`kuna_funcboundflow`](crate::kuna_funcboundflow).  The gate
+//! [`kuna_funcboundflow`](crate::funcboundflow).  The gate
 //! `glb->overlap_branch` (`option overlapbranch`) is resolved by the caller.
 
 use unlace_base::marshal::ElementId;
@@ -173,5 +173,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_overlapbranch/tests.rs"]
+#[path = "overlapbranch/tests.rs"]
 mod tests;

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use unlace_base::space::spacetype;
 
 use super::*;
-use crate::kuna_calleedeadarg::CalleeEntryDead;
+use crate::calleedeadarg::CalleeEntryDead;
 
 fn x8() -> Address {
     let reg = Rc::new(unlace_base::space::AddrSpace::new(

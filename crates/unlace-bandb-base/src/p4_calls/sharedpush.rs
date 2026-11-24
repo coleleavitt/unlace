@@ -54,9 +54,9 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::exclusivearguse::MAX_VISIT;
 use crate::fspec::{FuncCallSpecs, OFFSET_UNKNOWN, ParamTrial, ProtoParameter};
 use crate::funcdata::Funcdata;
-use crate::kuna_exclusivearguse::MAX_VISIT;
 
 /// Cap on Varnodes the reader walk visits.
 const MAX_VALUES: usize = 256;
@@ -255,8 +255,8 @@ fn reaches_avoiding(data: &Funcdata, from: BlockId, target: BlockId, wall: Block
     false
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.sharedpush_declared_arm_shares = Some(declared_arm_shares);
 }
 

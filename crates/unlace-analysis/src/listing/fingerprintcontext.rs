@@ -23,7 +23,7 @@ impl FingerprintContexts {
         index: usize,
         arch: &Architecture,
         addr: &Address,
-        mode: Option<&super::kuna_walkcontext::InstructionMode<'_>>,
+        mode: Option<&super::walkcontext::InstructionMode<'_>>,
     ) {
         if self.runs.last().is_some_and(|(start, _)| *start == index) {
             self.runs.pop();

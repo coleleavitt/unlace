@@ -4,7 +4,7 @@
   "scope": "small",
   "option": "calleearityscratch",
   "default": "on",
-  "module": "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleearityscratch.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p4_calls/calleearityscratch.rs",
   "witness": "cr4ckm3_0x (ELF x86-64, statically linked, stripped; challenge 5e51836e33c5d4439bb2dc24) 0x400f30 -> sub_417f80 @0x401007, reduced and vendored as decompiler/crates/kuna-analysis/tests/fixtures/calleearityscratch_x86_64",
   "decisions": [
     "THE FILED HYPOTHESIS WAS ALREADY OVERTURNED IN THE NEED and the refuter's diagnosis held under my own instrumentation. It said `single-site callee analysis does not establish its arity`; kuna has exactly that (`calleearitybody`, default-on) and it establishes the run {rdi} correctly here. The loss is one line further on, in `calleearitycut`'s boundary test.",

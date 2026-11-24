@@ -18,10 +18,10 @@ pub fn prefix(
     if matches!(strategy, NamespaceStrategy::NoNamespaces) {
         return Some(Vec::new());
     }
-    if !plain_module(name) || crate::kuna_rustuserop::raw_keyword(name) {
+    if !plain_module(name) || crate::rustuserop::raw_keyword(name) {
         return None;
     }
-    let scopes = crate::kuna_funcptrnames::proven_scopes(fd, arch, target, usepoint, name)?;
+    let scopes = crate::funcptrnames::proven_scopes(fd, arch, target, usepoint, name)?;
     let target: Vec<_> = scopes.target_inner.iter().rev().cloned().collect();
     let caller: Vec<_> = arch
         .symboltab
@@ -56,7 +56,7 @@ pub fn prefix(
         std::iter::once("crate".into()).chain(target).collect()
     };
     for scope in &mut path {
-        if crate::kuna_rustuserop::raw_keyword(scope) {
+        if crate::rustuserop::raw_keyword(scope) {
             *scope = format!("r#{scope}");
         }
     }

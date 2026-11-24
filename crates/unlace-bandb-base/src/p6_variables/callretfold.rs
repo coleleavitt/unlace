@@ -340,8 +340,8 @@ fn print_point_is_order_safe(data: &Funcdata, call: OpId, use_op: OpId) -> bool 
     if op_parent(data, point) != Some(blk) {
         return false;
     }
-    let syscall = crate::kuna_x64syscall::is_memory_call(data, call)
-        || crate::kuna_syscallregs::is_memory_call(data, call);
+    let syscall = crate::x64syscall::is_memory_call(data, call)
+        || crate::syscallregs::is_memory_call(data, call);
     let mut current = data.bb_op_next(call);
     while let Some(mid) = current {
         let barrier = if syscall {
@@ -629,7 +629,7 @@ impl OptionFoldCallRet {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FoldCallReturns(pub bool);
 
-impl crate::kuna_optionset::KunaOption for FoldCallReturns {
+impl crate::optionset::KunaOption for FoldCallReturns {
     const NAME: &'static str = "foldcallret";
     crate::kuna_option_id!();
 
@@ -642,11 +642,11 @@ impl crate::kuna_optionset::KunaOption for FoldCallReturns {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_callretfold::OptionFoldCallRet.apply(value)?;
+        let (v, msg) = crate::callretfold::OptionFoldCallRet.apply(value)?;
         Ok((FoldCallReturns(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_callretfold/tests.rs"]
+#[path = "callretfold/tests.rs"]
 mod tests;

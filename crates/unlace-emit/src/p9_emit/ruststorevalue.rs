@@ -26,7 +26,7 @@ impl PrintC {
         self.context.set_mods(mods);
         let converted = (arch
             .kuna_options
-            .get::<crate::kuna_rustarrayzero::RustArrayZero>()
+            .get::<crate::rustarrayzero::RustArrayZero>()
             .0
             && self.push_rust_array_zero(fd, value, &target))
             || self.push_rust_value_as(fd, arch, value, op, &target);

@@ -454,7 +454,7 @@ fn direct_float_struct_filter_keeps_field_identity_offsets_and_size_limits() {
     let with_bits = Rc::new(with_bits);
     assert!(!filter.filter(&with_bits));
     assert!(
-        super::super::kuna_aggregateabi::direct_fields(&with_bits).is_some(),
+        super::super::aggregateabi::direct_fields(&with_bits).is_some(),
         "integer bitfields must not discard a separate direct floating argument field"
     );
     for rejected in [

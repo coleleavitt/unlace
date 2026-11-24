@@ -361,7 +361,7 @@ impl ConstTpl {
             ConstType::Handle => {
                 let hand = walker.borrow_fixed_handle(self.value_handle_index)?;
                 if self.select == VField::VSpace {
-                    return Ok(crate::kuna_handleview::resolved_space(hand));
+                    return Ok(crate::handleview::resolved_space(hand));
                 }
                 // other selects fall through to the throw
             }
@@ -387,7 +387,7 @@ impl ConstTpl {
             ConstType::Handle => {
                 let otherhand = walker.borrow_fixed_handle(self.value_handle_index)?;
                 if self.select == VField::VSpace {
-                    hand.space = crate::kuna_handleview::export_space(otherhand);
+                    hand.space = crate::handleview::export_space(otherhand);
                     return Ok(());
                 }
                 // other selects fall through to the throw
@@ -412,7 +412,7 @@ impl ConstTpl {
     ) -> KunaResult<()> {
         if self.type_ == ConstType::Handle {
             let otherhand = walker.borrow_fixed_handle(self.value_handle_index)?;
-            crate::kuna_handleview::export_offset(otherhand, hand);
+            crate::handleview::export_offset(otherhand, hand);
         } else {
             hand.offset_space = None;
             let fixed = self.fix(walker)?;

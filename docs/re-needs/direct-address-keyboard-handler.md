@@ -128,7 +128,7 @@ _none recorded_
   4598-byte result.json -- a deliberate stop, not a 429 and not a SIGKILL. Its tree is committed as
   **`616959b7` on `feat/re-direct-address-keyboard-handler`, parented directly on `8ff1b4ec`**
   (i.e. already rebased onto current main); no PR was opened and origin/main is untouched.
-  23 files: `option tailcallframe` (default on, DIV-109) in `p2_lift/kuna_tailcallframe.rs` + its
+  23 files: `option tailcallframe` (default on, DIV-109) in `p2_lift/tailcallframe.rs` + its
   tests, `p2_lift/flow.rs`, `infra/decompile_drive.rs`, `infra/architecture.rs`, phases.toml,
   options.rs, `docs/spec/02-lift-and-flow.md`, `docs/history.md`, `docs/options.md`,
   `tests/stages/tailcallframe.toml` + the stages baseline + corpus count, the catalog count tests

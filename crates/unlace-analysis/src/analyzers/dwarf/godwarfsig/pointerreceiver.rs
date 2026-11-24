@@ -3,9 +3,9 @@
 use std::collections::BTreeSet;
 
 use unlace_decomp::dtype::type_metatype;
-use unlace_decomp::kuna_gopointermethod::Receiver;
+use unlace_decomp::gopointermethod::Receiver;
 
-use crate::gotypes::kuna_pointermethods::{LinkedMethod, LinkedWord};
+use crate::gotypes::pointermethods::{LinkedMethod, LinkedWord};
 
 use super::{DieSnap, Facts, Location};
 

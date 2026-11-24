@@ -1,6 +1,6 @@
 # structdefs — implementation plan
 
-## 1. The module (`p9_emit/kuna_structdefs.rs`)
+## 1. The module (`p9_emit/structdefs.rs`)
 
 - `OptionStructDefs` — the `on|off` parse, the kuna option idiom
   (`ELEM_STRUCTDEFS = 4174`); the caller (`Architecture::set_kuna_option`) does
@@ -65,7 +65,7 @@ nothing.
 
 ## 5. Tests
 
-- 7 unit tests in `kuna_structdefs/tests.rs` over hand-built `Datatype`s: the
+- 7 unit tests in `structdefs/tests.rs` over hand-built `Datatype`s: the
   pointee pull-in, nested ordering, cycle termination, the core/unnamed
   refusals, the opaque forward declaration, a complete body, and the dedup rule.
 - `tests/stages/kuna-structdefs.toml` — two `print C` passes over one decompiled

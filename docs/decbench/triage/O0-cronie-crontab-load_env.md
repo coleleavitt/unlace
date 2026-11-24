@@ -193,7 +193,7 @@ incidental dataflow side effect, not a fix.)
 ## Proposed fix
 
 New P2 option, suggested slug **`switchstagedindex`** (`p2_lift/kuna_switchstagedindex.rs`,
-canonical `kuna_loweredswitch.rs` template). Two candidate mechanisms:
+canonical `loweredswitch.rs` template). Two candidate mechanisms:
 
 **(a) Un-fold the index in the recovery partial (smaller, provably sufficient here).**
 In `Funcdata::stage_jump_table` (`substrate/funcdata_block.rs:2364`), before running the

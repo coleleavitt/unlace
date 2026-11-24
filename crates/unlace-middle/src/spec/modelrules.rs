@@ -485,7 +485,7 @@ impl PrimitiveExtractor {
 
     /// The `TYPE_STRUCT` tail of [`Self::extract`] (modelrules.cc:215-235).
     fn extract_struct(&mut self, dt: &Rc<Datatype>, max: int4, offset: int4) -> bool {
-        let Some(fields) = super::kuna_aggregateabi::primitive_fields(dt, offset) else {
+        let Some(fields) = super::aggregateabi::primitive_fields(dt, offset) else {
             return false;
         };
         let mut expected_off = offset;
@@ -663,10 +663,7 @@ impl DatatypeFilter {
             DatatypeFilter::FloatFields {
                 max_primitives,
                 size,
-            } => {
-                size.filter_on_size(dt)
-                    && super::kuna_aggregateabi::float_fields(dt, *max_primitives)
-            }
+            } => size.filter_on_size(dt) && super::aggregateabi::float_fields(dt, *max_primitives),
             // HomogeneousAggregate::filter (modelrules.cc:412-430).
             DatatypeFilter::Homogeneous {
                 meta_type,
@@ -1362,7 +1359,7 @@ impl AssignAction {
             _ => unreachable!(),
         };
         if direct_fields {
-            return super::kuna_aggregateabi::assign_fields(
+            return super::aggregateabi::assign_fields(
                 dt,
                 resource_type,
                 status,
@@ -1458,7 +1455,7 @@ impl AssignAction {
                 ..
             }
         ) {
-            let Some(fields) = super::kuna_aggregateabi::direct_fields(dt) else {
+            let Some(fields) = super::aggregateabi::direct_fields(dt) else {
                 return Ok(RES_FAIL);
             };
             PrimitiveExtractor {
@@ -2704,8 +2701,8 @@ impl ModelRule {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.modelrules_register_ids = Some(register_ids);
 }
 

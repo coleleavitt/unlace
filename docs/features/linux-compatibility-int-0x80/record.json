@@ -4,7 +4,7 @@
   "change_kind": "correctness-fix",
   "phase": "P2",
   "subphase": "pre-SSA lift repair",
-  "module": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_linuxsyscall.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p2_lift/linuxsyscall.rs",
   "option": "linuxsyscall",
   "default_on": false,
   "div": "DIV-165",

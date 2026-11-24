@@ -111,9 +111,7 @@ pub fn run(argv: &[String]) -> i32 {
         return run_raw(&args, raw);
     }
 
-    if unlace_analysis::loader::kuna_dyldcache::is_dyld_cache_file(std::path::Path::new(
-        &args.binary,
-    )) {
+    if unlace_analysis::loader::dyldcache::is_dyld_cache_file(std::path::Path::new(&args.binary)) {
         return dyld::run(&args.binary, args.output.as_deref(), args.list, args.json);
     }
     if args.list
@@ -1020,7 +1018,7 @@ fn usage() {
 /// not load.
 fn module_installs(
     path: &std::path::Path,
-) -> Vec<unlace_decomp::kuna_uefiprotocols::InstalledInterface> {
+) -> Vec<unlace_decomp::uefiprotocols::InstalledInterface> {
     crate::decompile_all::uefi_installs(path).unwrap_or_else(|e| {
         eprintln!("warning: {}: {e}", path.display());
         Vec::new()

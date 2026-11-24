@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use unlace_analysis::loader::kuna_dyldcache::{follow_images, is_dyld_cache_file};
+use unlace_analysis::loader::dyldcache::{follow_images, is_dyld_cache_file};
 
 /// The images a request may add when `--follow-images` is not given.
 pub(crate) const DEFAULT_LIMIT: usize = 2;
@@ -59,7 +59,7 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
         "xrefs" => false,
         _ => return,
     };
-    let Some(selected) = unlace_decomp::kuna_dyldcache::selected_image() else {
+    let Some(selected) = unlace_decomp::dyldcache::selected_image() else {
         return;
     };
     let Some(cache) = argv
@@ -108,7 +108,7 @@ pub(crate) fn apply(sub: &str, argv: &mut [String], limit: usize) {
     if followed.images == selected {
         return;
     }
-    unlace_decomp::kuna_dyldcache::set_dyldimage_env(&followed.images);
+    unlace_decomp::dyldcache::set_dyldimage_env(&followed.images);
     for i in 2..argv.len() {
         if argv[i - 2] == "--option" && argv[i - 1] == "dyldimage" {
             argv[i] = followed.images.clone();

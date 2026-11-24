@@ -66,7 +66,7 @@ pub(crate) fn with_types(
     }
     let mut all = sdk.unwrap_or_default();
     if !types.is_empty() {
-        all.extend(unlace_console::kuna_cheader::load_types(types, cpp)?);
+        all.extend(unlace_console::cheader::load_types(types, cpp)?);
     }
     all.extend(assertions);
     Ok(all)
@@ -249,7 +249,7 @@ pub(crate) fn console_form(d: &Directive, target: Option<&str>) -> Result<Consol
             Some(f) => return Err(unbindable(&f)),
             None => (
                 Slot::Symbol,
-                unlace_console::kuna_constformat::console_line(*addr, format, *value),
+                unlace_console::constformat::console_line(*addr, format, *value),
             ),
         },
         Body::Isolate { func, symbol } => match names_another(func, target) {

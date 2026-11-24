@@ -81,7 +81,7 @@
 //! rescues it.  Deferring every finalization until every spec is checked would
 //! make the direction symmetric and is the wrong way to get it — it changes what
 //! `checkCallDoubleUse` sees while scoring, on every binary.  The other direction
-//! is [`kuna_calleearityfwd`](crate::kuna_calleearityfwd), which retries
+//! is [`kuna_calleearityfwd`](crate::calleearityfwd), which retries
 //! this same plan at the end of the pass instead of moving anything.
 
 use unlace_base::address::Address;
@@ -120,7 +120,7 @@ pub fn witness_storage(data: &Funcdata, fc: &FuncCallSpecs) -> Option<Vec<(Addre
     let storage: Vec<(Address, int4)> = fc
         .final_input_storage()
         .iter()
-        .filter(|(a, s)| !crate::kuna_swiftcall::is_self_storage(data, a, *s))
+        .filter(|(a, s)| !crate::swiftcall::is_self_storage(data, a, *s))
         .cloned()
         .collect();
     if storage.is_empty() {
@@ -144,7 +144,7 @@ fn best_witness(fc: &FuncCallSpecs, data: &Funcdata) -> Vec<(Address, int4)> {
 
 /// [`best_witness`] addressed by callee entry and calling op rather than by the
 /// spec itself, so the deferred retry in
-/// [`kuna_calleearityfwd`](crate::kuna_calleearityfwd) — which has no
+/// [`kuna_calleearityfwd`](crate::calleearityfwd) — which has no
 /// `FuncCallSpecs` left to ask — runs the same search.
 pub fn best_witness_for(entry: &Address, op: OpId, data: &Funcdata) -> Vec<(Address, int4)> {
     let mut best: Vec<(Address, int4)> = Vec::new();
@@ -252,7 +252,7 @@ pub fn unify_with_sibling_call(fc: &mut FuncCallSpecs, data: &Funcdata) -> int4 
                 size: t.get_size(),
                 // (kuna `swiftcall`) A Swift `self` alone is no recovered list.
                 used: t.is_used()
-                    && !crate::kuna_swiftcall::is_self_storage(data, t.get_address(), t.get_size()),
+                    && !crate::swiftcall::is_self_storage(data, t.get_address(), t.get_size()),
                 definitely_not_used: t.is_definitely_not_used(),
                 unref: t.is_unref(),
                 has_value,
@@ -270,5 +270,5 @@ pub fn unify_with_sibling_call(fc: &mut FuncCallSpecs, data: &Funcdata) -> int4 
 }
 
 #[cfg(test)]
-#[path = "kuna_calleearity/tests.rs"]
+#[path = "calleearity/tests.rs"]
 mod tests;

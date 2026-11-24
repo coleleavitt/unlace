@@ -23,8 +23,8 @@
     "SCOPED TO THE CALL-SITE CHECKER ONLY. The first implementation changed gather_additive_base for every AliasChecker, including MapState's local-layout gather. Measured on the witness binary that was 17/159 functions changed and Stack<hex> unnamed-address references going 5 -> 38, because dropping the escape site also drops the fake covering array ScopeLocal builds at the alias offset (on this binary a char[32] that overlapped the canary slot). Narrowing the exemption to Funcdata::alias_gather_access -- the checker ActionActiveParam builds -- leaves stack-variable layout byte-identical and cuts the same binary to 6/159 with Stack<hex> unchanged at 3 -> 3. The broader flip is a real second opportunity and is deliberately NOT taken here."
   ],
   "files": [
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_cookiescramble.rs",
-    "decompiler/crates/kuna-decomp/src/p6_variables/kuna_cookiescramble/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p6_variables/cookiescramble.rs",
+    "decompiler/crates/kuna-decomp/src/p6_variables/cookiescramble/tests.rs",
     "decompiler/crates/kuna-decomp/src/p6_variables/funcdata_spacebase.rs",
     "decompiler/crates/kuna-decomp/src/p6_variables/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",

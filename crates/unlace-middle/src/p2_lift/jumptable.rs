@@ -69,8 +69,8 @@ use unlace_num::pcoderaw::VarnodeData;
 
 use crate::block::{BlockKind, block_get_start};
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::emulatefunction::EmulateFunction;
 use crate::funcdata::Funcdata;
-use crate::kuna_emulatefunction::EmulateFunction;
 
 /// (kuna) With `UNLACE_JUMPTABLE_TRACE` set, say on stderr what the basic
 /// jump-table model found at each indirect jump: the index range, the guards
@@ -984,10 +984,10 @@ fn matching_constants(fd: &Funcdata, vn1: VarnodeId, vn2: VarnodeId) -> bool {
 /// budget is spent, so a model with a long range ends with its drive: every
 /// recovery loop advances through [`JumpValues::next`].
 fn walk_within_budget() -> KunaResult<()> {
-    if !crate::kuna_budget::budget_probe() {
+    if !crate::budget::budget_probe() {
         return Ok(());
     }
-    crate::kuna_budget::note_budget_site(|| "jump-table value walk".to_string());
+    crate::budget::note_budget_site(|| "jump-table value walk".to_string());
     Err(KunaError::lowlevel(
         "Jumptable value walk ran past the per-function budget",
     ))
@@ -3565,7 +3565,7 @@ impl JumpBasicModel {
                 return Ok(true);
             }
             // (kuna `switchextent`) No guard at all: the table ends where the
-            // function's next jump table begins (`kuna_switchextent.rs`).
+            // function's next jump table begins (`switchextent.rs`).
             if unbounded
                 && fd
                     .get_arch()
@@ -3597,7 +3597,7 @@ impl JumpBasicModel {
 
     /// (kuna `switchtrim`) Open an unbounded single-LOAD table to
     /// `[0, maxtablesize)` and let the sanity check end it where its layout
-    /// does (see [`crate::kuna_switchtrim`]).
+    /// does (see [`crate::switchtrim`]).
     fn kuna_try_trimmed_table(&mut self, fd: &Funcdata, maxtablesize: uint4) -> bool {
         let loads = (0..self.path_meld.num_ops())
             .filter(|&i| {
@@ -3792,7 +3792,7 @@ impl JumpBasicModel {
     /// (kuna `switchextent`) Re-bound a table no guard reaches to `[0, N)`:
     /// `N` is the case count of the Swift enum whose case indexes it, else
     /// the entries before the function's next jump table in the same
-    /// load-image section (`p2_lift/kuna_switchextent.rs`).
+    /// load-image section (`p2_lift/switchextent.rs`).
     /// The melded path must hold one LOAD whose address is a constant table
     /// plus an index scaled by the entry width; that index becomes the
     /// range's start.
@@ -5860,7 +5860,7 @@ impl JumpBasicModel {
 
     /// (kuna `switchextent`) Where an unguarded table ends: at the lowest jump
     /// table above it, of this function or of the next ones
-    /// (`kuna_switchextent::later_tables`), when that is before `rows` end.
+    /// (`switchextent::later_tables`), when that is before `rows` end.
     /// A byte selector bounds a table only to 256 rows, whose run past its end
     /// may stay inside the function (csplit's regcomp, OCaml matches). A
     /// jump-table partial asks the flow for the tables first
@@ -7164,7 +7164,7 @@ impl JumpTable {
             self.addresstable.len() as uint4,
             max_table_size,
         )?;
-        if crate::kuna_budget::deadline_passed_in("jump-table basic model") {
+        if crate::budget::deadline_passed_in("jump-table basic model") {
             self.jmodel = None;
             return Ok(());
         }
@@ -7188,7 +7188,7 @@ impl JumpTable {
             self.addresstable.len() as uint4,
             max_table_size,
         )?;
-        if crate::kuna_budget::deadline_passed_in("jump-table default-path model") {
+        if crate::budget::deadline_passed_in("jump-table default-path model") {
             self.jmodel = None;
             return Ok(());
         }
@@ -7213,7 +7213,7 @@ impl JumpTable {
         // `option constselectjump on`, or for a table staged again after flow
         // re-entered the code before it, the destination may still be a select over
         // constants -- a set both models prune away at the MULTIEQUAL rather than
-        // lose.  See `p2_lift/kuna_constselectjump.rs`.
+        // lose.  See `p2_lift/constselectjump.rs`.
         let matchsize = self.addresstable.len() as uint4;
         if let Some(model) =
             (fd.hooks().constselectjump_recover)(self, fd, indirect, matchsize, max_table_size)?
@@ -7234,7 +7234,7 @@ impl JumpTable {
             return recovered;
         }
         // (kuna `rawswitch`) The models failed: match the table from the
-        // dispatch's own instructions (`kuna_rawswitch.rs`).
+        // dispatch's own instructions (`rawswitch.rs`).
         let Some(indirect) = self.indirect else {
             return recovered;
         };
@@ -7323,7 +7323,7 @@ impl JumpTable {
             self.addresstable = addresstable;
             self.loadpoints = loadpoints;
             r?;
-            crate::kuna_budget::deadline_passed_in("jump-table address emulation");
+            crate::budget::deadline_passed_in("jump-table address emulation");
             let reached = self.loadpoints.clone();
             let bounded = self.flow_bounded_values(fd);
             self.sanity_check(fd, Some(&loadcounts))?;
@@ -7345,7 +7345,7 @@ impl JumpTable {
             );
             self.addresstable = addresstable;
             r?;
-            crate::kuna_budget::deadline_passed_in("jump-table address emulation");
+            crate::budget::deadline_passed_in("jump-table address emulation");
             let bounded = self.flow_bounded_values(fd);
             let trim = self
                 .jmodel
@@ -8035,7 +8035,7 @@ crate::kuna_flag!(
 
 crate::kuna_flag!(
     /// (kuna) Recover an unbounded single-LOAD jump table by reading until its
-    /// layout ends (option `switchtrim`).  See [`crate::kuna_switchtrim`].
+    /// layout ends (option `switchtrim`).  See [`crate::switchtrim`].
     SwitchTrim,
     "switchtrim",
     "Unguarded jump-table recovery with layout trimming",
@@ -8046,7 +8046,7 @@ crate::kuna_flag!(
 crate::kuna_flag!(
     /// (kuna) `option switchextent`: end a jump table no range check bounds
     /// at the next jump table its function dispatches through
-    /// (`p2_lift/kuna_switchextent.rs`, and the Listing's AArch64 table read).
+    /// (`p2_lift/switchextent.rs`, and the Listing's AArch64 table read).
     SwitchExtent,
     "switchextent",
     "Unchecked jump table ends at the function's next table",

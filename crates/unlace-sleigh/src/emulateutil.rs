@@ -9,7 +9,7 @@
 //! and requested-size adjustment, and propagate unavailable-data errors.
 //!
 //! Emulation over decompiler IR lives in `unlace-middle`'s
-//! `engine/kuna_emulatefunction.rs`, which combines the upstream
+//! `engine/emulatefunction.rs`, which combines the upstream
 //! `EmulatePcodeOp` and `EmulateFunction` behavior.
 
 use std::cell::RefCell;

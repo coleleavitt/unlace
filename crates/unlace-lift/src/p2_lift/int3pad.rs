@@ -45,8 +45,8 @@
 //! # What it will not do
 //!
 //! * **Only vector 3.** `int 0x29` is `__fastfail` and belongs to
-//!   [`fastfailnoreturn`](crate::kuna_fastfailnoreturn); `int 0x80` is a Linux
-//!   syscall and belongs to [`linuxsyscall`](crate::kuna_linuxsyscall).
+//!   [`fastfailnoreturn`](crate::fastfailnoreturn); `int 0x80` is a Linux
+//!   syscall and belongs to [`linuxsyscall`](crate::linuxsyscall).
 //! * **Only the exact lifted shape**, shared with `fastfailnoreturn`: the
 //!   `CALLIND` must read the storage the `swi` `CALLOTHER` in the same instruction
 //!   wrote. Hexagon is the only other vendored processor with a `swi` user-op,
@@ -90,7 +90,7 @@ pub enum Int3PadMode {
     Halt,
 }
 
-impl crate::kuna_optionset::KunaOption for Int3PadMode {
+impl crate::optionset::KunaOption for Int3PadMode {
     const NAME: &'static str = "int3pad";
     crate::kuna_option_id!();
 
@@ -131,7 +131,7 @@ pub struct Int3PadSite {
 /// (kuna) Choose the `int3` pad handling: `int3pad off|warn|halt`.
 ///
 /// Following the kuna-option idiom
-/// ([`OptionArrayNotation`](crate::kuna_arraynotation::OptionArrayNotation)),
+/// ([`OptionArrayNotation`](crate::arraynotation::OptionArrayNotation)),
 /// this struct owns only the parse; the caller
 /// (`Architecture::set_kuna_option`) writes the live field.
 #[derive(Debug, Clone, Copy, Default)]
@@ -162,12 +162,12 @@ impl OptionInt3Pad {
 /// The lowered shape is `fastfailnoreturn`'s — one `swi` `CALLOTHER` feeding a
 /// `CALLIND` in the same instruction — read for the vector rather than tested
 /// against `0x29`; see
-/// [`swi_vector_of_callind`](crate::kuna_fastfailnoreturn::swi_vector_of_callind).
+/// [`swi_vector_of_callind`](crate::fastfailnoreturn::swi_vector_of_callind).
 pub fn is_int3_callind<F>(data: &Funcdata, op: OpId, userop_name: F) -> bool
 where
     F: Fn(u32) -> Option<String>,
 {
-    crate::kuna_fastfailnoreturn::swi_vector_of_callind(data, op, userop_name) == Some(INT3_VECTOR)
+    crate::fastfailnoreturn::swi_vector_of_callind(data, op, userop_name) == Some(INT3_VECTOR)
 }
 
 /// How many consecutive `0xcc` bytes the image holds at `addr`, capped at
@@ -210,5 +210,5 @@ pub fn warning_text(run: u32) -> String {
 }
 
 #[cfg(test)]
-#[path = "kuna_int3pad/tests.rs"]
+#[path = "int3pad/tests.rs"]
 mod tests;

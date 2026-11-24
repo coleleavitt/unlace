@@ -207,11 +207,11 @@ pub mod pcodeop_addlflags {
     pub const kuna_x64syscall: uint4 = 0x20000;
     /// (kuna) This COPY of zero is the fill a narrow write leaves in the upper
     /// half of a vector register, as decoded.  Set and read by
-    /// [`crate::p4_calls::kuna_zerofillreturn`].
+    /// [`crate::p4_calls::zerofillreturn`].
     pub const kuna_zerofill: uint4 = 0x40000;
     /// (kuna) This float comparison is the exact complement of a NaN-guarded
     /// flag, so no separate NaN test may be dropped against it.  Set by
-    /// [`crate::p3_dataflow::kuna_floatnegation`]; read by `RuleIgnoreNan`.
+    /// [`crate::p3_dataflow::floatnegation`]; read by `RuleIgnoreNan`.
     pub const kuna_exactfloat: uint4 = 0x80000;
     /// A COPY lowered from a physical stack LOAD, retaining its read provenance.
     pub const kuna_stack_read: uint4 = 0x100000;
@@ -225,7 +225,7 @@ pub mod pcodeop_addlflags {
     /// (kuna) Heritage left this op's read of its own output storage empty
     /// for renaming to fill, instead of linking a placeholder Varnode. Set and
     /// cleared within one heritage pass by
-    /// [`crate::p3_dataflow::kuna_renamereads`].
+    /// [`crate::p3_dataflow::renamereads`].
     pub const kuna_rename_read: uint4 = 0x800000;
     /// Transient saved RBP in a summarized Rust callee, not a caller-reserved slot.
     pub const kuna_rustprobe_spill: uint4 = 0x1000000;
@@ -459,7 +459,7 @@ impl Iterator for IntrusiveIter<'_> {
 }
 
 /// The op arena alias (ADR 0001): a slotmap keyed by [`OpId`].
-type OpArena = crate::kuna_checkedarena::Arena<OpId, PcodeOp>;
+type OpArena = crate::checkedarena::Arena<OpId, PcodeOp>;
 
 // ---------------------------------------------------------------------------
 // PcodeOp

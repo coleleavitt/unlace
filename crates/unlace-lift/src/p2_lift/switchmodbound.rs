@@ -73,5 +73,5 @@ impl SwitchModBoundOption {
 }
 
 #[cfg(test)]
-#[path = "kuna_switchmodbound/tests.rs"]
+#[path = "switchmodbound/tests.rs"]
 mod tests;

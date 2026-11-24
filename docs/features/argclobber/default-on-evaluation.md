@@ -164,7 +164,7 @@ the rule does not read.
 ## 5. Recommendations
 
 * Keep `argclobber` off.
-* Correct its `phases.toml` row to `destructive = true`. `kuna_phases.rs`
+* Correct its `phases.toml` row to `destructive = true`. `phases.rs`
   defines the field as "NOT safe as a global default", and the evidence above
   is exactly that. This was the #652 review's nit.
 * Redesign the callee clause around the callee's recovered prototype once

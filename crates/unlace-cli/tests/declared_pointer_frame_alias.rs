@@ -148,12 +148,12 @@ fn a_normalized_declared_pointer_refutes_a_stale_unaliased_mark() {
     use std::rc::Rc;
     use unlace_base::address::Address;
     use unlace_base::space::spacetype;
+    use unlace_console::console::register_kuna_commands;
     use unlace_console::ifacedecomp::{
         DECOMPILE_MODULE, IfaceDecompData, execute, register_console_commands,
         register_decomp_commands,
     };
     use unlace_console::ifaceterm::IfaceTerm;
-    use unlace_console::kuna_console::register_kuna_commands;
     use unlace_decomp::action::Rule;
     use unlace_decomp::op::pcodeop_addlflags;
     use unlace_decomp::ruleaction_3::RuleIndirectCollapse;

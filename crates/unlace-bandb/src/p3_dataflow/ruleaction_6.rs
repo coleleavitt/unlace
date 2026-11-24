@@ -583,7 +583,7 @@ impl RulePtrsubUndo {
         multiplier: int8,
     ) -> bool {
         use crate::dtype::type_metatype;
-        use crate::kuna_thumbfuncptr::{
+        use crate::thumbfuncptr::{
             ThumbPtrTypeFacts, ThumbSubTypeFact, kuna_preserve_thumb_funcptr,
         };
         let funcptr_align = data.get_arch().funcptr_align;
@@ -1343,7 +1343,7 @@ impl RulePieceStructure {
                 continue;
             }
             // (kuna `mulblob`) a multiply operand leaf stays an extension.
-            if crate::kuna_mulblob::declines_zext(data, op) {
+            if crate::mulblob::declines_zext(data, op) {
                 continue;
             }
             if !Self::spanning_range(structured_type, node.get_type_offset(), size(data, vn))? {
@@ -1431,7 +1431,7 @@ impl Rule for RulePieceStructure {
         if code(data, op) == OpCode::CPUI_INT_ZEXT {
             // (kuna `mulblob`) A widened multiply operand is a value, not an
             // aggregate: leave the extension alone so it prints as ZEXT816(x).
-            if crate::kuna_mulblob::declines_zext(data, op) {
+            if crate::mulblob::declines_zext(data, op) {
                 return 0;
             }
             let outty = vn_type(data, outvn);
@@ -1450,7 +1450,7 @@ impl Rule for RulePieceStructure {
             if zc == OpCode::CPUI_INT_ZEXT {
                 // Extension of a structured data-type; convert extension to PIECE first
                 // (kuna `mulblob`) unless the extension is a multiply operand.
-                if crate::kuna_mulblob::declines_zext(data, zext) {
+                if crate::mulblob::declines_zext(data, zext) {
                     return 0;
                 }
                 let zout = out_vn(data, zext);

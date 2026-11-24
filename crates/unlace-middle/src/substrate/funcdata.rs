@@ -141,8 +141,8 @@ pub struct FrameSlot {
 }
 
 /// (kuna `--assert`) A `type` directive's retype of a whole printed variable to `ct`, keeping
-/// its width and kind (`kuna_stablenames::unit_retype`); `infer` when type inference has to read
-/// it (`kuna_stablenames::reaches_inference`); `from` the type the variable was printed with.
+/// its width and kind (`stablenames::unit_retype`); `infer` when type inference has to read
+/// it (`stablenames::reaches_inference`); `from` the type the variable was printed with.
 #[derive(Clone, Debug)]
 pub struct UnitRetype {
     pub ct: std::rc::Rc<crate::dtype::Datatype>,
@@ -173,7 +173,7 @@ pub struct DirectiveSymbol {
     /// Did a `type` directive in the batch retype it.
     pub retyped: bool,
     /// The type a `type` directive gave the whole printed variable, when it keeps
-    /// the variable's width and kind (`kuna_stablenames::retypes_as_unit`).
+    /// the variable's width and kind (`stablenames::retypes_as_unit`).
     pub unit_type: Option<UnitRetype>,
 }
 
@@ -264,7 +264,7 @@ pub struct Funcdata {
     frame_slots: std::cell::RefCell<std::collections::BTreeMap<i64, FrameSlot>>,
     /// (kuna `castobject`) Every stack object a `restructure_varnode` pass
     /// re-declared, as `(offset, size, type)`; read by
-    /// [`crate::kuna_castobject::reconcile`] once the variables are merged.
+    /// [`crate::castobject::reconcile`] once the variables are merged.
     cast_objects: std::cell::RefCell<
         Vec<(
             unlace_base::types::uintb,
@@ -274,15 +274,15 @@ pub struct Funcdata {
     >,
     /// (kuna `stackstoreguard`) Set once a `restructure_varnode` pass lays out a
     /// guarded store's reach; later passes keep doing so
-    /// (`p6_variables/kuna_storereach.rs`).
+    /// (`p6_variables/storereach.rs`).
     store_reach_committed: std::cell::Cell<bool>,
     /// (kuna `stackstoreguard`) The STOREs of any width heritage guarded a
-    /// written stack range against (`p3_dataflow/kuna_stackstoreguard.rs`).
+    /// written stack range against (`p3_dataflow/stackstoreguard.rs`).
     indexed_guard_stores: std::cell::RefCell<std::collections::BTreeSet<OpId>>,
     /// (kuna `stackstoreguard`) The INDIRECTs heritage placed for those STOREs.
     indexed_guard_indirects: std::cell::RefCell<std::collections::BTreeSet<OpId>>,
     /// (kuna `stackstoreguard`) Every signed stack range a layout pass found
-    /// only the guard keeps (`p6_variables/kuna_storereach.rs`).
+    /// only the guard keeps (`p6_variables/storereach.rs`).
     guard_only_seen: std::cell::RefCell<Vec<(unlace_base::types::intb, unlace_base::types::intb)>>,
     /// (kuna `stackstoreguard`) Set when the guard is off for this function.
     /// Survives `clear()`.
@@ -323,13 +323,11 @@ pub struct Funcdata {
     /// Container of Varnode objects for \b this function (C++ `vbank`)
     vbank: VarnodeBank,
     /// Machine homes retained when equivalent values replace their Varnodes.
-    kuna_storage_sources: crate::kuna_fasthash::FxHashMap<VarnodeId, Vec<StorageSource>>,
-    kuna_call_transport: crate::kuna_fasthash::FxHashSet<VarnodeId>,
-    kuna_call_transport_projections: crate::kuna_fasthash::FxHashMap<VarnodeId, int4>,
-    kuna_denied_storage_writes:
-        crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
-    kuna_meaningful_storage_writes:
-        crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    kuna_storage_sources: crate::fasthash::FxHashMap<VarnodeId, Vec<StorageSource>>,
+    kuna_call_transport: crate::fasthash::FxHashSet<VarnodeId>,
+    kuna_call_transport_projections: crate::fasthash::FxHashMap<VarnodeId, int4>,
+    kuna_denied_storage_writes: crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+    kuna_meaningful_storage_writes: crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
     /// Container of PcodeOp objects for \b this function (C++ `obank`)
     obank: PcodeOpBank,
     /// Unstructured basic blocks (C++ `bblocks`)
@@ -464,11 +462,11 @@ pub struct Funcdata {
     kuna_directive_symbols: Vec<DirectiveSymbol>,
     /// One past the last default index the naming pass handed out.
     kuna_default_name_end: int4,
-    /// Whether the naming pass records [`kuna_name_snapshot`](crate::kuna_stablenames::FuncdataStablenamesExt::kuna_name_snapshot).
+    /// Whether the naming pass records [`kuna_name_snapshot`](crate::stablenames::FuncdataStablenamesExt::kuna_name_snapshot).
     kuna_record_names: bool,
     /// The local each replayed rename or retype reached, by the name the
     /// previous decompile printed it under; see
-    /// `kuna_stablenames::directive_targets`.
+    /// `stablenames::directive_targets`.
     kuna_directive_targets: std::collections::BTreeMap<String, crate::context::HighVariableId>,
     /// (kuna, ghidra Phase 4) WIRE-ONLY symbols the encode-time link pass
     /// synthesized for named HighVariables the analysis deliberately left
@@ -493,11 +491,11 @@ pub struct Funcdata {
     kuna_darwin_variadic: Option<std::collections::BTreeSet<(int4, unlace_base::types::uintb)>>,
     /// (kuna `swiftcall`) Direct callees whose bodies do not read `swiftself`
     /// before writing it, by `(space index, entry offset)`; seeded by
-    /// [`crate::kuna_swiftcall::seed_self_readers`].
+    /// [`crate::swiftcall::seed_self_readers`].
     kuna_swift_self_unread: std::collections::HashSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `hiddenretarg`) The values a veto removed from a call's
     /// hidden-return register, as the leaves
-    /// [`crate::kuna_hiddenretarg::value_leaves`] finds. Cleared with the
+    /// [`crate::hiddenretarg::value_leaves`] finds. Cleared with the
     /// Varnodes on a restart.
     kuna_hiddenret_vetoed: std::collections::HashSet<VarnodeId>,
     /// (kuna callee-contract) May this drive bootstrap direct callees from the P4
@@ -510,7 +508,7 @@ pub struct Funcdata {
     /// bootstrap (its pause).
     kuna_callee_split_calls: Vec<Address>,
     /// (kuna `callrettype`) The loader's data ranges, for telling an address
-    /// from a number ([`crate::kuna_callrettype::contradicted`]).
+    /// from a number ([`crate::callrettype::contradicted`]).
     kuna_callret_data: std::rc::Rc<Vec<(u64, u64)>>,
     /// (kuna `voidret`) The return storage this function's callers read.
     kuna_forced_return: Vec<(Address, int4)>,
@@ -518,7 +516,7 @@ pub struct Funcdata {
     kuna_forced_return_planted: Vec<(Address, int4)>,
     /// (kuna `callresultuse`) The result register whose RETURN read was planted
     /// so a call-to-call hand-off is heritaged; its return trial is settled by
-    /// `kuna_callresultuse::settle_planted`.
+    /// `callresultuse::settle_planted`.
     kuna_callresultuse_planted: Option<(Address, int4)>,
     /// (kuna `voidret`) A reader keeps this function's float return as another
     /// type, so the float-register vote on the return is withdrawn.
@@ -555,7 +553,7 @@ pub struct Funcdata {
     /// scored value may also reach.
     kuna_shared_float_call: Option<OpId>,
     /// (kuna `callrettype`) The extensions the return trimming narrowed the
-    /// returned value back through ([`crate::kuna_callrettype::note_returned_extension`]).
+    /// returned value back through ([`crate::callrettype::note_returned_extension`]).
     kuna_callret_returned: Vec<(bool, int4)>,
     /// (kuna `passthrough`) The CALL ops set up as variadic calls -- the caller
     /// writes the return register, which carries no argument, just before them
@@ -571,23 +569,23 @@ pub struct Funcdata {
     /// (kuna `retinputhalf`) The return registers whose value the function moved
     /// out of its own register and back at some RETURN, noted while return
     /// recovery can still see the moves
-    /// ([`crate::kuna_retinputhalf::note_moved_back_returns`]).
+    /// ([`crate::retinputhalf::note_moved_back_returns`]).
     kuna_moved_back_returns: Vec<(Address, int4)>,
     /// (kuna) Return recovery joined this function's two-register return value
     /// first register low on an ABI that puts the high word first
-    /// ([`crate::kuna_bejoin::join_order`]), so its calls' pairs are joined that
+    /// ([`crate::bejoin::join_order`]), so its calls' pairs are joined that
     /// way too.
     kuna_pairs_first_low: bool,
-    pub kuna_go_receiver: Option<crate::kuna_gopointermethod::Receiver>,
-    go_string_input: Option<Box<crate::kuna_gostringinput::GoStringInput>>,
+    pub kuna_go_receiver: Option<crate::gopointermethod::Receiver>,
+    go_string_input: Option<Box<crate::gostringinput::GoStringInput>>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftself`.
     kuna_swift_self_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `swiftcall`) The direct callees whose body reads `swiftasync`.
     kuna_swift_async_callees: std::collections::BTreeSet<(int4, unlace_base::types::uintb)>,
     /// (kuna `calleevote fields`) Every caller of this function is a known direct call.
     kuna_calleevote_closed: bool,
-    /// The kuna passes' per-function state ([`crate::kuna_funcstate`]).
-    kuna_states: crate::kuna_funcstate::FuncStates,
+    /// The kuna passes' per-function state ([`crate::funcstate`]).
+    kuna_states: crate::funcstate::FuncStates,
 }
 
 /// Opaque handle for a jump-table (C++ `JumpTable *` slot in `jumpvec`).
@@ -889,7 +887,7 @@ impl Funcdata {
     /// [`Self::drain_pending_comments`] will hand to the console `Architecture`'s
     /// comment database).
     ///
-    /// Used by [`crate::p8_structure::kuna_condfold`] to decline folding a basic
+    /// Used by [`crate::p8_structure::condfold`] to decline folding a basic
     /// block that carries an instruction comment into a condition operand: the
     /// printer suppresses `emitCommentGroup` under `comma_separate`, so such a
     /// fold would silently drop the comment.
@@ -1357,15 +1355,12 @@ impl Funcdata {
     }
 
     #[doc(hidden)]
-    pub fn set_go_string_input(
-        &mut self,
-        formal: Option<crate::kuna_gostringinput::GoStringInput>,
-    ) {
+    pub fn set_go_string_input(&mut self, formal: Option<crate::gostringinput::GoStringInput>) {
         self.go_string_input = formal.map(Box::new);
     }
 
     #[doc(hidden)]
-    pub fn go_string_input(&self) -> Option<&crate::kuna_gostringinput::GoStringInput> {
+    pub fn go_string_input(&self) -> Option<&crate::gostringinput::GoStringInput> {
         self.go_string_input.as_deref()
     }
 
@@ -1457,7 +1452,7 @@ impl Funcdata {
     }
 
     /// (kuna) Was this function's return pair joined first register low on an
-    /// ABI that puts the high word first ([`crate::kuna_bejoin::join_order`])?
+    /// ABI that puts the high word first ([`crate::bejoin::join_order`])?
     pub fn kuna_pairs_first_low(&self) -> bool {
         self.kuna_pairs_first_low
     }
@@ -1472,9 +1467,9 @@ impl Funcdata {
         self.size
     }
     /// Get the program/architecture owning \b this function (C++ `getArch`).
-    /// The pass hooks of the function's architecture ([`crate::kuna_passhooks`]).
+    /// The pass hooks of the function's architecture ([`crate::passhooks`]).
     #[inline]
-    pub fn hooks(&self) -> &'static crate::kuna_passhooks::KunaHooks {
+    pub fn hooks(&self) -> &'static crate::passhooks::KunaHooks {
         self.glb.pass_hooks
     }
 
@@ -1484,15 +1479,15 @@ impl Funcdata {
     }
 
     /// A kuna pass's per-function state, created with its default on first use
-    /// ([`crate::kuna_funcstate`]).
+    /// ([`crate::funcstate`]).
     #[inline]
-    pub fn kuna_state<S: crate::kuna_funcstate::FuncState>(&self) -> &S {
+    pub fn kuna_state<S: crate::funcstate::FuncState>(&self) -> &S {
         self.kuna_states.get::<S>()
     }
 
-    /// A kuna pass's per-function state for writing ([`crate::kuna_funcstate`]).
+    /// A kuna pass's per-function state for writing ([`crate::funcstate`]).
     #[inline]
-    pub fn kuna_state_mut<S: crate::kuna_funcstate::FuncState>(&mut self) -> &mut S {
+    pub fn kuna_state_mut<S: crate::funcstate::FuncState>(&mut self) -> &mut S {
         self.kuna_states.get_mut::<S>()
     }
 
@@ -2466,7 +2461,7 @@ impl Funcdata {
 
     /// (kuna `dwarfscopes`) Map each DWARF register local `(name, type, storage,
     /// start)` at the use point the value its register holds at `start` will
-    /// have once heritage has run (`kuna_dwarfregbind::reaching_write`): the
+    /// have once heritage has run (`dwarfregbind::reaching_write`): the
     /// block's phi when `start` begins a basic block, else the last raw write
     /// covering the storage before `start` in its block or up its
     /// single-predecessor chain, else the phi where that chain meets a merge. A
@@ -2480,7 +2475,7 @@ impl Funcdata {
         specs: &[(String, std::rc::Rc<crate::dtype::Datatype>, Address, u64)],
     ) -> Vec<(String, u64)> {
         use crate::dtype::TypeFactory;
-        use crate::kuna_dwarfregbind::{BindBlock, BindPoint, BindWrite};
+        use crate::dwarfregbind::{BindBlock, BindPoint, BindWrite};
         use crate::varnode::varnode_flags;
         let ids: Vec<_> = (0..self.bblocks_get_size())
             .map(|i| self.bblocks_get_block(i))
@@ -2542,21 +2537,20 @@ impl Funcdata {
                 });
                 written.push((v.get_addr().clone(), up));
             }
-            let bind =
-                match crate::kuna_dwarfregbind::reaching_write(&blocks, &writes, *start, size) {
-                    Some(BindPoint::Phi(at)) => code_space.as_ref().map(|s| {
-                        (
-                            storage.clone(),
-                            size,
-                            Address::new(std::rc::Rc::clone(s), at),
-                        )
-                    }),
-                    Some(BindPoint::Write(i)) => {
-                        let (addr, up) = written[i].clone();
-                        Some((addr, writes[i].size, up))
-                    }
-                    None => None,
-                };
+            let bind = match crate::dwarfregbind::reaching_write(&blocks, &writes, *start, size) {
+                Some(BindPoint::Phi(at)) => code_space.as_ref().map(|s| {
+                    (
+                        storage.clone(),
+                        size,
+                        Address::new(std::rc::Rc::clone(s), at),
+                    )
+                }),
+                Some(BindPoint::Write(i)) => {
+                    let (addr, up) = written[i].clone();
+                    Some((addr, writes[i].size, up))
+                }
+                None => None,
+            };
             let Some((addr, width, up)) = bind else {
                 unbound.push((name.clone(), *start));
                 continue;
@@ -2571,7 +2565,7 @@ impl Funcdata {
                 ));
                 continue;
             }
-            let Some(meta) = crate::kuna_dwarfregbind::widened_metatype(ty.get_metatype()) else {
+            let Some(meta) = crate::dwarfregbind::widened_metatype(ty.get_metatype()) else {
                 unbound.push((name.clone(), *start));
                 continue;
             };
@@ -3316,7 +3310,7 @@ impl Funcdata {
             )
         };
         let mut seen = (homes.len() >= 64 && sources.size_hint().0 >= 16).then(|| {
-            let mut seen = crate::kuna_fasthash::FxHashSet::default();
+            let mut seen = crate::fasthash::FxHashSet::default();
             seen.reserve(homes.len());
             seen.extend(homes.iter().map(key));
             seen
@@ -3473,7 +3467,7 @@ impl Funcdata {
     }
 
     fn kuna_storage_write_matches(
-        denied: &crate::kuna_fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
+        denied: &crate::fasthash::FxHashMap<(int4, u64, int4), Vec<(u64, int4)>>,
         source: &StorageSource,
     ) -> bool {
         let Some(pc) = source.write_address.as_ref() else {

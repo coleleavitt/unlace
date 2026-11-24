@@ -5,24 +5,20 @@
 
 pub mod coreaction_early;
 #[cfg(test)]
-mod kuna_globalarrayanchor_tests;
-pub mod kuna_globalcallstore;
-pub mod kuna_globalfieldstore;
-pub mod kuna_globalorderkeep;
-pub mod kuna_indexaliasguard;
+mod globalarrayanchor_tests;
+pub mod globalcallstore;
+pub mod globalfieldstore;
+pub mod globalorderkeep;
+pub mod indexaliasguard;
 #[cfg(test)]
-mod kuna_indirectanchor_tests;
-pub mod kuna_leafmemory;
-pub mod kuna_narrowload; // (kuna) a narrow LOAD keeps its own width
-pub mod kuna_opaquedomain;
-pub mod kuna_opaqueglobals;
-pub mod kuna_opaquepredicate;
-pub mod kuna_pairrefine;
-pub mod kuna_repframecopy;
-pub mod kuna_stackbytecopy;
-pub mod kuna_stackeffects;
-#[cfg(test)]
-mod kuna_storecopyeffects_tests;
+mod indirectanchor_tests;
+pub mod leafmemory;
+pub mod narrowload; // (kuna) a narrow LOAD keeps its own width
+pub mod opaquedomain;
+pub mod opaqueglobals;
+pub mod opaquepredicate;
+pub mod pairrefine;
+pub mod repframecopy;
 pub mod ruleaction_3;
 pub mod ruleaction_5;
 pub mod ruleaction_6;
@@ -31,3 +27,7 @@ mod ruleaction_7_ptrflow_tests;
 #[cfg(test)]
 mod ruleaction_7_tests;
 pub mod ruleaction_8;
+pub mod stackbytecopy;
+pub mod stackeffects;
+#[cfg(test)]
+mod storecopyeffects_tests;

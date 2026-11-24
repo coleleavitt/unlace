@@ -4,7 +4,7 @@ Owning phase: **P1 program prep**, the DWARF analyzer tier
 (`docs/spec/01-program-prep.md`). Option `cppproto`, tier `analysis`,
 `change_kind` `analysis-enablement`, default-**ON**.
 
-## 1. The module — `analyzers/dwarf/kuna_cppproto.rs` (new)
+## 1. The module — `analyzers/dwarf/cppproto.rs` (new)
 
 Sits beside `mod.rs` as a child module, so it can read `DieSnap`'s private
 fields, and reads the same `BTreeMap<offset, DieSnap>` snapshot the base walk

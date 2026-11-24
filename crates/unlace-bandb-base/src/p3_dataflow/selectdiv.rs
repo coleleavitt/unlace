@@ -289,7 +289,7 @@ impl Rule for RuleSelectDiv {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_selectdiv::Pow2Select>()
+            .get::<crate::selectdiv::Pow2Select>()
             .0
         {
             return 0;

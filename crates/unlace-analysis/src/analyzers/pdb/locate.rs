@@ -50,12 +50,12 @@ use crate::pdb::codeview::CodeViewInfo;
 /// `fid` `kuna_fid_db` env gate (the FID-database external-artifact precedent):
 /// the `.pdb` source is kept OFF the per-decompilation `--option` surface (so the
 /// catalog carries a single on|off `pdb` settable, not a path-valued one).
-pub const PDB_PATH_ENV: &str = unlace_decomp::kuna_loadoptions::PDB_PATH_ENV;
+pub const PDB_PATH_ENV: &str = unlace_decomp::loadoptions::PDB_PATH_ENV;
 
 /// The explicitly supplied `.pdb` path: the load's `LoadOptions::pdb_path`, else
 /// [`PDB_PATH_ENV`]. `None` when neither names one.
 pub fn explicit_pdb_path() -> Option<PathBuf> {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     scoped(|o| o.pdb_path.clone()).unwrap_or_else(env::pdb_path)
 }
 
@@ -63,7 +63,7 @@ pub fn explicit_pdb_path() -> Option<PathBuf> {
 /// the variable is unset or empty. Reads only the environment; a load in
 /// progress reads [`explicit_pdb_path`].
 pub fn pdb_path_from_env() -> Option<PathBuf> {
-    unlace_decomp::kuna_loadoptions::env::pdb_path()
+    unlace_decomp::loadoptions::env::pdb_path()
 }
 
 /// The ordered `.pdb` candidates for an image, most specific first (see the module
@@ -99,7 +99,7 @@ pub fn pdb_candidates(image_path: Option<&Path>, cv: &CodeViewInfo) -> Vec<PathB
 /// The symbol-store setting: the load's `LoadOptions::pdb_symsrv`, else
 /// `kuna_pdb_symsrv`. `None` when neither names one.
 pub fn symbol_store() -> Option<String> {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     scoped(|o| o.pdb_symsrv.clone()).unwrap_or_else(env::pdb_symsrv)
 }
 

@@ -73,11 +73,11 @@
   "counters --check": "no drift"
  },
  "files": [
-  "decompiler/crates/kuna-decomp/src/p8_structure/kuna_gotolabel.rs",
+  "decompiler/crates/kuna-decomp/src/p8_structure/gotolabel.rs",
   "decompiler/crates/kuna-decomp/src/p8_structure/mod.rs",
-  "decompiler/crates/kuna-decomp/src/p8_structure/kuna_gotoreduce.rs",
-  "decompiler/crates/kuna-decomp/src/p8_structure/kuna_taildup.rs",
-  "decompiler/crates/kuna-decomp/src/p8_structure/kuna_crossjumpreverter.rs",
+  "decompiler/crates/kuna-decomp/src/p8_structure/gotoreduce.rs",
+  "decompiler/crates/kuna-decomp/src/p8_structure/taildup.rs",
+  "decompiler/crates/kuna-decomp/src/p8_structure/crossjumpreverter.rs",
   "decompiler/crates/kuna-decomp/src/substrate/block.rs",
   "decompiler/crates/kuna-decomp/src/substrate/block/tests.rs",
   "decompiler/crates/kuna-ghidra/tests/ghidra_sim_e2e.rs",

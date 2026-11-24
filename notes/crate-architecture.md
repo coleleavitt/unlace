@@ -29,15 +29,15 @@ rust-analyzer call hierarchy (quoted below).
      context.rs:2656) has **210 fields**. Most are option mode enums and cross-function ledgers defined in pass
      modules, e.g. `be_join: crate::kuna_bejoin::BeJoinMode` (context.rs:764) and
      `goto_reduce: crate::p8_structure::kuna_gotoreduce::GotoReduceMode` (context.rs:1255). The option dispatch
-     is an `impl Architecture` block generated in p0 (`p0_knowledge/kuna_option_dispatch.rs:12-30`). It names
+     is an `impl Architecture` block generated in p0 (`p0_knowledge/option_dispatch.rs:12-30`). It names
      every pass's option parser (e.g. `crate::p9_emit::kuna_armconstantshift::OptionArmConstShift.apply`).
      `build.rs:232` generates `OptionValues` from `phases.toml` into the same crate
-     (`p0_knowledge/kuna_phases.rs:296`).
+     (`p0_knowledge/phases.rs:296`).
   3. **IR algorithms call kuna pass predicates directly.** Ghidra-core code in the IR calls `kuna_*` functions
      inline: 146 call sites to 115 distinct functions. lsp confirms, for example:
-     - `p4_calls/kuna_exclusivecallret.rs:32 applies` <- `substrate/funcdata_varnode.rs only_op_use_walk` [all 2237, call 2263]
-     - `p4_calls/kuna_spillargtrial.rs store_is_caller_save_spill` <- the same `only_op_use_walk` [all 2341]
-     - `p8_structure/kuna_orchain.rs shortcircuit_shared_targets` <- `substrate/funcdata_block.rs returndup_apply` [all 3252/3307]
+     - `p4_calls/exclusivecallret.rs:32 applies` <- `substrate/funcdata_varnode.rs only_op_use_walk` [all 2237, call 2263]
+     - `p4_calls/spillargtrial.rs store_is_caller_save_spill` <- the same `only_op_use_walk` [all 2341]
+     - `p8_structure/orchain.rs shortcircuit_shared_targets` <- `substrate/funcdata_block.rs returndup_apply` [all 3252/3307]
      - `p5_types/coreaction_infertypes.rs propagate_type_pub` <- `substrate/addtreestate.rs assign_propagated_type` [all 542/552]
      - `heritage.rs` alone calls 21 p4/p6 modules (40 sites). `merge.rs` calls 7 p6 `keeps_apart`-style vetoes.
        `jumptable.rs` calls 7.
@@ -57,9 +57,9 @@ rust-analyzer call hierarchy (quoted below).
 **Churn decides the value of any split.** Upstream non-merge commits that touched unlace-decomp since 2026-09-01:
 800. Of these:
 - 522 (65%) touch a file that would sit in an IR crate.
-- `architecture.rs` is touched by 377 (47%), and 332 of those 377 also touch `kuna_option_dispatch.rs` or
+- `architecture.rs` is touched by 377 (47%), and 332 of those 377 also touch `option_dispatch.rs` or
   `phases.toml`. That is option plumbing.
-- `context.rs` 219, `kuna_option_dispatch.rs` 192, `options.rs` 116, `funcdata.rs` 101, `modes.rs` 77.
+- `context.rs` 219, `option_dispatch.rs` 192, `options.rs` 116, `funcdata.rs` 101, `modes.rs` 77.
 
 So **a crate split alone would turn most edits into IR edits that rebuild everything.** The option storage and
 the `Funcdata` side tables must be inverted first. If option plumbing and side-table fields no longer count, the
@@ -182,7 +182,7 @@ algorithms into bandb/lift is a later option (it would shrink middle to ~86k, bu
 | `Funcdata` `kuna_*` side tables | 150 type refs to 39 modules | Per-function **typed slots** (`FuncState` trait with `Default` and a `KEEP_ACROSS_CLEAR` flag, since several fields survive `clear()`), with the same dense-index storage. Ghidra-core fields (`funcp`, `heritage`, `jumpvec`, `high_bank`, `localmap`, `covermerge`) stay as fields. | Bevy components/resources; rustc stores pass results outside `Body` |
 | IR algorithms -> kuna predicates (`only_op_use_walk`, `returndup_apply`, heritage, merge, jumptable, fspec) | 146 sites / 115 fns | **Hooks table** `KunaHooks { exclusive_call_ret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool, ... }` in middle, held in `ArchContext` like `tcx.hooks`. Each pass crate has `provide(&mut KunaHooks)`; the driver composes them. The default is the Ghidra behaviour (most of these are "kuna veto" predicates, so the default is "no veto"), not a panic: middle alone stays faithful to Ghidra. | `rustc_middle/src/hooks.rs` |
 | Pass -> pass upward (lift->bandb 16, bandb->emit 18) | 34 pairs | Move a shared type or helper down to middle when it is data; use a hook when it is behaviour | `TypeckResults` in middle |
-| Anything -> `decompile_drive` budget clock | ~25 sites | Move the thread-local deadline and `budget_*` functions into middle (`kuna_budget.rs`); the driver arms it | rustc keeps limits in `Session` |
+| Anything -> `decompile_drive` budget clock | ~25 sites | Move the thread-local deadline and `budget_*` functions into middle (`budget.rs`); the driver arms it | rustc keeps limits in `Session` |
 | 10 foreign `impl Funcdata`/`impl Datatype`/`impl Architecture` blocks | 10 | Extension traits (`FuncdataMergeExt`, ...) or move them into middle | `InferCtxtExt` |
 | `crate::<module>` paths across the new boundary | 7332 paths | **No edit needed.** Each new crate's root does `pub(crate) use kuna_middle::*;` (and the band below), so `crate::funcdata::Funcdata` keeps resolving. This is the trick lib.rs already uses (`pub use substrate::*;`). Only the inverted edges need source changes. | — |
 
@@ -259,7 +259,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
   without the `#[inline]` work.
 - Cold builds in a saturated multi-agent machine: about the same.
 - Conflicts: the inversions touch the three most conflicted files (`architecture.rs`, `context.rs`,
-  `kuna_option_dispatch.rs`). The payoff is that, once they land, a new option no longer touches them.
+  `option_dispatch.rs`). The payoff is that, once they land, a new option no longer touches them.
 
 ## 7. Migration plan (small, mechanical, each step mergeable and green on its own)
 
@@ -273,7 +273,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
    that only shrinks. This is what keeps ~60 open PRs from regrowing the cycle while the rest lands. Cheap,
    valuable now.
 2. **Budget clock down (~300 lines moved, ~25 call sites).** Move the `decompile_drive` thread-local deadline and
-   `budget_probe`/`budget_spent`/`deadline_passed_in`/`note_budget_site` into `substrate/kuna_budget.rs`.
+   `budget_probe`/`budget_spent`/`deadline_passed_in`/`note_budget_site` into `substrate/budget.rs`.
    `decompile_drive` keeps `pub use`, so no caller changes. No behaviour change.
 3. **Optional, independent: dev dylib (~50 lines + Makefile).** `unlace-decomp-dylib` (dylib, re-exports
    unlace-decomp + unlace-analysis), behind a `dynamic_linking` feature on console/cli/harness/ghidra, plus an rpath
@@ -282,7 +282,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
    `...Ext` traits. No behaviour change.
 5. **Option registry (the unlock; about 10 PRs of 300-600 diff lines each).**
    - PR 5a adds `KunaOption`/`OptionSet` to substrate, plus driver registration next to
-     `kuna_option_dispatch.rs`. The old fields keep working.
+     `option_dispatch.rs`. The old fields keep working.
    - PRs 5b..5k migrate options one phase at a time (P9 first: it has the most single-band commits). Each PR
      deletes the `Architecture` field, the `ArchContext` mirror and the dispatch arm for its options.
    - `unlace catalog --check` and the 675/675 parity gate prove each step changes nothing.
@@ -294,7 +294,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
 7. **Hooks table (about 6 PRs, ~115 functions).**
    - `KunaHooks` in substrate, held by `ArchContext`. Each phase folder gets a `provide(&mut KunaHooks)`, and the
      driver composes them (the rustc `DEFAULT_QUERY_PROVIDERS` shape).
-   - Done first: `substrate/kuna_passhooks.rs` (`KunaHooks`, `KunaHookSlots::finish`), `ArchContext::pass_hooks`,
+   - Done first: `substrate/passhooks.rs` (`KunaHooks`, `KunaHookSlots::finish`), `ArchContext::pass_hooks`,
      `Funcdata::hooks()`, composed in `universalaction::PASS_HOOKS`; the 11 IR edges into spacebase, union,
      facing, calltransport and casts go through it. A slot no `provide` fills stops the first run, naming it.
    - Batches: funcdata_varnode/funcdata_block (25 fns), heritage (21 modules), merge (7), jumptable (7),
@@ -359,10 +359,10 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
 **What each step became:**
 - Step 1, layering ratchet: `scripts/check_layers.py` + `scripts/layers-allowlist.txt` (#36). The allowlist
   reached zero entries in #164, before the physical split.
-- Step 2, budget clock: `substrate/kuna_budget.rs` (#37).
+- Step 2, budget clock: `substrate/budget.rs` (#37).
 - Step 4, extension traits: #38, then the pass methods on `Funcdata` (#149) and `OutLang`'s emit methods as
   `OutLangExt` (#165).
-- Step 5, option registry: `KunaOption`/`OptionSet` in `substrate/kuna_optionset.rs` (5a, #99), then options
+- Step 5, option registry: `KunaOption`/`OptionSet` in `substrate/optionset.rs` (5a, #99), then options
   moved off `Architecture`/`ArchContext` phase by phase (5b-5p: #101-#103, #107, #109, #114, #117, #121, #126,
   #133, #135, #137).
   Left as fields on purpose: `jumptablemax`, `impliedrefs` and `termdup` stay the upstream
@@ -373,16 +373,16 @@ harness build scripts (`docs/dev-setup.md`). Whether to turn it on for dev build
   bridge); the printer options (`arraynotation`, `braceelide`, `warnstyle`, ...) stay on the printer's own
   options. `ppcapu` and `ifuncfpret` are carried across `reset_defaults_internal`, as their fields were.
 - Step 6, typed slots, as three `TypeId`-indexed tables in `unlace-middle`:
-  - `FuncStates` (`substrate/kuna_funcstate.rs`): per-function side tables on `Funcdata`, created with
+  - `FuncStates` (`substrate/funcstate.rs`): per-function side tables on `Funcdata`, created with
     `Default` on first use, dropped by `Funcdata::clear` unless `KEEP_ACROSS_CLEAR` (#132, #134, #136, #138,
     #139).
-  - `ArchStates` (`substrate/kuna_archstate.rs`): per-architecture tables filled while the specs load, shared
+  - `ArchStates` (`substrate/archstate.rs`): per-architecture tables filled while the specs load, shared
     (`Rc`) by every `ArchContext` (#144).
   - `ArchTables`: the mutable run-wide ledgers and caches `Architecture` keeps across functions (#151, #159,
     #163).
   - Each type gets a dense index from `state_index(TypeId)` (a global map with a thread-local cache), so a pass
     crate can store a type alias or a std type it does not own, and lookups are a vector index.
-- Step 7, hooks: `KunaHooks` (`substrate/kuna_passhooks.rs`), filled by each band's `provide` and installed by
+- Step 7, hooks: `KunaHooks` (`substrate/passhooks.rs`), filled by each band's `provide` and installed by
   the driver (#100, #104-#113, #115, #118, #120, #128, #129, #153). An unfilled hook panics with its name.
   The table is found at link time: `kuna_passhooks::default_pass_hooks()` calls the `extern "Rust"` symbol
   `__unlace_default_pass_hooks`, which the driver defines `#[unsafe(no_mangle)]`, so unit tests and embedders
@@ -505,7 +505,7 @@ the machine was shared, load average 5-12 on 24 cores, so the baseline was re-me
 
 | edit in | before (one unlace-bandb, 30c7265e90) | after 10a | after 10b |
 |---|---|---|---|
-| base (`p4_calls/kuna_calleepurge.rs`) | 10.5 s | 7.9 s | 7.5 s |
+| base (`p4_calls/calleepurge.rs`) | 10.5 s | 7.9 s | 7.5 s |
 | core (`p5_types/coreaction_infertypes.rs`) | 10.5 s | 9.5 s | 8.2 s |
 | above the core (`p6_variables/coreaction_cleanup.rs`) | 10.5 s | 9.5 s | 6.8 s |
 

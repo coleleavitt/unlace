@@ -1,12 +1,12 @@
 use std::path::PathBuf;
 use unlace_base::address::Address;
+use unlace_console::console::register_kuna_commands;
 use unlace_console::engine::{ConsoleProgram, bootstrap_from_object};
 use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use unlace_console::kuna_console::register_kuna_commands;
-use unlace_decomp::kuna_funcptrnames;
+use unlace_decomp::funcptrnames;
 use unlace_decomp::options::NamespaceStrategy;
 use unlace_decomp::printlanguage::NamespaceStrategy::{
     AllNamespaces, MinimalNamespaces, NoNamespaces,
@@ -84,22 +84,15 @@ fn function_values_follow_the_use_namespace_and_requested_policy() {
             let fd = data.fd.as_ref().unwrap();
             let at = fd.get_address();
             assert_eq!(
-                kuna_funcptrnames::prefix(
-                    fd,
-                    program.arch(),
-                    &target,
-                    at,
-                    "target",
-                    MinimalNamespaces
-                ),
+                funcptrnames::prefix(fd, program.arch(), &target, at, "target", MinimalNamespaces),
                 Some(minimal.into_iter().map(String::from).collect())
             );
             assert_eq!(
-                kuna_funcptrnames::prefix(fd, program.arch(), &target, at, "target", AllNamespaces),
+                funcptrnames::prefix(fd, program.arch(), &target, at, "target", AllNamespaces),
                 Some(vec!["left".into()])
             );
             assert_eq!(
-                kuna_funcptrnames::prefix(fd, program.arch(), &target, at, "target", NoNamespaces),
+                funcptrnames::prefix(fd, program.arch(), &target, at, "target", NoNamespaces),
                 Some(vec![])
             );
         });
@@ -118,7 +111,7 @@ fn local_names_require_the_global_root_even_with_all_namespaces() {
             let fd = data.fd.as_ref().unwrap();
             for strategy in [MinimalNamespaces, AllNamespaces] {
                 assert_eq!(
-                    kuna_funcptrnames::prefix(
+                    funcptrnames::prefix(
                         fd,
                         program.arch(),
                         &target,
@@ -141,7 +134,7 @@ fn renamed_and_interior_function_references_decline_qualification() {
         let interior = Address::new(target.get_space().unwrap().clone(), target.get_offset() + 1);
         let fd = data.fd.as_ref().unwrap();
         assert!(
-            kuna_funcptrnames::prefix(
+            funcptrnames::prefix(
                 fd,
                 program.arch(),
                 &target,
@@ -152,7 +145,7 @@ fn renamed_and_interior_function_references_decline_qualification() {
             .is_none()
         );
         assert!(
-            kuna_funcptrnames::prefix(
+            funcptrnames::prefix(
                 fd,
                 program.arch(),
                 &interior,
@@ -180,7 +173,7 @@ fn data_symbols_do_not_gain_function_qualification() {
             .name_for_global_varnode_scoped(&target, 1, fd.get_address())
             .unwrap();
         assert!(
-            kuna_funcptrnames::prefix(
+            funcptrnames::prefix(
                 fd,
                 program.arch(),
                 &target,
@@ -211,7 +204,7 @@ fn conflicting_live_and_snapshot_scopes_do_not_choose_a_namespace() {
             .unwrap();
         let fd = data.fd.as_ref().unwrap();
         assert!(
-            kuna_funcptrnames::prefix(
+            funcptrnames::prefix(
                 fd,
                 program.arch(),
                 &target,
@@ -272,7 +265,7 @@ fn function_values_decline_scopes_that_are_not_plain_cpp_names() {
                 assert_eq!(path, vec![scope_name.to_string()]);
                 for strategy in [MinimalNamespaces, AllNamespaces] {
                     assert_eq!(
-                        kuna_funcptrnames::prefix(
+                        funcptrnames::prefix(
                             fd,
                             program.arch(),
                             &target,

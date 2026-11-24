@@ -11,19 +11,19 @@
 
 use object::Object;
 use unlace_decomp::architecture::Architecture;
-use unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode;
+use unlace_decomp::symbolnamechars::symbolnamechars_mode;
 use unlace_sleigh::translate::Translate;
 
 use crate::loadimage_object::ObjectLoadImage;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, run_analyses};
 use crate::sourcelang::Compiler;
 
-pub use unlace_decomp::kuna_loadoptions::{LOAD_OBJC_ENV, LOAD_STRINGS_ENV};
+pub use unlace_decomp::loadoptions::{LOAD_OBJC_ENV, LOAD_STRINGS_ENV};
 
 /// Whether the load runs pass `id`: the `objc` and `strings` passes can be
 /// skipped by the load's options.
 fn load_pass_enabled(id: &str) -> bool {
-    use unlace_decomp::kuna_loadoptions::{env, scoped};
+    use unlace_decomp::loadoptions::{env, scoped};
     match id {
         "objc" => scoped(|o| o.load_objc).unwrap_or_else(env::load_objc),
         "strings" => scoped(|o| o.load_strings).unwrap_or_else(env::load_strings),
@@ -100,30 +100,30 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // decbench C corpus and reduced from the platform headers. Applied only to
         // names the image IMPORTS (see the module docs — a defined `error` is the
         // image's own function). Registered always.
-        Box::new(crate::protos::kuna_libcsigs::LibcSigsPass),
+        Box::new(crate::protos::libcsigs::LibcSigsPass),
         // (kuna `objcsdk`) C prototypes read from the SDK headers the option
         // names, for a Mach-O's imports. After the libc tables, which it defers
         // to; inert with no header directory.
-        Box::new(crate::protos::kuna_sdkprotos::SdkProtoPass),
+        Box::new(crate::protos::sdkprotos::SdkProtoPass),
         // S1 libgcc DI-mode contracts (`libgccsigs`): `long long __divdi3(long long,
         // long long)` on SPARC32 BE ELF. Registered always; the COMMIT is gated by
         // `--option libgccsigs on|off` (default off) via `analysis_pass_enabled`.
-        Box::new(crate::protos::kuna_libgcc::LibgccSigsPass),
+        Box::new(crate::protos::libgcc::LibgccSigsPass),
         // (kuna) The Arm run-time ABI helpers (`__aeabi_dadd`, `__aeabi_d2iz`,
         // `__aeabi_memcpy`, ...) typed as RTABI32 declares them, on a 32-bit ARM
         // image that names one. Registered always.
-        Box::new(crate::protos::kuna_aeabisigs::AeabiSigsPass),
+        Box::new(crate::protos::aeabisigs::AeabiSigsPass),
         // (kuna) The libgcc soft-float and machine-mode integer routines
         // (`__addsf3`, `__fixdfsi`, `__muldi3`, ...) typed by their machine modes
         // on every target but 32-bit ARM. Registered always.
-        Box::new(crate::protos::kuna_softfpsigs::SoftFpSigsPass),
+        Box::new(crate::protos::softfpsigs::SoftFpSigsPass),
         // S1 built-in Win32 API signatures (`win32sigs`): the Windows half of the
         // `.gdt` stand-in, which nothing in the tree carried. PE/COFF only, and
         // keyed by ENTRY ADDRESS rather than by name -- a PE import is TWO
         // FunctionSymbols (the IAT slot and the `FF 25` thunk veneer) and the
         // global by-name query answers with the slot, which is not the address a
         // direct `call` resolves to. Registered always.
-        Box::new(crate::protos::kuna_win32sigs::Win32SigsPass),
+        Box::new(crate::protos::win32sigs::Win32SigsPass),
         Box::new(crate::tls::TlsNamesPass),
         // S1 entry discovery: find function entry points for stripped targets —
         // ELF e_entry, DT_INIT/DT_FINI + INIT_ARRAY/FINI_ARRAY pointer tables,
@@ -153,8 +153,8 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         Box::new(crate::entry::EhFrameLsdaPass),
         // (kuna `itaniumeh`) The call-site table with each landing pad's clauses,
         // for the decompiler's exceptional edges. Commit gated, default-OFF.
-        Box::new(crate::entry::kuna_itaniumeh::ItaniumEhPass),
-        Box::new(crate::entry::kuna_itaniumeh::EhNotePass),
+        Box::new(crate::entry::itaniumeh::ItaniumEhPass),
+        Box::new(crate::entry::itaniumeh::EhNotePass),
         // (kuna `unwindstarts`) S1 Mach-O `__unwind_info` function-start discovery:
         // the linker-built second-level pages of `__TEXT,__unwind_info` list every
         // function the unwinder can describe, by start offset. The section survives
@@ -165,11 +165,11 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // entries) via `engine.rs::analysis_pass_enabled`, so a default run is
         // byte-identical and an image carrying `LC_FUNCTION_STARTS` gains nothing
         // (unwind starts are a strict subset there). After EntryDiscoveryPass.
-        Box::new(crate::entry::kuna_unwindinfo::UnwindInfoStartsPass),
+        Box::new(crate::entry::unwindinfo::UnwindInfoStartsPass),
         // (kuna `machoehframe`) S1 Mach-O `__eh_frame` FDE function starts, the
         // Mach-O arm of the ELF `.eh_frame` oracle. Commit gated by
         // `--option machoehframe on|off` (default-ON).
-        Box::new(crate::entry::kuna_machoehframe::MachoEhFrameStartsPass),
+        Box::new(crate::entry::machoehframe::MachoEhFrameStartsPass),
         // (kuna `entrymainproto`) S1 PE CRT entry-function prototype recovery: the
         // function `__scrt_common_main_seh` calls immediately after the named
         // argc/argv/envp CRT accessors gets the prototype that call site
@@ -179,7 +179,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // the callee being unnamed, so it emits nothing anywhere else).
         // After EntryDiscoveryPass, whose commit installs the `sub_<addr>` name this
         // prototype is parked on.
-        Box::new(crate::entry::kuna_entrymainproto::EntryMainProtoPass),
+        Box::new(crate::entry::entrymainproto::EntryMainProtoPass),
         // (kuna `machomain`) S1 Mach-O `LC_MAIN` entry naming + prototype: the load
         // command whose `entryoff` field is documented as the offset of `main()`
         // names that routine `main` and declares it `int main(int, char **)`, so a
@@ -189,13 +189,13 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // nothing anywhere else). After EntryDiscoveryPass, whose commit
         // consults the `entry_names` overlay this pass writes and installs the
         // function the prototype is parked on.
-        Box::new(crate::entry::kuna_machomain::MachoMainPass),
+        Box::new(crate::entry::machomain::MachoMainPass),
         // (kuna `pemain`) S1 PE user-entry naming: the function the in-image C
         // runtime startup calls (MSVC `invoke_main`, MinGW `__tmainCRTStartup`) is
         // named `main`/`wmain`/`WinMain`/`wWinMain`, so a stripped PE stops
         // reporting its program entry as one more `sub_<addr>`. Registered always
         // (the pass self-gates on a PE whose recovered entry is unnamed).
-        Box::new(crate::entry::kuna_pemain::PeMainPass),
+        Box::new(crate::entry::pemain::PeMainPass),
         // (kuna `armlibcmain`) S1 non-PIE ARM `_start`->`main`: the arm of entry
         // oracle 4 that reads the value crt1 hands `__libc_start_main` out of the
         // image (a literal-pool word, or a statically filled `.got` slot) instead
@@ -206,7 +206,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // `__libc_start_main`, so it emits nothing anywhere else). After
         // EntryDiscoveryPass, whose commit consults the `entry_names`
         // overlay this pass writes.
-        Box::new(crate::entry::kuna_armlibcmain::ArmLibcMainPass),
+        Box::new(crate::entry::armlibcmain::ArmLibcMainPass),
         // (kuna `elfmain`) S1 ELF libc-start `main` naming + prototype: entry
         // oracle 4 already decodes the value crt1 hands `__libc_start_main`, but
         // address-only, so a stripped ELF reports its own starting point as one
@@ -220,7 +220,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // `engine.rs::analysis_pass_enabled`. After
         // ArmLibcMainPass, whose entry + name it parks the prototype on for the
         // non-PIE ARM32 shape oracle 4 cannot see.
-        Box::new(crate::entry::kuna_elfmain::ElfMainPass),
+        Box::new(crate::entry::elfmain::ElfMainPass),
         // S1 widened ARM Cortex-M vector-table discovery (`cortexmvectors`): the
         // reset/exception handler seeds and the whole-image Thumb region paint of a
         // hardware vector table the always-on oracle 6 signature rejects (an A-only
@@ -232,7 +232,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // signature already matched, on a non-ARM object, or when no widened table
         // is present. After EntryDiscoveryPass (it is the widened arm of its
         // oracle 6).
-        Box::new(crate::entry::kuna_cortexmvectors::CortexMVectorsPass),
+        Box::new(crate::entry::cortexmvectors::CortexMVectorsPass),
         // S1 `.eh_frame` FDE-interior entry suppression (`fdeinterior`): report the
         // FDE bodies that describe exactly one function, so the commit boundary can
         // reject a discovered entry that lands in the MIDDLE of one. kuna's function
@@ -243,7 +243,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // Inert on any image without `.eh_frame` FDEs. LAST of the entry passes: it
         // constrains what the others emit, and the suppression is applied to the
         // fully merged entry set (the deferred Listing consumers included).
-        Box::new(crate::entry::kuna_fdeinterior::FdeInteriorPass),
+        Box::new(crate::entry::fdeinterior::FdeInteriorPass),
         // S1 `.pdata` RUNTIME_FUNCTION-interior entry suppression
         // (`pdatainterior`): the PE half of `fdeinterior`, reporting on the same
         // `fde_bodies` channel. An x64 PE's exception directory records
@@ -252,7 +252,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // one is a point inside a function rather than a function. Inert on ELF, on
         // ARM/ARM64 PE (whose 8-byte records carry no `EndAddress`) and on any
         // image with no exception directory.
-        Box::new(crate::entry::kuna_pdatainterior::PdataInteriorPass),
+        Box::new(crate::entry::pdatainterior::PdataInteriorPass),
         // NB: the full byte-pattern function-start pass (`funcstart_patterns`) is
         // NOT registered here. It is a DEFERRED pass, run at the commit point by
         // [`run_deferred_entry_passes`] where its (default-OFF) gate is finally in
@@ -273,7 +273,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // (kuna `armfuncmode`) `TMode=0` at each even function symbol of an ARM
         // image without mapping symbols, so a Thumb paint stops at the next A32
         // function.
-        Box::new(crate::loader::kuna_armfuncmode::ArmFuncModePass),
+        Box::new(crate::loader::armfuncmode::ArmFuncModePass),
         // S1 MIPS `$gp` recovery: seed `t9 = func_entry` as a tracked register
         // value at each MIPS function entry (the PIC `jalr t9` ABI convention), so
         // a PIC prologue's `addu gp,gp,t9` folds to the real `$gp` and
@@ -301,9 +301,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // untouched). Always-on, like arm_markers/mips_gp.
         Box::new(crate::loader::mips_markers::MipsIsaModePass),
         // PPC32 ELF relocation metadata; self-gated like the register passes.
-        Box::new(crate::loader::kuna_ppc32_imports::PicSlotsPass),
+        Box::new(crate::loader::ppc32_imports::PicSlotsPass),
         // PPC64 ELFv2 `r12 = entry` at global entries; self-gated like mips_gp.
-        Box::new(crate::loader::kuna_ppc64r12::Ppc64GlobalEntryPass),
+        Box::new(crate::loader::ppc64r12::Ppc64GlobalEntryPass),
         // S1 DWARF: recover function/global names and TYPED function signatures
         // from `.debug_*` sections (the kuna analog of Ghidra's `DWARFAnalyzer`).
         // Registered AFTER LibProtoPass so for any name both emit, the DWARF
@@ -320,7 +320,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // Registered always (the facts are computed + stashed at load, in two
         // certainty tiers), the COMMIT gated by `--option cppsig proven|inferred`
         // via `engine.rs::analysis_pass_enabled` + `commit_analysis_output`.
-        Box::new(crate::demangle::kuna_cppsig::CppSigPass),
+        Box::new(crate::demangle::cppsig::CppSigPass),
         Box::new(crate::dwarf::DwarfPass),
         // S1 named libc/POSIX aggregate types (`libctypes`): the signatures
         // `LibProtoPass`/`LibcSigsPass` carry, with their aggregate slots spelled
@@ -336,17 +336,17 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // pointer minted against an empty shell keeps pointing at the empty shell
         // even after DWARF completes the same name. Running second, the pass sees
         // the platform's real `struct stat` already interned and points at THAT
-        // (`kuna_libctypes::named_aggregate`); the names DWARF did not define it
+        // (`libctypes::named_aggregate`); the names DWARF did not define it
         // mints itself. The order also keeps the prototype precedence right — a
         // DWARF-defined function outranks a table entry.
         //
         // The pass SELF-GATES on the `libctypes` env bridge rather than on the
         // commit boundary, because with the gate off not one of those shells may
         // exist, interned or not.
-        Box::new(crate::protos::kuna_libctypes::LibcTypesPass),
+        Box::new(crate::protos::libctypes::LibcTypesPass),
         // (kuna `typelib`) The image's library target and imports, for the
         // prebuilt type library the commit consults; no facts off-target.
-        Box::new(crate::protos::kuna_typelib::TypeLibPass),
+        Box::new(crate::protos::typelib::TypeLibPass),
         // S1 DWARF source lines: parse `.debug_line` and surface each
         // instruction's `file:line` as a `Comment::user2` on the decompiled
         // output (the kuna analog of Ghidra's `DWARFLineInfoCommentScript`).
@@ -367,9 +367,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // (kuna `blobs`) Embedded images and archives, committed unless `blobs off`.
         Box::new(crate::blobs::BlobPass),
         // (kuna `thunkentry`) An MSVC incremental-link table's stubs and targets.
-        Box::new(crate::listing::kuna_thunkentry::IncrementalLinkPass),
+        Box::new(crate::listing::thunkentry::IncrementalLinkPass),
         // (kuna) The MSVC x87 one-operand intrinsics take ST0 and return in ST0.
-        Box::new(crate::protos::kuna_x87intrinsics::X87IntrinsicPass),
+        Box::new(crate::protos::x87intrinsics::X87IntrinsicPass),
         // S1 address tables (AddrTablePass) run DEFERRED, from [`run_addrtable`]
         // at the commit point, and only under `--option addrtable on` (off,
         // matching Ghidra's `AddressTableAnalyzer.setDefaultEnablement(false)`:
@@ -425,14 +425,14 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // Mach-O (fixup slots resolved first); every other target's pass set is
     // byte-identical (the pass ALSO self-gates in `run`). DEFAULT-OFF: its
     // facts are computed at load but committed only when `--option itaniumrtti on`
-    // (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>().0`, default
+    // (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::analysisgates::Itaniumrtti>().0`, default
     // false), so a default run is byte-identical.
     if matches!(
         format,
         object::BinaryFormat::Elf | object::BinaryFormat::MachO
     ) {
-        passes.push(Box::new(crate::rtti::kuna_itaniumrtti::ItaniumRttiPass));
-        passes.push(Box::new(crate::rtti::kuna_vtabletypes::VtableTypesPass));
+        passes.push(Box::new(crate::rtti::itaniumrtti::ItaniumRttiPass));
+        passes.push(Box::new(crate::rtti::vtabletypes::VtableTypesPass));
     }
 
     // S1 ELF GOT data imports (ElfGotImportPass): name each undefined-symbol
@@ -440,12 +440,10 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // Mach-O `__got` slot, so `importdata` renders a read through it as the import.
     // Committed only when `importdata` is on.
     if format == object::BinaryFormat::Elf {
-        passes.push(Box::new(
-            crate::loader::kuna_elfgotimports::ElfGotImportPass,
-        ));
+        passes.push(Box::new(crate::loader::elfgotimports::ElfGotImportPass));
         // (kuna) An ARM ELF that states the base procedure-call standard binds
         // its external functions to the base-standard model (#681).
-        passes.push(Box::new(crate::loader::kuna_armbasepcs::ArmBasePcsPass));
+        passes.push(Box::new(crate::loader::armbasepcs::ArmBasePcsPass));
     }
 
     // S1 PE/Mach-O/ELF import-slot call binding (PeImportCallPass): paint
@@ -462,14 +460,14 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
             | object::BinaryFormat::MachO
             | object::BinaryFormat::Elf
     ) {
-        passes.push(Box::new(crate::loader::kuna_peimportcall::PeImportCallPass));
+        passes.push(Box::new(crate::loader::peimportcall::PeImportCallPass));
     }
 
     // (kuna `machobinds`) S1 Mach-O bound pointer slots: name each slot a bind
     // fills that no indirect entry names, through the same symbol-table-only
     // channel, and paint it `externref`. Committed only when `machobinds` is on.
     if format == object::BinaryFormat::MachO {
-        passes.push(Box::new(crate::loader::kuna_machobinds::MachoBindSlotsPass));
+        passes.push(Box::new(crate::loader::machobinds::MachoBindSlotsPass));
     }
 
     // S1 Mach-O data-import slots (MachODataImportPass): name each symbol-pointer
@@ -477,9 +475,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // for its import and paint it `externref`, so `importdata` renders a read
     // through it as the import. Committed only when `importdata` is on.
     if format == object::BinaryFormat::MachO {
-        passes.push(Box::new(
-            crate::loader::kuna_machodataslots::MachODataImportPass,
-        ));
+        passes.push(Box::new(crate::loader::machodataslots::MachODataImportPass));
     }
 
     // S1 Go pclntab function-name recovery (GoPclntabPass): when the binary is Go
@@ -498,9 +494,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // Go data image (.data/.noptrdata). FIRST in the Go block so
         // `gopclntab` keeps its appended-last contract. Committed under the
         // same `fatstr` mode gate as the rustc arm.
-        passes.push(Box::new(
-            crate::strings::kuna_strrecords::StrRecordPass::go(),
-        ));
+        passes.push(Box::new(crate::strings::strrecords::StrRecordPass::go()));
         // (kuna `gopcln`) is not registered here: its passes read the option,
         // which a load-time pass sees only at its constructor default, so they
         // run deferred at the commit point ([`run_gopcln`]).
@@ -509,26 +503,24 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // pclntab's own function list, so a STRIPPED Go binary (no .symtab for
         // `noreturn_known` to scan) still gets its runtime.panic*/throw/goexit
         // facts. Go-only: a structural no-op on every other binary.
-        passes.push(Box::new(crate::pclntab::kuna_gonoreturn::GoNoReturnPass));
+        passes.push(Box::new(crate::pclntab::gonoreturn::GoNoReturnPass));
         // (kuna `gotypes`) The runtime-type harvest — BEFORE `gopclntab`,
         // preserving that pass's appended-last contract.
         passes.push(Box::new(crate::gotypes::GoTypesPass));
         passes.push(Box::new(crate::pclntab::GoPclntabPass));
     }
     // (kuna `fatstr`) Rust-only: length-bounded string facts from static
-    // `(ptr, len)` records (`strings::kuna_strrecords`), the analysis-side half
+    // `(ptr, len)` records (`strings::strrecords`), the analysis-side half
     // of the fatstr option. Registered ONLY for `Compiler::Rustc`, so every
     // non-Rust binary's pass set is byte-identical to before; committed under
     // the `fatstr` mode gate (the registered option `FatStrMode`), so `--option fatstr
     // off` drops the facts at the read-symbols boundary.
     if compiler.is_rust() {
-        passes.push(Box::new(
-            crate::strings::kuna_strrecords::StrRecordPass::rust(),
-        ));
+        passes.push(Box::new(crate::strings::strrecords::StrRecordPass::rust()));
         // (kuna `fatstr`) The code-side (ptr, len) literal finder.
-        passes.push(Box::new(crate::strings::kuna_strcodelen::StrCodeLenPass));
+        passes.push(Box::new(crate::strings::strcodelen::StrCodeLenPass));
         // (kuna `panicloc`) The panic `Location` records, typed and named.
-        passes.push(Box::new(crate::strings::kuna_panicloc::PanicLocationPass));
+        passes.push(Box::new(crate::strings::panicloc::PanicLocationPass));
     }
 
     // S1 arm64e `__auth_ptr` call binding (AuthPtrCallPass): name each chained
@@ -536,15 +528,15 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // `peimportcall` facts for the one Mach-O import table the indirect-symbol
     // walk does not cover.
     if format == object::BinaryFormat::MachO {
-        passes.push(Box::new(crate::loader::kuna_authptrcall::AuthPtrCallPass));
-        passes.push(Box::new(crate::rtti::kuna_arm64evcall::Arm64eVcallPass));
+        passes.push(Box::new(crate::loader::authptrcall::AuthPtrCallPass));
+        passes.push(Box::new(crate::rtti::arm64evcall::Arm64eVcallPass));
     }
 
     // S1 stripped-stub naming (StubBindsPass): a `__stubs` entry whose
     // indirect-symbol entry is `LOCAL|ABS` is named after the chained bind on
     // the slot it jumps through. Committed only when `stubbinds` is on.
     if format == object::BinaryFormat::MachO {
-        passes.push(Box::new(crate::loader::kuna_stubbinds::StubBindsPass));
+        passes.push(Box::new(crate::loader::stubbinds::StubBindsPass));
     }
 
     // S1 MSVC RTTI / vftable recovery (RttiPass): on a Windows PE, parse the
@@ -556,24 +548,22 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // before (the no-op is structural, not a runtime check — and the pass ALSO
     // self-gates on PE in `run`). DEFAULT-OFF: its facts are computed at load but
     // committed only when `--option rtti on` (`engine.rs::analysis_pass_enabled`
-    // reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Rtti>().0`, default false), so a default run is byte-identical
+    // reads `arch.kuna_options.get::<unlace_decomp::analysisgates::Rtti>().0`, default false), so a default run is byte-identical
     // and bound to the real-PE path (the XML datatest oracle is untouched).
     if format == object::BinaryFormat::Pe {
         passes.push(Box::new(crate::rtti::RttiPass));
         // (kuna `vtabletypes`) The typed MSVC vftables, from the same RTTI.
-        passes.push(Box::new(
-            crate::rtti::kuna_msvcvtabletypes::MsvcVtableTypesPass,
-        ));
+        passes.push(Box::new(crate::rtti::msvcvtabletypes::MsvcVtableTypesPass));
         // (kuna `msvceh`) ThrowInfo/CatchableType labels and x64 throw-site
         // comments. Commit gated, default-OFF.
-        passes.push(Box::new(crate::entry::kuna_msvceh::MsvcEhPass));
+        passes.push(Box::new(crate::entry::msvceh::MsvcEhPass));
         // (kuna `delphi`) Borland/Delphi VMTs, method names, type info and
         // interface tables. Commit gated, default-OFF.
         passes.push(Box::new(crate::delphi::DelphiPass));
         // (kuna `delphiabi`) Under the Delphi spec, Win32 imports stay
         // `__stdcall`. Inert unless the gate is on.
         passes.push(Box::new(
-            crate::delphi::kuna_delphiabiimports::DelphiAbiImportsPass,
+            crate::delphi::delphiabiimports::DelphiAbiImportsPass,
         ));
     }
 
@@ -628,7 +618,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         passes.push(Box::new(crate::swift::SwiftMetadataPass));
         // (kuna `swiftruntime`) The runtime's entry points with their
         // header signatures, bound by name. Default-ON.
-        passes.push(Box::new(crate::swift::kuna_swiftruntime::SwiftRuntimePass));
+        passes.push(Box::new(crate::swift::swiftruntime::SwiftRuntimePass));
     }
 
     // S1 PE PDB metadata recovery (PdbPass): on a Windows PE, read the CodeView
@@ -643,7 +633,7 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
     // `BinaryFormat::Pe`, so every non-PE binary's pass set is byte-identical to
     // before (the gate is structural, and the pass ALSO self-gates on PE in `run`).
     // DEFAULT-OFF: its facts are computed at load but committed only when `--option
-    // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Pdb>().0`, default
+    // pdb on` (`engine.rs::analysis_pass_enabled` reads `arch.kuna_options.get::<unlace_decomp::analysisgates::Pdb>().0`, default
     // false) AND a fingerprint-matching `.pdb` is supplied via `kuna_pdb_path`, so a
     // default run is byte-identical and bound to the real-PE path (the XML datatest
     // oracle is untouched). Types/typed-locals/lines are `pdbtypes`/`pdblines`.
@@ -652,9 +642,9 @@ pub fn passes_for(compiler: Compiler, format: object::BinaryFormat) -> Vec<Box<d
         // S1 PDB-procedure-interior entry suppression (`pdbinterior`): the same
         // `.pdb`'s S_GPROC32/S_LPROC32 code lengths reported on `pdb_bodies`, for
         // the frameless leaves `.pdata` has no record of. Committed with `pdb`.
-        passes.push(Box::new(crate::pdb::kuna_pdbinterior::PdbInteriorPass));
-        passes.push(Box::new(crate::kuna_cvftrace::CvfTracePass));
-        passes.push(Box::new(crate::kuna_cvftrace::CvfTraceLinesPass));
+        passes.push(Box::new(crate::pdb::pdbinterior::PdbInteriorPass));
+        passes.push(Box::new(crate::cvftrace::CvfTracePass));
+        passes.push(Box::new(crate::cvftrace::CvfTraceLinesPass));
     }
 
     passes
@@ -711,17 +701,17 @@ fn listing_seeds_for_language(
 fn deferred_entry_passes() -> Vec<Box<dyn AnalysisPass>> {
     vec![
         Box::new(crate::entry::FuncStartPatternPass),
-        Box::new(crate::entry::kuna_coldentry::ColdEntryPass),
-        Box::new(crate::entry::kuna_ehcold::EhColdPass),
+        Box::new(crate::entry::coldentry::ColdEntryPass),
+        Box::new(crate::entry::ehcold::EhColdPass),
         // (kuna `functails`) Every other single-owner `.cold` part, commit gated.
-        Box::new(crate::entry::kuna_ehcold::FuncTailsPass),
-        Box::new(crate::entry::kuna_mfcmsgmap::MfcMsgMapPass),
-        Box::new(crate::entry::kuna_msvcptrentry::MsvcPtrEntryPass),
-        Box::new(crate::protos::kuna_importvote::ImportVotePass),
+        Box::new(crate::entry::ehcold::FuncTailsPass),
+        Box::new(crate::entry::mfcmsgmap::MfcMsgMapPass),
+        Box::new(crate::entry::msvcptrentry::MsvcPtrEntryPass),
+        Box::new(crate::protos::importvote::ImportVotePass),
         // (kuna `pdbtypes`/`pdblines`) A full read of the `.pdb`'s type,
         // module and line streams: paid only when its gate (and `pdb`) is on.
-        Box::new(crate::pdb::kuna_pdbtypes::PdbTypesPass),
-        Box::new(crate::pdb::kuna_pdblines::PdbLinesPass),
+        Box::new(crate::pdb::pdbtypes::PdbTypesPass),
+        Box::new(crate::pdb::pdblines::PdbLinesPass),
     ]
 }
 
@@ -753,8 +743,8 @@ pub fn run_deferred_entry_passes_without_image(
     let Ok(raw) = crate::loadimage_object::parse_object(bytes) else {
         return Vec::new();
     };
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     let ctx = AnalysisCtx {
         file: &file,
         bytes,
@@ -769,7 +759,7 @@ pub fn run_deferred_entry_passes_without_image(
         .map(|pass| {
             let mut out = pass.run(&ctx);
             if let Some(view) = &view {
-                crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+                crate::loader::relocrebase::retain_in_image(&mut out, view);
             }
             (pass.id(), out)
         })
@@ -796,19 +786,19 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
     vec![
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnDisc>()
+                .get::<unlace_decomp::analysisgates::NoreturnDisc>()
                 .0,
             Box::new(crate::noreturn_disc::NoReturnDiscoveredPass),
         ),
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::NoreturnPropagate>()
+                .get::<unlace_decomp::analysisgates::NoreturnPropagate>()
                 .0,
             Box::new(crate::noreturn_propagate::NoReturnPropagatePass),
         ),
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Fid>()
+                .get::<unlace_decomp::analysisgates::Fid>()
                 .on,
             Box::new(crate::fid::FidPass),
         ),
@@ -816,13 +806,13 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
         // vtable half runs at load, this half needs the Listing's data edges.
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Itaniumrtti>()
+                .get::<unlace_decomp::analysisgates::Itaniumrtti>()
                 .0,
-            Box::new(crate::rtti::kuna_itaniumctors::ItaniumCtorsPass),
+            Box::new(crate::rtti::itaniumctors::ItaniumCtorsPass),
         ),
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_coreoptions::Flirt>()
+                .get::<unlace_decomp::coreoptions::Flirt>()
                 .0,
             Box::new(crate::flirt::FlirtPass),
         ),
@@ -832,23 +822,23 @@ fn listing_consumer_passes(arch: &Architecture) -> Vec<(bool, Box<dyn AnalysisPa
         // the sites it declined.
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
+                .get::<unlace_decomp::formatstring::FormatStringMode>()
                 .resolves_at_load(&arch.archid)
                 || (arch
                     .kuna_options
-                    .get::<unlace_decomp::kuna_formatstring::FormatStringMode>()
-                    != unlace_decomp::kuna_formatstring::FormatStringMode::Off
-                    && unlace_decomp::kuna_armfloatargs::applies(arch)),
-            Box::new(crate::formatstring::kuna_fmtstatic::FormatStringStaticPass),
+                    .get::<unlace_decomp::formatstring::FormatStringMode>()
+                    != unlace_decomp::formatstring::FormatStringMode::Off
+                    && unlace_decomp::armfloatargs::applies(arch)),
+            Box::new(crate::formatstring::fmtstatic::FormatStringStaticPass),
         ),
         // (kuna `goitabcalls`) Interface parameters of a stripped Go binary,
         // typed from the static itabs its callers pass (call edges and `LEA`
         // data edges of the Listing).
         (
             arch.kuna_options
-                .get::<unlace_decomp::kuna_goitabcalls::GoItabCalls>()
+                .get::<unlace_decomp::goitabcalls::GoItabCalls>()
                 .0,
-            Box::new(crate::gotypes::kuna_itabargs::GoItabArgsPass),
+            Box::new(crate::gotypes::itabargs::GoItabArgsPass),
         ),
     ]
 }
@@ -867,7 +857,7 @@ fn dispatch_if_enabled<T>(enabled: bool, run: impl FnOnce() -> T) -> Option<T> {
 /// (before `read symbols`). So the Listing — and any pass that reads it — must be
 /// built/run at the deferred commit point, when the flag is finally in effect.
 /// The console calls this from `commit_pending_analysis` (reached at `read
-/// symbols`), gated on `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` or `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>().0`;
+/// symbols`), gated on `arch.kuna_options.get::<unlace_decomp::analysisgates::Listing>().0` or `arch.kuna_options.get::<unlace_decomp::analysisgates::FastFuncdisc>().0`;
 /// it parses `bytes`, builds the Listing with funcsym names +
 /// Known-no-return/call-fixup seed metadata, and either runs the enabled
 /// [`listing_consumer_passes`] passes or emits the fast discovery inventory.
@@ -889,7 +879,7 @@ fn dispatch_if_enabled<T>(enabled: bool, run: impl FnOnce() -> T) -> Option<T> {
 /// descent.
 ///
 /// `plan` is the walk's thread plan (`kuna --jobs N`, see
-/// [`crate::listing::kuna_pdecode`]). It is built once, by the caller, and reused
+/// [`crate::listing::pdecode`]). It is built once, by the caller, and reused
 /// across every rebuild below, so the callback generations and the ARM re-seeds
 /// pay for the engine recipe, the image share and the context snapshot once.
 #[allow(clippy::too_many_arguments)]
@@ -953,7 +943,7 @@ pub fn run_listing_consumers_replaying(
     committed_entries: &[u64],
     cold_entries: &[u64],
     plan: &crate::listing::WalkPlan,
-    frames_replay: Option<&crate::aif::kuna_framereplay::ArmFrameReplay>,
+    frames_replay: Option<&crate::aif::framereplay::ArmFrameReplay>,
 ) -> Vec<(&'static str, AnalysisOutput)> {
     run_listing_consumers_replaying_observed(
         bytes,
@@ -980,7 +970,7 @@ pub fn run_listing_consumers_replaying_observed(
     committed_entries: &[u64],
     cold_entries: &[u64],
     plan: &crate::listing::WalkPlan,
-    frames_replay: Option<&crate::aif::kuna_framereplay::ArmFrameReplay>,
+    frames_replay: Option<&crate::aif::framereplay::ArmFrameReplay>,
     observer: Option<&mut dyn FnMut(&object::File<'_>, &crate::listing::Listing)>,
 ) -> Vec<(&'static str, AnalysisOutput)> {
     let Ok(file) = crate::loadimage_object::parse_object(bytes) else {
@@ -1006,24 +996,24 @@ pub fn run_listing_consumers_replaying_observed(
     let mut go_entries: Vec<u64> = Vec::new();
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .get::<unlace_decomp::analysisgates::FastFuncdisc>()
         .0
         && !arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .get::<unlace_decomp::analysisgates::Listing>()
             .0
-        && arch.source_lang_detected == unlace_decomp::kuna_sourcelang::SourceLang::Go
+        && arch.source_lang_detected == unlace_decomp::sourcelang::SourceLang::Go
     {
         go_entries = crate::pclntab::function_entries(&file);
         seeds.retain(|seed| go_entries.binary_search(seed).is_err());
     }
     let bracket_evidence = std::cell::OnceCell::new();
-    let bracket =
-        |exec: &[(u64, u64)]| {
-            Some(bracket_evidence.get_or_init(|| {
-                crate::aif::kuna_aifbracket::BracketEvidence::from_object(&file, exec)
-            }))
-        };
+    let bracket = |exec: &[(u64, u64)]| {
+        Some(
+            bracket_evidence
+                .get_or_init(|| crate::aif::aifbracket::BracketEvidence::from_object(&file, exec)),
+        )
+    };
     // (kuna, recursive-descent discovery) When the prologue-pattern pass is active
     // (`funcstart_patterns`, default-ON for non-x86-64 on `decompile-all`, DIV-20),
     // seed the recursive-descent walk with its `<patternpairs>` function starts too — not
@@ -1035,11 +1025,11 @@ pub fn run_listing_consumers_replaying_observed(
     // Gated by the same flag, so x86-64 (funcstart_patterns off) is unchanged.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
     {
         let execs = crate::entry::executable_sections(&file);
@@ -1101,11 +1091,11 @@ pub fn run_listing_consumers_replaying_observed(
     let detail = crate::listing::ListingDetail {
         assembly: arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .get::<unlace_decomp::analysisgates::Listing>()
             .0,
         refs: arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Listing>()
+            .get::<unlace_decomp::analysisgates::Listing>()
             .0,
     };
     let mut listing = crate::listing::Listing::build_with_meta_planned_without_image(
@@ -1120,7 +1110,7 @@ pub fn run_listing_consumers_replaying_observed(
     );
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .get::<unlace_decomp::analysisgates::FastFuncdisc>()
         .0
         && matches!(
             file.architecture(),
@@ -1139,7 +1129,7 @@ pub fn run_listing_consumers_replaying_observed(
                 break;
             };
             let candidates: Vec<u64> =
-                crate::listing::kuna_callbackentry::stack_callback_candidates(&listing)
+                crate::listing::callbackentry::stack_callback_candidates(&listing)
                     .into_iter()
                     .filter(|target| examined.insert(*target))
                     .collect();
@@ -1174,7 +1164,7 @@ pub fn run_listing_consumers_replaying_observed(
             // decoding the whole program again.
             listing = if arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Incrementalwalk>()
+                .get::<unlace_decomp::analysisgates::Incrementalwalk>()
                 .0
             {
                 listing.resume(
@@ -1205,30 +1195,30 @@ pub fn run_listing_consumers_replaying_observed(
     // committed (`funcdisc_recursive`, `fast_funcdisc`).
     let walk_committed = (arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0)
         || arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+            .get::<unlace_decomp::analysisgates::FastFuncdisc>()
             .0;
     // (kuna `addrtakenentry`) Code whose address the program takes and no flow
     // reaches re-seeds the walk, which resumes from the Listing it already has.
-    // See `aif/kuna_addrtakenentry.rs`.
+    // See `aif/addrtakenentry.rs`.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Addrtakenentry>()
+        .get::<unlace_decomp::analysisgates::Addrtakenentry>()
         .0
         && walk_committed
     {
-        let evidence = crate::aif::kuna_addrtakenentry::AddrTaken::new(&file, bytes);
+        let evidence = crate::aif::addrtakenentry::AddrTaken::new(&file, bytes);
         if let (Some(evidence), Some(code_space)) =
             (evidence, arch.manage().get_default_code_space())
         {
-            for _ in 0..crate::aif::kuna_addrtakenentry::MAX_ROUNDS {
+            for _ in 0..crate::aif::addrtakenentry::MAX_ROUNDS {
                 let accepted = evidence.accept(&listing, translate, std::rc::Rc::clone(code_space));
                 let before = seeds.len();
                 seeds.extend(accepted);
@@ -1250,7 +1240,7 @@ pub fn run_listing_consumers_replaying_observed(
             }
         }
     }
-    let mut frame_aif: Option<crate::aif::kuna_entrychecks::CheckedAif> = None;
+    let mut frame_aif: Option<crate::aif::entrychecks::CheckedAif> = None;
     let mut frame_pointers = None;
     let mut inventory_context_paints = Vec::new();
     let mut retained_entries = Vec::new();
@@ -1262,19 +1252,19 @@ pub fn run_listing_consumers_replaying_observed(
     // parent's recovery and builds only its final Listing.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::ArmFrames>()
+            .get::<unlace_decomp::analysisgates::ArmFrames>()
             .inventory
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
-            let memo = std::rc::Rc::new(crate::listing::kuna_decodememo::DecodeMemo::new(
+            let memo = std::rc::Rc::new(crate::listing::decodememo::DecodeMemo::new(
                 listing.exec_ranges(),
             ));
             let mut frame_cache = match frames_replay {
@@ -1301,34 +1291,58 @@ pub fn run_listing_consumers_replaying_observed(
             if frames_recovered {
                 let independent_seeds = seeds.clone();
                 let original = listing;
-                let build = |frames: &std::collections::BTreeSet<u64>,
-                             pointers: Option<&Vec<u64>>,
-                             aif: Option<&crate::aif::kuna_entrychecks::CheckedAif>,
-                             memo: Option<&crate::listing::kuna_decodememo::DecodeMemo>| {
-                    let mut seeds: Vec<u64> = independent_seeds.iter().copied().chain(frames.iter().copied())
-                        .chain(pointers.into_iter().flatten().copied())
-                        .chain(aif.iter().flat_map(|checked| checked.entries.iter().copied())).collect();
-                    seeds.sort_unstable();
-                    seeds.dedup();
-                    let mut modes = crate::listing::kuna_framemode::FrameModes::preserving(
-                        &frames.iter().copied().chain(aif.iter()
-                            .flat_map(|checked| checked.entries.iter().copied())).collect::<Vec<_>>(),
-                        &original,
-                    );
-                    if arch.input_arm_isa_override { modes.retain_decoded_modes(); }
-                    let listing = crate::listing::Listing::build_tracking_frames_without_image(
-                        &file, arch, translate, &seeds, &funcsym_seeds,
-                        &seed_names, detail, plan, Some(&mut modes), memo,
-                    );
-                    (seeds, listing, modes)
-                };
+                let build =
+                    |frames: &std::collections::BTreeSet<u64>,
+                     pointers: Option<&Vec<u64>>,
+                     aif: Option<&crate::aif::entrychecks::CheckedAif>,
+                     memo: Option<&crate::listing::decodememo::DecodeMemo>| {
+                        let mut seeds: Vec<u64> = independent_seeds
+                            .iter()
+                            .copied()
+                            .chain(frames.iter().copied())
+                            .chain(pointers.into_iter().flatten().copied())
+                            .chain(
+                                aif.iter()
+                                    .flat_map(|checked| checked.entries.iter().copied()),
+                            )
+                            .collect();
+                        seeds.sort_unstable();
+                        seeds.dedup();
+                        let mut modes = crate::listing::framemode::FrameModes::preserving(
+                            &frames
+                                .iter()
+                                .copied()
+                                .chain(
+                                    aif.iter()
+                                        .flat_map(|checked| checked.entries.iter().copied()),
+                                )
+                                .collect::<Vec<_>>(),
+                            &original,
+                        );
+                        if arch.input_arm_isa_override {
+                            modes.retain_decoded_modes();
+                        }
+                        let listing = crate::listing::Listing::build_tracking_frames_without_image(
+                            &file,
+                            arch,
+                            translate,
+                            &seeds,
+                            &funcsym_seeds,
+                            &seed_names,
+                            detail,
+                            plan,
+                            Some(&mut modes),
+                            memo,
+                        );
+                        (seeds, listing, modes)
+                    };
                 if let Some(replay) = frames_replay {
                     let frames = replay.frames.iter().copied().collect();
                     frame_pointers = Some(replay.pointers.clone());
                     frame_aif = replay
                         .aif
                         .as_ref()
-                        .map(crate::aif::kuna_framereplay::AifReplay::checked);
+                        .map(crate::aif::framereplay::AifReplay::checked);
                     let frame_context = translate.context_scope();
                     let modes;
                     (seeds, listing, modes) =
@@ -1340,7 +1354,7 @@ pub fn run_listing_consumers_replaying_observed(
                     }
                 } else {
                     let frame_cache = frame_cache.as_mut().unwrap();
-                    let prior = crate::aif::kuna_frameretain::prior_inventory(
+                    let prior = crate::aif::frameretain::prior_inventory(
                         &file,
                         &original,
                         &seeds,
@@ -1390,7 +1404,7 @@ pub fn run_listing_consumers_replaying_observed(
                             .retain(|&root, &mut prefix| !prior.shields(root, prefix, frame_cache));
                         let stale = if replacements.is_empty() {
                             let mut stale = modes.stale().clone();
-                            stale.extend(crate::aif::kuna_frameflow::entered(&listing, &frames));
+                            stale.extend(crate::aif::frameflow::entered(&listing, &frames));
                             stale
                         } else {
                             std::collections::BTreeSet::new()
@@ -1427,7 +1441,7 @@ pub fn run_listing_consumers_replaying_observed(
                         }
                         if arch
                             .kuna_options
-                            .get::<unlace_decomp::kuna_aif::AifMode>()
+                            .get::<unlace_decomp::aif::AifMode>()
                             .enabled()
                             && frame_aif.is_none()
                         {
@@ -1437,10 +1451,10 @@ pub fn run_listing_consumers_replaying_observed(
                             }
                             let pointers = if arch
                                 .kuna_options
-                                .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+                                .get::<unlace_decomp::analysisgates::Ptrentry>()
                                 .0
                             {
-                                crate::aif::kuna_ptrentry::pointer_entry_seeds(
+                                crate::aif::ptrentry::pointer_entry_seeds(
                                     &file,
                                     &listing,
                                     translate,
@@ -1450,7 +1464,7 @@ pub fn run_listing_consumers_replaying_observed(
                             } else {
                                 Vec::new()
                             };
-                            let mut checked = crate::aif::kuna_entrychecks::run(
+                            let mut checked = crate::aif::entrychecks::run(
                                 &listing,
                                 Some(&original),
                                 arch,
@@ -1495,20 +1509,20 @@ pub fn run_listing_consumers_replaying_observed(
                         if let Some(context) = frame_context {
                             context.commit();
                         }
-                        frame_record = Some(crate::aif::kuna_framereplay::ArmFrameReplay {
+                        frame_record = Some(crate::aif::framereplay::ArmFrameReplay {
                             recovered: true,
                             frames: frames.iter().copied().collect(),
                             pointers: frame_pointers.clone().unwrap_or_default(),
                             aif: frame_aif
                                 .as_ref()
-                                .map(crate::aif::kuna_framereplay::AifReplay::of),
+                                .map(crate::aif::framereplay::AifReplay::of),
                             retained: retained_entries.clone(),
                         });
                         break;
                     }
                 }
             } else if frames_replay.is_none() {
-                frame_record = Some(crate::aif::kuna_framereplay::ArmFrameReplay::default());
+                frame_record = Some(crate::aif::framereplay::ArmFrameReplay::default());
             }
         }
     }
@@ -1516,11 +1530,11 @@ pub fn run_listing_consumers_replaying_observed(
     let mut thumb_memo = None;
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && !frames_recovered
     {
@@ -1542,7 +1556,7 @@ pub fn run_listing_consumers_replaying_observed(
                 thumb_roots.extend(&added);
                 seeds.extend(added);
                 seeds.sort_unstable();
-                let memo = thumb_memo.insert(crate::listing::kuna_decodememo::DecodeMemo::new(
+                let memo = thumb_memo.insert(crate::listing::decodememo::DecodeMemo::new(
                     listing.exec_ranges(),
                 ));
                 listing = crate::listing::Listing::build_tracking_frames_without_image(
@@ -1578,11 +1592,11 @@ pub fn run_listing_consumers_replaying_observed(
     // functions, zero false starts): cf2 +3, usart-stdio +1, betaflight +8.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
         && frame_pointers.is_none()
     {
@@ -1622,7 +1636,7 @@ pub fn run_listing_consumers_replaying_observed(
             thumb_roots.remove(root);
         }
         let entered: std::collections::BTreeSet<u64> =
-            crate::aif::kuna_frameflow::entered(&listing, &thumb_roots)
+            crate::aif::frameflow::entered(&listing, &thumb_roots)
                 .into_iter()
                 .filter(|&root| {
                     listing
@@ -1656,7 +1670,7 @@ pub fn run_listing_consumers_replaying_observed(
     // re-admits them behind a *containment* precision model — no referencing word
     // may be instruction bytes or share the target's discovered function, which is
     // the `ldr pc,[pc,r]` switch-table shape — plus a terminating-routine validity
-    // check with no length floor. See `aif::kuna_ptrentry`.
+    // check with no length floor. See `aif::ptrentry`.
     //
     // Its accepted targets are emitted as an additive `entries` fact and are
     // deliberately NOT re-seeded into the walk (unlike Stages 2-3): measured, the
@@ -1669,15 +1683,15 @@ pub fn run_listing_consumers_replaying_observed(
         ptrentry_out.clone_from(&checked.pointer_entries);
     } else if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Ptrentry>()
+            .get::<unlace_decomp::analysisgates::Ptrentry>()
             .0
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
-            ptrentry_out = crate::aif::kuna_ptrentry::pointer_entry_seeds(
+            ptrentry_out = crate::aif::ptrentry::pointer_entry_seeds(
                 &file,
                 &listing,
                 translate,
@@ -1701,7 +1715,7 @@ pub fn run_listing_consumers_replaying_observed(
                         .all(|r| r.kind != crate::listing::RefKind::Call)
                 })
                 .collect();
-            let merged = crate::aif::kuna_ptrentry::shrinkwrap_roots(
+            let merged = crate::aif::ptrentry::shrinkwrap_roots(
                 translate,
                 std::rc::Rc::clone(code_space),
                 listing.exec_ranges(),
@@ -1734,7 +1748,7 @@ pub fn run_listing_consumers_replaying_observed(
     let mut fast_walked: Vec<u64> = Vec::new();
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .get::<unlace_decomp::analysisgates::FastFuncdisc>()
         .0
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
@@ -1795,7 +1809,7 @@ pub fn run_listing_consumers_replaying_observed(
     };
     let mut out: Vec<(&'static str, AnalysisOutput)> = if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
     {
         listing_consumer_passes(arch)
@@ -1818,17 +1832,17 @@ pub fn run_listing_consumers_replaying_observed(
     // space.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_aif::AifMode>()
+            .get::<unlace_decomp::aif::AifMode>()
             .enabled()
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
             let mut aif_out = AnalysisOutput::default();
             let checked = frame_aif.unwrap_or_else(|| {
-                crate::aif::kuna_entrychecks::run(
+                crate::aif::entrychecks::run(
                     &listing,
                     None,
                     arch,
@@ -1845,11 +1859,11 @@ pub fn run_listing_consumers_replaying_observed(
             // the program reads or writes any of it as data.
             if arch
                 .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Aifdataveto>()
+                .get::<unlace_decomp::analysisgates::Aifdataveto>()
                 .0
             {
                 if let Some(data) = arch.manage().get_default_data_space() {
-                    let targets = crate::listing::kuna_accesswidth::data_targets(
+                    let targets = crate::listing::accesswidth::data_targets(
                         &listing, translate, code_space, data,
                     );
                     let flow_target = |e: u64| {
@@ -1861,7 +1875,7 @@ pub fn run_listing_consumers_replaying_observed(
                         })
                     };
                     let mut veto_out = AnalysisOutput::default();
-                    let string_at = |e: u64| crate::aif::kuna_aifstringveto::string_at(&file, e);
+                    let string_at = |e: u64| crate::aif::aifstringveto::string_at(&file, e);
                     veto_out.data_vetoed = listing
                         .functions()
                         .filter(|(_, f)| !f.from_symbol)
@@ -1900,22 +1914,22 @@ pub fn run_listing_consumers_replaying_observed(
     // pure `entries` fact — the Listing is never rebuilt, which is what makes "this
     // option can never remove an entry" a property of the wiring (the walk's
     // instruction closure is invariant under the split; see
-    // `listing/kuna_tailcallentry.rs`).
+    // `listing/tailcallentry.rs`).
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Tailcallentry>()
+            .get::<unlace_decomp::analysisgates::Tailcallentry>()
             .0
     {
         let mut tce_out = AnalysisOutput::default();
-        tce_out.entries = crate::listing::kuna_tailcallentry::tail_call_entries(
+        tce_out.entries = crate::listing::tailcallentry::tail_call_entries(
             &file,
             &listing,
             arch.kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Tailcallentryall>()
+                .get::<unlace_decomp::analysisgates::Tailcallentryall>()
                 .0,
         );
         out.push(("tailcallentry", tce_out));
@@ -1925,14 +1939,14 @@ pub fn run_listing_consumers_replaying_observed(
     // `size` the console reports.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Funcchunks>()
+            .get::<unlace_decomp::analysisgates::Funcchunks>()
             .0
     {
-        let model = crate::listing::kuna_funcchunks::ChunkModel::build(&listing);
+        let model = crate::listing::funcchunks::ChunkModel::build(&listing);
         let mut fc_out = AnalysisOutput::default();
         fc_out.function_bodies = listing
             .functions()
@@ -1945,15 +1959,15 @@ pub fn run_listing_consumers_replaying_observed(
     // entry on a switch case that nothing calls is not a function.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Calltable>()
+            .get::<unlace_decomp::analysisgates::Calltable>()
             .0
         && listing.has_refs()
     {
-        let tables = crate::listing::kuna_calltable::scan(&file, &listing, arch, translate);
+        let tables = crate::listing::calltable::scan(&file, &listing, arch, translate);
         let mut ct_out = AnalysisOutput::default();
         ct_out.entries = tables.entries;
         ct_out.case_entries = tables.case_entries;
@@ -1963,11 +1977,11 @@ pub fn run_listing_consumers_replaying_observed(
     // (kuna `globalwidth`) The access width of each symbol-table data object.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::Globalwidth>()
+            .get::<unlace_decomp::analysisgates::Globalwidth>()
             .0
     {
         if let (Some(code), Some(data)) = (
@@ -1984,7 +1998,7 @@ pub fn run_listing_consumers_replaying_observed(
                 .map(|s| (s.address(), s.size()))
                 .collect();
             let mut gw_out = AnalysisOutput::default();
-            gw_out.global_widths = crate::listing::kuna_accesswidth::access_widths(
+            gw_out.global_widths = crate::listing::accesswidth::access_widths(
                 &listing, translate, code, data, &objects,
             );
             out.push(("globalwidth", gw_out));
@@ -1995,44 +2009,44 @@ pub fn run_listing_consumers_replaying_observed(
     // step to read a `void` function's callers from.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && listing.has_refs()
     {
         let mut cr_out = AnalysisOutput::default();
-        cr_out.call_returns = crate::listing::kuna_callerreads::call_returns(&listing);
+        cr_out.call_returns = crate::listing::callerreads::call_returns(&listing);
         out.push(("callerreads", cr_out));
     }
 
     // (kuna `poolextents`) The ARM32 literal pools the Listing's trusted
     // instructions prove, for the flow walk's `funcboundflow` bound. See
-    // `listing/kuna_poolextents.rs`.
+    // `listing/poolextents.rs`.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && listing.has_assembly()
         && crate::loadimage_object::is_arm32_language(&arch.archid)
     {
         if let Some(code_space) = arch.manage().get_default_code_space() {
-            let mode = crate::aif::kuna_poolentry::DecodeMode {
+            let mode = crate::aif::poolentry::DecodeMode {
                 arch,
                 code_space: std::rc::Rc::clone(code_space),
             };
             let mut pe_out = AnalysisOutput::default();
-            pe_out.arm_pool_extents = crate::listing::kuna_poolextents::pool_extents(
+            pe_out.arm_pool_extents = crate::listing::poolextents::pool_extents(
                 &listing,
-                &|at, operands| crate::aif::kuna_poolentry::literal_target(at, operands, &mode),
-                &crate::aif::kuna_poolentry::wide,
+                &|at, operands| crate::aif::poolentry::literal_target(at, operands, &mode),
+                &crate::aif::poolentry::wide,
             );
             out.push(("poolextents", pe_out));
         }
     }
 
     // (kuna `thunkentry`) The targets of the walk's jump thunks join the walk's own
-    // function set wherever that set is committed. See `listing/kuna_thunkentry.rs`.
+    // function set wherever that set is committed. See `listing/thunkentry.rs`.
     let thunk_targets = if walk_committed {
-        crate::listing::kuna_thunkentry::thunk_entries(&file, &listing)
+        crate::listing::thunkentry::thunk_entries(&file, &listing)
     } else {
         Vec::new()
     };
@@ -2046,11 +2060,11 @@ pub fn run_listing_consumers_replaying_observed(
     // `analysis_funcstart_patterns` flag, so x86-64 (funcstart_patterns off) is byte-identical.
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         && arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::FuncstartPatterns>()
+            .get::<unlace_decomp::analysisgates::FuncstartPatterns>()
             .0
     {
         let mut rd_out = AnalysisOutput::default();
@@ -2069,7 +2083,7 @@ pub fn run_listing_consumers_replaying_observed(
     }
     if arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::FastFuncdisc>()
+        .get::<unlace_decomp::analysisgates::FastFuncdisc>()
         .0
     {
         let mut fast_out = AnalysisOutput::default();
@@ -2140,7 +2154,7 @@ pub fn run_uefi(
 }
 
 /// (kuna `vtabletypes`) Run the **deferred** MSVC constructor/destructor
-/// recovery ([`crate::rtti::kuna_msvcctors`]) at the commit point: it walks
+/// recovery ([`crate::rtti::msvcctors`]) at the commit point: it walks
 /// candidate functions through the engine `Translate`, which has the image
 /// only after the load-time list ran. It declines every image that is not an
 /// x86 or x86-64 PE.
@@ -2163,7 +2177,7 @@ pub fn run_msvc_ctors(
         listing: None,
         image_path,
     };
-    let mut out = crate::rtti::kuna_msvcctors::run(&ctx);
+    let mut out = crate::rtti::msvcctors::run(&ctx);
     out.sanitize_names(symbolnamechars_mode());
     out
 }
@@ -2190,7 +2204,7 @@ pub fn run_com(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
 }
 
 /// Run the **deferred** Go source-position comments (`option gopcln`) at the
-/// commit point, where the option is in effect: [`crate::pclntab::kuna_gopcln`]'s
+/// commit point, where the option is in effect: [`crate::pclntab::gopcln`]'s
 /// passes read it, and a load-time pass sees only the constructor default
 /// (`off`), so registered at load they never wrote a comment. Both passes decline
 /// an image without a Go pclntab.
@@ -2209,8 +2223,8 @@ pub fn run_gopcln(path: &str, bytes: &[u8], arch: &Architecture) -> AnalysisOutp
         listing: None,
         image_path: None,
     };
-    let mut out = crate::pclntab::kuna_gopcln::GoPclnPass.run(&ctx);
-    out.merge(crate::pclntab::kuna_gopcln::GoPclnLinesPass.run(&ctx));
+    let mut out = crate::pclntab::gopcln::GoPclnPass.run(&ctx);
+    out.merge(crate::pclntab::gopcln::GoPclnLinesPass.run(&ctx));
     out
 }
 
@@ -2230,7 +2244,7 @@ pub fn run_dextrpc(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
         listing: None,
         image_path: None,
     };
-    let mut out = crate::iokit::kuna_dextrpc::run(&ctx);
+    let mut out = crate::iokit::dextrpc::run(&ctx);
     out.sanitize_names(symbolnamechars_mode());
     out
 }
@@ -2245,7 +2259,7 @@ pub fn run_dextrpc(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
 /// `Sleigh` *after* the load-time pass list runs (`set_loader` in
 /// `bootstrap_from_object`). A load-time decode would find no bytes (every decode
 /// fails). The console calls this from `commit_pending_analysis` (reached at `read
-/// symbols`, after `set_loader`), gated on `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::OperandRefs>().0`
+/// symbols`, after `set_loader`), gated on `arch.kuna_options.get::<unlace_decomp::analysisgates::OperandRefs>().0`
 /// (`--option operand_refs on`). `ctx.listing` is `None` — the pass does its own
 /// linear decode, independent of the Listing tier (which never populates the data
 /// references this pass needs; see `docs/history/listing-tier-design.md` §2.2).
@@ -2261,8 +2275,8 @@ pub fn run_operand_refs(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     // address-keyed string/readonly facts, so it takes the same rebased view the
     // load-time list does — otherwise turning it on for a `.o` would reintroduce
     // pre-link addresses at the deferred commit.
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     let ctx = AnalysisCtx {
         file: &file,
         bytes,
@@ -2273,7 +2287,7 @@ pub fn run_operand_refs(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     };
     let mut out = crate::operand_refs::OperandRefsPass.run(&ctx);
     if let Some(view) = &view {
-        crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+        crate::loader::relocrebase::retain_in_image(&mut out, view);
     }
     out.sanitize_names(symbolnamechars_mode());
     out
@@ -2289,8 +2303,8 @@ pub fn run_addrtable(
     let Ok(raw) = crate::loadimage_object::parse_object(bytes) else {
         return AnalysisOutput::default();
     };
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     let ctx = AnalysisCtx {
         file: &file,
         bytes,
@@ -2301,7 +2315,7 @@ pub fn run_addrtable(
     };
     let mut out = crate::addrtable::AddrTablePass::default().run(&ctx);
     if let Some(view) = &view {
-        crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+        crate::loader::relocrebase::retain_in_image(&mut out, view);
     }
     out
 }
@@ -2314,8 +2328,8 @@ pub fn run_wide_strings32(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     let Ok(raw) = crate::loadimage_object::parse_object(bytes) else {
         return AnalysisOutput::default();
     };
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     let ctx = AnalysisCtx {
         file: &file,
         bytes,
@@ -2326,7 +2340,7 @@ pub fn run_wide_strings32(bytes: &[u8], arch: &Architecture) -> AnalysisOutput {
     };
     let mut out = crate::operand_refs::wide_strings32_alone(&ctx);
     if let Some(view) = &view {
-        crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+        crate::loader::relocrebase::retain_in_image(&mut out, view);
     }
     out
 }
@@ -2394,8 +2408,8 @@ pub fn run_default_analyses(
     // by the loader, so the raw view's addresses are pre-link ones. Re-present it
     // in the loaded image's address space before any pass reads it; `None` (a
     // linked image, or the gate off) keeps the raw view byte for byte.
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     // Source-language detection runs once, before pass selection, and shapes the
     // pass list (the kuna analog of `SourceLanguageAnalyzer` running early and
     // gating the language-specific analyzers).
@@ -2407,7 +2421,7 @@ pub fn run_default_analyses(
     let seeds = listing_seeds_for_language(&file, bytes, Some(arch.get_description()));
     let listing = arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         .then(|| crate::listing::Listing::build_without_image(&file, arch, translate, &seeds));
     let ctx = AnalysisCtx {
@@ -2421,7 +2435,7 @@ pub fn run_default_analyses(
     let format = file.format();
     let mut out = run_analyses(&ctx, &passes_for(compiler, format));
     if let Some(view) = &view {
-        crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+        crate::loader::relocrebase::retain_in_image(&mut out, view);
     }
     out.sanitize_names(symbolnamechars_mode());
     out
@@ -2448,11 +2462,11 @@ pub fn run_default_analyses_per_pass(
     // (kuna `relocrebase`, GH-289) See `run_default_analyses`: a relocatable
     // object is re-presented in the loaded image's address space so every pass
     // below produces an already-rebased fact. `None` ⇒ the raw pre-link view.
-    let view = crate::loader::kuna_relocrebase::rebased_view(&raw, bytes);
-    let (file, bytes) = crate::loader::kuna_relocrebase::select(raw, bytes, &view);
+    let view = crate::loader::relocrebase::rebased_view(&raw, bytes);
+    let (file, bytes) = crate::loader::relocrebase::select(raw, bytes, &view);
     let compiler = crate::sourcelang::effective_compiler(&file, bytes);
     // Listing/xref tier (design §1.3): built once, before the pass loop, only
-    // when `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::Listing>().0` (i.e. `--option listing on`). Default-off ⇒
+    // when `arch.kuna_options.get::<unlace_decomp::analysisgates::Listing>().0` (i.e. `--option listing on`). Default-off ⇒
     // `.then(...)` is `None` ⇒ no decode work, `ctx.listing == None`, and the
     // real-ELF bootstrap is byte-identical to today. The `Listing` is owned here
     // (same lifetime shape as `file`), outlives the pass loop, and is borrowed
@@ -2460,7 +2474,7 @@ pub fn run_default_analyses_per_pass(
     let seeds = listing_seeds_for_language(&file, bytes, Some(arch.get_description()));
     let listing = arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Listing>()
+        .get::<unlace_decomp::analysisgates::Listing>()
         .0
         .then(|| crate::listing::Listing::build_without_image(&file, arch, translate, &seeds));
     let ctx = AnalysisCtx {
@@ -2478,7 +2492,7 @@ pub fn run_default_analyses_per_pass(
         .map(|pass| {
             let mut out = pass.run(&ctx);
             if let Some(view) = &view {
-                crate::loader::kuna_relocrebase::retain_in_image(&mut out, view);
+                crate::loader::relocrebase::retain_in_image(&mut out, view);
             }
             (pass.id(), out)
         })
@@ -2496,7 +2510,7 @@ pub fn run_default_analyses_per_pass(
 /// downstream. See [`AnalysisOutput::sanitize_names`].
 fn sanitize_all_names(split: &mut [(&'static str, AnalysisOutput)]) {
     let mode = symbolnamechars_mode();
-    if mode == unlace_decomp::kuna_symbolnamechars::NameChars::Off {
+    if mode == unlace_decomp::symbolnamechars::NameChars::Off {
         return;
     }
     for (_, out) in split.iter_mut() {
@@ -2572,20 +2586,19 @@ mod tests {
     fn listing_consumer_schedule_pairs_each_pass_with_its_option() {
         let mut arch = test_arch();
         arch.kuna_options
-            .set(unlace_decomp::kuna_analysisgates::NoreturnDisc(false));
+            .set(unlace_decomp::analysisgates::NoreturnDisc(false));
         arch.kuna_options
-            .set(unlace_decomp::kuna_analysisgates::NoreturnPropagate(true));
+            .set(unlace_decomp::analysisgates::NoreturnPropagate(true));
+        arch.kuna_options.set(unlace_decomp::analysisgates::Fid {
+            on: false,
+            strict: false,
+        });
         arch.kuna_options
-            .set(unlace_decomp::kuna_analysisgates::Fid {
-                on: false,
-                strict: false,
-            });
+            .set(unlace_decomp::analysisgates::Itaniumrtti(true));
         arch.kuna_options
-            .set(unlace_decomp::kuna_analysisgates::Itaniumrtti(true));
+            .set(unlace_decomp::formatstring::FormatStringMode::Off);
         arch.kuna_options
-            .set(unlace_decomp::kuna_formatstring::FormatStringMode::Off);
-        arch.kuna_options
-            .set(unlace_decomp::kuna_goitabcalls::GoItabCalls(false));
+            .set(unlace_decomp::goitabcalls::GoItabCalls(false));
 
         let schedule: Vec<(&str, bool)> = listing_consumer_passes(&arch)
             .into_iter()
@@ -2607,7 +2620,7 @@ mod tests {
 
         // `static` asks for the load-time resolver on x86 and `full` on every
         // target; `off` never does.
-        use unlace_decomp::kuna_formatstring::FormatStringMode::{Full, Off, Static};
+        use unlace_decomp::formatstring::FormatStringMode::{Full, Off, Static};
         for (archid, mode, want) in [
             ("x86:LE:64:default:gcc", Static, true),
             ("x86:LE:64:default:gcc", Full, true),

@@ -221,7 +221,7 @@ functions listed above.
 ## Proposed fix
 
 **Slug `peimportcall`, P2, one module** — a new
-`decompiler/crates/unlace-decomp/src/p2_lift/kuna_peimportcall.rs`, built on the
+`decompiler/crates/unlace-decomp/src/p2_lift/peimportcall.rs`, built on the
 `kuna_tailcalljump` template (which already rewrites one flow-level call shape into
 another at this seam).
 
@@ -237,7 +237,7 @@ already works for an ELF PLT stub, where the slot happens to be code and the cal
 happens to be direct.
 
 Owning files:
-- `p2_lift/kuna_peimportcall.rs` (new): the matcher + rewrite.
+- `p2_lift/peimportcall.rs` (new): the matcher + rewrite.
 - `p2_lift/flow.rs`: one hook at the CALLIND classification point.
 - `p0_knowledge/options.rs` + `phases.toml`: the `peimportcall on|off` row
   (plus the hard-coded catalog counts listed in `kuna-adding-option-count-tests`).

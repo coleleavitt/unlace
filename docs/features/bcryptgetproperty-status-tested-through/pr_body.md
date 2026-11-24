@@ -32,7 +32,7 @@ it whose result is consumed by the identical `test eax,eax; js` pair.
 - `Funcdata::opInsertAfter` redirects an insertion after an INDIRECT marker to
   the CALL (or STORE) that marker speaks for. kuna carried that redirect as a
   `STUB(W3-varnode)` because the iop decode belonged to a later wave; this
-  completes it (`p3_dataflow/kuna_indirectanchor.rs`).
+  completes it (`p3_dataflow/indirectanchor.rs`).
 - Without the redirect, `RulePullsubIndirect` — pulling a SUBPIECE through the
   guard INDIRECT of a frame slot whose upper half is read after the call —
   planted that SUBPIECE *inside* the call's guard run.
@@ -49,7 +49,7 @@ it whose result is consumed by the identical `test eax,eax; js` pair.
 
 ## The tests
 
-`p3_dataflow/kuna_indirectanchor/tests.rs` builds the guard-run shape against a
+`p3_dataflow/indirectanchor/tests.rs` builds the guard-run shape against a
 real `Funcdata` and asserts both arms; the three behavioural cases fail with the
 option off. `tests/cli/bcryptgetproperty-status-tested-through.json` pins the
 `__printf_fp_l` witness above.

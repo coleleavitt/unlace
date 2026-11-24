@@ -69,7 +69,7 @@ through a `(long)`-cast base (a jump-as-call base) appears on the shared set.
 
 ## 3. The change
 
-A new option `castindex on|off` (P9, cast-policy), in `p9_emit/kuna_castarith.rs`
+A new option `castindex on|off` (P9, cast-policy), in `p9_emit/castarith.rs`
 beside `castarith`, at the same seam. A separate option rather than a value of
 `castarith`: the two act on disjoint ops (a constant addend; a variable addend or an
 `INT_SUB`), every cast class of this campaign is ablatable on its own (`castimplied`,
@@ -120,7 +120,7 @@ beside `castarith`, at the same seam. A separate option rather than a value of
   each quad folded into a checksum. Every program prints what its binary prints, and
   a hand-made mutant of the printed decoder with a sign-extended index, or with an
   `unsigned char` element, prints a different checksum.
-- 12 unit tests in `p9_emit/kuna_castarith/tests.rs`; the stage test
+- 12 unit tests in `p9_emit/castarith/tests.rs`; the stage test
   `tests/stages/kuna-castindex.toml` (7 assertions, two passes).
 
 ## 5. Measurements

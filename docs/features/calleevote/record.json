@@ -720,11 +720,11 @@
  "notes": "Measured and not shipped: refusing a value handed to a declared void * (-8 perfect, -28 improved, +3), byte/halfword lone fields (+10 credited, +2 worse), a settle pass for every structsynth candidate (no scored change). Known secondary effect: a callee's one-field record stated by protoorder can make a caller's interior-pointer argument a cast and leave the caller's own parameter long (diff O0 print_context_header: void * -> long, 5 scored rows, all misses either way).",
  "files": {
   "engine": [
-   "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleevote.rs",
-   "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleevote/tests.rs",
-   "decompiler/crates/kuna-decomp/src/p5_types/kuna_structsynth.rs",
+   "decompiler/crates/kuna-decomp/src/p4_calls/calleevote.rs",
+   "decompiler/crates/kuna-decomp/src/p4_calls/calleevote/tests.rs",
+   "decompiler/crates/kuna-decomp/src/p5_types/structsynth.rs",
    "decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs",
-   "decompiler/crates/kuna-decomp/src/p4_calls/kuna_protoorder.rs"
+   "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs"
   ],
   "driver": [
    "decompiler/crates/kuna-cli/src/decompile_all.rs",

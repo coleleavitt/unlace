@@ -794,7 +794,7 @@ fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
     let written = data.vbank().iter_loc_addr_range(&base, &end).any(|id| {
         data.vbank().get(id).is_some_and(|v| v.is_written()) && !call_effect_only(data, id)
     });
-    let pair = crate::kuna_armpairparam::joined_pair(data, &base, 2 * size);
+    let pair = crate::armpairparam::joined_pair(data, &base, 2 * size);
     (!h.is_type_lock()
         && (pair || (!written && data.get_func_proto().possible_input_param(&base, 2 * size))))
     .then_some(hi)
@@ -916,7 +916,7 @@ fn xor_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
 /// together, as a soft-float caller does with a `double` it hands to
 /// `__aeabi_dadd` (`CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int
 /// a1`). Only for an aligned argument register pair under `armpairparam`
-/// (`kuna_armpairparam::joined_pair`): stack words never, since the i386
+/// (`armpairparam::joined_pair`): stack words never, since the i386
 /// MSVC `__stdcall` helpers' callers read theirs concatenated as well, and
 /// `arithhelpers` prints those as `CONCAT44(a1,a0) / CONCAT44(a3,a2)`.
 fn piece_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
@@ -935,7 +935,7 @@ fn piece_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
     else {
         return 0;
     };
-    if !crate::kuna_armpairparam::joined_pair(data, &base, 2 * size) {
+    if !crate::armpairparam::joined_pair(data, &base, 2 * size) {
         return 0;
     }
     if input_above(data, lo) != Some(hi) {
@@ -1036,7 +1036,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_borrowcompare::PairParams>()
+            .get::<crate::borrowcompare::PairParams>()
             .0
             || data.get_func_proto().is_input_locked()
         {
@@ -1379,11 +1379,11 @@ fn hi_compare(
 
 /// (kuna) Join two adjacent input words a borrow or carry chain links into
 /// one double-precision input (option `pairparam`).  See
-/// [`crate::kuna_borrowcompare::RuleDoubleInputPair`].
+/// [`crate::borrowcompare::RuleDoubleInputPair`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PairParams(pub bool);
 
-impl crate::kuna_optionset::KunaOption for PairParams {
+impl crate::optionset::KunaOption for PairParams {
     const NAME: &'static str = "pairparam";
     crate::kuna_option_id!();
 

@@ -12,7 +12,7 @@ use crate::dtype::type_metatype;
 use crate::fspec::effect_type;
 use crate::funcdata::Funcdata;
 use crate::funcdata_varnode::*;
-use crate::kuna_noreturnretuse;
+use crate::noreturnretuse;
 use crate::varnode::DefOpInfo;
 use crate::varnode::VarnodeBank;
 use crate::varnode::varnode_flags;
@@ -133,7 +133,7 @@ fn rejected_delete_preserves_membership(has_definition: bool, shared: bool) {
     });
     fd.kuna_extend_storage_sources(
         vn,
-        [crate::kuna_varsources::StorageSource {
+        [crate::varsources::StorageSource {
             address: Address::new(ram(&fd), 0x80),
             size: 4,
             write_address: Some(pc.clone()),
@@ -221,7 +221,7 @@ fn rejected_delete_preserves_descendants_shared() {
 
 #[test]
 fn large_storage_merge_preserves_order_and_distinct_write_sites() {
-    use crate::kuna_varsources::StorageSource;
+    use crate::varsources::StorageSource;
 
     let mut fd = build_fd();
     let dst = fd.new_unique(4, None);

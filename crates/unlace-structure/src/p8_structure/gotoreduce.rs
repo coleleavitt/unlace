@@ -43,7 +43,7 @@
 //!
 //! `option gotoreduce off|return|on` ([`GotoReduceMode`]) selects which return
 //! tails are duplicated: `return` runs this pass alone, `on` (the default) also
-//! runs [`crate::kuna_taildup`] for a return tail that contains a
+//! runs [`crate::taildup`] for a return tail that contains a
 //! call, and `off` runs neither, leaving the upstream goto/label rendering.
 
 use unlace_base::error::{KunaError, KunaResult};
@@ -74,11 +74,11 @@ pub enum GotoReduceMode {
     /// Only a call-free return tail ([`ActionGotoReduce`]).
     Return,
     /// `return`, and a return tail that contains a call
-    /// ([`crate::kuna_taildup::ActionTailDup`]).
+    /// ([`crate::taildup::ActionTailDup`]).
     On,
 }
 
-impl crate::kuna_optionset::KunaOption for GotoReduceMode {
+impl crate::optionset::KunaOption for GotoReduceMode {
     const NAME: &'static str = "gotoreduce";
     crate::kuna_option_id!();
 
@@ -110,7 +110,7 @@ impl GotoReduceMode {
         self != GotoReduceMode::Off
     }
 
-    /// Does [`crate::kuna_taildup::ActionTailDup`] run?
+    /// Does [`crate::taildup::ActionTailDup`] run?
     pub fn call_tails(self) -> bool {
         self == GotoReduceMode::On
     }
@@ -204,7 +204,7 @@ impl Action for ActionGotoReduce {
         // Drop the label on any target no longer reached by an unstructured edge --
         // counting switch-case and multigoto carriers, not just BlockGoto/BlockIf
         // (`kuna_gotolabel`), so a target a switch arm still jumps to keeps its label.
-        crate::kuna_gotolabel::release_converted_labels(data, &converted_targets);
+        crate::gotolabel::release_converted_labels(data, &converted_targets);
 
         self.base_mut().count += count;
         0

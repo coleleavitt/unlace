@@ -18,7 +18,7 @@ pub fn backing_store(
     input: VarnodeId,
     ty: &Rc<Datatype>,
 ) -> bool {
-    if !crate::kuna_stackviews::enabled(fd)
+    if !crate::stackviews::enabled(fd)
         || inslot != 2
         || outslot != 1
         || fd
@@ -65,7 +65,7 @@ pub fn stored_word(fd: &Funcdata, input: VarnodeId, resolved: Rc<Datatype>) -> R
         return resolved;
     };
     let size = fd.vbank().get(input).unwrap().get_size();
-    crate::kuna_stackviews::scalar_piece(factory, Rc::clone(&resolved), 0, size)
+    crate::stackviews::scalar_piece(factory, Rc::clone(&resolved), 0, size)
         .or_else(|| factory.get_base(size, type_metatype::TYPE_UINT).ok())
         .unwrap_or(resolved)
 }

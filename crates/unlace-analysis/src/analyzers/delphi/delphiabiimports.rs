@@ -42,7 +42,7 @@ impl AnalysisPass for DelphiAbiImportsPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        if !unlace_decomp::kuna_delphiabi::delphiabi_enabled()
+        if !unlace_decomp::delphiabi::delphiabi_enabled()
             || ctx.file.format() != BinaryFormat::Pe
             || ctx.file.architecture() != Architecture::I386
             || !super::is_delphi_image(ctx.file)

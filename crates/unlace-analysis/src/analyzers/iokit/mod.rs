@@ -23,7 +23,7 @@
 
 mod a64;
 mod cxx;
-pub mod kuna_dextrpc;
+pub mod dextrpc;
 pub mod osclassinfo;
 mod tables;
 
@@ -77,7 +77,7 @@ impl AnalysisPass for IokitClassesPass {
         let typed = ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_analysisgates::IokitClasses>()
+            .get::<unlace_decomp::analysisgates::IokitClasses>()
             .types;
         classes.emit(&mut out, typed);
         if typed {

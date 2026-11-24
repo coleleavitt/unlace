@@ -1512,7 +1512,7 @@ impl ArchOption for OptionSetLanguage {
         // claims; kuna owns a fixed set, so the check is a table lookup. Without
         // it a typo would silently keep emitting C under a name that says
         // otherwise.
-        let Some(lang) = crate::kuna_outlang::OutLang::from_print_name(p1) else {
+        let Some(lang) = crate::outlang::OutLang::from_print_name(p1) else {
             return Err(KunaError::parse(format!("Unknown print language: {p1}")));
         };
         glb.set_print_language(lang.print_name());

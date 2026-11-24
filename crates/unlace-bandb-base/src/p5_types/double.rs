@@ -1753,12 +1753,12 @@ fn apply_rule_in(in_: &SplitVarnode, data: &mut Funcdata) -> int4 {
                     if logicalform.apply_rule(in_, workop, workishi, data) {
                         return 1;
                     }
-                    if crate::kuna_borrowcompare::apply_equal_rule(in_, workop, workishi, data) {
+                    if crate::borrowcompare::apply_equal_rule(in_, workop, workishi, data) {
                         return 1;
                     }
                 }
                 OpCode::CPUI_INT_XOR => {
-                    if crate::kuna_borrowcompare::apply_equal_rule(in_, workop, workishi, data) {
+                    if crate::borrowcompare::apply_equal_rule(in_, workop, workishi, data) {
                         return 1;
                     }
                     let mut logicalform = LogicalForm::new();
@@ -1789,7 +1789,7 @@ fn apply_rule_in(in_: &SplitVarnode, data: &mut Funcdata) -> int4 {
                     if lessconstform.apply_rule(in_, workop, workishi, data) {
                         return 1;
                     }
-                    if crate::kuna_borrowcompare::apply_rule(in_, workop, workishi, data) {
+                    if crate::borrowcompare::apply_rule(in_, workop, workishi, data) {
                         return 1;
                     }
                 }

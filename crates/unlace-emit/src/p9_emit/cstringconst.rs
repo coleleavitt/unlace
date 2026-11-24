@@ -59,7 +59,7 @@ pub fn literal_sections<'a>(
 pub fn literal_char(arch: &Architecture, val: uintb, size: i32) -> Option<Rc<Datatype>> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_cstringconst::CstringConst>()
+        .get::<crate::cstringconst::CstringConst>()
         .0
         || size != arch.types().get_size_of_pointer()
     {

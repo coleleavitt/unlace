@@ -1,11 +1,11 @@
 //! (kuna) `kuna_tailcallframe` — recover an `-O2` tail jump whose callee was
 //! never discovered, from the stack-frame teardown that precedes it (S2 flow
-//! classification).  Sibling of [`kuna_tailcalljump`](crate::kuna_tailcalljump),
+//! classification).  Sibling of [`kuna_tailcalljump`](crate::tailcalljump),
 //! which handles the case where the branch target *is* a known function entry.
 //!
 //! ## The structural gap
 //!
-//! [`kuna_tailcalljump`](crate::kuna_tailcalljump) recognises `jmp X` as a tail
+//! [`kuna_tailcalljump`](crate::tailcalljump) recognises `jmp X` as a tail
 //! call only when `query_call(X)` resolves — X must already be a function in the
 //! symbol table.  Every discovery oracle kuna has reaches a function either from
 //! a symbol, from an unwind record, or from a direct `call` the recursive-descent
@@ -54,13 +54,13 @@
 //! A delta that cancels is necessary but not sufficient: the run ending at the
 //! branch is also asked to give back what the entry run put on the stack, which
 //! is what tells a teardown apart from cdecl argument cleanup.  See
-//! [`kuna_tailcallsaved`](crate::kuna_tailcallsaved).
+//! [`kuna_tailcallsaved`](crate::tailcallsaved).
 //!
 //! ## What this rule cannot distinguish
 //!
 //! The evidence is the frame, not the function bound, and kuna's
 //! `FunctionSymbol` is an entry address with **no extent** (see
-//! [`kuna_funcboundflow`](crate::kuna_funcboundflow)), so nothing here can ask
+//! [`kuna_funcboundflow`](crate::funcboundflow)), so nothing here can ask
 //! whether `dest` is still inside the caller.  A jump that tears the frame down
 //! *completely* and then branches to a shared return sequence **inside the same
 //! function** is therefore indistinguishable from a tail call, and is recovered
@@ -82,7 +82,7 @@
 //!
 //! The *decision* only.  The rewrite (`BRANCH` → `CPUI_CALL` + an artificial
 //! `RETURN`) is the one `flow.rs` already drives for
-//! [`kuna_tailcalljump`](crate::kuna_tailcalljump) at the `CPUI_BRANCH` arm of
+//! [`kuna_tailcalljump`](crate::tailcalljump) at the `CPUI_BRANCH` arm of
 //! `xref_control_flow`; this predicate is consulted second, so a target that is
 //! a known function keeps the existing path and the existing warning text.
 
@@ -94,7 +94,7 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::OpId;
 use crate::funcdata::Funcdata;
-use crate::kuna_tailcallsaved::{
+use crate::tailcallsaved::{
     kuna_stack_restored_bytes, kuna_stack_saved_bytes, kuna_teardown_restores_saves,
 };
 
@@ -360,7 +360,7 @@ fn epilogue_teardown(data: &Funcdata, branch: OpId, sp: &VarnodeStorage) -> Opti
 ///   - `op` is a direct, non-indirect `CPUI_BRANCH`;
 ///   - `dest` is neither the current function's own entry (self tail recursion
 ///     stays an ordinary back-edge, as in
-///     [`kuna_tailcalljump`](crate::kuna_tailcalljump)) nor an address this
+///     [`kuna_tailcalljump`](crate::tailcalljump)) nor an address this
 ///     function has already decoded (an address already in the op bank is live
 ///     intraprocedural flow, whatever the stack looks like);
 ///   - the function establishes a frame (`prologue < 0`) and the run of
@@ -416,7 +416,7 @@ crate::kuna_flag!(
     /// function as a tail call when the instructions immediately before it tear
     /// down exactly the frame the entry block built — the callback-only callee no
     /// discovery oracle reaches (`option tailcallframe`).  See
-    /// [`crate::p2_lift::kuna_tailcallframe`].
+    /// [`crate::p2_lift::tailcallframe`].
     TailCallFrame,
     "tailcallframe",
     "Frame-teardown tail-call recovery",
@@ -425,5 +425,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_tailcallframe/tests.rs"]
+#[path = "tailcallframe/tests.rs"]
 mod tests;

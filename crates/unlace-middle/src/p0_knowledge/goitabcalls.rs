@@ -14,7 +14,7 @@
 //! to that record, and an indirect call through one of its method slots prints
 //! as `Interface.Method(receiver, ...)`.
 //!
-//! [`LangFacet::GoItab`]: crate::kuna_langfacet::LangFacet::GoItab
+//! [`LangFacet::GoItab`]: crate::langfacet::LangFacet::GoItab
 
 /// The record-name prefix of a per-interface itab layout.
 pub const ITAB_RECORD_PREFIX: &str = "go.itab.";
@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn the_option_ships_on() {
-        use crate::kuna_optionset::KunaOption;
+        use crate::optionset::KunaOption;
         assert!(!GoItabCalls::unset().0);
         assert!(GoItabCalls::shipped().0);
         assert!(GoItabCalls::parse("on").unwrap().0.0);

@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 use unlace_console::engine::{Bootstrap, ConsoleProgram};
 use unlace_console::project::{DecompileOptions, decompile_entry};
-use unlace_decomp::kuna_memoryspecs::{MemorySpecs, SpecRoot};
+use unlace_decomp::memoryspecs::{MemorySpecs, SpecRoot};
 
 const FUNCS: [&str; 3] = ["authenticate", "accepted", "main"];
 const X86_64_SLA: &str = "Ghidra/Processors/x86/data/languages/x86-64.sla";

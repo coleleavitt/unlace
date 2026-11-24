@@ -38,7 +38,7 @@ use crate::pass::{
 use object::{Object, ObjectSection, SectionKind};
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
-use unlace_decomp::kuna_uefiprotocols::InstalledInterface;
+use unlace_decomp::uefiprotocols::InstalledInterface;
 
 /// The UEFI module pass.
 pub struct UefiPass;

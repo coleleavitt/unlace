@@ -29,7 +29,7 @@ fn x86_64_module_table_names_a_warn_and_a_bug() {
     let bytes = fixture("kernel_bugtable_x86_64.ko");
     let raw = object::File::parse(&*bytes).expect("parse");
     let view =
-        crate::loader::kuna_relocrebase::rebased_view(&raw, &bytes).expect("a module is laid out");
+        crate::loader::relocrebase::rebased_view(&raw, &bytes).expect("a module is laid out");
     let file = object::File::parse(&*view.bytes).expect("rebased view parses");
     let sites = scan(&file, exec_ranges(&file));
     let text = file.section_by_name(".text").expect(".text").address();

@@ -1,6 +1,6 @@
 {
  "opportunity": "gzip -O2 gzip_base_name (0xd290) is `endbr64; jmp last_component`: it forwards its own rdi and returns the callee's rax, and kuna renders `void sub_d290(void) { sub_dfd0(); }` while recovering the callee as `char *sub_dfd0(char *a0)` in the same run. DWARF says `char *gzip_base_name(char const *fname)`. A call's argument trials come from Heritage::guardCalls, one per HERITAGED range, and a register the function only forwards is heritaged nowhere, so the call gets no trial and the function no parameter. df dir_name 0x7550 and tar *_diag are the same shape. The O2 census counts 25 register-forward arity-short functions.",
- "test_name": "tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json + passthrough-off-leaves-the-forwarded-register-unread.json; tests/stages/kuna-passthrough.xml; unit tests in kuna_passthrough/tests.rs",
+ "test_name": "tests/cli/passthrough-gives-a-forwarding-function-its-parameter.json + passthrough-off-leaves-the-forwarded-register-unread.json; tests/stages/kuna-passthrough.xml; unit tests in passthrough/tests.rs",
  "binary": "decompiler/crates/kuna-analysis/tests/fixtures/passthrough_x86_64",
  "selector": "sub_401019",
  "func_addr": "0x401019",
@@ -145,9 +145,9 @@
  },
  "preset_decision": "ON by default; the UNEVALUATED entry in modes.rs is removed and nothing is added to AGGRESSIVE_OVERRIDES (a default-on option needs no override).",
  "files": [
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_passthrough.rs (+tests)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_protoorder.rs (RecoveredTypes::arity_sound + output)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_calleedeadarg.rs (live_input_width)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/passthrough.rs (+tests)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/protoorder.rs (RecoveredTypes::arity_sound + output)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/calleedeadarg.rs (live_input_width)",
   "decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs (ActionFuncLink claim, ActionActiveParam extend_pending, ActionReturnRecovery hooks)",
   "decompiler/crates/kuna-decomp/src/p4_calls/funcdata_callsite.rs (claimed_range arm in check_input_trial_use; capture in build_input_from_trials)",
   "decompiler/crates/kuna-decomp/src/p5_types/coreaction_infertypes.rs (tail_return_type)",
@@ -156,11 +156,11 @@
   "decompiler/crates/kuna-analysis/tests/fixtures/passthrough_x86_64(.s)",
   "decompiler/crates/kuna-decomp/src/p3_dataflow/heritage.rs (guardReturns skips a claimed range)",
   "docs/features/passthrough/lostargs.py (corpus lost-argument detector)",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_returnuncomputed.rs (every_return_computes + computes_everywhere, +4 unit tests)",
+  "decompiler/crates/kuna-decomp/src/p4_calls/returnuncomputed.rs (every_return_computes + computes_everywhere, +4 unit tests)",
   "decompiler/crates/kuna-console/src/project.rs (park_recovered takes the callee's Funcdata)",
   "docs/features/passthrough/dwarf-confirmation.md",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_varargtail.rs (+tests) -- the vararg-tail refusal",
-  "decompiler/crates/kuna-decomp/src/p4_calls/kuna_passthrough.rs (no_hole_before; set_up_as_variadic reads the writing instruction's own ops as its own)"
+  "decompiler/crates/kuna-decomp/src/p4_calls/varargtail.rs (+tests) -- the vararg-tail refusal",
+  "decompiler/crates/kuna-decomp/src/p4_calls/passthrough.rs (no_hole_before; set_up_as_variadic reads the writing instruction's own ops as its own)"
  ],
  "speed": {
   "method": "interleaved min-of-15, SAME build, whole-binary `kuna decompile-all --json --max-fn-seconds 120`, `--option passthrough off` against the new default; the option is inert under single-function `kuna decompile`",

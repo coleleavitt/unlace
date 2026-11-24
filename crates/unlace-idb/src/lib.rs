@@ -5,7 +5,7 @@
 //! The container, ID0 B-tree, root record, ID1/IDAS/ID2 flags and NAM readers are ported
 //! from idb-rs (https://github.com/Vector35/idb-rs, Apache-2.0), Copyright Rubens Brandao and
 //! the idb-rs contributors; see NOTICE. Type strings are left undecoded here: unlace's TIL
-//! decoder (`unlace_analysis::protos::kuna_til`) renders them as C.
+//! decoder (`unlace_analysis::protos::til`) renders them as C.
 //!
 //! Every read is bounded by its section; malformed input is an [`Error`] or a skipped
 //! item listed in [`Database::errors`], never a panic.

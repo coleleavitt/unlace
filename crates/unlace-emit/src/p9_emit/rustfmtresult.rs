@@ -1,6 +1,6 @@
 //! Preserve the hidden String destination of verified Rust format_inner calls.
 
-use super::kuna_rustfmtargs::{self, MacroKind};
+use super::rustfmtargs::{self, MacroKind};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::type_metatype;
@@ -11,16 +11,16 @@ use unlace_num::opcodes::OpCode;
 pub struct Plan {
     pub destination: VarnodeId,
     pub pointer_bridge: bool,
-    pub format: kuna_rustfmtargs::Plan,
+    pub format: rustfmtargs::Plan,
 }
 
 #[doc(hidden)]
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
     {
         return None;
@@ -56,7 +56,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !entry_value(fd, destination) {
         return None;
     }
-    let format = kuna_rustfmtargs::recover_at(fd, arch, id, 2, 3, MacroKind::Format)?;
+    let format = rustfmtargs::recover_at(fd, arch, id, 2, 3, MacroKind::Format)?;
     Some(Plan {
         destination,
         pointer_bridge,

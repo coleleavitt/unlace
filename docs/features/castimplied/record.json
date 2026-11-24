@@ -257,7 +257,7 @@
  },
  "soundness": {
   "round_trip": "kuna-cli/tests/decompile_all_cli.rs an_implied_cast_round_trips_through_the_printed_c: castimplied_{gcc,clang}_O0_x86_64 printed functions, option off and on, compiled by gcc and clang: all print the binary's output",
-  "unit": "p9_emit/kuna_castimplied/tests.rs: preserves() == C integer conversion over all 1/2/4/8-byte signed/unsigned pairs and bool",
+  "unit": "p9_emit/castimplied/tests.rs: preserves() == C integer conversion over all 1/2/4/8-byte signed/unsigned pairs and bool",
   "found_and_fixed": "first cut took an explicit operand's type from the IR when its declaration disagreed and removed `v36 = (unsigned long)v9;` with `int *v9`; fixed (declaration is authoritative; a mismatch refuses)"
  },
  "default_on_evaluation": "docs/features/castimplied/default-on-evaluation.md"

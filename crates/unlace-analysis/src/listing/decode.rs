@@ -215,7 +215,7 @@ pub fn decode_one(
 /// or current parallel lane as soon as the assembly callback provides it.
 ///
 /// `key`, when given, receives the decode context that certifies a
-/// context-free decode (see [`super::kuna_decodememo`]).
+/// context-free decode (see [`super::decodememo`]).
 pub(super) fn decode_one_listing(
     translate: &dyn Translate,
     vma: u64,

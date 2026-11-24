@@ -46,7 +46,7 @@ unchanged on master at f9e13846, 2026-06-16); its constant arm even carries
 - `is_possible_alias` has one caller, `check_implied_cover`'s load-crosses-store
   loop; `is_possible_alias_step` is only called from it.
 - The load/call-crosses-call arm of `check_implied_cover` is unconditional.
-- `foldcallret`/`foldcallretphi` (`kuna_callretfold.rs op_is_barrier`) treat
+- `foldcallret`/`foldcallretphi` (`callretfold.rs op_is_barrier`) treat
   every STORE as a barrier, with no offset reasoning.
 - `SplitDatatype::split_load` (`p3_dataflow/subflow.rs`) does move a LOAD past
   a STORE or a call; section 6 covers it, and this PR fixes it too.

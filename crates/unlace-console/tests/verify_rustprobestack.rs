@@ -3,7 +3,7 @@ use unlace_base::address::Address;
 use unlace_console::engine::bootstrap_from_object;
 use unlace_decomp::action::ActionContext;
 use unlace_decomp::funcdata::Funcdata;
-use unlace_decomp::kuna_rustprobestack::ActionRustProbestack;
+use unlace_decomp::rustprobestack::ActionRustProbestack;
 use unlace_num::opcodes::OpCode;
 
 fn root() -> PathBuf {
@@ -37,14 +37,14 @@ fn raw_policy(
         .unwrap();
     let forced = match language {
         "auto" => None,
-        "c" => Some(unlace_decomp::kuna_sourcelang::SourceLang::C),
-        "go" => Some(unlace_decomp::kuna_sourcelang::SourceLang::Go),
+        "c" => Some(unlace_decomp::sourcelang::SourceLang::C),
+        "go" => Some(unlace_decomp::sourcelang::SourceLang::Go),
         _ => panic!("unsupported test language"),
     };
     program
         .arch_mut()
         .kuna_options
-        .set(unlace_decomp::kuna_sourcelang::SourceLangForced(forced));
+        .set(unlace_decomp::sourcelang::SourceLangForced(forced));
     if let Some(policy) = policy {
         program.arch_mut().set_kuna_option(policy, "on").unwrap();
     }

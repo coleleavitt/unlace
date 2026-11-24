@@ -111,7 +111,7 @@ use object::{Object, ObjectSection};
 use unlace_base::types::uint4;
 use unlace_decomp::dtype::{Datatype, TypeFactory, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
-use unlace_decomp::kuna_symbolnamechars::{NameChars, sanitize_symbol_name, symbolnamechars_mode};
+use unlace_decomp::symbolnamechars::{NameChars, sanitize_symbol_name, symbolnamechars_mode};
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase, SymFact, SymKind};
 
@@ -120,29 +120,29 @@ pub use lines::DwarfLinesPass;
 mod callwide;
 pub use callwide::declarations as callwide_declarations;
 
-mod kuna_cppnames;
-mod kuna_cppproto;
-pub use kuna_cppnames::merge_symbols as merge_cpp_symbols;
-mod kuna_dwarfbounds;
-mod kuna_dwarfbyref;
-mod kuna_dwarflocation;
-pub mod kuna_dwarfscopes;
-use kuna_dwarfscopes::FrameBase;
-pub(crate) mod kuna_dwarfcomplex;
-mod kuna_dwarfdecls;
-pub mod kuna_dwarfenumtypedef;
-mod kuna_dwarflinkage;
-mod kuna_dwarfsignatures;
-pub mod kuna_godwarfsig;
-mod kuna_goformals;
+mod cppnames;
+mod cppproto;
+pub use cppnames::merge_symbols as merge_cpp_symbols;
+mod dwarfbounds;
+mod dwarfbyref;
+mod dwarflocation;
+pub mod dwarfscopes;
+use dwarfscopes::FrameBase;
+pub(crate) mod dwarfcomplex;
+mod dwarfdecls;
+pub mod dwarfenumtypedef;
+mod dwarflinkage;
+mod dwarfsignatures;
+pub mod godwarfsig;
+mod goformals;
 
-mod kuna_typedepth;
-use kuna_typedepth::TypeWalk;
+mod typedepth;
+use typedepth::TypeWalk;
 
-mod kuna_dwarfstructs;
+mod dwarfstructs;
 
-mod kuna_dwarfvariants;
-mod kuna_variantnames;
+mod dwarfvariants;
+mod variantnames;
 
 /// gimli's section reader: a byte slice tagged with the run-time endianness.
 type Reader<'a> = gimli::EndianSlice<'a, gimli::RunTimeEndian>;
@@ -300,7 +300,7 @@ struct DieSnap {
     /// is a single register.
     entry_register: Option<u16>,
     indirect_parameter: bool,
-    register_indirect_parameter: Option<kuna_dwarfbyref::HiddenValues>,
+    register_indirect_parameter: Option<dwarfbyref::HiddenValues>,
     /// Depth in the DIE tree (root unit DIE = 0).
     depth: isize,
     /// Offsets of this DIE's direct children, in order.
@@ -383,13 +383,13 @@ fn snapshot_unit(
     dwarf: &gimli::Dwarf<Reader<'_>>,
     unit: &gimli::Unit<Reader<'_>>,
 ) -> BTreeMap<usize, DieSnap> {
-    snapshot_unit_for_abi(dwarf, unit, kuna_dwarfbyref::ArgumentAbi::default())
+    snapshot_unit_for_abi(dwarf, unit, dwarfbyref::ArgumentAbi::default())
 }
 
 fn snapshot_unit_for_abi(
     dwarf: &gimli::Dwarf<Reader<'_>>,
     unit: &gimli::Unit<Reader<'_>>,
-    abi: kuna_dwarfbyref::ArgumentAbi,
+    abi: dwarfbyref::ArgumentAbi,
 ) -> BTreeMap<usize, DieSnap> {
     snapshot_unit_with_go(dwarf, unit, abi, None)
 }
@@ -397,8 +397,8 @@ fn snapshot_unit_for_abi(
 fn snapshot_unit_with_go(
     dwarf: &gimli::Dwarf<Reader<'_>>,
     unit: &gimli::Unit<Reader<'_>>,
-    abi: kuna_dwarfbyref::ArgumentAbi,
-    mut go: Option<&mut kuna_godwarfsig::UnitExtras>,
+    abi: dwarfbyref::ArgumentAbi,
+    mut go: Option<&mut godwarfsig::UnitExtras>,
 ) -> BTreeMap<usize, DieSnap> {
     let mut map: BTreeMap<usize, DieSnap> = BTreeMap::new();
     // Parent stack of (offset, depth) to attach children to their parent.
@@ -523,7 +523,7 @@ fn snapshot_unit_with_go(
         if let Some(gimli::AttributeValue::Encoding(e)) = entry.attr_value(gimli::DW_AT_encoding) {
             snap.encoding = Some(e);
         }
-        snap.array_count = kuna_dwarfbounds::array_count(
+        snap.array_count = dwarfbounds::array_count(
             entry.attr_value(gimli::DW_AT_count),
             entry.attr_value(gimli::DW_AT_lower_bound),
             entry.attr_value(gimli::DW_AT_upper_bound),
@@ -551,7 +551,7 @@ fn snapshot_unit_with_go(
             snap.prototyped = true;
         }
         if let Some(fb) = entry.attr_value(gimli::DW_AT_frame_base) {
-            snap.frame_base = kuna_dwarfscopes::frame_base(&fb);
+            snap.frame_base = dwarfscopes::frame_base(&fb);
         }
         if matches!(
             entry.attr_value(gimli::DW_AT_calling_convention),
@@ -566,34 +566,31 @@ fn snapshot_unit_with_go(
             snap.addr_location = simple_addr_location(&loc, unit.encoding().address_size)
                 .or_else(|| indexed_addr_location(dwarf, unit, &loc));
             snap.fbreg_location = simple_fbreg_location(&loc).or_else(|| {
-                kuna_dwarfscopes::enabled()
-                    .then(|| kuna_dwarfscopes::loclist_frame_offset(dwarf, unit, &loc))
+                dwarfscopes::enabled()
+                    .then(|| dwarfscopes::loclist_frame_offset(dwarf, unit, &loc))
                     .flatten()
             });
-            if kuna_dwarfscopes::enabled() {
+            if dwarfscopes::enabled() {
                 if snap.fbreg_location.is_none() {
-                    snap.reg_location = kuna_dwarfscopes::register_location(dwarf, unit, &loc);
+                    snap.reg_location = dwarfscopes::register_location(dwarf, unit, &loc);
                 }
                 if snap.tag == gimli::DW_TAG_formal_parameter {
                     let entry = parent_off
                         .and_then(|parent| map.get(&parent))
                         .and_then(|parent| parent.low_pc);
-                    snap.entry_register =
-                        kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
-                            .and_then(|e| kuna_dwarfscopes::single_register(e.0.slice()));
+                    snap.entry_register = dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
+                        .and_then(|e| dwarfscopes::single_register(e.0.slice()));
                 }
             }
-            if snap.tag == gimli::DW_TAG_formal_parameter && kuna_dwarfbyref::is_fortran(language) {
+            if snap.tag == gimli::DW_TAG_formal_parameter && dwarfbyref::is_fortran(language) {
                 let entry = parent_off
                     .and_then(|parent| map.get(&parent))
                     .and_then(|parent| parent.low_pc);
-                if let Some(expression) =
-                    kuna_dwarfbyref::location_at_entry(dwarf, unit, &loc, entry)
-                {
-                    snap.indirect_parameter = kuna_dwarfbyref::indirect_location(
+                if let Some(expression) = dwarfbyref::location_at_entry(dwarf, unit, &loc, entry) {
+                    snap.indirect_parameter = dwarfbyref::indirect_location(
                         &gimli::AttributeValue::Exprloc(expression.clone()),
                     );
-                    snap.register_indirect_parameter = kuna_dwarfbyref::memory_argument_register(
+                    snap.register_indirect_parameter = dwarfbyref::memory_argument_register(
                         &expression,
                         unit.encoding(),
                         abi.registers,
@@ -693,7 +690,7 @@ impl ForeignUnits {
     fn unit_holding(
         &mut self,
         dwarf: &gimli::Dwarf<Reader<'_>>,
-        abi: kuna_dwarfbyref::ArgumentAbi,
+        abi: dwarfbyref::ArgumentAbi,
         sup: bool,
         off: usize,
     ) -> Option<std::rc::Rc<BTreeMap<usize, DieSnap>>> {
@@ -747,7 +744,7 @@ impl ForeignUnits {
 fn graft_foreign(
     dies: &mut BTreeMap<usize, DieSnap>,
     dwarf: &gimli::Dwarf<Reader<'_>>,
-    abi: kuna_dwarfbyref::ArgumentAbi,
+    abi: dwarfbyref::ArgumentAbi,
     units: &mut ForeignUnits,
 ) {
     let mut grafted: BTreeSet<usize> = BTreeSet::new();
@@ -860,9 +857,9 @@ fn indexed_addr_location<'a>(
 fn simple_member_location(loc: &gimli::AttributeValue<Reader<'_>>) -> Option<i64> {
     match loc {
         gimli::AttributeValue::Exprloc(expression) => {
-            kuna_dwarflocation::member_offset(expression.0.slice())
+            dwarflocation::member_offset(expression.0.slice())
         }
-        gimli::AttributeValue::Block(block) => kuna_dwarflocation::member_offset(block.slice()),
+        gimli::AttributeValue::Block(block) => dwarflocation::member_offset(block.slice()),
         gimli::AttributeValue::Sdata(value) => Some(*value),
         _ => loc.udata_value().and_then(|u| i64::try_from(u).ok()),
     }
@@ -877,9 +874,9 @@ fn simple_fbreg_location(loc: &gimli::AttributeValue<Reader<'_>>) -> Option<i64>
         gimli::AttributeValue::Block(block) => block.slice(),
         _ => return None,
     };
-    kuna_dwarflocation::frame_offset(bytes).or_else(|| {
-        kuna_dwarfscopes::enabled()
-            .then(|| kuna_dwarfscopes::piece_frame_offset(bytes))
+    dwarflocation::frame_offset(bytes).or_else(|| {
+        dwarfscopes::enabled()
+            .then(|| dwarfscopes::piece_frame_offset(bytes))
             .flatten()
     })
 }
@@ -916,7 +913,7 @@ fn read_sleb128(buf: &[u8]) -> Option<(i64, usize)> {
 /// DWARF type chain (faithful reduction of `DWARFDataTypeImporter.getDataType`'s
 /// tag switch). `None` for a missing/unbuildable type; the caller skips that one
 /// piece rather than failing the analysis. `walk` is the recursion guard
-/// ([`kuna_typedepth::TypeWalk`]) and is the whole of the termination argument.
+/// ([`typedepth::TypeWalk`]) and is the whole of the termination argument.
 ///
 /// `cpp` adds the C++-only tag arms (see [`kuna_cppproto`]): a
 /// `DW_TAG_class_type` maps like a structure and a
@@ -977,7 +974,7 @@ fn build_datatype_at(
                 }
                 Some(gimli::DW_ATE_boolean) => types.get_base(size, type_metatype::TYPE_BOOL).ok(),
                 Some(gimli::DW_ATE_complex_float) if size <= die.complex_max_size => {
-                    kuna_dwarfcomplex::complex_type(types, size)
+                    dwarfcomplex::complex_type(types, size)
                 }
                 Some(gimli::DW_ATE_float) => types.get_base(size, type_metatype::TYPE_FLOAT).ok(),
                 enc if encoding_signed(enc) == Some(false) => {
@@ -1071,9 +1068,7 @@ fn build_datatype_at(
                 // enum size: fall back to the plain underlying integer.
                 .or_else(|| types.get_base(size, enum_fallback(size, signed)).ok())
         }
-        gimli::DW_TAG_subroutine_type
-            if unlace_decomp::kuna_calltargettype::dwarf_function_types() =>
-        {
+        gimli::DW_TAG_subroutine_type if unlace_decomp::calltargettype::dwarf_function_types() => {
             build_subroutine(die, dies, types, word_size, walk, cpp)
         }
         // Any other tag -> give up on this type cleanly.
@@ -1113,13 +1108,13 @@ fn intern_aggregate(
     // this DIE -- it fell short of one of its guards -- and the member walk
     // still gets its turn.
     if !union {
-        if let Some(t) = kuna_dwarfvariants::intern_variant_aggregate(
+        if let Some(t) = dwarfvariants::intern_variant_aggregate(
             types, die, dies, alias, fallback, walk, word_size, cpp,
         ) {
             return Some(t);
         }
     }
-    kuna_dwarfstructs::intern_aggregate(
+    dwarfstructs::intern_aggregate(
         types, die, dies, alias, fallback, walk, word_size, cpp, union,
     )
 }
@@ -1252,7 +1247,7 @@ fn build_enum(
     size: i32,
     signed: Option<bool>,
 ) -> Option<Rc<Datatype>> {
-    let name = kuna_dwarfenumtypedef::name(die, alias)?;
+    let name = dwarfenumtypedef::name(die, alias)?;
     let mask: u64 = if size >= 8 {
         u64::MAX
     } else {
@@ -1376,7 +1371,7 @@ fn build_pieces(
         match child.tag {
             gimli::DW_TAG_formal_parameter => {
                 let ty = build_datatype(child.type_ref, dies, types, word_size, &mut walk, false)?;
-                let ty = kuna_dwarfbyref::parameter_type(child, ty, types, word_size)?;
+                let ty = dwarfbyref::parameter_type(child, ty, types, word_size)?;
                 intypes.push(ty);
                 innames.push(child.name.clone());
             }
@@ -1452,10 +1447,10 @@ fn collect_fbreg_locals(
     out: &mut Vec<crate::pass::LocalFact>,
     regs: &mut Vec<crate::pass::RegLocalFact>,
 ) {
-    let base = kuna_dwarfscopes::frame_base_offset(sub.frame_base, cfa);
+    let base = dwarfscopes::frame_base_offset(sub.frame_base, cfa);
     let mut walk = TypeWalk::new();
-    let mut names = kuna_dwarfscopes::LocalNames::default();
-    for child in kuna_dwarfscopes::scope_vars(sub, dies) {
+    let mut names = dwarfscopes::LocalNames::default();
+    for child in dwarfscopes::scope_vars(sub, dies) {
         if !matches!(
             child.tag,
             gimli::DW_TAG_variable | gimli::DW_TAG_formal_parameter
@@ -1510,7 +1505,7 @@ impl AnalysisPass for DwarfPass {
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = Self::run_generic(ctx);
-        if let Some(facts) = kuna_godwarfsig::capture_arm64_compressed(ctx) {
+        if let Some(facts) = godwarfsig::capture_arm64_compressed(ctx) {
             out.go_dwarf.push(facts);
         }
         out
@@ -1521,7 +1516,7 @@ impl DwarfPass {
     #[inline(never)]
     fn run_generic(ctx: &AnalysisCtx) -> AnalysisOutput {
         let mut out = AnalysisOutput::default();
-        if let Some(facts) = kuna_godwarfsig::capture_compressed(ctx) {
+        if let Some(facts) = godwarfsig::capture_compressed(ctx) {
             out.go_dwarf.push(facts);
             return out;
         }
@@ -1543,7 +1538,7 @@ impl DwarfPass {
         if dwarf_section_data(ctx.file, gimli::SectionId::DebugInfo).is_none() {
             // (kuna `debuglink`) A stripped image's DWARF lives in its companion
             // debug file; the addresses are the image's own.
-            if unlace_decomp::kuna_debuglink::debuglink_enabled() {
+            if unlace_decomp::debuglink::debuglink_enabled() {
                 let companion = ctx
                     .image_path
                     .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path));
@@ -1581,7 +1576,7 @@ impl DwarfPass {
         // types it shares with other packages' debug files in a supplementary
         // file its `.gnu_debugaltlink` names; its `strp_alt`/`strp_sup` names
         // then resolve through `Dwarf::sup`.
-        let sup_bytes = unlace_decomp::kuna_debuglink::debuglink_enabled()
+        let sup_bytes = unlace_decomp::debuglink::debuglink_enabled()
             .then(|| crate::loader::elf_debuglink::find_altlink(ctx.file, ctx.image_path))
             .flatten()
             .map(|(_, bytes)| bytes);
@@ -1604,26 +1599,23 @@ impl DwarfPass {
         // `None` => this target's CFA is not in kuna's table; skip fbreg locals
         // (additive — the names+types from subtasks 1+2 still apply).
         let cfa = call_frame_cfa(ctx.file.architecture());
-        let complex_max = kuna_dwarfcomplex::max_size(
-            ctx.file.format(),
-            ctx.file.architecture(),
-            &ctx.arch.archid,
-        );
+        let complex_max =
+            dwarfcomplex::max_size(ctx.file.format(), ctx.file.architecture(), &ctx.arch.archid);
 
-        let linkage_imports = kuna_dwarflinkage::imports(ctx);
-        let linkage_definitions = kuna_dwarflinkage::definitions(ctx, &linkage_imports);
+        let linkage_imports = dwarflinkage::imports(ctx);
+        let linkage_definitions = dwarflinkage::definitions(ctx, &linkage_imports);
         let go_target =
             ctx.file.is_little_endian() && ctx.file.architecture() == object::Architecture::X86_64;
-        let mut go_facts = kuna_godwarfsig::Facts::default();
-        let mut decls = kuna_dwarfdecls::Decls::default();
-        let abi = kuna_dwarfbyref::argument_abi(ctx.file.format(), ctx.file.architecture());
+        let mut go_facts = godwarfsig::Facts::default();
+        let mut decls = dwarfdecls::Decls::default();
+        let abi = dwarfbyref::argument_abi(ctx.file.format(), ctx.file.architecture());
         let mut foreign = ForeignUnits::new(&dwarf);
         let mut units = dwarf.units();
         while let Ok(Some(header)) = units.next() {
             let Ok(unit) = dwarf.unit(header) else {
                 continue;
             };
-            let mut go = kuna_godwarfsig::UnitExtras::default();
+            let mut go = godwarfsig::UnitExtras::default();
             let mut dies = snapshot_unit_with_go(&dwarf, &unit, abi, go_target.then_some(&mut go));
             graft_foreign(&mut dies, &dwarf, abi, &mut foreign);
             if complex_max > 0 {
@@ -1632,8 +1624,8 @@ impl DwarfPass {
                 }
             }
 
-            let signatures = kuna_goformals::generic_prototype_allowed(&unit)
-                && kuna_dwarfsignatures::has_signature_information(&dies);
+            let signatures = goformals::generic_prototype_allowed(&unit)
+                && dwarfsignatures::has_signature_information(&dies);
             for snap in dies.values() {
                 match snap.tag {
                     gimli::DW_TAG_subprogram => {
@@ -1650,7 +1642,7 @@ impl DwarfPass {
                             let name = if signatures {
                                 snap.name.clone()
                             } else {
-                                kuna_cppproto::resolve_subprogram(snap, &dies)
+                                cppproto::resolve_subprogram(snap, &dies)
                                     .map(|resolved| resolved.name)
                                     .unwrap_or_else(|| snap.name.clone())
                             };
@@ -1665,14 +1657,14 @@ impl DwarfPass {
                                 .then(|| build_pieces(&snap.name, snap, &dies, types, word_size))
                                 .flatten()
                             {
-                                kuna_dwarfscopes::entry_storage(
+                                dwarfscopes::entry_storage(
                                     snap,
                                     low_pc,
                                     &dies,
                                     &pieces,
                                     &mut out.dwarf_param_regs,
                                 );
-                                kuna_dwarflinkage::append(
+                                dwarflinkage::append(
                                     snap,
                                     &dies,
                                     &pieces,
@@ -1697,7 +1689,7 @@ impl DwarfPass {
                                 out.withheld_prototypes.push((
                                     Some(low_pc),
                                     snap.name.clone(),
-                                    unlace_decomp::kuna_honestgaps::WithheldCause::DwarfType,
+                                    unlace_decomp::honestgaps::WithheldCause::DwarfType,
                                 ));
                             }
                             // subtask 3: named, typed stack LOCALS. Each direct
@@ -1726,7 +1718,7 @@ impl DwarfPass {
                         // namespace/class ancestry, and key the prototype by entry
                         // address. Emitted into a SEPARATE fact set the commit
                         // boundary merges in its own order.
-                        let Some(res) = kuna_cppproto::resolve_subprogram(snap, &dies) else {
+                        let Some(res) = cppproto::resolve_subprogram(snap, &dies) else {
                             continue;
                         };
                         // Only a name the arm above could not produce is new; a
@@ -1740,10 +1732,10 @@ impl DwarfPass {
                             });
                         }
                         if let Some(pieces) = signatures
-                            .then(|| kuna_cppproto::build_pieces(&res, &dies, types, word_size))
+                            .then(|| cppproto::build_pieces(&res, &dies, types, word_size))
                             .flatten()
                         {
-                            kuna_dwarflinkage::append(
+                            dwarflinkage::append(
                                 snap,
                                 &dies,
                                 &pieces,
@@ -1763,7 +1755,7 @@ impl DwarfPass {
                         }
                         if res.chased {
                             if let Some(cfa) = cfa {
-                                kuna_cppproto::collect_fbreg_locals(
+                                cppproto::collect_fbreg_locals(
                                     low_pc,
                                     snap,
                                     &dies,
@@ -1827,15 +1819,13 @@ impl DwarfPass {
         decls.finish(&linkage_imports, &mut out.dwarf_decl_prototypes);
         let arch = ctx.file.architecture();
         for list in [&mut out.dwarf_reg_locals, &mut out.dwarf_param_regs] {
-            list.retain_mut(
-                |r| match kuna_dwarfscopes::register_name(arch, r.dwarf_reg) {
-                    Some(name) => {
-                        r.reg = name;
-                        true
-                    }
-                    None => false,
-                },
-            );
+            list.retain_mut(|r| match dwarfscopes::register_name(arch, r.dwarf_reg) {
+                Some(name) => {
+                    r.reg = name;
+                    true
+                }
+                None => false,
+            });
         }
         out
     }

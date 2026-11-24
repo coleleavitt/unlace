@@ -334,7 +334,7 @@ the actual table index. The new admission rule must establish that connection.
 `listing/walk.rs::step` follows static flow and has special table readers for
 Thumb and A32. It has no x86 table reader. `StepCtx` and the constructors in
 `listing/mod.rs::Listing::build_resuming` therefore cannot supply one.
-`listing/kuna_pdecode.rs` builds its own `StepCtx` for each lane and must make
+`listing/pdecode.rs` builds its own `StepCtx` for each lane and must make
 the same decision as the serial walk. A predecessor-dependent reader added only
 to the serial loop would violate that invariant.
 

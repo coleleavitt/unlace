@@ -5,13 +5,13 @@
 //! any `method_list_t`, takes no `_cmd`, and only its symbol, `-[Class sel]`,
 //! says what it is. On AArch64 its receiver is always in `x0`, so each such
 //! symbol hints `x0` as `self`, of the class's type under `objcivars`: an
-//! unlocked hint ([`unlace_decomp::kuna_inputhints`]), since the encoding that
+//! unlocked hint ([`unlace_decomp::inputhints`]), since the encoding that
 //! would give the other parameters does not exist.
 
 use object::Architecture;
 
 use super::encoding::TypeCtx;
-use super::kuna_objcivars::Structs;
+use super::objcivars::Structs;
 use super::sections::MachoImage;
 use crate::pass::{AnalysisOutput, InputHintFact};
 

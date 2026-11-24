@@ -28,8 +28,8 @@ use unlace_base::types::{int4, uint4};
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, VarnodeId};
+use crate::fasthash::FxHashSet;
 use crate::funcdata::Funcdata;
-use crate::kuna_fasthash::FxHashSet;
 use crate::varnode::varnode_flags;
 
 /// The entry block of each strongly connected component of the basic-block
@@ -177,8 +177,8 @@ pub fn mark(fd: &mut Funcdata, reaching: &[VarnodeId]) {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.haltloopguard_exitless_loops = Some(exitless_loops);
     hooks.haltloopguard_guard = Some(guard);
     hooks.haltloopguard_mark = Some(mark);

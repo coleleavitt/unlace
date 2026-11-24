@@ -144,7 +144,7 @@
       "attempts": 0,
       "covered_by_option": null,
       "touches": [
-        "crates/unlace-analysis/src/listing/kuna_poolref.rs"
+        "crates/unlace-analysis/src/listing/poolref.rs"
       ],
       "scope": "small",
       "regression_of": "arm-literal-pool-string",
@@ -403,7 +403,7 @@
       "attempts": 1,
       "covered_by_option": "picbase",
       "touches": [
-        "crates/unlace-analysis/src/listing/kuna_picbase.rs",
+        "crates/unlace-analysis/src/listing/picbase.rs",
         "crates/unlace-analysis/src/listing/xrefs.rs"
       ],
       "scope": "large",
@@ -2612,7 +2612,7 @@
       "attempts": 0,
       "covered_by_option": "pdatainterior",
       "touches": [
-        "crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
+        "crates/unlace-analysis/src/analyzers/entry/pdatainterior.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3106,7 +3106,7 @@
       "attempts": 0,
       "covered_by_option": "pdatainterior",
       "touches": [
-        "crates/unlace-analysis/src/analyzers/entry/kuna_pdatainterior.rs"
+        "crates/unlace-analysis/src/analyzers/entry/pdatainterior.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -3431,7 +3431,7 @@
       "touches": [
         "crates/unlace-cli/src/decompile_all.rs",
         "crates/unlace-cli/src/decompile_graph.rs",
-        "crates/unlace-analysis/src/analyzers/entry/kuna_machomain.rs"
+        "crates/unlace-analysis/src/analyzers/entry/machomain.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -4501,8 +4501,8 @@
       "attempts": 1,
       "covered_by_option": "loweredswitchlabels",
       "touches": [
-        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs",
-        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitchlabels.rs",
+        "crates/unlace-decomp/src/p2_lift/loweredswitch.rs",
+        "crates/unlace-decomp/src/p2_lift/loweredswitchlabels.rs",
         "crates/unlace-decomp/src/substrate/funcdata_block.rs"
       ],
       "scope": "small",
@@ -5245,7 +5245,7 @@
       "covered_by_option": "ppclocalentry",
       "touches": [
         "crates/unlace-analysis/src",
-        "crates/unlace-decomp/src/p2_lift/kuna_funcboundflow.rs"
+        "crates/unlace-decomp/src/p2_lift/funcboundflow.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -5534,7 +5534,7 @@
       "covered_by_option": null,
       "touches": [
         "crates/unlace-cli/src/decompile.rs",
-        "crates/unlace-decomp/src/p9_emit/kuna_naming.rs"
+        "crates/unlace-decomp/src/p9_emit/naming.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6225,7 +6225,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "crates/unlace-decomp/src/p2_lift/kuna_linuxsyscall.rs"
+        "crates/unlace-decomp/src/p2_lift/linuxsyscall.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6255,7 +6255,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "crates/unlace-analysis/src/analyzers/entry/kuna_entrymainproto.rs"
+        "crates/unlace-analysis/src/analyzers/entry/entrymainproto.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6347,7 +6347,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "crates/unlace-analysis/src/listing/kuna_unmappedentry.rs"
+        "crates/unlace-analysis/src/listing/unmappedentry.rs"
       ],
       "scope": "small",
       "regression_of": null,
@@ -6377,7 +6377,7 @@
       "attempts": 1,
       "covered_by_option": null,
       "touches": [
-        "crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs"
+        "crates/unlace-decomp/src/p2_lift/loweredswitch.rs"
       ],
       "scope": "small",
       "regression_of": null,

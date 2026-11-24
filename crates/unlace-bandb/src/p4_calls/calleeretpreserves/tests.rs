@@ -12,7 +12,7 @@
 //! `tests/cli/main-returns-invented-cookie.json`.
 
 use super::*;
-use crate::kuna_rustabi::FuncdataRustabiExt;
+use crate::rustabi::FuncdataRustabiExt;
 
 use std::rc::Rc;
 
@@ -23,7 +23,7 @@ use unlace_base::space::{
 use crate::context::{ArchContext, TypeOp};
 use crate::dtype::{Datatype, type_class, type_metatype};
 use crate::fspec::{EffectRecord, ParamEntry, ProtoModel, effect_type};
-use crate::kuna_rustabi::CalleeReturnWrites;
+use crate::rustabi::CalleeReturnWrites;
 use unlace_num::opcodes::OpCode;
 
 /// The convention, reduced to what the rule reads: RAX (here 0x00) killed by

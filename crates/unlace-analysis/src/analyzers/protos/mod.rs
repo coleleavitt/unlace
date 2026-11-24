@@ -38,19 +38,19 @@ use unlace_decomp::fspec::PrototypePieces;
 
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
-pub mod kuna_aeabisigs;
-pub mod kuna_importvote;
-mod kuna_libcnames;
-pub mod kuna_libcsigs;
-pub mod kuna_libctypes;
-pub mod kuna_libgcc;
-pub mod kuna_nameladder;
-pub mod kuna_sdkprotos;
-pub mod kuna_softfpsigs;
-pub mod kuna_til;
-pub mod kuna_typelib;
-pub mod kuna_win32sigs;
-pub mod kuna_x87intrinsics;
+pub mod aeabisigs;
+pub mod importvote;
+mod libcnames;
+pub mod libcsigs;
+pub mod libctypes;
+pub mod libgcc;
+pub mod nameladder;
+pub mod sdkprotos;
+pub mod softfpsigs;
+pub mod til;
+pub mod typelib;
+pub mod win32sigs;
+pub mod x87intrinsics;
 
 /// Port of `ApplyDataArchiveAnalyzer`: seed built-in libc prototypes onto matching
 /// FunctionSymbols so call arguments get typed.
@@ -97,7 +97,7 @@ enum Ty {
     Double,
     /// (kuna `libctypes`) A pointer to the NAMED libc/POSIX aggregate spelled by
     /// the payload (`FILE`, `stat`, `DIR`, ...), sized from
-    /// [`kuna_libctypes::NAMED_AGGREGATES`].
+    /// [`libctypes::NAMED_AGGREGATES`].
     ///
     /// Pointer-only: no slot these tables name is taken or returned BY VALUE,
     /// because no libc declaration restated here does that. That is a property
@@ -108,7 +108,7 @@ enum Ty {
     /// v1; }` from the `timespec *` slot alone.
     ///
     /// What makes that rendering right is the WIDTH, not the pointer. Both
-    /// hazards `analyzers::dwarf::kuna_dwarfstructs` documents are hazards of a
+    /// hazards `analyzers::dwarf::dwarfstructs` documents are hazards of a
     /// SIZELESS aggregate: a by-value parameter the ABI classifier cannot size
     /// degrades to a raw integer, and a sizeless RETURN is classified as a
     /// hidden-return-buffer call, which grows a phantom first parameter and
@@ -123,7 +123,7 @@ enum Ty {
 
 /// Shorthand for the one layout every `void *` table can be built under: these
 /// signatures carry no [`Ty::NamedPtr`], so the value never reaches a mint.
-const L: kuna_libctypes::Layout = kuna_libctypes::Layout::Opaque;
+const L: libctypes::Layout = libctypes::Layout::Opaque;
 
 /// A built-in libc signature: return type, parameter types, and the first
 /// variadic slot (`-1` if not variadic).
@@ -530,7 +530,7 @@ fn build_ty(
     t: Ty,
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: kuna_libctypes::Layout,
+    layout: libctypes::Layout,
 ) -> KunaResult<Rc<Datatype>> {
     let ptr = types.get_size_of_pointer();
     match t {
@@ -566,12 +566,12 @@ fn build_ty(
             let v = types.get_type_void()?;
             types.get_type_pointer(ptr, v, word_size)
         }
-        Ty::Complex(size) => crate::analyzers::dwarf::kuna_dwarfcomplex::complex_type(types, size)
+        Ty::Complex(size) => crate::analyzers::dwarf::dwarfcomplex::complex_type(types, size)
             .ok_or_else(|| unlace_base::error::KunaError::lowlevel("unsupported complex layout")),
         Ty::Float => types.get_base(4, type_metatype::TYPE_FLOAT),
         Ty::Double => types.get_base(8, type_metatype::TYPE_FLOAT),
         Ty::NamedPtr(n) => {
-            let s = kuna_libctypes::named_aggregate(n, types, word_size, layout)?;
+            let s = libctypes::named_aggregate(n, types, word_size, layout)?;
             types.get_type_pointer(ptr, s, word_size)
         }
     }
@@ -583,7 +583,7 @@ fn build_pieces(
     sig: &Sig,
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: kuna_libctypes::Layout,
+    layout: libctypes::Layout,
 ) -> KunaResult<PrototypePieces> {
     let outtype = Some(build_ty(sig.ret, types, word_size, layout)?);
     let mut intypes = Vec::with_capacity(sig.params.len());
@@ -599,7 +599,7 @@ fn build_pieces(
         first_var_arg_slot: sig.vararg,
         output_storage: None,
         input_storage: Vec::new(),
-        kuna_library_names: kuna_libcnames::library_names(name)
+        kuna_library_names: libcnames::library_names(name)
             .filter(|n| n.params.len() == sig.params.len()),
     })
 }
@@ -614,12 +614,12 @@ fn build_pieces(
 /// callee's own parked prototype does) cannot drift from it.
 pub(crate) fn effective_libctypes_layout(
     file: &object::File,
-) -> unlace_decomp::kuna_libctypes::LibcTypesLayout {
-    use unlace_decomp::kuna_libctypes::LibcTypesLayout as L;
-    match unlace_decomp::kuna_libctypes::libctypes_layout() {
+) -> unlace_decomp::libctypes::LibcTypesLayout {
+    use unlace_decomp::libctypes::LibcTypesLayout as L;
+    match unlace_decomp::libctypes::libctypes_layout() {
         L::Off => L::Off,
-        _ if !kuna_libctypes::glibc::target_takes_the_widths(file) => L::Off,
-        L::Glibc if kuna_libctypes::glibc::target_is_glibc_x86_64(file) => L::Glibc,
+        _ if !libctypes::glibc::target_takes_the_widths(file) => L::Off,
+        L::Glibc if libctypes::glibc::target_is_glibc_x86_64(file) => L::Glibc,
         _ => L::Opaque,
     }
 }
@@ -650,21 +650,21 @@ pub(crate) fn variadic_format_prototype(
     name: &str,
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: unlace_decomp::kuna_libctypes::LibcTypesLayout,
+    layout: unlace_decomp::libctypes::LibcTypesLayout,
 ) -> Option<(PrototypePieces, usize)> {
     if NOT_FORMAT_VARIADICS.contains(&name) {
         return None;
     }
-    let named = if layout == kuna_libctypes::Layout::Off {
+    let named = if layout == libctypes::Layout::Off {
         None
     } else {
-        kuna_libctypes::declared_named_prototype(name)
+        libctypes::declared_named_prototype(name)
     };
     let sig = match named {
         Some(sig) => sig,
         None => LIBC
             .iter()
-            .chain(kuna_libcsigs::LIBC_EXT.iter())
+            .chain(libcsigs::LIBC_EXT.iter())
             .find(|(n, _)| *n == name)
             .map(|(_, sig)| sig)?,
     };
@@ -702,7 +702,7 @@ fn seed_resolved_prototypes(
     table: &[(&str, Sig)],
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: kuna_libctypes::Layout,
+    layout: libctypes::Layout,
 ) {
     for (name, addr) in imports {
         let Some((_, sig)) = table.iter().find(|(candidate, _)| *candidate == name) else {
@@ -722,7 +722,7 @@ fn seed_named_prototypes(
     table: &[(&str, Sig)],
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: kuna_libctypes::Layout,
+    layout: libctypes::Layout,
     ladder: bool,
 ) {
     for (name, sig) in table {
@@ -742,7 +742,7 @@ fn seed_named_prototypes(
         .collect();
     spelled.sort_unstable();
     for present in spelled {
-        let hit = kuna_nameladder::fallbacks(present)
+        let hit = nameladder::fallbacks(present)
             .into_iter()
             .find_map(|f| table.iter().find(|(t, _)| *t == f));
         if let Some((_, sig)) = hit {
@@ -757,7 +757,7 @@ fn seed_named_prototypes(
 /// OPERATOR declared, or `None` when neither table knows the name.
 ///
 /// The two load-time passes match a name the *image* carries: [`LibProtoPass`]
-/// over the object's own FUNC symbols and imports, [`kuna_libcsigs::LibcSigsPass`]
+/// over the object's own FUNC symbols and imports, [`libcsigs::LibcSigsPass`]
 /// over the imports alone. Neither can answer for a name that exists only because
 /// a caller said so (`--define-function 0x8048968=ptrace` on a stripped, statically
 /// linked image), which is precisely the reverse-engineering case: the symbol table
@@ -771,7 +771,7 @@ pub fn declared_libc_prototype(
     name: &str,
     types: &dyn TypeFactory,
     word_size: uint4,
-    layout: unlace_decomp::kuna_libctypes::LibcTypesLayout,
+    layout: unlace_decomp::libctypes::LibcTypesLayout,
 ) -> Option<PrototypePieces> {
     // (kuna `libctypes`) The named-aggregate form of the same signature when that
     // gate is on, so a declared `fopen` agrees with what the load-time pass parks
@@ -787,10 +787,10 @@ pub fn declared_libc_prototype(
     // answered, and the program alone cannot stand in for it -- a MIPS32 image's
     // DWARF `stat` also puts `st_dev` at offset 0. `Off` is how the console
     // passes on a target whose ABI the aggregate widths are not measured for.
-    let named = if layout == kuna_libctypes::Layout::Off {
+    let named = if layout == libctypes::Layout::Off {
         None
     } else {
-        kuna_libctypes::declared_named_prototype(name)
+        libctypes::declared_named_prototype(name)
     };
     if let Some(sig) = named {
         if let Ok(pieces) = build_pieces(name, sig, types, word_size, layout) {
@@ -799,7 +799,7 @@ pub fn declared_libc_prototype(
     }
     let sig = LIBC
         .iter()
-        .chain(kuna_libcsigs::LIBC_EXT.iter())
+        .chain(libcsigs::LIBC_EXT.iter())
         .find(|(n, _)| *n == name)
         .map(|(_, sig)| sig)?;
     build_pieces(name, sig, types, word_size, layout).ok()
@@ -808,9 +808,9 @@ pub fn declared_libc_prototype(
 /// Whether a built-in table declares `name`, so no other source types it.
 pub(crate) fn has_builtin_prototype(name: &str) -> bool {
     LIBC.iter()
-        .chain(kuna_libcsigs::LIBC_EXT.iter())
+        .chain(libcsigs::LIBC_EXT.iter())
         .any(|(n, _)| *n == name)
-        || kuna_libctypes::declared_named_prototype(name).is_some()
+        || libctypes::declared_named_prototype(name).is_some()
 }
 
 /// Collect the set of FUNC symbol names present in the object — the names the
@@ -1008,13 +1008,13 @@ impl AnalysisPass for LibProtoPass {
             types,
             word_size,
             L,
-            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+            unlace_decomp::loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &imports, LIBC, types, word_size, L);
         if ctx
             .arch
             .kuna_options
-            .get::<unlace_decomp::kuna_cppsig::CppSigMode>()
+            .get::<unlace_decomp::cppsig::CppSigMode>()
             .enabled()
         {
             seed_named_prototypes(
@@ -1024,7 +1024,7 @@ impl AnalysisPass for LibProtoPass {
                 types,
                 word_size,
                 L,
-                unlace_decomp::kuna_loadoptions::nameladder_enabled(),
+                unlace_decomp::loadoptions::nameladder_enabled(),
             );
             seed_resolved_prototypes(&mut out, &imports, CXX_ALLOC, types, word_size, L);
         }
@@ -1265,7 +1265,7 @@ mod tests {
 
     #[test]
     fn variadic_format_prototype_admits_the_format_families() {
-        use unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque;
+        use unlace_decomp::libctypes::LibcTypesLayout::Opaque;
         let types = fmt_factory();
         // The format slot is the LAST fixed parameter of each declaration.
         for (name, slot) in [
@@ -1310,7 +1310,7 @@ mod tests {
 
     #[test]
     fn variadic_format_prototype_refuses_everything_else() {
-        use unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque;
+        use unlace_decomp::libctypes::LibcTypesLayout::Opaque;
         let types = fmt_factory();
         for name in [
             // Variadic, but the varargs are not governed by the trailing char *.
@@ -1408,7 +1408,7 @@ mod tests {
             "ptrace",
             &types,
             1,
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+            unlace_decomp::libctypes::LibcTypesLayout::Opaque,
         )
         .expect("base table name");
         assert_eq!(base.name, "ptrace");
@@ -1417,7 +1417,7 @@ mod tests {
             "read",
             &types,
             1,
-            unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque,
+            unlace_decomp::libctypes::LibcTypesLayout::Opaque,
         )
         .expect("extension table name");
         assert_eq!(ext.intypes.len(), 3, "ssize_t read(int, void *, size_t)");
@@ -1426,7 +1426,7 @@ mod tests {
                 "sub_8049027",
                 &types,
                 1,
-                unlace_decomp::kuna_libctypes::LibcTypesLayout::Opaque
+                unlace_decomp::libctypes::LibcTypesLayout::Opaque
             )
             .is_none(),
             "a name neither table knows is left alone"
@@ -1543,16 +1543,8 @@ mod tests {
             !imported.contains("memcmp"),
             "a same-named resolver export makes global by-name parking ambiguous"
         );
-        seed_named_prototypes(
-            &mut out,
-            &imported,
-            kuna_libcsigs::LIBC_EXT,
-            &types,
-            1,
-            L,
-            false,
-        );
-        seed_resolved_prototypes(&mut out, &imports, kuna_libcsigs::LIBC_EXT, &types, 1, L);
+        seed_named_prototypes(&mut out, &imported, libcsigs::LIBC_EXT, &types, 1, L, false);
+        seed_resolved_prototypes(&mut out, &imports, libcsigs::LIBC_EXT, &types, 1, L);
         let seeded: Vec<(u64, usize)> = out
             .prototypes_at
             .iter()

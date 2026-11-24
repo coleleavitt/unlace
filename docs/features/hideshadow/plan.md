@@ -1,7 +1,7 @@
 # hideshadow — plan
 
 1. Port `ActionHideShadow::apply` (`coreaction.cc:4976-4995`) into
-   `p6_variables/kuna_hideshadow.rs` as `hide_shadow_copies`, driving the
+   `p6_variables/hideshadow.rs` as `hide_shadow_copies`, driving the
    already-ported `Merge::hide_shadows` over the `with_covermerge` bridge and
    deduping HighVariables through the bank mark surface. The action stays where
    it is in `universal_sched`, so `list_action_decompile_oracle.txt` does not

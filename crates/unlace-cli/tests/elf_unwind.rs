@@ -1,6 +1,6 @@
 use crate::common;
 use std::process::Command;
-use unlace_analysis::analyzers::entry::kuna_fdeinterior::{eligible_fde_bodies, scan_fde_bodies};
+use unlace_analysis::analyzers::entry::fdeinterior::{eligible_fde_bodies, scan_fde_bodies};
 use unlace_analysis::analyzers::entry::{scan_eh_frame_landing_pads, scan_eh_frame_starts};
 #[path = "fixtures/elf_unwind_fixture.rs"]
 mod fixture;

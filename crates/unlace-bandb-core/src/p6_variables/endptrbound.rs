@@ -562,7 +562,7 @@ pub fn gather_walks(fd: &Funcdata, space: &Rc<AddrSpace>) -> Vec<PointerWalk> {
     if !fd
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_endptrbound::EndPtrBound>()
+        .get::<crate::endptrbound::EndPtrBound>()
         .0
     {
         return Vec::new();
@@ -854,7 +854,7 @@ pub fn rebase_bounds(fd: &mut Funcdata, space: &Rc<AddrSpace>, walks: &[PointerW
 #[derive(Clone, Debug, PartialEq)]
 pub struct EndPtrBound(pub bool);
 
-impl crate::kuna_optionset::KunaOption for EndPtrBound {
+impl crate::optionset::KunaOption for EndPtrBound {
     const NAME: &'static str = "endptrbound";
     crate::kuna_option_id!();
 
@@ -867,11 +867,11 @@ impl crate::kuna_optionset::KunaOption for EndPtrBound {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_endptrbound::OptionEndPtrBound.apply(value)?;
+        let (v, msg) = crate::endptrbound::OptionEndPtrBound.apply(value)?;
         Ok((EndPtrBound(v), msg))
     }
 }
 
 #[cfg(test)]
-#[path = "kuna_endptrbound/tests.rs"]
+#[path = "endptrbound/tests.rs"]
 mod tests;

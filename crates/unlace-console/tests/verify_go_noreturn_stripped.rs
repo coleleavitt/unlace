@@ -16,7 +16,7 @@
 //! Built at runtime in an isolated temp dir (the `verify_go_pclntab`
 //! pattern), guarded on `go` being on PATH; an installed compiler must build
 //! the fixture successfully. The list-matching logic is pinned hermetically
-//! by the unit tests in `unlace-analysis` (`pclntab/kuna_gonoreturn.rs`).
+//! by the unit tests in `unlace-analysis` (`pclntab/gonoreturn.rs`).
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};

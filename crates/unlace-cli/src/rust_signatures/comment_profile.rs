@@ -1,7 +1,7 @@
 //! Derive an O3 bank hint from stable compiler metadata and bank availability.
 
 use serde_json::{Value, json};
-use unlace_analysis::flirt::kuna_rustprofiles::{CompilerProvenance, Report};
+use unlace_analysis::flirt::rustprofiles::{CompilerProvenance, Report};
 
 use super::{profile, profile_json};
 

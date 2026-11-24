@@ -80,7 +80,7 @@ use unlace_sleigh::sleigh::Sleigh;
 use unlace_sleigh::translate::{ELEM_TRUNCATE_SPACE, TruncationTag};
 
 use crate::architecture::Architecture;
-use crate::kuna_memoryspecs::{self, MemorySpecs, SpecRoot};
+use crate::memoryspecs::{self, MemorySpecs, SpecRoot};
 
 // ---------------------------------------------------------------------------
 // Marshaling ids (C++ sleigh_arch.cc:21-34 + architecture.cc:40 for adjustvma)
@@ -447,7 +447,7 @@ impl LanguageDatabase {
         match root {
             SpecRoot::Dir(path) => self.scan_for_sleigh_directories(&path.to_string_lossy()),
             SpecRoot::Memory(specs) => {
-                let rootpath = kuna_memoryspecs::memory_root(self.mounts.len());
+                let rootpath = memoryspecs::memory_root(self.mounts.len());
                 self.mounts.push(specs.clone());
                 self.scan_for_sleigh_directories(&rootpath);
             }
@@ -457,7 +457,7 @@ impl LanguageDatabase {
     /// (kuna) The contents of a spec file this database resolved, such as a
     /// [`BuildSpecFiles`] path, from disk or from a mounted tree.
     pub fn read_spec(&self, path: &str) -> std::io::Result<Cow<'_, [u8]>> {
-        kuna_memoryspecs::read(&self.mounts, path)
+        memoryspecs::read(&self.mounts, path)
     }
 
     /// All parsed language descriptions, in `.ldefs` document then file order
@@ -556,7 +556,7 @@ impl LanguageDatabase {
         }
         let mut testspecs: Vec<String> = Vec::new();
         for path in self.specpaths.path_list() {
-            kuna_memoryspecs::match_list_dir(&self.mounts, &mut testspecs, ".ldefs", path);
+            memoryspecs::match_list_dir(&self.mounts, &mut testspecs, ".ldefs", path);
         }
         for spec in &testspecs {
             self.load_language_description(spec, errs, registry);
@@ -592,42 +592,24 @@ impl LanguageDatabase {
         let mut procdir2: Vec<String> = Vec::new();
         let mut languagesubdirs: Vec<String> = Vec::new();
 
-        kuna_memoryspecs::scan_directory_recursive(
-            &self.mounts,
-            &mut ghidradir,
-            "Ghidra",
-            rootpath,
-            2,
-        );
+        memoryspecs::scan_directory_recursive(&self.mounts, &mut ghidradir, "Ghidra", rootpath, 2);
         for g in &ghidradir {
-            kuna_memoryspecs::scan_directory_recursive(
-                &self.mounts,
-                &mut procdir,
-                "Processors",
-                g,
-                1,
-            ); // Processors structure
-            kuna_memoryspecs::scan_directory_recursive(&self.mounts, &mut procdir, "contrib", g, 1);
+            memoryspecs::scan_directory_recursive(&self.mounts, &mut procdir, "Processors", g, 1); // Processors structure
+            memoryspecs::scan_directory_recursive(&self.mounts, &mut procdir, "contrib", g, 1);
         }
         if !procdir.is_empty() {
             for p in &procdir {
-                kuna_memoryspecs::directory_list(&self.mounts, &mut procdir2, p);
+                memoryspecs::directory_list(&self.mounts, &mut procdir2, p);
             }
 
             let mut datadirs: Vec<String> = Vec::new();
             for p in &procdir2 {
-                kuna_memoryspecs::scan_directory_recursive(
-                    &self.mounts,
-                    &mut datadirs,
-                    "data",
-                    p,
-                    1,
-                );
+                memoryspecs::scan_directory_recursive(&self.mounts, &mut datadirs, "data", p, 1);
             }
 
             let mut languagedirs: Vec<String> = Vec::new();
             for d in &datadirs {
-                kuna_memoryspecs::scan_directory_recursive(
+                memoryspecs::scan_directory_recursive(
                     &self.mounts,
                     &mut languagedirs,
                     "languages",
@@ -642,7 +624,7 @@ impl LanguageDatabase {
 
             // In the old version we have to go down one more level to get to ldefs
             for l in &languagedirs {
-                kuna_memoryspecs::directory_list(&self.mounts, &mut languagesubdirs, l);
+                memoryspecs::directory_list(&self.mounts, &mut languagesubdirs, l);
             }
         }
         // If we haven't matched this directory structure, just use rootpath as the
@@ -673,7 +655,7 @@ impl LanguageDatabase {
     /// (kuna) The same `<truncate_space>` records [`Self::modify_spaces`]
     /// applies, as plain data — the half of a decode engine's rebuild
     /// instructions that lives in the `.ldefs` rather than the `.sla`
-    /// ([`crate::kuna_decodekit::EngineRecipe`]).
+    /// ([`crate::decodekit::EngineRecipe`]).
     pub fn truncations(&self, languageindex: int4) -> Vec<(String, u32)> {
         let language = &self.description[languageindex as usize];
         (0..language.num_truncations())
@@ -879,20 +861,20 @@ impl SleighArchitecture {
         let mut compilerfile = String::new();
         let mut slafile = String::new();
 
-        kuna_memoryspecs::find_file(
+        memoryspecs::find_file(
             &db.mounts,
             &db.specpaths,
             &mut processorfile,
             language.get_processor_spec(),
         );
-        kuna_memoryspecs::find_file(
+        memoryspecs::find_file(
             &db.mounts,
             &db.specpaths,
             &mut compilerfile,
             compilertag.get_spec(),
         );
         if !language_reuse {
-            kuna_memoryspecs::find_file(
+            memoryspecs::find_file(
                 &db.mounts,
                 &db.specpaths,
                 &mut slafile,
@@ -908,12 +890,7 @@ impl SleighArchitecture {
                     .to_string_lossy()
                     .into_owned();
                 if slafile.is_empty() {
-                    kuna_memoryspecs::find_file(
-                        &db.mounts,
-                        &db.specpaths,
-                        &mut slaspec,
-                        &spec_name,
-                    );
+                    memoryspecs::find_file(&db.mounts, &db.specpaths, &mut slaspec, &spec_name);
                 }
                 let wanted = if on_disk {
                     Some(std::path::PathBuf::from(&slafile))
@@ -973,7 +950,7 @@ impl SleighArchitecture {
         let mut base = Architecture::new(&archid, sleigh);
         // (kuna) Keep the bytes: they are the only thing a decode-equivalent
         // engine can be rebuilt from away from this one
-        // (`kuna_decodekit::EngineRecipe`).
+        // (`decodekit::EngineRecipe`).
         base.set_decode_sla(std::sync::Arc::from(sla_bytes));
         self.base = Some(base);
         Ok(())

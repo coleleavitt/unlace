@@ -29,12 +29,12 @@ symptom is invisible under `--mode reliable`, where the same call rendered the
 bare `LoadLibraryW(0x1400074b8)`.
 
 Both ends of the real fix already existed and were simply not wired together:
-`kuna_stringinv.rs` had a UTF-16 matcher whose only consumer was `kuna strings`,
+`stringinv.rs` had a UTF-16 matcher whose only consumer was `kuna strings`,
 and `stringmanage.rs` has handled `charsize == 2` since the port.
 
 ## Mechanism — `widestrings` (new option, `on|off`, default **on**, DIV-110)
 
-`kuna_widestrings.rs` is the 2-byte width of `StringLiteralPass` — Ghidra
+`widestrings.rs` is the 2-byte width of `StringLiteralPass` — Ghidra
 `StringsAnalyzer`'s `allCharWidths` arm, which kuna's 1-byte port left as a
 documented seam. It is the **same** matcher widened, not a different one: the same
 printable-ASCII recognizer over each unit's low byte, the same require-NUL-end
@@ -50,7 +50,7 @@ commit's `occupied` guard against `operand_refs`' one-character read. Against
 zero high byte, so five consecutive 1-byte-charset bytes never occur inside a wide
 run and neither width can reach the other's address.
 
-The UTF-16 matcher moved from `kuna_stringinv.rs` (the `kuna strings` query) into
+The UTF-16 matcher moved from `stringinv.rs` (the `kuna strings` query) into
 the new module and is now called by both, so the reported inventory and the
 committed markup remain one scan.
 
@@ -94,7 +94,7 @@ Whole-binary A/B on the witness: **42 changed lines, every one a recovery** —
   with `operand_refs` on, the pass set a default `kuna decompile` runs — the
   off-arm reproduces the recorded `LoadLibraryW("n")` verbatim while the on-arm
   outranks it.
-- `kuna_widestrings.rs` unit tests: the widened matcher, short/unterminated
+- `widestrings.rs` unit tests: the widened matcher, short/unterminated
   rejection, the disjointness of the two widths, even-address unit reads, and the
   fixture end-to-end.
 

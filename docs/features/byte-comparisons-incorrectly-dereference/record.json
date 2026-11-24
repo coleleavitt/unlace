@@ -6,7 +6,7 @@
   "div": "DIV-160",
   "default": "on",
   "phase": "P9",
-  "module": "decompiler/crates/kuna-decomp/src/p9_emit/kuna_declhightype.rs",
+  "module": "decompiler/crates/kuna-decomp/src/p9_emit/declhightype.rs",
   "summary": "A merged local was declared at a pointer type no use in its body was checked against, so a one-byte MOVSX comparison read as an eight-byte dereference. The declaration now takes the HighVariable's own type, which is what upstream's sym->getType() writes and what ActionSetCasts checked every use against.",
   "decisions": [
     "The filed hypothesis (merged register variables retain one pointer type across differently sized accesses without per-use casts) and the round-12 refutation (the IR is innocent; only the printed declaration is wrong) are both UPHELD, and the refutation is what located the defect. kuna's printer takes the declared type off decl_rep_varnode -- the first address-tied member Varnode, else member zero -- while every cast in the body was decided against HighVariable::getType, which is the TYPE representative (the most specialized member). Those are different Varnodes, and for a merged register high they carry different types.",

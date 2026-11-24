@@ -39,7 +39,7 @@ math-function family.
 
 ## Implementation status (2026-08-12)
 
-**Stage A is IMPLEMENTED** on this branch (`elf_plt.rs` + `kuna_ifuncfpret.rs`,
+**Stage A is IMPLEMENTED** on this branch (`elf_plt.rs` + `ifuncfpret.rs`,
 gated `option ifuncfpret`, default-off). Verified: `0x7350`/`0x9220` are now
 discovered functions (`ifunc_<resolver>`), so `tailcalljump` fires and `sub_15620`
 renders `ifunc_15c80(); // tail-call` instead of the opaque `(*dat_def20)();

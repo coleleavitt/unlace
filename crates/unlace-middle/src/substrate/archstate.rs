@@ -2,7 +2,7 @@
 //!
 //! An [`ArchStates`] holds one shared value (`Rc`) per [`ArchState`] type, indexed by a dense
 //! [`ArchStateId`] the type takes the first time it is used, the architecture-level counterpart of
-//! [`FuncStates`](crate::kuna_funcstate::FuncStates).
+//! [`FuncStates`](crate::funcstate::FuncStates).
 //! [`Architecture`](crate::architecture::Architecture) owns one, filled while the specs load, and
 //! every [`ArchContext`](crate::context::ArchContext) built from it holds a clone that shares the
 //! values, so neither names a pass's type: a pass installs its table with

@@ -570,8 +570,7 @@ impl PointerRelocs {
 fn pointer_relocs(file: &object::File) -> Result<PointerRelocs, String> {
     use object::{Architecture as A, elf};
     let arch = file.architecture();
-    if let Some((relative, glob_dat, jump_slot)) = crate::loader::kuna_dynrelocs::reloc_triple(arch)
-    {
+    if let Some((relative, glob_dat, jump_slot)) = crate::loader::dynrelocs::reloc_triple(arch) {
         let absolute = match arch {
             A::X86_64 => elf::R_X86_64_64,
             A::Aarch64 => elf::R_AARCH64_ABS64,
@@ -609,7 +608,7 @@ fn pointer_relocs(file: &object::File) -> Result<PointerRelocs, String> {
             local_addend: false,
         },
         A::PowerPc => {
-            let secure_plt = crate::loader::kuna_dynrelocs::dynamic_entries(file)
+            let secure_plt = crate::loader::dynrelocs::dynamic_entries(file)
                 .iter()
                 .any(|&(tag, _)| tag == elf::DT_PPC_GOT);
             PointerRelocs {
@@ -637,7 +636,7 @@ fn pointer_relocs(file: &object::File) -> Result<PointerRelocs, String> {
 /// preemptible. An undefined symbol is an import. Read here rather than through
 /// `dynrelocs`, whose writes are an option of the loaded image, not of the
 /// metadata. Partial when a table the walk does not read exists
-/// ([`crate::loader::kuna_dynrelocs::unread_tables`]).
+/// ([`crate::loader::dynrelocs::unread_tables`]).
 fn elf(file: &object::File) -> DataPointers {
     let kinds = match pointer_relocs(file) {
         Ok(kinds) => kinds,
@@ -695,7 +694,7 @@ fn elf(file: &object::File) -> DataPointers {
             width,
         });
     }
-    let (relr, relr_unread) = crate::loader::kuna_dynrelocs::elf_relr_slots(file, width as usize);
+    let (relr, relr_unread) = crate::loader::dynrelocs::elf_relr_slots(file, width as usize);
     for slot in relr {
         match read_word(file, slot, width as usize) {
             Some(word) => pointers.push(DataPointer {
@@ -706,7 +705,7 @@ fn elf(file: &object::File) -> DataPointers {
             None => missing += 1,
         }
     }
-    let mut unread = crate::loader::kuna_dynrelocs::unread_tables(file);
+    let mut unread = crate::loader::dynrelocs::unread_tables(file);
     unread.extend(relr_unread);
     if missing != 0 {
         unread.push(format!(

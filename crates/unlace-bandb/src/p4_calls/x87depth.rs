@@ -31,7 +31,7 @@ use unlace_base::address::Address;
 use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 
-use super::kuna_x87emptyreturn::Storage;
+use super::x87emptyreturn::Storage;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Depth {
@@ -477,7 +477,7 @@ pub fn warn(data: &mut Funcdata) {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_x87depth::X87Depth>()
+        .get::<crate::x87depth::X87Depth>()
         .0
     {
         return;
@@ -513,7 +513,7 @@ pub fn warn(data: &mut Funcdata) {
 
 crate::kuna_flag!(
     /// (kuna) The x87 stack depth proves ST0 empty at returns (option
-    /// `x87depth`). See [`crate::kuna_x87depth`].
+    /// `x87depth`). See [`crate::x87depth`].
     X87Depth,
     "x87depth",
     "x87 stack depth at returns",

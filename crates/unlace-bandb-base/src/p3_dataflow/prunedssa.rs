@@ -34,9 +34,9 @@ use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
 
 use crate::context::{BlockId, OpId, VarnodeId};
+use crate::fasthash::FxHashSet;
 use crate::fspec::{Containment, FuncCallSpecs, OFFSET_UNKNOWN};
 use crate::funcdata::Funcdata;
-use crate::kuna_fasthash::FxHashSet;
 
 const CALL: u8 = 0;
 const USE: u8 = 1;
@@ -275,8 +275,8 @@ fn call_reads(
             && fc.proto().characterize_as_output(&trans, size) != Containment::NoContainment)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.prunedssa_applies = Some(applies);
     hooks.prunedssa_applies_to_calls = Some(applies_to_calls);
     hooks.prunedssa_live_calls = Some(live_calls);

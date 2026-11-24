@@ -93,10 +93,10 @@ impl TextRanges {
     pub fn with_relocations(file: &object::File, bytes: &[u8]) -> Self {
         let mut text = Self::new(file);
         if file.format() == object::BinaryFormat::Pe {
-            let listed = crate::loader::kuna_dataptrs::data_pointers(file, bytes);
+            let listed = crate::loader::dataptrs::data_pointers(file, bytes);
             if matches!(
                 listed.coverage,
-                crate::loader::kuna_dataptrs::Coverage::Complete(_)
+                crate::loader::dataptrs::Coverage::Complete(_)
             ) && !listed.pointers.is_empty()
             {
                 text.relocated = Some(listed.pointers.iter().map(|p| p.slot).collect());

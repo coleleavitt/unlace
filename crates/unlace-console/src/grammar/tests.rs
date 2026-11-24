@@ -539,8 +539,8 @@ fn parse_type_abstract_pointer_to_array() {
 /// so a parsed `(*a)[N]` can never print back as `*a[N]` (or vice versa).
 #[test]
 fn pointer_array_types_round_trip_through_the_c_speller() {
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     let f = factory();
     for (source, expected) in [
@@ -562,8 +562,8 @@ fn pointer_array_types_round_trip_through_the_c_speller() {
 fn nested_pointer_array_declarations_round_trip_through_the_c_speller() {
     use std::rc::Rc;
     use unlace_decomp::dtype::Datatype;
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     fn same(a: &Rc<Datatype>, b: &Rc<Datatype>) -> bool {
         if a.get_metatype() != b.get_metatype() || a.get_size() != b.get_size() {
@@ -1923,8 +1923,8 @@ fn anonymous_member_records_stay_distinct() {
 
 #[test]
 fn callback_declarations_keep_their_stored_prototypes() {
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     let f = factory_with_model_resources(&[], true);
     for (source, expected) in [
@@ -1956,8 +1956,8 @@ fn callback_declarations_keep_their_stored_prototypes() {
 
 #[test]
 fn unprototyped_code_keeps_its_existing_spelling() {
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     let f = factory_with_code();
     let (ty, _) = parse_type("code *x", &f, org()).unwrap();
@@ -1969,8 +1969,8 @@ fn unprototyped_code_keeps_its_existing_spelling() {
 
 #[test]
 fn named_callback_typedef_keeps_its_declared_name() {
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     let f = factory_with_model_resources(&[], true);
     super::parse_c(
@@ -1992,8 +1992,8 @@ fn named_callback_typedef_keeps_its_declared_name() {
 #[test]
 fn qualified_declarations_roundtrip_without_moving_qualifiers() {
     use std::rc::Rc;
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
 
     let f = factory_with_model_resources(&[], true);
     for declaration in ["typedef uint4 *Ptr;", "typedef volatile uint4 Register;"] {
@@ -2042,8 +2042,8 @@ fn qualified_declarations_roundtrip_without_moving_qualifiers() {
 
 #[test]
 fn prototype_return_qualifiers_and_typedefs_survive() {
-    use unlace_decomp::kuna_langc::C_SPELLER;
-    use unlace_decomp::kuna_langtypes::{SpellCtx, TypeSpeller};
+    use unlace_decomp::langc::C_SPELLER;
+    use unlace_decomp::langtypes::{SpellCtx, TypeSpeller};
     let f = factory();
     let pieces =
         parse_protopieces("extern volatile uint4 *read(volatile uint4 *p);", &f, org()).unwrap();
@@ -2062,7 +2062,7 @@ fn prototype_return_qualifiers_and_typedefs_survive() {
     )
     .unwrap();
     let alias = f.find_by_name("Register").unwrap().unwrap();
-    assert!(unlace_decomp::kuna_typequal::is_volatile(&alias));
+    assert!(unlace_decomp::typequal::is_volatile(&alias));
     assert_eq!(
         C_SPELLER.declarator(&SpellCtx::OFF, &alias),
         ("Register".into(), "".into())

@@ -54,7 +54,7 @@ pub struct Plan {
     pub writer: VarnodeId,
     pub pointer_bridge: bool,
     pub result_type: Option<&'static str>,
-    pub format: super::kuna_rustfmtargs::Plan,
+    pub format: super::rustfmtargs::Plan,
 }
 
 #[doc(hidden)]
@@ -76,13 +76,13 @@ pub static WITH_WRITE: OpToken = OpToken {
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .writers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || arch
             .kuna_tables
-            .get::<crate::kuna_rustfmtwrite::WriterMethods>()
+            .get::<crate::rustfmtwrite::WriterMethods>()
             .is_empty()
     {
         return None;
@@ -117,7 +117,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     }
     let writer = call.get_in(1)?;
     let value = fd.vbank().get(writer)?;
-    if value.get_size() != 8 || !super::kuna_rustfmtresult::entry_value(fd, writer) {
+    if value.get_size() != 8 || !super::rustfmtresult::entry_value(fd, writer) {
         return None;
     }
     let pointer_bridge = match value.get_type_read_facing(id).get_metatype() {
@@ -125,7 +125,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
         type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN => false,
         _ => return None,
     };
-    let table = super::kuna_rustfmtargs::constant_word(fd, call.get_in(2)?)?;
+    let table = super::rustfmtargs::constant_word(fd, call.get_in(2)?)?;
     if table == 0 || table % 8 != 0 {
         return None;
     }
@@ -145,18 +145,18 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     ] {
         if arch
             .kuna_tables
-            .get::<crate::kuna_rustfmtwrite::WriterMethods>()
+            .get::<crate::rustfmtwrite::WriterMethods>()
             .get(&words[index])
             != Some(&method)
         {
             return None;
         }
     }
-    let format = super::kuna_rustfmtliteral::literal_bytes(fd, call.get_in(3)?, call.get_in(4)?)
+    let format = super::rustfmtliteral::literal_bytes(fd, call.get_in(3)?, call.get_in(4)?)
         .and_then(|bytes| String::from_utf8(bytes).ok())
         .map(|text| {
-            let (name, literal) = super::kuna_rustfmtliteral::render(&text, false);
-            super::kuna_rustfmtargs::Plan {
+            let (name, literal) = super::rustfmtliteral::render(&text, false);
+            super::rustfmtargs::Plan {
                 name: if name == "println!" {
                     "writeln!"
                 } else {
@@ -167,13 +167,13 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
             }
         });
     let format = format.or_else(|| {
-        super::kuna_rustfmtargs::recover_inputs_at(
+        super::rustfmtargs::recover_inputs_at(
             fd,
             arch,
             id,
             3,
             4,
-            super::kuna_rustfmtargs::MacroKind::Write,
+            super::rustfmtargs::MacroKind::Write,
         )
     })?;
     Some(Plan {
@@ -208,6 +208,6 @@ fn vtable_bytes(fd: &Funcdata, arch: &Architecture, pointer: u64) -> Option<Vec<
 }
 
 /// (kuna `rustfmtwrite`) The image's `String` writer methods, by address; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type WriterMethods = std::collections::BTreeMap<u64, WriterMethod>;
 crate::kuna_arch_table!(WriterMethods);

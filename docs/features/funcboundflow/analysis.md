@@ -55,7 +55,7 @@ pattern pervades the statically-linked glibc.
 
 ## The fix
 
-`p2_lift/kuna_funcboundflow.rs (kuna_should_bound_at_entry)` is the decision; the
+`p2_lift/funcboundflow.rs (kuna_should_bound_at_entry)` is the decision; the
 truncation lives at the fall-through push of `flow.rs (FlowInfo::process_instruction)`.
 When the fall-through target is the entry of another known function
 (`query_call(next).is_some()`) and is not the current function's own entry, kuna

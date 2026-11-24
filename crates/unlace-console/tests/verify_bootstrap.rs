@@ -11,7 +11,7 @@ use unlace_base::error::KunaResult;
 use unlace_base::xml::{DocumentStorage, Element};
 use unlace_console::engine::{Bootstrap, ConsoleProgram, language_database};
 use unlace_console::project::{DecompileOptions, decompile_entry};
-use unlace_decomp::kuna_loadoptions::{LoadOptions, environment_fallbacks};
+use unlace_decomp::loadoptions::{LoadOptions, environment_fallbacks};
 
 const X86_64: &str = "x86:LE:64:default";
 /// `lea rax, [rdi+rbx]; ret`
@@ -203,9 +203,9 @@ fn one_builder_loads_on_several_threads() {
 #[test]
 fn a_program_reenters_its_own_options_after_another_load() {
     use unlace_console::engine::ArmIsa;
-    use unlace_decomp::kuna_kernelcache::KernelcacheChoice;
-    use unlace_decomp::kuna_loadoptions::scoped;
-    use unlace_decomp::kuna_symbolnamechars::NameChars;
+    use unlace_decomp::kernelcache::KernelcacheChoice;
+    use unlace_decomp::loadoptions::scoped;
+    use unlace_decomp::symbolnamechars::NameChars;
 
     let specs = specs();
     let db = language_database(&specs).unwrap();
@@ -247,11 +247,11 @@ fn a_program_reenters_its_own_options_after_another_load() {
         let _a = a.arch().load_scope();
         assert_eq!(KernelcacheChoice::in_force(), KernelcacheChoice::Off);
         assert_eq!(
-            unlace_decomp::kuna_symbolnamechars::symbolnamechars_mode(),
+            unlace_decomp::symbolnamechars::symbolnamechars_mode(),
             NameChars::Ident
         );
         assert_eq!(
-            unlace_decomp::kuna_dyldcache::selected_image().as_deref(),
+            unlace_decomp::dyldcache::selected_image().as_deref(),
             Some("libA.dylib")
         );
         assert_eq!(
@@ -263,7 +263,7 @@ fn a_program_reenters_its_own_options_after_another_load() {
             Some(PathBuf::from("/a.pdb"))
         );
         assert_eq!(
-            unlace_decomp::kuna_objcsdk::sdk_path(),
+            unlace_decomp::objcsdk::sdk_path(),
             Some(PathBuf::from("/sdk-a"))
         );
     }
@@ -283,7 +283,7 @@ fn a_program_reenters_its_own_options_after_another_load() {
 /// thread with no options in force.
 #[test]
 fn a_failed_load_leaves_no_options_in_force() {
-    use unlace_decomp::kuna_loadoptions::scoped;
+    use unlace_decomp::loadoptions::scoped;
 
     let specs = specs();
     let db = language_database(&specs).unwrap();

@@ -685,7 +685,7 @@ fn read_code(
 /// The classification of the code image `loader` holds, or `None` when the
 /// option is off or the language is not EVM (it has no `evmstack` space).
 pub fn image_map(
-    options: &crate::kuna_optionset::OptionSet,
+    options: &crate::optionset::OptionSet,
     manage: &unlace_base::space::AddrSpaceManager,
     loader: &RefCell<Box<dyn unlace_sleigh::loadimage::LoadImage>>,
 ) -> Option<Rc<EvmCallMap>> {
@@ -931,7 +931,7 @@ impl Action for ActionEvmCalls {
 
 crate::kuna_flag!(
     /// (kuna `evmcalls`) Recover Solidity internal-function calls and returns in
-    /// EVM bytecode. See [`crate::p2_lift::kuna_evmcalls`].
+    /// EVM bytecode. See [`crate::p2_lift::evmcalls`].
     EvmCalls,
     "evmcalls",
     "EVM internal-call recovery",
@@ -940,5 +940,5 @@ crate::kuna_flag!(
 );
 
 #[cfg(test)]
-#[path = "kuna_evmcalls/tests.rs"]
+#[path = "evmcalls/tests.rs"]
 mod tests;

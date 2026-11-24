@@ -58,7 +58,7 @@ So a stripped closure that calls `swift_release` is `__swiftcall`, Hex-Rays then
 input (and x21 as error when the function calls `swift_willThrow`), and parameter recovery decides whether
 the body reads it.
 
-**kuna.** `unlace-analysis/src/analyzers/swift/kuna_swiftcall.rs:766` `bind` attaches `__swiftcall` only to a
+**kuna.** `unlace-analysis/src/analyzers/swift/swiftcall.rs:766` `bind` attaches `__swiftcall` only to a
 function it can place in a type (vtable slot, conformance witness, demangled symbol); the model itself
 (`unlace_decomp::kuna_swiftcall`, swiftself as an extra input resource) is already right. Everything else uses
 the C model, where x20 is callee-saved and never a parameter.
@@ -68,7 +68,7 @@ caller rule: any function that calls a Swift runtime entry point (`swift_retain*
 `swift_allocObject`, `swift_deallocObject`, `swift_beginAccess`, `swift_getGenericMetadata`, …, through stubs and
 jump thunks) gets `__swiftcall` with no signature, `__swiftcall_throws` when it calls `swift_willThrow`. Because
 kuna's model only declares `self` when the body reads x20 at full width, a false positive costs nothing in a
-function that does not read x20. Owner: unlace-analysis swift (`kuna_swiftcall.rs`), facts committed as today.
+function that does not read x20. Owner: unlace-analysis swift (`swiftcall.rs`), facts committed as today.
 Extra **beat IDA**: also accept a function that is the target of a `swift_allocObject` metadata's destroy slot
 or of a partial-apply context, so the self type is the context layout, not `void *`.
 
@@ -106,7 +106,7 @@ result (instancetype heuristic `sub_164E0`: `alloc/init/new/allocWithZone:/share
 retain/autorelease/self`, an `init…With…` selector, or a `xWith…` selector whose prefix matches the class name's
 tail case-insensitively, e.g. `stringWithFormat:` on `NSString`).
 
-**kuna.** Open PR #1735 (bound data slots named and folded). Once it lands, `p5_types/kuna_objcrettype.rs`
+**kuna.** Open PR #1735 (bound data slots named and folded). Once it lands, `p5_types/objcrettype.rs`
 (the `objcrettype` / `objcresolve` arm, which already implements the receiver walk and the instancetype rule)
 needs the folded `__got` class import as a receiver source; check that the SDK class (`NSNumber`) resolves
 without a local `class_t`.
@@ -127,9 +127,9 @@ wtk wta wet wst`) to the type's mangled name and demangling, names the table `<T
 (alignment) and extra-inhabitant count. If the table is imported it recognises the builtin tables (`ytWV`,
 `Bi64_WV`, `BoWV`, `BbWV`, …) for the layout only.
 
-**kuna.** `unlace-analysis/src/analyzers/swift/kuna_swifttypes.rs:341` `struct_extent` and `:354`
+**kuna.** `unlace-analysis/src/analyzers/swift/swifttypes.rs:341` `struct_extent` and `:354`
 `local_witness_table` already find the same table, but only to read size and alignment; nothing names or
-types the eight entries. The demangler already prints value witnesses (`analyzers/demangle/kuna_swift/parse.rs:1871`).
+types the eight entries. The demangler already prints value witnesses (`analyzers/demangle/swift/parse.rs:1871`).
 
 **Proposed change.** In `swifttypes` (under `swiftmetadata`), for every located metadata whose VWT is local:
 name entry i `<Type>.<witness>.value_witness` (or the demangler's form) and give it the runtime prototype
@@ -153,11 +153,11 @@ of about 490 runtime and stdlib prototypes (name patterns with `%d`), a few of t
 `print(_:separator:terminator:)`, `_allocateUninitializedArray`), plus usercall forms for x8 results
 (`swift_getAtKeyPath`). IDA shows `self:` on only 22 call sites in the 390, so it is weak here too.
 
-**kuna.** `kuna_swiftcall.rs` binds `__swiftcall` to *local* functions it places; an import keeps the C model.
+**kuna.** `swiftcall.rs` binds `__swiftcall` to *local* functions it places; an import keeps the C model.
 PR #1859 adds the x21 error read for throwing imports only.
 
 **Proposed change (beat IDA).** For every import whose demangled tree is a method or accessor of a nominal type
-(the same tree `kuna_swiftcall.rs` already walks for local symbols), bind `__swiftcall` with no signature:
+(the same tree `swiftcall.rs` already walks for local symbols), bind `__swiftcall` with no signature:
 recovery then keeps x20 exactly when the caller writes it before the call, and x8 as an indirect result when
 the function type returns an address-only type. No table needed; covers every stdlib/Foundation/SwiftUI method.
 Owner: unlace-analysis swift, `swiftcall` option.
@@ -173,7 +173,7 @@ Owner: unlace-analysis swift, `swiftcall` option.
 `objc_retain_x<N>` / `objc_release_x<N>` up to 28 (`objc.so` `sub_1C270`). Separately, `gotLoadHelper_x<N>$…swift…`
 gets `void *f@<xN>()`.
 
-**kuna.** `unlace-analysis/src/analyzers/objc/kuna_objcruntime.rs:122` `outlined_register` accepts the `objc_`
+**kuna.** `unlace-analysis/src/analyzers/objc/objcruntime.rs:122` `outlined_register` accepts the `objc_`
 prefix only. Open PR #1839. Check that it includes the two `bridgeObject` families, x29/x30, excludes x18, and
 the `_<digits>` suffix; `gotLoadHelper_x<N>` is not in any PR.
 
@@ -191,7 +191,7 @@ immortal strings, stores the result per address in a netnode (`$ swift strings`)
 string provider so Hex-Rays prints `Swift::String("…")` wherever that pair appears, however the decompiler
 later moves it.
 
-**kuna.** `unlace-decomp/src/p5_types/kuna_swiftstr.rs:1` pairs a count word with an object word inside one
+**kuna.** `unlace-decomp/src/p5_types/swiftstr.rs:1` pairs a count word with an object word inside one
 `STORE` / `COPY` / `CALL` / `RETURN` / `PIECE`; a pair whose halves reach the return through two locals and a
 `char[16]` stack copy is missed. Open #1736 / #1854 cover part of it.
 
@@ -212,7 +212,7 @@ When the pattern has no bounding compare, the size is left open and the kernel's
 (`trim_jtable`) or the flat-table checker (`check_flat_jump_table`, for tables of `b` instructions) ends the
 table by its layout (my reading of the call sites; the kernel side is not in the Apple modules).
 
-**kuna.** `unlace-decomp/src/p2_lift/kuna_switchtrim.rs:1` implements exactly this "read until a stop rule" for a
+**kuna.** `unlace-decomp/src/p2_lift/switchtrim.rs:1` implements exactly this "read until a stop rule" for a
 single-load unbounded table, but it does not fire here: the index is a zero-extended 32-bit call result and the
 table holds 16-bit scaled offsets from an `adr` base. Needs a reduced repro to see which precondition fails.
 **Beat IDA**: the index is `swift_getEnumCaseMultiPayload(value, metadata)`, and the metadata's enum descriptor
@@ -247,7 +247,7 @@ functions, the concurrency runtime (with `__swiftasynccall` where it applies), n
 (`swift_dynamicCastFailure_*`, `swift_unreachable`), and `$s…Ma` non-generic metadata accessors
 (`MetadataResponse f(MetadataRequest)`, only when the demangled name has no `<([,` or `->`).
 
-**kuna.** `unlace-analysis/src/analyzers/swift/kuna_swiftruntime.rs` has 166 entries, `_swift_stdlib_*` mostly
+**kuna.** `unlace-analysis/src/analyzers/swift/swiftruntime.rs` has 166 entries, `_swift_stdlib_*` mostly
 missing (`:351` has two). Open #1847 (stdlib C entry points), #1815 (concurrency), #1862 (variadic
 `objc_msgSend*` / `NSLog`).
 
@@ -261,7 +261,7 @@ prototype (`sub_1000fa658` returns `swift_getEnumCaseMultiPayload(a0, a1)`) but 
 **IDA mechanism** (`arm.so` `sub_8C8B0` around `calc_thunk_function_target`): a function that is one direct
 branch is a thunk; it is named `j_<target>` and calls through it render as the target.
 
-**kuna.** `unlace-analysis/src/listing/kuna_thunkentry.rs:37` "x86 only". Extend the naming half (not the
+**kuna.** `unlace-analysis/src/listing/thunkentry.rs:37` "x86 only". Extend the naming half (not the
 entry-promotion half) to arm64 `b <target>` bodies; owner `thunkentry` or the naming pass. Low call-site
 impact, high inventory impact.
 
@@ -281,7 +281,7 @@ Owner p5 type propagation (stack object typed from a typelocked pointer paramete
 
 IDA types the `.value` of every `type metadata accessor for X(request)` as `Swift::Metadata *` (270 locals in the
 390); kuna prints `long v1 = X.type_metadata_accessor(0)` (78 typed locals) although
-`kuna_swifttypes.rs:24` says the accessor prototype is `swift.MetadataResponse f(void)`. Probably the first
+`swifttypes.rs:24` says the accessor prototype is `swift.MetadataResponse f(void)`. Probably the first
 field of the response is not projected at the call site. Small, but it is what item 4's **beat IDA** typing
 of `*(metadata - 8)` hangs on.
 

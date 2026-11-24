@@ -27,7 +27,7 @@
 use std::collections::BTreeMap;
 
 use unlace_base::types::{uint4, uintb};
-use unlace_decomp::kuna_regiongraph::{
+use unlace_decomp::regiongraph::{
     KunaIncrementalDominators, KunaNodeId, KunaNodePool, KunaNodeSet, KunaRegionGraph, NodeKind,
     kuna_dfs_postorder_deterministic, kuna_immediate_dominators, kuna_quasi_topo_sort,
     kuna_subgraph_between_nodes,

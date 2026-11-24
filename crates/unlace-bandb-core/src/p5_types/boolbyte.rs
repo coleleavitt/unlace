@@ -62,7 +62,7 @@ use unlace_base::space::spacetype;
 use unlace_num::opcodes::OpCode;
 
 /// How many def-use hops the walk follows before giving up.  The same bound
-/// [`crate::kuna_ptrfromuse`] uses.
+/// [`crate::ptrfromuse`] uses.
 const HOP_CAP: usize = 10;
 
 /// What one reader of a walked Varnode tells us.
@@ -93,7 +93,7 @@ pub fn truth_value_type(
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_boolbyte::BoolByte>()
+        .get::<crate::boolbyte::BoolByte>()
         .0
     {
         return None;
@@ -360,7 +360,7 @@ pub fn def_is_truth_valued(data: &Funcdata, vn: VarnodeId, depth: usize) -> bool
     if o.is_bool_output() {
         return true;
     }
-    if opcode == OpCode::CPUI_CALL && crate::kuna_narrowret::states_truth(data, def) {
+    if opcode == OpCode::CPUI_CALL && crate::narrowret::states_truth(data, def) {
         return true;
     }
     match opcode {
@@ -552,7 +552,7 @@ fn is_mask_proven(data: &Funcdata, vn: VarnodeId) -> bool {
 crate::kuna_flag!(
     /// (kuna `boolbyte`) Offer `bool` as a `getLocalType` candidate for a byte
     /// whose every read is a truth test.  Implementation:
-    /// [`kuna_boolbyte`](crate::kuna_boolbyte).
+    /// [`kuna_boolbyte`](crate::boolbyte).
     BoolByte,
     "boolbyte",
     "truth-valued byte typing",

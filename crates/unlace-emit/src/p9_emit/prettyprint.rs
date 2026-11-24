@@ -730,7 +730,7 @@ pub struct EmitBase {
     /// on a stale sibling/descendant fire (the shared-slot bug).
     pub pend_fired: Vec<(u64, int4)>,
     /// (kuna) A C label was the last thing printed: no statement or opening
-    /// brace has followed it yet (see [`crate::kuna_labelstmt`]).
+    /// brace has followed it yet (see [`crate::labelstmt`]).
     pub dangling_label: bool,
 }
 
@@ -807,7 +807,7 @@ impl EmitNoMarkup {
     }
     /// One-based position of the next emitted byte in [`output`](Self::output),
     /// scanning each preceding byte once.
-    pub fn position(&mut self) -> crate::kuna_pointerargs::Position {
+    pub fn position(&mut self) -> crate::pointerargs::Position {
         for (i, &byte) in self.out.as_bytes()[self.position_cursor..]
             .iter()
             .enumerate()
@@ -818,7 +818,7 @@ impl EmitNoMarkup {
             }
         }
         self.position_cursor = self.out.len();
-        crate::kuna_pointerargs::Position {
+        crate::pointerargs::Position {
             line: self.position_line + 1,
             column: self.out.len() - self.position_start,
         }

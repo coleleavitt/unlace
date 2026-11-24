@@ -41,7 +41,7 @@
 //!
 //! Without a carried record the pass numbers in sequence, exactly as before.
 
-use crate::kuna_libcnames::FuncdataLibcnamesExt;
+use crate::libcnames::FuncdataLibcnamesExt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use unlace_base::address::Address;
@@ -108,7 +108,7 @@ pub struct PriorNames {
     /// ([`same_variable`]).
     pub merged_names: std::cell::RefCell<MergeMemo>,
     /// The storage and width of each isolated stack local and parameter
-    /// (`crate::kuna_isolated`).
+    /// (`crate::isolated`).
     pub isolated: BTreeSet<(Address, int4)>,
 }
 
@@ -881,7 +881,7 @@ pub fn is_name_only(fd: &Funcdata, sym: crate::database::SymbolId) -> bool {
 /// earlier numbering, so a plain re-decompile numbers from scratch as before.
 pub fn carry(fd: &Funcdata) -> PriorNames {
     let prior = fd.kuna_prior_names();
-    let isolated = crate::kuna_isolated::carried(fd);
+    let isolated = crate::isolated::carried(fd);
     if prior.is_empty() && fd.kuna_directive_symbols().is_empty() {
         return PriorNames {
             isolated,
@@ -1032,8 +1032,8 @@ impl FuncdataStablenamesExt for crate::funcdata::Funcdata {
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.stablenames_same_variable = Some(same_variable);
     hooks.stablenames_variable_groups = Some(variable_groups);
 }

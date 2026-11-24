@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use super::kuna_rustfmtflags::{Formatter, Options, Trait};
+use super::rustfmtflags::{Formatter, Options, Trait};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::funcdata::Funcdata;
@@ -38,7 +38,7 @@ pub enum Writer {
         value: VarnodeId,
         pointer_bridge: bool,
     },
-    Io(super::kuna_rustfmtio::Writer),
+    Io(super::rustfmtio::Writer),
 }
 
 #[derive(Clone, Copy)]
@@ -55,7 +55,7 @@ pub enum MacroKind {
 pub fn formatter_symbols(
     symbols: impl IntoIterator<Item = (u64, Option<String>)>,
 ) -> BTreeMap<u64, &'static str> {
-    super::kuna_rustfmtflags::formatter_symbols(symbols)
+    super::rustfmtflags::formatter_symbols(symbols)
         .into_iter()
         .filter_map(|(address, formatter)| {
             (formatter.kind == Trait::Display).then_some((address, formatter.primitive))
@@ -67,9 +67,9 @@ pub fn formatter_symbols(
 pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
     {
         return None;
@@ -78,7 +78,7 @@ pub fn recover(fd: &Funcdata, arch: &Architecture, id: OpId) -> Option<Plan> {
     if call.code() != OpCode::CPUI_CALL || call.num_input() != 3 || call.get_out().is_some() {
         return None;
     }
-    let stderr = super::kuna_rustfmtliteral::print_sink(fd, id)?;
+    let stderr = super::rustfmtliteral::print_sink(fd, id)?;
     recover_at(fd, arch, id, 1, 2, MacroKind::Print(stderr))
 }
 
@@ -109,14 +109,14 @@ pub fn recover_inputs_at(
 ) -> Option<Plan> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_rustfmt::RustFmtMode>()
+        .get::<crate::rustfmt::RustFmtMode>()
         .recovers()
-        || arch.source_lang() != crate::kuna_sourcelang::SourceLang::Rust
+        || arch.source_lang() != crate::sourcelang::SourceLang::Rust
         || !matches!(arch.rustc_stable_version, Some((1, 93, 0 | 1)))
         || (arch.rust_display_formatters.is_empty()
             && arch
                 .kuna_tables
-                .get::<crate::kuna_rustfmtflags::IntegerFormatters>()
+                .get::<crate::rustfmtflags::IntegerFormatters>()
                 .is_empty()
             && arch.rust_str_display_formatters.is_empty())
     {
@@ -188,13 +188,11 @@ pub fn primitive_arguments(
         let address = constant_word(fd, cells[index * 2 + 1])?;
         let Some(formatter) = arch
             .kuna_tables
-            .get::<crate::kuna_rustfmtflags::IntegerFormatters>()
+            .get::<crate::rustfmtflags::IntegerFormatters>()
             .get(&address)
             .copied()
         else {
-            arguments.push(super::kuna_rustfmtstr::recover(
-                fd, arch, id, address, pointer,
-            )?);
+            arguments.push(super::rustfmtstr::recover(fd, arch, id, address, pointer)?);
             formatters.push(Formatter {
                 primitive: "&str",
                 kind: Trait::Display,

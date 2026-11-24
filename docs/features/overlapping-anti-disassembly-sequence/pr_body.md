@@ -41,7 +41,7 @@ truncated function."* This PR answers it.
 
 ## Mechanism — `option overlapbranch`, default on (DIV-106)
 
-P2, `flow.rs (FlowInfo::process_instruction)` + `p2_lift/kuna_overlapbranch.rs`.
+P2, `flow.rs (FlowInfo::process_instruction)` + `p2_lift/overlapbranch.rs`.
 
 A conditional branch pushes its target and then its fall-through, and `addrlist` is a stack,
 so **the fall-through is always decoded first and wins by arrival order**. `set_fallthru_bound`
@@ -131,7 +131,7 @@ asked for. No `sub_b10cdc7`, no `dat_d98ddd00`.
   `decompiler/crates/kuna-analysis/tests/fixtures/overlapbranch_i386` (generator
   `overlapbranch_i386.py` beside it), which carries the same idiom at the same address and
   reproduces both forbidden patterns with the option off.
-* 11 unit tests on the two decision predicates (`kuna_overlapbranch/tests.rs`): the witness,
+* 11 unit tests on the two decision predicates (`overlapbranch/tests.rs`): the witness,
   the gate, every ordinary forward/backward branch shape that must not fire, and the four
   reconvergence cases (glibc's `LOCK` prefix, the witness's non-reconvergent overlap, an
   undecodable target, and a target that outruns the fall-through).

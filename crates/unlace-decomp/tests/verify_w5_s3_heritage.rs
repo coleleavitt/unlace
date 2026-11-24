@@ -33,8 +33,8 @@ use unlace_base::types::int4;
 use unlace_decomp::context::{ArchContext, BlockId};
 use unlace_decomp::funcdata::Funcdata;
 use unlace_decomp::heritage::{Heritage, LocationMap, PriorityQueue, TaskList};
-use unlace_decomp::kuna_restartlog::RestartLog;
 use unlace_decomp::overrides::Override;
+use unlace_decomp::restartlog::RestartLog;
 
 // ---- fixtures (mirroring the in-module ones) ------------------------------
 

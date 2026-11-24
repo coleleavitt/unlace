@@ -14,7 +14,7 @@ rounds: [11]
 first_seen_round: 11
 attempts: 0
 covered_by_option: null
-touches: [crates/unlace-cli/src/decompile.rs, crates/unlace-decomp/src/p6_variables/kuna_naming.rs]
+touches: [crates/unlace-cli/src/decompile.rs, crates/unlace-decomp/src/p6_variables/naming.rs]
 scope: small
 regression_of: null
 pr: null
@@ -153,7 +153,7 @@ decomp_dbg -- unlace-cli only translates the console's unknown-function output i
 unlace-cli/src/decompile.rs:505. A CLI-tier fix (resolve the name to an address against the analysis
 function list before forking) and a decomp-tier fix (keep the default-style name as an alias) are both
 plausible. Confirm at T_TRIAGE before the lease algebra aims a builder at one tree.
-- round 11 TRIAGE (captain): cleared regression_of=analysis-generated-function-name -- the refuter measured that need's acceptance still PASSING on main, so the link was title-similarity, not a regression; it was scoring this need 1055.5 vs 43.9 for the runner-up. touches was filed unlace-cli alone and the refuter left it unproven; recorded BOTH candidate seams, since unlace-analysis names the function at load and namestyle is applied AFTER the load (kuna_entrymainproto.rs:84), so the rename that breaks the lookup happens in unlace-decomp while the error text is produced at unlace-cli/src/decompile.rs:505. touches carries no lease (select.PATH_RESOURCES leases only phases.toml/options.rs/tests-stages/history.md), so naming two seams costs no scheduling breadth. track stays tooling: the fix may land in unlace-decomp but the defect is a CLI round-trip gap, not emitted C.
+- round 11 TRIAGE (captain): cleared regression_of=analysis-generated-function-name -- the refuter measured that need's acceptance still PASSING on main, so the link was title-similarity, not a regression; it was scoring this need 1055.5 vs 43.9 for the runner-up. touches was filed unlace-cli alone and the refuter left it unproven; recorded BOTH candidate seams, since unlace-analysis names the function at load and namestyle is applied AFTER the load (entrymainproto.rs:84), so the rename that breaks the lookup happens in unlace-decomp while the error text is produced at unlace-cli/src/decompile.rs:505. touches carries no lease (select.PATH_RESOURCES leases only phases.toml/options.rs/tests-stages/history.md), so naming two seams costs no scheduling breadth. track stays tooling: the fix may land in unlace-decomp but the defect is a CLI round-trip gap, not emitted C.
 - round 11 BUILDER (b-r11-changing-namesty): hypothesis UPHELD and the refuter's mechanism confirmed
   exactly. Not a lost alias and not a broken selector: PR #499 (RE-need `string-owner-function-name`)
   already retries a by-name MISS as the address the name spells, and decides by MINTING -- it rendered

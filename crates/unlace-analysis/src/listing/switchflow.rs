@@ -3,7 +3,7 @@
 //!
 //! # The gap
 //!
-//! [`super::kuna_switchtable`]'s slice steps back from the dispatch by address
+//! [`super::switchtable`]'s slice steps back from the dispatch by address
 //! and stops at the first instruction that does not fall through, so a base
 //! hoisted above a `jmp` never reaches it. Three shapes every x86-64 compiler
 //! emits sit behind one:
@@ -31,7 +31,7 @@
 //! decoded in this function that falls through or branches to it, a switch
 //! case edge included. The question is asked on demand, from the `BRANCHIND`'s
 //! input back through the ops that define what it still wants, exactly the
-//! slice's chain, and the fold is [`kuna_switchtable::fold`]: a constant, a
+//! slice's chain, and the fold is [`switchtable::fold`]: a constant, a
 //! constant plus an index, a table entry, an entry composed with its base. A
 //! call kills what the calling convention does not preserve. Predecessors that
 //! agree keep the value, ones that disagree make it unknown, and a predecessor
@@ -39,7 +39,7 @@
 //! case bodies reach — contributes nothing, as the linear slice never saw it
 //! either. The range check is, on every path of predecessors up from the
 //! dispatch, the nearest conditional branch, by either of its sides, read by
-//! [`kuna_switchtable::guard_cases`] as before; a join takes the largest
+//! [`switchtable::guard_cases`] as before; a join takes the largest
 //! count. It must compare the value the table is indexed by: the addend of
 //! the table-address sum, followed up the path, names a register the
 //! comparison reads or is loaded from the address it loads. The entry, a
@@ -60,8 +60,8 @@ use unlace_num::opcodes::OpCode;
 use unlace_num::pcoderaw::VarnodeData;
 use unlace_sleigh::translate::Translate;
 
-use super::kuna_poolref::PoolImage;
-use super::kuna_switchtable::{
+use super::poolref::PoolImage;
+use super::switchtable::{
     self, Key, MAX_GUARD_INSNS, MIN_ENTRIES, Reach, TableRead, Val, boundary_leaves, delta_targets,
     feeders, fold, guard_cases, is_constant, key_of, keys_overlap, leaves_registers_unknown,
     leaving_branch, mask_limit, survives, targets, value_of, value_of_key,
@@ -245,7 +245,7 @@ impl Flow<'_> {
 }
 
 /// The case bodies of the computed jump at `from` on `branch`, read over
-/// `edges`: [`kuna_switchtable::register_targets`]'s answer for a dispatch
+/// `edges`: [`switchtable::register_targets`]'s answer for a dispatch
 /// whose base or range check the linear read could not reach. Only a
 /// range-checked table is read this way; a jump that is not a switch declines
 /// at the first definition the fold does not model, as the slice does.
@@ -351,7 +351,7 @@ pub(super) fn register_targets(
 /// predecessors up from the dispatch, the nearest conditional branch, falling
 /// through to the path or branching to it, with the bound in the branch or in
 /// the nearest instruction falling into it that writes what the condition
-/// reads ([`kuna_switchtable::guard_limit`]'s rule), and comparing the
+/// reads ([`switchtable::guard_limit`]'s rule), and comparing the
 /// selector: one of the table-address `index` addends, followed up the same
 /// instructions, still names what the comparison reads ([`selects`]). clang
 /// copies the check into both arms above the dispatch's block (`cmp $7,%r15d;
@@ -451,7 +451,7 @@ fn guard_at(
         let preds: Vec<u64> = flow.edges.preds(cur).collect();
         let &[w] = preds.as_slice() else { return None };
         let insn = flow.insn(w)?;
-        if w.wrapping_add(u64::from(insn.0)) != cur || !kuna_switchtable::falls_through(&insn.1) {
+        if w.wrapping_add(u64::from(insn.0)) != cur || !switchtable::falls_through(&insn.1) {
             return None;
         }
         above.push(w);
@@ -475,7 +475,7 @@ fn guard_at(
 /// Does the table-address addend `key`, read by op `upto` of the instruction
 /// at `vma` on `path` (the dispatch first, the comparison last), name a
 /// register in `compared` once followed up `path` through copies, extensions
-/// and arithmetic with a constant, as [`kuna_switchtable::mask_limit`] follows
+/// and arithmetic with a constant, as [`switchtable::mask_limit`] follows
 /// an index? Any other definition on the way is a different value, and so is
 /// a register the calling convention does not preserve across a call, except
 /// a load from the address the comparison loads from (gcc's `cmpb
@@ -589,7 +589,7 @@ fn copied_above(flow: &mut Flow, cmp: u64, mut key: Key, compared: &[Key]) -> bo
         let Some(insn) = flow.insn(w) else {
             return false;
         };
-        if w.wrapping_add(u64::from(insn.0)) != cur || !kuna_switchtable::falls_through(&insn.1) {
+        if w.wrapping_add(u64::from(insn.0)) != cur || !switchtable::falls_through(&insn.1) {
             return false;
         }
         for op in insn.1.iter().rev() {

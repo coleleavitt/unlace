@@ -6,16 +6,16 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use unlace_analysis::flirt::kuna_rustprofiles::{
+use unlace_analysis::flirt::rustprofiles::{
     Bank, ImageReport, Library, Profile, ProfileSignature, Request, Selection, Source,
 };
 
 use crate::jsonfmt::Json;
 
-mod kuna_comment_profile;
-mod kuna_installed_manifest;
+mod comment_profile;
+mod installed_manifest;
 
-pub(crate) use kuna_installed_manifest::run;
+pub(crate) use installed_manifest::run;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -264,7 +264,7 @@ pub(crate) fn fields(manifest: &ManifestInfo, image: Option<&ImageReport>) -> Ve
                 "unavailable"
             }
         } else if let Some(report) = &image.report {
-            comment_hint = kuna_comment_profile::hint(&image.compiler, report);
+            comment_hint = comment_profile::hint(&image.compiler, report);
             for candidate in &report.candidates {
                 candidates.push(json!({
                     "profile": profile_json(candidate.profile),

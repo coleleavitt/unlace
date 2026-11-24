@@ -152,10 +152,10 @@
       "typed-comparison.json": "d6dd63f2c828cbaa79b3fa14f1b97d3dc1bf076fa6a377f71d4b4e88e3f19ecc"
     },
     "source_seams_sha256": {
-      "decompiler/crates/kuna-decomp/src/p4_calls/kuna_bejoin.rs": "934583e6cbd193eee55d68ecba4fcaa6ecd0b5a3caa49009734ce93bc7d7cc68",
-      "decompiler/crates/kuna-decomp/src/p4_calls/kuna_bejoin/evidence.rs": "db9012bf4374ab26024b95b868e6666e868fe434dd6368ff043663919325529c",
+      "decompiler/crates/kuna-decomp/src/p4_calls/bejoin.rs": "934583e6cbd193eee55d68ecba4fcaa6ecd0b5a3caa49009734ce93bc7d7cc68",
+      "decompiler/crates/kuna-decomp/src/p4_calls/bejoin/evidence.rs": "db9012bf4374ab26024b95b868e6666e868fe434dd6368ff043663919325529c",
       "decompiler/crates/kuna-decomp/src/p4_calls/coreaction_protos.rs": "6e606e8678cb8790608affd3ad3423909b49aac36404b017f3ffc54b0d6a5bfc",
-      "decompiler/crates/kuna-decomp/src/p4_calls/kuna_callerreads.rs": "5ceadb83414dbda5b4674356ced10351b21e1a29d9ce5e4687a1619793e63cc2",
+      "decompiler/crates/kuna-decomp/src/p4_calls/callerreads.rs": "5ceadb83414dbda5b4674356ced10351b21e1a29d9ce5e4687a1619793e63cc2",
       "decompiler/crates/kuna-cli/src/callgraph.rs": "13410ce56c6837888ac978d9b19cff55fa8b481515f949fba35925471dfd206c",
       "decompiler/crates/kuna-cli/src/callgraph/arm_closure.rs": "f8c32c3cc6602839a1885d2a285fdfa9647cc739e19f3c89aaf0f351f8246c75"
     },
@@ -625,7 +625,7 @@
         "sha256": "40c237afea512076817e0f53e71b80ac190aa658d6dd274115cb303189bb3e0f"
       },
       "foreign_paths_preserved": [
-        "decompiler/crates/kuna-analysis/src/listing/kuna_x86listingswitch.rs",
+        "decompiler/crates/kuna-analysis/src/listing/x86listingswitch.rs",
         "decompiler/crates/kuna-console/tests/verify_x86listingswitch.rs",
         "docs/spec/01-program-prep.md"
       ],

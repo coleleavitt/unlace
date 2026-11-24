@@ -65,7 +65,7 @@ pub const IMAGE_WINDOW_BYTES: usize = 512;
 /// moving read window behind `RefCell`s. The *bytes* underneath it are neither,
 /// so this is the half that can be shared -- one owner of the segment data, N
 /// readers, each with its own window and its own space handle
-/// ([`crate::kuna_sharedbytes::SharedBytesImage`]).
+/// ([`crate::sharedbytes::SharedBytesImage`]).
 ///
 /// The read semantics are `ObjectLoadImage`'s exactly, and deliberately so: a
 /// span that runs off the end of a mapped segment is zero-filled, and the ONLY

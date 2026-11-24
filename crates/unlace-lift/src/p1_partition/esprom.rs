@@ -125,24 +125,24 @@ pub fn parse_esprom(p1: &str) -> KunaResult<(EspRom, String)> {
     ))
 }
 
-impl crate::kuna_optionset::KunaOption for EspRom {
+impl crate::optionset::KunaOption for EspRom {
     const NAME: &'static str = "esprom";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        crate::kuna_esprom::EspRom::Auto
+        crate::esprom::EspRom::Auto
     }
 
     fn shipped() -> Self {
-        crate::kuna_esprom::EspRom::Auto
+        crate::esprom::EspRom::Auto
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        Ok(crate::kuna_esprom::parse_esprom(value)?)
+        Ok(crate::esprom::parse_esprom(value)?)
     }
 }
 
 /// (kuna `esprom`) The ESP chip the loaded image was built for; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 pub type ImageChip = Option<EspChip>;
 crate::kuna_arch_table!(ImageChip);

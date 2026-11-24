@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use unlace_decomp::kuna_kernelcacheboot::KernelcacheBoot;
+use unlace_decomp::kernelcacheboot::KernelcacheBoot;
 
 use super::fileset::{self, rd_u64};
 

@@ -74,7 +74,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::listing::{Listing, RefKind};
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, NoReturnFact, Phase};
 
-pub mod kuna_discstrict;
+pub mod discstrict;
 
 /// Ghidra's `FindNoReturnFunctionsAnalyzer` evidence threshold: a callee is
 /// concluded no-return once at least this many of its call sites show no valid
@@ -134,7 +134,7 @@ fn call_site_has_no_fallthrough(listing: &Listing, call_vma: u64, callee: u64) -
         // A call with no fall-through at all (a lowered tail jump) is evidence.
         return true;
     };
-    kuna_discstrict::successor_is_positive_evidence(listing, fall, callee)
+    discstrict::successor_is_positive_evidence(listing, fall, callee)
 }
 
 /// Count the call sites of `callee` that show no valid fall-through (the evidence

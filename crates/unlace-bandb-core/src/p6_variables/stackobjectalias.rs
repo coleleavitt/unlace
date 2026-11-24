@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::context::VarnodeId;
 use crate::dtype::{TypeFactory, type_metatype};
 use crate::funcdata::Funcdata;
-use crate::kuna_stackobjectasserts::{ObjectAssertion, UseAnchor};
+use crate::stackobjectasserts::{ObjectAssertion, UseAnchor};
 use crate::varmap::LinkEntryInfo;
 use unlace_num::opcodes::OpCode;
 
@@ -142,7 +142,7 @@ pub fn matches(
     if !Rc::ptr_eq(&pointer, ty) {
         return false;
     }
-    let Some(address) = crate::kuna_stackranges::frame_address(fd, input) else {
+    let Some(address) = crate::stackranges::frame_address(fd, input) else {
         return false;
     };
     let Some(space) = assertion.address.get_space() else {

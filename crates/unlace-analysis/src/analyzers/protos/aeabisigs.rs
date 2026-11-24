@@ -13,7 +13,7 @@
 //! unaligned accessors of 4.3.3 and `__aeabi_read_tp`. Every one keeps the base
 //! procedure-call standard in every image (RTABI32 3.1), so its declared
 //! prototype is laid out under the core-register model even on a hard-float
-//! image (`kuna_armfloatreturn::declared_helper_model`): a `double` in r0:r1 /
+//! image (`armfloatreturn::declared_helper_model`): a `double` in r0:r1 /
 //! r2:r3. Without a prototype the call prints `__aeabi_fadd()`, or splits each
 //! `double` into two `int` words of a union cast.
 //!
@@ -597,7 +597,7 @@ mod tests {
         assert_eq!(len, 65);
         for name in names {
             assert!(
-                unlace_decomp::kuna_armfloatreturn::base_pcs_helper(name),
+                unlace_decomp::armfloatreturn::base_pcs_helper(name),
                 "{name} must take the core-register model"
             );
         }

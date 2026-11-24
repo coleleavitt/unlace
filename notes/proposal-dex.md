@@ -52,7 +52,7 @@ engine pieces are ports of `ruleaction.cc`, `typeop.cc`, `jumptable.cc`,
    `--target` overrides), and installs one function symbol per method with
    code at `code_off + 16`, named `pkg.Class.method` (`_<addr>` added to
    overloads, as Ghidra's uniquifier does).
-3. **DEX model on the architecture** — `unlace-decomp/src/p0_knowledge/kuna_dex.rs`
+3. **DEX model on the architecture** — `unlace-decomp/src/p0_knowledge/dex.rs`
    holds what the engine asks: per-entry register layout, method/field/type/
    string tables. It answers three upstream questions:
    * the constant pool (`ConstantPoolDex::getRecord`) — records are built on

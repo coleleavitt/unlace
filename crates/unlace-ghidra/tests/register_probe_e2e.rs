@@ -26,7 +26,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use unlace_base::marshal::PackedEncode;
-use unlace_decomp::kuna_linuxsyscall::{ARG_REGISTERS, NUM_REGISTER};
+use unlace_decomp::linuxsyscall::{ARG_REGISTERS, NUM_REGISTER};
 use unlace_ghidra::process::GhidraProcess;
 
 use ghidra_sim::oracle::{SimOracle, generate_tspec, repo_root};

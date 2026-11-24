@@ -47,7 +47,7 @@ pub(crate) fn capture_compressed(ctx: &AnalysisCtx<'_>) -> Option<Facts> {
     if !ctx
         .arch
         .kuna_options
-        .get::<unlace_decomp::kuna_analysisgates::Godwarfsig>()
+        .get::<unlace_decomp::analysisgates::Godwarfsig>()
         .0
         || !ctx.file.is_little_endian()
         || ctx.file.architecture() != object::Architecture::Aarch64

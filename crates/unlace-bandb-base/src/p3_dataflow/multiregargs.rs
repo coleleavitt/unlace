@@ -141,8 +141,8 @@ pub fn subpiece_drops_reached_piece(
     }
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.multiregargs_input_partition = Some(input_partition);
     hooks.multiregargs_subpiece_drops_reached_piece = Some(subpiece_drops_reached_piece);
 }

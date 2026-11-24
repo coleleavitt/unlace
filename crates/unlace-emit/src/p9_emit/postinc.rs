@@ -89,7 +89,7 @@ fn fold(data: &Funcdata, inc: OpId) -> Option<OpId> {
     } else {
         return None;
     };
-    if crate::kuna_stackmem::access(data, access).is_some() {
+    if crate::stackmem::access(data, access).is_some() {
         return None;
     }
     let ao = data.obank().get(access)?;
@@ -148,7 +148,7 @@ impl Action for ActionPostIncrement {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_coreoptions::PostIncrement>()
+            .get::<crate::coreoptions::PostIncrement>()
             .0
         {
             return 0;

@@ -2,7 +2,7 @@
 //! `try { } catch (T e) { }`.
 //!
 //! Flow enters each catch handler from a dispatch at the start of its first
-//! protected range (`p2_lift/kuna_javatry.rs`), and structuring drops the
+//! protected range (`p2_lift/javatry.rs`), and structuring drops the
 //! exceptional edges, so the dispatch structures as an `if` whose one arm is the
 //! handler. The other side is the protected code: the `if`'s other arm, or the
 //! statements that follow it in the enclosing list. The protected part is the
@@ -12,11 +12,11 @@
 
 use unlace_num::opcodes::OpCode;
 
-use super::kuna_javasyncprint::TryForm;
+use super::javasyncprint::TryForm;
 use super::{Architecture, Funcdata, OpId, PrintC, modifiers, to_emit_brace};
 use crate::block::BlockType;
 use crate::context::BlockId;
-use crate::kuna_javatry::{CatchTable, caught_handler, dispatch_handler};
+use crate::javatry::{CatchTable, caught_handler, dispatch_handler};
 use crate::prettyprint::{Emit, SyntaxHighlight};
 
 /// Where a part of a `try` statement comes from.

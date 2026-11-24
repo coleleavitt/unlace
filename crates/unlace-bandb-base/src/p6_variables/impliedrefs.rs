@@ -23,7 +23,7 @@
 //! `max_implied_ref` is a program-wide tunable, not a private constant of the
 //! explicit-marking pass: `BlockBasic::isComplex`
 //! ([`Funcdata::bb_is_complex`](crate::funcdata_block)) and
-//! [`kuna_condfold`](crate::kuna_condfold) read the same field to
+//! [`kuna_condfold`](crate::condfold) read the same field to
 //! decide how many printed statements a condition block may carry. Raising
 //! `impliedrefs` therefore also loosens those two structure tests, exactly as it
 //! does upstream when the field is edited by hand.

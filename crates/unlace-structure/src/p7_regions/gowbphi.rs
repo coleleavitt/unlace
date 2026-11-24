@@ -1,7 +1,7 @@
 //! **gowritebarrier, the post-SSA arm** — fold the Go GC write-barrier
 //! diamonds the pre-SSA one-hop fold must refuse (`docs/multilang.md` W2/W5).
 //!
-//! The pre-SSA fold (`p2_lift/kuna_gowritebarrier.rs`) takes the textbook
+//! The pre-SSA fold (`p2_lift/gowritebarrier.rs`) takes the textbook
 //! shape: one guard, one-block arm, rejoining in one hop, values dead on
 //! exit. Real Go binaries carry two more shapes it rightly refuses:
 //!
@@ -34,8 +34,8 @@
 
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::funcdata::Funcdata;
+use crate::gowritebarrier::{is_write_barrier_name, live};
 use crate::idiom::match_guarded_cold_call_phi;
-use crate::kuna_gowritebarrier::{is_write_barrier_name, live};
 
 /// (kuna) `ActionGoWriteBarrierPhi` — fold shared / phi-feeding Go GC
 /// write-barrier arms post-SSA (option `gowritebarrier`).
@@ -96,5 +96,5 @@ impl Action for ActionGoWriteBarrierPhi {
 }
 
 #[cfg(test)]
-#[path = "kuna_gowbphi/tests.rs"]
+#[path = "gowbphi/tests.rs"]
 mod tests;

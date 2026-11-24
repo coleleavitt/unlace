@@ -55,7 +55,7 @@ pub fn took_hint_type(data: &Funcdata, vn: VarnodeId, ct: &Datatype) -> bool {
     v.is_input()
         && hint_at(data, v.get_addr(), v.get_size())
             .and_then(|h| h.ct.as_ref())
-            .is_some_and(|t| crate::kuna_calleevote::same_type(t, ct))
+            .is_some_and(|t| crate::calleevote::same_type(t, ct))
 }
 
 /// The hinted name of the recovered parameter in `addr`/`size`.
@@ -66,7 +66,7 @@ pub fn param_name(data: &Funcdata, addr: &Address, size: int4) -> Option<String>
 /// (kuna `swiftcall`) Names and types for the inputs this function's analysis recovers; kept
 /// across `Funcdata::clear`.
 #[derive(Default)]
-struct HintsSlot(Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>);
+struct HintsSlot(Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>);
 crate::kuna_func_state!(HintsSlot, keep_across_clear: true);
 
 /// The `kuna_inputhints` pass's methods on [`Funcdata`], as an extension trait so the type can
@@ -75,22 +75,22 @@ pub trait FuncdataInputhintsExt {
     /// (kuna `swiftcall`) Seed the input hints.
     fn kuna_set_input_hints(
         &mut self,
-        hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
+        hints: Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>,
     );
     /// (kuna `swiftcall`) The input hints of this function.
-    fn kuna_input_hints(&self) -> Option<&[crate::kuna_inputhints::InputHint]>;
+    fn kuna_input_hints(&self) -> Option<&[crate::inputhints::InputHint]>;
 }
 
 impl FuncdataInputhintsExt for crate::funcdata::Funcdata {
     /// (kuna `swiftcall`) Seed the input hints.
     fn kuna_set_input_hints(
         &mut self,
-        hints: Option<std::rc::Rc<Vec<crate::kuna_inputhints::InputHint>>>,
+        hints: Option<std::rc::Rc<Vec<crate::inputhints::InputHint>>>,
     ) {
         self.kuna_state_mut::<HintsSlot>().0 = hints;
     }
     /// (kuna `swiftcall`) The input hints of this function.
-    fn kuna_input_hints(&self) -> Option<&[crate::kuna_inputhints::InputHint]> {
+    fn kuna_input_hints(&self) -> Option<&[crate::inputhints::InputHint]> {
         self.kuna_state::<HintsSlot>()
             .0
             .as_deref()
@@ -99,7 +99,7 @@ impl FuncdataInputhintsExt for crate::funcdata::Funcdata {
 }
 
 /// (kuna `swiftcall`) The input hints the IOKit pass gave each method's `this`, by entry; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 #[derive(Default)]
 pub struct ThisHints(
     pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
@@ -107,7 +107,7 @@ pub struct ThisHints(
 crate::kuna_arch_table!(ThisHints);
 
 /// The input hints the loader stated for each function, by entry; an
-/// [`ArchTable`](crate::kuna_archstate::ArchTable) on the architecture.
+/// [`ArchTable`](crate::archstate::ArchTable) on the architecture.
 #[derive(Default)]
 pub struct LoaderHints(
     pub std::collections::BTreeMap<unlace_base::address::Address, std::rc::Rc<Vec<InputHint>>>,
@@ -115,11 +115,11 @@ pub struct LoaderHints(
 crate::kuna_arch_table!(LoaderHints);
 
 /// Did a pass give any method's `this` input hints?
-fn has_this_hints(tables: &crate::kuna_archstate::ArchTables) -> bool {
+fn has_this_hints(tables: &crate::archstate::ArchTables) -> bool {
     !tables.get::<ThisHints>().0.is_empty()
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.inputhints_has_this_hints = Some(has_this_hints);
 }

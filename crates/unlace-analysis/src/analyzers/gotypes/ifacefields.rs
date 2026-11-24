@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::kuna_typeglobals::{global_name_ok, linker_name, reachable};
+use super::typeglobals::{global_name_ok, linker_name, reachable};
 use super::*;
 
 /// The interface-typed fields of named struct descriptor `t`: `(byte offset,

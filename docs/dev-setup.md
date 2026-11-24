@@ -158,7 +158,7 @@ The same input gives the same output, byte for byte, whatever the process, its h
   `.iter()`/`.keys()`/`.values()`/`.drain()`/`.into_iter()` chain on one, is a finding unless the
   chain ends in an order-insensitive reduction (`count`, `any`, `all`, `sum`, `len`, `contains`,
   `min`/`max`, a `collect` into a set or map, or a `let` typed as one) or the collected `Vec` is
-  sorted within the next few lines. `FxHashMap`/`FxHashSet` (`infra/kuna_fasthash.rs`, a fixed
+  sorted within the next few lines. `FxHashMap`/`FxHashSet` (`infra/fasthash.rs`, a fixed
   hasher) are deterministic and not findings. The findings that exist today are listed in
   `scripts/determinism-allowlist.txt` as `<file> <binding> <count>`; a count above its entry fails,
   and so does an entry above its count, so the list only shrinks. Fix a finding with a

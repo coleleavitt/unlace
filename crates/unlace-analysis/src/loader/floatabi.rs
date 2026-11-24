@@ -4,7 +4,7 @@
 //! header flags, the MIPS ABI flags and GNU attributes, the PowerPC GNU
 //! attributes, and the RISC-V header flags.  A single-precision convention, which
 //! passes doubles in integer registers, and anything unstated are `None`.
-use super::kuna_armfloatabi::{string, uleb, word};
+use super::armfloatabi::{string, uleb, word};
 use object::{Object, ObjectSection};
 
 pub fn float_arg_registers(file: &object::File<'_>) -> Option<bool> {
@@ -13,10 +13,10 @@ pub fn float_arg_registers(file: &object::File<'_>) -> Option<bool> {
         return None;
     }
     match file.architecture() {
-        A::Arm => super::kuna_armfloatabi::args_evidence(file),
-        arch if super::kuna_mipsabi::is_mips(arch) => {
-            let record = super::kuna_mipsabi::abi_flags(file).ok()?;
-            let value = super::kuna_mipsabi::fp_abi(file, record).ok()??;
+        A::Arm => super::armfloatabi::args_evidence(file),
+        arch if super::mipsabi::is_mips(arch) => {
+            let record = super::mipsabi::abi_flags(file).ok()?;
+            let value = super::mipsabi::fp_abi(file, record).ok()??;
             match value {
                 1 | 5 | 6 | 7 => Some(true),
                 3 => Some(false),
@@ -43,7 +43,7 @@ pub fn float_arg_registers(file: &object::File<'_>) -> Option<bool> {
 /// The file-scope `Tag_GNU_*_ABI_FP` of every `.gnu.attributes` section:
 /// `Some(None)` when none states it, `None` when they conflict or are malformed.
 pub(super) fn gnu_fp_abi(file: &object::File<'_>) -> Option<Option<u32>> {
-    let mips = super::kuna_mipsabi::is_mips(file.architecture());
+    let mips = super::mipsabi::is_mips(file.architecture());
     let mut answer = None;
     for section in file
         .sections()

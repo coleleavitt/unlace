@@ -6,7 +6,7 @@ use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 use unlace_num::opcodes::OpCode;
 
-use crate::kuna_constantshift::ConstantLslPlan;
+use crate::constantshift::ConstantLslPlan;
 
 /// (kuna `armconstshift`) Which fixed left shifts of a signed operand print
 /// through an unsigned conversion.
@@ -21,7 +21,7 @@ pub enum ConstShiftMode {
     All,
 }
 
-impl crate::kuna_optionset::KunaOption for ConstShiftMode {
+impl crate::optionset::KunaOption for ConstShiftMode {
     const NAME: &'static str = "armconstshift";
     crate::kuna_option_id!();
 

@@ -564,7 +564,7 @@ pub const SYMBOL_ID_BASE: uint8 = 0x4000_0000_0000_0000;
 #[derive(Debug, Clone)]
 pub struct FunctionPrototype {
     pieces: crate::fspec::PrototypePieces,
-    go_string_input: Option<crate::kuna_gostringinput::GoStringInput>,
+    go_string_input: Option<crate::gostringinput::GoStringInput>,
 }
 
 /// The subclass discriminant for a [`Symbol`] (C++ uses virtual dispatch /
@@ -612,7 +612,7 @@ pub enum SymbolKind {
         /// source-declared prototype (the default-model recovery applies).
         proto_pieces: Option<Box<FunctionPrototype>>,
         /// Receiver evidence belongs to this exact parked prototype.
-        pointer_receiver: Option<Box<crate::kuna_gopointermethod::Receiver>>,
+        pointer_receiver: Option<Box<crate::gopointermethod::Receiver>>,
     },
     /// `EquateSymbol` — labels a constant (C++ `EquateSymbol`).
     Equate {
@@ -2132,7 +2132,7 @@ impl Database {
                 let rec = join_space.find_join(addr.get_offset())?;
                 let num = rec.num_pieces();
                 let bigendian = addr.is_big_endian();
-                let wrapped_stack = super::kuna_wrappedstackmap::is_wrapped_join(&rec);
+                let wrapped_stack = super::wrappedstackmap::is_wrapped_join(&rec);
                 let mut off: int4 = 0;
                 for j in 0..num {
                     // Take pieces in endian order (database.cc:1169).
@@ -2548,7 +2548,7 @@ impl Database {
                 None => continue,
             };
             let addr = if entry.is_piece() && (entry.extraflags & varnode_flags::mapped) != 0 {
-                super::kuna_wrappedstackmap::whole_address(self, scope, entry)
+                super::wrappedstackmap::whole_address(self, scope, entry)
                     .unwrap_or_else(|| entry.get_addr().clone())
             } else {
                 entry.get_addr().clone()
@@ -2640,7 +2640,7 @@ impl Database {
                 // Only the whole-symbol starting entry (offset 0); pieces are rebuilt
                 // by re-mapping the whole symbol.
                 if entry.get_offset() != 0
-                    || super::kuna_wrappedstackmap::is_wrapped_in_space(
+                    || super::wrappedstackmap::is_wrapped_in_space(
                         entry.get_addr(),
                         skip_space_index,
                     )
@@ -3077,7 +3077,7 @@ impl Database {
         &mut self,
         sid: SymbolId,
         pieces: crate::fspec::PrototypePieces,
-        go_string_input: Option<crate::kuna_gostringinput::GoStringInput>,
+        go_string_input: Option<crate::gostringinput::GoStringInput>,
     ) {
         self.kuna_gen += 1;
         Self::write_function_prototype(
@@ -3105,7 +3105,7 @@ impl Database {
     pub fn function_go_string_input(
         &self,
         addr: &Address,
-    ) -> Option<&crate::kuna_gostringinput::GoStringInput> {
+    ) -> Option<&crate::gostringinput::GoStringInput> {
         let (sid, _) = self.find_function_across_scopes(addr)?;
         let SymbolKind::Function {
             proto_pieces: Some(decl),
@@ -3122,7 +3122,7 @@ impl Database {
     pub fn attach_go_pointer_receiver(
         &mut self,
         addr: &Address,
-        receiver: crate::kuna_gopointermethod::Receiver,
+        receiver: crate::gopointermethod::Receiver,
     ) {
         self.kuna_gen += 1;
         let Some((id, _)) = self.find_function_across_scopes(addr) else {
@@ -3145,10 +3145,7 @@ impl Database {
     }
 
     #[doc(hidden)]
-    pub fn go_pointer_receiver(
-        &self,
-        addr: &Address,
-    ) -> Option<&crate::kuna_gopointermethod::Receiver> {
+    pub fn go_pointer_receiver(&self, addr: &Address) -> Option<&crate::gopointermethod::Receiver> {
         let (id, _) = self.find_function_across_scopes(addr)?;
         let symbol = &self.symbols[id];
         let SymbolKind::Function {
@@ -4321,7 +4318,7 @@ impl Database {
         // SAME rewrite as the create path below: a symbol installed under a
         // folded scope path would otherwise be unfindable by the name the binary
         // spells, and every call to it would render `sub_<addr>`.
-        let fullname = &*crate::kuna_symbolnamebound::bound_scope_path(fullname, delim);
+        let fullname = &*crate::symbolnamebound::bound_scope_path(fullname, delim);
         let mut start = start.or(self.globalscope);
         let mut mark = 0usize;
         loop {
@@ -4364,7 +4361,7 @@ impl Database {
         // input-to-RSS amplifier on attacker-controlled `.strtab` bytes. Shared
         // verbatim with `resolve_scope_from_symbol_name` above so the two
         // round-trip -- see `kuna_symbolnamebound`.
-        let fullname = &*crate::kuna_symbolnamebound::bound_scope_path(fullname, delim);
+        let fullname = &*crate::symbolnamebound::bound_scope_path(fullname, delim);
         let mut start = start.or(self.globalscope).expect("a global scope exists");
         let mut mark = 0usize;
         loop {
@@ -4379,7 +4376,7 @@ impl Database {
             // (kuna) An empty component would be rejected by attach_scope, and
             // that error aborts the whole architecture build rather than one
             // symbol -- see `kuna_symbolnamerepair`.
-            if crate::kuna_symbolnamerepair::skip_scope_component(&scopename) {
+            if crate::symbolnamerepair::skip_scope_component(&scopename) {
                 mark = endmark + delim.len();
                 continue;
             }
@@ -5131,9 +5128,7 @@ impl Database {
             .filter_map(|&sid| {
                 let sym = &self.symbols[sid];
                 if !sym.mapentry.iter().any(|&entry| {
-                    super::kuna_wrappedstackmap::is_wrapped_address(
-                        self.entry(scope, entry).get_addr(),
-                    )
+                    super::wrappedstackmap::is_wrapped_address(self.entry(scope, entry).get_addr())
                 }) {
                     return None;
                 }
@@ -5209,8 +5204,7 @@ impl Database {
                 for eref in &sym.mapentry {
                     let entry = self.entry(scope, *eref);
                     if !entry.is_piece() && entry.get_addr().is_join() {
-                        let wrapped =
-                            super::kuna_wrappedstackmap::is_wrapped_address(entry.get_addr());
+                        let wrapped = super::wrappedstackmap::is_wrapped_address(entry.get_addr());
                         if let Some((addr, _)) = wrapped_storage
                             .get(&sym.symbol_id)
                             .filter(|(_, size)| wrapped && *size == entry.get_size())
@@ -5246,7 +5240,7 @@ impl Database {
 // ===========================================================================
 
 #[cfg(test)]
-#[path = "kuna_wrappedstackmap/tests.rs"]
+#[path = "wrappedstackmap/tests.rs"]
 mod wrapped_stack_tests;
 
 #[cfg(test)]

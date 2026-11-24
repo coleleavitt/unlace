@@ -23,10 +23,10 @@
 //! Under `closed`, a parameter read at two or more constant offsets none of which
 //! is zero is a record when every caller of its function is a known direct call
 //! (`Funcdata::kuna_calleevote_closed`) and nothing outside the function gave
-//! the parameter its pointee (`kuna_structsynth::pointee_is_given`). Every other
+//! the parameter its pointee (`structsynth::pointee_is_given`). Every other
 //! condition a parameter is held to still applies, and the one `locals` adds for
 //! a partial view: no address is formed at or past the end of every access
-//! (`kuna_structsynth::points_past`), since a record typed on the accesses would
+//! (`structsynth::points_past`), since a record typed on the accesses would
 //! spell that address as an element of a record array (`&a0[1].field_0x0[0x14]`).
 //! The bytes before the first access become `undefined1` filler, exactly as a
 //! hole does.
@@ -48,7 +48,7 @@
 //! rules something to rewrite, so its function always iterates again; a headless
 //! record gives them nothing, and 287 of the refused parameters sit in functions
 //! that never iterate. Such a function asks for the one pass
-//! `kuna_structsynth::wants_settle_pass` already asks for on behalf of a lone
+//! `structsynth::wants_settle_pass` already asks for on behalf of a lone
 //! field.
 
 use unlace_base::error::{KunaError, KunaResult};
@@ -68,7 +68,7 @@ pub enum StructHeadlessMode {
     Closed,
 }
 
-impl crate::kuna_optionset::KunaOption for StructHeadlessMode {
+impl crate::optionset::KunaOption for StructHeadlessMode {
     const NAME: &'static str = "structheadless";
     crate::kuna_option_id!();
 
@@ -126,7 +126,7 @@ pub fn admits(data: &Funcdata, base: VarnodeId, ct: &Datatype) -> bool {
         .fires()
         && data.kuna_calleevote_closed()
         && data.vbank().get(base).is_some_and(|v| v.is_input())
-        && !crate::kuna_calleevote::took_stated_type(data, base, ct)
+        && !crate::calleevote::took_stated_type(data, base, ct)
 }
 
 /// Does a declared call in `vn`'s value family -- one that returns the value or
@@ -143,11 +143,11 @@ pub fn yields_to_a_declared_pointer(data: &Funcdata, vn: VarnodeId, vote: &Datat
         .kuna_options
         .get::<StructHeadlessMode>()
         .fires()
-        || !crate::kuna_structsynth::points_at_synthesized_record(vote)
+        || !crate::structsynth::points_at_synthesized_record(vote)
     {
         return false;
     }
-    let family = crate::kuna_protoorder::value_family(data, vn);
+    let family = crate::protoorder::value_family(data, vn);
     family
         .iter()
         .filter_map(|&v| data.vbank().get(v).map(|n| (v, n)))
@@ -198,7 +198,7 @@ pub fn bare_pointer_for(data: &Funcdata, vote: &Datatype) -> Option<std::rc::Rc<
         .kuna_options
         .get::<StructHeadlessMode>()
         .fires()
-        || !crate::kuna_structsynth::points_at_headless_record(vote)
+        || !crate::structsynth::points_at_headless_record(vote)
     {
         return None;
     }
@@ -216,7 +216,7 @@ pub fn gives_a_pointee(ct: &Datatype) -> bool {
             p.get_metatype(),
             crate::dtype::type_metatype::TYPE_VOID | crate::dtype::type_metatype::TYPE_UNKNOWN
         )
-    }) && !crate::kuna_structsynth::points_at_synthesized_record(ct)
+    }) && !crate::structsynth::points_at_synthesized_record(ct)
 }
 
 /// Does `vote`, a headless record, type as a plain word the member `member`
@@ -242,7 +242,7 @@ pub fn types_a_pointer_as_a_word(data: &Funcdata, vote: &Datatype, member: &Data
 /// points at, one `structsynth` minted from reads past its start?
 fn minted_word(vote: &Datatype, member: &Datatype, ptr_size: unlace_base::types::int4) -> bool {
     use crate::dtype::type_metatype;
-    crate::kuna_structsynth::points_at_headless_record(vote)
+    crate::structsynth::points_at_headless_record(vote)
         && matches!(
             member.get_metatype(),
             type_metatype::TYPE_INT | type_metatype::TYPE_UINT | type_metatype::TYPE_UNKNOWN
@@ -328,7 +328,7 @@ mod tests {
         };
         let minted = ptr_to(Rc::new(minted));
         assert!(!gives_a_pointee(&minted));
-        assert!(crate::kuna_structsynth::points_at_headless_record(&minted));
+        assert!(crate::structsynth::points_at_headless_record(&minted));
         assert!(!gives_a_pointee(&Datatype::new(8, type_metatype::TYPE_INT)));
 
         // `ws_head` copied as a word by one headless reader is no member for a

@@ -41,14 +41,14 @@
 //! and ≥4 chars is accepted) — harmless for real string literals, which all pass.
 //! Recorded in `docs/missing-analyses.md` / `docs/history/analysis-port-log.md`.
 
-pub mod kuna_panicloc;
-pub mod kuna_ptrslot;
-pub mod kuna_strcodelen;
-pub mod kuna_stringinv;
-pub mod kuna_strrecords;
-pub mod kuna_utf8strings;
-pub mod kuna_widestrings;
-pub mod kuna_widestrings32;
+pub mod panicloc;
+pub mod ptrslot;
+pub mod strcodelen;
+pub mod stringinv;
+pub mod strrecords;
+pub mod utf8strings;
+pub mod widestrings;
+pub mod widestrings32;
 
 use object::SectionKind;
 use object::read::{Object, ObjectSection};
@@ -72,7 +72,7 @@ pub(crate) fn is_string_char(b: u8) -> bool {
 /// [`StringLiteralPass`] is always [`Termination::Nul`] — the markup it commits is
 /// a `char[N]`, which only a NUL-ended run describes. The relaxed arm exists for
 /// the read-only inventory query behind `unlace strings`
-/// ([`kuna_stringinv`](self::kuna_stringinv)), where the question is "what text is
+/// ([`kuna_stringinv`](self::stringinv)), where the question is "what text is
 /// in this image", not "where can a `char[N]` be planted".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Termination {
@@ -317,16 +317,16 @@ impl AnalysisPass for StringLiteralPass {
     }
 
     fn run(&self, ctx: &AnalysisCtx) -> AnalysisOutput {
-        let slots = kuna_ptrslot::PointerSlots::new(ctx.file);
+        let slots = ptrslot::PointerSlots::new(ctx.file);
         let mut strings = scan_strings(
             ctx.file,
             self.min_len,
-            unlace_decomp::kuna_loadoptions::codestrings_enabled(),
+            unlace_decomp::loadoptions::codestrings_enabled(),
         );
         strings.retain(|fact| !slots.holds_address(fact.addr));
         AnalysisOutput {
             strings,
-            wide_strings: kuna_widestrings::scan_wide_strings(ctx.file, self.wide_min_len),
+            wide_strings: widestrings::scan_wide_strings(ctx.file, self.wide_min_len),
             ..Default::default()
         }
     }

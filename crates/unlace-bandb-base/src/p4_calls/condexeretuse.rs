@@ -159,8 +159,8 @@ fn reachable_from(data: &Funcdata, from: BlockId) -> Option<HashSet<BlockId>> {
     Some(blocks)
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.condexeretuse_any_retest_merge = Some(any_retest_merge);
     hooks.condexeretuse_applies = Some(applies);
     hooks.condexeretuse_cannot_arrive = Some(cannot_arrive);
@@ -168,5 +168,5 @@ pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
 }
 
 #[cfg(test)]
-#[path = "kuna_condexeretuse/tests.rs"]
+#[path = "condexeretuse/tests.rs"]
 mod tests;

@@ -309,7 +309,7 @@ impl Rule for RuleLoadVarnode {
             unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         // A read-only relocated pointer is the weak binding plus its addend,
         // not the synthetic display address stored in its pre-link bytes.
-        let nullable = crate::kuna_nullable_reloc::relocations(&data.get_arch().kuna_states)
+        let nullable = crate::nullable_reloc::relocations(&data.get_arch().kuna_states)
             .get(&offoff)
             .filter(|_| {
                 data.get_address()
@@ -319,7 +319,7 @@ impl Rule for RuleLoadVarnode {
             .and_then(|records| {
                 records.iter().find(|r| {
                     r.pointer_size == size
-                        && matches!(r.operand, crate::kuna_nullable_reloc::Operand::DataPointer)
+                        && matches!(r.operand, crate::nullable_reloc::Operand::DataPointer)
                 })
             })
             .cloned();
@@ -336,7 +336,7 @@ impl Rule for RuleLoadVarnode {
             data.op_remove_input(op, 1);
             set_opcode(data, op, OpCode::CPUI_COPY);
         }
-        crate::kuna_stackreadscope::mark_stack_read(data, op);
+        crate::stackreadscope::mark_stack_read(data, op);
         // C++ ruleaction.cc:4316-4324 — the spacebase-placeholder tail.  When the
         // converted COPY output is the stack-pointer placeholder the call set up,
         // clear the trigger and resolve the call's relative stack offset (the RSP
@@ -413,11 +413,11 @@ impl Rule for RuleStoreVarnode {
         let offoff =
             unlace_base::space::AddrSpace::address_to_byte(offoff, baseoff.get_word_size());
         let addr = Address::new(Rc::clone(&baseoff), offoff);
-        if !crate::kuna_storecopyeffects::can_materialize(data, op, &addr, size) {
+        if !crate::storecopyeffects::can_materialize(data, op, &addr, size) {
             return 0;
         }
-        crate::kuna_stackparamviews::record_store(data, &addr, size);
-        crate::kuna_localstackviews::record_store(data, op, &addr, size);
+        crate::stackparamviews::record_store(data, &addr, size);
+        crate::localstackviews::record_store(data, op, &addr, size);
         let outvn = data
             .new_varnode_out_unlaned(size, &addr, op)
             .expect("newVarnodeOut");
@@ -440,7 +440,7 @@ impl Rule for RuleStoreVarnode {
         if store_unmapped {
             data.scope_local_mark_not_mapped(&baseoff, offoff, size, false);
         }
-        crate::kuna_storecopyeffects::collapse(data, op);
+        crate::storecopyeffects::collapse(data, op);
         1
     }
 }
@@ -684,7 +684,7 @@ impl Rule for RuleSubCommute {
                 if is_written(data, lin0) {
                     let opc = code(data, def_of(data, lin0));
                     if opc != OpCode::CPUI_INT_ZEXT && opc != OpCode::CPUI_PIECE {
-                        byte_cancellation = crate::kuna_cancelbytearithmetic::find_cancellation(
+                        byte_cancellation = crate::cancelbytearithmetic::find_cancellation(
                             data, op, longform, outsize,
                         );
                         if byte_cancellation.is_none() {
@@ -825,7 +825,7 @@ impl Rule for RuleSubCommute {
         }
 
         if let Some(plan) = byte_cancellation {
-            crate::kuna_cancelbytearithmetic::apply_cancellation(data, plan);
+            crate::cancelbytearithmetic::apply_cancellation(data, plan);
             return 1;
         }
 
@@ -910,7 +910,7 @@ impl Rule for RuleConcatCommute {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if crate::kuna_floatnegpiece::recover(data, op) {
+        if crate::floatnegpiece::recover(data, op) {
             return 1;
         }
         let outsz = size_of(data, out_vn(data, op));
@@ -1392,7 +1392,7 @@ impl Rule for RuleConcatZero {
     }
 
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
-        if crate::kuna_aggregatefields::keeps_structured_concat(data, op) {
+        if crate::aggregatefields::keeps_structured_concat(data, op) {
             return 0;
         }
         let in1 = in_vn(data, op, 1);

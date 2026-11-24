@@ -8,7 +8,7 @@ escape hatch for the whole pass.
 1. Reproduce the issue (`repro.c`) and find whether the same hole is reachable
    past the single use (`travel.s`). Both yes.
 2. Share the *helpers* with `foldcallretphi` — the storage test, the print-point
-   walk, the opcode test — by moving them into `kuna_callretfold.rs`, which is
+   walk, the opcode test — by moving them into `callretfold.rs`, which is
    the module that owns order safety. Do **not** share the policy:
    `foldcallretphi` composes its own guard, exactly as it shipped.
 3. For the default fold, take a write test to the landing statement. Leave the

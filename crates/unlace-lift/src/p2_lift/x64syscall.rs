@@ -71,7 +71,7 @@
 //! # Where it sits
 //!
 //! An `Action` in the once-per-function block beside
-//! [`ActionLinuxSyscall`](crate::kuna_linuxsyscall::ActionLinuxSyscall), for the
+//! [`ActionLinuxSyscall`](crate::linuxsyscall::ActionLinuxSyscall), for the
 //! same reason — the pattern is read off the raw p-code, and adding a register
 //! read or write is only legal before heritage builds SSA. A `CALLOTHER` a
 //! compiler spec has already specialized with a `<callotherfixup>` is left alone;
@@ -91,7 +91,7 @@ use unlace_base::error::{KunaError, KunaResult};
 /// 4160 was the previous max.
 pub const ELEM_X64SYSCALL: ElementId = ElementId::new("x64syscall", 4161);
 
-pub use crate::kuna_specnames::X64_SYSCALL_USEROP as USEROP_NAME;
+pub use crate::specnames::X64_SYSCALL_USEROP as USEROP_NAME;
 
 /// The register carrying the syscall number on the way in and the result on the
 /// way out.
@@ -123,7 +123,7 @@ pub enum X64SyscallMode {
     Abi,
 }
 
-impl crate::kuna_optionset::KunaOption for X64SyscallMode {
+impl crate::optionset::KunaOption for X64SyscallMode {
     const NAME: &'static str = "x64syscall";
     crate::kuna_option_id!();
 
@@ -155,7 +155,7 @@ impl X64SyscallMode {
 /// (kuna) Choose the `SYSCALL` effect model: `x64syscall off|on|abi`.
 ///
 /// Following the kuna-option idiom
-/// ([`OptionInt3Pad`](crate::kuna_int3pad::OptionInt3Pad)), this struct owns only
+/// ([`OptionInt3Pad`](crate::int3pad::OptionInt3Pad)), this struct owns only
 /// the parse; the caller (`Architecture::set_kuna_option`) writes the live field.
 pub struct OptionX64Syscall;
 

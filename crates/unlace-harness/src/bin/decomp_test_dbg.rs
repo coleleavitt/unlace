@@ -35,9 +35,7 @@ use unlace_harness::testfunction::write_file_runs;
 use unlace_harness::unittest::{UnitTestSuite, add_exit_code};
 
 fn main() -> ExitCode {
-    unlace_console::kuna_buildstamp::answer_parent(
-        unlace_console::kuna_buildstamp::ChildKind::Harness,
-    );
+    unlace_console::buildstamp::answer_parent(unlace_console::buildstamp::ChildKind::Harness);
     let argv: Vec<String> = std::env::args().collect();
 
     let mut run_unit_tests = true;

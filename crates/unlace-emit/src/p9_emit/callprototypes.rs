@@ -1,6 +1,6 @@
 //! C declarations for named calls with complete locked prototypes.
+use crate::calltargettype::FuncdataCalltargettypeExt;
 use crate::dtype::{Datatype, DatatypeKind, type_metatype};
-use crate::kuna_calltargettype::FuncdataCalltargettypeExt;
 use crate::printc::ArchPrintExt;
 use crate::{architecture::Architecture, funcdata::Funcdata};
 use std::{collections::BTreeSet, rc::Rc};
@@ -9,13 +9,13 @@ use unlace_num::opcodes::OpCode;
 #[derive(Default)]
 pub struct Declarations {
     pub declarations: Vec<String>,
-    pub callwide_prototypes: Vec<crate::kuna_callwide::ExportPrototype>,
+    pub callwide_prototypes: Vec<crate::callwide::ExportPrototype>,
 }
 
 pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, String> {
     let mut declarations = BTreeSet::new();
     let mut callwide_prototypes = Vec::new();
-    if let Some(contract) = crate::kuna_callwide::definition_prototype(fd, fd.get_display_name())? {
+    if let Some(contract) = crate::callwide::definition_prototype(fd, fd.get_display_name())? {
         callwide_prototypes.push(contract);
     }
     let rt = crate::printc::RealTypeCtx::from_arch(arch, arch.print().out_lang());
@@ -28,7 +28,7 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
             continue;
         }
         let name = call.fspec_printed_name(arch.kuna_name_style());
-        let wide = crate::kuna_callwide::call_prototype(fd, call, &name)?;
+        let wide = crate::callwide::call_prototype(fd, call, &name)?;
         let proto = call.proto();
         if wide.is_none()
             && (!proto.has_store() || !proto.is_input_locked() || !proto.is_output_locked())
@@ -99,22 +99,17 @@ pub fn declarations(arch: &Architecture, fd: &Funcdata) -> Result<Declarations, 
 }
 
 /// Project-only dependencies; ordinary per-function type inventories stay local.
-pub fn type_definitions(
-    arch: &Architecture,
-    fd: &Funcdata,
-) -> Vec<crate::kuna_funcreport::TypeInfo> {
-    if !arch.print().options.struct_defs()
-        || arch.print().out_lang() != crate::kuna_lang::OutLang::C
-    {
+pub fn type_definitions(arch: &Architecture, fd: &Funcdata) -> Vec<crate::funcreport::TypeInfo> {
+    if !arch.print().options.struct_defs() || arch.print().out_lang() != crate::lang::OutLang::C {
         return Vec::new();
     }
     let rt = crate::printc::RealTypeCtx::from_arch(arch, arch.print().out_lang());
-    let types = crate::kuna_structdefs::referenced_call_types(fd);
-    crate::kuna_structdefs::dedup_by_name(&types)
+    let types = crate::structdefs::referenced_call_types(fd);
+    crate::structdefs::dedup_by_name(&types)
         .iter()
-        .map(|ty| crate::kuna_funcreport::TypeInfo {
+        .map(|ty| crate::funcreport::TypeInfo {
             name: ty.get_name().to_string(),
-            definition: crate::kuna_structdefs::definition_text(ty, rt.clone()),
+            definition: crate::structdefs::definition_text(ty, rt.clone()),
             size: ty.get_size() as i64,
         })
         .collect()
@@ -125,11 +120,11 @@ pub fn type_definitions(
 pub fn field_declarations(
     arch: &Architecture,
     fd: &Funcdata,
-) -> Vec<crate::kuna_calltargettype::FieldDecl> {
+) -> Vec<crate::calltargettype::FieldDecl> {
     let rt = crate::printc::RealTypeCtx::from_arch(arch, arch.print().out_lang());
     fd.kuna_field_calls()
         .iter()
-        .map(|call| crate::kuna_calltargettype::FieldDecl {
+        .map(|call| crate::calltargettype::FieldDecl {
             record: call.record.clone(),
             field: call.field.clone(),
             declaration: call

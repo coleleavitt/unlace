@@ -289,10 +289,10 @@ pub fn recover(fd: &mut Funcdata) -> KunaResult<()> {
                     && current.get_metatype() == M::TYPE_FLOAT
                     && match code {
                         OpCode::CPUI_CALL | OpCode::CPUI_CALLIND => {
-                            crate::kuna_floatreg::passed_in_a_float_register(fd, user, slot)
+                            crate::floatreg::passed_in_a_float_register(fd, user, slot)
                         }
                         OpCode::CPUI_RETURN => fd.vbank().get(out).is_some_and(|node| {
-                            crate::kuna_floatreg::returned_in_a_float_register(fd, out, node)
+                            crate::floatreg::returned_in_a_float_register(fd, out, node)
                         }),
                         _ => false,
                     };
@@ -348,13 +348,13 @@ pub fn keeps_root_alone(ctx: &dyn MergeContext, a: HighVariableId, b: HighVariab
     ctx.fpu_trunc_views_enabled() && (ctx.fpu_trunc_root_high(a) || ctx.fpu_trunc_root_high(b))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.fputruncviews_keeps_apart = Some(keeps_apart);
     hooks.fputruncviews_keeps_highs_apart = Some(keeps_highs_apart);
     hooks.fputruncviews_keeps_root_alone = Some(keeps_root_alone);
 }
 
 #[cfg(test)]
-#[path = "kuna_fputruncviews/tests.rs"]
+#[path = "fputruncviews/tests.rs"]
 mod tests;

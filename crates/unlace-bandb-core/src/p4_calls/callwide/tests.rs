@@ -1,13 +1,13 @@
 use super::*;
-use crate::kuna_callwide::FuncdataCallwideExt;
+use crate::callwide::FuncdataCallwideExt;
 
 use unlace_base::space::{
     AddrSpace, AddrSpaceManager, ConstantSpace, UniqueSpace, addrspace_flags, spacetype,
 };
 use unlace_num::opcodes::OpCode;
 
+use crate::bejoin::BeJoinMode;
 use crate::context::{ArchContext, TypeOp, VarnodeId};
-use crate::kuna_bejoin::BeJoinMode;
 
 fn data_and_proof() -> (Funcdata, Rc<Ledger>) {
     let mut manager = AddrSpaceManager::new();

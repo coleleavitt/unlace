@@ -6,7 +6,7 @@
 
 The feature has three moving parts and they are useless apart:
 
-1. **`externref` over the IAT slots** (`kuna-analysis/src/loader/kuna_peimportcall.rs`
+1. **`externref` over the IAT slots** (`kuna-analysis/src/loader/peimportcall.rs`
    + `pe_iat::resolve_pe_import_slots`, committed by `engine.rs` as
    `Database::set_property_range(varnode_flags::externref, ...)`). Binds the call.
 2. **`GlobalEntry::func_no_return`** (`p0_knowledge/database.rs::build_global_query`,

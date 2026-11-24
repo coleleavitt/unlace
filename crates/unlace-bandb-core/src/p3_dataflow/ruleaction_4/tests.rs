@@ -1243,7 +1243,7 @@ fn every_copy_on_the_chain_to_the_return_resolves_the_whole_container() {
         fd.op_insert(ret, block, None);
         for (op, slot) in [(first, -1), (first, 0), (second, -1), (second, 0), (ret, 1)] {
             assert!(
-                crate::kuna_aggregatefields::returns_whole_container(&fd, op, slot, &parent),
+                crate::aggregatefields::returns_whole_container(&fd, op, slot, &parent),
                 "op={op:?} slot={slot}"
             );
         }

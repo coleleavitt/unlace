@@ -71,7 +71,7 @@ pub fn thunk_register(read: impl Fn(u64) -> Option<u8>) -> Option<&'static str> 
 pub fn inject_id(arch: &Architecture, entry: &Address) -> int4 {
     if !arch
         .kuna_options
-        .get::<crate::kuna_retpolinethunk::RetpolineThunk>()
+        .get::<crate::retpolinethunk::RetpolineThunk>()
         .0
         || !arch.get_description().starts_with("x86:")
     {

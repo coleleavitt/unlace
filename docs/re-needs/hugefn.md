@@ -14,7 +14,7 @@ rounds: []
 first_seen_round: null
 attempts: 0
 covered_by_option: null
-touches: [crates/unlace-cli/src/decompile_all.rs, crates/unlace-analysis/src/listing/xrefs.rs, crates/unlace-analysis/src/listing/kuna_switchtable.rs, crates/unlace-decomp/phases.toml]
+touches: [crates/unlace-cli/src/decompile_all.rs, crates/unlace-analysis/src/listing/xrefs.rs, crates/unlace-analysis/src/listing/switchtable.rs, crates/unlace-decomp/phases.toml]
 scope: small
 regression_of: null
 pr: null

@@ -1279,7 +1279,7 @@ fn maskjoin_covering_halves_are_the_value() {
     ] {
         let mut fd = build_fd();
         let (op, x) = mask_join(&mut fd, opc, 0xffff_ffff, 0xffff_ffff_0000_0000);
-        let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+        let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
         assert_eq!(r.apply_op(op, &mut fd), 1, "{opc:?}");
         assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
         assert_eq!(numin(&fd, op), 1);
@@ -1291,7 +1291,7 @@ fn maskjoin_covering_halves_are_the_value() {
 fn maskjoin_partial_masks_join_into_one_and() {
     let mut fd = build_fd();
     let (op, x) = mask_join(&mut fd, OpCode::CPUI_INT_ADD, 0xff, 0xff00);
-    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 1);
     assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_AND);
     assert_eq!(in_of(&fd, op, 0), Some(x));
@@ -1304,7 +1304,7 @@ fn maskjoin_partial_masks_join_into_one_and() {
 fn maskjoin_declines_overlapping_masks() {
     let mut fd = build_fd();
     let (op, _) = mask_join(&mut fd, OpCode::CPUI_INT_ADD, 0x1ff, 0xff00);
-    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 0);
     assert_eq!(code_of(&fd, op), OpCode::CPUI_INT_ADD);
 }
@@ -1328,7 +1328,7 @@ fn maskjoin_declines_masks_of_different_values() {
     wire_input(&mut fd, op, hi, 0);
     wire_input(&mut fd, op, lo, 1);
     let _out = give_output(&mut fd, op, 0x110, 8);
-    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 0);
 }
 
@@ -1362,7 +1362,7 @@ fn maskjoin_reads_zero_extended_pieces_moved_back_into_place() {
     wire_input(&mut fd, op, shifted, 0);
     wire_input(&mut fd, op, lo8, 1);
     let _out = give_output(&mut fd, op, 0x128, 8);
-    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 1);
     assert_eq!(code_of(&fd, op), OpCode::CPUI_COPY);
     assert_eq!(in_of(&fd, op, 0), Some(x));
@@ -1398,6 +1398,6 @@ fn maskjoin_declines_a_piece_shifted_off_its_place() {
     wire_input(&mut fd, op, shifted, 0);
     wire_input(&mut fd, op, lo8, 1);
     let _out = give_output(&mut fd, op, 0x128, 8);
-    let mut r = crate::kuna_maskjoin::RuleMaskJoin::new("analysis");
+    let mut r = crate::maskjoin::RuleMaskJoin::new("analysis");
     assert_eq!(r.apply_op(op, &mut fd), 0);
 }

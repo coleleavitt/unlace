@@ -4,9 +4,9 @@
 
 A print-time decision, like `castimplied` and `castternary`; the IR is not changed.
 
-- `p9_emit/kuna_castwiden.rs (plan)` decides, once per arithmetic op
+- `p9_emit/castwiden.rs (plan)` decides, once per arithmetic op
   (`+ - * / % & | ^`), which widened operand keeps no cast and which 8-byte literal
-  operand takes a size suffix. `kuna_castimplied.rs (ImpliedCasts::widen_plan)`
+  operand takes a size suffix. `castimplied.rs (ImpliedCasts::widen_plan)`
   caches it for the function (cleared by `ImpliedCasts::begin`).
 - `printc.rs (PrintC::implied_cast_drops)` asks `ImpliedCasts::widen_drops` for the
   extension arms and the `CPUI_CAST` arm; a dropped cast pushes its operand bare,

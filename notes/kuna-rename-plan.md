@@ -60,7 +60,7 @@ special cases. The script refuses to run while any clash remains.
 - **Provenance**: `NOTICE`, `LICENSE`, `docs/history.md`, and comments citing
   `decompiler/cpp/<file>` Ghidra anchors are untouched.
 - **Decompiler output**: anything printed into C (`KUNA_BYTEARRAY_C_*` include guards in
-  `kuna_bytearrayc.rs`, region/maturity trace banners) changes datatest/stage text; keep it in
+  `bytearrayc.rs`, region/maturity trace banners) changes datatest/stage text; keep it in
   phase 2, or change it in its own PR with the 675/675 and stage gates run.
 - **Compile-time names**: `KUNA_VERSION` (release matrix), `KUNA_*_SOURCE_FINGERPRINT`
   (`unlace-console/build.rs`) and the harness `===KUNA_DUMP_*===` markers (parsed by tests

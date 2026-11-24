@@ -104,7 +104,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::int4;
 
 use crate::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
-use crate::kuna_structsynth::ledger::{self, Layout, Member};
+use crate::structsynth::ledger::{self, Layout, Member};
 
 /// How many claims two layouts must share before the union is evidence, when one
 /// of the shared claims is a pointer with a pointee.
@@ -123,7 +123,7 @@ pub enum StructMergeMode {
     Siblings,
 }
 
-impl crate::kuna_optionset::KunaOption for StructMergeMode {
+impl crate::optionset::KunaOption for StructMergeMode {
     const NAME: &'static str = "structmerge";
     crate::kuna_option_id!();
 
@@ -230,7 +230,7 @@ fn agreement_is_evidence(a: &Layout, b: &Layout, shared: usize) -> bool {
 
 /// The member list of a record holding exactly `claims`, with every gap and the
 /// tail covered by `undefined1` filler and the size rounded the way a C compiler
-/// rounds it -- the same layout [`crate::kuna_structsynth`] builds for one
+/// rounds it -- the same layout [`crate::structsynth`] builds for one
 /// reader, over two readers' claims.
 fn plan(
     types: &dyn TypeFactory,

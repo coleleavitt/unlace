@@ -70,7 +70,7 @@ impl Report {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::flirt::kuna_rustprofiles::{
+    use crate::flirt::rustprofiles::{
         BankScore, CandidateScore, Library, LibraryMatch, Profile, Source,
     };
 

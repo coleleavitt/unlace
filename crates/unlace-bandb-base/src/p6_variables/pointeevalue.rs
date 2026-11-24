@@ -16,7 +16,7 @@
 //! that join in the two optional merges that make it, the `COPY`'s copy-shadow
 //! merge and the adjacent-op merge, so the value keeps its own variable, typed
 //! by its own uses, and the `COPY` prints as the store.
-//! `p3_dataflow/kuna_pointeestorekeep.rs` keeps that `COPY` alive in the first
+//! `p3_dataflow/pointeestorekeep.rs` keeps that `COPY` alive in the first
 //! place when a marker would otherwise swallow it.
 //!
 //! The binary's own loads of the global stay loads there too, and a register
@@ -30,10 +30,10 @@ use unlace_num::opcodes::OpCode;
 
 use crate::context::{HighVariableId, VarnodeId};
 use crate::funcdata::Funcdata;
-use crate::kuna_pointeestorekeep::{
+use crate::merge::MergeContext;
+use crate::pointeestorekeep::{
     WALK_BOUND, loads_stored_global, offsets_address, reads_pointee, written_between,
 };
-use crate::merge::MergeContext;
 use crate::varnode::varnode_flags;
 
 /// Must the HighVariables of `vn1` and `vn2` stay apart because one is a global
@@ -195,8 +195,8 @@ pub fn load_crosses_write(data: &Funcdata, vn: VarnodeId) -> bool {
         .any(|r| written_between(data, vn, r))
 }
 
-/// Fill this pass's hooks ([`crate::kuna_passhooks`]).
-pub fn provide(hooks: &mut crate::kuna_passhooks::KunaHookSlots) {
+/// Fill this pass's hooks ([`crate::passhooks`]).
+pub fn provide(hooks: &mut crate::passhooks::KunaHookSlots) {
     hooks.pointeevalue_load_crosses_write = Some(load_crosses_write);
     hooks.pointeevalue_keeps_apart = Some(keeps_apart);
 }

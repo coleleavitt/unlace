@@ -122,7 +122,7 @@ fn stripped_swift_functions_are_named_from_metadata() {
         assert_eq!(on[i], want, "swiftmetadata on names 0x{vma:x} ({symbol})");
         // The demangled symbol's path is a prefix of (or equal to) the
         // installed name's type path, so the two agree on which type owns it.
-        let demangled = unlace_analysis::demangle::kuna_swift::demangle_swift_name(symbol)
+        let demangled = unlace_analysis::demangle::swift::demangle_swift_name(symbol)
             .expect("symbol demangles");
         let type_path = |n: &str| {
             let n = n.trim_start_matches('<');

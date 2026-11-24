@@ -8,7 +8,7 @@ use unlace_console::ifacedecomp::{
     DECOMPILE_MODULE, IfaceDecompData, execute, register_decomp_commands,
 };
 use unlace_console::ifaceterm::ConsoleCommands;
-use unlace_decomp::kuna_maturity::{Fact, Maturity};
+use unlace_decomp::maturity::{Fact, Maturity};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -30,7 +30,7 @@ fn drive(cmds: &[&str]) -> (String, Vec<Maturity>, Vec<Fact>, bool) {
     let count = cmds.len();
     let mut status = ConsoleCommands::into_status(cmds);
     register_decomp_commands(&mut status);
-    unlace_console::kuna_console::register_kuna_commands(&mut status);
+    unlace_console::console::register_kuna_commands(&mut status);
     status
         .get_data_mut(DECOMPILE_MODULE)
         .unwrap()

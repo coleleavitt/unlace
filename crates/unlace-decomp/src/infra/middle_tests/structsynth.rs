@@ -15,7 +15,7 @@ use crate::dtype::TypeFactory;
 use crate::dtype::TypeField;
 use crate::dtype::type_metatype;
 use crate::funcdata::Funcdata;
-use crate::kuna_structsynth::*;
+use crate::structsynth::*;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use unlace_base::error::KunaError;

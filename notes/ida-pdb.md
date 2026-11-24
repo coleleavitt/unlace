@@ -2,7 +2,7 @@
 
 Deepens gap 3 of `notes/ida-gaps.md`. unlace's `pdb` pass locates a matching PDB (GUID/age gate, no
 network; `analyzers/pdb/locate.rs`) and imports function names (`walk.rs`) and extents
-(`kuna_pdbinterior.rs`). It reads no type stream: `git grep -i 'type_information\|TypeData' origin/main --
+(`pdbinterior.rs`). It reads no type stream: `git grep -i 'type_information\|TypeData' origin/main --
 crates/unlace-analysis/src/analyzers/pdb` is empty, although the `pdb` crate it already uses (0.8.0)
 parses the TPI stream (`PDB::type_information`, `TypeData::{Class, Union, Enumeration, Procedure,
 MemberFunction, Pointer, Array, Bitfield, FieldList}`) and module symbols (`S_REGREL32`, `S_LOCAL` +
@@ -31,7 +31,7 @@ the natural sink: render the PDB's TPI the same way and seed it by address for e
 
 | step | what | where | size |
 |---|---|---|---|
-| 1 | **Types.** `kuna_pdbtypes.rs`: walk `type_information()` with a `TypeFinder`; render classes/structs/unions (member offsets are in the field list, no layout needed), enums, typedefs (from `S_UDT`), pointers, arrays, bitfields, procedure types as typelib text. Bound counts and recursion depth (hostile PDB); forward references resolved by name, as `kuna_til` does. | `unlace-analysis/src/analyzers/pdb/` | M |
+| 1 | **Types.** `pdbtypes.rs`: walk `type_information()` with a `TypeFinder`; render classes/structs/unions (member offsets are in the field list, no layout needed), enums, typedefs (from `S_UDT`), pointers, arrays, bitfields, procedure types as typelib text. Bound counts and recursion depth (hostile PDB); forward references resolved by name, as `kuna_til` does. | `unlace-analysis/src/analyzers/pdb/` | M |
 | 2 | **Prototypes.** For each `S_GPROC32`/`S_LPROC32`, its procedure or member-function type as a prototype at the function address (`prototypes_at`), `this` typed as the class pointer; calling convention from the type record. A PDB prototype outranks `win32sigs`/`cppsig` for that address. | same + `kuna_typelib::seed` | S-M |
 | 3 | **Locals.** `S_REGREL32` (frame-register relative), `S_BPREL32`, and `S_LOCAL` with `S_DEFRANGE_REGISTER`/`_FRAMEPOINTER_REL`/`_REGISTER_REL` ranges, imported like `dwarfscopes` imports DWARF locals (names and types per storage and range), including `S_BLOCK32` scopes. | same, through the declared-variables path `dwarfscopes` uses | M |
 | 4 | **Lines (optional).** The C13 line program as `file:line` comments, behind the same switch as DWARF lines (`dwarf_lines`). | same | S |

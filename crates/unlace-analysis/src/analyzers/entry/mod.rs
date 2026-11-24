@@ -88,31 +88,31 @@ use object::{SectionKind, SymbolKind};
 use crate::loader::format::FormatKind;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, ContextPaint, Phase};
 
-pub mod kuna_armlibcmain;
-pub mod kuna_elfmain;
-pub mod kuna_entrymainproto;
-pub mod kuna_machomain;
-pub mod kuna_unwindinfo;
+pub mod armlibcmain;
+pub mod elfmain;
+pub mod entrymainproto;
+pub mod machomain;
+pub mod unwindinfo;
 // (kuna `machoehframe`) Mach-O `__eh_frame` FDE function starts.
-pub mod kuna_armexidx;
-pub mod kuna_coldentry;
-pub mod kuna_cortexmvectors;
-pub mod kuna_ehcold;
-pub mod kuna_fdeinterior;
-mod kuna_initterm;
-pub mod kuna_itaniumeh;
-pub mod kuna_machoehframe;
-pub mod kuna_mfcmsgmap;
-pub mod kuna_msvceh;
-pub mod kuna_msvcfuncinfo;
-pub mod kuna_msvcptrentry;
-pub mod kuna_msvcseh;
-pub mod kuna_pdatainterior;
-pub mod kuna_pemain;
-pub mod kuna_pereloccode;
+pub mod armexidx;
+pub mod coldentry;
+pub mod cortexmvectors;
+pub mod ehcold;
+pub mod fdeinterior;
+mod initterm;
+pub mod itaniumeh;
 mod macho_entry;
+pub mod machoehframe;
+pub mod mfcmsgmap;
+pub mod msvceh;
+pub mod msvcfuncinfo;
+pub mod msvcptrentry;
+pub mod msvcseh;
 pub mod patterns;
+pub mod pdatainterior;
 mod pe_entry;
+pub mod pemain;
+pub mod pereloccode;
 
 // ===========================================================================
 // The image entry point, as a virtual address
@@ -210,8 +210,7 @@ impl AnalysisPass for EntryDiscoveryPass {
         out.context_paints
             .extend(cortexm_thumb_paints(ctx.file, false));
         // ARM EHABI: the `.ARM.exidx` functions known to be Thumb.
-        out.context_paints
-            .extend(kuna_armexidx::thumb_paints(ctx.file));
+        out.context_paints.extend(armexidx::thumb_paints(ctx.file));
         // Ghidra-faithful names for the dynamic INIT/FINI entries (oracle 2 only),
         // restricted to the VMAs that actually survived into `out.entries` (a named
         // entry already covered by a funcsym is filtered out above, so its name is
@@ -231,7 +230,7 @@ impl AnalysisPass for EntryDiscoveryPass {
 ///
 /// Like every other analysis pass it RUNS at load (the facts are cheap to compute
 /// and are stashed per-pass); the **commit** is gated by `--option eh_frame_full
-/// on` (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::kuna_analysisgates::EhFrameFull>().0`). So a
+/// on` (`engine.rs::analysis_pass_enabled` → `arch.kuna_options.get::<unlace_decomp::analysisgates::EhFrameFull>().0`). So a
 /// default run computes but never COMMITS the landing pads, and the discovery set
 /// is byte-identical to the FDE-pcBegin-only behavior — every parity gate is
 /// structurally untouched. Output-changing (adds entries) ⇒ default-off.
@@ -377,7 +376,7 @@ pub fn full_pattern_starts_with_mode(file: &object::File) -> Vec<(u64, Option<u3
     // .pdata) already list what such a weak hint could add.
     let weak_ok = set.only_weak() && matches!(file.format(), object::BinaryFormat::Elf);
     let bodies = if weak_ok {
-        kuna_fdeinterior::scan_fde_bodies(file)
+        fdeinterior::scan_fde_bodies(file)
     } else {
         Vec::new()
     };
@@ -386,7 +385,7 @@ pub fn full_pattern_starts_with_mode(file: &object::File) -> Vec<(u64, Option<u3
     let mut cand: Vec<(u64, Option<u32>)> = Vec::new();
     for (addr, _hi, data) in &execs {
         for hit in set.scan_hits(*addr, data) {
-            if hit.weak && (!weak_ok || kuna_fdeinterior::is_interior(&bodies, hit.vma)) {
+            if hit.weak && (!weak_ok || fdeinterior::is_interior(&bodies, hit.vma)) {
                 continue;
             }
             cand.push((hit.vma, hit.mode));
@@ -448,11 +447,11 @@ pub(crate) fn inside_body(bodies: &[(u64, u64)], vma: u64) -> bool {
 /// The function bodies the image states, sorted and merged so each entry
 /// reaches as far as any body starting at or before it: its sized function
 /// symbols and, on ELF, the `.eh_frame` FDEs that describe one function
-/// ([`kuna_fdeinterior::eligible_fde_bodies`]). A point strictly inside one
+/// ([`fdeinterior::eligible_fde_bodies`]). A point strictly inside one
 /// ([`inside_body`]) is code of that function, not a function of its own.
 pub(crate) fn stated_function_bodies(file: &object::File, bytes: &[u8]) -> Vec<(u64, u64)> {
     let mut out = sized_function_bodies(file);
-    out.extend(kuna_fdeinterior::eligible_fde_bodies(file, bytes));
+    out.extend(fdeinterior::eligible_fde_bodies(file, bytes));
     out.sort_unstable();
     let mut reach = 0;
     for body in &mut out {
@@ -561,7 +560,7 @@ fn collect_entries_with_pe_mode(file: &object::File, bytes: &[u8], pe_arm: bool)
                 cand.extend(cortexm_vector_entries(file, false));
                 // Oracle 3 on ARM32: the `.ARM.exidx` function starts, the EHABI
                 // counterpart of the FDE `pcBegin`s (an ARM ELF has no `.eh_frame`).
-                cand.extend(kuna_armexidx::starts(file));
+                cand.extend(armexidx::starts(file));
             }
         }
         // PE: entry (AddressOfEntryPoint+ImageBase), `.pdata` RUNTIME_FUNCTION
@@ -1537,7 +1536,7 @@ fn cortexm_vector_table_shipped(file: &object::File) -> Option<(u64, u64, Vec<u8
 /// and the widened scan only runs when the shipped signature found nothing —
 /// see [`kuna_cortexmvectors`].
 fn cortexm_vector_table(file: &object::File, widen: bool) -> Option<(u64, u64, Vec<u8>)> {
-    kuna_cortexmvectors::vector_table(file, widen)
+    cortexmvectors::vector_table(file, widen)
 }
 
 /// Oracle 6: harvest the reset + exception/IRQ handler pointers from a detected

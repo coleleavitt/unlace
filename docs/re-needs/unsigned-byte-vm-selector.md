@@ -14,7 +14,7 @@ rounds: [4, 12]
 first_seen_round: 4
 attempts: 1
 covered_by_option: loweredswitchlabels
-touches: [crates/unlace-decomp/src/p2_lift/kuna_loweredswitch.rs, crates/unlace-decomp/src/p2_lift/kuna_loweredswitchlabels.rs, crates/unlace-decomp/src/substrate/funcdata_block.rs]
+touches: [crates/unlace-decomp/src/p2_lift/loweredswitch.rs, crates/unlace-decomp/src/p2_lift/loweredswitchlabels.rs, crates/unlace-decomp/src/substrate/funcdata_block.rs]
 scope: small
 regression_of: null
 pr: https://github.com/Noelo-Lab/kuna/pull/613

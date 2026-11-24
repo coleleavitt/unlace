@@ -34,7 +34,7 @@
 
 use std::path::PathBuf;
 
-use unlace_analysis::listing::kuna_tailcallentry::tail_call_entries;
+use unlace_analysis::listing::tailcallentry::tail_call_entries;
 use unlace_analysis::listing::{Listing, ListingDetail};
 use unlace_console::engine::bootstrap_from_object;
 use unlace_console::ifacedecomp::{

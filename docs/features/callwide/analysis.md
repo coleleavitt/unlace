@@ -131,7 +131,7 @@ cc -O2 -fwrapv -include /tmp/kuna-callwide-repro/support.h \
 
 ## Diagnosis and evidence limits
 
-P4's `kuna_bejoin/evidence.rs::seed` caches producer-body proofs only.
+P4's `bejoin/evidence.rs::seed` caches producer-body proofs only.
 `kuna_callerreads::read` handles recovered-void outputs and one register; it
 does not establish this pair. `ActionReturnRecovery::apply` scores output
 trials before selecting their join order. On this MIPS witness the low word

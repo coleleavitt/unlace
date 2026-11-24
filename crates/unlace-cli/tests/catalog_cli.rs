@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::sync::Mutex;
 
-use unlace_decomp::kuna_phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
+use unlace_decomp::phases::{emit_catalog_json, emit_catalog_json_one, emit_catalog_markdown};
 
 // A concurrent fork can inherit a just-written executable's writable descriptor
 // until exec, so the copy or the fake console fails with ETXTBSY when run.

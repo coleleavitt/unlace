@@ -73,7 +73,7 @@ including the `sub_40424c` body kuna had been absorbing, is
 ## Mechanism (three parts, one gate)
 
 1. **`externref` over the IAT slots.**
-   `kuna-analysis/src/loader/kuna_peimportcall.rs (PeImportCallPass)` reports one
+   `kuna-analysis/src/loader/peimportcall.rs (PeImportCallPass)` reports one
    `[slot, slot+ptr)` range per import-descriptor entry (`pe_iat::resolve_pe_import_slots`,
    reusing the existing INT/IAT lockstep walk), and the commit ORs
    `Varnode::externref` over each in the symbol-table property map — the same
@@ -276,7 +276,7 @@ fix — `ExitProcess(0xc); // no-return`, `ExitProcess(); // no-return`, and exa
 `// no-return` marks. 2 of the 5 assertions fail with the option off; 5/5 with it on.
 
 Plus `passes::tests::peimportcall_pass_is_pe_coff_gated` (format gating) and the two
-vendored-list guards in `kuna_peimportcall.rs` (the Win32 exits are present; the
+vendored-list guards in `peimportcall.rs` (the Win32 exits are present; the
 returning APIs — `CreateThread`, `GetTickCount`, `TerminateProcess`, … — are not).
 
 ## Gates

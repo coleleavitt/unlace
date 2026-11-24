@@ -3,7 +3,7 @@
 use crate::funcdata_facing::FuncdataFacingExt;
 use std::rc::Rc;
 
-use super::kuna_rustarrayaddr::{RAW_ADDRESS, array_place};
+use super::rustarrayaddr::{RAW_ADDRESS, array_place};
 use crate::architecture::Architecture;
 use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};

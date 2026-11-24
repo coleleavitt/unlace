@@ -145,7 +145,7 @@
     "kuna catalog --check": "catalog OK"
   },
   "files": {
-    "pass": "decompiler/crates/kuna-analysis/src/analyzers/aif/kuna_ptrentry.rs",
+    "pass": "decompiler/crates/kuna-analysis/src/analyzers/aif/ptrentry.rs",
     "wiring": "decompiler/crates/kuna-analysis/src/passes.rs",
     "fixture": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32",
     "fixture_generator": "decompiler/crates/kuna-analysis/tests/fixtures/cortexm_ptrentry_le32.py",

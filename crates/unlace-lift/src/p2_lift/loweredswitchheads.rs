@@ -1,7 +1,7 @@
 //! (kuna `loweredswitchheads`) Look for a lowered-switch cascade behind every head
 //! on the switch variable, not only the first.
 //!
-//! [`crate::kuna_loweredswitch`] picks the most-compared variable and recovers a
+//! [`crate::loweredswitch`] picks the most-compared variable and recovers a
 //! cascade from a head: a compare on that variable that no other compare on it
 //! continues into. Any unrelated test of the same variable is a head as well, and
 //! upstream tried only the first head in block order. MSVC `/O2` inlines an
@@ -11,7 +11,7 @@
 //!
 //! Detection tries the heads in block order and records the first cascade that
 //! recovers. Every cascade is kept only when
-//! [`crate::p2_lift::kuna_loweredswitchexact::record_is_exact`] shows the switch
+//! [`crate::p2_lift::loweredswitchexact::record_is_exact`] shows the switch
 //! the install builds routes every value and keeps every statement as the
 //! compare tree does; one behind a head after the first additionally needs a
 //! head block with one predecessor and no case body also entered from outside
@@ -24,8 +24,8 @@ use unlace_base::marshal::ElementId;
 
 use crate::context::BlockId;
 use crate::funcdata::Funcdata;
-use crate::p2_lift::kuna_loweredswitch::KunaLoweredSwitchRecord;
-use crate::p2_lift::kuna_loweredswitchexact::{block_at_start, removed_blocks};
+use crate::p2_lift::loweredswitch::KunaLoweredSwitchRecord;
+use crate::p2_lift::loweredswitchexact::{block_at_start, removed_blocks};
 
 /// Marshaling element `<loweredswitchheads>` (kuna 4000+ range).
 pub const ELEM_LOWEREDSWITCHHEADS: ElementId = ElementId::new("loweredswitchheads", 4172);
@@ -74,5 +74,5 @@ pub fn case_body_entered_elsewhere(
 }
 
 #[cfg(test)]
-#[path = "kuna_loweredswitchheads/tests.rs"]
+#[path = "loweredswitchheads/tests.rs"]
 mod tests;

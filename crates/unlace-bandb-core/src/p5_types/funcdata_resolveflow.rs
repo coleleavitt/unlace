@@ -321,7 +321,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                 if is_lock && v.map(|v| Rc::ptr_eq(v.get_type(), parent)).unwrap_or(false) {
                     return Ok(-1); // COPY of the structure directly, use whole structure
                 }
-                if crate::kuna_aggregatefields::returns_whole_container(self, op, slot, parent) {
+                if crate::aggregatefields::returns_whole_container(self, op, slot, parent) {
                     return Ok(-1);
                 }
             }
@@ -347,7 +347,7 @@ impl FuncdataResolveFlowLocalExt for Funcdata {
                 }
             }
         } else if opc == OpCode::CPUI_RETURN && slot >= 1 {
-            if crate::kuna_aggregatefields::returns_whole_container(self, op, slot, parent) {
+            if crate::aggregatefields::returns_whole_container(self, op, slot, parent) {
                 return Ok(-1);
             }
         } else if o.is_call() {

@@ -11,7 +11,7 @@ mod module_scope {
 }
 use crate::dtype::type_class;
 use crate::fspec::{ParamEntry, ParamListKind, ParamListStandard};
-use crate::kuna_stackarggap::*;
+use crate::stackarggap::*;
 use module_scope::*;
 use unlace_base::address::Address;
 use unlace_base::space::{AddrSpace, AddrSpaceManager};

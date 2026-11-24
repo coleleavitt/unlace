@@ -8,9 +8,9 @@ use object::{BinaryFormat, Object};
 use super::{Image, accepted_matches, applies_to};
 use crate::listing::Listing;
 
-mod kuna_application;
-mod kuna_image;
-pub use kuna_image::{CompilerProvenance, ImageReport, Request};
+mod application;
+mod image;
+pub use image::{CompilerProvenance, ImageReport, Request};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Profile {

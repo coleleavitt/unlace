@@ -18,7 +18,7 @@
 //! extra lines, and a duplicated call per cloned block.
 //!
 //! This is the exact **inverse** of the three SAILR goto-reduction passes
-//! ([`crate::kuna_gotoreduce`] / `kuna_crossjumpreverter` /
+//! ([`crate::gotoreduce`] / `kuna_crossjumpreverter` /
 //! `kuna_taildup`), which *duplicate* a shared tail to remove a `goto`.  Here kuna
 //! has *over-duplicated* a shared if/else head, and the readability win is to
 //! **merge** the identical copies back into one.
@@ -116,7 +116,7 @@ impl Action for ActionDedupIteTail {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_dedupitetail::DedupIteTail>()
+            .get::<crate::dedupitetail::DedupIteTail>()
             .0
         {
             return 0;
@@ -634,7 +634,7 @@ impl OptionDedupIteTail {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DedupIteTail(pub bool);
 
-impl crate::kuna_optionset::KunaOption for DedupIteTail {
+impl crate::optionset::KunaOption for DedupIteTail {
     const NAME: &'static str = "dedupitetail";
     crate::kuna_option_id!();
 
@@ -647,7 +647,7 @@ impl crate::kuna_optionset::KunaOption for DedupIteTail {
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (v, msg) = crate::kuna_dedupitetail::OptionDedupIteTail.apply(value)?;
+        let (v, msg) = crate::dedupitetail::OptionDedupIteTail.apply(value)?;
         Ok((DedupIteTail(v), msg))
     }
 }

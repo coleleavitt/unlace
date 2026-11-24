@@ -7,7 +7,7 @@ assert record['new_cli_sha256']==build['new_cli_sha256'] and record['parent_cli_
 lex=re.compile(r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|//[^\n]*|[A-Za-z_][A-Za-z_0-9]*|.''')
 identifier=re.compile(r'[A-Za-z_][A-Za-z_0-9]*\Z')
 prefix=r'(?:(?:::)?(?:[A-Za-z_][A-Za-z_0-9]*::)+|::)'
-keywords=set(re.findall(r'"([a-z][a-z_0-9]*)"',Path('/home/mahaloz/kwt/angr-fnptr-namespace/decompiler/crates/kuna-decomp/src/p9_emit/kuna_funcptrnames.rs').read_text().split('fn plain_scope')[1]))
+keywords=set(re.findall(r'"([a-z][a-z_0-9]*)"',Path('/home/mahaloz/kwt/angr-fnptr-namespace/decompiler/crates/kuna-decomp/src/p9_emit/funcptrnames.rs').read_text().split('fn plain_scope')[1]))
 changes=[];totals=collections.Counter();parse_failures=[]
 for image in record['records']:
  assert sha(Path(image['fixture_path']))==image['fixture_sha256']

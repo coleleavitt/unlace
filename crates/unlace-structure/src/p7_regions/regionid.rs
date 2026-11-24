@@ -5,7 +5,7 @@
 //! of its `GraphRegion` result type (`graph_region.py`).
 //!
 //! This module is **not** part of upstream Ghidra.  It builds on the merged
-//! graph substrate [`crate::kuna_regiongraph`] (`KunaRegionGraph`,
+//! graph substrate [`crate::regiongraph`] (`KunaRegionGraph`,
 //! `KunaNodePool`, the DFS/dominator utilities) and collapses a *private* copy
 //! of a function's control-flow graph into a nested [`KunaGraphRegion`] tree.
 //!
@@ -31,7 +31,7 @@
 //! `BlockGraph` read-only) and three console commands (`IfcKunaRegionTree`,
 //! `IfcKunaRegionBlocks`, `IfcKunaRegionWalk`).  Both depend on
 //! `FlowBlock::getStart()`/`lastOp()` and the `IfaceDecompCommand` console
-//! machinery, which are a later wave (the same surface `kuna_assert.rs` stubs
+//! machinery, which are a later wave (the same surface `assert.rs` stubs
 //! off).  This port realizes the full identifier algorithm over the synthetic
 //! input API (`add_synthetic_block`/`add_synthetic_edge`), exactly what the
 //! `testkunaregion.cc` unit tests drive; the block-graph adapter and the
@@ -43,7 +43,7 @@ use unlace_base::error::{KunaError, KunaResult};
 use unlace_base::types::{int4, int8, uintb};
 
 use crate::funcdata::Funcdata;
-use crate::kuna_regiongraph::{
+use crate::regiongraph::{
     KunaIncrementalDominators, KunaNodeId, KunaNodeKey, KunaNodePool, KunaNodeSet, KunaRegionGraph,
     NodeKind, RegionPayloadId, kuna_dfs_back_edges, kuna_dfs_postorder_deterministic,
     kuna_immediate_dominators, kuna_quasi_topo_sort, kuna_slice_visits,
@@ -54,7 +54,7 @@ use crate::kuna_regiongraph::{
 /// spent. One region identification over a big function's CFG runs for
 /// minutes inside a single structuring action, so every region attempt asks.
 fn budget() -> KunaResult<()> {
-    if crate::kuna_budget::deadline_passed_in("region identification") {
+    if crate::budget::deadline_passed_in("region identification") {
         return Err(KunaError::lowlevel(
             "kuna regionid: stopped at the function's budget",
         ));
@@ -527,7 +527,7 @@ impl KunaRegionIdentifier {
     /// region identification, so [`build_from_block_graph`] precomputes that
     /// `lastOp` probe once per real block (deterministically, via `bb_op_tail` —
     /// the block's tail op under `(addr, ident)` ordering) and parks it on the
-    /// node ([`crate::kuna_regiongraph::KunaRegionNode::branchy`]); here we read
+    /// node ([`crate::regiongraph::KunaRegionNode::branchy`]); here we read
     /// the parked flag.  Synthetic test nodes have no block and never set the
     /// flag, so the answer is `false` for them — exactly the C++
     /// synthetic-node path the unit tests drive.
@@ -954,7 +954,7 @@ impl KunaRegionIdentifier {
                             break;
                         }
                     }
-                    if all_preds_in && crate::kuna_regiongraph::kuna_dominates(&idom_map, head, n) {
+                    if all_preds_in && crate::regiongraph::kuna_dominates(&idom_map, head, n) {
                         cand_order.push(n);
                     }
                 }
@@ -2502,8 +2502,8 @@ mod tests {
 
         use crate::context::{ArchContext, BlockId, TypeOp};
         use crate::funcdata::Funcdata;
-        use crate::kuna_regionid::KunaRegionIdentifier;
         use crate::op::pcodeop_flags;
+        use crate::regionid::KunaRegionIdentifier;
 
         fn build_manager() -> AddrSpaceManager {
             let mut m = AddrSpaceManager::new();

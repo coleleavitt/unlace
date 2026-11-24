@@ -24,7 +24,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use object::{Architecture, BinaryFormat};
 
-use super::kuna_flirtpat::{FuncPattern, PATTERN_LEN, Target};
+use super::flirtpat::{FuncPattern, PATTERN_LEN, Target};
 
 /// The format version written.
 pub const SIG_VERSION: u8 = 10;

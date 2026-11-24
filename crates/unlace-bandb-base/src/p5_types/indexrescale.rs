@@ -84,8 +84,7 @@ fn constant(data: &Funcdata, v: VarnodeId) -> Option<(u64, int4)> {
 fn divide(c: u64, size: int4, k: u64) -> Option<u64> {
     let bits = 8 * size.clamp(1, 8) as u32;
     let signed = ((c << (64 - bits)) as i64) >> (64 - bits);
-    (signed % k as i64 == 0)
-        .then(|| ((signed / k as i64) as u64) & crate::kuna_regioneval::mask(size))
+    (signed % k as i64 == 0).then(|| ((signed / k as i64) as u64) & crate::regioneval::mask(size))
 }
 
 /// What a reader of a web member does with it.
@@ -299,7 +298,7 @@ impl Action for ActionIndexRescale {
         if !data
             .get_arch()
             .kuna_options
-            .get::<crate::kuna_indexrescale::IndexRescale>()
+            .get::<crate::indexrescale::IndexRescale>()
             .0
         {
             return 0;

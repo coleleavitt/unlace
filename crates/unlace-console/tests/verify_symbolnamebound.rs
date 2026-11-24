@@ -22,7 +22,7 @@
 use std::path::PathBuf;
 
 use unlace_console::engine::bootstrap_from_object;
-use unlace_decomp::kuna_symbolnamebound::{DEFAULT_SCOPE_DEPTH, bound_scope_path};
+use unlace_decomp::symbolnamebound::{DEFAULT_SCOPE_DEPTH, bound_scope_path};
 
 /// The fixture's symbol nests 1000 `::` components (`deep_scope_x86_64.s`).
 const FIXTURE_DEPTH: usize = 1000;

@@ -719,10 +719,10 @@ mod tests;
 /// queries can use the remote scope. [`ArchHandle`] shares this context between
 /// the function and its analysis passes.
 pub struct ArchContext {
-    /// The pass hooks the IR calls through ([`crate::kuna_passhooks`]).
-    pub pass_hooks: &'static crate::kuna_passhooks::KunaHooks,
+    /// The pass hooks the IR calls through ([`crate::passhooks`]).
+    pub pass_hooks: &'static crate::passhooks::KunaHooks,
     /// The registered kuna options, copied from the engine.
-    pub kuna_options: crate::kuna_optionset::OptionSet,
+    pub kuna_options: crate::optionset::OptionSet,
     pub x87_empty_storage: Option<crate::architecture::Storage>,
     /// (kuna `varargsave`) The System V argument registers, when the pass applies.
     pub vararg_regs: Option<crate::architecture::Regs>,
@@ -730,16 +730,16 @@ pub struct ArchContext {
     pub vcall_targets: Rc<std::collections::BTreeMap<u64, crate::architecture::VcallTargets>>,
 
     /// The kuna passes' architecture-wide tables, shared with the engine
-    /// ([`crate::kuna_archstate`]): call mechanisms, jump assists, segment operations.
-    pub kuna_states: crate::kuna_archstate::ArchStates,
+    /// ([`crate::archstate`]): call mechanisms, jump assists, segment operations.
+    pub kuna_states: crate::archstate::ArchStates,
     /// (kuna) `callmechanisms` — apply compiler-spec prototype entry/return p-code.
     pub call_mechanism_effects: bool,
     /// (kuna `dexmodel`) The loaded DEX file's constant pool and register
     /// payloads; `None` for any other image or with the option off.
-    pub dex: Option<Rc<crate::kuna_dex::DexModel>>,
+    pub dex: Option<Rc<crate::dex::DexModel>>,
     /// (kuna `jvmmodel`) The class file holding the function, when it is a
     /// method of a loaded class.
-    pub jvm: Option<Rc<crate::kuna_jvm::JvmModel>>,
+    pub jvm: Option<Rc<crate::jvm::JvmModel>>,
     /// (kuna) `callmechanisms auto` — only return payloads whose stored slot the next instruction
     /// reloads, forwarded into that reload when possible.
     pub call_mechanism_reload_only: bool,
@@ -814,8 +814,8 @@ pub struct ArchContext {
     /// `ActionMarkExplicit::processMultiplier`.
     pub max_term_duplication: int4,
     /// (kuna) CALLOTHER user-op ids named in
-    /// [`STATE_USEROP_NAMES`](crate::kuna_retsysreg::STATE_USEROP_NAMES), and
-    /// those named in [`COP_USEROP_NAMES`](crate::kuna_retsysreg::COP_USEROP_NAMES),
+    /// [`STATE_USEROP_NAMES`](crate::retsysreg::STATE_USEROP_NAMES), and
+    /// those named in [`COP_USEROP_NAMES`](crate::retsysreg::COP_USEROP_NAMES),
     /// resolved from the program's user ops when the handle is built.
     pub retsysreg_userops: Vec<unlace_base::types::uint4>,
     pub retsysreg_cop_userops: Vec<unlace_base::types::uint4>,
@@ -823,16 +823,16 @@ pub struct ArchContext {
     /// applied): what `option rustabi auto` tests and `option reloadarg`
     /// stands down on.  Copied from the engine `Architecture` in
     /// `build_arch_handle`.
-    pub source_lang: crate::kuna_sourcelang::SourceLang,
+    pub source_lang: crate::sourcelang::SourceLang,
     /// (kuna `swifttypes`) Type Swift metadata accessor call results; read by
-    /// [`crate::p5_types::kuna_swiftmetaresult`]. Copied from the engine
+    /// [`crate::p5_types::swiftmetaresult`]. Copied from the engine
     /// `Architecture` in `build_arch_handle`.
     pub swift_metadata_results: bool,
     /// (kuna) The `SoftwareBreakpoint` user-op id when `option ptrauthtrap`
-    /// is on; read by [`crate::kuna_ptrauthtrap`].
+    /// is on; read by [`crate::ptrauthtrap`].
     pub ptrauth_trap_userop: Option<unlace_base::types::uint4>,
     /// (kuna) The language is arm64e's; read by
-    /// [`crate::p4_calls::kuna_hiddenretarg`].
+    /// [`crate::p4_calls::hiddenretarg`].
     pub arm64e: bool,
     /// (kuna) angr-style default naming: an unknown callee / global prints as
     /// `sub_<addr>` / `dat_<addr>` rather than `func_<addr>` (C++
@@ -850,26 +850,26 @@ pub struct ArchContext {
     pub opaque_globals_wanted: std::cell::Cell<bool>,
 
     /// (kuna) CALLOTHER user-op ids the architecture registered under a byte
-    /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::kuna_simdlane::SHUFFLE_USEROP_NAMES)),
+    /// shuffle name ([`SHUFFLE_USEROP_NAMES`](crate::simdlane::SHUFFLE_USEROP_NAMES)),
     /// resolved once per program in `Architecture::build_arch_handle` so
-    /// [`RuleSimdShuffleLane`](crate::kuna_simdlane::RuleSimdShuffleLane) can
+    /// [`RuleSimdShuffleLane`](crate::simdlane::RuleSimdShuffleLane) can
     /// name a CALLOTHER without reaching the full `Architecture`.
     pub simd_shuffle_userops: Vec<unlace_base::types::uint4>,
     /// (kuna) CALLOTHER ids of the x87 integer conversions read by
-    /// [`RuleX87Truncate`](crate::kuna_x87truncate::RuleX87Truncate).
+    /// [`RuleX87Truncate`](crate::x87truncate::RuleX87Truncate).
     pub x87_float_to_int_userops: Vec<unlace_base::types::uint4>,
     /// SLEIGH FIST/FISTP conversion userops and their signed output widths.
     /// Resolved by name once when building the architecture snapshot.
     pub x87_integer_userops: Vec<(unlace_base::types::uint4, int4)>,
     /// (kuna) CALLOTHER ids of the float roundings p-code has no operator for
-    /// ([`USEROP_NAMES`](crate::kuna_roundingops::USEROP_NAMES)), typed float in
-    /// and out by [`kuna_roundingops`](crate::kuna_roundingops).
+    /// ([`USEROP_NAMES`](crate::roundingops::USEROP_NAMES)), typed float in
+    /// and out by [`kuna_roundingops`](crate::roundingops).
     pub float_rounding_userops: Vec<unlace_base::types::uint4>,
     /// (kuna `calltargettype`) C output: a parameter or global takes the call's
     /// type too, and a target whose uses disagree is cast at each call. The
     /// Rust speller spells every pointer to code `*const ()`, so neither changes
     /// anything there. Read by
-    /// [`retype_call_targets`](crate::kuna_calltargettype::retype_call_targets).
+    /// [`retype_call_targets`](crate::calltargettype::retype_call_targets).
     pub call_target_c: bool,
     /// (kuna) The output is Java: decide casts as `CastStrategyJava`.
     pub java_casts: bool,
@@ -877,61 +877,61 @@ pub struct ArchContext {
     pub float_globals_wanted: std::cell::Cell<bool>,
     /// (kuna) The printer spells a residual one-byte TYPE_UNKNOWN as C `char`
     /// (`realtypes` on, C output), so its promotion sign-extends.  Read by
-    /// [`kuna_truncarg`](crate::p9_emit::kuna_truncarg).
+    /// [`kuna_truncarg`](crate::p9_emit::truncarg).
     pub unknown_byte_is_char: bool,
     /// (kuna) The printer spells residual TYPE_UNKNOWN bytes as an integer
     /// (`realtypes` on, or an output language with no unknown-bytes type), so a
     /// float assigned into them reads as a numeric conversion.  Read by
-    /// [`kuna_floatstore`](crate::p9_emit::kuna_floatstore).
+    /// [`kuna_floatstore`](crate::p9_emit::floatstore).
     pub unknown_is_integer: bool,
     /// (kuna) The output language promotes a sub-`int` argument to `int`
     /// (`LangCaps::integer_promotion`).  Read by
-    /// [`kuna_truncarg`](crate::p9_emit::kuna_truncarg).
+    /// [`kuna_truncarg`](crate::p9_emit::truncarg).
     pub int_promotion: bool,
 
     /// (kuna `elemptr`) The sections a program's data objects live in, sorted and
     /// inclusive; the `globalref` ranges, copied from the Architecture.
     pub elem_ptr_ranges: std::rc::Rc<Vec<(u64, u64)>>,
     /// (kuna `libctypes`) The named libc aggregate tables are on.  Copied from
-    /// the option's [`LibcTypesLayout`](crate::kuna_libctypes::LibcTypesLayout) (not `off`);
-    /// read by [`kuna_libcfit`](crate::p5_types::kuna_libcfit), which holds a
+    /// the option's [`LibcTypesLayout`](crate::libctypes::LibcTypesLayout) (not `off`);
+    /// read by [`kuna_libcfit`](crate::p5_types::libcfit), which holds a
     /// named libc pointer vote to what the caller does through it.
     pub libctypes: bool,
     /// (kuna) `armfloatreturn` is on and the image states the ARM VFP calling
-    /// convention.  Read by [`crate::p4_calls::kuna_armfloatreturn`].
+    /// convention.  Read by [`crate::p4_calls::armfloatreturn`].
     pub arm_float_return: bool,
     /// (kuna) `armfloatargs` is on and the image states the ARM VFP calling
-    /// convention.  Read by [`crate::p4_calls::kuna_armfloatargs`].
+    /// convention.  Read by [`crate::p4_calls::armfloatargs`].
     pub arm_float_args: bool,
     /// (kuna) The default model before `armfloatreturn` widens it, kept for the
     /// AEABI helpers that use the base standard in every image.  Read by
-    /// [`crate::p4_calls::kuna_armfloatreturn::helper_model`].
+    /// [`crate::p4_calls::armfloatreturn::helper_model`].
     pub arm_base_model: Option<Rc<crate::fspec::ProtoModel>>,
     /// (kuna) The core-register (soft-float) model a declared AEABI helper
     /// prototype is laid out under on every 32-bit ARM image (RTABI32 3.1).  Read by
-    /// [`crate::p4_calls::kuna_armfloatreturn::declared_helper_model`].
+    /// [`crate::p4_calls::armfloatreturn::declared_helper_model`].
     pub arm_helper_model: Option<Rc<crate::fspec::ProtoModel>>,
     /// What the image says about floating-point arguments (`Some(false)`: they
-    /// travel in integer registers).  Read by [`crate::p4_calls::kuna_typedcallabi`].
+    /// travel in integer registers).  Read by [`crate::p4_calls::typedcallabi`].
     pub float_arg_registers: Option<bool>,
     /// The spec's soft-float model on a soft-float image, if it has one.
     pub soft_float_model: Option<Rc<crate::fspec::ProtoModel>>,
     /// (kuna) The soft-float model a declaration that names no convention is
     /// laid out under, on an image without floating-point hardware.  Read by
-    /// [`crate::p4_calls::kuna_typedcallabi::undeclared_model`].
+    /// [`crate::p4_calls::typedcallabi::undeclared_model`].
     pub soft_float_declarations: Option<Rc<crate::fspec::ProtoModel>>,
     /// (kuna) The image is ARM and states the VFP variant, where a variadic
     /// declaration returns under the base standard.  Read by
-    /// [`crate::p4_calls::kuna_typedcallabi::undeclared_model`].
+    /// [`crate::p4_calls::typedcallabi::undeclared_model`].
     pub vfp_variadic: bool,
     /// The default model with the variadic return rules, derived on first use.
     pub variadic_declarations: std::cell::OnceCell<Option<Rc<crate::fspec::ProtoModel>>>,
     /// The narrowest return value, in bytes, that the caller rather than the
     /// callee extends to its register (`i32::MAX`: none).  Read by
-    /// [`crate::p4_calls::kuna_typedcallabi`].
+    /// [`crate::p4_calls::typedcallabi`].
     pub caller_extends_returns_from: i32,
     /// (kuna) How the image passes a floating-point value in the variadic part
-    /// of a call.  Read by [`crate::p4_calls::kuna_varargretreg`].
+    /// of a call.  Read by [`crate::p4_calls::varargretreg`].
     pub vararg_floats: crate::architecture::VarargFloats,
     /// (kuna) how a narrow integer argument or return value fills its register
     /// (`narrowext`).  Read by [`crate::p4_calls::kuna_narrowext`].
@@ -960,20 +960,20 @@ pub struct ArchContext {
     /// per program because the boundary `ArchContext` carries no userop table.
     /// A user-op a compiler spec specialized with its own `<callotherfixup>` is
     /// left out, so a spec-declared model always wins.  Read by
-    /// [`ActionX64Syscall`](crate::kuna_x64syscall::ActionX64Syscall).
+    /// [`ActionX64Syscall`](crate::x64syscall::ActionX64Syscall).
     pub x64_syscall_userops: Vec<unlace_base::types::uint4>,
     /// The Octeon atomic, reservation and ordering operations the language
     /// declares, resolved under [`Self::octeon_effects`]. Under `off` only a
     /// load-linked or store-conditional left without its upstream fixup (ghidra
-    /// mode) remains; see `kuna_octeonops::userop_ids`.
-    pub octeon_memory_userops: Vec<(u32, crate::kuna_octeonops::Effect)>,
+    /// mode) remains; see `octeonops::userop_ids`.
+    pub octeon_memory_userops: Vec<(u32, crate::octeonops::Effect)>,
     /// (kuna `atomics`) The x86 lock envelope or AArch64 ordering user
     /// operations an atomic instruction may carry; see `kuna_atomics`.
-    pub atomic_userops: crate::kuna_atomicops::AtomicUserops,
+    pub atomic_userops: crate::atomicops::AtomicUserops,
     /// (kuna) `option syscallregs`, resolved against the loader's user-space
     /// fact: does the ARM/AArch64/RISC-V/MIPS/PowerPC system-call user-op read
     /// its setup registers and write its result?  Read by
-    /// [`ActionSyscallRegs`](crate::kuna_syscallregs::ActionSyscallRegs).
+    /// [`ActionSyscallRegs`](crate::syscallregs::ActionSyscallRegs).
     pub syscall_regs: bool,
     /// (kuna) The processor family of the loaded language, when `syscallregs`
     /// models it.
@@ -1001,7 +1001,7 @@ pub struct ArchContext {
     /// Ignore NaN effects around comparisons (C++ `nan_ignore_compare`; the
     /// shipped `nanignore compare` default). Also lets a floating round trip
     /// drop its signaling-NaN quieting
-    /// ([`crate::p3_dataflow::kuna_floatquiet`]); fixtures default to off.
+    /// ([`crate::p3_dataflow::floatquiet`]); fixtures default to off.
     pub nan_ignore_compare: bool,
     /// The data-type factory (C++ `glb->types`), shared from the real
     /// [`crate::architecture::Architecture`] through `build_arch_handle`.
@@ -1154,7 +1154,7 @@ pub struct ArchContext {
         std::collections::BTreeMap<(int4, unlace_base::types::uintb), Rc<crate::fspec::ProtoModel>>,
     >,
     /// (kuna `swiftmetadata`) Each local Swift enum's case count by its
-    /// metadata accessor's entry offset (`p2_lift/kuna_switchextent.rs`).
+    /// metadata accessor's entry offset (`p2_lift/switchextent.rs`).
     pub swift_enum_cases: Rc<std::collections::BTreeMap<u64, u32>>,
     /// (kuna `calleereginputs`) The `__thiscall` model, the ECX storage a
     /// virtual call reads its `this` from and EAX's, when the option applies.
@@ -1200,7 +1200,7 @@ impl ArchContext {
             call_mechanism_reload_only: false,
             manage,
             min_laned_register_size: 4,
-            kuna_options: crate::kuna_optionset::OptionSet::new(),
+            kuna_options: crate::optionset::OptionSet::new(),
             x87_empty_storage: None,
             vararg_regs: None,
             vcall_targets: Rc::default(),
@@ -1286,7 +1286,7 @@ impl ArchContext {
             x64_syscall_memory_target: false,
             x64_syscall_userops: Vec::new(),
             octeon_memory_userops: Vec::new(),
-            atomic_userops: crate::kuna_atomicops::AtomicUserops::default(),
+            atomic_userops: crate::atomicops::AtomicUserops::default(),
             syscall_regs: false,
             syscall_regs_family: None,
             syscall_regs_userops: Vec::new(),

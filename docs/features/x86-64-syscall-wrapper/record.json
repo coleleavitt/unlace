@@ -18,8 +18,8 @@
     "Delivery is preset membership, exactly as for cortexmpriv (DIV-99): the catalog default stays `off` because the read set is a modelling judgement, and `aggressive` -- which `auto` selects under 500 KiB -- carries `on`. That is what makes the need's acceptance probe, which passes no x64syscall flag, go green."
   ],
   "changed": [
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_x64syscall.rs",
-    "decompiler/crates/kuna-decomp/src/p2_lift/kuna_x64syscall/tests.rs",
+    "decompiler/crates/kuna-decomp/src/p2_lift/x64syscall.rs",
+    "decompiler/crates/kuna-decomp/src/p2_lift/x64syscall/tests.rs",
     "decompiler/crates/kuna-decomp/src/p2_lift/mod.rs",
     "decompiler/crates/kuna-decomp/src/infra/architecture.rs",
     "decompiler/crates/kuna-decomp/src/infra/universalaction.rs",

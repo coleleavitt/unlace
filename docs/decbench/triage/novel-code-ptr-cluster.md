@@ -289,7 +289,7 @@ returns a bit flag. `--option inferfuncentry off` restores `unsigned long` and e
 literal.
 
 **Mechanism.** `inferfuncentry` (P5 / `const-pointer`, default **on**, kuna's own, GH-6930,
-`p5_types/kuna_inferfuncentry.rs`) exists to skip `ActionConstantPtr::isPointer`'s
+`p5_types/inferfuncentry.rs`) exists to skip `ActionConstantPtr::isPointer`'s
 `bit_transitions < 3` rejection when the constant resolves exactly to a function entry —
 written for a real function at a power-of-two *image base* (`0x100000`). In a stripped PIE
 ELF the image base is 0, kuna's analysis tier synthesises `_DT_INIT`/`_DT_FINI` function
@@ -307,7 +307,7 @@ Corpus-wide 431 functions declare a `code *X` that is never called in the body.
 honest narrowing is not "flip it off" (it fixes the real GH-6930 case) but "require the
 resolved entry to be at a non-zero image base, or refuse when the constant also feeds an
 arithmetic/comparison chain" — that is a separate one-module change in
-`kuna_inferfuncentry.rs` and should be its own case.
+`inferfuncentry.rs` and should be its own case.
 
 ---
 

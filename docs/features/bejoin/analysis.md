@@ -52,7 +52,7 @@ gone.
 ## The fix as built
 
 The order is decided once, at return recovery, by asking whether the second
-register's low word is returned on purpose (`p4_calls/kuna_bejoin.rs`):
+register's low word is returned on purpose (`p4_calls/bejoin.rs`):
 
 * walk back from the second register at every live RETURN through copies, phis,
   indirects and the pieces heritage splits a register pair into (following the

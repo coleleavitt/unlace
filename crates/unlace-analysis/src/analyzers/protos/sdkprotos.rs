@@ -44,7 +44,7 @@ use object::{FileKind, Object};
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
 
-use crate::analyzers::objc::kuna_objcsdk as objcsdk;
+use crate::analyzers::objc::objcsdk;
 use crate::pass::{AnalysisCtx, AnalysisOutput, AnalysisPass, Phase};
 
 /// Seeds the header-declared prototype of every imported C function.
@@ -64,7 +64,7 @@ impl AnalysisPass for SdkProtoPass {
         if ctx.file.format() != object::BinaryFormat::MachO {
             return out;
         }
-        let Some(root) = unlace_decomp::kuna_objcsdk::sdk_path() else {
+        let Some(root) = unlace_decomp::objcsdk::sdk_path() else {
             return out;
         };
         let Some(image) = ctx.image else { return out };

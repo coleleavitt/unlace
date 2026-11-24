@@ -24,64 +24,64 @@ pub use unlace_structure::*;
 /// The pass hooks this crate's own modules provide: each module's `provide`, in the driver's
 /// order. The driver composes the crates' tables into the default pipeline's
 /// (`unlace_decomp::PASS_HOOKS`); a crate's unit tests compose the crates at or below it.
-pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
-    crate::kuna_calltransport::provide(slots);
+pub fn provide_all(slots: &mut crate::passhooks::KunaHookSlots) {
+    crate::calltransport::provide(slots);
     crate::funcdata_union::provide(slots);
-    crate::kuna_exclusivearguse::provide(slots);
-    crate::kuna_exclusivecallret::provide(slots);
-    crate::kuna_multiregargs::provide(slots);
-    crate::kuna_noreturnretuse::provide(slots);
-    crate::kuna_sharedpush::provide(slots);
-    crate::kuna_spillargtrial::provide(slots);
-    crate::kuna_zeroidiomuse::provide(slots);
-    crate::kuna_indirectanchor::provide(slots);
-    crate::kuna_calleeprotostack::provide(slots);
-    crate::kuna_inputtile::provide(slots);
-    crate::kuna_msvcbyval::provide(slots);
-    crate::kuna_splitstorekeep::provide(slots);
-    crate::kuna_stackreadscope::provide(slots);
-    crate::kuna_varargretreg::provide(slots);
-    crate::kuna_haltloopguard::provide(slots);
-    crate::kuna_memoryguard::provide(slots);
-    crate::kuna_renamereads::provide(slots);
-    crate::kuna_spillstoreguard::provide(slots);
-    crate::kuna_wrapsplit::provide(slots);
-    crate::kuna_dynamiclocals::provide(slots);
-    crate::kuna_joincalloutput::provide(slots);
-    crate::kuna_octeoneffects::provide(slots);
-    crate::kuna_varargtransfer::provide(slots);
-    crate::kuna_globalvalue::provide(slots);
-    crate::kuna_pointeevalue::provide(slots);
-    crate::kuna_tiedphitrim::provide(slots);
-    crate::kuna_isolated::provide(slots);
-    crate::kuna_stablenames::provide(slots);
-    crate::kuna_guardedreadtrim::provide(slots);
-    crate::kuna_protomerge::provide(slots);
-    crate::kuna_spsolve::provide(slots);
-    crate::kuna_stackparamalign::provide(slots);
-    crate::kuna_vectorabi::provide(slots);
-    crate::kuna_floatregister::provide(slots);
-    crate::kuna_inputparamgap::provide(slots);
-    crate::kuna_inputrefinement::provide(slots);
-    crate::kuna_inputstorage::provide(slots);
-    crate::kuna_narrowext::provide(slots);
-    crate::kuna_nulterminator::provide(slots);
-    crate::kuna_stackaddrargtrial::provide(slots);
-    crate::kuna_stackarggap::provide(slots);
-    crate::kuna_swifterror::provide(slots);
-    crate::kuna_varargstackargs::provide(slots);
-    crate::kuna_partialglobalload::provide(slots);
-    crate::kuna_persistcalls::provide(slots);
-    crate::kuna_prunedssa::provide(slots);
-    crate::kuna_swiftcall::provide(slots);
-    crate::kuna_dfunaffected::provide(slots);
-    crate::kuna_x87intrinsic::provide(slots);
-    crate::kuna_retpushedhalf::provide(slots);
-    crate::kuna_customreturn::provide(slots);
-    crate::kuna_varargsave::provide(slots);
-    crate::kuna_arraysize::provide(slots);
-    crate::kuna_condexeretuse::provide(slots);
-    crate::kuna_calleepurge::provide(slots);
+    crate::exclusivearguse::provide(slots);
+    crate::exclusivecallret::provide(slots);
+    crate::multiregargs::provide(slots);
+    crate::noreturnretuse::provide(slots);
+    crate::sharedpush::provide(slots);
+    crate::spillargtrial::provide(slots);
+    crate::zeroidiomuse::provide(slots);
+    crate::indirectanchor::provide(slots);
+    crate::calleeprotostack::provide(slots);
+    crate::inputtile::provide(slots);
+    crate::msvcbyval::provide(slots);
+    crate::splitstorekeep::provide(slots);
+    crate::stackreadscope::provide(slots);
+    crate::varargretreg::provide(slots);
+    crate::haltloopguard::provide(slots);
+    crate::memoryguard::provide(slots);
+    crate::renamereads::provide(slots);
+    crate::spillstoreguard::provide(slots);
+    crate::wrapsplit::provide(slots);
+    crate::dynamiclocals::provide(slots);
+    crate::joincalloutput::provide(slots);
+    crate::octeoneffects::provide(slots);
+    crate::varargtransfer::provide(slots);
+    crate::globalvalue::provide(slots);
+    crate::pointeevalue::provide(slots);
+    crate::tiedphitrim::provide(slots);
+    crate::isolated::provide(slots);
+    crate::stablenames::provide(slots);
+    crate::guardedreadtrim::provide(slots);
+    crate::protomerge::provide(slots);
+    crate::spsolve::provide(slots);
+    crate::stackparamalign::provide(slots);
+    crate::vectorabi::provide(slots);
+    crate::floatregister::provide(slots);
+    crate::inputparamgap::provide(slots);
+    crate::inputrefinement::provide(slots);
+    crate::inputstorage::provide(slots);
+    crate::narrowext::provide(slots);
+    crate::nulterminator::provide(slots);
+    crate::stackaddrargtrial::provide(slots);
+    crate::stackarggap::provide(slots);
+    crate::swifterror::provide(slots);
+    crate::varargstackargs::provide(slots);
+    crate::partialglobalload::provide(slots);
+    crate::persistcalls::provide(slots);
+    crate::prunedssa::provide(slots);
+    crate::swiftcall::provide(slots);
+    crate::dfunaffected::provide(slots);
+    crate::x87intrinsic::provide(slots);
+    crate::retpushedhalf::provide(slots);
+    crate::customreturn::provide(slots);
+    crate::varargsave::provide(slots);
+    crate::arraysize::provide(slots);
+    crate::condexeretuse::provide(slots);
+    crate::calleepurge::provide(slots);
 }
 
 /// This crate's unit tests link without the driver, so they define the driver's hook symbol
@@ -89,7 +89,7 @@ pub fn provide_all(slots: &mut crate::kuna_passhooks::KunaHookSlots) {
 /// itself, for each hook a higher crate provides (`KunaHookSlots::finish_with_stubs`).
 #[cfg(test)]
 mod unprovided {
-    use unlace_middle::kuna_passhooks::{KunaHookSlots, KunaHooks};
+    use unlace_middle::passhooks::{KunaHookSlots, KunaHooks};
 
     #[unsafe(no_mangle)]
     fn __unlace_default_pass_hooks() -> &'static KunaHooks {

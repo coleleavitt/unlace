@@ -9,7 +9,7 @@
 //!   method pointers, the base interfaces' methods first, and hands the engine
 //!   the map from the id's address to the struct (`ComInterfaces`), which types
 //!   the out-parameter of `CoCreateInstance`, `QueryInterface` and the other
-//!   requests by the id they pass (`unlace_decomp::kuna_comtyping`);
+//!   requests by the id they pass (`unlace_decomp::comtyping`);
 //! - declares the prototypes of the imported `ole32` requests, so the
 //!   out-parameter of each call is an argument even where the call site alone
 //!   would not show it.
@@ -470,11 +470,7 @@ fn parse_guid(text: &str) -> Option<[u8; 16]> {
 /// cannot be read.
 fn cfg_ids(arch: &unlace_decomp::architecture::Architecture) -> BTreeMap<[u8; 16], String> {
     use std::io::Read;
-    let Some(path) = arch
-        .kuna_options
-        .get::<unlace_decomp::kuna_comcfg::ComCfg>()
-        .0
-    else {
+    let Some(path) = arch.kuna_options.get::<unlace_decomp::comcfg::ComCfg>().0 else {
         return BTreeMap::new();
     };
     let mut bytes = Vec::new();

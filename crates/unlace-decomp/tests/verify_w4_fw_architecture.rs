@@ -85,7 +85,7 @@ fn ram_space() -> Rc<AddrSpace> {
 fn func_default_name_matches_cpp_printraw_oracle() {
     let mut arch = Architecture::new("t", bare_sleigh());
     arch.kuna_options
-        .set(unlace_decomp::kuna_coreoptions::NameStyleAngr(false)); // exercise the upstream `func_` path
+        .set(unlace_decomp::coreoptions::NameStyleAngr(false)); // exercise the upstream `func_` path
 
     let addr = Address::new(ram_space(), 0x401000);
 

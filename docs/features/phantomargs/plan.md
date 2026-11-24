@@ -2,7 +2,7 @@
 
 ## 1. The change
 
-New module `decompiler/crates/kuna-decomp/src/p4_calls/kuna_argclobber.rs`, one
+New module `decompiler/crates/kuna-decomp/src/p4_calls/argclobber.rs`, one
 entry point called from `build_input_from_trials`
 (`p4_calls/funcdata_callsite.rs`) immediately after
 `kuna_calleearity::unify_with_sibling_call`:
@@ -53,7 +53,7 @@ list and reconciles to it.
 
 Re-derived against `origin/main` at rebase time with
 `python3 -m scripts.repipe.counters --rederive/--fix` on a freshly built tree,
-never by arithmetic: 208 -> 209 settables (`kuna_phases/tests.rs` fn-name,
+never by arithmetic: 208 -> 209 settables (`phases/tests.rs` fn-name,
 `kuna_num_settables`, `SETTABLE_TABLE-len`, tier tuple 67->68 core,
 catalog-json-records 207->208; `tests/catalog_bytecompat.rs`, 4 sites) and the
 captured `tests/fixtures/phase_catalog.json` (re-captured with `phase catalog`, no

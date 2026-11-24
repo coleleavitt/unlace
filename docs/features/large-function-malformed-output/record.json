@@ -11,7 +11,7 @@
  "source_decompiler": "kuna",
  "inspiration": "crackmes.one 6a3822888a86e4c2c55254fe selam.exe 0x140002d50: 1267 lines, 159 declarations, 63 synthetic return-address stores, BCrypt arguments as stack blobs",
  "phase": "P2 (flow classification, setup_callind_specs)",
- "module": "decompiler/crates/kuna-decomp/src/p2_lift/kuna_fastfailnoreturn.rs + one call site in p2_lift/flow.rs",
+ "module": "decompiler/crates/kuna-decomp/src/p2_lift/fastfailnoreturn.rs + one call site in p2_lift/flow.rs",
  "change_kind": "correctness-fix",
  "option": "fastfailnoreturn",
  "flag": "fastfail_noreturn",

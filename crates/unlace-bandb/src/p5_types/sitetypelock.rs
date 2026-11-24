@@ -43,7 +43,7 @@
 //!
 //! Clients contribute sites once per (re)flow, before the pending locks are
 //! applied.  The first client is the Go `runtime.newobject` descriptor arm
-//! ([`crate::kuna_gonewtype`], option `gonewtype`).
+//! ([`crate::gonewtype`], option `gonewtype`).
 
 use std::rc::Rc;
 
@@ -132,8 +132,8 @@ impl Action for ActionSiteTypeLock {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        crate::kuna_gonewtype::contribute(data);
-        crate::kuna_swiftmetaresult::contribute(data);
+        crate::gonewtype::contribute(data);
+        crate::swiftmetaresult::contribute(data);
         if apply_pending(data) {
             self.base.count += 1;
         }
@@ -142,5 +142,5 @@ impl Action for ActionSiteTypeLock {
 }
 
 #[cfg(test)]
-#[path = "kuna_sitetypelock/tests.rs"]
+#[path = "sitetypelock/tests.rs"]
 mod tests;

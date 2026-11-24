@@ -6,8 +6,8 @@ pub(super) fn discard_bodies(
     state: &mut State,
     partition: &mut Vec<(u64, u32)>,
     spans: &mut BTreeMap<u64, u32>,
-    contexts: &mut Option<crate::listing::kuna_fingerprintcontext::FingerprintContexts>,
-    modes: &crate::listing::kuna_framemode::FrameModes,
+    contexts: &mut Option<crate::listing::fingerprintcontext::FingerprintContexts>,
+    modes: &crate::listing::framemode::FrameModes,
     replacements: &BTreeMap<u64, u64>,
 ) {
     let removed: HashSet<_> = partition
@@ -38,7 +38,7 @@ pub(super) fn discard_bodies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::listing::kuna_framemode::FrameModes;
+    use crate::listing::framemode::FrameModes;
 
     /// A condition skip held by a body the reconciliation discards goes with
     /// that body, as its filed rows do.

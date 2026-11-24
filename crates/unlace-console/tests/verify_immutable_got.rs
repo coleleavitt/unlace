@@ -76,25 +76,15 @@ fn a_stated_callee_excludes_its_physical_site_from_got_proof() {
         let expected = match case {
             0 | 1 => {
                 if case == 1 {
-                    unlace_console::kuna_calleeoverride::plant(
-                        &mut program,
-                        &caller,
-                        &site,
-                        "callback",
-                    )
-                    .unwrap();
+                    unlace_console::calleeoverride::plant(&mut program, &caller, &site, "callback")
+                        .unwrap();
                 }
-                unlace_console::kuna_calleeoverride::plant(
-                    &mut program,
-                    &caller,
-                    &site,
-                    "alternate",
-                )
-                .unwrap();
+                unlace_console::calleeoverride::plant(&mut program, &caller, &site, "alternate")
+                    .unwrap();
                 slot
             }
             2 => {
-                unlace_console::kuna_calleeoverride::plant(
+                unlace_console::calleeoverride::plant(
                     &mut program,
                     &other_owner,
                     &site,

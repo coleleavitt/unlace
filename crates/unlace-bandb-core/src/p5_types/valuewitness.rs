@@ -30,7 +30,7 @@ use crate::context::{OpId, VarnodeId};
 use crate::dtype::{Datatype, type_metatype};
 use crate::funcdata::Funcdata;
 
-/// The interned layouts (`kuna_swifttypes::witness_table_struct` and
+/// The interned layouts (`swifttypes::witness_table_struct` and
 /// `enum_witness_table_struct`) and the metadata layout.
 const TABLE: &str = "swift.value_witness_table";
 const ENUM_TABLE: &str = "swift.enum_value_witness_table";
@@ -45,7 +45,7 @@ pub fn output_vote(data: &Funcdata, vn: VarnodeId) -> Option<Rc<Datatype>> {
     let arch = data.get_arch();
     if !arch
         .kuna_options
-        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .get::<crate::valuewitness::Valuewitness>()
         .0
     {
         return None;
@@ -79,7 +79,7 @@ pub fn keeps_offset(data: &Funcdata, op: OpId, slot: i32) -> bool {
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .get::<crate::valuewitness::Valuewitness>()
         .0
     {
         return false;
@@ -109,7 +109,7 @@ pub fn outside_header(data: &Funcdata, op: OpId, slot: i32, ptr: &Rc<Datatype>) 
     if !data
         .get_arch()
         .kuna_options
-        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .get::<crate::valuewitness::Valuewitness>()
         .0
         || !ptr.get_ptr_to().is_some_and(|t| t.get_name() == METADATA)
     {
@@ -183,7 +183,7 @@ fn table_read(data: &Funcdata, op: OpId, vn: VarnodeId) -> Option<u64> {
 pub fn tables(arch: &crate::context::ArchContext) -> Option<(Rc<Datatype>, Option<Rc<Datatype>>)> {
     if !arch
         .kuna_options
-        .get::<crate::kuna_valuewitness::Valuewitness>()
+        .get::<crate::valuewitness::Valuewitness>()
         .0
     {
         return None;
@@ -226,7 +226,7 @@ pub fn call_prototype(
         enum_table.as_ref()
     };
     let proto = slot_prototype(owner?, off)?;
-    crate::kuna_typedcallabi::admit(data, proto)
+    crate::typedcallabi::admit(data, proto)
 }
 
 /// Whether `code` is the function type of a value witness table slot.

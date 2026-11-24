@@ -2,7 +2,7 @@
 //!
 //! At build, [`describe`] gives each record the prototype the object's own
 //! committed analysis parked on its function (its DWARF signature), as the C
-//! text a record stores ([`unlace_decomp::kuna_fidproto`]). At match, [`pick`]
+//! text a record stores ([`unlace_decomp::fidproto`]). At match, [`pick`]
 //! chooses the prototype of a bucket whose records all carry one name: the
 //! record the specific hash and code-unit count single out, else the one
 //! prototype every describing record agrees on.
@@ -46,7 +46,7 @@ pub fn describe(arch: &Architecture, image: &ObjectLoadImage, records: &mut [Fid
         let declaration = arch
             .symboltab
             .function_proto_pieces_across_scopes(&addr)
-            .and_then(unlace_decomp::kuna_fidproto::declaration);
+            .and_then(unlace_decomp::fidproto::declaration);
         if let Some(declaration) = declaration {
             record.prototype = Some(declaration.prototype);
             record.typedefs = declaration.typedefs.into();

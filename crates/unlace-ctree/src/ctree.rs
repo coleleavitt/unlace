@@ -175,6 +175,9 @@ pub enum StmtKind {
         pad: u64,
         handler: BlockId,
     },
+    /// (unlace `javatry`) An `if` that opens a DEX `try` statement on its own (its body and
+    /// catches all inside the `if`), printed as `try { } catch`.
+    JavaTry,
     /// Not modelled yet: printed from its origin block.
     Opaque,
 }
@@ -228,6 +231,7 @@ pub struct CTree {
     by_origin: BTreeMap<BlockId, StmtId>,
     conds: BTreeSet<StmtId>,
     list_tries: BTreeMap<StmtId, ListTry>,
+    java_lists: BTreeSet<StmtId>,
 }
 
 impl CTree {
@@ -270,6 +274,17 @@ impl CTree {
     /// The `try` form recorded for the list sequence `id`.
     pub fn list_try(&self, id: StmtId) -> Option<ListTry> {
         self.list_tries.get(&id).copied()
+    }
+
+    /// (unlace `javatry`) Record that the list sequence `id` holds a DEX `try` dispatch and
+    /// prints through the Java `try` list printer.
+    pub fn set_java_list(&mut self, id: StmtId) {
+        self.java_lists.insert(id);
+    }
+
+    /// Does the list sequence `id` print through the Java `try` list printer?
+    pub fn is_java_list(&self, id: StmtId) -> bool {
+        self.java_lists.contains(&id)
     }
 
     /// Add an expression.
@@ -411,6 +426,7 @@ impl CTree {
             | StmtKind::Return { .. }
             | StmtKind::SwitchOf { .. }
             | StmtKind::Try { .. }
+            | StmtKind::JavaTry
             | StmtKind::Opaque => Vec::new(),
         }
     }
@@ -436,6 +452,7 @@ impl CTree {
             StmtKind::Return { value: Some(e), .. } => format!("return {}", self.expr_text(*e)),
             StmtKind::SwitchOf { switch } => format!("switch-of {switch:?}"),
             StmtKind::Try { pad, .. } => format!("try pad={pad:#x}"),
+            StmtKind::JavaTry => "java-try".to_string(),
             StmtKind::Opaque => "opaque".to_string(),
         };
         match stmt.origin {

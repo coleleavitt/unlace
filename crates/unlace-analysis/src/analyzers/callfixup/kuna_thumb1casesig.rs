@@ -1,6 +1,6 @@
-//! (kuna) Recognize libgcc's Thumb-1 switch helpers in a stripped ARM image by
-//! their instructions, so the `switch*_r0` call-fixups of the ARM cspecs reach
-//! them.
+//! (kuna) Recognize libgcc's Thumb-1 switch helpers and armcc's
+//! `__ARM_common_switch8` in a stripped ARM image by their instructions, so the
+//! `switch*_r0` and `switch8_r3` call-fixups of the ARM cspecs reach them.
 //!
 //! gcc compiles a Thumb-1 switch (`-mthumb` on ARMv6-M, or `-Os`) as `bl
 //! __gnu_thumb1_case_<kind>` followed by the case table; the helper reads the
@@ -19,11 +19,18 @@
 //! | `__gnu_thumb1_case_uqi`, `_sqi` | `push {r1}; mov r1,lr; lsrs r1,#1; lsls r1,#1; ldrb`/`ldrsb r1,[r1,r0]; lsls r1,#1; add lr,r1; pop {r1}; bx lr` |
 //! | `__gnu_thumb1_case_uhi`, `_shi` | `push {r0,r1}; mov r1,lr; lsrs r1,#1; lsls r0,#1; lsls r1,#1; ldrh`/`ldrsh r1,[r1,r0]; lsls r1,#1; add lr,r1; pop {r0,r1}; bx lr` |
 //! | `__gnu_thumb1_case_si` | `push {r0,r1}; mov r1,lr; adds r1,#2; lsrs r1,#2; lsls r0,#2; lsls r1,#2; ldr r0,[r1,r0]; adds r0,r1; mov lr,r0; pop {r0,r1}; mov pc,lr` |
+//! | `__ARM_common_switch8` (Thumb-1, saves `r4,r5`) | `push {r4,r5}; mov r4,lr; subs r4,#1; ldrb r5,[r4]; adds r4,#1; cmp r3,r5; bhs +0; mov r5,r3; ldrb r3,[r4,r5]; lsls r3,#1; adds r3,r4,r3; pop {r4,r5}; bx r3` |
+//! | `__ARM_common_switch8` (Thumb-1, saves `r0-r3`) | `push {r0-r3}; mov r0,lr; subs r0,#1; ldrb r1,[r0]; adds r0,#1; cmp r3,r1; bhs +0; movs r1,r3; ldrb r3,[r0,r1]; lsls r3,#1; adds r0,r3; mov ip,r0; pop {r0-r3}; bx ip` |
+//! | `__ARM_common_switch8` (Thumb-2) | `ldrb ip,[lr,#-1]; cmp r3,ip; ite lo; ldrblo r3,[lr,r3]; ldrbhs r3,[lr,ip]; add ip,lr,r3,lsl #1; bx ip` |
+//!
+//! All three armcc forms read the table size from the byte before the table,
+//! clamp the index in `r3` to it (the last entry is the default) and branch to
+//! the table plus twice the entry, which is what `switch8_r3` models.
 
 use crate::pass::{AnalysisOutput, CallFixupFact, FidMatch, SymFact, SymKind};
 
 /// Each helper's Thumb halfwords, in instruction order.
-const HELPERS: [(&str, &[u16]); 5] = [
+const HELPERS: [(&str, &[u16]); 8] = [
     (
         "__gnu_thumb1_case_uqi",
         &[
@@ -52,6 +59,26 @@ const HELPERS: [(&str, &[u16]); 5] = [
         "__gnu_thumb1_case_si",
         &[
             0xb403, 0x4671, 0x3102, 0x0889, 0x0080, 0x0089, 0x5808, 0x1840, 0x4686, 0xbc03, 0x46f7,
+        ],
+    ),
+    (
+        "__ARM_common_switch8",
+        &[
+            0xb430, 0x4674, 0x1e64, 0x7825, 0x1c64, 0x42ab, 0xd200, 0x461d, 0x5d63, 0x005b, 0x18e3,
+            0xbc30, 0x4718,
+        ],
+    ),
+    (
+        "__ARM_common_switch8",
+        &[
+            0xb40f, 0x4670, 0x1e40, 0x7801, 0x1c40, 0x428b, 0xd200, 0x0019, 0x5c43, 0x005b, 0x18c0,
+            0x4684, 0xbc0f, 0x4760,
+        ],
+    ),
+    (
+        "__ARM_common_switch8",
+        &[
+            0xf81e, 0xcc01, 0x4563, 0xbf34, 0xf81e, 0x3003, 0xf81e, 0x300c, 0xeb0e, 0x0c43, 0x4760,
         ],
     ),
 ];

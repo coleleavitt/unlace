@@ -6497,7 +6497,11 @@ moves.
   stays in Thumb state, as the helper does (`adds r0,r1; mov lr,r0; mov pc,lr`);
   the vendored body scaled the entry by four and added it to the return
   address, which sent the cases to the wrong addresses. armcc's
-  `__ARM_common_switch8` is still matched by name only.
+  `__ARM_common_switch8` is recognized the same way in its three forms (two
+  Thumb-1 bodies, saving `r4,r5` or `r0-r3`, and the Thumb-2 one with `ite`):
+  each reads the table size from the byte before the table, clamps the index in
+  `r3` to it and branches to the table plus twice the entry, which the
+  `switch8_r3` fixup models.
 - **Linux kernel `__bug_table`** (`kernelbug`, always on, inert without the
   section; `crates/unlace-analysis/src/analyzers/kernelbug/mod.rs
   (KernelBugPass)`): the kernel's `WARN_ON`/`BUG_ON` macros plant a trap (`ud2`,

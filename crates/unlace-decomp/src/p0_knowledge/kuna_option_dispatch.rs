@@ -299,6 +299,7 @@ kuna_options! { self, p1;
     "switchreturn" => registered!(crate::kuna_switchreturn::SwitchReturn),
     "foldcallret" => registered!(crate::kuna_callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::kuna_indirectonly::MarkIndirectOnly),
+    "typemerge" => registered!(crate::kuna_typemerge::TypeMergeMode),
     "impliedrefs" => {
         let (val, msg) = crate::kuna_impliedrefs::OptionImpliedRefs.apply(p1)?;
         self.max_implied_ref = val;
@@ -356,6 +357,7 @@ kuna_options! { self, p1;
     "castnarrow" => registered!(crate::kuna_castnarrow::CastNarrow),
     "libcnames" => registered!(crate::kuna_libcnames::LibcNames),
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
+    "flownames" => registered!(crate::kuna_flownames::FlowNames),
     "declorder" => registered!(crate::kuna_declorder::DeclOrder),
     "castwiden" => registered!(crate::kuna_castwiden::CastWidenMode),
     "ptrdepthcap" => registered!(crate::coreaction_infertypes::Ptrdepthcap),

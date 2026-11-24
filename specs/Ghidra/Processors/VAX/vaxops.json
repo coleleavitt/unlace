@@ -1,0 +1,3032 @@
+{
+"np": {
+"0x0": [
+"HALT",
+[],
+"0"
+],
+"0x1": [
+"NOP",
+[],
+"0"
+],
+"0x2": [
+"REI",
+[],
+"vax_disassembler::STEP_OUT"
+],
+"0x3": [
+"BPT",
+[],
+"0"
+],
+"0x4": [
+"RET",
+[],
+"vax_disassembler::STEP_OUT"
+],
+"0x5": [
+"RSB",
+[],
+"vax_disassembler::STEP_OUT"
+],
+"0x6": [
+"LDPCTX",
+[],
+"vax_disassembler::STEP_OUT"
+],
+"0x7": [
+"SVPCTX",
+[],
+"0"
+],
+"0x8": [
+"CVTPS",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x9": [
+"CVTSP",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0xa": [
+"INDEX",
+[
+"rl",
+"rl",
+"rl",
+"rl",
+"rl",
+"wl"
+],
+"0"
+],
+"0xb": [
+"CRC",
+[
+"ab",
+"rl",
+"rw",
+"ab"
+],
+"0"
+],
+"0xc": [
+"PROBER",
+[
+"rl",
+"rw",
+"ab"
+],
+"0"
+],
+"0xd": [
+"PROBEW",
+[
+"rl",
+"rw",
+"ab"
+],
+"0"
+],
+"0xe": [
+"INSQUE",
+[
+"ab",
+"ab"
+],
+"0"
+],
+"0xf": [
+"REMQUE",
+[
+"ab",
+"wl"
+],
+"0"
+],
+"0x10": [
+"BSBB",
+[
+"bb"
+],
+"vax_disassembler::STEP_OUT"
+],
+"0x11": [
+"BRB",
+[
+"bb"
+],
+"0"
+],
+"0x12": [
+"BNEQ",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x13": [
+"BEQL",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x14": [
+"BGTR",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x15": [
+"BLEQ",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x16": [
+"JSB",
+[
+"ab"
+],
+"vax_disassembler::STEP_OVER"
+],
+"0x17": [
+"JMP",
+[
+"ab"
+],
+"0"
+],
+"0x18": [
+"BGEQ",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x19": [
+"BLSS",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1a": [
+"BGTRU",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1b": [
+"BLEQU",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1c": [
+"BVC",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1d": [
+"BVS",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1e": [
+"BCC",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x1f": [
+"BCS",
+[
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x20": [
+"ADDP4",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x21": [
+"ADDP6",
+[
+"rw",
+"ab",
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x22": [
+"SUBP4",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x23": [
+"SUBP6",
+[
+"rw",
+"ab",
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x24": [
+"CVTPT",
+[
+"rw",
+"ab",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x25": [
+"MULP",
+[
+"rw",
+"ab",
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x26": [
+"CVTTP",
+[
+"rw",
+"ab",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x27": [
+"DIVP",
+[
+"rw",
+"ab",
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x28": [
+"MOVC3",
+[
+"rw",
+"ab",
+"ab"
+],
+"0"
+],
+"0x29": [
+"CMPC3",
+[
+"rw",
+"ab",
+"ab"
+],
+"0"
+],
+"0x2a": [
+"SCANC",
+[
+"rw",
+"ab",
+"ab",
+"urb"
+],
+"0"
+],
+"0x2b": [
+"SPANC",
+[
+"rw",
+"ab",
+"ab",
+"urb"
+],
+"0"
+],
+"0x2c": [
+"MOVC5",
+[
+"rw",
+"ab",
+"urb",
+"rw",
+"ab"
+],
+"0"
+],
+"0x2d": [
+"CMPC5",
+[
+"rw",
+"ab",
+"urb",
+"rw",
+"ab"
+],
+"0"
+],
+"0x2e": [
+"MOVTC",
+[
+"rw",
+"ab",
+"urb",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x2f": [
+"MOVTUC",
+[
+"rw",
+"ab",
+"urb",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x30": [
+"BSBW",
+[
+"bw"
+],
+"vax_disassembler::STEP_OVER"
+],
+"0x31": [
+"BRW",
+[
+"bw"
+],
+"0"
+],
+"0x32": [
+"CVTWL",
+[
+"srw",
+"wl"
+],
+"0"
+],
+"0x33": [
+"CVTWB",
+[
+"srw",
+"wb"
+],
+"0"
+],
+"0x34": [
+"MOVP",
+[
+"rw",
+"ab",
+"ab"
+],
+"0"
+],
+"0x35": [
+"CMPP3",
+[
+"rw",
+"ab",
+"ab"
+],
+"0"
+],
+"0x36": [
+"CVTPL",
+[
+"rw",
+"ab",
+"wl"
+],
+"0"
+],
+"0x37": [
+"CMPP4",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x38": [
+"EDITPC",
+[
+"rw",
+"ab",
+"ab",
+"ab"
+],
+"0"
+],
+"0x39": [
+"MATCHC",
+[
+"rw",
+"ab",
+"rw",
+"ab"
+],
+"0"
+],
+"0x3a": [
+"LOCC",
+[
+"urb",
+"rw",
+"ab"
+],
+"0"
+],
+"0x3b": [
+"SKPC",
+[
+"urb",
+"rw",
+"ab"
+],
+"0"
+],
+"0x3c": [
+"MOVZWL",
+[
+"rw",
+"wl"
+],
+"0"
+],
+"0x3d": [
+"ACBW",
+[
+"srw",
+"srw",
+"mw",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x3e": [
+"MOVAW",
+[
+"aw",
+"wl"
+],
+"0"
+],
+"0x3f": [
+"PUSHAW",
+[
+"aw"
+],
+"0"
+],
+"0x40": [
+"ADDF2",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0x41": [
+"ADDF3",
+[
+"rl",
+"rl",
+"wl"
+],
+"0"
+],
+"0x42": [
+"SUBF2",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0x43": [
+"SUBF3",
+[
+"rl",
+"rl",
+"wl"
+],
+"0"
+],
+"0x44": [
+"MULF2",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0x45": [
+"MULF3",
+[
+"rl",
+"rl",
+"wl"
+],
+"0"
+],
+"0x46": [
+"DIVF2",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0x47": [
+"DIVF3",
+[
+"rl",
+"rl",
+"wl"
+],
+"0"
+],
+"0x48": [
+"CVTFB",
+[
+"rl",
+"wb"
+],
+"0"
+],
+"0x49": [
+"CVTFW",
+[
+"rl",
+"ww"
+],
+"0"
+],
+"0x4a": [
+"CVTFL",
+[
+"rl",
+"wl"
+],
+"0"
+],
+"0x4b": [
+"CVTRFL",
+[
+"rl",
+"wl"
+],
+"0"
+],
+"0x4c": [
+"CVTBF",
+[
+"srb",
+"wl"
+],
+"0"
+],
+"0x4d": [
+"CVTWF",
+[
+"srw",
+"wl"
+],
+"0"
+],
+"0x4e": [
+"CVTLF",
+[
+"srl",
+"wl"
+],
+"0"
+],
+"0x4f": [
+"ACBF",
+[
+"rl",
+"rl",
+"ml",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x50": [
+"MOVF",
+[
+"rl",
+"wl"
+],
+"0"
+],
+"0x51": [
+"CMPF",
+[
+"rl",
+"rl"
+],
+"0"
+],
+"0x52": [
+"MNEGF",
+[
+"rl",
+"wl"
+],
+"0"
+],
+"0x53": [
+"TSTF",
+[
+"rl"
+],
+"0"
+],
+"0x54": [
+"EMODF",
+[
+"rl",
+"rb",
+"rl",
+"wl",
+"wl"
+],
+"0"
+],
+"0x55": [
+"POLYF",
+[
+"rl",
+"rw",
+"ab"
+],
+"0"
+],
+"0x56": [
+"CVTFD",
+[
+"rl",
+"wq"
+],
+"0"
+],
+"0x58": [
+"ADAWI",
+[
+"rw",
+"mw"
+],
+"0"
+],
+"0x5c": [
+"INSQHI",
+[
+"ab",
+"aq"
+],
+"0"
+],
+"0x5d": [
+"INSQTI",
+[
+"ab",
+"aq"
+],
+"0"
+],
+"0x5e": [
+"REMQHI",
+[
+"aq",
+"wl"
+],
+"0"
+],
+"0x5f": [
+"REMQTI",
+[
+"aq",
+"wl"
+],
+"0"
+],
+"0x60": [
+"ADDD2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x61": [
+"ADDD3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x62": [
+"SUBD2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x63": [
+"SUBD3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x64": [
+"MULD2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x65": [
+"MULD3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x66": [
+"DIVD2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x67": [
+"DIVD3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x68": [
+"CVTDB",
+[
+"rq",
+"wb"
+],
+"0"
+],
+"0x69": [
+"CVTDW",
+[
+"rq",
+"ww"
+],
+"0"
+],
+"0x6a": [
+"CVTDL",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x6b": [
+"CVTRDL",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x6c": [
+"CVTBD",
+[
+"srb",
+"wq"
+],
+"0"
+],
+"0x6d": [
+"CVTWD",
+[
+"srw",
+"wq"
+],
+"0"
+],
+"0x6e": [
+"CVTLD",
+[
+"srl",
+"wq"
+],
+"0"
+],
+"0x6f": [
+"ACBD",
+[
+"rq",
+"rq",
+"mq",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x70": [
+"MOVD",
+[
+"rq",
+"wq"
+],
+"0"
+],
+"0x71": [
+"CMPD",
+[
+"rq",
+"rq"
+],
+"0"
+],
+"0x72": [
+"MNEGD",
+[
+"rq",
+"wq"
+],
+"0"
+],
+"0x73": [
+"TSTD",
+[
+"rq"
+],
+"0"
+],
+"0x74": [
+"EMODD",
+[
+"rq",
+"rb",
+"rq",
+"wl",
+"wq"
+],
+"0"
+],
+"0x75": [
+"POLYD",
+[
+"rq",
+"rw",
+"ab"
+],
+"0"
+],
+"0x76": [
+"CVTDF",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x78": [
+"ASHL",
+[
+"cntb",
+"rl",
+"wl"
+],
+"0"
+],
+"0x79": [
+"ASHQ",
+[
+"cntb",
+"rq",
+"wq"
+],
+"0"
+],
+"0x7a": [
+"EMUL",
+[
+"rl",
+"rl",
+"rl",
+"wq"
+],
+"0"
+],
+"0x7b": [
+"EDIV",
+[
+"rl",
+"rq",
+"wl",
+"wl"
+],
+"0"
+],
+"0x7c": [
+"CLRQ",
+[
+"wq"
+],
+"0"
+],
+"0x7d": [
+"MOVQ",
+[
+"urq",
+"wq"
+],
+"0"
+],
+"0x7e": [
+"MOVAQ",
+[
+"aq",
+"wl"
+],
+"0"
+],
+"0x7f": [
+"PUSHAQ",
+[
+"aq"
+],
+"0"
+],
+"0x80": [
+"ADDB2",
+[
+"srb",
+"mb"
+],
+"0"
+],
+"0x81": [
+"ADDB3",
+[
+"srb",
+"srb",
+"wb"
+],
+"0"
+],
+"0x82": [
+"SUBB2",
+[
+"srb",
+"mb"
+],
+"0"
+],
+"0x83": [
+"SUBB3",
+[
+"srb",
+"srb",
+"wb"
+],
+"0"
+],
+"0x84": [
+"MULB2",
+[
+"srb",
+"mb"
+],
+"0"
+],
+"0x85": [
+"MULB3",
+[
+"srb",
+"srb",
+"wb"
+],
+"0"
+],
+"0x86": [
+"DIVB2",
+[
+"srb",
+"mb"
+],
+"0"
+],
+"0x87": [
+"DIVB3",
+[
+"srb",
+"srb",
+"wb"
+],
+"0"
+],
+"0x88": [
+"BISB2",
+[
+"urb",
+"mb"
+],
+"0"
+],
+"0x89": [
+"BISB3",
+[
+"urb",
+"urb",
+"wb"
+],
+"0"
+],
+"0x8a": [
+"BICB2",
+[
+"urb",
+"mb"
+],
+"0"
+],
+"0x8b": [
+"BICB3",
+[
+"urb",
+"urb",
+"wb"
+],
+"0"
+],
+"0x8c": [
+"XORB2",
+[
+"urb",
+"mb"
+],
+"0"
+],
+"0x8d": [
+"XORB3",
+[
+"urb",
+"urb",
+"wb"
+],
+"0"
+],
+"0x8e": [
+"MNEGB",
+[
+"srb",
+"wb"
+],
+"0"
+],
+"0x8f": [
+"CASEB",
+[
+"rb",
+"rb",
+"rb"
+],
+"0"
+],
+"0x90": [
+"MOVB",
+[
+"urb",
+"wb"
+],
+"0"
+],
+"0x91": [
+"CMPB",
+[
+"srb",
+"srb"
+],
+"0"
+],
+"0x92": [
+"MCOMB",
+[
+"rb",
+"wb"
+],
+"0"
+],
+"0x93": [
+"BITB",
+[
+"urb",
+"urb"
+],
+"0"
+],
+"0x94": [
+"CLRB",
+[
+"wb"
+],
+"0"
+],
+"0x95": [
+"TSTB",
+[
+"rb"
+],
+"0"
+],
+"0x96": [
+"INCB",
+[
+"mb"
+],
+"0"
+],
+"0x97": [
+"DECB",
+[
+"mb"
+],
+"0"
+],
+"0x98": [
+"CVTBL",
+[
+"srb",
+"wl"
+],
+"0"
+],
+"0x99": [
+"CVTBW",
+[
+"srb",
+"ww"
+],
+"0"
+],
+"0x9a": [
+"MOVZBL",
+[
+"rb",
+"wl"
+],
+"0"
+],
+"0x9b": [
+"MOVZBW",
+[
+"rb",
+"ww"
+],
+"0"
+],
+"0x9c": [
+"ROTL",
+[
+"cntb",
+"rl",
+"wl"
+],
+"0"
+],
+"0x9d": [
+"ACBB",
+[
+"srb",
+"srb",
+"mb",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x9e": [
+"MOVAB",
+[
+"ab",
+"wl"
+],
+"0"
+],
+"0x9f": [
+"PUSHAB",
+[
+"ab"
+],
+"0"
+],
+"0xa0": [
+"ADDW2",
+[
+"srw",
+"mw"
+],
+"0"
+],
+"0xa1": [
+"ADDW3",
+[
+"srw",
+"srw",
+"ww"
+],
+"0"
+],
+"0xa2": [
+"SUBW2",
+[
+"srw",
+"mw"
+],
+"0"
+],
+"0xa3": [
+"SUBW3",
+[
+"srw",
+"srw",
+"ww"
+],
+"0"
+],
+"0xa4": [
+"MULW2",
+[
+"srw",
+"mw"
+],
+"0"
+],
+"0xa5": [
+"MULW3",
+[
+"srw",
+"srw",
+"ww"
+],
+"0"
+],
+"0xa6": [
+"DIVW2",
+[
+"srw",
+"mw"
+],
+"0"
+],
+"0xa7": [
+"DIVW3",
+[
+"srw",
+"srw",
+"ww"
+],
+"0"
+],
+"0xa8": [
+"BISW2",
+[
+"urw",
+"mw"
+],
+"0"
+],
+"0xa9": [
+"BISW3",
+[
+"urw",
+"urw",
+"ww"
+],
+"0"
+],
+"0xaa": [
+"BICW2",
+[
+"urw",
+"mw"
+],
+"0"
+],
+"0xab": [
+"BICW3",
+[
+"urw",
+"urw",
+"ww"
+],
+"0"
+],
+"0xac": [
+"XORW2",
+[
+"urw",
+"mw"
+],
+"0"
+],
+"0xad": [
+"XORW3",
+[
+"urw",
+"urw",
+"ww"
+],
+"0"
+],
+"0xae": [
+"MNEGW",
+[
+"srw",
+"ww"
+],
+"0"
+],
+"0xaf": [
+"CASEW",
+[
+"rw",
+"rw",
+"rw"
+],
+"0"
+],
+"0xb0": [
+"MOVW",
+[
+"urw",
+"ww"
+],
+"0"
+],
+"0xb1": [
+"CMPW",
+[
+"srw",
+"srw"
+],
+"0"
+],
+"0xb2": [
+"MCOMW",
+[
+"rw",
+"ww"
+],
+"0"
+],
+"0xb3": [
+"BITW",
+[
+"urw",
+"urw"
+],
+"0"
+],
+"0xb4": [
+"CLRW",
+[
+"ww"
+],
+"0"
+],
+"0xb5": [
+"TSTW",
+[
+"rw"
+],
+"0"
+],
+"0xb6": [
+"INCW",
+[
+"mw"
+],
+"0"
+],
+"0xb7": [
+"DECW",
+[
+"mw"
+],
+"0"
+],
+"0xb8": [
+"BISPSW",
+[
+"urw"
+],
+"0"
+],
+"0xb9": [
+"BICPSW",
+[
+"urw"
+],
+"0"
+],
+"0xba": [
+"POPR",
+[
+"mskw"
+],
+"0"
+],
+"0xbb": [
+"PUSHR",
+[
+"mskw"
+],
+"0"
+],
+"0xbc": [
+"CHMK",
+[
+"rw"
+],
+"0"
+],
+"0xbd": [
+"CHME",
+[
+"rw"
+],
+"0"
+],
+"0xbe": [
+"CHMS",
+[
+"rw"
+],
+"0"
+],
+"0xbf": [
+"CHMU",
+[
+"rw"
+],
+"0"
+],
+"0xc0": [
+"ADDL2",
+[
+"srl",
+"ml"
+],
+"0"
+],
+"0xc1": [
+"ADDL3",
+[
+"srl",
+"srl",
+"wl"
+],
+"0"
+],
+"0xc2": [
+"SUBL2",
+[
+"srl",
+"ml"
+],
+"0"
+],
+"0xc3": [
+"SUBL3",
+[
+"srl",
+"srl",
+"wl"
+],
+"0"
+],
+"0xc4": [
+"MULL2",
+[
+"srl",
+"ml"
+],
+"0"
+],
+"0xc5": [
+"MULL3",
+[
+"srl",
+"srl",
+"wl"
+],
+"0"
+],
+"0xc6": [
+"DIVL2",
+[
+"srl",
+"ml"
+],
+"0"
+],
+"0xc7": [
+"DIVL3",
+[
+"srl",
+"srl",
+"wl"
+],
+"0"
+],
+"0xc8": [
+"BISL2",
+[
+"url",
+"ml"
+],
+"0"
+],
+"0xc9": [
+"BISL3",
+[
+"url",
+"url",
+"wl"
+],
+"0"
+],
+"0xca": [
+"BICL2",
+[
+"url",
+"ml"
+],
+"0"
+],
+"0xcb": [
+"BICL3",
+[
+"url",
+"url",
+"wl"
+],
+"0"
+],
+"0xcc": [
+"XORL2",
+[
+"url",
+"ml"
+],
+"0"
+],
+"0xcd": [
+"XORL3",
+[
+"url",
+"url",
+"wl"
+],
+"0"
+],
+"0xce": [
+"MNEGL",
+[
+"srl",
+"wl"
+],
+"0"
+],
+"0xcf": [
+"CASEL",
+[
+"rl",
+"rl",
+"rl"
+],
+"0"
+],
+"0xd0": [
+"MOVL",
+[
+"url",
+"wl"
+],
+"0"
+],
+"0xd1": [
+"CMPL",
+[
+"srl",
+"srl"
+],
+"0"
+],
+"0xd2": [
+"MCOML",
+[
+"rl",
+"wl"
+],
+"0"
+],
+"0xd3": [
+"BITL",
+[
+"url",
+"url"
+],
+"0"
+],
+"0xd4": [
+"CLRL",
+[
+"wl"
+],
+"0"
+],
+"0xd5": [
+"TSTL",
+[
+"rl"
+],
+"0"
+],
+"0xd6": [
+"INCL",
+[
+"ml"
+],
+"0"
+],
+"0xd7": [
+"DECL",
+[
+"ml"
+],
+"0"
+],
+"0xd8": [
+"ADWC",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0xd9": [
+"SBWC",
+[
+"rl",
+"ml"
+],
+"0"
+],
+"0xda": [
+"MTPR",
+[
+"url",
+"prl"
+],
+"0"
+],
+"0xdb": [
+"MFPR",
+[
+"prl",
+"wl"
+],
+"0"
+],
+"0xdc": [
+"MOVPSL",
+[
+"wl"
+],
+"0"
+],
+"0xdd": [
+"PUSHL",
+[
+"rl"
+],
+"0"
+],
+"0xde": [
+"MOVAL",
+[
+"al",
+"wl"
+],
+"0"
+],
+"0xdf": [
+"PUSHAL",
+[
+"al"
+],
+"0"
+],
+"0xe0": [
+"BBS",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe1": [
+"BBC",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe2": [
+"BBSS",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe3": [
+"BBCS",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe4": [
+"BBSC",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe5": [
+"BBCC",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe6": [
+"BBSSI",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe7": [
+"BBCCI",
+[
+"posl",
+"vb",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe8": [
+"BLBS",
+[
+"posl",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xe9": [
+"BLBC",
+[
+"posl",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xea": [
+"FFS",
+[
+"posl",
+"cntb",
+"vb",
+"wl"
+],
+"0"
+],
+"0xeb": [
+"FFC",
+[
+"posl",
+"cntb",
+"vb",
+"wl"
+],
+"0"
+],
+"0xec": [
+"CMPV",
+[
+"posl",
+"cntb",
+"vb",
+"rl"
+],
+"0"
+],
+"0xed": [
+"CMPZV",
+[
+"posl",
+"cntb",
+"vb",
+"rl"
+],
+"0"
+],
+"0xee": [
+"EXTV",
+[
+"posl",
+"cntb",
+"vb",
+"wl"
+],
+"0"
+],
+"0xef": [
+"EXTZV",
+[
+"posl",
+"cntb",
+"vb",
+"wl"
+],
+"0"
+],
+"0xf0": [
+"INSV",
+[
+"rl",
+"posl",
+"cntb",
+"vb"
+],
+"0"
+],
+"0xf1": [
+"ACBL",
+[
+"srl",
+"srl",
+"ml",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xf2": [
+"AOBLSS",
+[
+"srl",
+"ml",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xf3": [
+"AOBLEQ",
+[
+"srl",
+"ml",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xf4": [
+"SOBGEQ",
+[
+"ml",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xf5": [
+"SOBGTR",
+[
+"ml",
+"bb"
+],
+"vax_disassembler::STEP_COND"
+],
+"0xf6": [
+"CVTLB",
+[
+"srl",
+"wb"
+],
+"0"
+],
+"0xf7": [
+"CVTLW",
+[
+"srl",
+"ww"
+],
+"0"
+],
+"0xf8": [
+"ASHP",
+[
+"cntb",
+"rw",
+"ab",
+"rb",
+"rw",
+"ab"
+],
+"0"
+],
+"0xf9": [
+"CVTLP",
+[
+"srb",
+"rw",
+"ab"
+],
+"0"
+],
+"0xfa": [
+"CALLG",
+[
+"ab",
+"ab"
+],
+"vax_disassembler::STEP_OVER"
+],
+"0xfb": [
+"CALLS",
+[
+"rl",
+"ab"
+],
+"vax_disassembler::STEP_OVER"
+],
+"0xfc": [
+"XFC",
+[],
+"0"
+]
+},
+"fd": {
+"0x31": [
+"MFVP",
+[
+"rw",
+"wl"
+],
+"0"
+],
+"0x32": [
+"CVTDH",
+[
+"rq",
+"wo"
+],
+"0"
+],
+"0x33": [
+"CVTGF",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x34": [
+"VLDL",
+[
+"rw",
+"ab",
+"rl"
+],
+"0"
+],
+"0x35": [
+"VGATHL",
+[
+"rw",
+"ab"
+],
+"0"
+],
+"0x36": [
+"VLDQ",
+[
+"rw",
+"ab",
+"rl"
+],
+"0"
+],
+"0x37": [
+"VLGATHQ",
+[
+"rw",
+"ab"
+],
+"0"
+],
+"0x40": [
+"ADDG2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x41": [
+"ADDG3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x42": [
+"SUBG2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x43": [
+"SUBG3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x44": [
+"MULG2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x45": [
+"MULG3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x46": [
+"DIVG2",
+[
+"rq",
+"mq"
+],
+"0"
+],
+"0x47": [
+"DIVG3",
+[
+"rq",
+"rq",
+"wq"
+],
+"0"
+],
+"0x48": [
+"CVTGB",
+[
+"rq",
+"wb"
+],
+"0"
+],
+"0x49": [
+"CVTGW",
+[
+"rq",
+"ww"
+],
+"0"
+],
+"0x4a": [
+"CVTGL",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x4b": [
+"CVTRGL",
+[
+"rq",
+"wl"
+],
+"0"
+],
+"0x4c": [
+"CVTBG",
+[
+"srb",
+"wq"
+],
+"0"
+],
+"0x4d": [
+"CVTWG",
+[
+"srw",
+"wq"
+],
+"0"
+],
+"0x4e": [
+"CVTLG",
+[
+"srl",
+"wq"
+],
+"0"
+],
+"0x4f": [
+"ACBG",
+[
+"rq",
+"rq",
+"mq",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x50": [
+"MOVG",
+[
+"rq",
+"wq"
+],
+"0"
+],
+"0x51": [
+"CMPG",
+[
+"rq",
+"rq"
+],
+"0"
+],
+"0x52": [
+"MNEGG",
+[
+"rq",
+"wq"
+],
+"0"
+],
+"0x53": [
+"TSTG",
+[
+"rq"
+],
+"0"
+],
+"0x54": [
+"EMODG",
+[
+"rq",
+"rb",
+"rq",
+"wl",
+"wq"
+],
+"0"
+],
+"0x55": [
+"POLYG",
+[
+"rq",
+"rw",
+"ab"
+],
+"0"
+],
+"0x56": [
+"CVTGH",
+[
+"rq",
+"wo"
+],
+"0"
+],
+"0x60": [
+"ADDH2",
+[
+"ro",
+"wo"
+],
+"0"
+],
+"0x61": [
+"ADDH3",
+[
+"ro",
+"ro",
+"wo"
+],
+"0"
+],
+"0x62": [
+"SUBH2",
+[
+"ro",
+"mo"
+],
+"0"
+],
+"0x63": [
+"SUBH3",
+[
+"ro",
+"ro",
+"wo"
+],
+"0"
+],
+"0x64": [
+"MULH2",
+[
+"ro",
+"mo"
+],
+"0"
+],
+"0x65": [
+"MULH3",
+[
+"ro",
+"ro",
+"wo"
+],
+"0"
+],
+"0x66": [
+"DIVH2",
+[
+"ro",
+"mo"
+],
+"0"
+],
+"0x67": [
+"DIVH3",
+[
+"ro",
+"ro",
+"wo"
+],
+"0"
+],
+"0x68": [
+"CVTHB",
+[
+"ro",
+"wb"
+],
+"0"
+],
+"0x69": [
+"CVTHW",
+[
+"ro",
+"ww"
+],
+"0"
+],
+"0x6a": [
+"CVTHL",
+[
+"ro",
+"wl"
+],
+"0"
+],
+"0x6b": [
+"CVTRHL",
+[
+"ro",
+"wl"
+],
+"0"
+],
+"0x6c": [
+"CVTBH",
+[
+"srb",
+"wo"
+],
+"0"
+],
+"0x6d": [
+"CVTWH",
+[
+"srw",
+"wo"
+],
+"0"
+],
+"0x6e": [
+"CVTLH",
+[
+"srl",
+"wo"
+],
+"0"
+],
+"0x6f": [
+"ACBH",
+[
+"ro",
+"ro",
+"mq",
+"bw"
+],
+"vax_disassembler::STEP_COND"
+],
+"0x70": [
+"MOVH",
+[
+"ro",
+"wo"
+],
+"0"
+],
+"0x71": [
+"CMPH",
+[
+"ro",
+"ro"
+],
+"0"
+],
+"0x72": [
+"MNEGH",
+[
+"ro",
+"wo"
+],
+"0"
+],
+"0x73": [
+"TSTH",
+[
+"ro"
+],
+"0"
+],
+"0x74": [
+"EMODH",
+[
+"ro",
+"rb",
+"ro",
+"wl",
+"wo"
+],
+"0"
+],
+"0x75": [
+"POLYH",
+[
+"ro",
+"rw",
+"ab"
+],
+"0"
+],
+"0x76": [
+"CVTHG",
+[
+"ro",
+"wq"
+],
+"0"
+],
+"0x7c": [
+"CLRO",
+[
+"wo"
+],
+"0"
+],
+"0x7d": [
+"MOVO",
+[
+"uro",
+"wo"
+],
+"0"
+],
+"0x7e": [
+"MOVAO",
+[
+"ao",
+"wl"
+],
+"0"
+],
+"0x7f": [
+"PUSHAO",
+[
+"ao"
+],
+"0"
+],
+"0x80": [
+"VVADDL",
+[
+"rw"
+],
+"0"
+],
+"0x81": [
+"VSADDL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0x82": [
+"VVADDG",
+[
+"rw"
+],
+"0"
+],
+"0x83": [
+"VSADDG",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0x84": [
+"VVADDF",
+[
+"rw"
+],
+"0"
+],
+"0x85": [
+"VSADDF",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0x86": [
+"VVADDD",
+[
+"rw"
+],
+"0"
+],
+"0x87": [
+"VSADDD",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0x88": [
+"VVSUBL",
+[
+"rw"
+],
+"0"
+],
+"0x89": [
+"VSSUBL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0x8a": [
+"VVSUBG",
+[
+"rw"
+],
+"0"
+],
+"0x8b": [
+"VSSUBG",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0x8c": [
+"VVSUBF",
+[
+"rw"
+],
+"0"
+],
+"0x8d": [
+"VSSUBF",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0x8e": [
+"VVSUBD",
+[
+"rw"
+],
+"0"
+],
+"0x8f": [
+"VSSUBD",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0x98": [
+"CVTFH",
+[
+"rl",
+"wo"
+],
+"0"
+],
+"0x99": [
+"CVTFG",
+[
+"rl",
+"wq"
+],
+"0"
+],
+"0x9a": [
+"PROBEVMR",
+[
+"rb",
+"ab"
+],
+"0"
+],
+"0x9b": [
+"PROBEVMW",
+[
+"rb",
+"ab"
+],
+"0"
+],
+"0x9c": [
+"VSTL",
+[
+"rw",
+"ab",
+"rl"
+],
+"0"
+],
+"0x9d": [
+"VSCATL",
+[
+"rw",
+"ab"
+],
+"0"
+],
+"0x9e": [
+"VSTQ",
+[
+"rw",
+"ab",
+"rl"
+],
+"0"
+],
+"0x9f": [
+"VSCATQ",
+[
+"rw",
+"ab"
+],
+"0"
+],
+"0xa0": [
+"VVMULL",
+[
+"rw"
+],
+"0"
+],
+"0xa1": [
+"VSMULL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xa2": [
+"VVMULG",
+[
+"rw"
+],
+"0"
+],
+"0xa3": [
+"VSMULG",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xa4": [
+"VVMULF",
+[
+"rw"
+],
+"0"
+],
+"0xa5": [
+"VSMULF",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xa6": [
+"VVMULD",
+[
+"rw"
+],
+"0"
+],
+"0xa7": [
+"VSMULD",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xa8": [
+"VVDIVL",
+[
+"rw"
+],
+"0"
+],
+"0xa9": [
+"VSDIVL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xaa": [
+"VVDIVG",
+[
+"rw"
+],
+"0"
+],
+"0xab": [
+"VSDIVG",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xac": [
+"VVDIVF",
+[
+"rw"
+],
+"0"
+],
+"0xad": [
+"VSDIVF",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xae": [
+"VVDIVD",
+[
+"rw"
+],
+"0"
+],
+"0xaf": [
+"VSDIVD",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xc0": [
+"VVCMPL",
+[
+"rw"
+],
+"0"
+],
+"0xc1": [
+"VSCMPL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xc2": [
+"VVCMPG",
+[
+"rw"
+],
+"0"
+],
+"0xc3": [
+"VSCMPG",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xc4": [
+"VVCMPF",
+[
+"rw"
+],
+"0"
+],
+"0xc5": [
+"VSCMPF",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xc6": [
+"VVCMPD",
+[
+"rw"
+],
+"0"
+],
+"0xc7": [
+"VSCMPD",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xc8": [
+"VVBISL",
+[
+"rw"
+],
+"0"
+],
+"0xc9": [
+"VSBISL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xcc": [
+"VVBICL",
+[
+"rw"
+],
+"0"
+],
+"0xcd": [
+"VSBICL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xe0": [
+"VVSRLL",
+[
+"rw"
+],
+"0"
+],
+"0xe1": [
+"VSSRLL",
+[
+"rw",
+"posl"
+],
+"0"
+],
+"0xe4": [
+"VVSLLL",
+[
+"rw"
+],
+"0"
+],
+"0xe5": [
+"VSSLLL",
+[
+"rw",
+"posl"
+],
+"0"
+],
+"0xe8": [
+"VVXORL",
+[
+"rw"
+],
+"0"
+],
+"0xe9": [
+"VSXORL",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xec": [
+"VVCNT",
+[
+"rw"
+],
+"0"
+],
+"0xed": [
+"IOTA",
+[
+"rw",
+"rl"
+],
+"0"
+],
+"0xee": [
+"VVMERGE",
+[
+"rw"
+],
+"0"
+],
+"0xef": [
+"VSMERGE",
+[
+"rw",
+"rq"
+],
+"0"
+],
+"0xf6": [
+"CVTHF",
+[
+"ro",
+"wl"
+],
+"0"
+],
+"0xf7": [
+"CVTHD",
+[
+"ro",
+"wq"
+],
+"0"
+]
+}
+}

@@ -1,0 +1,390 @@
+# Renesas (Mitsubishi) M32R family: M32R/D, M32RX and M32R2 integer ISA.
+#
+# Written from the M32R family software manuals and the CGEN description in GNU
+# binutils (cpu/m32r.cpu, read for semantics only). Instructions are 16 or 32
+# bits, big-endian, and two 16-bit instructions share one word: a 32-bit
+# instruction is word-aligned and has bit 15 of its first halfword set, while
+# in the second slot of a word that bit marks parallel execution (M32RX/M32R2).
+# The context bit "slot" tells the two apart: a 16-bit instruction decoded at a
+# word boundary commits slot=1 for the halfword after it.
+
+define endian=big;
+define alignment=2;
+
+define space ram      type=ram_space      size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0x00 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 fp lr sp ];
+define register offset=0x40 size=4 [ psw cbr spi spu cr4 evb bpc cr7 bbpsw cr9 cr10 cr11 cr12 cr13 bbpc cr15 ];
+define register offset=0x80 size=4 [ pc ];
+define register offset=0x90 size=1 [ C LOCK ];
+define register offset=0xa0 size=8 [ a0 a1 ];
+define register offset=0x100 size=4 [ contextreg ];
+
+define context contextreg
+  slot = (0,0) noflow
+;
+
+define token ins16 (16)
+  op1    = (12,15)
+  op1l   = (12,14)
+  pbit   = (15,15)
+  rn1     = (8,11)
+  dr     = (8,11)
+  src1   = (8,11)
+  dcr    = (8,11)
+  rn2     = (0,3)
+  sr     = (0,3)
+  src2   = (0,3)
+  scr    = (0,3)
+  op2    = (4,7)
+  simm8  = (0,7) signed
+  uimm8  = (0,7)
+  uimm3  = (8,10)
+  bit4   = (11,11)
+  uimm4  = (0,3)
+  uimm5  = (0,4)
+  shop   = (5,7)
+  op23   = (4,6)
+  acc    = (7,7)
+  accs   = (2,3)
+  op3    = (0,1)
+  accd   = (10,11)
+  bits67 = (8,9)
+  bit14  = (1,1)
+  imm1   = (0,0)
+;
+
+define token ext16 (16)
+  simm16 = (0,15) signed
+  uimm16 = (0,15)
+;
+
+attach variables [ dr sr src1 src2 ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 fp lr sp ];
+attach variables [ dcr scr ] [ psw cbr spi spu cr4 evb bpc cr7 bbpsw cr9 cr10 cr11 cr12 cr13 bbpc cr15 ];
+attach variables [ acc ] [ a0 a1 ];
+attach variables [ accs accd ] [ a0 a1 _ _ ];
+
+define pcodeop software_trap;
+
+# ---------------------------------------------------------------- operands
+
+disp8: target is simm8 [ target = (inst_start & 0xfffffffc) + (simm8 << 2); ] { export *:4 target; }
+disp16: target is simm16 [ target = inst_start + (simm16 << 2); ] { export *:4 target; }
+disp24: target is simm8; uimm16 [ target = inst_start + ((((simm8 << 16) | uimm16)) << 2); ] { export *:4 target; }
+skip2: dest is epsilon [ dest = inst_next + 2; ] { export *:4 dest; }
+uimm24: val is uimm8; uimm16 [ val = (uimm8 << 16) | uimm16; ] { export *[const]:4 val; }
+
+# ---------------------------------------------------------------- 16-bit ALU
+
+i16:"subv" dr,sr is op1l=0 & op2=0 & dr & sr { local a = dr; local b = sr; C = sborrow(a, b); dr = a - b; }
+i16:"subx" dr,sr is op1l=0 & op2=1 & dr & sr {
+  local a = dr; local b = sr; local c:4 = zext(C);
+  local d = a - b;
+  C = (a < b) || (d < c);
+  dr = d - c;
+}
+i16:"sub" dr,sr is op1l=0 & op2=2 & dr & sr { dr = dr - sr; }
+i16:"neg" dr,sr is op1l=0 & op2=3 & dr & sr { dr = -sr; }
+i16:"cmp" src1,src2 is op1l=0 & op2=4 & src1 & src2 { C = src1 s< src2; }
+i16:"cmpu" src1,src2 is op1l=0 & op2=5 & src1 & src2 { C = src1 < src2; }
+i16:"cmpeq" src1,src2 is op1l=0 & op2=6 & src1 & src2 { C = src1 == src2; }
+i16:"cmpz" src2 is op1l=0 & op2=7 & rn1=0 & src2 { C = src2 == 0; }
+i16:"pcmpbz" src2 is op1l=0 & op2=7 & rn1=3 & src2 {
+  C = ((src2 & 0xff) == 0) || ((src2 & 0xff00) == 0) || ((src2 & 0xff0000) == 0) || ((src2 & 0xff000000) == 0);
+}
+i16:"addv" dr,sr is op1l=0 & op2=8 & dr & sr { local a = dr; local b = sr; C = scarry(a, b); dr = a + b; }
+i16:"addx" dr,sr is op1l=0 & op2=9 & dr & sr {
+  local a = dr; local b = sr; local c:4 = zext(C);
+  local s = a + b;
+  C = carry(a, b) || carry(s, c);
+  dr = s + c;
+}
+i16:"add" dr,sr is op1l=0 & op2=10 & dr & sr { dr = dr + sr; }
+i16:"not" dr,sr is op1l=0 & op2=11 & dr & sr { dr = ~sr; }
+i16:"and" dr,sr is op1l=0 & op2=12 & dr & sr { dr = dr & sr; }
+i16:"xor" dr,sr is op1l=0 & op2=13 & dr & sr { dr = dr ^ sr; }
+i16:"or" dr,sr is op1l=0 & op2=14 & dr & sr { dr = dr | sr; }
+i16:"btst" "#"uimm3,sr is op1l=0 & bit4=0 & uimm3 & op2=15 & sr {
+  local sh:4 = 7 - uimm3;
+  C = ((sr >> sh) & 1) != 0;
+}
+
+# shifts, multiply, jumps, control registers
+i16:"srl" dr,sr is op1l=1 & op2=0 & dr & sr { dr = dr >> (sr & 31); }
+i16:"sra" dr,sr is op1l=1 & op2=2 & dr & sr { dr = dr s>> (sr & 31); }
+i16:"sll" dr,sr is op1l=1 & op2=4 & dr & sr { dr = dr << (sr & 31); }
+i16:"mul" dr,sr is op1l=1 & op2=6 & dr & sr { dr = dr * sr; }
+i16:"mv" dr,sr is op1l=1 & op2=8 & dr & sr { dr = sr; }
+i16:"mvfc" dr,scr is op1l=1 & op2=9 & dr & scr & rn2=0 { dr = (psw & 0xfffffffe) | zext(C); }
+i16:"mvfc" dr,scr is op1l=1 & op2=9 & dr & scr & rn2=1 { dr = zext(C); }
+i16:"mvfc" dr,scr is op1l=1 & op2=9 & dr & scr { dr = scr; }
+i16:"mvtc" sr,dcr is op1l=1 & op2=10 & dcr & sr & rn1=0 { psw = sr; C = (sr & 1) != 0; }
+i16:"mvtc" sr,dcr is op1l=1 & op2=10 & dcr & sr & rn1=1 { }
+i16:"mvtc" sr,dcr is op1l=1 & op2=10 & dcr & sr { dcr = sr; }
+i16:"jc" sr is op1l=1 & rn1=12 & op2=12 & sr {
+  if (C == 0) goto inst_next;
+  local t = sr & 0xfffffffc;
+  goto [t];
+}
+i16:"jnc" sr is op1l=1 & rn1=13 & op2=12 & sr {
+  if (C != 0) goto inst_next;
+  local t = sr & 0xfffffffc;
+  goto [t];
+}
+i16:"jl" sr is op1l=1 & rn1=14 & op2=12 & sr {
+  local t = sr & 0xfffffffc;
+  lr = (inst_start & 0xfffffffc) + 4;
+  call [t];
+}
+i16:"jmp" sr is op1l=1 & rn1=15 & op2=12 & sr & rn2=14 {
+  local t = sr & 0xfffffffc;
+  return [t];
+}
+i16:"jmp" sr is op1l=1 & rn1=15 & op2=12 & sr {
+  local t = sr & 0xfffffffc;
+  goto [t];
+}
+i16:"rte" is op1l=1 & rn1=0 & op2=13 & rn2=6 {
+  local t = bpc & 0xfffffffc;
+  bpc = bbpc;
+  psw = (psw & 0xffff0000) | ((psw >> 8) & 0xff) | ((bbpsw & 0xff) << 8);
+  C = (psw & 1) != 0;
+  return [t];
+}
+i16:"trap" "#"uimm4 is op1l=1 & rn1=0 & op2=15 & uimm4 {
+  bbpc = bpc;
+  bpc = inst_start + 4;
+  bbpsw = (psw >> 8) & 0xff;
+  psw = (psw & 0xffff0000) | (((psw & 0xfe) | zext(C)) << 8) | (psw & 0x80);
+  C = 0;
+  local v:1 = uimm4;
+  software_trap(v);
+}
+
+# loads and stores, register indirect
+i16:"stb" src1,@src2 is op1l=2 & op2=0 & src1 & src2 { *:1 src2 = src1:1; }
+i16:"stb" src1,@src2+ is op1l=2 & op2=1 & src1 & src2 { local a = src2; *:1 a = src1:1; src2 = a + 1; }
+i16:"sth" src1,@src2 is op1l=2 & op2=2 & src1 & src2 { *:2 src2 = src1:2; }
+i16:"sth" src1,@src2+ is op1l=2 & op2=3 & src1 & src2 { local a = src2; *:2 a = src1:2; src2 = a + 2; }
+i16:"st" src1,@src2 is op1l=2 & op2=4 & src1 & src2 { *:4 src2 = src1; }
+i16:"unlock" src1,@src2 is op1l=2 & op2=5 & src1 & src2 {
+  if (LOCK == 0) goto <done>;
+  *:4 src2 = src1;
+<done>
+  LOCK = 0;
+}
+i16:"st" src1,@+src2 is op1l=2 & op2=6 & src1 & src2 { local a = src2 + 4; *:4 a = src1; src2 = a; }
+i16:"push" src1 is op1l=2 & op2=7 & src1 & rn2=15 { local a = sp - 4; *:4 a = src1; sp = a; }
+i16:"st" src1,@-src2 is op1l=2 & op2=7 & src1 & src2 { local a = src2 - 4; *:4 a = src1; src2 = a; }
+i16:"ldb" dr,@sr is op1l=2 & op2=8 & dr & sr { local v:1 = *:1 sr; dr = sext(v); }
+i16:"ldub" dr,@sr is op1l=2 & op2=9 & dr & sr { local v:1 = *:1 sr; dr = zext(v); }
+i16:"ldh" dr,@sr is op1l=2 & op2=10 & dr & sr { local v:2 = *:2 sr; dr = sext(v); }
+i16:"lduh" dr,@sr is op1l=2 & op2=11 & dr & sr { local v:2 = *:2 sr; dr = zext(v); }
+i16:"ld" dr,@sr is op1l=2 & op2=12 & dr & sr { dr = *:4 sr; }
+i16:"lock" dr,@sr is op1l=2 & op2=13 & dr & sr { LOCK = 1; dr = *:4 sr; }
+i16:"pop" dr is op1l=2 & op2=14 & dr & rn2=15 { local a = sp; sp = a + 4; dr = *:4 a; }
+i16:"ld" dr,@sr+ is op1l=2 & op2=14 & dr & sr { local a = sr; sr = a + 4; dr = *:4 a; }
+
+# DSP multiply/accumulate (M32RX/M32R2 forms; acc=0 is the M32R/D form)
+i16:"mulhi" src1,src2,acc is op1l=3 & src1 & acc & op23=0 & src2 {
+  local h:4 = src2 s>> 16;
+  local p:8 = sext(src1 & 0xffff0000) * sext(h:2);
+  acc = (p << 16) s>> 16;
+}
+i16:"mullo" src1,src2,acc is op1l=3 & src1 & acc & op23=1 & src2 {
+  local p:8 = sext(src1 << 16) * sext(src2:2);
+  acc = (p << 16) s>> 16;
+}
+i16:"mulwhi" src1,src2,acc is op1l=3 & src1 & acc & op23=2 & src2 {
+  local h:4 = src2 s>> 16;
+  local p:8 = sext(src1) * sext(h:2);
+  acc = (p << 8) s>> 8;
+}
+i16:"mulwlo" src1,src2,acc is op1l=3 & src1 & acc & op23=3 & src2 {
+  local p:8 = sext(src1) * sext(src2:2);
+  acc = (p << 8) s>> 8;
+}
+i16:"machi" src1,src2,acc is op1l=3 & src1 & acc & op23=4 & src2 {
+  local h:4 = src2 s>> 16;
+  local p:8 = acc + sext(src1 & 0xffff0000) * sext(h:2);
+  acc = (p << 8) s>> 8;
+}
+i16:"maclo" src1,src2,acc is op1l=3 & src1 & acc & op23=5 & src2 {
+  local p:8 = acc + sext(src1 << 16) * sext(src2:2);
+  acc = (p << 8) s>> 8;
+}
+i16:"macwhi" src1,src2,acc is op1l=3 & src1 & acc & op23=6 & src2 {
+  local h:4 = src2 s>> 16;
+  local p:8 = acc + sext(src1) * sext(h:2);
+  acc = (p << 8) s>> 8;
+}
+i16:"macwlo" src1,src2,acc is op1l=3 & src1 & acc & op23=7 & src2 {
+  local p:8 = acc + sext(src1) * sext(src2:2);
+  acc = (p << 8) s>> 8;
+}
+
+i16:"addi" dr,"#"simm8 is op1l=4 & dr & simm8 { dr = dr + simm8; }
+
+# OP1 5: immediate shifts and accumulator moves
+i16:"srli" dr,"#"uimm5 is op1l=5 & shop=0 & dr & uimm5 { dr = dr >> uimm5; }
+i16:"srai" dr,"#"uimm5 is op1l=5 & shop=1 & dr & uimm5 { dr = dr s>> uimm5; }
+i16:"slli" dr,"#"uimm5 is op1l=5 & shop=2 & dr & uimm5 { dr = dr << uimm5; }
+i16:"mvtachi" src1,accs is op1l=5 & src1 & op2=7 & accs & op3=0 { accs = (accs & 0xffffffff) | (sext(src1) << 32); }
+i16:"mvtaclo" src1,accs is op1l=5 & src1 & op2=7 & accs & op3=1 { accs = (accs & 0xffffffff00000000) | zext(src1); }
+i16:"rach" accd,accs,"#"sh is op1l=5 & accd & bits67=0 & op2=8 & accs & bit14=0 & imm1 [ sh = imm1 + 1; ] {
+  local t:8 = accs << (imm1 + 1);
+  t = t + 0x80000000;
+  local hi:1 = t s> 0x00007fff00000000;
+  local lo:1 = t s< 0xffff800000000000;
+  accd = (zext(hi) * 0x00007fff00000000) + (zext(lo) * 0xffff800000000000) + (zext(!hi && !lo) * (t & 0xffffffff00000000));
+}
+i16:"rac" accd,accs,"#"sh is op1l=5 & accd & bits67=0 & op2=9 & accs & bit14=0 & imm1 [ sh = imm1 + 1; ] {
+  local t:8 = accs << (imm1 + 1);
+  t = t + 0x8000;
+  local hi:1 = t s> 0x00007fffffff0000;
+  local lo:1 = t s< 0xffff800000000000;
+  accd = (zext(hi) * 0x00007fffffff0000) + (zext(lo) * 0xffff800000000000) + (zext(!hi && !lo) * (t & 0xffffffffffff0000));
+}
+i16:"mulwu1" src1,src2 is op1l=5 & src1 & op2=10 & src2 {
+  local p:8 = sext(src1) * zext(src2 & 0xffff);
+  a1 = (p << 16) s>> 16;
+}
+i16:"macwu1" src1,src2 is op1l=5 & src1 & op2=11 & src2 {
+  local p:8 = a1 + sext(src1) * zext(src2 & 0xffff);
+  a1 = (p << 8) s>> 8;
+}
+i16:"maclh1" src1,src2 is op1l=5 & src1 & op2=12 & src2 {
+  local m:4 = sext(src1:2) * (src2 s>> 16);
+  local p:8 = a1 + (sext(m) << 16);
+  a1 = (p << 8) s>> 8;
+}
+i16:"msblo" src1,src2 is op1l=5 & src1 & op2=13 & src2 {
+  local m:8 = sext(src1:2) * sext(src2:2);
+  local p:8 = a0 - ((m << 32) s>> 16);
+  a0 = (p << 8) s>> 8;
+}
+i16:"sadd" is op1l=5 & rn1=0 & op2=14 & rn2=4 { a0 = (a1 s>> 16) + a0; }
+i16:"mvfachi" dr,accs is op1l=5 & dr & op2=15 & accs & op3=0 { local v:8 = accs s>> 32; dr = v:4; }
+i16:"mvfaclo" dr,accs is op1l=5 & dr & op2=15 & accs & op3=1 { dr = accs:4; }
+i16:"mvfacmi" dr,accs is op1l=5 & dr & op2=15 & accs & op3=2 { local v:8 = accs s>> 16; dr = v:4; }
+
+i16:"ldi" dr,"#"simm8 is op1l=6 & dr & simm8 { dr = simm8; }
+
+# OP1 7: short branches and PSW bit operations
+i16:"nop" is op1l=7 & rn1=0 & op2=0 & rn2=0 { }
+i16:"setpsw" "#"uimm8 is op1l=7 & rn1=1 & uimm8 { local m:4 = uimm8; psw = psw | m; C = C || ((m & 1) != 0); }
+i16:"clrpsw" "#"uimm8 is op1l=7 & rn1=2 & uimm8 { local m:4 = uimm8; psw = psw & (~m | 0xffffff00); C = C && ((m & 1) == 0); }
+i16:"sc" is op1l=7 & rn1=4 & op2=0 & rn2=1 & skip2 { if (C != 0) goto skip2; }
+i16:"snc" is op1l=7 & rn1=5 & op2=0 & rn2=1 & skip2 { if (C == 0) goto skip2; }
+i16:"bcl.s" disp8 is op1l=7 & rn1=8 & disp8 {
+  if (C == 0) goto inst_next;
+  lr = (inst_start & 0xfffffffc) + 4;
+  call disp8;
+}
+i16:"bncl.s" disp8 is op1l=7 & rn1=9 & disp8 {
+  if (C != 0) goto inst_next;
+  lr = (inst_start & 0xfffffffc) + 4;
+  call disp8;
+}
+i16:"bc.s" disp8 is op1l=7 & rn1=12 & disp8 { if (C != 0) goto disp8; }
+i16:"bnc.s" disp8 is op1l=7 & rn1=13 & disp8 { if (C == 0) goto disp8; }
+i16:"bl.s" disp8 is op1l=7 & rn1=14 & disp8 { lr = (inst_start & 0xfffffffc) + 4; call disp8; }
+i16:"bra.s" disp8 is op1l=7 & rn1=15 & disp8 { goto disp8; }
+
+# ---------------------------------------------------------------- 32-bit
+
+i32:"cmpi" src2,"#"simm16 is op1=8 & rn1=0 & op2=4 & src2; simm16 { C = src2 s< simm16; }
+i32:"cmpui" src2,"#"simm16 is op1=8 & rn1=0 & op2=5 & src2; simm16 { C = src2 < simm16; }
+i32:"sat" dr,sr is op1=8 & dr & op2=6 & sr; uimm16=0 {
+  local neg = sr s< 0;
+  local s:4 = (zext(neg) * 0x7fffffff) + (zext(!neg) * 0x80000000);
+  dr = (zext(C != 0) * s) + (zext(C == 0) * sr);
+}
+i32:"sath" dr,sr is op1=8 & dr & op2=6 & sr; uimm16=0x200 {
+  local hi = sr s>= 32767;
+  local lo = sr s<= -32768;
+  dr = (zext(hi) * 32767) + (zext(lo) * 0xffff8000) + (zext(!hi && !lo) * sr);
+}
+i32:"satb" dr,sr is op1=8 & dr & op2=6 & sr; uimm16=0x300 {
+  local hi = sr s>= 127;
+  local lo = sr s<= -128;
+  dr = (zext(hi) * 127) + (zext(lo) * 0xffffff80) + (zext(!hi && !lo) * sr);
+}
+i32:"addv3" dr,sr,"#"simm16 is op1=8 & dr & op2=8 & sr; simm16 { local a = sr; C = scarry(a, simm16); dr = a + simm16; }
+i32:"add3" dr,sr,"#"simm16 is op1=8 & dr & op2=10 & sr; simm16 { dr = sr + simm16; }
+i32:"and3" dr,sr,"#"uimm16 is op1=8 & dr & op2=12 & sr; uimm16 { dr = sr & uimm16; }
+i32:"xor3" dr,sr,"#"uimm16 is op1=8 & dr & op2=13 & sr; uimm16 { dr = sr ^ uimm16; }
+i32:"or3" dr,sr,"#"uimm16 is op1=8 & dr & op2=14 & sr; uimm16 { dr = sr | uimm16; }
+
+i32:"div" dr,sr is op1=9 & dr & op2=0 & sr; uimm16=0 { if (sr == 0) goto inst_next; dr = dr s/ sr; }
+i32:"divh" dr,sr is op1=9 & dr & op2=0 & sr; uimm16=0x10 { if (sr == 0) goto inst_next; local a:4 = sext(dr:2); dr = a s/ sr; }
+i32:"divb" dr,sr is op1=9 & dr & op2=0 & sr; uimm16=0x18 { if (sr == 0) goto inst_next; local a:4 = sext(dr:1); dr = a s/ sr; }
+i32:"divu" dr,sr is op1=9 & dr & op2=1 & sr; uimm16=0 { if (sr == 0) goto inst_next; dr = dr / sr; }
+i32:"divuh" dr,sr is op1=9 & dr & op2=1 & sr; uimm16=0x10 { if (sr == 0) goto inst_next; local a:4 = zext(dr:2); dr = a / sr; }
+i32:"divub" dr,sr is op1=9 & dr & op2=1 & sr; uimm16=0x18 { if (sr == 0) goto inst_next; local a:4 = zext(dr:1); dr = a / sr; }
+i32:"rem" dr,sr is op1=9 & dr & op2=2 & sr; uimm16=0 { if (sr == 0) goto inst_next; dr = dr s% sr; }
+i32:"remh" dr,sr is op1=9 & dr & op2=2 & sr; uimm16=0x10 { if (sr == 0) goto inst_next; local a:4 = sext(dr:2); dr = a s% sr; }
+i32:"remb" dr,sr is op1=9 & dr & op2=2 & sr; uimm16=0x18 { if (sr == 0) goto inst_next; local a:4 = sext(dr:1); dr = a s% sr; }
+i32:"remu" dr,sr is op1=9 & dr & op2=3 & sr; uimm16=0 { if (sr == 0) goto inst_next; dr = dr % sr; }
+i32:"remuh" dr,sr is op1=9 & dr & op2=3 & sr; uimm16=0x10 { if (sr == 0) goto inst_next; local a:4 = zext(dr:2); dr = a % sr; }
+i32:"remub" dr,sr is op1=9 & dr & op2=3 & sr; uimm16=0x18 { if (sr == 0) goto inst_next; local a:4 = zext(dr:1); dr = a % sr; }
+i32:"srl3" dr,sr,"#"simm16 is op1=9 & dr & op2=8 & sr; simm16 { dr = sr >> (simm16 & 31); }
+i32:"sra3" dr,sr,"#"simm16 is op1=9 & dr & op2=10 & sr; simm16 { dr = sr s>> (simm16 & 31); }
+i32:"sll3" dr,sr,"#"simm16 is op1=9 & dr & op2=12 & sr; simm16 { dr = sr << (simm16 & 31); }
+i32:"ldi" dr,"#"simm16 is op1=9 & dr & op2=15 & rn2=0; simm16 { dr = simm16; }
+
+i32:"stb" src1,@(simm16,src2) is op1=10 & src1 & op2=0 & src2; simm16 { local a = src2 + simm16; *:1 a = src1:1; }
+i32:"sth" src1,@(simm16,src2) is op1=10 & src1 & op2=2 & src2; simm16 { local a = src2 + simm16; *:2 a = src1:2; }
+i32:"st" src1,@(simm16,src2) is op1=10 & src1 & op2=4 & src2; simm16 { local a = src2 + simm16; *:4 a = src1; }
+i32:"bset" "#"uimm3,@(simm16,sr) is op1=10 & bit4=0 & uimm3 & op2=6 & sr; simm16 {
+  local a = sr + simm16;
+  local m:1 = 1 << (7 - uimm3);
+  *:1 a = *:1 a | m;
+}
+i32:"bclr" "#"uimm3,@(simm16,sr) is op1=10 & bit4=0 & uimm3 & op2=7 & sr; simm16 {
+  local a = sr + simm16;
+  local m:1 = 1 << (7 - uimm3);
+  *:1 a = *:1 a & ~m;
+}
+i32:"ldb" dr,@(simm16,sr) is op1=10 & dr & op2=8 & sr; simm16 { local a = sr + simm16; local v:1 = *:1 a; dr = sext(v); }
+i32:"ldub" dr,@(simm16,sr) is op1=10 & dr & op2=9 & sr; simm16 { local a = sr + simm16; local v:1 = *:1 a; dr = zext(v); }
+i32:"ldh" dr,@(simm16,sr) is op1=10 & dr & op2=10 & sr; simm16 { local a = sr + simm16; local v:2 = *:2 a; dr = sext(v); }
+i32:"lduh" dr,@(simm16,sr) is op1=10 & dr & op2=11 & sr; simm16 { local a = sr + simm16; local v:2 = *:2 a; dr = zext(v); }
+i32:"ld" dr,@(simm16,sr) is op1=10 & dr & op2=12 & sr; simm16 { local a = sr + simm16; dr = *:4 a; }
+
+i32:"beq" src1,src2,disp16 is op1=11 & src1 & op2=0 & src2; disp16 { if (src1 == src2) goto disp16; }
+i32:"bne" src1,src2,disp16 is op1=11 & src1 & op2=1 & src2; disp16 { if (src1 != src2) goto disp16; }
+i32:"beqz" src2,disp16 is op1=11 & rn1=0 & op2=8 & src2; disp16 { if (src2 == 0) goto disp16; }
+i32:"bnez" src2,disp16 is op1=11 & rn1=0 & op2=9 & src2; disp16 { if (src2 != 0) goto disp16; }
+i32:"bltz" src2,disp16 is op1=11 & rn1=0 & op2=10 & src2; disp16 { if (src2 s< 0) goto disp16; }
+i32:"bgez" src2,disp16 is op1=11 & rn1=0 & op2=11 & src2; disp16 { if (src2 s>= 0) goto disp16; }
+i32:"blez" src2,disp16 is op1=11 & rn1=0 & op2=12 & src2; disp16 { if (src2 s<= 0) goto disp16; }
+i32:"bgtz" src2,disp16 is op1=11 & rn1=0 & op2=13 & src2; disp16 { if (src2 s> 0) goto disp16; }
+
+i32:"seth" dr,"#"uimm16 is op1=13 & dr & op2=12 & rn2=0; uimm16 { dr = uimm16 << 16; }
+
+i32:"ld24" dr,"#"uimm24 is (op1=14 & dr) ... & uimm24 { dr = uimm24; }
+
+i32:"bcl.l" disp24 is (op1=15 & rn1=8) ... & disp24 {
+  if (C == 0) goto inst_next;
+  lr = inst_start + 4;
+  call disp24;
+}
+i32:"bncl.l" disp24 is (op1=15 & rn1=9) ... & disp24 {
+  if (C != 0) goto inst_next;
+  lr = inst_start + 4;
+  call disp24;
+}
+i32:"bc.l" disp24 is (op1=15 & rn1=12) ... & disp24 { if (C != 0) goto disp24; }
+i32:"bnc.l" disp24 is (op1=15 & rn1=13) ... & disp24 { if (C == 0) goto disp24; }
+i32:"bl.l" disp24 is (op1=15 & rn1=14) ... & disp24 { lr = inst_start + 4; call disp24; }
+i32:"bra.l" disp24 is (op1=15 & rn1=15) ... & disp24 { goto disp24; }
+
+# ---------------------------------------------------------------- root
+
+:^i16 is slot=0 & pbit=0 & i16 [ slot = 1; globalset(inst_next, slot); ] { }
+:^i16 is slot=1 & pbit=0 & i16 { }
+:"||" i16 is slot=1 & pbit=1 & i16 { }
+:^i32 is (slot=0 & pbit=1) ... & i32 { }
+

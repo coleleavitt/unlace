@@ -4,6 +4,8 @@ mod arcv2_loops;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
 mod common;
+#[path = "m32r_raw.rs"]
+mod m32r_raw;
 #[path = "m6800_family.rs"]
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]

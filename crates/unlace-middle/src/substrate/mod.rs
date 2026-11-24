@@ -28,6 +28,7 @@ pub mod kuna_avxintrin; // (kuna `avxintrinsics`) Intel intrinsic names for the 
 pub mod kuna_budget;
 pub mod kuna_calleefacts;
 pub mod kuna_checkedarena;
+pub mod kuna_condcallpush; // (kuna `condcallpush`) a call's return-address push is not a statement
 pub mod kuna_dwarfregbind; // (kuna `dwarfscopes`) where a DWARF register local binds
 pub mod kuna_emittedop;
 pub mod kuna_fnmemory;

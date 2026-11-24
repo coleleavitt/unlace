@@ -661,6 +661,7 @@ kuna_options! { self, p1;
     "boolreturn" => registered!(crate::kuna_ctree::Boolreturn),
     "noretfirst" => registered!(crate::kuna_ctree::Noretfirst),
     "nestedand" => registered!(crate::kuna_ctree::Nestedand),
+    "condcallpush" => registered!(crate::kuna_condcallpush::CondCallPush),
     "retternary" => registered!(crate::kuna_ctree::Retternary),
     "orexit" => registered!(crate::kuna_ctree::Orexit),
     "macho-arm64e" => {

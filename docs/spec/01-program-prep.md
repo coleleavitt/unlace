@@ -362,9 +362,11 @@ its machine is read from the ELF header
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
 ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARC
-object loads, but its relocation types are not applied; a call to an undefined
-symbol keeps the unrelocated displacement.
+language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
+displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
+words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the
+small-data forms against `_SDA_BASE_` and the GOT forms are not.
 
 (kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
 section; its function and global names come from the `WASM_SYMBOL_TABLE`
@@ -1084,7 +1086,10 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   non-empty section out above `0x400000` (`RELOC_BASE`, matching CLE so addresses
   line up with angr's), apply the relocations, rebase defined symbols, and bind
   each undefined extern to a synthetic call target in an extern area above the
-  sections so calls render by name. A section header's size is a claim the file
+  sections so calls render by name (an extern reached by a plain data relocation
+  on the operand of an x86 `call`/`jmp`/`jcc` or an MSP430 `call #imm` counts as
+  code too, so i386 and MSP430 libcalls are named) (the next 4 KiB page plus one; on a 16-bit
+  machine the next 16 bytes, so AVR's 4 KiB `rcall` still reaches every libcall). A section header's size is a claim the file
   need not back, so the layout allocates zero-fill only for data — `SHT_NOBITS`
   storage and a data extent past the end of the file — and at most 256 MiB of it
   per object (`reloc_object.rs (ZERO_FILL_LIMIT)`); code is laid out at the bytes

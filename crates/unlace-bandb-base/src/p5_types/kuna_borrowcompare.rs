@@ -909,6 +909,41 @@ fn xor_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
     joined as int4
 }
 
+/// The whole-value trigger of [`RuleDoubleInputPair`]: join the input words
+/// `lo` and the one above it when the PIECE `op` concatenates them, high word
+/// first, and every op that reads either word is such a PIECE. Neither word is
+/// then a value of its own: the function only ever uses the eight bytes
+/// together, as a soft-float caller does with a `double` it hands to
+/// `__aeabi_dadd` (`CONCAT44(a1,a0)` beside `unsigned int a0,unsigned int
+/// a1`).
+fn piece_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
+    let (Some(hi), Some(lo)) = (input(data, op, 0), input(data, op, 1)) else {
+        return 0;
+    };
+    let size = size_of(data, lo);
+    if size <= 0 || size > 4 || size_of(data, hi) != size {
+        return 0;
+    }
+    if input_above(data, lo) != Some(hi) {
+        return 0;
+    }
+    let only_pieced = |vn: VarnodeId| {
+        data.vbank().get(vn).is_some_and(|v| {
+            v.descend_iter().all(|r| {
+                data.obank().get(r).is_some_and(|o| {
+                    o.code() == OpCode::CPUI_PIECE
+                        && o.get_in(0) == Some(hi)
+                        && o.get_in(1) == Some(lo)
+                })
+            })
+        })
+    };
+    if !only_pieced(lo) || !only_pieced(hi) {
+        return 0;
+    }
+    join(data, lo, hi) as int4
+}
+
 /// Whether some value the carry reaches sums the carry with `hi`.
 fn carried_into(sums: &[Lin], hi: VarnodeId, mask: uintb) -> bool {
     let unit = |k: Option<&uintb>| matches!(k, Some(&k) if k == 1 || k == mask);
@@ -979,6 +1014,7 @@ impl crate::action::Rule for RuleDoubleInputPair {
             OpCode::CPUI_INT_XOR,
             OpCode::CPUI_INT_EQUAL,
             OpCode::CPUI_INT_NOTEQUAL,
+            OpCode::CPUI_PIECE,
         ]
     }
 
@@ -998,6 +1034,13 @@ impl crate::action::Rule for RuleDoubleInputPair {
             .is_some_and(|o| o.code() == OpCode::CPUI_INT_XOR)
         {
             return xor_input_pair(data, op);
+        }
+        if data
+            .obank()
+            .get(op)
+            .is_some_and(|o| o.code() == OpCode::CPUI_PIECE)
+        {
+            return piece_input_pair(data, op);
         }
         if data
             .obank()

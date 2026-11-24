@@ -514,7 +514,7 @@ class Arm32(Arch32):
         Keep an encoding only when Keystone assembles Capstone's text back to the same bytes, and an
         LDRD/STRD only with an even first register below lr. T32: a shifted-register data-processing
         op with bit 15 of its second halfword set, or a saturate/bit-field op with bit 10 of its
-        first, is UNPREDICTABLE."""
+        first or bit 5 of its second, is UNPREDICTABLE."""
         b = cand["bytes"]
         if self.thumb:
             if len(b) != 4:
@@ -522,7 +522,7 @@ class Arm32(Arch32):
             hw1 = b[1] << 8 | b[0]
             if (hw1 & 0xFE00) == 0xEA00 and b[3] & 0x80:
                 return False
-            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and hw1 & 0x400)
+            return not ((hw1 & 0xFA00) == 0xF200 and not b[3] & 0x80 and (hw1 >> 4) & 0x10 and (hw1 & 0x400 or b[2] & 0x20))
         m = re.match(r"^(?:ld|st)rd\w*$", cand["mnemonic"]) and re.match(r"(\w+),", cand["op_str"])
         if m:
             n = {"sb": 9, "sl": 10, "fp": 11, "ip": 12, "sp": 13, "lr": 14}.get(m.group(1))

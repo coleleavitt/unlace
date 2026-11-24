@@ -69,7 +69,10 @@ cache-control instructions new in these generations (`s_clause`, `s_delay_alu`,
 `s_waitcnt_*cnt`, `s_inst_prefetch`, ...) decode as no-ops.
 
 Gaps beyond GFX9's: on gfx10, VOP3P (packed math), MIMG and the dot operations are not decoded;
-on both, the export and LDS-direct instructions are not. gfx11's true16 forms, VOP3P,
+on both, the export and LDS-direct instructions are not. The VOP3-only `v_add_co_u32`,
+`v_sub_co_u32` and `v_subrev_co_u32` print without an `_e64` suffix, as LLVM does, and
+`v_permlane16_b32`/`v_permlanex16_b32` are the `permlane16`/`permlanex16` user-ops on the old
+destination, the source and both lane-select SGPRs. gfx11's true16 forms, VOP3P,
 WMMA and MIMG come from the generated includes below.
 
 Oracle: `fixtures/amdgpu/gfx900_kernels.cl` and the four GFX9 test kernels built with clang
@@ -112,9 +115,9 @@ constructors to the base spec (the probe skips opcodes the base already decodes 
 prints a half for them); then rerun `gen_amdgpu_wave64.py`.
 
 Oracle: the probe encodings against `llvm-objdump`. Of the 436 valid VOP3 encodings (destination
-field 0x7e, which `v_cmpx` requires), 430 print
-the same mnemonic (the rest: `v_mqsad_u32_u8` and `v_permlane16/x16_b32`, not decoded, and the
-base spec's `v_add/sub/subrev_co_u32_e64` spelling), and 132 of the 133 that name a half print
+field 0x7e, which `v_cmpx` requires), all but `v_mqsad_u32_u8` print the same mnemonic (when
+this was first measured, 430 did: `v_permlane16/x16_b32` and the `v_add/sub/subrev_co_u32`
+suffix were fixed later), and 132 of the 133 that name a half print
 the same text (the other is the probe's VGPR as a `v_cndmask_b16` mask); of the 496 VOPC, VOP1
 and VOP2 encodings with halves, all but `v_swap_b16` and the base spec's `v_mov_b16`/`v_not_b16`
 spelling print the same text; all 34 VOP3P encodings print the same mnemonic; and 3,632 MIMG

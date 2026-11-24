@@ -4224,6 +4224,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `RockwellL39` | Rockwell C39 / L39 | `RockwellL39:LE:16:default` | aleph-void/ghidra-rockwell-l39 @ `df9c28fdc1`, Apache-2.0 |
 | `AdrenoQRISC` | Qualcomm Adreno SQE / QRISC | `QRisc:LE:32:a6xx`, `QRisc:LE:32:a7xx`, `QRisc:LE:32:a7xx_gen3`, `QRisc:LE:32:a8xx` | aleph-void/ida-adreno-qrisc (fork of locus-x64/ida-adreno-qrisc) @ `f5b3d0de28`, MIT |
 | `PRU` | TI PRU / PRU-ICSS | `PRU:LE:32:v0`, `PRU:LE:32:v1`, `PRU:LE:32:v2`, `PRU:LE:32:v3`, `PRU:LE:32:v4` | aleph-void/Ghidra-Rare (PRU) @ `87cc554e33`, MIT |
+| `MicroBlaze` | AMD/Xilinx MicroBlaze | `MicroBlaze:BE:32:default`, `MicroBlaze:LE:32:default`, `MicroBlaze:BE:64:default`, `MicroBlaze:LE:64:default` | aleph-void/Ghidra-Rare (MicroBlaze) @ `87cc554e33`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

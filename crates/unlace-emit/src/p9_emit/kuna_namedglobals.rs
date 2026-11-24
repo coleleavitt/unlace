@@ -21,6 +21,11 @@ struct Accesses {
 pub struct References {
     objects: BTreeMap<(u64, String), Rc<Datatype>>,
     accesses: BTreeMap<(u64, String), Accesses>,
+    /// Per variable [`record_named`](Self::record_named) has looked at, the
+    /// address of its first instance in program data: the scan is over every
+    /// instance, and one function's print asks it for every read of the global.
+    /// Keyed by the function too, in case one print reads two.
+    data_instance: BTreeMap<(usize, crate::context::HighVariableId), Option<Address>>,
 }
 
 impl References {
@@ -120,12 +125,18 @@ impl References {
         let storage = if in_data(vn) {
             Some(vn.get_addr().clone())
         } else {
-            let high = vn.get_high().and_then(|h| fd.high_bank().get(h));
-            high.and_then(|h| {
-                (0..h.num_instances())
-                    .filter_map(|i| fd.vbank().get(h.get_instance(i)))
-                    .find(|v| in_data(v))
-                    .map(|v| v.get_addr().clone())
+            vn.get_high().and_then(|id| {
+                self.data_instance
+                    .entry((std::ptr::from_ref(fd) as usize, id))
+                    .or_insert_with(|| {
+                        fd.high_bank().get(id).and_then(|h| {
+                            (0..h.num_instances())
+                                .filter_map(|i| fd.vbank().get(h.get_instance(i)))
+                                .find(|v| in_data(v))
+                                .map(|v| v.get_addr().clone())
+                        })
+                    })
+                    .clone()
             })
         };
         if let Some(address) = storage {

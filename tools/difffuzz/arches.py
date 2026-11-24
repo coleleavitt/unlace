@@ -3183,4 +3183,84 @@ class Bfin(ObjdumpArch):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin())}
+RX_DENY = re.compile(
+    r"^(b[a-z]*(\.[sbwa])?|bra(\.[sbwla])?|bsr(\.[wal])?|jmp|jsr|rts|rtsd|rte|rtfi|wait|brk|int|nop|"
+    r"mvtc|mvfc|setpsw|clrpsw|pushc|popc|mvtipl|push(\.[bwl])?|pushm|pop|popm|smovf|smovb|smovu|sstr\..|"
+    r"scmpu|suntil\..|swhile\..|rmpa\..|f[a-z]+|round|itof|mac[a-z]*|mul[hl]o|mvfac[a-z]*|mvtac[a-z]*|"
+    r"racw|racl|rdacw|rdacl|emaca|emsba|emula|msbhi|msblh|msblo|movco|movli|\.[a-z]+)$"
+)
+
+
+class Rx(ObjdumpArch):
+    """Renesas RX (RXv1, little endian) against gdb's rx simulator (--oracle gdbsim, driven with
+    dfsim_plain: sim/rx has its own main.c). R0 is the stack pointer; C, Z, S and O are compared
+    through PSW (sim/rx register 18). Branches, calls, returns, control-register moves,
+    push/pop, string, floating-point and DSP (accumulator) instructions are not generated."""
+    name = "rx"
+    lang = "RX:LE:32:RXv1"
+    elf_machine = 173
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(f"R{i}", None) for i in range(16)]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"C": 0, "Z": 1, "S": 2, "O": 3}
+    deny = RX_DENY
+    gdbsim = "rx"
+    gdb_pc = "pc"
+    sim_regnums = dict([(f"R{i}", (i, 4)) for i in range(16)] + [("psw", (18, 4)), ("pc", (19, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("rx runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("rx", False, 8, b"\x03", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.4:
+            return rng.randrange(0x10000, 0xF0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return 0x10 <= a < 0x100000
+
+    def canonical(self, cand):
+        mn, ops = cand["mnemonic"], cand["op_str"]
+        # RXv2/RXv3-only forms (double-precision, DBT, 3-operand XOR) and encodings binutils
+        # accepts with an immediate wider than the operation (MOV.B/W #imm32)
+        if "invalid" in mn + ops or mn.startswith("d") or (mn == "xor" and ops.count(",") == 2):
+            return False
+        # ... a MOV.B/W #imm to a register, and the 06 memex prefix with a register source
+        if re.match(r"mov\.[bw]$", mn) and re.search(r", r\d+$", ops) and ops.startswith("#"):
+            return False
+        if cand["bytes"][0] == 0x06 and len(cand["bytes"]) > 1 and (cand["bytes"][1] & 3) == 3:
+            return False
+        m = re.match(r"mov\.([bw]) #(0x[0-9a-f]+|-?\d+),", ops and mn + " " + ops)
+        if m:
+            v = int(m.group(2), 0)
+            lim = 0x100 if m.group(1) == "b" else 0x10000
+            if not (-lim // 2 <= v < lim):
+                return False
+        return True
+
+    def ignored(self, mnemonic, operands, state):
+        # a register shift count uses bits 4..0 of the register; sim/rx shifts by all of it
+        m = re.match(r"(r\d+), (r\d+)$", operands)
+        if mnemonic in ("shll", "shlr", "shar", "rotl", "rotr") and m:
+            c = state.get(m.group(1).upper())
+            if m.group(1) == m.group(2) or c > 31:
+                return {"*"}
+        return set()
+
+    def mem_ignored(self, a):
+        # sim/rx keeps a byte of its own at 0x88264 (it reads back 4 whatever was written)
+        return a == 0x88264
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin(), Rx())}

@@ -48,8 +48,8 @@ fn surface_count_is_102() {
 
 #[test]
 fn settable_count_is_362() {
-    assert_eq!(kuna_num_settables(), 367);
-    assert_eq!(SETTABLE_TABLE.len(), 367);
+    assert_eq!(kuna_num_settables(), 372);
+    assert_eq!(SETTABLE_TABLE.len(), 372);
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_182_transform_111_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 186, 111));
+    assert_eq!((core, transform, analysis), (71, 188, 113));
 }
 
 #[test]
@@ -371,6 +371,8 @@ fn option_values_live_value_present_for_129() {
         "machobinds",
         "machoehframe",
         "ehcold",
+        "mfcmsgmap",
+        "msvcptrentry",
         "importvote",
         "ehnote",
         // (kuna) The full byte-pattern function-start pass — an analysis-pass gate
@@ -793,6 +795,29 @@ fn option_values_live_value_present_for_129() {
                             // `warnstyle` and `int3pad` are here.  Its live
                             // value is the registered option `SignPolicy`.
                             | "signedness"
+                            // (kuna) Registered options (`kuna_flag!`,
+                            // `registered!`) with no `live_field`: their live
+                            // value is the option registry's, not a codegen field.
+                            | "fpargboxed"
+                            | "satconvert"
+                            | "latecse"
+                            | "aeabifloat"
+                            | "evmcalls"
+                            | "pairbranch"
+                            | "calleeargsmsvc"
+                            | "typemerge"
+                            | "phiarm"
+                            | "calleesaved"
+                            | "ctree"
+                            | "boolreturn"
+                            | "noretfirst"
+                            | "nestedand"
+                            | "retternary"
+                            | "orexit"
+                            | "honestgaps"
+                            | "condcallpush"
+                            | "orchainlive"
+                            | "orchainbool"
                     ) || PASS_GATES.contains(&st.option),
                     "unexpected option with no live reader: {}",
                     st.option
@@ -999,7 +1024,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `armhoist` (live_field = arm_hoist).
     // +1 for `javasync` (live_field = java_sync).
     // +1 for `egraph` (live_field = egraph).
-    assert_eq!(with_live, 147);
+    // +2 for `fpargboxed` (fp_arg_boxed) and `satconvert` (sat_convert).
+    assert_eq!(with_live, 149);
 }
 
 #[test]
@@ -1348,7 +1374,10 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +1 for `egraph`; its P3 row follows `mba`: 362 rows, 361 commas.
     // +1 for `calleeargsmsvc`; its P4 row follows `calleeargs`: 363 rows, 362 commas.
     // +1 for `jumptablework`; its P2 row follows `jumptablemax`.
-    assert_eq!(json.matches("},\n").count(), 363);
+    // Recounted from phases.toml with `evmcalls` (its P2 row follows `linuxsyscall`): 368 rows, 367 commas.
+    // +1 for `retindexuse`; its P4 row follows `pairbranch`, with the row main added alongside: 370 rows, 369 commas.
+    // +1 for `wideconst`; its P9 row follows `evmcalls`: 372 rows, 371 commas.
+    assert_eq!(json.matches("},\n").count(), 371);
 }
 
 #[test]

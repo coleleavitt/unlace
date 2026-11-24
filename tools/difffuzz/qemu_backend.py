@@ -38,6 +38,9 @@ def _mmap_min_addr():
 # QEMU user mode maps guest pages one-to-one onto the host's, so it cannot map below this
 MIN_ADDR = _mmap_min_addr()
 
+# --qemu-cpu: replaces the harness's -cpu value
+CPU_OVERRIDE = None
+
 
 def fill_byte(addr, seed):
     x = (addr * 0x9E3779B97F4A7C15 + seed * 0xC2B2AE3D27D4EB4F) & 0xFFFFFFFFFFFFFFFF
@@ -903,21 +906,560 @@ class LaHarness:
         return regs, 0
 
 
-HARNESSES = {"aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
+# ---------------------------------------------------------------- PA-RISC 1.1 (32-bit, big endian)
+
+def hp_assemble21(v):
+    a = (v >> 11) & 0x1FFFFF
+    return (a & 3) << 12 | (a & 0x7C) << 14 | (a & 0x180) << 7 | (a & 0xFFE00) >> 8 | (a & 0x100000) >> 20
+
+
+def hp_im14(x):
+    return ((x & 0x1FFF) << 1) | (1 if x < 0 else 0)
+
+
+def hp_li32(r, v):
+    """ldil L%v,r; ldo R%v(r),r."""
+    return [0x20000000 | r << 21 | hp_assemble21(v), 0x34000000 | r << 21 | r << 16 | hp_im14(v & 0x7FF)]
+
+
+def hp_ldw(t, b, off):
+    return 0x48000000 | b << 21 | t << 16 | hp_im14(off)
+
+
+def hp_stw(r, b, off):
+    return 0x68000000 | b << 21 | r << 16 | hp_im14(off)
+
+
+def hp_bl(here, target):
+    d = ((target - (here + 8)) >> 2) & 0x1FFFF
+    return 0xE8000000 | (d & 0x10000) >> 16 | (d & 0xF800) << 5 | (d & 0x400) >> 8 | (d & 0x3FF) << 3
+
+
+class HppaHarness:
+    """r1..r31 at 4*i, SAR at 128, carry (PSW CB) at 132, marker at 144. One free register holds
+    the table address (the BL's delay slot restores it); a second one detects nullification: the
+    epilogue's first instruction complements it, so it keeps its input value only when the
+    instruction under test nullified that slot."""
+    qemu = ("qemu-hppa", [])
+    machine = 15
+    big = True
+    elf32 = True
+    table_size = 152
+    marker_at = 144
+
+    def __init__(self):
+        self.s, self.n = 3, 4
+        self.scratch_names = []
+        self.n_init = 0
+
+    def choose_scratch(self, arch, regs, written):
+        free = []
+        for i in list(range(3, 20)) + [21, 22, 23, 28, 29]:
+            name = arch.gprs[i - 1][0]
+            if name in regs and not written & set(range(regs[name][0], regs[name][0] + regs[name][1])):
+                free.append(i)
+        if len(free) < 2:
+            return False
+        self.s, self.n = free[0], free[1]
+        self.scratch_names = [arch.gprs[self.s - 1][0], arch.gprs[self.n - 1][0]]
+        return True
+
+    def _t(self):
+        return next(r for r in (1, 2, 5, 6) if r not in (self.s, self.n))
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = hp_li32(s, TABLES)
+        c += [hp_ldw(t, s, 128), 0x01601840 | t << 16]                    # mtsar t
+        c += [hp_ldw(t, s, 132), 0xB4000000 | t << 21 | 0x7FF]            # addi -1,t,r0: carry = (t != 0)
+        for i in range(1, 32):
+            if i != s:
+                c.append(hp_ldw(i, s, 4 * i))
+        here = PROLOGUE + 4 * len(c)
+        c += [hp_bl(here, target), hp_ldw(s, s, 4 * s)]                    # b target; ldw (delay slot)
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s, n, t = self.s, self.n, self._t()
+        c = [0x08000980 | n << 21 | n]                                     # uaddcm r0,n,n (nullifiable)
+        c += hp_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(hp_stw(i, s, 4 * i))
+        c += [0x016008A0 | t, hp_stw(t, s, 128)]                           # mfctl sar,t
+        c += [0x08000700 | t, hp_stw(t, s, 132)]                           # add,c r0,r0,t
+        c += hp_li32(t, marker) + [hp_stw(t, s, self.marker_at + 4)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x341A0002] + hp_li32(25, base) + hp_li32(24, size) + [0xE4008200, 0x34140008]  # be,l 0x100(sr2,r0); ldi 4,r20
+        c += [0x341A0000, 0xE4008200, 0x34140002]                          # exit(0)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (name, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">I", t, 4 * i, init.get(name, 0) & 0xFFFFFFFF)
+        struct.pack_into(">I", t, 128, init.get("sar", 0) & 0x1F)
+        struct.pack_into(">I", t, 132, flagword & 1)
+        self.n_init = init.get(arch.gprs[self.n - 1][0], 0) & 0xFFFFFFFF
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {name: struct.unpack_from(">I", out, 4 * i)[0] for i, (name, _) in enumerate(arch.gprs[:31], start=1)}
+        regs["sar"] = struct.unpack_from(">I", out, 128)[0]
+        nullified = regs[arch.gprs[self.n - 1][0]] == self.n_init
+        return regs, (struct.unpack_from(">I", out, 132)[0] & 1) | (2 if nullified else 0)
+
+
+
+# ---------------------------------------------------------------- ARM / Thumb (AArch32, ELF32)
+
+def arm_movw(rd, v):
+    return 0xE3000000 | ((v >> 12) & 0xF) << 16 | rd << 12 | (v & 0xFFF)
+
+
+def arm_movt(rd, v):
+    return 0xE3400000 | ((v >> 28) & 0xF) << 16 | rd << 12 | ((v >> 16) & 0xFFF)
+
+
+def arm_li32(rd, v):
+    return [arm_movw(rd, v & 0xFFFF), arm_movt(rd, v)]
+
+
+def arm_ldr(rt, rn, off):
+    return 0xE5900000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+def arm_str(rt, rn, off):
+    return 0xE5800000 | rn << 16 | rt << 12 | (off & 0xFFF)
+
+
+class ArmHarness:
+    """A32 code on qemu-arm -cpu max. r0..r14 at 4*i, APSR (NZCVQ, GE) at 64, read back at 64.
+    The prologue is A32: it sets the flags with MSR APSR_nzcvqg, loads every register but a
+    scratch one, restores the scratch register last and jumps with LDR pc from a literal, which
+    interworks, so a Thumb target (bit 0 set) runs as Thumb. An epilogue at a Thumb exit starts
+    with BX pc from a word-aligned address (a NOP first when it is not) and a NOP, to get back to A32."""
+    qemu = ("qemu-arm", ["-cpu", "max"])
+    machine = 40
+    big = False
+    elf32 = True
+    flags = 0x05000000          # EF_ARM_EABI_VER5
+    table_size = 80
+    marker_at = 72
+    thumb = False
+
+    def __init__(self):
+        self.scratch, self.scratch_names = 12, ["r12"]
+
+    def choose_scratch(self, arch, regs, written):
+        names = [f"r{i}" for i in range(12, -1, -1)] + ["lr"]
+        got = _pick_free(arch, regs, written, names, 1)
+        if not got:
+            return False
+        self.scratch_names = got
+        self.scratch = 14 if got[0] == "lr" else int(got[0][1:])
+        return True
+
+    def prologue(self, target):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, TABLES)
+        c += [arm_ldr(t, s, 64), 0xE12CF000 | t]                                    # msr APSR_nzcvqg, t
+        for i in range(15):
+            if i != s:
+                c.append(arm_ldr(i, s, 4 * i))
+        c.append(arm_ldr(s, s, 4 * s))
+        c += [0xE51FF004, target | (1 if self.thumb else 0)]                         # ldr pc, [pc, #-4]
+        return words(c)
+
+    def epilogue_at(self, dumps, marker, at):
+        head = b""
+        if self.thumb:
+            head = halfwords(([] if at % 4 == 0 else [0x46C0]) + [0x4778, 0x46C0])   # bx pc from a word address
+        return head + self._epilogue(dumps, marker)
+
+    def epilogue(self, dumps, marker):
+        return self.epilogue_at(dumps, marker, 0)
+
+    def _epilogue(self, dumps, marker):
+        s = self.scratch
+        t = 0 if s != 0 else 1
+        c = arm_li32(s, OUT)
+        for i in range(15):
+            if i != s:
+                c.append(arm_str(i, s, 4 * i))
+        c += [0xE10F0000 | t << 12, arm_str(t, s, 64)]                               # mrs t, APSR
+        c += arm_li32(t, marker) + [arm_str(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += arm_li32(7, 4) + arm_li32(0, 1) + arm_li32(1, base) + arm_li32(2, size) + [0xEF000000]   # write
+        c += arm_li32(7, 1) + arm_li32(0, 0) + [0xEF000000]                                             # exit
+        return words(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:15]):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into("<I", t, 64, flagword & 0xF80F0000)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:15])}
+        return regs, struct.unpack_from("<I", out, 64)[0]
+
+
+class ThumbHarness(ArmHarness):
+    """T32 code: the same harness, entered with bit 0 of the target set."""
+    thumb = True
+
+
+# ---------------------------------------------------------------- Alpha (64-bit, little endian)
+
+def al_mem(op, ra, rb, disp):
+    return op << 26 | ra << 21 | rb << 16 | (disp & 0xFFFF)
+
+
+def al_li(r, v):
+    """ldah r,hi(zero); lda r,lo(r) for v below 2^31."""
+    hi = ((v + 0x8000) >> 16) & 0xFFFF
+    lo = (v - (hi << 16)) & 0xFFFF
+    return [al_mem(0x09, r, 31, hi), al_mem(0x08, r, r, lo)]
+
+
+class AlphaHarness:
+    """r0..r30 at 8*i, marker at 248. A free register holds the table address and is loaded last,
+    then BR reaches the instruction (Alpha has no delay slots). qemu-alpha maps 8 KiB pages."""
+    qemu = ("qemu-alpha", ["-cpu", "ev67"])
+    machine = 0x9026
+    big = False
+    seg_align = 0x2000
+    table_size = 256
+    marker_at = 248
+
+    def __init__(self):
+        self.s = 28
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in list(range(28, 0, -1)):
+            n = arch.gprs[i][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.s
+        c = al_li(s, TABLES)
+        for i in range(31):
+            if i != s:
+                c.append(al_mem(0x29, i, s, 8 * i))                      # ldq
+        c.append(al_mem(0x29, s, s, 8 * s))
+        here = PROLOGUE + 4 * len(c)
+        c.append(0x30 << 26 | 31 << 21 | (((target - (here + 4)) >> 2) & 0x1FFFFF))   # br zero,target
+        return words(c, False)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        t = 1 if s != 1 else 2
+        c = al_li(s, OUT)
+        for i in range(31):
+            if i != s:
+                c.append(al_mem(0x2D, i, s, 8 * i))                      # stq
+        c += al_li(t, marker) + [al_mem(0x2D, t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [al_mem(0x08, 0, 31, 4), al_mem(0x08, 16, 31, 1)] + al_li(17, base) + al_li(18, size) + [0x83]  # write; callsys
+        c += [al_mem(0x08, 0, 31, 1), al_mem(0x08, 16, 31, 0), 0x83]                                      # exit(0)
+        return words(c, False)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<Q", t, 8 * i, init.get(n, 0) & 0xFFFFFFFFFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<Q", out, 8 * i)[0] for i, (n, _) in enumerate(arch.gprs)}, 0
+
+
+# ---------------------------------------------------------------- OpenRISC 1000 (32-bit, big endian)
+
+def or_li32(r, v):
+    """l.movhi r,hi; l.ori r,r,lo."""
+    return [0x18000000 | r << 21 | (v >> 16) & 0xFFFF, 0xA8000000 | r << 21 | r << 16 | (v & 0xFFFF)]
+
+
+def or_lwz(d, a, off):
+    return 0x84000000 | d << 21 | a << 16 | (off & 0xFFFF)
+
+
+def or_sw(b, a, off):
+    return 0xD4000000 | ((off >> 11) & 0x1F) << 21 | a << 16 | b << 11 | (off & 0x7FF)
+
+
+class Or1kHarness:
+    """r1..r31 at 4*i; F and CY in at 128/132 and back at 136/140; marker at 144. F is set with
+    l.sfne, CY with l.addi -1 (which leaves OV clear); CY reads back with l.addc and F with
+    l.cmov. OV cannot be read from user mode. The l.j delay slot restores the table register.
+    qemu-or1k does not hold r0 at zero, so the epilogue clears it first; r0 is not compared."""
+    qemu = ("qemu-or1k", [])
+    machine = 92
+    big = True
+    elf32 = True
+    seg_align = 0x2000
+    table_size = 152
+    marker_at = 144
+
+    def __init__(self):
+        self.s = 30
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in range(30, 0, -1):
+            n = arch.gprs[i - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def _t(self):
+        return 3 if self.s != 3 else 4
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = or_li32(s, TABLES)
+        c += [or_lwz(t, s, 128), 0xE4200000 | t << 16]                        # l.sfne t,r0
+        c += [or_lwz(t, s, 132), 0x9C000000 | t << 21 | t << 16 | 0xFFFF]     # l.addi t,t,-1
+        for i in range(1, 32):
+            if i != s:
+                c.append(or_lwz(i, s, 4 * i))
+        here = PROLOGUE + 4 * len(c)
+        c += [((target - here) >> 2) & 0x3FFFFFF, or_lwz(s, s, 4 * s)]          # l.j target; l.lwz (delay slot)
+        return words(c, True)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.s, self._t()
+        u = 5 if 5 not in (s, t) else 6
+        c = [0x18000000]                                                       # l.movhi r0,0: qemu-or1k lets r0 be written
+        c += or_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(or_sw(i, s, 4 * i))
+        c += [0xE0000001 | t << 21, or_sw(t, s, 140)]                           # l.addc t,r0,r0
+        c += [0x9C000000 | u << 21 | 1, 0xE000000E | t << 21 | u << 16, or_sw(t, s, 136)]  # l.addi u,r0,1; l.cmov t,u,r0
+        c += or_li32(t, marker) + [or_sw(t, s, self.marker_at + 4)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x9C000000 | 11 << 21 | 64, 0x9C000000 | 3 << 21 | 1] + or_li32(4, base) + or_li32(5, size) + [0x20000001]
+        c += [0x9C000000 | 11 << 21 | 93, 0x9C000000 | 3 << 21, 0x20000001]     # exit(0)
+        return words(c, True)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(">I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into(">II", t, 128, flagword & 1, (flagword >> 1) & 1)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from(">I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        f, cy = struct.unpack_from(">II", out, 136)
+        return regs, (f & 1) | (cy & 1) << 1
+
+
+# ---------------------------------------------------------------- MicroBlaze (32-bit, either endianness)
+
+def mb_li32(r, v):
+    """imm hi; addik r,r0,lo."""
+    return [0xB0000000 | (v >> 16) & 0xFFFF, 0x30000000 | r << 21 | (v & 0xFFFF)]
+
+
+class MicroBlazeHarness:
+    """r1..r31 at 4*i, carry in at 128 and back at 132, marker at 136. The carry goes in with
+    addi -1 and comes back with addc; imm + braid reaches the instruction and its delay slot
+    restores the table register."""
+    qemu = ("qemu-microblaze", [])
+    machine = 189
+    big = True
+    elf32 = True
+    table_size = 144
+    marker_at = 136
+
+    def __init__(self):
+        self.s = 30
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in [30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 13, 11, 10, 9, 8, 4, 3, 2]:
+            n = arch.gprs[i - 1][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def _t(self):
+        return 3 if self.s != 3 else 4
+
+    def prologue(self, target):
+        s, t = self.s, self._t()
+        c = mb_li32(s, TABLES)
+        c += [0xE8000000 | t << 21 | s << 16 | 128, 0x20000000 | t << 21 | t << 16 | 0xFFFF]   # lwi; addi t,t,-1
+        for i in range(1, 32):
+            if i != s:
+                c.append(0xE8000000 | i << 21 | s << 16 | 4 * i)
+        c += [0xB0000000 | (target >> 16) & 0xFFFF, 0xB8180000 | (target & 0xFFFF),       # imm; braid
+              0xE8000000 | s << 21 | s << 16 | 4 * s]                                     # lwi (delay slot)
+        return words(c, self.big)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.s, self._t()
+        c = mb_li32(s, OUT)
+        for i in range(1, 32):
+            if i != s:
+                c.append(0xF8000000 | i << 21 | s << 16 | 4 * i)
+        c += [0x08000000 | t << 21, 0xF8000000 | t << 21 | s << 16 | 132]                 # addc t,r0,r0
+        c += mb_li32(t, marker) + [0xF8000000 | t << 21 | s << 16 | (self.marker_at + (4 if self.big else 0))]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x30000000 | 12 << 21 | 4, 0x30000000 | 5 << 21 | 1] + mb_li32(6, base) + mb_li32(7, size) + [0xB9CC0008]
+        c += [0x30000000 | 12 << 21 | 1, 0x30000000 | 5 << 21, 0xB9CC0008]              # exit(0)
+        return words(c, self.big)
+
+    def table(self, arch, init, init_vec, flagword):
+        e = ">" if self.big else "<"
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs[:31], start=1):
+            struct.pack_into(e + "I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into(e + "I", t, 128, flagword & 1)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        e = ">" if self.big else "<"
+        regs = {n: struct.unpack_from(e + "I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs[:31], start=1)}
+        return regs, struct.unpack_from(e + "I", out, 132)[0] & 1
+
+
+class MicroBlazeElHarness(MicroBlazeHarness):
+    qemu = ("qemu-microblazeel", [])
+    big = False
+
+
+# ---------------------------------------------------------------- Xtensa (little endian, 16/24-bit)
+
+def xt_bytes(ws):
+    out = b""
+    for w in ws:
+        out += bytes([w & 0xFF, (w >> 8) & 0xFF]) if isinstance(w, tuple) else bytes([w & 0xFF, (w >> 8) & 0xFF, (w >> 16) & 0xFF])
+    return out
+
+
+def xt_l32i(t, s, off):
+    return (off // 4) << 16 | 2 << 12 | s << 8 | t << 4 | 2
+
+
+def xt_s32i(t, s, off):
+    return (off // 4) << 16 | 6 << 12 | s << 8 | t << 4 | 2
+
+
+def xt_movi(t, imm):
+    return (imm & 0xFF) << 16 | 0xA << 12 | ((imm >> 8) & 0xF) << 8 | t << 4 | 2
+
+
+def xt_slli(r, s, sa):
+    e = 32 - sa
+    return ((e >> 4) & 1) << 20 | 1 << 16 | r << 12 | s << 8 | (e & 0xF) << 4
+
+
+def xt_or(r, s, t):
+    return 2 << 20 | r << 12 | s << 8 | t << 4
+
+
+def xt_li32(r, v, tmp):
+    """movi r,byte3; then slli r,r,8; movi tmp,byte; or r,r,tmp for the lower bytes."""
+    c = [xt_movi(r, (v >> 24) & 0xFF)]
+    for sh in (16, 8, 0):
+        c += [xt_slli(r, r, 8), xt_movi(tmp, (v >> sh) & 0xFF), xt_or(r, r, tmp)]
+    return c
+
+
+class XtensaHarness:
+    """a0..a15 at 4*i, SAR at 64, marker at 72. A free register holds the table address and is
+    loaded last, then J reaches the instruction (no delay slots). SAR goes through wsr/rsr."""
+    qemu = ("qemu-xtensa", [])
+    machine = 94
+    big = False
+    elf32 = True
+    table_size = 80
+    marker_at = 72
+
+    def __init__(self):
+        self.s = 15
+        self.scratch_names = []
+
+    def choose_scratch(self, arch, regs, written):
+        for i in range(15, 1, -1):
+            n = arch.gprs[i][0]
+            if n in regs and not written & set(range(regs[n][0], regs[n][0] + regs[n][1])):
+                self.s = i
+                self.scratch_names = [n]
+                return True
+        return False
+
+    def prologue(self, target):
+        s = self.s
+        t = 2 if s != 2 else 3
+        c = [xt_movi(s, 0x3E), xt_slli(s, s, 16)]                               # TABLES = 0x3E0000
+        c += [xt_l32i(t, s, 64), 0x130300 | t << 4]                             # wsr.sar t
+        for i in range(16):
+            if i != s:
+                c.append(xt_l32i(i, s, 4 * i))
+        c.append(xt_l32i(s, s, 4 * s))
+        here = PROLOGUE + 3 * len(c)
+        c.append(((target - (here + 4)) & 0x3FFFF) << 6 | 6)                    # j target
+        return xt_bytes(c)
+
+    def epilogue(self, dumps, marker):
+        s = self.s
+        t, u = [r for r in (7, 8, 9, 10) if r != s][:2]
+        c = [xt_movi(s, 0x3E), xt_slli(s, s, 16), 8 << 16 | 0xD << 12 | s << 8 | s << 4 | 2]   # addmi s,s,0x800
+        for i in range(16):
+            if i != s:
+                c.append(xt_s32i(i, s, 4 * i))
+        c += [0x030300 | t << 4, xt_s32i(t, s, 64)]                             # rsr.sar t
+        c += xt_li32(t, marker, u) + [xt_s32i(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [xt_movi(2, 13), xt_movi(6, 1)] + xt_li32(3, base, 5) + xt_li32(4, size, 5) + [0x005000]   # write; syscall
+        c += [xt_movi(2, 118), xt_movi(6, 0), 0x005000]                         # exit(0)
+        return xt_bytes(c)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        return bytes(t)
+
+    def parse(self, arch, out):
+        return {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs)}, 0
+
+
+HARNESSES = {"arm": ArmHarness, "thumb": ThumbHarness, "aarch64": A64Harness, "riscv64": RvHarness, "mips": MipsHarness, "mips64": Mips64Harness,
              "mipsr6": MipsR6Harness, "mips64r6": Mips64R6Harness, "nios2": Nios2Harness, "sh4": Sh4Harness,
              "ppc": lambda: PpcHarness(("qemu-ppc", ["-cpu", "7457"]), 20, True, False),
              "ppc64": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
              "ppc64-isa": lambda: PpcHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
              "ppc64le-isa": lambda: PpcHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
-             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness}
+             "ppc64-p10": lambda: PpcVsxHarness(("qemu-ppc64", ["-cpu", "power10"]), 21, True, True, 2),
+             "ppc64le-p10": lambda: PpcVsxHarness(("qemu-ppc64le", ["-cpu", "power10"]), 21, False, True, 2),
+             "s390x": S390xHarness, "s390x-vec": S390xHarness, "m68k": M68kHarness, "loongarch64": LaHarness, "sparc64": SparcHarness, "sparc": Sparc32Harness, "hppa": HppaHarness, "alpha": AlphaHarness, "or1k": Or1kHarness, "microblaze": MicroBlazeHarness, "microblazeel": MicroBlazeElHarness, "xtensa": XtensaHarness}
 
 
 def qemu_path(name):
-    """A QEMU user binary: from $DIFFFUZZ_QEMU_DIR when set, else from PATH."""
-    d = os.environ.get("DIFFFUZZ_QEMU_DIR")
-    if d and os.access(os.path.join(d, name), os.X_OK):
-        return os.path.join(d, name)
+    """A QEMU user binary: from the directories in $DIFFFUZZ_QEMU_DIR (separated by ':') when set,
+    else from PATH."""
+    for d in os.environ.get("DIFFFUZZ_QEMU_DIR", "").split(os.pathsep):
+        if d and os.access(os.path.join(os.path.expanduser(d), name), os.X_OK):
+            return os.path.join(os.path.expanduser(d), name)
     return shutil.which(name)
 
 # ---------------------------------------------------------------- PowerPC (32, 64 big- and little-endian)
@@ -1037,6 +1579,66 @@ class PpcHarness:
         return regs, self._get(out, 272) & 0xFFFFFFFF
 
 
+class PpcVsxHarness(PpcHarness):
+    """PpcHarness with vs0..vs63 at 304 + 16*i (lxv/stxv) in place of the FPRs."""
+    table_size = 304 + 1024
+
+    def _vsx(self, store):
+        s = self.scratch
+        return [0xF4000000 | (i & 31) << 21 | s << 16 | (304 + 16 * i) | (i >> 5) << 3 | (5 if store else 1)
+                for i in range(64)]
+
+    def prologue(self, target):
+        s, t = self.scratch, self._temp()
+        c = ppc_li(s, TABLES)
+        c += [self._ld(t, s, 256), ppc_spr(0x7C0003A6, t, 8)]
+        c += [self._ld(t, s, 264), ppc_spr(0x7C0003A6, t, 9)]
+        c += [self._ld(t, s, 272), 0x7C0FF120 | t << 21]
+        c += [self._ld(t, s, 280), ppc_spr(0x7C0003A6, t, 1)]
+        c += self._vsx(False)
+        for i in range(32):
+            if i != s:
+                c.append(self._ld(i, s, 8 * i))
+        c.append(self._ld(s, s, 8 * s))
+        here = PROLOGUE + 4 * len(c)
+        c.append(0x48000000 | ((target - here) & 0x3FFFFFC))
+        return words(c, self.big)
+
+    def epilogue(self, dumps, marker):
+        s, t = self.scratch, self._temp()
+        c = ppc_li(s, OUT)
+        for i in range(32):
+            if i != s:
+                c.append(self._st(i, s, 8 * i))
+        c += [ppc_spr(0x7C0002A6, t, 8), self._st(t, s, 256)]
+        c += [ppc_spr(0x7C0002A6, t, 9), self._st(t, s, 264)]
+        c += [0x7C000026 | t << 21, self._st(t, s, 272)]
+        c += [ppc_spr(0x7C0002A6, t, 1), self._st(t, s, 280)]
+        c += self._vsx(True)
+        c += ppc_li(t, marker) + [self._st(t, s, self.marker_at)]
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += [0x38000004, 0x38600001] + ppc_li(4, base) + ppc_li(5, size) + [0x44000002]
+        c += [0x38000001, 0x38600000, 0x44000002]
+        return words(c, self.big)
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(PpcHarness.table(self, arch, init, {}, flagword)[:296]) + bytearray(self.table_size - 296)
+        for i in range(64):
+            t[304 + 16 * i:320 + 16 * i] = (init_vec.get(f"vs{i}", 0) & (2 ** 128 - 1)).to_bytes(16, "big" if self.big else "little")
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {f"r{i}": self._get(out, 8 * i) for i in range(32)}
+        regs["LR"] = self._get(out, 256)
+        regs["CTR"] = self._get(out, 264)
+        xer = self._get(out, 280)
+        for n, b in self.xer_bits.items():
+            regs[n] = (xer >> b) & 1
+        for i in range(64):
+            regs[f"vs{i}"] = int.from_bytes(out[304 + 16 * i:320 + 16 * i], "big" if self.big else "little")
+        return regs, self._get(out, 272) & 0xFFFFFFFF
+
+
 
 
 # ---------------------------------------------------------------- x86-64, run natively
@@ -1137,6 +1739,75 @@ HARNESSES["x86-64-native"] = X86NativeHarness
 HARNESSES["x86-64-x87"] = X86NativeHarness
 
 
+# ---------------------------------------------------------------- 32-bit x86, run natively
+
+X86_SEG_ORDER = ["ES", "CS", "SS", "DS", "FS", "GS"]
+
+
+class X86_32NativeHarness:
+    """EAX..EDI at 4*i, EFLAGS at 64, XMM0..XMM7 at 128 + 16*i, the segment registers (ES CS SS DS
+    FS GS, as stored after the instruction) at 256 + 2*i. An i386 static ELF the kernel runs under
+    its IA-32 emulation, so the case runs on this CPU in 32-bit protected mode."""
+    qemu = None
+    machine = 3
+    big = False
+    elf32 = True
+    table_size = 320
+    marker_at = 288
+
+    def prologue(self, target):
+        c = b"\xB8" + struct.pack("<I", TABLES)                           # mov eax, TABLES
+        for i in range(8):
+            c += b"\xF3\x0F\x6F" + bytes([0x80 | (i << 3)]) + struct.pack("<i", 128 + 16 * i)
+        c += b"\xFF\xB0" + struct.pack("<i", 64) + b"\x9D"               # push [eax+64]; popfd
+        for i in range(1, 8):
+            c += b"\x8B" + bytes([0x80 | (i << 3)]) + struct.pack("<i", 4 * i)
+        c += b"\x8B\x80" + struct.pack("<i", 0)
+        here = PROLOGUE + len(c) + 5
+        return c + b"\xE9" + struct.pack("<i", target - here)
+
+    def epilogue(self, dumps, marker):
+        # SS-relative stores until DS and ES are restored: the instruction may have loaded a null DS
+        c = b"\x36\xA3" + struct.pack("<I", OUT)                          # mov ss:[OUT], eax
+        c += b"\xB8" + struct.pack("<I", OUT)                             # mov eax, OUT
+        for i in range(1, 8):
+            c += b"\x36\x89" + bytes([0x80 | (i << 3)]) + struct.pack("<i", 4 * i)
+        for s in range(6):
+            c += b"\x36\x8C" + bytes([0x80 | (s << 3)]) + struct.pack("<i", 256 + 2 * s)   # mov ss:[eax+d], sreg
+        c += b"\xBB\x2B\x00\x00\x00\x8E\xDB\x8E\xC3"                    # mov ebx, 0x2b; mov ds, bx; mov es, bx
+        c += b"\xBC" + struct.pack("<I", TABLES + 0xF00)                  # mov esp, private stack
+        c += b"\x9C\x5B\x89\x98" + struct.pack("<i", 64)                 # pushfd; pop ebx; store
+        for i in range(8):
+            c += b"\xF3\x0F\x7F" + bytes([0x80 | (i << 3)]) + struct.pack("<i", 128 + 16 * i)
+        c += b"\xC7\x80" + struct.pack("<iI", self.marker_at, marker)
+        for base, size in [(OUT, self.table_size)] + [(p, PAGE) for p in dumps]:
+            c += b"\xB8\x04\x00\x00\x00\xBB\x01\x00\x00\x00"          # eax=4 (write); ebx=1
+            c += b"\xB9" + struct.pack("<I", base)                        # ecx=base
+            c += b"\xBA" + struct.pack("<I", size) + b"\xCD\x80"         # edx=size; int 0x80
+        c += b"\xB8\x01\x00\x00\x00\x31\xDB\xCD\x80"                    # exit(0)
+        return c
+
+    def table(self, arch, init, init_vec, flagword):
+        t = bytearray(self.table_size)
+        for i, (n, _) in enumerate(arch.gprs):
+            struct.pack_into("<I", t, 4 * i, init.get(n, 0) & 0xFFFFFFFF)
+        struct.pack_into("<I", t, 64, flagword)
+        for i in range(8):
+            t[128 + 16 * i:144 + 16 * i] = (init_vec.get(f"XMM{i}", 0) & (2 ** 128 - 1)).to_bytes(16, "little")
+        return bytes(t)
+
+    def parse(self, arch, out):
+        regs = {n: struct.unpack_from("<I", out, 4 * i)[0] for i, (n, _) in enumerate(arch.gprs)}
+        for i in range(8):
+            regs[f"XMM{i}"] = int.from_bytes(out[128 + 16 * i:144 + 16 * i], "little")
+        for s, n in enumerate(X86_SEG_ORDER):
+            regs[n] = struct.unpack_from("<H", out, 256 + 2 * s)[0]
+        return regs, struct.unpack_from("<I", out, 64)[0]
+
+
+HARNESSES["x86-32-native"] = X86_32NativeHarness
+
+
 def available(arch):
     """The QEMU user binary for this architecture, or None."""
     h = HARNESSES.get(arch.name)
@@ -1174,6 +1845,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         words_.append((fields, word))
 
     st = State(arch.big, lambda a: fill_byte(a, seed), regs)
+    if hasattr(arch, "callother_fn"):
+        st.callother = lambda op: arch.callother_fn(op, st)
     for i, b in enumerate(cand["bytes"]):
         st.mem[addr + i] = b
     for n, _ in arch.gprs:
@@ -1247,7 +1920,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
     for i, b in enumerate(cand["bytes"]):
         mem[addr + i] = b
     for k, x in enumerate(exits):
-        for i, b in enumerate(h.epilogue(data_pages, 0x5EA1 + k)):
+        ep = h.epilogue_at(data_pages, 0x5EA1 + k, x) if hasattr(h, "epilogue_at") else h.epilogue(data_pages, 0x5EA1 + k)
+        for i, b in enumerate(ep):
             mem[x + i] = b
     tables = bytearray(PAGE)
     tables[:h.table_size] = h.table(arch, init, init_vec, flagword)
@@ -1272,7 +1946,8 @@ def run_case_qemu(arch, regs, row, cand, rng, seed, tmp):
         f.write(build(segs, PROLOGUE, h.machine, h.big, getattr(h, "flags", 0), align=align))
     os.chmod(path, 0o755)
     try:
-        cmd = [path] if h.qemu is None else [qemu_path(h.qemu[0]), *h.qemu[1], path]
+        qargs = ["-cpu", CPU_OVERRIDE] if CPU_OVERRIDE and h.qemu is not None else (h.qemu[1] if h.qemu else [])
+        cmd = [path] if h.qemu is None else [qemu_path(h.qemu[0]), *qargs, path]
         p = subprocess.run(cmd, capture_output=True, timeout=10)
     except subprocess.TimeoutExpired:
         return {"status": "ref-exception", "why": "qemu timeout"}

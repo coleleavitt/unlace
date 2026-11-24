@@ -108,6 +108,37 @@ Follow-ups from the re-run:
 - Issues: #756 (linked SPARC64 marks a leaf no-return), #757 (AVR and AMDGPU ET_REL relocations), #765 (SPARC64 float result returned in `fs0`).
 - Regression rows: `processors.toml` `elfroute_*` (#760) loads ET_REL and ET_EXEC builds of every routed or relocated machine through auto-detection.
 
+## Re-run on `unlace-5dac424f4f` (2026-11-24)
+
+Every object was run with no `--target`. That covers the 66 objects of the first sweep and the families added since:
+- C-SKY, m68k, OpenRISC, ARCv2 (`-mcpu=hs`) and Xtensa, from GNU gcc 15.3, as .o and linked;
+- Xtensa HiFi 4, the gcc output assembled with the HiFi 4 `xtensa-elf-as`, also run with `--target Xtensa:LE:32:hifi4_rt700`;
+- CUDA `sm_80`, clang `-S` then `ptxas`;
+- AVR and MSP430 as .o and linked.
+
+All 98 runs load, and every function is found: 13/13, with 10/10 for BPF. VE still has no spec.
+
+| family | O0 | O2 | new since the last run | fixed by / filed as |
+|---|---|---|---|---|
+| x86, x86_64, aarch64(_be), arm, armeb, armv7a, thumb, thumbv7m, mips*, powerpc*, riscv32/64, s390x, sparc, sparc64, hexagon, lanai, loongarch64, wasm32, AMDGPU | 13/13 | 13/13 | clean. thumbv7m/armeb soft-float `scale` returns `__aeabi_fadd(...)` (#840). sparc64 `scale` is right (#799) | |
+| x86 -O0 | 13/13 | | every UBSan check is `sub_403030(...)`: the extern called through `R_386_PC32` was not named | #861 |
+| MSP430 -O0 | 13/13 | | the same through `R_MSP430_16_BYTE` on `call #imm` (`sub_3030`) | #861 |
+| AVR (.o) | 13/13 | 13/13 | `rcall` to libcalls out of range (externs a page past 4 KiB), `subi`/`sbci` `LDI_NEG` refused | #856 |
+| ARCv2 (.o) | 13/13 | 13/13 | `bl`, `b` and long immediates unrelocated | #857 |
+| C-SKY, OpenRISC, Lanai, ARC (no `-g`) | 13/13 | 13/13 | `scale` is `void`: its `__addsf3` tail result is lost | #864 |
+| Xtensa, Xtensa HiFi 4 | 13/13 | 13/13 | -O2 `mul_wide` is `void` (`__umulsidi3`) | #864 |
+| m68k | 13/13 | 13/13 | -O2 `str_len`'s self tail call to `str_len` is named `sub_402000` | |
+| BPF, CUDA sm_80 | 10/10, 13/13 | 10/10, 13/13 | -O2 `str_len` is `void`, its loop counter already in the return register | #865 |
+| CUDA sm_80 (cubin) | 13/13 | 13/13 | relocation type 66 (`CONST_FIELD21_38`) still skipped, as noted in the earlier row | |
+
+Also fixed in this round, before the re-run:
+- #827 ARM/Thumb-2 `MOVW`/`MOVT`;
+- #830 C-SKY `bsr32`;
+- #834 OpenRISC;
+- #839 and #848 Xtensa `SLOT0_OP` and partial-inplace `R_XTENSA_32`.
+
+The `elfroute_*` rows cover these.
+
 ## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
 
 Real artifacts decompiled one function or code object at a time with the pinned
@@ -122,11 +153,12 @@ Real artifacts decompiled one function or code object at a time with the pinned
 | `Lua:LE:32:5.3` | Lua 5.3.4 test suite, luac 5.3.6 | 666 | 666 | none | none |
 | `Lua:LE:32:5.4` | Lua 5.4.6 test suite, luac 5.4.8 | 1034 | 1033 | none | #688 (kuna_selectdiv overflow on bitwise.lua's main chunk) |
 | `V8Ignition:LE:32:13.6` | `node --no-lazy --print-bytecode` of npm's semver package and the Node internals it loads | 682 | 682 | none | none |
-| `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes) |
+| `EVM:BE:32:Cancun` | solc 0.8.24 runtime code of an ERC-20 and a vault (mapping, array, call, selfdestruct), optimizer off and on | 4 | 2 | none | #687 (jump-table shift overflow on the ERC-20 runtimes, fixed by #709); readability: option `evmcalls` (see below) |
 | `AMDGPU:LE:64:GFX9/10/11` | 8 OpenCL kernels (matmul, tiled matmul, histogram, LDS scan, float4 saxpy, clamp, f64 math, string scan) at -O2/-O3 for gfx900, gfx1030, gfx1100 | 96 | 82, then 96 after #685 | #685: v_div_scale/fmas/fixup_f64, v_cmp_class_f64/f32, gfx11 s_sendmsg_rtn_b32; f64 literals are the high half on GFX10/11. #702: RDNA v_cmpx writes only EXEC (it also wrote VCC), and restores #663's aperture operands and `v_swap_b32`, which #685 had dropped; the same 96 functions pass on GFX10-W64/GFX11-W64 | none |
 
 Notes:
 - Lua and V8 warnings are informational only (`iteboolean` re-rolls in Lua; none in V8).
+- EVM, option `evmcalls` (default off): internal calls, returns and constant jumps are recovered from the bytecode, so the dispatcher is an if-chain of selector compares calling the internal functions, and each function decompiles with its stack arguments and result. On 10 solc 0.8.24 runtimes (Token, Vault, Calc, Registry, Staking; optimizer off and on) bare JUMPI conditions go from 209 to 0, if statements from 1 to 109, indirect-jump warnings from 42 to 0, dispatcher lines from 2,423 to 844, and all 260 internal functions decompile. Without it:
 - EVM: the two contracts that decompile are hard to read. Internal Solidity functions return
   through a JUMP to an address on the stack, so the dispatcher becomes indirect jumps
   ("Re-entered indirect jump"), and many JUMPI conditions print as bare expression

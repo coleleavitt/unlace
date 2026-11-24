@@ -29,7 +29,9 @@ from arches import ARCHES  # noqa: E402
 from pcode_emu import State, Unmodeled, step  # noqa: E402
 from slaregs import register_map  # noqa: E402
 import qemu_backend  # noqa: E402
+import gdbsim_backend  # noqa: E402
 import rvv_backend  # noqa: E402
+import llvmgen  # noqa: E402
 
 PAGE = 0x1000
 
@@ -56,12 +58,18 @@ def make_elf(code, arch):
 
 def lift(unlace, arch, cands, tmp, sleighpath=None):
     """{address: raw-pcode row} for the candidates, plus per-candidate lift problems."""
-    code = b"".join(c["bytes"] for c in cands)
+    # an architecture with lift_align places every candidate on that boundary, padded with lift_pad
+    align, pad = getattr(arch, "lift_align", 1), getattr(arch, "lift_pad", b"")
+    code = b""
     addrs = []
     a = arch.base
     for c in cands:
+        while align > 1 and a % align:
+            code += pad
+            a += len(pad)
         c["addr"] = a
         addrs.append(a)
+        code += c["bytes"]
         a += len(c["bytes"])
     end = a
     elf = os.path.join(tmp, "batch.elf")
@@ -173,6 +181,8 @@ def run_case(arch, regs, row, cand, rng, seed):
         return {"status": "ref-exception", "why": str(e)}
 
     st = State(big, lambda a: fill_byte(a, seed), regs)
+    if hasattr(arch, "callother_fn"):
+        st.callother = lambda op: arch.callother_fn(op, st)
     for i, b in enumerate(cand["bytes"]):
         st.mem[addr + i] = b
     for n, _ in arch.gprs:
@@ -214,7 +224,7 @@ def run_case(arch, regs, row, cand, rng, seed):
             a, r = (st.get(reg) >> off) & ((1 << wd) - 1), (fv >> sh) & ((1 << wd) - 1)
             if a != r:
                 diffs[n] = (a, r)
-    upc = emu.reg_read(pc_k)
+    upc = arch.read_pc(emu) if hasattr(arch, "read_pc") else emu.reg_read(pc_k)
     if nxt & ((1 << bits) - 1) != upc:
         diffs["pc"] = (nxt, upc)
     touched = set(st.writes)
@@ -261,7 +271,11 @@ def main():
                     help="riscv64v: RISC-V vector instructions against QEMU (tools/difffuzz/rvv_backend.py)")
     ap.add_argument("--vlen", type=int, default=128, help="riscv64v: QEMU's VLEN in bits (128..256)")
     ap.add_argument("--objdump", default="llvm-objdump", help="riscv64v: an llvm-objdump with the RISC-V vector extensions")
-    ap.add_argument("--only", help="riscv64v: a regex the mnemonic must match")
+    ap.add_argument("--only", help="riscv64v, --llvm-mattr: a regex the mnemonic must match")
+    ap.add_argument("--lang", help="lift with this SLEIGH language id instead of the architecture's (RISCV:LE:64:Zcmp)")
+    ap.add_argument("--qemu-cpu", help="--oracle qemu: the -cpu value (riscv64 Zcmp: rv64,zcd=false,zcmp=true,zcmt=true)")
+    ap.add_argument("--llvm-mattr", help="riscv64: generate the words llvm-objdump (--objdump) decodes with this -mattr "
+                    "instead of the ones Capstone decodes (for extensions Capstone does not know)")
     ap.add_argument("--count", type=int, default=1000, help="instructions to generate")
     ap.add_argument("--trials", type=int, default=3, help="random input states per instruction")
     ap.add_argument("--seed", type=int, default=1)
@@ -270,13 +284,13 @@ def main():
     ap.add_argument("--sleighpath", help="SLEIGH tree holding freshly compiled .sla files (unlace --sleighpath)")
     ap.add_argument("--out", help="JSON report path")
     ap.add_argument("--bytes", help="hex encodings to test instead of random ones, comma separated")
-    ap.add_argument("--oracle", choices=("unicorn", "qemu", "native"), default="unicorn",
+    ap.add_argument("--oracle", choices=("unicorn", "qemu", "native", "gdbsim"), default="unicorn",
                     help="reference: Unicorn (default), QEMU user mode (tools/difffuzz/qemu_backend.py), or "
-                         "this CPU (native, --arch x86-64-native)")
+                         "this CPU (native, --arch x86-64-native), or gdb's simulator (gdbsim, tools/difffuzz/gdbsim_backend.py)")
     args = ap.parse_args()
     if args.oracle == "native":
-        if args.arch not in ("x86-64-native", "x86-64-x87"):
-            sys.exit("--oracle native needs --arch x86-64-native or x86-64-x87")
+        if args.arch not in ("x86-64-native", "x86-64-x87", "x86-32-native"):
+            sys.exit("--oracle native needs --arch x86-64-native, x86-64-x87 or x86-32-native")
         args.oracle = "qemu"
     vector = args.arch == "riscv64v"
     arch = ARCHES["riscv64" if vector else args.arch]
@@ -284,6 +298,12 @@ def main():
         sys.exit("--arch riscv64v needs --oracle qemu")
     if args.oracle == "qemu" and not qemu_backend.available(arch):
         sys.exit(f"--oracle qemu: no QEMU user harness or binary for {arch.name}")
+    if args.oracle == "gdbsim" and not gdbsim_backend.available(arch):
+        sys.exit(f"--oracle gdbsim: no simulator wiring for {arch.name} or no gdb ($DIFFFUZZ_GDB)")
+    if args.lang:
+        arch.lang = args.lang
+    if args.qemu_cpu:
+        qemu_backend.CPU_OVERRIDE = args.qemu_cpu
     regs, big = register_map(arch.lang)
     arch.big = big
     rng = random.Random(args.seed)
@@ -296,8 +316,12 @@ def main():
             cands.append({"bytes": b, "mnemonic": ins.mnemonic if ins else "?", "op_str": ins.op_str if ins else ""})
     elif vector:
         cands = rvv_backend.generate(rng, args.count, args.objdump, args.only)
+    elif args.llvm_mattr:
+        cands = llvmgen.generate(rng, args.count, args.objdump, args.llvm_mattr, args.only, 64 if arch.elf64 else 32)
     else:
         cands = generate(arch, rng, args.count)
+    if hasattr(arch, "order"):
+        cands = arch.order(cands)
     dis = arch.capstone()
     counts = collections.Counter()
     findings = []
@@ -323,9 +347,9 @@ def main():
                 if row is None:
                     counts["not-lifted"] += 1
                     continue
-                at = None if vector else next(dis.disasm(c["bytes"], c["addr"]), None)
+                at = None if vector or args.llvm_mattr else next(dis.disasm(c["bytes"], c["addr"]), None)
                 cap_ops = at.op_str if at else c["op_str"]
-                why = None if vector else arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
+                why = None if vector or args.llvm_mattr else arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
                 if why:
                     counts["operand"] += 1
                     findings.append({"kind": "operand", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",
@@ -336,6 +360,8 @@ def main():
                         res = rvv_backend.run_case_rvv(arch, regs, row, c, case_rng, args.seed + t, tmp, args.vlen)
                     elif args.oracle == "qemu":
                         res = qemu_backend.run_case_qemu(arch, regs, row, c, case_rng, args.seed + t, tmp)
+                    elif args.oracle == "gdbsim":
+                        res = gdbsim_backend.run_case_gdbsim(arch, regs, row, c, case_rng, args.seed + t, tmp)
                     else:
                         res = run_case(arch, regs, row, c, case_rng, args.seed + t)
                     counts[res["status"]] += 1

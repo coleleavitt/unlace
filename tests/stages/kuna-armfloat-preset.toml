@@ -19,8 +19,8 @@
 # Passes 3 and 4 run the soft-float object the same two ways: the image
 # states the base standard, so neither option fires and both passes print
 # every value in core registers. Its arithmetic calls the AEABI helpers,
-# whose RTABI32 prototypes (analysis pass aeabisigs) type their values:
-# scale returns the double __aeabi_dmul returns.
+# which aeabifloat folds into the operators: scale returns the double
+# product in core registers.
 #
 # The hard-float passes also pin what the preset must leave alone.
 # scale_err converts a double to float on one exit and returns oflow's
@@ -36,9 +36,8 @@
 # on the others; it keeps its int return. Passes 5 and 6 load
 # armfloat_preset_m4f.o, a base-standard function a Cortex-M4F computes in
 # through the AEABI helpers, with declared prototypes that put its double
-# in d0: the call to __aeabi_dcmplt keeps its integer result in both
-# passes instead of becoming the double left live in d0, and its RTABI32
-# prototype reads the compared double from r0:r1. Passes 7 and 8
+# in d0: the folded __aeabi_dcmplt compares the double in r0:r1 in both
+# passes instead of the double left live in d0. Passes 7 and 8
 # load armfloat_preset_m7.o (arm-none-eabi-gcc 10.3 -O2 for a Cortex-M7
 # with double-precision VFP) with the options off and under the preset.
 # neg_trunc widens its float into d0 to subtract it and returns the
@@ -293,9 +292,9 @@ count = 2
 regex = 'void save_vfp\((double|unsigned long long) \*a0\)'
 
 [[match]]
-name = 'armfloat preset #16: an AEABI helper call keeps its integer result and takes its doubles in core registers in both passes'
+name = 'armfloat preset #16: the folded AEABI comparison reads its double from core registers in both passes'
 count = 2
-regex = 'if \(__aeabi_dcmplt\(.*,0\.0\)\)'
+regex = 'if \(.*CONCAT44\(.*\)\.to < 0\.0\)'
 
 [[match]]
 name = 'armfloat preset #17: an integer reloaded into s0 from an unoptimized spill keeps its integer parameter in both passes'

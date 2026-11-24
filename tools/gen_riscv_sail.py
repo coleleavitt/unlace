@@ -756,6 +756,8 @@ class Compiler:
             return C(0, None, 'int')
         if lhs[0] == 'call' and lhs[1] in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
             lhs = ('call', 'F_' + lhs[1][-1], lhs[2])
+        if lhs[0] == 'call' and lhs[1] == 'F_BF16':
+            lhs = ('call', 'F_H', lhs[2])
         if lhs[0] == 'call' and lhs[1] in ('F_H', 'F_S', 'F_D'):
             reg = self.expr(lhs[2][0], env, None)
             w = self.fwidth(lhs[1])
@@ -1230,6 +1232,13 @@ class Compiler:
         return V(acc.name, 10, 'bits')
 
     def fconst(self, value, fw):
+        if fw == 16:
+            # a bound past the half range is the infinity of its sign
+            try:
+                bits = struct.unpack('<H', struct.pack('<e', value))[0]
+            except OverflowError:
+                bits = 0x7c00 if value > 0 else 0xfc00
+            return '0x%x:2' % bits
         return '0x%x:%d' % (struct.unpack('<Q' if fw == 64 else '<I', struct.pack('<d' if fw == 64 else '<f', value))[0], fw // 8)
 
     def trunc_sat(self, x, fw, signed, iw):
@@ -1260,6 +1269,9 @@ class Compiler:
             self.emit('%s = %s + 0x8000000000000000:8;' % (r.name, t.name))
             self.depth -= 1
             self.emit('<%s>' % lab)
+        if signed and fw == 16 and lo < -65504.0:
+            # every finite half is in range: only -inf saturates low
+            lo = -65504.0
         for cond, val in (('%s f<= %s' % (xs, self.fconst(lo, fw)) if not signed else '%s f< %s' % (xs, self.fconst(lo, fw)), imin),
                           ('%s f>= %s' % (xs, self.fconst(hi, fw)), imax),
                           ('nan(%s)' % xs, imax)):
@@ -1418,6 +1430,8 @@ class Compiler:
             return self.bor(C(mask(w) & ~mask(v.w), w), self.coerce_zext(v, w), w)
         if f in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
             f = 'F_' + f[-1]
+        if f == 'F_BF16':
+            f = 'F_H'
         if f in ('F_H', 'F_S', 'F_D') and len(args) == 1:
             reg = self.expr(args[0], env, None)
             return self.freg_read(reg, self.fwidth(f))
@@ -1689,6 +1703,8 @@ class Gen:
 
     def expand(self, ctor, lhs, rhs, guard, xlen, comp):
         types = self.arg_types(ctor)
+        if types == ['unit']:
+            types = []
         largs = lhs[2]
         if len(largs) != len(types):
             raise Unsupported('arity')
@@ -1876,6 +1892,8 @@ class Gen:
         # positional args of execute/assembly
         ex_env = {}
         for i, n in enumerate(exec_args):
+            if i >= len(largs):
+                break
             a = largs[i]
             if i in combo and a[0] != 'id':
                 ex_env[n] = genv.get('#%d' % i) or C(combo[i][1], combo[i][2]) if combo[i][0] == 'bits' else genv.get('#%d' % i)
@@ -1903,19 +1921,26 @@ class Gen:
             op = mnem.replace('.', '_')
             comp.pcodeops.add(op)
             widths = {n: tw for n, w, tw in imm.values()}
+            # the first operand is the result only when it is a destination register
+            dest = ops[0] if ops and ops[0] in ('rd', 'frd') else None
             args = []
-            for o in ops[1:]:
+            for o in (ops[1:] if dest else ops):
                 if o in widths:
                     args.append(comp.tmp(widths[o], o).name)
                 else:
                     args.append(o)
-            width = {'s': 4, 'h': 2}.get(mnem.rsplit('.', 1)[-1]) if ops and ops[0] == 'frd' else None
+            # the destination format: the first after fcvt., else the last suffix
+            parts = mnem.split('.')
+            fmt = parts[1] if parts[0] == 'fcvt' and len(parts) > 2 else parts[-1]
+            width = {'s': 4, 'h': 2, 'bf16': 2}.get(fmt) if dest == 'frd' else None
             if width and self.flen == 64:
                 # an S or H result is written NaN-boxed, as every F/Zfh instruction writes it
                 r = comp.tmp(8 * width, '%s(%s)' % (op, ', '.join(args)))
                 comp.emit('%s = 0x%x:8 | zext(%s);' % (ops[0], mask(64) & ~mask(8 * width), r.name))
+            elif dest:
+                comp.emit('%s = %s(%s);' % (dest, op, ', '.join(args)))
             else:
-                comp.emit('%s = %s(%s);' % (ops[0], op, ', '.join(args)))
+                comp.emit('%s(%s);' % (op, ', '.join(args)))
         if mnem in self.opaque or ctor in self.opaque:
             opaque()
         else:
@@ -2135,10 +2160,9 @@ def aliases(gen, xlen, pseudo):
             for p in gen.parts.get(xlen, []):
                 if p['mnem'] != base or p['mask'] != m_p or p['match'] != v_p or 'frs2' not in p['ops'] or name not in gen.idioms:
                     continue
-                w = 32 if base.endswith('.s') else 64
+                reg = {'s': 'F_S', 'h': 'F_H'}.get(base.rsplit('.', 1)[-1], 'F_D')
                 comp = Compiler(gen.m, xlen, gen.budget, gen.flen)
                 comp.unbox = gen.unbox
-                reg = 'F_S' if w == 32 else 'F_D'
                 body = ('assign', ('call', reg, [('id', 'rd')]), ('call', '#' + gen.idioms[name], [('call', reg, [('id', 'rs1')])]))
                 comp.expr(('block', [body]), {'rd': V('frd', 5, 'freg'), 'rs1': V('frs1', 5, 'freg')}, None)
                 disp = list(p['disp'])

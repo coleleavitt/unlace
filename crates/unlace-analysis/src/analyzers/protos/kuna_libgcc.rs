@@ -1,5 +1,6 @@
 //! (kuna `libgccsigs`) Compiler-runtime contracts whose integer widths come from
-//! machine modes, not the host C data model. Off by default: a caller that
+//! machine modes, not the host C data model. Also the libgcc routines with an
+//! eight-byte result on a big-endian target (`kuna_softfpsigs`). Off by default: a caller that
 //! returns arithmetic on the locked eight-byte quotient still loses a word.
 //!
 //! `__divdi3` is `di_int (di_int, di_int)`, with `di_int = int64_t`:
@@ -92,6 +93,7 @@ impl AnalysisPass for LibgccSigsPass {
             word_size,
             L,
         );
+        super::kuna_softfpsigs::seed_big_endian_wide(ctx, &mut out);
         if !matches!(
             ctx.file.architecture(),
             Architecture::Sparc | Architecture::Sparc32Plus
@@ -108,10 +110,7 @@ impl AnalysisPass for LibgccSigsPass {
             types,
             word_size,
             L,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         seed_resolved_prototypes(&mut out, &imports, SIGNATURES, types, word_size, L);
         out

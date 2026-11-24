@@ -46,4 +46,56 @@
     <compiler name="default" spec="xtensa.cspec" id="default"/>
     <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
   </language>
+  <language processor="Xtensa"
+            endian="little"
+            size="32"
+            variant="hifi4_rt700"
+            version="4.1"
+            slafile="xtensa_hifi4_rt700.sla"
+            processorspec="xtensa.pspec"
+            manualindexfile="../manuals/xtensa.idx"
+            id="Xtensa:LE:32:hifi4_rt700">
+    <description>Tensilica Xtensa LX7 little-endian with the Cadence HiFi 4 DSP of the NXP i.MX RT700 (FLIX bundles, AE_* operations)</description>
+    <compiler name="default" spec="xtensa.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
+  </language>
+  <language processor="Xtensa"
+            endian="little"
+            size="32"
+            variant="hifi1_rt700"
+            version="4.1"
+            slafile="xtensa_hifi1_rt700.sla"
+            processorspec="xtensa.pspec"
+            manualindexfile="../manuals/xtensa.idx"
+            id="Xtensa:LE:32:hifi1_rt700">
+    <description>Tensilica Xtensa LX7 little-endian with the Cadence HiFi 1 DSP of the NXP i.MX RT700 (FLIX bundles, AE_* operations)</description>
+    <compiler name="default" spec="xtensa.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
+  </language>
+  <language processor="Xtensa"
+            endian="little"
+            size="32"
+            variant="hifi3_tgl"
+            version="4.1"
+            slafile="xtensa_hifi3_tgl.sla"
+            processorspec="xtensa.pspec"
+            manualindexfile="../manuals/xtensa.idx"
+            id="Xtensa:LE:32:hifi3_tgl">
+    <description>Tensilica Xtensa LX6 little-endian with the Cadence HiFi 3 DSP of the Intel Tiger Lake audio DSP (FLIX bundles, AE_* operations)</description>
+    <compiler name="default" spec="xtensa.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
+  </language>
+  <language processor="Xtensa"
+            endian="little"
+            size="32"
+            variant="hifi5_mt8196"
+            version="4.1"
+            slafile="xtensa_hifi5_mt8196.sla"
+            processorspec="xtensa.pspec"
+            manualindexfile="../manuals/xtensa.idx"
+            id="Xtensa:LE:32:hifi5_mt8196">
+    <description>Tensilica Xtensa LX7 little-endian with the Cadence HiFi 5 DSP of the MediaTek MT8196 (FLIX bundles, AE_* operations)</description>
+    <compiler name="default" spec="xtensa.cspec" id="default"/>
+    <external_name tool="DWARF.register.mapping.file" name="xtensa.dwarf"/>
+  </language>
 </language_definitions>

@@ -30,7 +30,8 @@
 use std::path::Path;
 use std::process::ExitCode;
 
-use unlace_harness::testfunction::run_test_files_with_specs;
+use unlace_harness::parallel::{WORKER_FLAG, run_test_files_parallel, worker_main};
+use unlace_harness::testfunction::write_file_runs;
 use unlace_harness::unittest::{UnitTestSuite, add_exit_code};
 
 fn main() -> ExitCode {
@@ -46,6 +47,9 @@ fn main() -> ExitCode {
     // C++ defaults; the Python harness always passes -path and -sleighpath.
     let mut dirname = String::from("../datatests");
     let mut spec_roots: Vec<String> = Vec::new();
+    // kuna: `-j N` runs the datatests across N worker processes; `-worker` is one of them.
+    let mut jobs = 1usize;
+    let mut worker = false;
 
     // C++ `argc -= 1; argv += 1;` — skip the program name.
     let mut i = 1usize;
@@ -66,6 +70,17 @@ fn main() -> ExitCode {
                 }
                 spec_roots.push(argv[i + 1].clone());
                 i += 2;
+            }
+            "-j" => {
+                let Some(n) = argv.get(i + 1).and_then(|n| n.parse().ok()) else {
+                    return usage();
+                };
+                jobs = n;
+                i += 2;
+            }
+            flag if flag == WORKER_FLAG => {
+                worker = true;
+                i += 1;
             }
             "-usesleighenv" => {
                 if let Ok(home) = std::env::var("SLEIGHHOME") {
@@ -101,6 +116,11 @@ fn main() -> ExitCode {
         }
     }
 
+    if worker {
+        worker_main(&spec_roots);
+        return ExitCode::SUCCESS;
+    }
+
     // startDecompilerLibrary(sleighdirname) — the id/capability bootstrap is
     // per-program inside `engine::bootstrap_*`; the roots are recorded here.
 
@@ -123,7 +143,9 @@ fn main() -> ExitCode {
         println!();
         println!();
         let mut buf = String::new();
-        let errors = run_test_files_with_specs(&test_files, &spec_roots, &mut buf);
+        let exe = std::env::current_exe().unwrap_or_else(|_| argv[0].clone().into());
+        let runs = run_test_files_parallel(&test_files, &spec_roots, jobs, &exe);
+        let errors = write_file_runs(runs, &mut buf);
         print!("{buf}");
         failed_tests = add_exit_code(failed_tests, errors);
     }
@@ -134,7 +156,7 @@ fn main() -> ExitCode {
 /// C++ usage line + the `-1` (=255) exit.
 fn usage() -> ExitCode {
     println!(
-        "USAGE: ghidra_test [-usesleighenv] [-sleighpath <sleighdir>] [-path <datatestdir>] \
+        "USAGE: ghidra_test [-usesleighenv] [-sleighpath <sleighdir>] [-path <datatestdir>] [-j <jobs>] \
          [[unittests|datatests] [testname1 testname2 ...]]"
     );
     ExitCode::from(255)

@@ -13,9 +13,10 @@
 //! high word first on big-endian) and writing its result to r0 or r0:r1, so
 //! `return __aeabi_dadd(a,b);` prints `return a + b;`.
 //!
-//! A judgement, so off by default: the fold assumes the image's helpers are the
-//! IEEE ones (a library built for flush-to-zero or another rounding mode
-//! computes something else), and a conversion to an unsigned integer is read as
+//! On by default: RTABI32 requires the helpers to be the IEEE 754 round-to-nearest
+//! ones, so on a conforming image the fold changes no value; the option stays for
+//! a firmware that links its own non-IEEE helpers under the AEABI names. A
+//! conversion to an unsigned integer is read as
 //! the signed conversion to a wider integer, exact over the range the C cast is
 //! defined on. The conversions with no such reading (`d2ulz`, `f2ulz`, `ul2d`,
 //! `ul2f`) keep the call, as do the flag-returning `cdcmp`/`cfcmp` forms.
@@ -162,7 +163,7 @@ crate::kuna_flag!(
     "aeabifloat",
     "AEABI floating-point helper call-fixups",
     unset: false,
-    shipped: false
+    shipped: true
 );
 
 #[cfg(test)]

@@ -432,8 +432,9 @@ pub fn demangle_name(raw: &str) -> Option<String> {
             .no_params()
             .no_return_type();
         if let Ok(d) = sym.demangle_with_options(&opts) {
+            let d = thunk_target(&d).unwrap_or(&d);
             let reduced =
-                strip_legacy_rust_hash(&strip_bracket_groups(&name_anonymous_namespaces(&d)));
+                strip_legacy_rust_hash(&strip_bracket_groups(&name_anonymous_namespaces(d)));
             if !reduced.is_empty() && reduced != raw {
                 return Some(reduced);
             }
@@ -649,6 +650,33 @@ fn ends_with_operator_head(out: &str) -> bool {
 /// follows it still goes (`operator[](Cell &)` -> `operator[]`). A `<` or `>`
 /// immediately followed by an identifier character is left to the generic path,
 /// where it is the start of a template-argument list rather than the operator.
+/// The function a this-adjusting thunk (`_ZTh`, `_ZTv`, `_ZTc`) jumps to, read
+/// from cpp_demangle's `{virtual override thunk(<offsets>, <target>)}`. A thunk
+/// is named for its target, as the vtable typing names its slot: stripping the
+/// bracket groups of the whole rendering left `{virtual override thunk}` for
+/// every thunk of an image.
+fn thunk_target(demangled: &str) -> Option<&str> {
+    let mut rest = demangled
+        .strip_prefix("{virtual override thunk(")?
+        .strip_suffix(")}")?;
+    // The offsets come first, each one brace group (`{offset(16)}`,
+    // `{virtual offset(0, -24)}`) followed by `, `; the target is the rest,
+    // whose template arguments carry commas of their own.
+    while rest.starts_with('{') {
+        let mut depth = 0i32;
+        let end = rest.char_indices().find_map(|(i, ch)| {
+            match ch {
+                '{' => depth += 1,
+                '}' => depth -= 1,
+                _ => {}
+            }
+            (depth == 0).then_some(i)
+        })?;
+        rest = rest[end + 1..].strip_prefix(',')?.trim_start();
+    }
+    (!rest.is_empty()).then_some(rest)
+}
+
 fn strip_bracket_groups(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut depth: i32 = 0;
@@ -1303,6 +1331,28 @@ mod tests {
         assert!(!skip("?foo@Bar@@QEAAXXZ"), "MSVC name must not be skipped");
         assert_eq!(demangle_name("?not a real mangled name"), None);
         assert_eq!(demangle_raw("?"), None);
+    }
+
+    #[test]
+    fn thunks_are_named_for_their_target() {
+        assert_eq!(
+            demangle_name(
+                "_ZThn16_NSt3__118basic_stringstreamIcNS_11char_traitsIcEENS_9allocatorIcEEED1Ev"
+            ),
+            Some("std::__1::basic_stringstream::~basic_stringstream".to_string())
+        );
+        assert_eq!(
+            demangle_name("_ZTv0_n24_NSt3__113basic_istreamIcNS_11char_traitsIcEEED0Ev"),
+            Some("std::__1::basic_istream::~basic_istream".to_string())
+        );
+        assert_eq!(
+            demangle_name("_ZThn8_N3foo3Bar3getEv"),
+            Some("foo::Bar::get".to_string())
+        );
+        assert_eq!(
+            demangle_name("_ZTv0_n24_NSt3__113basic_istreamIcNS_11char_traitsIcEEED1Ev"),
+            Some("std::__1::basic_istream::~basic_istream".to_string())
+        );
     }
 
     #[test]

@@ -19,7 +19,7 @@ python3 -m venv ~/.local/share/difffuzz-venv
 `--arch` is `x86-64`, `aarch64`, `riscv64`, `arm` (A32), `thumb` (T32), `mips` (MIPS32 big-endian),
 `mips64`, `mips64r6`, `mipsr6` (MIPS64, MIPS64 Release 6 and MIPS32 Release 6, big-endian; use
 `--oracle qemu`), `ppc` (PowerPC 32 big-endian), `tricore`, or (QEMU oracle only) `ppc64`, `ppc64le`, `ppc64-isa`,
-`ppc64le-isa`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
+`ppc64le-isa`, `ppc64-p10`, `ppc64le-p10`, `s390x`, `s390x-vec` and `loongarch64`. `--sleighpath DIR` lifts with the `.sla`
 files under `DIR` instead of the built-in ones, so a spec edit can be checked right after
 `slacomp` without rebuilding unlace. The summary on stdout counts each outcome and lists the
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
@@ -31,8 +31,8 @@ input registers and the differing values.
 (`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
 (`qemu-riscv64 -cpu max`), `mips` and `mips64` (`qemu-mips64 -cpu MIPS64R2-generic`), and `mipsr6`
 and `mips64r6` (`qemu-mips64 -cpu I6400`, an R6 ELF with no HI/LO in the harness). `ppc` (`qemu-ppc -cpu 7457`), and the QEMU-only `ppc64`, `ppc64le` (`PowerPC:*:64:default`),
-`ppc64-isa` and `ppc64le-isa` (`PowerPC:*:64:A2ALT`, Power ISA 3.0) on `qemu-ppc64` /
-`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, and `loongarch64` on `qemu-loongarch64 -cpu max`. `DIFFFUZZ_QEMU_DIR` names a directory searched before `PATH`
+`ppc64-isa`, `ppc64le-isa`, `ppc64-p10` and `ppc64le-p10` (`PowerPC:*:64:A2ALT`, Power ISA 3.1) on `qemu-ppc64` /
+`qemu-ppc64le -cpu power10`, `s390x` on `qemu-s390x -cpu max`, `loongarch64` on `qemu-loongarch64 -cpu max`, and `arm` and `thumb` on `qemu-arm -cpu max`. `DIFFFUZZ_QEMU_DIR` names directories (separated by `:`) searched before `PATH`
 for the QEMU binaries (a `--target-list=ppc-linux-user,...` build of QEMU 10 works). QEMU 10 implements
 what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
 `fcmla`/`fcadd`, and RISC-V NaN-boxing.
@@ -117,6 +117,112 @@ afterwards. The register file is unchanged.
   after the first run: UDIV/SDIV(cc) clamp an overflowing quotient (2^32-1, 2^31-1 or -2^31)
   and set icc.v; xcc of UMULcc/SMULcc/UDIVcc/SDIVcc comes from the 64-bit result. Seed 5,
   4000 encodings on sparc64: 10650 matches; seed 6, 3000 on sparc: 8251; no mismatches.
+- PA-RISC 1.1 (`--arch hppa`, `pa-risc:BE:32:default`, `--oracle qemu` with `qemu-hppa` from
+  QEMU 8.2). Capstone 5 has no PA-RISC, so candidates are decoded by a multi-target binutils
+  `objdump` (`BinutilsDis`/`ObjdumpArch`: `$DIFFFUZZ_OBJDUMP`, default
+  `~/.local/share/difffuzz-binutils/bin/objdump`, built from binutils 2.45 with
+  `--enable-targets=all`), a batch of 4096 encodings per objdump run. binutils also decodes the
+  PA 2.0 forms, which are dropped. SAR and the carry bit go in and out through `mtsar`/`mfctl`
+  and `addi -1`/`add,c`; nullification is compared too: the epilogue's first instruction
+  complements a second free register, which keeps its input value only when the instruction
+  nullified it. Not generated: branches, system, cache/TLB, FP, coprocessor, DCOR and DS. When
+  SLEIGH traps on a ,TSV/,O overflow the case is undefined (QEMU 8.2 checks the 64-bit sign and
+  misses narrow overflows). Fixed in the PA-RISC module after the first run: the 11-bit
+  immediate took bit 11 (`im11less0`); the add and subtract conditions (=, <, <=, NUV/<<,
+  ZNV/<<=, SV, OD) are computed from the operands the instruction saves first
+  (`condA`/`condB`/`condCin`), so a target that aliases a source no longer changes them and
+  ADD,C/SUB,B/SHxADD conditions include the carry and the shift; ADD,C, ADD,CO and SUB,B carry
+  the full 33-bit sum; the unit conditions SDC/SBC/SHC are implemented; STBY stores the right
+  bytes and its ,M form modifies the base register (after the store, QEMU's reading), not the
+  source; a short-displacement store whose source is the modified base stores the old value.
+  Seeds 4 and 5, 3000 encodings each: 6205 and 6293 matches, no mismatches.
+- Alpha (`--arch alpha`, `21264:LE:64:unix`, `--oracle qemu` with `qemu-alpha -cpu ev67` from
+  QEMU 8.2), decoded by the binutils `objdump` (`ObjdumpArch`, see PA-RISC). The table register is
+  loaded last and a BR reaches the instruction (no delay slots); segments are widened to 8 KiB.
+  The generator favours the integer operate opcodes (0x10..0x13, 0x1c: BWX, CIX, MVI) over loads
+  and stores. Not generated: branches, PALcode, barriers, RPCC, locked loads/stores, IMPLVER,
+  AMASK and floating point. Seeds 4 and 5, 3000 encodings each: 7191 and 7252 matches, no
+  mismatches; the SLEIGH integer lifts needed no fix.
+- OpenRISC 1000 (`--arch or1k`, `OpenRISC:BE:32:default`, `--oracle qemu` with `qemu-or1k` from
+  QEMU 8.2), decoded by the binutils `objdump` (`ObjdumpArch`). F is set with `l.sfne` and read
+  with `l.cmov`, CY set with `l.addi -1` and read with `l.addc`; OV cannot be read from user mode
+  and is not compared. The `l.j` delay slot restores the table register; qemu-or1k lets r0 be
+  written, so the epilogue clears it first (r0 is not compared); segments are widened to 8 KiB.
+  The generator draws the register ALU, set-flag and shift-immediate forms with their reserved
+  bits clear. Not generated: jumps, branches, system, SPR, MAC, atomic, FP and vector
+  instructions, and `l.extws`/`l.extwz` (QEMU lacks them). QEMU 8.2 takes `l.mulu`'s carry from
+  a signed multiply, so CY is not compared there. Seed 6, 3000 encodings: 8803 matches, no
+  mismatches; the SLEIGH lifts needed no fix.
+- MicroBlaze (`--arch microblaze` / `microblazeel`, `MicroBlaze:BE:32:default` /
+  `MicroBlaze:LE:32:default`, `--oracle qemu` with `qemu-microblaze` / `qemu-microblazeel` from QEMU
+  8.2), decoded by the binutils `objdump` (`ObjdumpArch`). The carry goes in with `addi -1` and
+  back with `addc`; `imm` + `braid` reaches the instruction and its delay slot restores the table
+  register. The generator draws the register (type A) forms with their reserved bits clear, and
+  encodings with reserved bits set are not generated (binutils decodes them anyway). Not
+  generated: branches, returns, traps, special-register moves, stream (FSL), cache,
+  exclusive-access, `imm` prefixes, FP and `pcmpbc` (QEMU lacks it). Fixed in `microblaze.sinc`
+  after the first run: the reversed byte and halfword accesses (`lbur`, `lhur`, `sbr`, `shr`)
+  also flip the low address bits (address ^ 3, ^ 2), as QEMU reads them. Seeds 4 and 5, 3000 encodings each (big and
+  little endian): 8497 and 8449 matches, no mismatches.
+- Xtensa (`--arch xtensa`, `Xtensa:LE:32:default`, `--oracle qemu` with `qemu-xtensa` from QEMU 8.2, its
+  default dc232b core), decoded by the binutils `objdump` through `XtensaDis`: a candidate is 2 or 3
+  bytes (op0 8..13 is a narrow instruction) and sits in an 8-byte slot padded with NOP/NOP.N so
+  every slot decodes in step. a0..a15 and SAR are compared; the table register is loaded last and
+  a J reaches the instruction. The generator favours the RRR and LSAI formats; FLIX bundles are
+  not generated. Not generated: branches, calls, window, loop, system, cache/TLB, atomic, MAC16,
+  boolean and FP instructions, L32R, MULUH/MULSH (dc232b has no MUL32_HIGH) and SLLI by 32 (its
+  reserved encoded amount 0). Fixed in `xtensaInstructions.sinc` after the first run: NSA counted the
+  leading zeros of the complement, so it returned 0 for every non-negative value; it is now the
+  number of leading sign bits less one (31 for 0 and -1). Seeds 4 and 5, 3000 encodings each:
+  7040 and 7164 matches, no mismatches.
+- gdb simulators (`--oracle gdbsim`, `tools/difffuzz/gdbsim_backend.py`) for architectures neither
+  Unicorn nor QEMU runs. `dfsim-<sim>` is `tools/difffuzz/dfsim.c` linked against gdb 16's
+  `sim/<sim>/libsim.a` (`build_dfsim.sh`; gdb configured with `--enable-targets=all --enable-sim`,
+  `CFLAGS=-std=gnu17` for GCC 15): it loads a one-page ELF with a `.text` section, then per case
+  takes memory writes, register stores (gdb's numbering, read from `maint print registers`), one
+  step and reads, over stdin/stdout. No prologue or epilogue is needed. `$DIFFFUZZ_GDBSIM_DIR`
+  (default `~/.local/share/difffuzz-gdbsim/bin`) holds the drivers and that gdb. Harvard targets
+  set `gdb_data_bias`/`gdb_code_bias`; `misaligned_undefined` makes a misaligned access undefined.
+  - Moxie (`--arch moxie`, `moxie:BE:32:default`; sim/moxie is big endian only): CMP is not
+    checked (the language keeps the operands, the simulator keeps its condition codes
+    internally). The simulator's `mul.x` multiplies zero-extended operands, so it is skipped, and
+    shifts by 32 or more are undefined (C shifts there). sim/moxie's register store reads little
+    endian and its fetch writes big endian. Seed 7, 2500 encodings: 5641 matches.
+  - FT32 (`--arch ft32`): instructions in program memory at 0x1000, data in the 64 KiB RAM the
+    simulator keeps at 0x800000. FT32B compressed words are not in the language. The simulator
+    computes every compare-type overflow with the subtraction formula, so ADDCC/TST/BTST compare
+    z, c, s and a only. Fixed in `ft32.slaspec`: the LDI/STI/EXI/LPMI offset is stored with bits
+    14:8 inverted when bit 7 is set (gas encodes it so, the simulator decodes it so; objdump prints
+    the raw field); PUSH/POP of `$sp` push the old value and pop into `$sp`; BEXTS past bit 31
+    reads zeros; TST.B/.S and ADDCC.B/.S work on 8/16 bits. Seed 8, 2500 encodings: 3592 matches.
+  - IQ2000 (`--arch iq2000`): instructions at 0x80000000 + address, data below 8 MiB. Seed 5,
+    2500 encodings: 5390 matches; no fix needed.
+  - V850 (`--arch v850`, `V850:LE:32:default`, simulator machine v850e2v3): the simulator has memory
+    below 2 MiB, so the instruction sits at 0x100000. Flags are PSW bits 0..4, compared as PSW.
+    Misaligned accesses are undefined (sim/v850 aligns them down). Simulator quirks: ADF/SBF leave
+    PSW alone (PSW not compared there); MAC/MACU drop a carry into the high word (skipped).
+    Fixed in `Instructions/Arithmetic.sinc`: DIVH divides signed by the sign-extended halfword
+    (it was an unsigned 32-bit division) and the three-operand DIVH takes Z/S from the quotient;
+    MULHI multiplies the sign-extended halfword of reg1; SATADD/SATSUB/SATSUBR/SATSUBI saturate
+    (`__saturate` was an empty pcodeop) and S/Z follow the saturated value. Seed 3, 3000
+    encodings: 6663 matches.
+  - MN10300 (`--arch mn10300`, `mn10300:LE:32:mn10300`): the simulator has memory below 1 MiB, so the
+    instruction sits at 0x10000; Z, N, C, V go through PSW. DIV/DIVU are undefined on overflow
+    (sim/mn10300 only tests a zero divisor). Fixed in `mn103_base.sinc`: the register forms of
+    ADD/SUB read the source register again for the flags after writing the destination, so
+    `add d3,d3` set C and V from the sum. Seed 2, 2000 encodings: 5190 matches.
+  - LatticeMico32 (`--arch lm32`, `lm32:BE:32:default`; `--memory-region 0x0,0x1000000`): r0 is
+    loaded with 0 (sim/lm32 keeps it as a real register). Seed 2, 2500 encodings: 5797 matches; no
+    fix needed.
+  - M32R (`--arch m32r`, `M32R:BE:32:default`): candidates sit on word boundaries (`lift_align`),
+    a 16-bit one with a NOP after it (`gdb_insn_pad`); C is PSW bit 0. sim/m32r runs the base M32R:
+    its M32RX/M32R2 mode does not keep C in PSW or CBR, so the M32RX/M32R2-only instructions and
+    the accumulator (DSP) ones are not generated. Seed 2, 1500 encodings: 4048 matches; no fix
+    needed.
+  - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
+    at an address they ran, so a different instruction at a used address starts a fresh
+    simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and
+    sim/msp430 models 20-bit MSP430X addressing and keeps V where the MSP430 manual clears it.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.
@@ -131,7 +237,24 @@ afterwards. The register file is unchanged.
   their result uncompared (p-code rounds twice), `stfs` of a double outside single range
   (the ISA stores truncated bits) is `undefined`, and an `lfs` of a single sNaN (widened
   without quieting) is not compared. QEMU 10.2 also sets CR bit 14 for the A-form FP record
-  forms (`fmadd.`, `fsel.`, ...), so CR3 is not compared there.
+  forms (`fmadd.`, `fsel.`, `fdivs.`, ...), so CR3 is not compared there.
+- `ppc64-p10` and `ppc64le-p10` test the Power ISA 3.0/3.1 (POWER9/POWER10) instructions. Three
+  in four encodings come from the LLVM records in `specs/Ghidra/Processors/PowerPC/isa31_insts.json`
+  (prefixed 8-byte instructions, MMA, the new VMX/VSX/fixed-point ones; seven in ten prefixed
+  ones get a displacement below 64 KiB), the rest are random VMX/VSX/X-form words. Capstone 5
+  lacks the prefixed instructions, so they are decoded in batches by `llvm-objdump --mcpu=pwr10`
+  (`DIFFFUZZ_PPC_OBJDUMP`, or `llvm-objdump` on `PATH`, with the PowerPC target; the rustup
+  `llvm-tools` one has it) after `llvm-objcopy -I binary` next to it. The harness
+  (`PpcVsxHarness`) seeds and compares vs0..vs63 with `lxv`/`stxv` in place of the FPRs. The
+  8-byte instructions go first in each batch, so none crosses a 64-byte boundary (an alignment
+  interrupt), and data addresses stay below 2^31 (the epilogue builds them with `lis`/`ori`).
+  Doubleword 1 of a scalar VSX or FP result is undefined and not compared; FMAs, an extended
+  divide whose quotient does not fit, a vector divide by zero (or an overflowing one),
+  `xxextractuw`/`xxinsertw` with UIM above 12 and a store of a double outside single range
+  are not compared; FPSCR, `mffs`, the quad-precision and DFP/BCD instructions, and the
+  instructions LLVM decodes for a future ISA (`IsISAFuture`, which QEMU lacks) are not
+  generated. Seed 17, 2500 encodings (`ppc64le-p10`): 3089 matches, no mismatches; seed 18,
+  1500 encodings (`ppc64-p10`): 1953 matches and one mismatch, `divdeu` (fixed, below).
 - LoongArch64 (`Loongarch:LE:64:lp64d`) has no Unicorn or Capstone 5 support, so it runs only with
   `--oracle qemu`, and its encodings are decoded in batches by binutils objdump
   (`DIFFFUZZ_LA_OBJDUMP`, or `loongarch64-linux-gnu-objdump` on `PATH`; a `--target=loongarch64-linux-gnu`
@@ -195,6 +318,24 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
     - FP ops do not write fflags and fixed-point ops do not write vxsat (17-19), as the scalar
       F/D lift also leaves the accrued flags out.
 
+### RISC-V extensions Capstone does not decode (`--llvm-mattr`)
+
+`--arch riscv64 --llvm-mattr +c,+zcb,... --objdump <llvm-objdump>` draws the candidates from what
+llvm-objdump decodes with that `-mattr` instead of from Capstone 5, which knows neither Zcb,
+Zcmp, Zcmt, Zimop, Zcmop, Zicond nor Zalasr. One word in four is a 16-bit encoding, and
+`--only REGEX` picks mnemonics. Two more options exist for the Zcmp language:
+- `--lang` lifts with another SLEIGH language: `RISCV:LE:64:Zcmp`, whose `c.fsdsp` space holds
+  Zcmp/Zcmt.
+- `--qemu-cpu` replaces the harness's `-cpu`. Zcmp needs
+  `rv64,c=false,zca=true,zcd=false,zcmp=true,zcmt=true`: QEMU still decodes `c.fsdsp` when C
+  and D are both on, `zcd=false` or not.
+
+First runs (pinned `unlace-5dac424f4f`):
+- Zca/Zcb/Zcmop/Zimop/Zicond/Zalasr: 1400 encodings, 1433 matches, no mismatch. QEMU 10.2
+  rejects the Zalasr loads with SIGILL, so those are not compared.
+- Zcmp/Zcmt: 300 encodings, 251 matches, no mismatch. Most of the rest touch a stack outside
+  the mapped pages, which is `bad-address`.
+
 On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
 `UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
 finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
@@ -208,7 +349,7 @@ Unicorn emulates it, with `--oracle qemu`, including `riscv64v`, and `x86-64-nat
 count, one difffuzz process per configuration, and prints one line per configuration:
 
 ```sh
-DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user ~/.local/share/difffuzz-venv/bin/python \
+DIFFFUZZ_QEMU_DIR=~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user ~/.local/share/difffuzz-venv/bin/python \
     tools/difffuzz/sweep.py --unlace target/debug/unlace --objdump <llvm-objdump with RVV> --jobs 4 --out sweep.json
 x86-64       unicorn  ok    match    270  mismatch    0 (+0 known)  decode    0  ref-exc    8  unmodeled    9
 riscv64v     qemu     ok    match    126  mismatch    0 (+66 known)  decode    0  ref-exc   83  unmodeled    0
@@ -232,6 +373,22 @@ First run (unlace-2feb8da847, seed 1, 200 per configuration): every available co
 `ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no
 `qemu-ppc`/`qemu-ppc64le`/`qemu-s390x` on this host). `riscv64v` had 66 findings, all in its four
 documented classes.
+
+`tools/difffuzz/sweep_ci.sh <unlace>` is the cron/CI entry point. It runs the whole sweep with
+the venv's python (`DIFFFUZZ_PYTHON`), the QEMU directories
+`~/.local/share/qemu-8.2-user:~/.local/share/qemu-10.2-user` (`DIFFFUZZ_QEMU_DIR`), rustup's
+rustc-master llvm-objdump for RVV (`DIFFFUZZ_OBJDUMP`) and
+`~/.local/share/difffuzz-tools/loongarch64-linux-gnu-objdump` (`DIFFFUZZ_LA_OBJDUMP`). It goes
+through `kuna-slot` when that exists, with core dumps off, and writes the summary to
+`~/.local/share/difffuzz-sweeps/sweep-<UTC time>-<binary>.json` (`DIFFFUZZ_SWEEP_OUT`). Its
+exit status is sweep.py's. LoongArch without an objdump is `unavailable`.
+
+Full sweep (unlace-5dac424f4f, 37 configurations, all oracles installed): exit 0, every
+configuration `ok`, no mismatches beyond riscv64v's 15 known ones. The `decode` findings (s390x
+97, ppc 25, tricore 12, x86-64-native 7, a few elsewhere) are spec gaps or encodings Capstone
+accepts that the ISA leaves invalid. They are listed in #862. After the `isel` decode and the
+invalid-encoding filters (unlace-478ab58a5e), the only `decode` findings left are AMD FMA4 on
+`x86-64-native` (2), a spec gap routed to the x86 team.
 
 ## How a case runs
 
@@ -265,7 +422,24 @@ documented classes.
   (UNPREDICTABLE); `Q` outside the saturating instructions. A32 encodings whose should-be-zero
   fields are set are dropped before lifting: an encoding is kept only when Keystone assembles
   Capstone's text back to the same bytes (`pip install keystone-engine`; without it every
-  encoding is kept).
+  encoding is kept). Also dropped as UNPREDICTABLE: an `LDRD`/`STRD` whose first register is
+  odd or `lr`; T32 shifted-register data-processing ops with bit 15 of the second halfword set
+  and saturate/bit-field ops with bit 10 of the first or bit 5 of the second; `SVC` (a system call
+  on QEMU).
+- Encodings Capstone decodes but the ISA leaves invalid are dropped before lifting (each
+  architecture's `canonical`), so a `decode` finding is a SLEIGH gap: on x86, an F2/F3 prefix on
+  a 0F-map opcode that has no such form (Capstone decodes the same instruction without it); on
+  32-bit PowerPC, 64-bit-only instructions, VSX and `isel`, which the 32-bit language and the
+  7457 lack; on MIPS R6, the REGIMM trap-immediates R6 removed and the Cavium Octeon
+  instructions; on TriCore, an encoding with a reserved bit set that Capstone ignores, and the
+  TC1.6.2 additions the TC1.6.1 language lacks; on m68k, a full extension word for the opword's
+  own effective address with bit 3 set, a zero base-displacement size or a reserved I/IS value.
+- ARM and Thumb on QEMU (`qemu-arm -cpu max`, QEMU 10; build it with
+  `--target-list=arm-linux-user`): the A32 prologue sets NZCVQ and GE with `MSR APSR_nzcvqg`,
+  loads r0..lr, and enters the instruction with `LDR pc` from a literal (bit 0 set for Thumb);
+  a Thumb exit leaves through `BX pc` from a word-aligned address. First run (pinned
+  `unlace-a3147ecd77`, seed 4, 2000 encodings each): arm 4020 matches, thumb 4876, no
+  mismatches.
 - MIPS: branches and jumps (delay slots), loads and stores (Unicorn maps kuseg differently, and
   SLEIGH lifts an `lwl`/`lwr` pair as one access by design), FPU, MSA and privileged
   instructions; HI/LO after `DIV`.
@@ -331,7 +505,10 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   shifted register did not set C from the shifter.
 - **PowerPC.** `divw.` set XER[OV]/[SO]; `lhbrx`/`lwbrx` were not byte-reversed in the
   little-endian languages; `ldbrx`/`stdbrx` were user ops; `stswi` with a partial last
-  register stored the whole word.
+  register stored the whole word. With `ppc64-p10`/`ppc64le-p10`: `sradi.` did not set CR0;
+  `divwe[u]`/`divde[u]` divided 0 by 0 or `RA` by `RB` instead of `RA || 0`; `bpermd`, `xxsel`,
+  the VSX compares, `xststdcdp`, `xscmpexpdp` and the other VSX user ops never wrote their target;
+  `stxsd`/`stxssp` were user ops (no store). The generic 64-bit languages did not decode `isel`.
 - **LoongArch.** `bstrins.w`/`.d` had `bstrpick`'s semantics; `slli.d`/`srli.d`/`srai.d` masked the
   shift with `0x1f`; the rotates shifted arithmetically; `bytepick.w`/`.d` picked the wrong bytes;
   `ftintrm`/`ftintrp`/`ftint` truncated and the `.l.s` forms wrote only the low word.
@@ -404,6 +581,31 @@ scalar float arithmetic, integer and flag semantics are compared.
 
 `tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
 matching decode check against `llvm-objdump` for those encodings.
+
+### 32-bit x86 (`--arch x86-32-native`) and real mode (`--arch x86-16`)
+
+`--arch x86-32-native --oracle native` builds an i386 static ELF (`X86_32NativeHarness`) the kernel
+runs under its IA-32 emulation: EAX-EDI, EFLAGS, XMM0-XMM7 and the six segment registers are
+compared, the p-code state starting from the selectors a 32-bit process has (CS 0x23, DS/ES/SS
+0x2B, FS/GS 0) with IF set. The epilogue stores through SS until it has reloaded DS and ES, so an
+instruction that loads a null DS still reports. The generator favours the forms 64-bit mode lacks:
+BCD adjusts, PUSHA/POPA, BOUND, PUSH/POP and MOV of segment registers, LDS/LES/LSS/LFS/LGS, far
+JMP/CALL to selector 0x23 and RETF, string instructions, 0x66/0x67 prefixes; registers now and then
+hold a valid selector. Branches and calls run (a taken branch lands on a second epilogue).
+
+`--arch x86-16` lifts with `x86:LE:16:Real Mode` and runs Unicorn's 16-bit mode (QEMU's real mode) with
+random DS/ES/SS/FS/GS and CS 0. `segment(selector, offset)` (user operation 0) is evaluated as
+selector*16 + offset here and as the offset in the flat 32-bit mode. Encodings this CPU raises #UD
+for although Capstone and LLVM decode them (control registers that do not exist, VEX after a
+66/F2/F3 prefix, MOVNTI with 66/F2/F3, 66-prefixed RCPPS/RSQRTPS/MOVLHPS/MOVHLPS), AMD-only SSE4a
+and 3DNow are not generated.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-32-native --oracle native \
+    --count 2500 --seed 6 --unlace <unlace> --sleighpath specs
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-16 \
+    --count 1500 --seed 4 --unlace <unlace> --sleighpath specs
+```
 
 ### x87 (`--arch x86-64-x87`)
 

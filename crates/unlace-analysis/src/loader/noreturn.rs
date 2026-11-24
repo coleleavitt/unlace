@@ -63,6 +63,9 @@ const ELF_NORETURN_LIST: &str = include_str!("../../data/ElfFunctionsThatDoNotRe
 /// duplicated here so a PE still flags `exit`), plus the Windows-CRT specifics
 /// (`__fastfail`/`_invoke_watson`/`quick_exit`/…) the ELF list does not name.
 const PE_MAC_NORETURN_LIST: &str = include_str!("../../data/PeMacFunctionsThatDoNotReturn");
+/// The Windows-only names (`crate::loader::kuna_peimportcall` matches them at
+/// load); [`listed_noreturn`] reads them for names a later rename gives.
+const PE_WIN32_NORETURN_LIST: &str = include_str!("../../data/PEFunctionsThatDoNotReturn");
 
 /// No-return helpers matched by exact name on import addresses only: glibc
 /// `debug/stack_chk_fail_local.c` declares `__stack_chk_fail_local` `noreturn`.
@@ -246,14 +249,18 @@ pub(crate) fn name_matches_ladder(
                 .any(|f| name_matches(f, exact, wildcard)))
 }
 
-/// Does the shipped no-return list (ELF and PE/Mach-O lists together) name
-/// `name` under any `nameladder` spelling? For a name a rename gave a function
-/// after the load-time scan.
+/// Does the shipped no-return list (the ELF, PE/Mach-O and Windows-only lists
+/// together) name `name` under any `nameladder` spelling? For a name a rename
+/// gave a function after the load-time scan: a FLIRT or FID match names a
+/// statically linked MSVC CRT routine (`__CxxThrowException@8`,
+/// `___report_gsfailure`), which only the Windows list carries.
 pub fn listed_noreturn(name: &str) -> bool {
     let (mut exact, mut wildcard) = parse_list(ELF_NORETURN_LIST);
-    let (e, w) = parse_list(PE_MAC_NORETURN_LIST);
-    exact.extend(e);
-    wildcard.extend(w);
+    for list in [PE_MAC_NORETURN_LIST, PE_WIN32_NORETURN_LIST] {
+        let (e, w) = parse_list(list);
+        exact.extend(e);
+        wildcard.extend(w);
+    }
     name_matches_ladder(name, &exact, &wildcard, true)
 }
 
@@ -390,10 +397,7 @@ impl AnalysisPass for NoReturnKnownPass {
             ctx.file,
             ctx.bytes,
             self.compiler,
-            ctx.arch
-                .kuna_options
-                .get::<unlace_decomp::kuna_analysisgates::Nameladder>()
-                .0,
+            unlace_decomp::kuna_loadoptions::nameladder_enabled(),
         );
         if let Some(image) = ctx.image {
             let (imports, _) = crate::protos::loaded_import_addrs(ctx.file, ctx.bytes, image);
@@ -773,6 +777,30 @@ mod tests {
                 "{n} without the ladder"
             );
         }
+    }
+
+    #[test]
+    fn renamed_msvc_crt_routines_are_listed() {
+        for name in [
+            "__CxxThrowException@8",
+            "___report_gsfailure",
+            "___report_rangecheckfailure",
+            "___report_securityfailure",
+            "__invoke_watson",
+            "_unexpected",
+            "?_Xlen@_String_base@std@@SAXXZ",
+            "?_Xran@_String_base@std@@SAXXZ",
+            "?CallUnexpected@@YAXPBU_s_ESTypeList@@@Z",
+            "?_inconsistency@@YAXXZ",
+            "?__scrt_throw_std_bad_array_new_length@@YAXXZ",
+            "?AtlThrowImpl@ATL@@YGXJ@Z",
+            "?ThrowMemoryException@?$CSimpleStringT@_W$0A@@ATL@@KAXXZ",
+            "?AfxThrowInternetException@@YGXKK@Z",
+            "?Fail@CDataExchange@@QAEXXZ",
+        ] {
+            assert!(listed_noreturn(name), "{name}");
+        }
+        assert!(!listed_noreturn("?_Tidy@_String_base@std@@QAEXXZ"));
     }
 
     #[test]

@@ -9,9 +9,11 @@
 }
 
 # ABS.S - Absolute Single Value (RRR), pg. 247.
+@ifndef XTENSA_NO_FP
 :abs.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b0001 & op0 = 0b0000 {
 	fr = abs(fs);
 }
+@endif
 
 # ADD - Add (RRR), pg. 248.
 :add ar, as, at is op2 = 0b1000 & op1 = 0 & ar & as & at & op0 = 0 {
@@ -24,9 +26,11 @@
 }
 
 # ADD.S - Add Single (RRR), pg. 250.
+@ifndef XTENSA_NO_FP
 :add.s fr, fs, ft is op2 = 0 & op1 = 0b1010 & fr & fs & ft & op0 = 0 {
 	fr = fs f+ ft;
 }
+@endif
 
 # ADDI - Add Immediate (RRI8), pg. 251.
 :addi at, as, ri8_si8 is ri8_si8 & ar = 0b1100 & as & at & op0 = 0b0010 {
@@ -114,13 +118,13 @@
 }
 
 # BALL - Branch if All Bits Set (RRI8), pg. 264.
-:ball ri8_srel, as, at is ri8_srel & ar = 0b0100 & as & at & op0 = 0b0111 {
+:ball as, at, ri8_srel is ri8_srel & ar = 0b0100 & as & at & op0 = 0b0111 {
 	local test:4 = ~as & at;
 	if (test == 0)	goto ri8_srel;
 }
 
 # BANY - Branch if Any Bit Set (RRI8), pg. 265.
-:bany ri8_srel, as, at, is ri8_srel & ar = 0b1000 & as & at & op0 = 0b0111 {
+:bany as, at, ri8_srel is ri8_srel & ar = 0b1000 & as & at & op0 = 0b0111 {
 	local test:4 = as & at;
 	if (test != 0)	goto ri8_srel;
 }
@@ -260,7 +264,7 @@ macro extract_bit(bit, result) {
 }
 
 # BNALL - Branch if Not-All Bits Set (RRI8), pg. 287.
-:bnall ri8_srel, as, at is ri8_srel & ar = 0b1100 & as & at & op0 = 0b0111 {
+:bnall as, at, ri8_srel is ri8_srel & ar = 0b1100 & as & at & op0 = 0b0111 {
     if ((~as & at) != 0)
         goto ri8_srel;
 }
@@ -290,7 +294,7 @@ macro extract_bit(bit, result) {
 }
 
 # BNONE - Branch if No Bit Set (RRI8), pg. 292.
-:bnone ri8_srel, as, at, is ri8_srel & ar = 0 & as & at & op0 = 0b0111 {
+:bnone as, at, ri8_srel is ri8_srel & ar = 0 & as & at & op0 = 0b0111 {
     if ((as & at) == 0)
         goto ri8_srel;
 }
@@ -386,10 +390,12 @@ macro extract_bit(bit, result) {
 }
 
 # CEIL.S - Ceiling Single to Fixed (RRR), pg. 311.
+@ifndef XTENSA_NO_FP
 :ceil.s ar, fs, op_t is op2 = 0b1011 & op1 = 0b1010 & ar & fs & op_t & op0 = 0 {
 	local scale:4 = 1 << op_t;
 	ar = ceil(fs f* int2float(scale));
 }
+@endif
 
 # CLAMPS - Signed Clamp (RRR), pg. 312.
 :clamps ar, as, u5_4_7_plus7 is op2 = 0b0011 & op1 = 0b0011 & ar & as & u5_4_7_plus7 & op0 = 0 {
@@ -503,16 +509,20 @@ macro extract_bit(bit, result) {
 }
 
 # FLOAT.S - Convert Fixed to Single (RRR), pg. 346.
+@ifndef XTENSA_NO_FP
 :float.s fr, as, op_t is op2 = 0b1100 & op1 = 0b1010 & fr & as & op_t & op0 = 0 {
 	local scale:4 = 1 << op_t;
 	fr = int2float(as) f/ int2float(scale);
 }
+@endif
 
 # FLOOR.S - Floor Single to Fixed (RRR), pg. 347.
+@ifndef XTENSA_NO_FP
 :floor.s ar, fs, op_t is op2 = 0b1010 & op1 = 0b1010 & ar & fs & op_t & op0 = 0 {
 	local scale:4 = 1 << op_t;
 	ar = floor(fs f* int2float(scale));
 }
+@endif
 
 # IDTLB - Invalidate Data TLB Entry (RRR), pg. 348.
 :idtlb as is op2 = 0b0101 & op1 = 0 & ar = 0b1100 & as & at = 0 & op0 = 0 {
@@ -657,35 +667,45 @@ macro extract_bit(bit, result) {
 }
 
 # LSI - Load Single Immediate, (RRI8) pg. 398.
+@ifndef XTENSA_NO_FP
 :lsi ft, as, ri8_i8_sh2 is ri8_i8_sh2 & ar = 0 & as & ft & op0 = 0b0011 {
 	local addr:4 = as + ri8_i8_sh2;
 	ft = *:4 addr;
 }
+@endif
 
 # LSIU - Load Single Immediate with Update (RRI8), pg. 400.
+@ifndef XTENSA_NO_FP
 :lsiu ft, as, ri8_i8_sh2 is ri8_i8_sh2 & ar = 0b1000 & as & ft & op0 = 0b0011 {
 	local addr:4 = as + ri8_i8_sh2;
 	ft = *:4 addr;
 	as = addr;
 }
+@endif
 
 # LSX - Load Single Indexed (RRR), pg. 402.
+@ifndef XTENSA_NO_FP
 :lsx fr, as, at is op2 = 0 & op1 = 0b1000 & fr & as & at & op0 = 0 {
 	local addr:4 = as+at;
 	fr = *:4 addr;
 }
+@endif
 
 # LSXU - Load Single Indexed with Update (RRR), pg. 404.
+@ifndef XTENSA_NO_FP
 :lsxu fr, as, at is op2 = 0b0001 & op1 = 0b1000 & fr & as & at & op0 = 0 {
 	local addr:4 = as+at;
 	fr = *:4 addr;
 	as = addr;
 }
+@endif
 
 # MADD.S - Multiply and Add Single (RRR), pg. 406.
+@ifndef XTENSA_NO_FP
 :madd.s fr, fs, ft is op2 = 0b0100 & op1 = 0b1010 & fr & fs & ft & op0 = 0 {
 	fr = fr f+ (fs f* ft);
 }
+@endif
 
 # MAX - Maximum Value (RRR), pg. 407.
 :max ar, as, at is op2 = 0b0101 & op1 = 0b0011 & ar & as & at & op0 = 0 {
@@ -722,9 +742,11 @@ macro extract_bit(bit, result) {
 }
 
 # MOV.S - Move Single (RRR), pg. 414.
+@ifndef XTENSA_NO_FP
 :mov.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0 & op0 = 0 {
 	fr = fs;
 }
+@endif
 
 # MOVEQZ - Move if Equal to Zero (RRR), pg. 415.
 :moveqz ar, as, at is op2 = 0b1000 & op1 = 0b0011 & ar & as & at & op0 = 0 {
@@ -734,11 +756,13 @@ macro extract_bit(bit, result) {
 }
 
 # MOVEQZ.S - Move Single if Equal to Zero (RRR), pg. 416.
+@ifndef XTENSA_NO_FP
 :moveqz.s fr, fs, at is op2 = 0b1000 & op1 = 0b1011 & fr & fs & at & op0 = 0 {
 	if (at != 0) goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MOVF - Move if False (RRR), pg. 417.
 :movf ar, as, bt is op2 = 0b1100 & op1 = 0b0011 & ar & as & bt & op0 = 0 {
@@ -748,11 +772,13 @@ macro extract_bit(bit, result) {
 }
 
 # MOVF.S - Move Single if False (RRR), pg. 418.
+@ifndef XTENSA_NO_FP
 :movf.s fr, fs, bt is op2 = 0b1100 & op1 = 0b1011 & fr & fs & bt & op0 = 0 {
 	if (bt)goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MOVGEZ - Move if Greater Than or Equal to Zero (RRR), pg. 419.
 :movgez ar, as, at is op2 = 0b1011 & op1 = 0b0011 & ar & as & at & op0 = 0 {
@@ -762,11 +788,13 @@ macro extract_bit(bit, result) {
 }
 
 # MOVGEZ.S - Move Single if Greater Than or Equal to Zero (RRR), pg. 420.
+@ifndef XTENSA_NO_FP
 :movgez.s fr, fs, at is op2 = 0b1011 & op1 = 0b1011 & fr & fs & at & op0 = 0 {
 	if (at s< 0) goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MOVI - Move Immediate (RRI8), pg. 421.
 :movi at, movi_si16 is movi_si16 & ar = 0b1010 & at & op0 = 0b0010 {
@@ -776,8 +804,7 @@ macro extract_bit(bit, result) {
 
 # MOVI.N - Narrow Move Immediate (RI7), pg. 422.
 :movi.n n_as, movin_si8 is movin_si8 & n_as & n_op_s_3 = 0 & n_op0 = 0b1100 {
-    local val:4 = sext(movin_si8);
-    n_as = val;
+    n_as = movin_si8;
 }
 
 # MOVLTZ - Move if Less Than Zero (RRR), pg. 423.
@@ -788,11 +815,13 @@ macro extract_bit(bit, result) {
 }
 
 # MOVLTZ.S - Move Single if Less Than Zero (RRR), pg. 424.
+@ifndef XTENSA_NO_FP
 :movltz.s fr, fs, at is op2 = 0b1010 & op1 = 0b1011 & fr & fs & at & op0 = 0 {
 	if (at s>= 0) goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MOVNEZ - Move if Not Equal to Zero (RRR), pg. 425.
 :movnez ar, as, at is op2 = 0b1001 & op1 = 0b0011 & ar & as & at & op0 = 0 {
@@ -802,11 +831,13 @@ macro extract_bit(bit, result) {
 }
 
 # MOVNEZ.S - Move Single if Not Equal to Zero (RRR), pg. 426.
+@ifndef XTENSA_NO_FP
 :movnez.s fr, fs, at is op2 = 0b1001 & op1 = 0b1011 & fr & fs & at & op0 = 0 {
 	if (at == 0) goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MOVSP - Move to Stack Pointer (RRR), pg. 427.
 :movsp at, as is op2 = 0 & op1 = 0 & ar = 0b0001 & as & at & op0 = 0 {
@@ -821,21 +852,27 @@ macro extract_bit(bit, result) {
 }
 
 # MOVT.S - Move Single if True (RRR), pg. 429.
+@ifndef XTENSA_NO_FP
 :movt.s fr, fs, bt is op2 = 0b1101 & op1 = 0b1011 & fr & fs & bt & op0 = 0 {
 	if (!bt) goto <end>;
 	fr = fs;
 	<end>
 }
+@endif
 
 # MSUB.S - Multiply and Subtract Single (RRR), pg. 430.
+@ifndef XTENSA_NO_FP
 :msub.s fr, fs, ft is op2 = 0b0101 & op1 = 0b1010 & fr & fs & ft & op0 = 0 {
 	fr = fr f- (fs f* ft);
 }
+@endif
 
 # MUL.S - Multiply Single (RRR), pg. 435.
+@ifndef XTENSA_NO_FP
 :mul.s fr, fs, ft is op2 = 0b0010 & op1 = 0b1010 & fr & fs & ft & op0 = 0 {
 	fr = fs f* ft;
 }
+@endif
 
 # MUL16S - Multiply 16-bit Signed (RRR), pg. 436.
 :mul16s ar, as, at is op2 = 0b1101 & op1 = 0b0001 & ar & as & at & op0 = 0 {
@@ -874,9 +911,11 @@ macro extract_bit(bit, result) {
 }
 
 # NEG.S - Negate Single (RRR), pg. 458.
+@ifndef XTENSA_NO_FP
 :neg.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b0110 & op0 = 0 {
 	fr = 0 f- fs;
 }
+@endif
 
 # NOP - No Operation (RRR), pg. 459.
 :nop is op2 = 0 & op1 = 0 & ar = 0b0010 & as = 0 & at = 0b1111 & op0 = 0 { }
@@ -886,7 +925,9 @@ macro extract_bit(bit, result) {
 
 # NSA - Normalization Shift Amount (RRR), pg. 461.
 :nsa at, as is op2 = 0b0100 & op1 = 0 & ar = 0b1110 & as & at & op0 = 0 {
-    at = lzcount(~as);
+    # leading bits equal to the sign bit, less one: 31 for 0 and -1
+    local v:4 = as ^ (as s>> 31);
+    at = lzcount(v) - 1;
 }
 
 # NSAU - Normalization Shift Amount Unsigned (RRR), pg. 462. (Count leading zeros)
@@ -895,19 +936,25 @@ macro extract_bit(bit, result) {
 }
 
 # OEQ.S - Compare Single Equal (RRR), pg. 463.
+@ifndef XTENSA_NO_FP
 :oeq.s br, fs, ft is op2 = 0b0010 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = !nan(fs) && !nan(ft) && fs f== ft;
 }
+@endif
 
 # OLE.S - Compare Single Ordered and Less Than or Equal (RRR), pg. 464
+@ifndef XTENSA_NO_FP
 :ole.s br, fs, ft is op2 = 0b0110 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = !nan(fs) && !nan(ft) && fs f<= ft;
 }
+@endif
 
 # OLT.S - Compare Single Ordered and Less Than (RRR), pg. 465.
+@ifndef XTENSA_NO_FP
 :olt.s br, fs, ft is op2 = 0b0100 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = !nan(fs) && !nan(ft) && fs f< ft;
 }
+@endif
 
 # MOV - Move (RRR), pg. 412. Special case of OR as, at, at.
 :mov ar, as is op2 = 0b0010 & op1 = 0 & ar & as & as = at & op0 = 0 {
@@ -1034,9 +1081,11 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # RFR - Move FR to AR (RRR), pg. 490.
+@ifndef XTENSA_NO_FP
 :rfr ar, fs is op2 = 0b1111 & op1 = 0b1010 & ar & fs & at = 0b0100 & op0 = 0 {
 	ar = fs;
 }
+@endif
 
 # RFUE - Return from User-Mode Exception (RRR), pg. 491.
 :rfue is op2 = 0 & op1 = 0 & ar = 0b0011 & as = 0b0001 & at = 0 & op0 = 0 {
@@ -1074,6 +1123,7 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # ROUND.S - Round Single to Fixed (RRR), pg. 497.
+@ifndef XTENSA_NO_FP
 :round.s ar, fs, op_t is op2 = 0b1000 & op1 = 0b1010 & ar & fs & op_t & op0 = 0 {
 	local scale:4 = 1 << op_t;
 	local result = fs f* int2float(scale);
@@ -1087,6 +1137,7 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 	ar = 0x7fffffff;
 	<end>
 }
+@endif
 
 # RSIL - Read and Set Interrupt Level (RRR), pg. 498.
 :rsil at, op_s is op2 = 0 & op1 = 0 & ar = 0b0110 & op_s & at & op0 = 0 {
@@ -1247,17 +1298,21 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # SSI - Store Single Immediate (RRI8), pg. 534.
+@ifndef XTENSA_NO_FP
 :ssi ft, as, ri8_i8_sh2 is ri8_i8_sh2 & ar = 0b0100 & as & ft & op0 = 0b0011 {
 	local addr:4 = as + ri8_i8_sh2;
 	*:4 addr = ft;
 }
+@endif
 
 # SSIU - Store Single Immediate with Update (RRI8), pg. 536.
+@ifndef XTENSA_NO_FP
 :ssiu ft, as, ri8_i8_sh2 is ri8_i8_sh2 & ar = 0b1100 & as & ft & op0 = 0b0011 {
 	local addr:4 = as + ri8_i8_sh2;
 	*:4 addr = ft;
 	as = addr;
 }
+@endif
 
 # SSL - Set Shift Amount for Left Shift (RRR), pg. 538.
 :ssl as is op2 = 0b0100 & op1 = 0 & ar = 0b0001 & as & at = 0 & op0 = 0 {
@@ -1270,17 +1325,21 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # SSX - Store Single Indexed (RRR), pg. 540.
+@ifndef XTENSA_NO_FP
 :ssx fr, as, at is op2 = 0b0100 & op1 = 0b1000 & fr & as & at & op0 = 0 {
 	local addr:4 = as+at;
 	*:4 addr = fr;
 }
+@endif
 
 # SSXU - Store Single Indexed with Update (RRR), pg. 541.
+@ifndef XTENSA_NO_FP
 :ssxu fr, as, at is op2 = 0b0101 & op1 = 0b1000 & fr & as & at & op0 = 0 {
 	local addr:4 = as+at;
 	*:4 addr = fr;
 	as = addr;
 }
+@endif
 
 # SUB - Subtract (RRR), pg. 542.
 :sub ar, as, at is op2 = 0b1100 & op1 = 0 & ar & as & at & op0 = 0 {
@@ -1288,9 +1347,11 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # SUB.S - Subtract Single (RRR), pg. 543.
+@ifndef XTENSA_NO_FP
 :sub.s fr, fs, ft is op2 = 0b0001 & op1 = 0b1010 & fr & fs & ft & op0 = 0 {
 	fr = fs f- ft;
 }
+@endif
 
 # SUBX2 - Subtract with Shift by 1 (RRR), pg. 544.
 :subx2 ar, as, at is op2 = 0b1101 & op1 = 0 & ar & as & at & op0 = 0 {
@@ -1313,6 +1374,7 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # TRUNC.S - Truncate Single to Fixed (RRR), pg. 548
+@ifndef XTENSA_NO_FP
 :trunc.s ar, fs, op_t is op2 = 0b1001 & op1 = 0b1010 & ar & fs & op_t & op0 = 0 {
 	local scale:4 = 1 << op_t;
 	local result = fs f* int2float(scale);
@@ -1326,35 +1388,47 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 	ar = 0x7fffffff;
 	<end>
 }
+@endif
 
 # UEQ.S - Compare Single Unordered or Equal (RRR), pg. 549.
+@ifndef XTENSA_NO_FP
 :ueq.s br, fs, ft is op2 = 0b0011 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = nan(fs) || nan(ft) || fs f== ft;
 }
+@endif
 
 # UFLOAT.S - Convert Unsigned Fixed to Single (RRR), pg. 550.
+@ifndef XTENSA_NO_FP
 :ufloat.s fr, as, op_t is op2 = 0b1101 & op1 = 0b1010 & fr & as & op_t & op0 = 0 {
 	local tmp:8 = zext(as);
 	local scale:4 = 1 << op_t;
 	fr = int2float(tmp) f/ int2float(scale);
 }
+@endif
 
 # ULE.S - Compare Single Unordered or Less Than or Equal (RRR), pg. 551.
+@ifndef XTENSA_NO_FP
 :ule.s br, fs, ft is op2 = 0b0111 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = nan(fs) || nan(ft) || fs f<= ft;
 }
+@endif
 
 # ULT.S - Compare Single Unordered or Less Than (RRR), pg. 552.
+@ifndef XTENSA_NO_FP
 :ult.s br, fs, ft is op2 = 0b0101 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = nan(fs) || nan(ft) || fs f< ft;
 }
+@endif
 
 # UN.S - Compare Single Unordered (RRR), pg. 554.
+@ifndef XTENSA_NO_FP
 :un.s br, fs, ft is op2 = 0b0001 & op1 = 0b1011 & br & fs & ft & op0 = 0 {
 	br = nan(fs) || nan(ft);
 }
+@endif
 
 # UTRUNC.S - Truncate Single to Fixed Unsigned (RRR), pg. 555.
+@ifndef XTENSA_NO_FP
 :utrunc.s ar, fs, op_t is op2 = 0b1110 & op1 = 0b1010 & ar & fs & op_t & op0 = 0 {
     local scale:4 = int2float(1:2 << op_t:2);
     local tmp:8 = trunc(fs f* scale);
@@ -1363,6 +1437,7 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
     local noof  = !posof && !negof;
     ar = zext(posof)*0xffffffff + zext(negof)*0x80000000 + zext(noof)*tmp:4;
 }
+@endif
 
 # WAITI - Wait Interrupt (RRR), pg. 556.
 :waiti op_s is op2 = 0 & op1 = 0 & ar = 0b0111 & op_s & at = 0 & op0 = 0 {
@@ -1380,9 +1455,11 @@ rfi_eps: ptr is op_s	[ ptr = $(EPS_BASE) + (4 * op_s); ] { export *[register]:4 
 }
 
 # WFR - Move AR to FR (RRR), pg. 559.
+@ifndef XTENSA_NO_FP
 :wfr fr, as is op2 = 0b1111 & op1 = 0b1010 & fr & as & at = 0b0101 & op0 = 0 {
 	fr = as;
 }
+@endif
 
 # WITLB - Write Instruction TLB Entry (RRR), pg. 560.
 :witlb at, as is op2 = 0b0101 & op1 = 0 & ar = 0b0110 & as & at & op0 = 0 {
@@ -1926,3 +2003,32 @@ LoopOffset8: loc is ri8_i8 [ loc = inst_start + ri8_i8 + 4; ] { export *:4 loc; 
 	LEND = &LoopOffset8;
 	if (as == 0) goto LoopOffset8;
 }
+
+# Divide and square-root steps of the Xtensa floating-point option (ESP32, ESP32-S3 and the
+# HiFi cores with an FPU); encodings from the cores' xtensa-modules.c. The approximation and
+# Newton-step operations are named ops; MADDN.S is the fused multiply-add they iterate with.
+@ifndef XTENSA_NO_FP
+define pcodeop div0_s;
+define pcodeop divn_s;
+define pcodeop recip0_s;
+define pcodeop sqrt0_s;
+define pcodeop rsqrt0_s;
+define pcodeop nexp01_s;
+define pcodeop mksadj_s;
+define pcodeop mkdadj_s;
+define pcodeop addexp_s;
+define pcodeop addexpm_s;
+define pcodeop const_s;
+:div0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b0111 & op0 = 0 { fr = div0_s(fs); }
+:recip0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1000 & op0 = 0 { fr = recip0_s(fs); }
+:sqrt0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1001 & op0 = 0 { fr = sqrt0_s(fs); }
+:rsqrt0.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1010 & op0 = 0 { fr = rsqrt0_s(fs); }
+:nexp01.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1011 & op0 = 0 { fr = nexp01_s(fs); }
+:mksadj.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1100 & op0 = 0 { fr = mksadj_s(fs); }
+:mkdadj.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1101 & op0 = 0 { fr = mkdadj_s(fr, fs); }
+:addexp.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1110 & op0 = 0 { fr = addexp_s(fr, fs); }
+:addexpm.s fr, fs is op2 = 0b1111 & op1 = 0b1010 & fr & fs & at = 0b1111 & op0 = 0 { fr = addexpm_s(fr, fs); }
+:const.s fr, op_s is op2 = 0b1111 & op1 = 0b1010 & fr & op_s & at = 0b0011 & op0 = 0 { local k:1 = op_s; fr = const_s(k); }
+:maddn.s fr, fs, ft is op2 = 0b0110 & op1 = 0b1010 & fr & fs & ft & op0 = 0 { fr = fr f+ (fs f* ft); }
+:divn.s fr, fs, ft is op2 = 0b0111 & op1 = 0b1010 & fr & fs & ft & op0 = 0 { fr = divn_s(fr, fs, ft); }
+@endif

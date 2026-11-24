@@ -2211,7 +2211,14 @@ classified:
   virtual call `mov eax,[ecx]; call [eax+4]` between statements) takes no
   stack argument, so it pops none and the stack pointer stays at the saved
   value. Without that, every push of a local's address after such a call reads
-  as an unplaced store. This one does change what the pop proof reads, so with
+  as an unplaced store. Functions without an EH frame restore their
+  callee-saved registers the same way (`kuna_calleepurge.rs (note_saved_register,
+  restore_slot)`). The walk records the slot where each of EBX, EBP, ESI and
+  EDI is first pushed while it still holds its entry value (`push ebp`,
+  `push esi` in the prologue). A pop into that register at a stack pointer that
+  unread calls left only bounded, where the bounds contain the slot, is placed
+  at the slot: compiled code restores each register from where it saved it.
+  That covers `pop esi; pop ebp; ret 4` after a call to an import. This one does change what the pop proof reads, so with
   the option on an MSVC EH function whose virtual calls left its stack pointer
   bounded can prove its pop.
   The rest of this bookkeeping runs only with the option on and never changes
@@ -4587,6 +4594,34 @@ type holds and are left to `arithhelpers`; the `__aeabi_cdcmp*` and
 `__aeabi_cfcmp*` comparisons return in the flags and get no prototype. A DWARF or
 explicit declaration keeps precedence.
 
+**libgcc soft-float and integer routines on other targets.** Every other
+target calls libgcc by its own names: `__addsf3`, `__muldf3`, `__floatsisf`,
+`__fixdfsi`, `__ltdf2` (the GCC internals manual's "Soft float library
+routines"), `__mulsi3`, `__muldi3`, `__udivdi3`, `__ashldi3` ("Integer library
+routines") and Xtensa's `__umulsidi3`. Untyped, a caller whose last act is
+one came out `void` with its arguments lost (`void scale(void) { __addsf3();
+}` on C-SKY, OpenRISC, Lanai, ARC, MIPS and RISC-V `ilp32`, #864). The pass
+`softfpsigs` (`crates/unlace-analysis/src/analyzers/protos/kuna_softfpsigs.rs`)
+seeds each one an image other than 32-bit ARM defines or imports, typed by
+its machine modes as integers: an `SFmode` value is a 4-byte and a `DFmode`
+value an 8-byte integer, since the routines are integer code under the
+integer convention and a `float` declaration would be laid out in the default
+model's floating-point registers (`$f12` on MIPS, `fa0` under `ilp32d`), which
+a soft-float caller never sets; a comparison returns the word (libgcc's
+`CMPtype`). A routine with an 8-byte value is seeded only where the default
+model lays out an 8-byte integer as it lays out a 4-byte one (first argument
+both in registers or both on the stack) and returns it in registers with no
+hidden pointer (`kuna_softfpsigs.rs (wide_values_fit)`): Lanai's spec passes a
+`long long` on the stack and returns it through a hidden pointer. One with an
+8-byte result is seeded by this pass on a little-endian target only; on a
+big-endian one `libgccsigs` seeds it (`kuna_softfpsigs.rs
+(seed_big_endian_wide)`, called from `kuna_libgcc.rs`), since a locked 8-byte
+result in a big-endian pair still costs a caller that returns arithmetic on it
+a word. `float scale(float v, int n)` on MIPS prints `unsigned int
+scale(unsigned int a0,int a1) { return __addsf3(__mulsf3(a0,__floatsisf(a1)),
+0x3f000000); }`. The integer routines count as effect-free for the RETURN
+(`kuna_callresultuse.rs (libgcc_integer)`).
+
 The soft-float model is the spec's `__stdcall_softfp` with the default model's
 `extension` copied onto its core-register input entries: the base standard
 extends an argument narrower than a word as the VFP variant does, and the
@@ -5614,6 +5649,22 @@ locked. Three places read it:
 Off, nothing changes. On, the joined pair prints as one `long long` and the
 double-precision forms (`kuna_borrowcompare.rs`) fold its arithmetic and
 compares, instead of an `SBORROW4`/`CONCAT44` chain.
+
+### (kuna) `retindexuse` — a return value that also indexes a load
+
+`Funcdata::onlyOpUse` walks every use of a RETURN trial's value forward and
+refuses the trial at any LOAD on the way: a register whose value addresses
+memory is read as a pointer the function was handed. A loop counter that is
+also the return register falls to that test whenever the loop indexes memory
+with it, which on BPF (`r0`) and SASS makes `while (s[n]) n++; return n;`
+print `void` (unlace#865). With option `retindexuse` (default off),
+`crates/unlace-middle/src/p4_calls/kuna_retindexuse.rs (index_only_load)`
+exempts, for a RETURN trial only, a LOAD whose address is the walked value
+plus a value the walk did not reach (a base pointer), constant offsets folded
+on the way: that LOAD is an index use, and the walk goes on without it. Every
+other LOAD, and every LOAD on an argument trial, still refuses. Off by
+default, because a scratch register that indexes a loop and is left in the
+return register of a `void` function then reads as its return value.
 
 ### (kuna) `returnpair` — the register-pair return split
 
@@ -10499,6 +10550,20 @@ there (`swift_bridgeObjectRetain(v8); Foundation.Locale.current.getter(v7)`,
 or `objc_retainAutoreleasedReturnValue(..)` before
 `URL._bridgeToObjectiveC()`, whose `self` is in `x20`). `tests/stages/kuna-callresultuse-runtime.toml`
 pins both ends.
+
+In every mode, off included, a RETURN takes the result of a run-time helper
+with no effect but its result (`kuna_callresultuse.rs (pure_helper)`: the
+RTABI32 and libgcc arithmetic, comparison and conversion routines
+`kuna_armfloatreturn.rs (base_pcs_helper)` names, not the memory helpers, the
+unaligned accessors, the flag-setting comparisons or `__aeabi_read_tp`) as its
+return value when, at every live RETURN and on every path, the value is that
+result in the first result register and nothing reads it but the RETURNs
+(`kuna_callresultuse.rs (pure_helper_result)`). A compiler drops a call to
+such a helper whose result is unused, at `-O0` too, so `bl __aeabi_fadd; pop
+{r4,pc}` is `return a + b;` and never `a + b;`: without debug information a
+soft-float `float scale(float v, int n)` returned `void` and dropped the
+`__aeabi_fadd` result. A result the function also tests is used there and
+keeps the strict reading below.
 
 So the hand-off is heritaged at all, `kuna_callresultuse.rs (plant)` gives
 the RETURNs a read of that register the way `voidret` plants the storage a

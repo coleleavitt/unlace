@@ -139,3 +139,121 @@ fn the_stamp_answers_the_key_until_a_source_changes() {
     assert_eq!(changed, cache_key(&spec));
     let _ = fs::remove_dir_all(&tmp);
 }
+
+fn scratch(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("unlace-sla-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(&dir).expect("mkdir");
+    dir
+}
+
+fn rewrite(path: &Path, text: &[u8]) {
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    fs::write(path, text).expect("write");
+}
+
+#[test]
+fn editing_an_included_sinc_changes_the_key() {
+    let dir = scratch("include-edit");
+    let spec = dir.join("a.slaspec");
+    fs::write(&spec, b"@include \"sub/b.sinc\"\n").expect("spec");
+    fs::create_dir_all(dir.join("sub")).expect("mkdir");
+    fs::write(dir.join("sub/b.sinc"), b"@include \"c.sinc\"\n").expect("b");
+    fs::write(dir.join("sub/c.sinc"), b"define alignment=1;\n").expect("c");
+    let cache = dir.join("cache");
+    let key = current_key(&cache, "a", &spec);
+    rewrite(&dir.join("sub/c.sinc"), b"define alignment=2;\n");
+    let changed = current_key(&cache, "a", &spec);
+    assert_ne!(changed, key, "a nested include is part of the key");
+    assert_eq!(changed, cache_key(&spec));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_macro_named_include_is_part_of_the_key() {
+    let dir = scratch("macro-include");
+    let spec = dir.join("a.slaspec");
+    fs::write(
+        &spec,
+        b"@define GEN \"gen32.sinc\"\n@include \"main.sinc\"\n",
+    )
+    .expect("spec");
+    fs::write(
+        dir.join("main.sinc"),
+        b"@ifndef GEN\n@define GEN \"gen.sinc\" # default\n@endif\n  @include \"$(GEN)\"\n",
+    )
+    .expect("main");
+    fs::write(dir.join("gen.sinc"), b"# 64\n").expect("gen");
+    fs::write(dir.join("gen32.sinc"), b"# 32\n").expect("gen32");
+    let files = sources(&spec);
+    for name in ["main.sinc", "gen.sinc", "gen32.sinc"] {
+        assert!(files.contains(&dir.join(name)), "{name} in {files:?}");
+    }
+    let cache = dir.join("cache");
+    let key = current_key(&cache, "a", &spec);
+    rewrite(&dir.join("gen32.sinc"), b"# 32, edited\n");
+    let changed = current_key(&cache, "a", &spec);
+    assert_ne!(changed, key, "the expanded include is part of the key");
+    assert_eq!(changed, cache_key(&spec));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_undefined_macro_include_stands_for_every_sinc_beside_it() {
+    let dir = scratch("undefined-macro");
+    let spec = dir.join("a.slaspec");
+    fs::write(&spec, b"@include \"$(NOWHERE)\"\n").expect("spec");
+    fs::write(dir.join("x.sinc"), b"").expect("x");
+    fs::write(dir.join("y.sinc"), b"").expect("y");
+    let files = sources(&spec);
+    assert!(files.contains(&dir.join("x.sinc")) && files.contains(&dir.join("y.sinc")));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn creating_a_missing_include_invalidates_the_stamp() {
+    let dir = scratch("missing-include");
+    let spec = dir.join("a.slaspec");
+    fs::write(&spec, b"@ifdef OPT\n@include \"opt.sinc\"\n@endif\n").expect("spec");
+    let cache = dir.join("cache");
+    current_key(&cache, "a", &spec);
+    let stamp = stamp_path(&cache, "a", &spec);
+    assert!(stamped_key(&stamp).is_some());
+    fs::write(dir.join("opt.sinc"), b"").expect("opt");
+    assert_eq!(
+        stamped_key(&stamp),
+        None,
+        "a new include invalidates the stamp"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_stamp_from_an_older_format_is_not_trusted() {
+    let dir = scratch("old-stamp");
+    let spec = dir.join("a.slaspec");
+    fs::write(&spec, b"").expect("spec");
+    let stamp = dir.join("a.stamp");
+    fs::write(&stamp, format!("{COMPILER_FINGERPRINT}\tdeadbeef\n")).expect("stamp");
+    assert_eq!(stamped_key(&stamp), None);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn ia64_counts_both_generated_tables() {
+    let spec = repo_specs().join("IA64/data/languages/ia64_be32.slaspec");
+    let files = sources(&spec);
+    for name in [
+        "ia64.sinc",
+        "ia64_regs.sinc",
+        "ia64_gen.sinc",
+        "ia64_gen32.sinc",
+    ] {
+        assert!(
+            files
+                .iter()
+                .any(|f| f.file_name().is_some_and(|n| n == name)),
+            "{name} in {files:?}"
+        );
+    }
+}

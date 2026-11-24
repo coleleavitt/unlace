@@ -3388,25 +3388,33 @@ fn next_op_in_block(data: &Funcdata, op: crate::context::OpId) -> Option<crate::
     next
 }
 
-/// (kuna `noretfirst`) Does the halt `tail` of `bb` follow a call?  Either a
-/// `CALL`/`CALLIND` precedes it in `bb`, or `bb` holds only the halt and every
-/// predecessor ends in a call (the `funcboundflow` halt starts its own block).
+/// (kuna `noretfirst`) Does the halt `tail` of `bb` follow a call to a function
+/// the source calls?  Either a `CALL`/`CALLIND` precedes it in `bb`, or `bb`
+/// holds only the halt and every predecessor ends in a call (the
+/// `funcboundflow` halt starts its own block).  A `__stack_chk_fail` call does
+/// not count: the compiler adds that check, so the source has no `if` to order.
 fn halt_follows_call(data: &Funcdata, bb: BlockId, tail: crate::context::OpId) -> bool {
     let is_call = |op: crate::context::OpId| {
         data.obank()
             .get(op)
             .is_some_and(|o| matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND))
     };
+    let source_call = |op: crate::context::OpId| {
+        is_call(op)
+            && !data
+                .get_call_specs_index(op)
+                .is_some_and(|i| data.get_call_specs(i).get_name().contains("stack_chk_fail"))
+    };
     let prev = |op| data.obank().get(op).and_then(|o| o.basic_neighbours().0);
     let mut cur = prev(tail);
     if cur.is_none() {
         let blk = data.bblocks_ref().block(bb);
         let n = blk.size_in();
-        return n > 0 && (0..n).all(|i| last_op_of(data, blk.get_in(i)).is_some_and(is_call));
+        return n > 0 && (0..n).all(|i| last_op_of(data, blk.get_in(i)).is_some_and(source_call));
     }
     while let Some(op) = cur {
         if is_call(op) {
-            return true;
+            return source_call(op);
         }
         cur = prev(op);
     }

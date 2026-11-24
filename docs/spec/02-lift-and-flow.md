@@ -4599,6 +4599,18 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 prefix, BSF/BSR and MOVSXD fixes (#548)
+
+Found by `tools/difffuzz`. In 64-bit mode a REX prefix that another prefix (a
+legacy prefix or a second REX) follows is ignored, as the CPU does: before, the
+REX constructor moved decoding past the prefix phase and the encoding was a bad
+instruction (about 2% of random encodings, none from compilers). 3DNow! decodes
+after a REX too. BSF and BSR with a zero source set ZF and leave the
+destination unchanged (the manual calls it undefined; CPUs keep it), where
+before they wrote the bit index of their search loop. `66 63 /r` decodes as
+`movsxd r16, r/m32` (the low word of the source). Exercised by the
+`x86_64_issue548` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 AVX-512 base-spec decode fixes (#98)
 
 Four wrong AVX-512 decodes in the Ghidra-derived tables are fixed in every x86
@@ -5084,6 +5096,44 @@ names, RV32 and RV64, and LLVM-selected half-precision functions that
 decompile with no bad or unimplemented instruction.
 
 
+
+### RISC-V F and D
+
+`riscv.fd.sinc` decodes the F and D extensions. It is generated from the Sail model's
+`fext_insts.sail` and `dext_insts.sail` by `tools/gen_riscv_sail.py`
+(`docs/sleigh-from-isa-specs.md` has the command). It replaces the hand-written
+`riscv.rv32f.sinc`, `riscv.rv64f.sinc`, `riscv.rv32d.sinc` and `riscv.rv64d.sinc`; `riscv.rv32f.sinc`
+now holds only the `fliConstS` table that `riscv.zfa.sinc` displays through. It is included for
+FPSIZE 64, the only FLEN any RISC-V language uses.
+
+- Arithmetic, square root and conversions lift to `f+`/`f-`/`f*`/`f/`/`sqrt`/`int2float`/
+  `float2float` when the rounding mode is `rne`, or `dyn` (read as the `rne` a program starts with).
+  Conversions that are always exact (`fcvt.d.s`, `fcvt.d.w`, `fcvt.d.wu`) lift this way under every
+  mode. With a static `rtz`/`rdn`/`rup`/`rmm`, where p-code has no operation that rounds that way,
+  an inexact operation is a user operation named after the mnemonic (`fadd_s`). The exception is
+  float-to-integer conversion with `rtz`, the C cast: it truncates and saturates as the ISA does.
+  NaN and values above the range give the maximum, values below it the minimum (0 for the
+  unsigned forms). `fcvt.lu` handles values of 2^63 and above by subtracting 2^63 first.
+  Unsigned 64-bit integer-to-float conversion halves the value, keeping a sticky bit, when the top
+  bit is set.
+- The fused multiply-adds are user operations (`fmadd_d(a, b, c)`): p-code has no fused operation,
+  and `a * b + c` rounds twice. Exception flags are not modelled.
+- `fclass` builds its one-hot mask from the sign, exponent and mantissa. `fmin`/`fmax` return the
+  other operand for one NaN and the canonical NaN for two, and order -0 below +0. `feq`/`flt`/`fle`
+  are the p-code compares.
+- `fsgnj*` build the result from the sign and magnitude bits. The `rs2 = rs1` aliases `fmv`,
+  `fneg` and `fabs` (constructors with `op1519=op2024`) are a copy, `f-` and `abs()`.
+- Single-precision results are written NaN-boxed (`0xffffffff00000000 | zext(v)`), as `fassignS`
+  does. Single-precision sources are read as the low 32 bits of the register (`--unbox truncate`),
+  as the hand-written files did. A register that does not hold a boxed value therefore reads as
+  that value instead of the canonical NaN. Compiled code never produces that state, and the
+  exact read is held back until the decompiler can fold it away for values it knows are boxed.
+
+The generated file decodes what LLVM decodes: 2496/2496 RV64 and 2176/2176 RV32 sampled words, plus
+every near miss. The hand-written files rejected `fcvt.d.s`, `fcvt.d.w` and `fcvt.d.wu` with a
+static rounding mode. Against QEMU (`tools/sail_sleigh_compare.py --fp`), the generated file
+differs only on unboxed sources. The hand-written one differed on 109 of 251 sampled words:
+rounding, saturation, `fclass` (unimplemented) and the fused multiply-adds.
 
 ### RISC-V Zfa (#98)
 

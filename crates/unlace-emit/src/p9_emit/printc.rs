@@ -6959,15 +6959,20 @@ impl PrintC {
             self.emit_switch_case(fd, arch, *arm);
             let id = self.emit.start_indent();
             let case = fd.sblocks_ref().block(owner).switch_caseblocks()[arm.index].clone();
+            let record = self.tree_switch_arm(blk, i);
+            let goto_type = match record {
+                Some(record) => record.goto,
+                None => (case.gototype != 0).then(|| {
+                    self.goto_rewrites
+                        .case_gototype(owner, case.block, case.gototype)
+                }),
+            };
             if let Some((guard, _)) = arm.guard {
                 let id2 = self.emit.begin_block(0);
                 self.emit_block(fd, arch, fd.sblocks_ref().block(guard).get_block(1));
                 self.emit.end_block(id2);
-            } else if case.gototype != 0 {
+            } else if let Some(gototype) = goto_type {
                 self.emit.tag_line();
-                let gototype = self
-                    .goto_rewrites
-                    .case_gototype(owner, case.block, case.gototype);
                 let head = fd.sblocks_ref().block(owner).get_block(0);
                 self.emit_goto_statement(fd, head, case.block, gototype);
             } else {
@@ -6981,9 +6986,7 @@ impl PrintC {
                 // Blocks that formally exit the switch need an explicit `break;`
                 // (unless it is the last case, whose fall-through is the close).
                 let last = i == ncase - 1;
-                let exits_here = self
-                    .tree_switch_exit(blk, i)
-                    .unwrap_or(case.isexit && !last);
+                let exits_here = record.map_or(case.isexit && !last, |record| record.exit_break);
                 if exits_here || (last && self.emit.label_dangling()) {
                     self.emit.tag_line();
                     self.emit_goto_statement(

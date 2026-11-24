@@ -169,8 +169,14 @@ predecessors: the head (directly or through one block, here the `dmb`) and a
 reload block that the status test falls into and that branches back to it or
 to the head's failure exit
 (`crates/unlace-lift/src/p2_lift/kuna_atomics.rs (rotated_blocks)`). The head,
-the block between and the store-exclusive's blocks fold as above, and the
-reload block must repeat the head: evaluated from the state the loop body
+the block between (whose barrier, `DataMemoryBarrier`, stays) and the
+store-exclusive's blocks fold as above. Since a retry re-runs only the
+store-exclusive, status and reload blocks, the head's values are not
+checked against what those blocks write; instead no op of that cycle may
+read a storage a later op of the cycle writes (`cycle_invariant`), the
+values the reload block leaves must equal the head's where they stay live
+after either exit, and the store-exclusive's constant status writes are
+exempt (`dead_after`). The reload block must repeat the head: evaluated from the state the loop body
 leaves, its one load-exclusive reads the head's address, it reads neither
 monitor output, and it branches back exactly when the reloaded value equals
 the head's expected value (`reload_matches`). The status test then always
@@ -184,8 +190,18 @@ bne loop` that follows, which the evaluation folds through the compare's flag
 arithmetic (subtraction, borrow and carry, signed and unsigned order). Thumb's
 `ldrex` marks its load with `ExclusiveAccess(addr)`; it is accepted inside
 the loop and becomes a dead copy with the fold. The doubleword forms
-(`ldrexd`/`strexd`, `ldaxp`/`stlxp`) load and store twice and are not
-folded. Only AArch64 and ARM declare the monitor user operations, so the option
+(`ldrexd`/`strexd`, `ldaxp`/`ldxp` with `stlxp`/`stxp`) load and store the two
+halves of a `2w`-byte location; a loop whose head is the store-exclusive's
+block folds through `crates/unlace-lift/src/p2_lift/kuna_atomics.rs (fold_pair_loop)`:
+the low half (lower address) reads as `SUBPIECE(Old, 0)`, the high half as
+`SUBPIECE(Old, w)`, and the two stored halves must be an exchange (neither
+reads `Old`), the same `&`, `|` or `^` of each half with an independent
+operand, or an addition with carry (`lo + x0` and `hi + x1 + CARRY(lo, x0)`,
+ARM's `adds`/`adc`). A new `2w`-byte builtin call goes in front of the first
+load, the loads become its two halves and the stores dead copies, as for
+`casp`. Doubleword compare-exchange loops are not folded yet. AArch64's
+`stlxp` of X registers stored its second register at `+4`; it is `+8`, and
+the W-register `stlxp`/`stxp` test an 8-byte monitor range, not 16. Only AArch64 and ARM declare the monitor user operations, so the option
 is inert elsewhere.
 
 This phase turns an entry address into a function: raw p-code ops for every

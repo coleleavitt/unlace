@@ -4177,6 +4177,32 @@ TLBI forms match only Rt=31 (as in LLVM); another Rt stays `sys`. Exercised by
 `unlace-cli/tests/aarch64_rme.rs` (a raw image decompiles to the user
 operations).
 
+### Hexagon HMX (#98)
+
+`hexagon_hmx.sinc` decodes the ten documented instructions of the Hexagon
+Matrix Extension (FP16 set, V68/V73, Hexagon V81 HMX Programmer's Reference
+Manual 80-N2040-62): `activation.hf = mxmem(Rs,Rt)` with its `:deep` and
+`:single` forms, `weight.hf = mxmem(Rs,Rt)` and its `:deep` form,
+`bias = mxmem2(Rs)`, `mxmem2(Rs) = bias`, `cvt.hf = acc(Rs)`,
+`mxmem(Rs,Rt) = cvt` and `mxclracc.hf`. They sit in LD class 9 (op 0x10, low
+byte 0xe2..0xfe, beside `memw_locked`, `memd_locked`, `memw_phys` and
+`vextract`, whose bits 7..5 are not 111) and ST class 10 op 0x37, which
+nothing else decodes, so the existing `Hexagon:LE:32:default` language takes
+them without a variant. The accumulators, convert state, bias sets and the
+VTCM buffers are not registers here: each instruction lifts to a named
+pcodeop over its decoded fields (activation: 2 KB-aligned address, the low
+control bits, Rt; weight: 128-byte-aligned address, the negate bit, the dW
+range; bias: 256-byte-aligned address and set index; convert: bias select and
+the remaining control bits), so a raw `activation.hf = mxmem(r0,r1)`
+decompiles to `hmx_activation_hf(a0 & 0xfffff800,a0 & 0x7ff,a1);`. Before,
+every HMX word was a bad instruction. The activation/weight pair must share a
+packet; such a packet disassembles, but decompiling any multi-instruction
+Hexagon packet still fails in the crossbuild step ("Could not obtain cached
+crossbuild instruction"), an existing engine gap that is not HMX-specific.
+Exercised by `unlace-cli/tests/hexagon_hmx.rs`: probe rows for all ten
+encodings against LLVM's syntax and a raw image with one instruction per
+packet. Notes in `specs/Ghidra/Processors/Hexagon/README.md`.
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its
@@ -4295,6 +4321,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | Moxie architecture page, binutils `moxie` opcode table | `unlace-cli/tests/moxie_raw.rs` |
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | FT32 programmer documentation, binutils `ft32` opcode table, GCC `config/ft32` | `unlace-cli/tests/ft32_raw.rs` |
 | `NiosII` | Altera/Intel Nios II (R1) | `nios2:LE:32:R1`, `nios2:BE:32:R1` | Nios II Processor Reference Guide and ABI, binutils 2.43 `nios2` opcode table | `unlace-cli/tests/nios2_raw.rs` |
+| `2650` | Signetics 2650 / 2650A / 2650B | `2650:BE:16:default` | Signetics 2650 Microprocessor manual, 2650 data sheet | `unlace-cli/tests/s2650_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

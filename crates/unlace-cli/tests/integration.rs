@@ -6,6 +6,8 @@ mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "hexagon_hmx.rs"]
+mod hexagon_hmx;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "ft32_raw.rs"]
@@ -62,6 +64,8 @@ mod x86_amx;
 mod aarch64_rme;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "s2650_raw.rs"]
+mod s2650_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

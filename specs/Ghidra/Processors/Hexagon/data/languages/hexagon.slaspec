@@ -886,3 +886,8 @@ VNreg0002: vnreg_	is GetVNAltReg & vnreg_ & vnreg & nreg_0002lsb=1 & nreg_0002 [
 #       
 @include "hexagon_hvx.sinc"
 
+#
+# Matrix Instruction Set (HMX extension)
+#
+@include "hexagon_hmx.sinc"
+

@@ -6,6 +6,7 @@
 
 pub mod addrtable;
 pub mod aif;
+pub mod apihash;
 pub mod blobs;
 pub mod callfixup;
 pub mod cfstring;

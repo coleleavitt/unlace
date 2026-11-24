@@ -27,11 +27,9 @@ taken from the binutils `s390-opc.txt` table (opcode and format only), and
   translate and storage-to-storage instructions, written by `gen_hfpdec.py` into
   `s390x_hfpdec.sinc` (below).
 
-Not yet modelled: the privileged and system instructions, transactional execution, the
-crypto (CPACF) instructions, guarded storage, and a few problem-state forms LLVM decodes
-(`lpd`, `lmd`, `lzrf`/`lzrg`/`llzrgf`, the compare-and-trap forms with a mask
-of 0 or 15, `locg`/`stocg` and `locfh`/`stocfh` with a mask of 0 or 15, `cfc`). An
-instruction outside the module does not decode.
+Every instruction of LLVM's SystemZ target decodes (a survey of three encodings per record
+against `llvm-objdump --mcpu=z16`); the privileged, system, transactional-execution, crypto
+and guarded-storage instructions are user operations.
 
 ## How the files are produced
 
@@ -116,3 +114,24 @@ conversions) is the user operation `hd_<mnemonic>`, plus `hd_<mnemonic>_cc` for 
 condition code. QEMU 10 implements neither HFP nor `bsm`/`bassm`, so only `ts` and the BFP
 rows were checked with `tools/difffuzz --oracle qemu` (no mismatch beyond the rounded-twice
 `maeb`).
+
+### Crypto, system and condition-mask instructions
+
+The same generator covers the CPACF instructions (`km`, `kmc`, `kmctr`, `kma`, `kmo`, `kmf`,
+`kimd`, `klmd`, `kmac`, `kdsa`, `pcc`, `prno`, `pckmo`, `cksm`, `dfltcc`, `sortl`, `nnpa`), the
+privileged and system instructions (`lctl`/`lctlg`/`stctl`/`stctg` on `c0`-`c15`, `lpsw`/`lpswe`,
+`ssm`, `stnsm`/`stosm`, `sigp`, the channel-subsystem, clock, storage-key, DAT and
+interrupt-handling instructions, `diag`, `sie`), transactional execution, guarded storage,
+access-register moves (`lam`, `stam`, `ear`-family), `mvcl`/`clcl` and the Unicode
+conversions. Their user operations take the register operands and the implicit registers of
+the LLVM record (CPACF reads `r0l` and `r1`) and write every output register, so the pairs a
+CPACF instruction advances (address and length) are redefined. Exact: `lpsw`/`lpswe`/`lpswey`
+return to the new PSW's address (the PSW switch itself is `hd_lpsw*`), `lzrg`, `lzrf`,
+`llzrgf`, `lpd`, `lpdg` (condition code 0), `lfpc`, `stfpc`, `srnm`, `srnmb`, `srnmt`.
+
+`MASKED` lists the condition-mask records whose masks the hand-written rows leave out:
+masks 0 and 15 of `loc`/`locg`/`locr`/`locgr`/`locfhr`/`lochi`/`locghi`/`lochhi`/`stoc`/
+`stocg` and the selects, masks 0, 1, 14 and 15 of the compare-and-trap instructions (whose
+rows test only the three high mask bits), every mask of `locfh`, `stocfh`, `clt` and `clgt`,
+and `bic` with mask 0. Each mask is its own constructor with the extended mnemonic `objdump`
+prints, and exact p-code (mask 0: no effect; mask 15: unconditional).

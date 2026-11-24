@@ -159,6 +159,17 @@ fn transforms_bool_sign_shift_to_2comp() {
 }
 
 #[test]
+fn multi_bit_value_declines() {
+    let mut fd = build_fd();
+    // sa=5 leaves 3 bits: 3 << 5 s>> 5 is 3 (sign-extended from bit 2), not 0 - 3.
+    let (op, _v) = build_idiom(&mut fd, 5, 3);
+
+    let mut rule = RuleBoolSignShift::new();
+    assert_eq!(rule.apply_op(op, &mut fd), 0);
+    assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_SRIGHT);
+}
+
+#[test]
 fn byte_aligned_shift_defers_to_leftright() {
     let mut fd = build_fd();
     // sa=8 is a multiple of 8 -> RuleLeftRight handles it; this rule declines.

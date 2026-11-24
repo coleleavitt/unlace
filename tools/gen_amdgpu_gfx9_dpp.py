@@ -21,6 +21,7 @@ import sys
 SEL = ['BYTE_0', 'BYTE_1', 'BYTE_2', 'BYTE_3', 'WORD_0', 'WORD_1', 'DWORD']
 UNUSED = ['UNUSED_PAD', 'UNUSED_SEXT', 'UNUSED_PRESERVE']
 SKIP = re.compile(r'\b(V64F?_i0|i9_vp|i17_vp|i17_lo7|i0_vg|litv|VN32_i0)\b')
+SKIP_DPP = re.compile(r'\b(i9_vp|i17_lo7|i0_vg|litv|VN32_i0)\b')   # DPP also takes a 64-bit src0 or result
 
 
 def groups(lines):
@@ -63,8 +64,9 @@ def main():
       ' sw_s0abs = (21,21) sw_s0 = (23,23) sw_s1sel = (24,26) sw_s1sext = (27,27) sw_s1neg = (28,28)'
       ' sw_s1abs = (29,29) sw_s1 = (31,31);')
     w('define token dpp(32) dp_src0 = (0,7) dp_ctrl = (8,16) dp_bound = (19,19) dp_s0neg = (20,20) dp_s0abs = (21,21)'
-      ' dp_s1neg = (22,22) dp_s1abs = (23,23) dp_bank = (24,27) dp_row = (28,31);')
+      ' dp_s1neg = (22,22) dp_s1abs = (23,23) dp_bank = (24,27) dp_row = (28,31) dp_src0p = (0,7);')
     w('attach variables [ sw_src0 dp_src0 ] [ %s ];' % ' '.join('v%d' % i for i in range(256)))
+    w('attach variables [ dp_src0p ] [ %s _ ];' % ' '.join('v%d_%d' % (i, i + 1) for i in range(255)))
     w('attach variables [ sw_src0s ] [ %s ];' % ' '.join(s4 + ['_'] * (256 - len(s4))))
     if 'define pcodeop dpp_mov;' not in text:
         w('define pcodeop dpp_mov;')
@@ -115,6 +117,16 @@ def main():
             disp = '"sext("^i9_vg^")"' if sx else 'i9_vg'
             w('SW1i: %s is i9_vg ; sw_s1sel=%d & sw_s1sext=%d & sw_s1=0 { t:4 = i9_vg; %s export t; }' % (
                 disp, sel, sx, selcode('t', sel, sx)))
+    for neg in (0, 1):
+        for ab in (0, 1):
+            d0 = 'dp_src0p'
+            if ab:
+                d0 = '"|"^%s^"|"' % d0
+            if neg:
+                d0 = '"-"^%s' % d0
+            mod = (' t = t & 0x7fffffffffffffff;' if ab else '') + (' t = t ^ 0x8000000000000000;' if neg else '')
+            w('DP064: %s is dp_src0p & dp_ctrl & dp_s0neg=%d & dp_s0abs=%d { c:2 = dp_ctrl; t:8 = dpp_mov(dp_src0p, c);%s export t; }'
+              % (d0, neg, ab, mod))
     w('DP0i: dp_src0 is dp_src0 & dp_ctrl { c:2 = dp_ctrl; t:4 = dpp_mov(dp_src0, c); export t; }')
     w('DP1i: i9_vg is i9_vg ; dp_s1neg { export i9_vg; }')
     # SGPR src1 (s1) and the anchored src1 for the root
@@ -186,8 +198,9 @@ def clones(text):
     body = []
     for c in groups(text.split('\n')):
         m = re.match(r':(\S+) (.*?) is (e1=0|e7=0x3e|e7=0x3f) (.*?)\{(.*)\}\s*$', c, re.S)
-        if not m or SKIP.search(c) or 'V32_i0' not in c:
+        if not m or SKIP_DPP.search(c) or not re.search(r'\b(V32_i0|V64F?_i0)\b', c):
             continue
+        sdwa_ok = not SKIP.search(c)
         mn, disp, enc, pat, sem = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
         fo = re.search(r'\b(vop1op|vop2op|vopcop)=(\d+)', pat)
         if not fo:
@@ -199,7 +212,7 @@ def clones(text):
         if not re.search(r'_f(16|32|64)', base) and base != 'v_cndmask_b32':
             hsfx = 'i'     # integer: no neg/abs
         h1 = 'i' if base.startswith('v_ldexp') else hsfx    # ldexp's exponent is an integer
-        fields = [x for x in ('i17_vg', 'i9_vg') if re.search(r'\b%s\b' % x, pat)]
+        fields = [x for x in ('i17_vg', 'i17_vp', 'i9_vg') if re.search(r'\b%s\b' % x, pat)]
         word0 = '%s & %s=%s & %s & i0_v=0' % (enc, fo.group(1), fo.group(2), ' & '.join(fields) if fields else 'i0_x')
         has1 = 'i9_vg' in disp
         # SDWA
@@ -219,16 +232,18 @@ def clones(text):
             extra = ' & SWD'
         if has1:
             extra += ' & SW1' + h1
-        body.append(':%s_sdwa %s%s is (%s & i0_x=249 ; %s)%s { %s }' % (base, d, suffix, word0, w1, extra, sm.strip()))
+        if sdwa_ok:
+            body.append(':%s_sdwa %s%s is (%s & i0_x=249 ; %s)%s { %s }' % (base, d, suffix, word0, w1, extra, sm.strip()))
         if vopc:
             continue
         # DPP
-        d = disp.replace('V32_i0', 'DP0' + hsfx).replace('i9_vg', 'DP1' + h1)
-        sm = sem.replace('V32_i0', 'DP0' + hsfx)
+        p0 = 'DP064' if re.search(r'\bV64F?_i0\b', c) else 'DP0' + hsfx
+        d = re.sub(r'\b(V32_i0|V64F?_i0)\b', p0, disp).replace('i9_vg', 'DP1' + h1)
+        sm = re.sub(r'\b(V32_i0|V64F?_i0)\b', p0, sem)
         sm = re.sub(r'\bi9_vg\b', 'DP1' + h1, sm)
         extra = (' & DP1' + h1) if has1 else ''
-        body.append(':%s_dpp %s^DPC^" row_mask:"^dp_row^" bank_mask:"^dp_bank^DPB is (%s & i0_x=250 ; DP0%s & DPC & dp_row & dp_bank & DPB)%s { %s }'
-                    % (base, d, word0, hsfx, extra, sm.strip()))
+        body.append(':%s_dpp %s^DPC^" row_mask:"^dp_row^" bank_mask:"^dp_bank^DPB is (%s & i0_x=250 ; %s & DPC & dp_row & dp_bank & DPB)%s { %s }'
+                    % (base, d, word0, p0, extra, sm.strip()))
     return body
 
 

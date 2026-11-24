@@ -244,6 +244,8 @@ Three tiers:
 | an int local prints as unsigned long on x86-64 though every value is a zero-extended 32-bit result | [`regnarrow`](#regnarrow----on--off-default-on) |
 | a long long parameter on i386 or 32-bit ARM prints as two int parameters | [`pairparam`](#pairparam----on--off-default-on) |
 | a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters | [`pairparam`](#pairparam----on--off-default-on) |
+| a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3 | [`armpairparam`](#armpairparam----on--off-default-off) |
+| a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters | [`armpairparam`](#armpairparam----on--off-default-off) |
 | a signed char loaded with ldrsb is declared int | [`regsigned`](#regsigned----on--off-default-off) |
 | a short counter prints as int with (int)(short) casts at every use | [`regsigned`](#regsigned----on--off-default-off) |
 | an int local prints as long on x86-64 though every value is a movsxd | [`regsigned`](#regsigned----on--off-default-off) |
@@ -1824,6 +1826,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`
+
+### `armpairparam` -- on | off, default `off`
+
+- **Symptoms:** a long long parameter on 32-bit ARM prints as two int parameters in r0 and r1 or r2 and r3; a 64-bit compare on 32-bit ARM prints as an SBORROW4 or CONCAT44 chain over two register parameters.
+- **What it does:** Treat an even-aligned argument register pair (r0:r1, r2:r3 on 32-bit ARM) as one 8-byte parameter slot of an unprototyped function, so pairparam can join a long long passed in registers.
+- **When to flip:** Off by default: it changes the recovered prototype of every unprototyped 32-bit ARM function whose register pair a borrow, carry or two-word equality links (pairparam must be on). Turn it on for ARM32 firmware or libraries with 64-bit arithmetic where a long long parameter prints as two int parameters and its compare as an SBORROW4 or CONCAT44 chain. The pairing follows the input model's general register entries in order: the first word sits at an even position among them, as the AAPCS join align rule places a 64-bit value.
+- **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
+- **Example:** `option armpairparam on`
 
 ### `regsigned` -- on | off, default `off`
 

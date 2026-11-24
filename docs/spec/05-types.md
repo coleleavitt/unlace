@@ -3961,7 +3961,7 @@ change it, leaves 4-byte writes that a joined parameter could only print as
 partial stores into it), the prototype model accepts the two words as one
 parameter (`possible_input_param` on the joined
 storage: a stack slot, not two separate argument registers such as ARM's r0
-and r1, which only a declared prototype can join), and that word appears with coefficient +-1 in the same
+and r1, which only a declared prototype or option `armpairparam` (chapter 4) can join), and that word appears with coefficient +-1 in the same
 linear sum as `c` among the values `c` reaches (or in the difference of a
 compare's operands). Propagating the low word's borrow or carry into the high
 word is what makes the two words one value. The rule also fires on an INT_XOR

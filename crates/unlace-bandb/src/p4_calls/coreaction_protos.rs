@@ -2344,6 +2344,19 @@ impl Action for ActionInputPrototype {
                         active.get_trial_mut(slot).mark_active(); // has descendants
                     }
                     triallist.push(vn);
+                } else if crate::kuna_armpairparam::joined_pair(data, &addr, size) {
+                    // (kuna `armpairparam`) One trial per register of the pair,
+                    // both mapped to the whole; `update_input_types` keeps the
+                    // first used one.
+                    let half = size / 2;
+                    for word in [addr.clone(), &addr + half as i64] {
+                        let slot = active.get_num_trials();
+                        active.register_trial(&word, half);
+                        if !no_descend {
+                            active.get_trial_mut(slot).mark_active();
+                        }
+                        triallist.push(vn);
+                    }
                 }
             }
             crate::kuna_armfloatargs::mark_own_reads(&mut active, data);
@@ -2431,7 +2444,8 @@ fn update_input_types(
             .get(vn)
             .map(|v| v.is_persist())
             .unwrap_or(false);
-        let addr = active.get_trial(i).get_address().clone();
+        let addr =
+            crate::kuna_armpairparam::param_addr(data, vn, active.get_trial(i).get_address());
         let ty = crate::kuna_armfloatreturn::unused_vfp_type(data, active, triallist, i)
             .or_else(|| data.high_get_type(vn))
             .unwrap_or_else(|| {
@@ -2510,7 +2524,8 @@ fn update_input_no_types(
         if data.vbank().get(vn).map(|v| v.is_mark()).unwrap_or(true) {
             continue;
         }
-        let addr = active.get_trial(i).get_address().clone();
+        let addr =
+            crate::kuna_armpairparam::param_addr(data, vn, active.get_trial(i).get_address());
         let sz = data.vbank().get(vn).map(|v| v.get_size()).unwrap_or(1);
         let ty = Rc::new(crate::dtype::Datatype::new(
             sz,

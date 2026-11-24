@@ -766,6 +766,9 @@ impl RuleDoubleInputPair {
 /// that spills into an argument slot writes one half, which a joined parameter
 /// can only print as a partial store), and the prototype model accepts the two
 /// words as one parameter (a stack slot; not two separate argument registers).
+/// With option `armpairparam` an aligned argument register pair is accepted
+/// as well, written or not: a later write of a register is a new value, not a
+/// store into the parameter.
 fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
     let v = data.vbank().get(lo)?;
     if !v.is_input() || v.is_type_lock() || v.is_constant() {
@@ -786,8 +789,10 @@ fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
         .vbank()
         .iter_loc_addr_range(&base, &end)
         .any(|id| data.vbank().get(id).is_some_and(|v| v.is_written()));
-    (!h.is_type_lock() && !written && data.get_func_proto().possible_input_param(&base, 2 * size))
-        .then_some(hi)
+    let pair = crate::kuna_armpairparam::joined_pair(data, &base, 2 * size);
+    (!h.is_type_lock()
+        && (pair || (!written && data.get_func_proto().possible_input_param(&base, 2 * size))))
+    .then_some(hi)
 }
 
 /// The input word directly above `lo` in its space, if `lo` is an input.

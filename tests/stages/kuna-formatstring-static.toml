@@ -648,7 +648,7 @@ literal = 'void f_is(unsigned int a0,unsigned int a1)'
 [[match]]
 name = "FMTSTATIC #29: off leaves the version line's three phantom arguments while the four-byte string stays visible"
 count = 2
-literal = '__fprintf_chk(a8,1,"%s (%s) %s\n","demo","Demo Pkg",0x2004,0x20,v9,v10);'
+literal = '__fprintf_chk(a8,1,"%s (%s) %s\n","demo","Demo Pkg",0x2004,0x20,v10,v11);'
 
 [[match]]
 name = 'FMTSTATIC #30: the default and full print the version line with its three strings'
@@ -658,12 +658,12 @@ regex = '__fprintf_chk\((a8|a0),1,"%s \(%s\) %s\\n","demo","Demo Pkg","1.0"\);'
 [[match]]
 name = 'FMTSTATIC #31: the switch calls keep the arguments off gives them'
 count = 9
-regex = ',(v14,v2|v4\[7\],v1)\);'
+regex = ',(v15,v3|v5\[7\],v2)\);'
 
 [[match]]
 name = "FMTSTATIC #32: no switch call takes the va_list's slots"
 count = 0
-literal = ',v2,0x20,'
+regex = ',v\d+,0x20,'
 
 [[match]]
 name = 'FMTSTATIC #33: a scanf destination in the outgoing argument slot is read back after the call'

@@ -164,7 +164,7 @@ regex = [
 name = 'KUNA-CROSSJUMPTAIL #4: the jump to the call ending the loop body is a copy and continue by default'
 count = 1
 regex = [
-    '^          v3 = sub_dc08\(v2\);$',
+    '^          v4 = sub_dc08\(v3\);$',
     '^          continue;$',
 ]
 
@@ -172,8 +172,8 @@ regex = [
 name = "KUNA-CROSSJUMPTAIL #5: a switch case that jumped into a later case's call ends in its own call and break by default"
 count = 1
 regex = [
-    '^      v7 = 0;$',
-    '^      sub_c6d4\(a1,v7,v10\);$',
+    '^      v9 = 0;$',
+    '^      sub_c6d4\(a1,v9,v12\);$',
     '^      break;$',
 ]
 

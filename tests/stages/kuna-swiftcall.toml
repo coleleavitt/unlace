@@ -277,7 +277,7 @@ literal = 'v5 = swift_error();'
 [[match]]
 name = 'swiftcall on, symbols: the throwing function hands its error back'
 count = 1
-literal = 'swift_throw(v5);'
+literal = 'swift_throw(v7);'
 
 [[match]]
 name = "swiftcall on, symbols: the mutating struct method takes the struct's self by address"

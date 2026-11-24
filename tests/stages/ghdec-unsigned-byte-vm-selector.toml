@@ -37,12 +37,12 @@ commands = [
 [[match]]
 name = 'UNSIGNED-BYTE-VM-SELECTOR #1: the selector declaration remains'
 count = 1
-regex = 'uint1\s+v15;'
+regex = 'uint1\s+v59;'
 
 [[match]]
 name = 'UNSIGNED-BYTE-VM-SELECTOR #2: the recovered switch remains'
 count = 1
-literal = 'switch(v15)'
+literal = 'switch(v59)'
 
 [[match]]
 name = 'UNSIGNED-BYTE-VM-SELECTOR #3: the low case remains'

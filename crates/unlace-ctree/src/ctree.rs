@@ -221,6 +221,17 @@ pub struct ListTry {
     pub keep_open: bool,
 }
 
+/// The choices the printer makes for one arm of a switch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ArmRecord {
+    /// The arm ends in a `break` on its own account: its case exits the switch and it is not the
+    /// last arm.
+    pub exit_break: bool,
+    /// The arm is a bare `goto` with this goto type (`case_gototype`); `None` for a guard or a
+    /// block arm.
+    pub goto: Option<uint4>,
+}
+
 /// The C syntax tree of one function.
 #[derive(Clone, Debug, Default)]
 pub struct CTree {
@@ -233,7 +244,7 @@ pub struct CTree {
     list_tries: BTreeMap<StmtId, ListTry>,
     java_lists: BTreeSet<StmtId>,
     rest_tries: BTreeMap<StmtId, Vec<Option<ListTry>>>,
-    switch_exits: BTreeMap<StmtId, Vec<bool>>,
+    switch_arms: BTreeMap<StmtId, Vec<ArmRecord>>,
 }
 
 impl CTree {
@@ -296,15 +307,14 @@ impl CTree {
         self.rest_tries.insert(id, rests);
     }
 
-    /// Record, for the switch `id`, whether each printed arm ends in a `break` on its own
-    /// account: its case exits the switch and it is not the last arm.
-    pub fn set_switch_exits(&mut self, id: StmtId, exits: Vec<bool>) {
-        self.switch_exits.insert(id, exits);
+    /// Record, for the switch `id`, the choices the printer makes for each arm (`ArmRecord`).
+    pub fn set_switch_arms(&mut self, id: StmtId, arms: Vec<ArmRecord>) {
+        self.switch_arms.insert(id, arms);
     }
 
-    /// The recorded exit flag of arm `index` of the switch `id`, when one was recorded.
-    pub fn switch_exit(&self, id: StmtId, index: usize) -> Option<bool> {
-        self.switch_exits.get(&id)?.get(index).copied()
+    /// The recorded choices of arm `index` of the switch `id`, when a record was made.
+    pub fn switch_arm(&self, id: StmtId, index: usize) -> Option<ArmRecord> {
+        self.switch_arms.get(&id)?.get(index).copied()
     }
 
     /// The `try` form recorded for the rest of the list sequence `id` from `skip` on. The

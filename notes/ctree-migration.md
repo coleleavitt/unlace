@@ -103,14 +103,22 @@ the emitter the block printer called for the same block, and should print the sa
    `list_java_try` / `list_has_java_try` (the DEX `try` matcher on a rest; it reads
    `java_catches`, printer state, so it needs its own check).
 
-10. ctree/switchexit (edit-only, 2026-11-24): the `break` a switch arm prints on its own account
-   (`isexit` and not the last arm) is recorded on the `Switch` node when the tree is rewritten
-   (`ctree_switch_exits`, `CTree::set_switch_exits`); `emit_block_switch_c` reads it through
-   `tree_switch_exit`. The test reads only the block's case and the arm index. Not moved, and why:
-   the last arm's `break` when the emitter reports a dangling label (`label_dangling()` is emitter
-   output state); the comment block placed before a merged switch's first arm
-   (`emit_comment_block_tree` reads the comment sorter); the goto arm and the guard arm (their
-   statements are printed by the goto and block emitters; the arm itself is not a tree node yet).
+10. ctree/switcharms (edit-only, 2026-11-24): each arm of a `Switch` node gets an `ArmRecord` when the
+   tree is rewritten (`ctree_switch_arms`, `CTree::set_switch_arms`), and `emit_block_switch_c`
+   reads it through `tree_switch_arm`. Two choices move: the `break` an arm prints on its own
+   account (`isexit` and not the last arm; step (1), #1149), and the goto type of a bare-goto arm
+   (`case_gototype` when the arm is not a guard and its case has a goto type; step (2), goto
+   placement). Both tests read only the block's case, the arm index and the goto plan, which is
+   fixed before the tree is rewritten. Not moved, and why:
+   - the last arm's `break` when the emitter reports a dangling label (`label_dangling()` is
+     emitter output state);
+   - the comment block placed before a merged switch's first arm (`emit_comment_block_tree`
+     reads the comment sorter);
+   - the guard arm's body and the goto statement itself (the printer's goto and block emitters
+     write them; the arm is not a tree node yet);
+   - label placement (`emit_any_label_statement`): called from about a dozen block emitters in
+     the C, Go and Rust printers, and gated by the printer's mode (`ONLY_BRANCH`), so a label
+     node would have to reproduce each call site's placement. Not attempted.
 
 What still matches while printing: the DEX `try` matcher on a rest of a list (`list_has_java_try`
 for a slice), and any block the tree holds no statement for (past the depth bound) runs every

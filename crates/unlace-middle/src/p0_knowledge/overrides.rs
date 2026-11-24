@@ -249,6 +249,10 @@ pub struct Override {
     /// (unlace `spsolve`) Call sites the stack-pointer solve found not to return,
     /// replayed on the restart it asks for.
     no_return_calls: BTreeSet<Address>,
+    /// (unlace `stkpnt`) User-pinned stack-pointer deltas: the delta the stack
+    /// pointer has on entry to the instruction at the address. Recorded only; no
+    /// pass reads them yet.
+    stack_pins: BTreeMap<Address, int4>,
     /// (unlace `formatstring`) Call points whose prototype override is a resolved
     /// format string, installed with an open tail it sheds after P4.
     format_calls: BTreeSet<Address>,
@@ -282,6 +286,7 @@ impl Override {
         self.flowoverride.clear();
         self.msvc_cookie_calls.clear();
         self.no_return_calls.clear();
+        self.stack_pins.clear();
         self.format_calls.clear();
         self.persist_calls_off = false;
         self.outputtypelock.clear();
@@ -424,6 +429,27 @@ impl Override {
     /// when it was already recorded.
     pub fn insert_no_return_call(&mut self, addr: Address) -> bool {
         self.no_return_calls.insert(addr)
+    }
+
+    /// (unlace `stkpnt`) Pin the stack-pointer delta at `addr` to `delta`, replacing
+    /// an earlier pin there; returns the pin it replaced.
+    pub fn insert_stack_pin(&mut self, addr: Address, delta: int4) -> Option<int4> {
+        self.stack_pins.insert(addr, delta)
+    }
+
+    /// (unlace `stkpnt`) The stack-pointer delta pinned at `addr`, if the user pinned one.
+    pub fn stack_pin(&self, addr: &Address) -> Option<int4> {
+        self.stack_pins.get(addr).copied()
+    }
+
+    /// (unlace `stkpnt`) Remove the pin at `addr`; returns the delta it held.
+    pub fn remove_stack_pin(&mut self, addr: &Address) -> Option<int4> {
+        self.stack_pins.remove(addr)
+    }
+
+    /// (unlace `stkpnt`) Every stack-pointer pin, in address order.
+    pub fn stack_pins(&self) -> impl Iterator<Item = (&Address, &int4)> {
+        self.stack_pins.iter()
     }
 
     /// Has the late `/GS` recognizer seeded this exact call site?

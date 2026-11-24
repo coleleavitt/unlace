@@ -426,3 +426,39 @@ fn override_decode_bad_flow_errors() {
         .unwrap_err();
     assert!(err.to_string().contains("Bad flowoverride tag"));
 }
+
+// ---------------------------------------------------------------------------
+// User-pinned stack-pointer deltas (unlace `stkpnt`)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn stack_pin_insert_query_replace_and_remove() {
+    let m = manager();
+    let mut ov = Override::new();
+    assert_eq!(ov.stack_pin(&ram(&m, 0x40)), None);
+
+    assert_eq!(ov.insert_stack_pin(ram(&m, 0x40), -8), None);
+    ov.insert_stack_pin(ram(&m, 0x80), 4);
+    assert_eq!(ov.stack_pin(&ram(&m, 0x40)), Some(-8));
+    assert_eq!(ov.stack_pin(&ram(&m, 0x99)), None);
+
+    // A second pin at the same address replaces the first and returns it.
+    assert_eq!(ov.insert_stack_pin(ram(&m, 0x40), -12), Some(-8));
+    assert_eq!(ov.stack_pin(&ram(&m, 0x40)), Some(-12));
+
+    let listed: Vec<(u64, i32)> = ov.stack_pins().map(|(a, d)| (a.get_offset(), *d)).collect();
+    assert_eq!(listed, vec![(0x40, -12), (0x80, 4)]);
+
+    assert_eq!(ov.remove_stack_pin(&ram(&m, 0x40)), Some(-12));
+    assert_eq!(ov.remove_stack_pin(&ram(&m, 0x40)), None);
+    assert_eq!(ov.stack_pin(&ram(&m, 0x40)), None);
+}
+
+#[test]
+fn clear_drops_stack_pins() {
+    let m = manager();
+    let mut ov = Override::new();
+    ov.insert_stack_pin(ram(&m, 0x40), -8);
+    ov.clear();
+    assert_eq!(ov.stack_pins().count(), 0);
+}

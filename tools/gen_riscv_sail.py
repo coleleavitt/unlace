@@ -1161,6 +1161,8 @@ class Gen:
                 layout.append(('reg', pos - w, pos - 1, p[2][0][1]))
             elif p[0] == 'call' and p[1] in self.m.maps:
                 rbits = self.m.maps[p[1]][0][1]
+                if rbits[0] != 'bits':
+                    raise Unsupported('encoding mapping %s' % p[1])
                 w = rbits[2]
                 layout.append(('map', pos - w, pos - 1, (p[1], p[2][0][1])))
             elif p[0] == 'id':

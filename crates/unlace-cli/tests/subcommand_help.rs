@@ -149,6 +149,7 @@ fn every_json_surface_names_its_root_in_help() {
     let stated: &[(&str, &str)] = &[
         ("fid", "{binary,"),
         ("rust-signatures", "{status,"),
+        ("sbom", "{bomFormat,"),
         ("decompile", "{binary,"),
         ("decompile-all", "{binary,"),
         ("functions", "{binary,"),

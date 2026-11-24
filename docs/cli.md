@@ -4099,6 +4099,78 @@ unparseable binary, an unknown `--section`, or an `--extract` directory that
 cannot be written is exit `1` with the reason on stderr; a malformed command
 line is exit `2` with the usage block.
 
+## `unlace sbom` — a software bill of materials
+
+```bash
+unlace sbom ./app                                  # one line per component
+unlace sbom ./app --json                           # CycloneDX 1.5 JSON
+unlace sbom ./app --json --format spdx             # SPDX 2.3 JSON
+unlace sbom ./app.dylib --slice arm64 -o app.cdx.json
+```
+
+Lists the components a binary records about itself, read straight off the
+image (no load into the engine, no processor spec):
+
+| `kind` | found from |
+|---|---|
+| `shared-library` | ELF `DT_NEEDED` (with `unlace:requires`, the highest `.gnu.version_r` version needed, e.g. `GLIBC_2.34`); Mach-O `LC_LOAD_DYLIB`, `LC_LOAD_WEAK_DYLIB`, `LC_REEXPORT_DYLIB`, `LC_LAZY_LOAD_DYLIB`, `LC_LOAD_UPWARD_DYLIB` (current version as the version, compatibility version as a property); PE imports |
+| `go-module` | the Go build info's `dep` lines (go1.18+ inline form), a `=>` replacement taking the dependency's place (`unlace:go-replaces` keeps the original), `unlace:go-sum` the module hash |
+| `rust-crate` | cargo-auditable's `.dep-v0` section, and the registry source paths panics and debug info carry (`.../registry/src/<index>/<crate>-<version>/...`) |
+| `embedded` | version banners of libraries linked in: OpenSSL, LibreSSL, BoringSSL, Mbed TLS, wolfSSL, zlib, libpng, libjpeg-turbo, libcurl, glibc, BusyBox, Lua, expat, OpenSSH, Dropbear, SQLite, PCRE2, liblzma, libxml2 |
+
+The binary itself is the document's subject: its SHA-256, format,
+architecture, role (`application`, or `library` for a shared object), entry,
+detected compiler, build identity (ELF build-id, Mach-O UUID, install name and
+source version, PE CodeView GUID/age/PDB path, Go build settings), toolchain
+records (ELF `.comment`, Go toolchain version, Mach-O `LC_BUILD_VERSION`
+platform, SDK and tools) and PE version-resource strings (`ProductName`,
+`FileVersion`, ..., plus the fixed file and product versions). Its version is
+the Go main module's or cargo-auditable root package's, else the PE
+`ProductVersion` or `FileVersion`; its purl is the module's.
+
+A component seen by two readers (a crate in both `.dep-v0` and a source path)
+is listed once, with both evidences. Nothing is inferred from function bodies:
+a statically linked library with no banner and no metadata is not listed.
+
+### Output
+
+```
+# fauxware sha256=... format=elf arch=x86_64 role=application compiler=gcc
+# toolchain GCC: (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+# kind	name	version	evidence
+shared-library	libc.so.6	-	DT_NEEDED
+```
+
+`--json` (or `-o FILE`, which writes it to the file) emits a CycloneDX 1.5
+document, an object:
+
+```json
+{"bomFormat": "CycloneDX", "specVersion": "1.5", "serialNumber": "urn:uuid:...", "version": 1,
+ "metadata": {"timestamp", "tools": {"components": [{"type","name":"unlace","version"}]},
+              "component": {"type","bom-ref":"binary","name","version"?,"purl"?,
+                            "hashes": [{"alg":"SHA-256","content"}], "properties": [{"name","value"}]}},
+ "components": [{"type":"library","bom-ref","name","version"?,"purl"?,"scope":"required",
+                 "properties": [{"name":"unlace:kind"},{"name":"unlace:evidence"},...]}],
+ "dependencies": [{"ref":"binary","dependsOn":[bom-ref...]}]}
+```
+
+`--format spdx` emits SPDX 2.3: `{spdxVersion,dataLicense,SPDXID,name,documentNamespace,
+creationInfo,packages,relationships}`, the binary as `SPDXRef-Binary` (with its
+SHA256 checksum), each component a package with a `purl` external reference,
+related to the binary by `DEPENDS_ON` (a shared library) or `CONTAINS`
+(linked in). Properties go to each package's `comment` as `name=value` lines.
+
+Purls: `pkg:cargo/<name>@<version>`, `pkg:golang/<module path>@<version>`,
+`pkg:generic/<name>@<version>` for a banner; a shared library has none. The
+serial number is derived from the file's SHA-256, so one binary always gets the
+same one. The timestamp is the current time, or `SOURCE_DATE_EPOCH` when set.
+A fat Mach-O is read at the `--slice` it selects (`--slice`, below); the
+document hashes the whole file and records the slice's own hash as
+`unlace:image-sha256`.
+
+An unreadable or unparseable binary is exit `1` with the reason on stderr; a
+malformed command line (an unknown `--format`) is exit `2` with the usage block.
+
 ## `unlace unpack` — statically unpack a UPX-, NEOLite- or PKLITE-packed executable
 
 ```bash

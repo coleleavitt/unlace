@@ -78,3 +78,65 @@ fn the_api_types_are_what_the_docs_promise() {
     assert_eq!(Target::X86_64.id(), "x86:LE:64:default");
     assert_eq!(Language::Rust.flag_value(), "rust");
 }
+
+#[test]
+fn raw_input_lowers_to_raw_image_flags() {
+    let decompiler = Decompiler::from_raw(vec![0xc3; 16], Target::X86_64, 0x1000, &[], &[0x1000])
+        .unwrap()
+        .with_entry(0x1008)
+        .with_noreturn(0x1004);
+    let argv = decompiler.request.argv();
+    assert!(argv.iter().any(|a| a == "--raw-image"));
+    assert_eq!(flag_values(&argv, "--base"), ["0x1000"]);
+    assert_eq!(flag_values(&argv, "--entry"), ["0x1000", "0x1008"]);
+    assert_eq!(flag_values(&argv, "--target"), ["x86:LE:64:default"]);
+    assert_eq!(decompiler.request.noreturn, [0x1004]);
+}
+
+#[test]
+fn a_container_entry_is_a_declared_function() {
+    let decompiler = Decompiler::from_bytes(b"\x7fELF")
+        .unwrap()
+        .with_entry(0x401000);
+    let argv = decompiler.request.argv();
+    assert_eq!(flag_values(&argv, "--define-function"), ["0x401000"]);
+    assert!(!argv.iter().any(|a| a == "--entry"));
+}
+
+#[test]
+fn segments_are_carved_out_of_the_bytes_and_checked() {
+    let bytes: Vec<u8> = (0..0x40).collect();
+    let segments = [
+        Segment::new(0x1020, 0x10, Perms::R),
+        Segment::new(0x1000, 0x10, Perms::RX),
+    ];
+    let decompiler =
+        Decompiler::from_raw(&bytes, Target::X86_64, 0x1000, &segments, &[0x1000]).unwrap();
+    let raw = decompiler.request.raw.as_ref().unwrap();
+    assert_eq!(raw.base, 0x1000);
+    let runs = raw.segments.as_ref().unwrap();
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].0, 0x1000);
+    assert_eq!(runs[0].1, bytes[..0x10]);
+    assert_eq!(runs[1].0, 0x1020);
+    assert_eq!(runs[1].1, bytes[0x20..0x30]);
+    assert_ne!(runs[0].2, runs[1].2, "code and read-only data differ");
+
+    let past_end = [Segment::new(0x1030, 0x20, Perms::RX)];
+    let below_base = [Segment::new(0x800, 0x10, Perms::RX)];
+    for bad in [&past_end[..], &below_base[..]] {
+        assert!(matches!(
+            Decompiler::from_raw(&bytes, Target::X86_64, 0x1000, bad, &[]),
+            Err(Error::Segments(_))
+        ));
+    }
+    let overlapping = vec![(0x10, vec![1; 8], Perms::RX), (0x14, vec![1; 8], Perms::RX)];
+    assert!(matches!(
+        Decompiler::from_memory(Target::X86_64, overlapping, &[]),
+        Err(Error::Segments(_))
+    ));
+    assert!(matches!(
+        Decompiler::from_memory(Target::X86_64, Vec::new(), &[]),
+        Err(Error::Segments(_))
+    ));
+}

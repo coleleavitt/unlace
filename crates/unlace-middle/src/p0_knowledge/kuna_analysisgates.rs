@@ -378,6 +378,15 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
+    /// (kuna) `dwarfdecls`: type an import's calls by its DWARF declaration.
+    Dwarfdecls,
+    "dwarfdecls",
+    "DWARF declarations of imports",
+    unset: false,
+    shipped: false
+);
+
+crate::kuna_flag!(
     /// (kuna) Gate the address-table pass (`addrtable`); default **off** (matches
     /// Ghidra `AddressTableAnalyzer.setDefaultEnablement(false)`).
     Addrtable,

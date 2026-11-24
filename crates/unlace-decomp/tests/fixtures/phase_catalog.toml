@@ -251,6 +251,25 @@ tier = "transform"
 symptoms = ["'\\0' <= c where the source tests c >= 0", "c + '\\x01' where the source adds 1", "a non-printable character literal in a comparison"]
 
 [[option]]
+option = "partmacro"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "part-macro"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-partmacro"
+summary = "Print a part of an integer value as the part macro that names it: LOBYTE(x), BYTE1(x) to BYTE7(x), LOWORD(x), HIWORD(x), WORD1(x) to WORD3(x), LODWORD(x) and HIDWORD(x). A truncation of a 2-, 4- or 8-byte integer to 1, 2 or 4 bytes at an aligned byte offset, and the truncation of a right shift by a whole number of bytes, print as the macro: the truncation of x >> 8 to one byte prints BYTE1(x). A nested part folds into the most direct one, so LOBYTE(HIWORD(x)) prints BYTE2(x). A part that reads past the value after folding, such as a byte of an arithmetic shift past the top, keeps its cast. Printing only; C output only, and the recompile prelude defines the macros when the option is on."
+use_when = "Turn on to read byte and half-word unpacking the way IDA prints it (LOBYTE, BYTE1, HIWORD, LODWORD). Leave off to keep the plain casts and shifts, which every existing output and expected text uses."
+example = "option partmacro on"
+source_decompiler = "unlace"
+inspiration = "IDA's part macros (LOBYTE, BYTE1 to BYTE7, LOWORD, HIWORD, LODWORD, HIDWORD) and their direct-part folding; notes/orig-unlace/output-cprinter-a.md row 2 (PR #1348)"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = ["(uint1)(x >> 8) where the source reads BYTE1(x)", "a 16-bit part of a 32-bit value printed as a cast of a shift", "LOBYTE(HIWORD(x)) where the source reads BYTE2(x)"]
+
+[[option]]
 option = "constright"
 values = ["on", "off"]
 default = "off"
@@ -325,6 +344,25 @@ inspiration = "Hex-Rays 9.5 idiom recognisers: bswap slot filling and (x>>n)|(x<
 change_kind = "presentation-default"
 tier = "transform"
 symptoms = ["a byte swap prints as four masked shifts ORed together", "a rotate prints as a pair of opposite shifts ORed together", "bswap or rev instructions decompile to shift and mask soup", "hash or crc code full of paired shifts"]
+
+[[option]]
+option = "bitfieldarith"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-bitfieldarith"
+summary = "Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks."
+use_when = "Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic."
+example = "option bitfieldarith on"
+source_decompiler = "unlace"
+inspiration = "archived unlace idiom_recognition try_bitfield_read / try_bitfield_write (issue 1253)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = ["a register field is extracted with a shift and an AND", "a flag field is set with a clear-mask OR and a shifted insert", "packed descriptor or hardware register fields print as shift and mask arithmetic"]
 
 [[option]]
 option = "satmul"
@@ -3082,6 +3120,25 @@ tier = "transform"
 symptoms = ["wide switch where every case assigns a constant and breaks to one shared return", "switch (x) { case A: v = K; break; ... } return v; instead of per-case return K", "17-plus-case const dispatch keeps a merged return variable"]
 
 [[option]]
+option = "irreduciblesplit"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "original-unlace-irreducible-split"
+summary = "Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has."
+use_when = "A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before."
+example = "option irreduciblesplit on"
+source_decompiler = "ghidra"
+inspiration = "original unlace origin/master unlace-struct irreducible.rs + node_split.rs; Ghidra ActionNodeSplit"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = ["goto into the middle of a loop that has two entrances", "a loop with two entry points rendered with goto labels", "irreducible region left as goto-shaped control flow"]
+
+[[option]]
 option = "foldcallret"
 values = ["on", "off"]
 default = "on"
@@ -3566,7 +3623,7 @@ subphase = "naming-policy"
 strength = "HARD"
 rewind = "P6"
 issue = "contextnames"
-summary = "Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), and the local the function returns `result`. `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), and `result` is the weakest evidence; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither."
+summary = "Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), the local the function returns `result`, the local a counter is compared with (`len`), and a pointer a load or store indexes by a counter (`buf`). `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), `result` is weaker than a loop counter, a loop bound and an array base are weaker than `result`, and a local's type is the weakest evidence of all; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither."
 use_when = "Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`."
 example = "option contextnames on"
 source_decompiler = "unlace"
@@ -6837,7 +6894,7 @@ strength = "HARD"
 rewind = "P1"
 issue = "unlace-1164"
 summary = "Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without this option, a PEIM and a standalone MM module keep the names the index gives them; every other entry keeps `_ModuleEntryPoint`. Needs `uefi` on."
-use_when = "Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. The walk still seeds a PEI or DXE core's parameters from the phase its file type gives, so the second parameter of DxeMain or PeiCore may print with that phase's table type."
+use_when = "Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. With the option on, the walk seeds a core's parameters from its file type: DxeMain's HobStart and PeiCore's SecCoreData and PpList are `VOID *`, not the phase's table types. Other modules keep the phase's table types."
 example = "option uefientry on"
 source_decompiler = "ida"
 inspiration = "IDA 9.5 uefi_fv loader entry prototypes (PeimEntryPoint, DxeMain, PeiCore, StandaloneMmEntryPoint, ModuleEntryPoint) and its COMBINED_* labels"

@@ -124,7 +124,7 @@ fn read_large(img: &MachoImage, m: u64, architecture: Architecture) -> Option<Me
     let name_ptr = img.read_ptr(m)?;
     let types_ptr = img.read_ptr(m.wrapping_add(ps))?;
     let imp = img.read_ptr(m.wrapping_add(2 * ps))?;
-    let selector = img.read_cstr(name_ptr)?;
+    let selector = display_selector(img.read_cstr(name_ptr)?);
     let types = img.read_cstr(types_ptr);
     Some(Method {
         selector,
@@ -151,7 +151,7 @@ fn read_small(img: &MachoImage, m: u64, architecture: Architecture) -> Option<Me
     // name: self-relative to a selref slot; deref the selref to the string VMA.
     let selref_va = rel_to(m, n_rel);
     let sel_ptr = img.read_ptr(selref_va)?;
-    let selector = img.read_cstr(sel_ptr)?;
+    let selector = display_selector(img.read_cstr(sel_ptr)?);
 
     // types: self-relative (field at m+4) to the encoding string.
     let types_va = rel_to(m.wrapping_add(4), t_rel);
@@ -185,7 +185,7 @@ fn read_small_direct(
     let t_rel = img.read_i32(m.wrapping_add(4))?;
     let i_rel = img.read_i32(m.wrapping_add(8))?;
     let sel_ptr = rel_to(base, n_rel);
-    let selector = img.read_cstr(sel_ptr)?;
+    let selector = display_selector(img.read_cstr(sel_ptr)?);
     let types_at = if relative_types {
         rel_to(base, t_rel)
     } else {
@@ -203,6 +203,19 @@ fn read_small_direct(
         types,
         imp: normalize_imp(architecture, imp),
     })
+}
+
+/// The readable form of a method's selector string. A Swift-mangled selector
+/// (`$s` / `_$s`, the spelling a Swift `@objc` member's name takes in an ObjC
+/// method list) is demangled to unlace's name-only form; any other string, or a
+/// mangled name outside the demangler's coverage, is returned unchanged.
+pub fn display_selector(raw: String) -> String {
+    if raw.starts_with("$s") || raw.starts_with("_$s") {
+        if let Some(name) = crate::demangle::swift::demangle_swift_name(&raw) {
+            return name;
+        }
+    }
+    raw
 }
 
 /// Add a signed self-relative `i32` displacement to a base VMA with wrapping
@@ -226,6 +239,13 @@ fn normalize_imp(architecture: Architecture, imp: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn swift_mangled_selector_is_demangled_and_others_pass_through() {
+        assert_eq!(display_selector("_$s4main5helloyyF".into()), "main.hello()");
+        assert_eq!(display_selector("greet:".into()), "greet:");
+        assert_eq!(display_selector("$s".into()), "$s");
+    }
 
     #[test]
     fn x86_64_odd_imp_is_an_address() {

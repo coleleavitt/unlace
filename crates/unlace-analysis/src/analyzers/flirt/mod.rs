@@ -28,6 +28,7 @@
 //! The signature files are named by `UNLACE_FLIRT_SIGS` (`:`-separated files or
 //! directories).
 
+pub mod autotil;
 pub mod flirtpat;
 pub mod flirtsig;
 
@@ -105,11 +106,17 @@ impl AnalysisPass for FlirtPass {
 /// startup signatures and those whose header excludes the file type are left
 /// out. Unreadable or malformed files are skipped.
 pub fn load_sigs(format: object::BinaryFormat) -> Vec<Signature> {
-    use unlace_decomp::loadoptions::{env, scoped};
-    let list = scoped(|o| o.flirt_sigs.clone()).unwrap_or_else(env::flirt_sigs);
-    if list.is_empty() {
-        return Vec::new();
-    }
+    applicable_sig_paths(format)
+        .iter()
+        .filter_map(|p| std::fs::read(p).ok())
+        .filter_map(|d| Signature::parse(&d).ok())
+        .collect()
+}
+
+/// The `.sig` files that apply to a binary of `format`, in load order: the files
+/// `UNLACE_FLIRT_SIGS` (or the load options) names, a directory's `*.sig` files
+/// taken in name order. Decided from each file's header alone.
+pub fn applicable_sig_paths(format: object::BinaryFormat) -> Vec<std::path::PathBuf> {
     let ft = match format {
         object::BinaryFormat::Elf => Some(18),
         object::BinaryFormat::Pe => Some(11),
@@ -117,6 +124,35 @@ pub fn load_sigs(format: object::BinaryFormat) -> Vec<Signature> {
         object::BinaryFormat::MachO => Some(25),
         _ => None,
     };
+    listed_sig_paths()
+        .into_iter()
+        .filter(|p| {
+            let mut head = [0u8; 18];
+            std::fs::File::open(p)
+                .and_then(|mut f| std::io::Read::read_exact(&mut f, &mut head))
+                .is_ok()
+                && applies_to(&head, ft)
+        })
+        .collect()
+}
+
+/// The type libraries the applicable signatures autoload, each with the signature
+/// file that names it (see [`autotil`]), in load order.
+pub fn autoloaded_tils(format: object::BinaryFormat) -> Vec<(std::path::PathBuf, String)> {
+    applicable_sig_paths(format)
+        .into_iter()
+        .flat_map(|sig| {
+            let libraries = autotil::autoloads(&sig);
+            libraries.into_iter().map(move |lib| (sig.clone(), lib))
+        })
+        .collect()
+}
+
+/// The `.sig` paths `UNLACE_FLIRT_SIGS` (or the load options) lists, a directory
+/// replaced by its `*.sig` files in name order.
+fn listed_sig_paths() -> Vec<std::path::PathBuf> {
+    use unlace_decomp::loadoptions::{env, scoped};
+    let list = scoped(|o| o.flirt_sigs.clone()).unwrap_or_else(env::flirt_sigs);
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
     for p in list {
         match std::fs::read_dir(&p) {
@@ -133,11 +169,6 @@ pub fn load_sigs(format: object::BinaryFormat) -> Vec<Signature> {
         }
     }
     paths
-        .iter()
-        .filter_map(|p| std::fs::read(p).ok())
-        .filter(|d| applies_to(d, ft))
-        .filter_map(|d| Signature::parse(&d).ok())
-        .collect()
 }
 
 /// Whether a `.sig` file's header admits a binary of IDA file type `ft`

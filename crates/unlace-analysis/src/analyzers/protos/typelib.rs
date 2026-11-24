@@ -238,6 +238,21 @@ impl AnalysisPass for TypeLibPass {
                 .into_iter()
                 .collect();
         named.sort_unstable();
+        let flirt_tils = if ctx
+            .arch
+            .unlace_options
+            .get::<unlace_decomp::coreoptions::Flirt>()
+            .0
+            && ctx
+                .arch
+                .unlace_options
+                .get::<unlace_decomp::analysisgates::FlirtTil>()
+                .0
+        {
+            crate::flirt::autoloaded_tils(ctx.file.format())
+        } else {
+            Vec::new()
+        };
         let subsystem = match ctx.file.format() {
             object::BinaryFormat::Pe => crate::uefi::pe_subsystem(ctx.bytes),
             _ => None,
@@ -249,6 +264,7 @@ impl AnalysisPass for TypeLibPass {
             named,
             subsystem,
             til_slots: til_slots(ctx.file, ctx.bytes),
+            flirt_tils,
         });
         out
     }

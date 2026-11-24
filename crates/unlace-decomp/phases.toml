@@ -6744,6 +6744,25 @@ inspiration = "IDA FLIRT library function recognition (AU_LIBF rounds, version-1
 change_kind = "analysis-enablement"
 tier = "analysis"
 symptoms = "a stripped static binary lists libc functions as sub_<addr>|unlace cannot use flirt .sig signatures|memcpy and printf in a static binary have no names"
+
+[[settable]]
+option = "flirttil"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "unlace-flirt-autoload-til"
+summary = "Autoload the IDA type library that FLIRT signatures name in the ids and idsnames files beside them: a line <signature> <library> loads <library>.til when <signature>.sig applies (IDA's autoloads lines). The library is read beside the signature, else from UNLACE_TIL_DIR, as one more source of the typelib option: it is read under typelib auto or a file list, not under typelib off, and after the libraries the option chose, so the first library that declares a name still wins. Needs flirt on and UNLACE_FLIRT_SIGS. Inert when no ids file beside an applicable signature names a library."
+use_when = "Off (default). Flip on with flirt on and UNLACE_FLIRT_SIGS pointing at an IDA sig directory whose ids file names type libraries, and with those libraries beside the signatures or in UNLACE_TIL_DIR, when a FLIRT-named library function still shows untyped arguments or raw record offsets."
+example = "UNLACE_FLIRT_SIGS=$IDADIR/sig/pc UNLACE_TIL_DIR=$IDADIR/til unlace functions ./static-stripped --option listing on --option flirt on --option flirttil on"
+source_decompiler = "unlace"
+inspiration = "IDA FLIRT autoload of a type library beside a signature (the ids and idsnames autoloads lines, libida sub_6849A0 and sub_691270)"
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = "a FLIRT-named library function has no prototype although its type library exists|a libc function named through FLIRT prints untyped arguments and raw record offsets|an ids file beside a signature names a type library that never loads"
 [[settable]]
 option = "ruststdsigs"
 values = "off|exact|nearest"

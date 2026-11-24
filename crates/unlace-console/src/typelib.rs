@@ -615,6 +615,46 @@ fn library_sources(
     Ok((sources, None))
 }
 
+/// The type libraries the FLIRT signatures autoload (`TypeLibFacts::flirt_tils`),
+/// each read beside the signature that names it or else from `til_dir`, after the
+/// libraries the option chose. Nothing is read under `typelib off`. A library that
+/// is not found or cannot be read is named in the returned note.
+fn autoload_sources(
+    facts: &TypeLibFacts,
+    typelib: &TypeLib,
+    addr_size: u8,
+    til_dir: Option<&Path>,
+) -> (Vec<Source>, Option<String>) {
+    if matches!(typelib, TypeLib::Off) {
+        return (Vec::new(), None);
+    }
+    let mut sources = Vec::new();
+    let mut said = Vec::new();
+    for (sig, name) in &facts.flirt_tils {
+        let file = format!("{name}.til");
+        let beside = sig.parent().map(|d| d.join(&file)).filter(|p| p.is_file());
+        let found =
+            beside.or_else(|| til_dir.and_then(|d| first_til(d, std::slice::from_ref(&file))));
+        match found {
+            Some(path) => match file_text(&path, facts.target, addr_size) {
+                Ok(text) => {
+                    said.push(format!("autoloaded {}", path.display()));
+                    sources.push(Source {
+                        label: path.display().to_string(),
+                        text: text.into(),
+                    });
+                }
+                Err(e) => said.push(e),
+            },
+            None => said.push(format!(
+                "{file} (autoloaded by {}) not found",
+                sig.display()
+            )),
+        }
+    }
+    (sources, (!said.is_empty()).then(|| said.join("; ")))
+}
+
 /// `true` when `path` opens with the IDA type-library header.
 fn is_til_file(path: &Path) -> bool {
     use std::io::Read;
@@ -672,7 +712,7 @@ pub fn seed(
     let til_dir = std::env::var_os(TIL_DIR_ENV)
         .filter(|d| !d.is_empty())
         .map(PathBuf::from);
-    let (sources, note) = library_sources(
+    let (mut sources, note) = library_sources(
         &typelib,
         facts.target,
         facts.subsystem,
@@ -680,6 +720,17 @@ pub fn seed(
         u8::try_from(addr_size).unwrap_or(8),
         til_dir.as_deref(),
     )?;
+    let (autoloaded, autonote) = autoload_sources(
+        facts,
+        &typelib,
+        u8::try_from(addr_size).unwrap_or(8),
+        til_dir.as_deref(),
+    );
+    sources.extend(autoloaded);
+    let note = match (note, autonote) {
+        (Some(a), Some(b)) => Some(format!("{a}; {b}")),
+        (a, b) => a.or(b),
+    };
     if sources.is_empty() {
         return Ok((0, note));
     }

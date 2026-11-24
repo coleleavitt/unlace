@@ -1978,6 +1978,13 @@ first block keeps the do-while. cmark O2ni (clang -O2 -fno-inline, arm64): 12
 functions change, GED -45 (9625 to 9580), do-whiles 151 to 133, while loops 45
 to 63; `finalize_document` prints `while (v2 != v3) { ... }` with no guard.
 
+On the loop's side the test is read on entry before it is compared: an operand
+that an assignment of `I` sets to a constant, or an implied COPY, extension or
+truncation of one (`(int)v` after `v = 0`), is that constant (`entry_const`), and
+an unsigned test against zero is an equality (`0 < x` is `x != 0`, `x < 1` is
+`x == 0`). So `if (n) { i = 0; do B while (i < n); }` on an unsigned `n` is a
+guard equivalent to the loop's first test, and prints `i = 0; while (i < n) B`.
+
 A do-while whose body is one basic block that prints nothing but its test
 (`empty_body`: the block branches back to itself and `kuna_condfold::printed_shape`
 counts only the terminal CBRANCH) needs no guard: `do {} while (c);` and

@@ -5582,7 +5582,9 @@ moves.
   prints; a narrower pointer, float or record is not widened and stays
   unbound. This also places a narrow local on a big-endian register at the
   bytes the write really covers. The matching raw varnodes have their
-  properties refreshed, as for a console `type varnode`. A parameter whose location at the entry PC is a
+  properties refreshed, as for a console `type varnode`. A local left unbound is
+  returned to the drive, which with `option honestgaps` on names it in a
+  `debuginfo:` header warning instead of dropping it silently (chapter 02). A parameter whose location at the entry PC is a
   single register (`entry_storage`) is locked to that register when the
   default model would put some parameter of the function elsewhere and gives it
   no hidden return pointer (the commit asks the model with

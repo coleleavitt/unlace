@@ -1250,6 +1250,9 @@ Three tiers:
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
 | output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
 | a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
+| a debug build shows a generic register name where the DWARF information names a local | [`honestgaps`](#honestgaps----on--off-default-off) |
+| a function with unimplemented instructions says so in its header but not where | [`honestgaps`](#honestgaps----on--off-default-off) |
+| the real-binary harness cannot tell which functions lost information | [`honestgaps`](#honestgaps----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -3934,6 +3937,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
 - **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
 - **Example:** `option ctree on`
+
+### `honestgaps` -- on | off, default `off`
+
+- **Symptoms:** a debug build shows a generic register name where the DWARF information names a local; a function with unimplemented instructions says so in its header but not where; the real-binary harness cannot tell which functions lost information.
+- **What it does:** Name in the output the losses the decompile otherwise drops without a word, each as a warning comment at the site that --json lists under its own kind. An instruction SLEIGH decodes but has no p-code for, stepped over as a no-op under the ignoreunimplemented policy, gets `notmodelled: <insn> has no p-code semantics; stepped over as a no-op` at its address (before, one header line said the function ignored unimplemented instructions, never which). A DWARF register local that no write of its register reaching its range can carry, which the decompile drops so its name never appears, gets a header line `debuginfo: DWARF local <name> (range from 0x...) not bound: no write of its register reaches it`. Losses that already print (decode-failure halts, funcboundflow and instruction-budget truncation, out-of-bounds flow, unrecovered jump tables) are unchanged.
+- **When to flip:** Turn on when auditing how much of a binary the output can be trusted for: with --json each record lists these sites in warnings and the document totals every warning kind in warning_kinds. Leave off for the upstream text.
+- **Where / provenance:** P2/decode-error-policy · kuna · opt-in-tool · unlace-33-honestgaps
+- **Example:** `option honestgaps on`
 
 ## Programmatic use
 

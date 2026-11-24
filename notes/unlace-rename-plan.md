@@ -44,7 +44,7 @@ special cases. The script refuses to run while any clash remains.
 ## What must stay stable
 
 - **Catalog ids**: option names, `issue` and `source_decompiler` values are output of
-  `unlace catalog --json` and recorded in `tests/fixtures/phase_catalog.json`,
+  `unlace catalog --json` and recorded in `tests/fixtures/phase_catalog.toml`,
   `tests/catalog_bytecompat.rs` and the Ghidra extension. Keep `source_decompiler = "unlace"`
   (it is provenance: the option came from the unlace port). Rename `issue = "unlace-x"` only
   together with the stage file it names, in the same commit, and re-record the fixture.

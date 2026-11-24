@@ -355,7 +355,7 @@ def check_round_trip(m: dict, text: str) -> None:
 
 # Files whose mentions of a stage test are text (fixture provenance and sources, golden records,
 # CLI test notes, the option catalog's prose): the conversion rewrites them instead of keeping the
-# test XML. phases.toml's prose is captured verbatim in phase_catalog.json, so both change together.
+# test XML. phases.toml's prose is captured verbatim in phase_catalog.toml, so both change together.
 TEXT_REFS = (
     "tests/golden/snapshot-manifest.json",
     "tests/golden/vectors/lift/*.txt",

@@ -199,9 +199,9 @@ The artifact checklist (every item, or the gates fail opaquely):
 3. Option name registered in `src/p0_knowledge/options.rs` (`UNLACE_OPTION_NAMES`).
 4. **Bump the hard-coded catalog counts** (two places; grep the current total):
    `src/p0_knowledge/phases/tests.rs` (count asserts) and
-   `crates/unlace-decomp/tests/catalog_bytecompat.rs` (count asserts **and** the
-   `tests/fixtures/phase_catalog.json` fixture — regenerate it with the console
-   `openfile write`/`phase catalog` recapture documented in that file's header).
+   `crates/unlace-decomp/tests/fixtures/phase_catalog.toml` (no count in `catalog_bytecompat.rs`):
+   regenerate it with the console `openfile write`/`phase catalog` recapture, converted by
+   `scripts/catalog_fixture_toml.py` (recipe in that file's header).
    `tests/stages/catalog.toml` computes its bucket counts from the compiled catalog.
    **After any rebase, re-derive these from a fresh capture and a green run — never from
    arithmetic.** Two of them auto-merge *without a conflict* and are still wrong: an

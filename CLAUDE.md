@@ -70,9 +70,8 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   ships unconditional, and a refinement extends the option it refines. New logic goes in
   a `unlace_<slug>.rs` module in its owning phase folder (template:
   `p2_lift/loweredswitch.rs`). Adding or dropping an option changes only
-  `tests/fixtures/phase_catalog.json` (the byte-compat capture) and `docs/options.md`, both
-  regenerated, never hand-counted: the counts in `phases/tests.rs` and
-  `tests/catalog_bytecompat.rs` are read from `phases.toml`, a `live_field` row is the only
+  `tests/fixtures/phase_catalog.toml` (the byte-compat capture: one `[[option]]` table per settable, recaptured and converted with `scripts/catalog_fixture_toml.py`) and `docs/options.md`, both
+  regenerated, never hand-counted: the counts in `phases/tests.rs` are read from `phases.toml`; `tests/catalog_bytecompat.rs` has no count to bump, a `live_field` row is the only
   kind with a codegen live reader, and `tests/stages/catalog.toml` computes its bucket
   counts from the compiled catalog. Run `cargo test -p unlace-middle --lib unlace_phases` after
   any catalog edit.

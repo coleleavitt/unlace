@@ -948,6 +948,8 @@ mod addrtable_xrefs;
 mod arm64e_vcall_xrefs;
 #[path = "arm_gs_cookie.rs"]
 mod arm_gs_cookie;
+#[path = "arm_switch_helpers.rs"]
+mod arm_switch_helpers;
 
 #[path = "ppc32_pic_calls.rs"]
 mod ppc32_pic_calls;

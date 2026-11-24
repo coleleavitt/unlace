@@ -91,3 +91,34 @@ fn every_armcc_switch8_form_is_named_and_tagged_once() {
     assert_eq!(expect.len(), 3);
     assert_eq!(scan_bytes(&code, 0x1000, false), expect);
 }
+
+fn le32(words: &[u32]) -> Vec<u8> {
+    words.iter().flat_map(|w| w.to_le_bytes()).collect()
+}
+
+#[test]
+fn every_arm_mode_helper_is_named_at_a_word_boundary() {
+    let mut code = le32(&[0xe1a00000]);
+    let mut expect = Vec::new();
+    for (name, words) in ARM_HELPERS {
+        expect.push((0x8000 + code.len() as u64, name));
+        code.extend(le32(words));
+    }
+    assert_eq!(scan_bytes(&code, 0x8000, false), expect);
+    let be: Vec<u8> = ARM_HELPERS[3]
+        .1
+        .iter()
+        .flat_map(|w| w.to_be_bytes())
+        .collect();
+    assert_eq!(scan_bytes(&be, 0, true), [(0, "___switch32")]);
+}
+
+#[test]
+fn an_arm_mode_helper_off_a_word_boundary_or_changed_is_not_named() {
+    let mut code = vec![0, 0];
+    code.extend(le32(ARM_HELPERS[0].1));
+    assert!(scan_bytes(&code, 0, false).is_empty());
+    let mut words = ARM_HELPERS[1].1.to_vec();
+    words[2] = 0x37de1000;
+    assert!(scan_bytes(&le32(&words), 0, false).is_empty());
+}

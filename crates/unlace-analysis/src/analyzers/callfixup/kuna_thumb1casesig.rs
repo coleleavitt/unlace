@@ -23,9 +23,24 @@
 //! | `__ARM_common_switch8` (Thumb-1, saves `r0-r3`) | `push {r0-r3}; mov r0,lr; subs r0,#1; ldrb r1,[r0]; adds r0,#1; cmp r3,r1; bhs +0; movs r1,r3; ldrb r3,[r0,r1]; lsls r3,#1; adds r0,r3; mov ip,r0; pop {r0-r3}; bx ip` |
 //! | `__ARM_common_switch8` (Thumb-2) | `ldrb ip,[lr,#-1]; cmp r3,ip; ite lo; ldrblo r3,[lr,r3]; ldrbhs r3,[lr,ip]; add ip,lr,r3,lsl #1; bx ip` |
 //!
+//!
 //! All three armcc forms read the table size from the byte before the table,
 //! clamp the index in `r3` to it (the last entry is the default) and branch to
 //! the table plus twice the entry, which is what `switch8_r3` models.
+//!
+//! The ARM-mode helpers, called with `blx` from Thumb code, are matched as whole
+//! words at a word boundary (the forms IDA 9.5's `arm.so` lists):
+//!
+//! | name | instructions |
+//! |---|---|
+//! | `___switch8`, `___switchu8` | `ldrb ip,[lr,#-1]; cmp r0,ip; ldrsblo`/`ldrblo r0,[lr,r0]; ldrsbhs`/`ldrbhs r0,[lr,ip]; add ip,lr,r0,lsl #1; bx ip` |
+//! | `___switch16` | `ldrh ip,[lr,#-1]; cmp r0,ip; add r0,lr,r0,lsl #1; ldrshlo r0,[r0,#1]; add ip,lr,ip,lsl #1; ldrshhs r0,[ip,#1]; add ip,lr,r0,lsl #1; bx ip` |
+//! | `___switch32` | `ldr ip,[lr,#-1]; cmp r0,ip; add r0,lr,r0,lsl #2; ldrlo r0,[r0,#3]; add ip,lr,ip,lsl #2; ldrhs r0,[ip,#3]; add ip,lr,r0; bx ip` |
+//! | `__rt_switch8` (three forms) | `ldrb ip,[lr,#-1]; cmp r3,ip; ldrblo r3,[lr,r3]; ldrbhs r3,[lr,ip]` (or the same with `blo`/`b`); `add ip,lr,r3,lsl #1; bx ip` or `add lr,lr,r3,lsl #1; bx lr` |
+//!
+//! The size sits at `lr-1` (a byte, a halfword or a word) and the entries follow it; an index
+//! at or past the size takes the last entry. The `___switch*` fixups (`switch*_r0_sized`)
+//! index with `r0`, `__rt_switch8` takes `switch8_r3`.
 
 use crate::pass::{AnalysisOutput, CallFixupFact, FidMatch, SymFact, SymKind};
 
@@ -83,6 +98,55 @@ const HELPERS: [(&str, &[u16]); 8] = [
     ),
 ];
 
+/// The ARM-mode helpers' instruction words.
+const ARM_HELPERS: [(&str, &[u32]); 7] = [
+    (
+        "___switch8",
+        &[
+            0xe55ec001, 0xe150000c, 0x319e00d0, 0x219e00dc, 0xe08ec080, 0xe12fff1c,
+        ],
+    ),
+    (
+        "___switchu8",
+        &[
+            0xe55ec001, 0xe150000c, 0x37de0000, 0x27de000c, 0xe08ec080, 0xe12fff1c,
+        ],
+    ),
+    (
+        "___switch16",
+        &[
+            0xe15ec0b1, 0xe150000c, 0xe08e0080, 0x31d000f1, 0xe08ec08c, 0x21dc00f1, 0xe08ec080,
+            0xe12fff1c,
+        ],
+    ),
+    (
+        "___switch32",
+        &[
+            0xe51ec001, 0xe150000c, 0xe08e0100, 0x35900003, 0xe08ec10c, 0x259c0003, 0xe08ec000,
+            0xe12fff1c,
+        ],
+    ),
+    (
+        "__rt_switch8",
+        &[
+            0xe55ec001, 0xe153000c, 0x37de3003, 0x27de300c, 0xe08ec083, 0xe12fff1c,
+        ],
+    ),
+    (
+        "__rt_switch8",
+        &[
+            0xe55ec001, 0xe153000c, 0x37de3003, 0x27de300c, 0xe08ee083, 0xe12fff1e,
+        ],
+    ),
+    (
+        "__rt_switch8",
+        &[
+            0xe55ec001, 0xe153000c, 0x3a000001, 0xe7de300c, 0xea000000, 0xe7de3003, 0xe08ec083,
+            0xe12fff1c,
+        ],
+    ),
+];
+
 /// Every helper entry in `code` (mapped at the halfword-aligned `base`), as
 /// `(vma, name)`. `big_endian` reads the halfwords big-endian (BE32 code).
 pub fn scan_bytes(code: &[u8], base: u64, big_endian: bool) -> Vec<(u64, &'static str)> {
@@ -102,6 +166,24 @@ pub fn scan_bytes(code: &[u8], base: u64, big_endian: bool) -> Vec<(u64, &'stati
             memchr::memmem::find_iter(code, &bytes)
                 .filter(|at| at % 2 == 0)
                 .map(|at| (base + at as u64, name)),
+        );
+    }
+    for (name, words) in ARM_HELPERS {
+        let bytes: Vec<u8> = words
+            .iter()
+            .flat_map(|w| {
+                if big_endian {
+                    w.to_be_bytes()
+                } else {
+                    w.to_le_bytes()
+                }
+            })
+            .collect();
+        hits.extend(
+            memchr::memmem::find_iter(code, &bytes)
+                .map(|at| base + at as u64)
+                .filter(|vma| vma % 4 == 0)
+                .map(|vma| (vma, name)),
         );
     }
     hits.sort_unstable();

@@ -15,6 +15,16 @@ use unlace_base::types::uint4;
 
 use crate::context::{BlockId, OpId, VarnodeId};
 
+crate::kuna_flag!(
+    /// (kuna `ctree`) Print the function body through its C syntax tree. Off by default while
+    /// the tree printer is proven to print exactly what the block printer prints.
+    Ctree,
+    "ctree",
+    "C syntax tree printing",
+    unset: false,
+    shipped: false
+);
+
 /// A statement of a [`CTree`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StmtId(u32);

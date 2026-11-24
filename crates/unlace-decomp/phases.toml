@@ -7911,3 +7911,22 @@ symptoms = "a 32-bit ELF function declares a `// esp` variable and writes call a
 live_field = "sp_solve"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "ctree"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "brace-form"
+strength = "HARD"
+rewind = "P9"
+issue = "kuna-ctree"
+summary = "Print the function body through its C syntax tree (`docs/architecture/ctree.md`): a statement tree built from the final structured block tree after structuring, one statement per structured block, with its own maturity (`built` here). The root's statements, the statements of a `BlockGraph`, the basic-block leaves and the arms of an `if` print from the tree; every other statement prints from its block as before, and its children come back through the tree. Built and walked per printed function, never in flat printing. With the option on the output is meant to be byte-identical to the block printer's; a difference is a bug in the tree path."
+use_when = "Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away."
+example = "option ctree on"
+source_decompiler = "kuna"
+inspiration = "Hex-Rays structures its microcode into a ctree (cinsn_t and cexpr_t nodes with a ctree_maturity_t level) and runs its C-level cleanups as rewrites of that tree before printing it"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "output printed with option ctree on differs from the same function printed with it off|a C-level cleanup needs the printed statement tree rather than the structured block graph"

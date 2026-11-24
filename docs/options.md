@@ -1225,6 +1225,8 @@ Three tiers:
 | many case labels that only goto the code default: runs | [`switchmerge`](#switchmerge----on--off-default-on) |
 | one source switch printed as several nested switches | [`switchmerge`](#switchmerge----on--off-default-on) |
 | case N: goto label_X; next to default: label_X: | [`switchmerge`](#switchmerge----on--off-default-on) |
+| output printed with option ctree on differs from the same function printed with it off | [`ctree`](#ctree----on--off-default-off) |
+| a C-level cleanup needs the printed statement tree rather than the structured block graph | [`ctree`](#ctree----on--off-default-off) |
 
 ## Toggleable transforms
 
@@ -3837,6 +3839,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: 0/675 datatest assertions move. Flip off to print each jump table as its own switch and every hole as a `case` label, for example to read the table layout the compiler emitted.
 - **Where / provenance:** P8/goto-quality · kuna · presentation-default · kuna-switchmerge
 - **Example:** `option switchmerge off`
+
+### `ctree` -- on | off, default `off`
+
+- **Symptoms:** output printed with option ctree on differs from the same function printed with it off; a C-level cleanup needs the printed statement tree rather than the structured block graph.
+- **What it does:** Print the function body through its C syntax tree (`docs/architecture/ctree.md`): a statement tree built from the final structured block tree after structuring, one statement per structured block, with its own maturity (`built` here). The root's statements, the statements of a `BlockGraph`, the basic-block leaves and the arms of an `if` print from the tree; every other statement prints from its block as before, and its children come back through the tree. Built and walked per printed function, never in flat printing. With the option on the output is meant to be byte-identical to the block printer's; a difference is a bug in the tree path.
+- **When to flip:** Leave it off. Turn it on to check the tree printer against the block printer on a binary (nothing should change), or while moving a C-level cleanup into the tree. It is a migration switch: once the tree path is the only printer, the option goes away.
+- **Where / provenance:** P9/brace-form · kuna · opt-in-tool · kuna-ctree
+- **Example:** `option ctree on`
 
 ## Programmatic use
 

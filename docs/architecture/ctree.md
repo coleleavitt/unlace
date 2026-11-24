@@ -1,7 +1,9 @@
 # A C syntax tree between structuring and printing (ctree)
 
-Status (2026-11-23): design, with section 9 step 2 started: `crates/unlace-ctree` holds the types,
-`CMaturity` and the builder at `built`; nothing calls it yet.
+Status (2026-11-23): section 9 steps 2-4 landed: `crates/unlace-ctree` holds the types, `CMaturity`
+and the builder at `built`; `option ctree on` (default off) prints the body through the tree
+(`printc/kuna_ctreeprint.rs`: graph sequences, leaves and `if` arms; the rest stays opaque).
+Spec: `docs/spec/09-emission.md`, "Printing through the C syntax tree".
 
 Today the printer walks the structured block graph and the p-code ops directly and writes text as it
 goes. Every C-level cleanup (a diamond printed as a ternary, an if-chain printed as a switch, a goto

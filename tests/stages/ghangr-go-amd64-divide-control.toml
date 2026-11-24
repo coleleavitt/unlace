@@ -1,0 +1,47 @@
+# The AMD64 arm of tests/fixtures/go-aarch64-divide/guard.S.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'guarded_quotient' },
+    { space = 'ram', offset = '0x100040', name = 'runtime.panicdivide' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4885f674094889f8489948f7fec3e82d0000000f0b'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '0f0b'
+
+[script]
+commands = [
+    'option sourcelang go',
+    'option outlang go',
+    'option noreturn runtime.panicdivide',
+    'map prototype guarded_quotient int8 guarded_quotient(int8 a,int8 b);',
+    'load function guarded_quotient',
+    'decompile',
+    'print C',
+    'print raw',
+    'option gobounds off',
+    'decompile',
+    'print C',
+    'print raw',
+    'option sourcelang auto',
+]
+
+[[match]]
+name = 'Go AMD64 compiler division retains source division in both modes'
+count = 2
+literal = 'return a / b'
+
+[[match]]
+name = 'Go AMD64 compiler division keeps its helper only in audit mode'
+count = 1
+regex = '^[[:space:]]+runtime\.panicdivide\(\) // no-return'

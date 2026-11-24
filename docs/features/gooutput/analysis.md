@@ -65,7 +65,7 @@ The proposal's older baseline remains recorded as proposal evidence only.
 
 ## Validation commands
 
-The end-to-end stage fixture is `tests/stages/ghangr-gooutput.xml`. It selects C,
+The end-to-end stage fixture is `tests/stages/ghangr-gooutput.toml`. It selects C,
 then Go, then C again over the same image. Go integration tests are registered
 in kuna-console's integration suite:
 

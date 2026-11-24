@@ -2,7 +2,7 @@
 //!
 //! The Rust catalog JSON emitter (`kuna_phases::emit_catalog_json`) must
 //! reproduce `kuna_console.cc kunaEmitSettableJson`'s output **byte for byte**:
-//! `tests/stages/kuna-catalog.xml` (a C++ datatest) string-matches the raw
+//! `tests/stages/kuna-catalog.toml` (a C++ datatest) string-matches the raw
 //! emitter output, and `python -m kuna.catalog` parses it, so any drift in key
 //! order, spacing, separators, pipe-splitting, the conditional `current` field,
 //! or escaping would silently break the LLM control surface.

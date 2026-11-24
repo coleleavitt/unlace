@@ -5019,9 +5019,9 @@ written to `rd` with `assignW`. A destination table that exports a temporary
 copy of the register would drop the write, which made these conversions
 produce no value at all. The fix is in the RISC-V SLEIGH sources, so
 `riscv.lp64d.sla`, `riscv.ilp32d.sla` and `andestar_v5.sla` must be rebuilt.
-Exercised by `tests/stages/gh831-riscv-fpmove.xml` (RV64: a call result moved
+Exercised by `tests/stages/gh831-riscv-fpmove.toml` (RV64: a call result moved
 by `fmv.x.d` and `fmv.x.w`, and all four conversions) and
-`tests/stages/gh831-riscv32-fpmove.xml` (the RV32 forms).
+`tests/stages/gh831-riscv32-fpmove.toml` (the RV32 forms).
 
 The x87 `FIST` and `FISTP` lifts preserve integer conversion as width-specific
 `x87_float_to_int16`, `x87_float_to_int32`, or `x87_float_to_int64` user operations.
@@ -5071,7 +5071,7 @@ the same operand (`vMem32z`), so the qword-index gathers still decode in
 `VPSCATTERQ*`) are still built for 64-bit mode only. An index in
 `ZMM16`..`ZMM31` (`EVEX.V'`) still reads as `ZMM0`..`ZMM15`, as for every EVEX
 VSIB operand. Exercised by
-`tests/stages/gh1627-x86-senduipi-gatherpf.xml`.
+`tests/stages/gh1627-x86-senduipi-gatherpf.toml`.
 
 In 64-bit mode the x86 spec also decodes Intel AMX (`amx.sinc`, #98):
 AMX-TILE `LDTILECFG`, `STTILECFG`, `TILERELEASE`, `TILEZERO`, `TILELOADD`,
@@ -5104,7 +5104,7 @@ decode whatever `REX.W` says, since their operand size is fixed at 64 bits
 there and compilers encode them without the prefix. `VMFUNC` and `VMCALL`
 write no flags: `VMFUNC` leaves them unchanged, and the flags after a guest's
 `VMCALL` are whatever the hypervisor returns. Exercised by
-`tests/stages/gh1628-x86-vmx-decode-flags.xml`.
+`tests/stages/gh1628-x86-vmx-decode-flags.toml`.
 
 For the bounded local policy (`kuna_localstackviews.rs`), the `FlowEmit::dump` seam in
 `crates/unlace-lift/src/p2_lift/flow.rs` records original STORE and

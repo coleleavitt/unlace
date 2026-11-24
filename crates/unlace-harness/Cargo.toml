@@ -15,6 +15,7 @@ unlace-sleigh.workspace = true
 unlace-decomp.workspace = true
 unlace-console.workspace = true
 regex.workspace = true
+toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 unlace-decomp-dylib = { workspace = true, optional = true }
 
 [features]

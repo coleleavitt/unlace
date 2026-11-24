@@ -1,0 +1,116 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_namespaces_cpp_x86_64',
+    'read symbols',
+    'load function direct_left',
+    'decompile',
+    'print C',
+    'load function direct_nested',
+    'decompile',
+    'print C',
+    'load function direct_right',
+    'decompile',
+    'print C',
+    'load function direct_global',
+    'decompile',
+    'print C',
+    'load function direct_shadow',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_namespaces_rust_x86_64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'load function direct_left',
+    'decompile',
+    'print C',
+    'load function direct_nested',
+    'decompile',
+    'print C',
+    'load function direct_right',
+    'decompile',
+    'print C',
+    'load function direct_global',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_function_pointer_x86_64',
+    'read symbols',
+    'load function get_target',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarf_raw_namespace_x86_64',
+    'read symbols',
+    'load function direct_target',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'genuine global and raw-identifier fallback stay bare'
+count = 2
+literal = 'return target(x);'
+
+[[match]]
+name = 'C++ namespace target'
+count = 1
+literal = 'return left::target(x);'
+
+[[match]]
+name = 'C++ nested namespace target'
+count = 1
+literal = 'return left::deep::target(x);'
+
+[[match]]
+name = 'C++ other namespace target'
+count = 1
+literal = 'return right::target(x);'
+
+[[match]]
+name = 'C++ namespace despite same-named parameter'
+count = 1
+literal = 'return left::target(left);'
+
+[[match]]
+name = 'Rust module target'
+count = 1
+literal = 'return dwarf_namespaces::left::target(x);'
+
+[[match]]
+name = 'Rust nested module target'
+count = 1
+literal = 'return dwarf_namespaces::left::deep::target(x);'
+
+[[match]]
+name = 'Rust other module target'
+count = 1
+literal = 'return dwarf_namespaces::right::target(x);'
+
+[[match]]
+name = 'Rust crate-level target'
+count = 1
+literal = 'return dwarf_namespaces::target(x);'
+
+[[match]]
+name = 'DWARF function value agrees with its qualified definition'
+count = 1
+literal = 'return (uint8)left::target;'
+
+[[match]]
+name = 'raw Rust module is not a C++ keyword scope'
+count = 0
+literal = '::union::'

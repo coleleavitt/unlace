@@ -1,0 +1,87 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64',
+    'phase catalog highsliceguard',
+    'read symbols',
+    'parse line extern uint4 narrow_guard(uint8 x);',
+    'load function narrow_guard',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/highslice_guard_x86_64',
+    'option highsliceguard on',
+    'phase catalog highsliceguard',
+    'read symbols',
+    'parse line extern uint4 narrow_guard(uint8 x);',
+    'load function narrow_guard',
+    'decompile',
+    'print C',
+    'parse line extern uint4 wide_guard(uint8 x);',
+    'load function wide_guard',
+    'decompile',
+    'print C',
+    'parse line extern uint4 explicit_zext(uint8 x);',
+    'load function explicit_zext',
+    'decompile',
+    'print C',
+    'parse line extern uint4 byte_guard(uint8 x);',
+    'load function byte_guard',
+    'decompile',
+    'print C',
+    'parse line extern uint4 word_guard(uint8 x);',
+    'load function word_guard',
+    'decompile',
+    'print C',
+    'parse line extern uint4 signed_guard(uint8 x);',
+    'load function signed_guard',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'all six guards recover switches'
+count = 6
+literal = 'switch('
+
+[[match]]
+name = 'all forty-one cases retained'
+count = 246
+literal = 'case '
+
+[[match]]
+name = 'all first case values retained'
+count = 6
+literal = 'return 3;'
+
+[[match]]
+name = 'all last case values retained'
+count = 6
+literal = 'return 0x11b;'
+
+[[match]]
+name = 'all out of range values retained'
+count = 7
+literal = 'return 1000;'
+
+[[match]]
+name = 'both option states are observable'
+count = 2
+literal = '"option": "highsliceguard"'
+
+[[match]]
+name = 'only disabled recovery leaves the indirect call'
+count = 1
+literal = '; // jump-as-call'

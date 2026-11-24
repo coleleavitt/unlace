@@ -1493,6 +1493,7 @@ version = "0.1.0"
 dependencies = [
  "regex",
  "serde_json",
+ "toml",
  "unlace-base",
  "unlace-console",
  "unlace-decomp",

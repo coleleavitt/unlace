@@ -1,0 +1,92 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/joined_callback_return_x86_64',
+    'read symbols',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype make_pair struct Pair make_pair(int8 a,int8 b);',
+    'map prototype first int8 first(struct Pair (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype second int8 second(struct Pair (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype both int8 both(struct Pair (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype forward struct Pair forward(struct Pair (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype narrow_second int4 narrow_second(struct Pair (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype scalar int8 scalar(int8 (*fn)(int8,int8),int8 a,int8 b);',
+    'map prototype invoke_void void invoke_void(void (*fn)(int8,int8),int8 a,int8 b);',
+    'load function make_pair',
+    'decompile',
+    'print C',
+    'load function first',
+    'decompile',
+    'print C',
+    'load function second',
+    'decompile',
+    'print C',
+    'load function both',
+    'decompile',
+    'print C',
+    'load function forward',
+    'decompile',
+    'print C',
+    'load function narrow_second',
+    'decompile',
+    'print C',
+    'load function scalar',
+    'decompile',
+    'print C',
+    'load function invoke_void',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Joined callback first component survives a late callback prototype'
+count = 1
+literal = 'return (*fn)(a,b).first;'
+
+[[match]]
+name = 'Joined callback second component is defined by the callback'
+count = 1
+literal = 'return (*fn)(a,b).second;'
+
+[[match]]
+name = 'Joined callback narrowed second component is preserved'
+count = 1
+literal = 'return (int4)(*fn)(a,b).second;'
+
+[[match]]
+name = 'Joined callback both fields come from one invocation'
+count = 1
+literal = 'v1 = (*fn)(a,b);'
+
+[[match]]
+name = 'Joined callback both fields remain live'
+count = 1
+regex = 'return v1.first \^ v1.second;'
+
+[[match]]
+name = 'Joined callback whole and scalar forwarding remain intact'
+count = 2
+literal = 'return (*fn)(a,b); // jump-as-call'
+
+[[match]]
+name = 'Joined callback callee side effect remains intact'
+count = 1
+literal = 'calls += 1;'
+
+[[match]]
+name = 'Joined callback void contract has no return storage'
+count = 1
+regex = '^  \(\*fn\)\(a,b\); // jump-as-call'

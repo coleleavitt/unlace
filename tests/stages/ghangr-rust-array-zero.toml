@@ -1,0 +1,127 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/array_constant_x86_64',
+    'read symbols',
+    'option outlang rust',
+    'option ctypes off',
+    'option realtypes off',
+    'map prototype zero_unsigned void zero_unsigned(uint1(*p)[16]);',
+    'map prototype zero_signed void zero_signed(uint1(*p)[16]);',
+    'map prototype zero_field void zero_field(struct WideFields*p);',
+    'map prototype zero_second void zero_second(uint1(*p)[16]);',
+    'map prototype zero_index void zero_index(uint1(*p)[16],uint8 i);',
+    'map prototype zero_callback void zero_callback(uint1(*p)[16]);',
+    'map prototype zero_bytes void zero_bytes(struct Byte16*p);',
+    'map prototype counted_pointer uint1(*counted_pointer(uint1(*p)[16]))[16];',
+    'option rustarrayzero off',
+    'load function zero_unsigned',
+    'decompile',
+    'print C',
+    'option rustarrayzero on',
+    'load function zero_unsigned',
+    'decompile',
+    'print C',
+    'load function zero_signed',
+    'decompile',
+    'print C',
+    'load function zero_field',
+    'decompile',
+    'print C',
+    'load function zero_second',
+    'decompile',
+    'print C',
+    'load function zero_index',
+    'decompile',
+    'print C',
+    'load function zero_callback',
+    'decompile',
+    'print C',
+    'load function zero_bytes',
+    'decompile',
+    'print C',
+    'option nocastprinting on',
+    'load function zero_unsigned',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_unsigned preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_unsigned\(',
+    '^\{',
+    '\*p\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_signed preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_signed\(',
+    '^\{',
+    '\*p\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_field preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_field\(',
+    '^\{',
+    '\*\(\&raw\ mut\ \(\*p\)\.value\ as\ \*mut\ \[u8;\ 16\]\)\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_second preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_second\(',
+    '^\{',
+    '\*p\.wrapping_byte_offset\(\(\(1\ as\ i64\)\ as\ isize\)\.wrapping_mul\(16\)\)\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_index preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_index\(',
+    '^\{',
+    '\*p\.wrapping_byte_offset\(\(i\ as\ isize\)\.wrapping_mul\(16\)\)\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_callback preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_callback\(',
+    '^\{',
+    '\*counted_pointer\(p\)\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store zero_bytes preserves its place'
+count = 1
+regex = [
+    'unsafe\ fn\ zero_bytes\(',
+    '^\{',
+    '\*\(\&raw\ mut\ \(\*p\)\.bytes\ as\ \*mut\ \[u8;\ 16\]\)\ =\ \[0;\ 16\];',
+]
+
+[[match]]
+name = 'Rust zero byte-array store off and cast suppression stay diagnostic'
+count = 2
+regex = '\*p\ =\ 0;'

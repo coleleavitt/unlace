@@ -1,0 +1,122 @@
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'load_offset' },
+    { space = 'ram', offset = '0x100008', name = 'store_offset' },
+    { space = 'ram', offset = '0x100014', name = 'return_offset' },
+    { space = 'ram', offset = '0x10001c', name = 'load_dynamic' },
+    { space = 'ram', offset = '0x100028', name = 'store_dynamic' },
+    { space = 'ram', offset = '0x100038', name = 'return_dynamic' },
+    { space = 'ram', offset = '0x100041', name = 'return_negative' },
+    { space = 'ram', offset = '0x100049', name = 'integer_address' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '8b4424048b4004c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100008'
+readonly = true
+hex = '8b4424048b542408895004c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100014'
+readonly = true
+hex = '8b44240483c004c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10001c'
+readonly = true
+hex = '8b4424048b5424088b0410c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100028'
+readonly = true
+hex = '8b4424048b5424088b4c240c890c10c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100038'
+readonly = true
+hex = '8b44240403442408c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100041'
+readonly = true
+hex = '8b44240483e804c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100049'
+readonly = true
+hex = '8b44240483c004c3'
+
+[script]
+commands = [
+    'option outlang go',
+    'parse line extern uint4 load_offset(void *base);',
+    'parse line extern void store_offset(void *base,uint4 value);',
+    'parse line extern uint4 *return_offset(void *base);',
+    'parse line extern uint4 load_dynamic(void *base,int4 offset);',
+    'parse line extern void store_dynamic(void *base,int4 offset,uint4 value);',
+    'parse line extern uint4 *return_dynamic(void *base,int4 offset);',
+    'parse line extern uint4 *return_negative(void *base);',
+    'parse line extern uint4 *integer_address(uint4 base);',
+    'load function load_offset',
+    'decompile',
+    'print C',
+    'load function store_offset',
+    'decompile',
+    'print C',
+    'load function return_offset',
+    'decompile',
+    'print C',
+    'load function load_dynamic',
+    'decompile',
+    'print C',
+    'load function store_dynamic',
+    'decompile',
+    'print C',
+    'load function return_dynamic',
+    'decompile',
+    'print C',
+    'load function return_negative',
+    'decompile',
+    'print C',
+    'load function integer_address',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go32 pointer: live pointer bases survive all seven additions'
+count = 7
+literal = 'unsafe.Add(unsafe.Pointer(base),'
+
+[[match]]
+name = 'Go32 pointer: dynamic offsets preserve their signed variable'
+count = 3
+literal = 'unsafe.Add(unsafe.Pointer(base),offset)'
+
+[[match]]
+name = 'Go32 pointer: negative offset is a signed byte displacement'
+count = 1
+literal = 'unsafe.Add(unsafe.Pointer(base),-0x4)'
+
+[[match]]
+name = 'Go32 pointer: integer addresses keep their explicit reconstruction'
+count = 1
+literal = 'unsafe.Pointer(uintptr(base + 0x'
+
+[[match]]
+name = 'Go32 pointer: pointer arithmetic has no signed integer roundtrip'
+count = 0
+regex = 'int[36][24]\(uintptr\(unsafe\.Pointer\(base\)\)\)'

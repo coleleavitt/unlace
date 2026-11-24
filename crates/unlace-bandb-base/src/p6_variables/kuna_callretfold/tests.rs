@@ -1,6 +1,6 @@
 //! Unit tests for the `foldcallret` option parse.  The order-safety predicate
 //! [`call_output_foldable`](super::call_output_foldable) is exercised end-to-end
-//! by the stage test `tests/stages/ghangr-call-return-variable-folding-dcde82.xml`.
+//! by the stage test `tests/stages/ghangr-call-return-variable-folding-dcde82.toml`.
 
 use super::*;
 

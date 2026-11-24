@@ -21,7 +21,8 @@
 //! pairs, and `DISP32`, plus on SPARC64 the `H44`/`M44`/`L44` and
 //! `HH22`/`HM10`/`LM22` address parts, `DISP64` and the `WDISP22`/`WDISP19`/
 //! `WDISP16` branches; LoongArch `PCALA_HI20`/`PCALA_LO12`, `CALL36` and the
-//! `B26`/`B21`/`B16` branches; and eBPF `64_64` (the two `imm` halves of `lddw`),
+//! `B26`/`B21`/`B16` branches; Lanai `25`/`21`/`HI16`/`LO16`/`32`; Hexagon
+//! PC-relative branches, `immext` payloads and measured `N_X` low bits; and eBPF `64_64` (the two `imm` halves of `lddw`),
 //! `64_32` (the subprogram `call` displacement) and the `ABS`/`NODYLD` data
 //! words. Generic
 //! absolute, relative, PLT-relative, and image-offset relocations support
@@ -91,6 +92,9 @@ enum Specific {
     LanaiBranch25,
     LanaiAbs21,
     LanaiHalf { high: bool },
+    HexBranch { mask: u32, extended: bool },
+    HexExtender { pc: bool },
+    HexLow6 { form: HexLow6 },
     Aarch64AdrLo21,
     Aarch64Imm19 { load: bool },
     Aarch64Imm14,
@@ -129,6 +133,16 @@ impl Specific {
                 | Specific::Aarch64Movw { .. }
         )
     }
+}
+
+/// The Hexagon `N_X` immediate relocations that take the low six bits of an
+/// `immext`-extended value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HexLow6 {
+    R16,
+    R11,
+    R10,
+    R6,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -240,6 +254,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::HexBranch { .. }
                     | Specific::Aarch64Imm19 { load: false }
                     | Specific::Aarch64Imm14
                     | Specific::RiscvCall
@@ -297,6 +312,50 @@ fn classify_lanai(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, Reloc
         call: false,
         got: false,
     }))
+}
+
+const R_HEX_B22_PCREL: u32 = 1;
+const R_HEX_B15_PCREL: u32 = 2;
+const R_HEX_B7_PCREL: u32 = 3;
+const R_HEX_B13_PCREL: u32 = 14;
+const R_HEX_B9_PCREL: u32 = 15;
+const R_HEX_B32_PCREL_X: u32 = 16;
+const R_HEX_32_6_X: u32 = 17;
+const R_HEX_B22_PCREL_X: u32 = 18;
+const R_HEX_B15_PCREL_X: u32 = 19;
+const R_HEX_B13_PCREL_X: u32 = 20;
+const R_HEX_B9_PCREL_X: u32 = 21;
+const R_HEX_B7_PCREL_X: u32 = 22;
+const R_HEX_16_X: u32 = 23;
+const R_HEX_11_X: u32 = 25;
+const R_HEX_10_X: u32 = 26;
+const R_HEX_6_X: u32 = 30;
+
+/// The Hexagon instruction relocations: the PC-relative branches (`B22`, `B15`,
+/// `B13`, `B9`, `B7`) by their ABI masks, the 26-bit `immext` payloads
+/// (`B32_PCREL_X`, `32_6_X`), the low six bits the extended branch and
+/// immediate forms (`*_X`) keep in the instruction itself.
+fn classify_hexagon(r_type: u32) -> Option<(Specific, bool)> {
+    let branch = |mask, extended| Specific::HexBranch { mask, extended };
+    Some(match r_type {
+        R_HEX_B22_PCREL => (branch(0x01ff_3ffe, false), true),
+        R_HEX_B15_PCREL => (branch(0x00df_20fe, false), false),
+        R_HEX_B13_PCREL => (branch(0x0020_2ffe, false), false),
+        R_HEX_B9_PCREL => (branch(0x0030_00fe, false), false),
+        R_HEX_B7_PCREL => (branch(0x0000_1f18, false), false),
+        R_HEX_B22_PCREL_X => (branch(0x01ff_3ffe, true), true),
+        R_HEX_B15_PCREL_X => (branch(0x00df_20fe, true), false),
+        R_HEX_B13_PCREL_X => (branch(0x0020_2ffe, true), false),
+        R_HEX_B9_PCREL_X => (branch(0x0030_00fe, true), false),
+        R_HEX_B7_PCREL_X => (branch(0x0000_1f18, true), false),
+        R_HEX_B32_PCREL_X => (Specific::HexExtender { pc: true }, false),
+        R_HEX_32_6_X => (Specific::HexExtender { pc: false }, false),
+        R_HEX_16_X => (Specific::HexLow6 { form: HexLow6::R16 }, false),
+        R_HEX_11_X => (Specific::HexLow6 { form: HexLow6::R11 }, false),
+        R_HEX_10_X => (Specific::HexLow6 { form: HexLow6::R10 }, false),
+        R_HEX_6_X => (Specific::HexLow6 { form: HexLow6::R6 }, false),
+        _ => return None,
+    })
 }
 
 /// `Ok(None)` means a no-op relocation (`R_*_NONE`).
@@ -625,6 +684,9 @@ fn classify_info(
         (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_B16)) => {
             Some((Specific::LarchBranch { bits: 16 }, false))
         }
+        (Architecture::Hexagon, Some(r_type)) if classify_hexagon(r_type).is_some() => {
+            classify_hexagon(r_type)
+        }
         (Architecture::Bpf, Some(elf::R_BPF_NONE)) => return Ok(None),
         (Architecture::Bpf, Some(elf::R_BPF_64_64)) => Some((Specific::BpfImm64, false)),
         (Architecture::Bpf, Some(elf::R_BPF_64_32)) => Some((Specific::BpfCall, true)),
@@ -824,6 +886,29 @@ fn apply_info(
         Specific::LarchBranch { bits } => larch_branch(field, reloc, symbol, place, bits),
         Specific::LanaiBranch25 => lanai_field(field, reloc, symbol, 0x01ff_fffc, true),
         Specific::LanaiAbs21 => lanai_abs21(field, reloc, symbol),
+        Specific::HexBranch { mask, extended } => {
+            hexagon_branch(field, reloc, symbol, place, mask, extended)
+        }
+        Specific::HexExtender { pc } => {
+            let value = symbol as i128 + reloc.addend as i128 - if pc { place as i128 } else { 0 };
+            hexagon_patch(field, reloc, 0x0fff_3fff, (value >> 6) as u32)
+        }
+        Specific::HexLow6 { form } => {
+            let insn = read_u32(field, true);
+            let mask = hexagon_low6_mask(form, insn).ok_or(RelocationFailure::Unsupported)?;
+            if reloc.implicit_addend {
+                return Err(RelocationFailure::InvalidEncoding);
+            }
+            // ORed in as the linker does: the field is zero in the object, and
+            // a class mask may span bits another operand of a variant holds.
+            let value = symbol as i128 + reloc.addend as i128;
+            write_u32(
+                field,
+                true,
+                insn | scatter_bits(mask, (value as u32) & 0x3f),
+            );
+            Ok(())
+        }
         Specific::LanaiHalf { high } => {
             let value = symbol as i128 + reloc.addend as i128;
             let half = if high { value >> 16 } else { value };
@@ -1930,6 +2015,75 @@ fn lanai_abs21(
     insn = (insn & !0x007c_ffff) | (((v >> 16) & 0x1f) << 18) | (v & 0xffff);
     write_u32(field, false, insn);
     Ok(())
+}
+
+/// The bits of `value` dealt, low first, into the set bits of `mask`.
+fn scatter_bits(mask: u32, value: u32) -> u32 {
+    let mut out = 0;
+    let mut bit = 0;
+    for at in 0..32 {
+        if mask >> at & 1 != 0 {
+            out |= ((value >> bit) & 1) << at;
+            bit += 1;
+        }
+    }
+    out
+}
+
+/// Replace the `mask` bits of a little-endian Hexagon word with `value`.
+fn hexagon_patch(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    mask: u32,
+    value: u32,
+) -> Result<(), RelocationFailure> {
+    if reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let insn = read_u32(field, true);
+    write_u32(field, true, (insn & !mask) | scatter_bits(mask, value));
+    Ok(())
+}
+
+/// A Hexagon PC-relative branch: `(S + A - P) >> 2` into the branch's mask,
+/// range-checked; the extended (`_X`) form keeps only the low six bits of
+/// `S + A - P`, its `immext` holding the rest.
+fn hexagon_branch(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+    mask: u32,
+    extended: bool,
+) -> Result<(), RelocationFailure> {
+    let value = symbol as i128 + reloc.addend as i128 - place as i128;
+    if extended {
+        return hexagon_patch(field, reloc, mask, (value as u32) & 0x3f);
+    }
+    require_aligned(value, 4)?;
+    require_signed(value, mask.count_ones() as u8 + 2)?;
+    hexagon_patch(field, reloc, mask, (value >> 2) as u32)
+}
+
+/// Where the low six bits of an extended immediate sit, by instruction class
+/// (the top byte) for the classes measured against `ld.lld` (every `_X` site of
+/// the real-code sweep objects, relinked at eleven data bases); `None` for any
+/// other class and for `8_X`, `12_X` and the rest, which stay unrelocated. A duplex (parse bits 15..14 zero) keeps
+/// them in bits 25..20.
+fn hexagon_low6_mask(form: HexLow6, insn: u32) -> Option<u32> {
+    let duplex = (insn >> 14) & 3 == 0;
+    let top = insn >> 24;
+    Some(match (form, duplex, top) {
+        (HexLow6::R6, true, _) => 0x03f0_0000,
+        (HexLow6::R16, false, 0x48) => 0x0000_003f,
+        (HexLow6::R16, false, 0x49 | 0x78 | 0xb0) => 0x0000_07e0,
+        (HexLow6::R11, false, 0x91) => 0x0000_07e0,
+        (HexLow6::R11, false, 0xa1) => 0x0000_003f,
+        (HexLow6::R10, false, 0x75 | 0x76) => 0x0000_07e0,
+        (HexLow6::R6, false, 0x9d) => 0x0000_0fc0,
+        (HexLow6::R6, false, 0xad) => 0x0000_003f,
+        _ => return None,
+    })
 }
 
 /// `R_BPF_64_ABS64`, `R_BPF_64_ABS32` and `R_BPF_64_NODYLD32`, which the
@@ -3307,6 +3461,83 @@ mod tests {
             );
             assert_eq!(field, before);
         }
+    }
+}
+
+#[cfg(test)]
+mod hexagon_tests {
+    use super::*;
+
+    fn patch(
+        r_type: u32,
+        addend: i64,
+        insn: u32,
+        symbol: u64,
+        place: u64,
+    ) -> Result<u32, RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        };
+        let spec = classify_info(Architecture::Hexagon, info)?.expect("not a no-op");
+        let mut field = insn.to_le_bytes();
+        apply_info(spec, info, &mut field, true, symbol, place, None, None)?;
+        Ok(u32::from_le_bytes(field))
+    }
+
+    // Words as ld.lld writes them for the sweep's hexagon objects.
+    #[test]
+    fn branches_extenders_and_low_six_bits_match_the_linker() {
+        assert_eq!(
+            patch(R_HEX_B9_PCREL_X, 0, 0x1701_c000, 0x1_0164, 0x1_013c),
+            Ok(0x1701_c050)
+        );
+        assert_eq!(
+            patch(R_HEX_16_X, 0, 0x4880_c000, 0x3_0738, 0),
+            Ok(0x4880_c038)
+        );
+        assert_eq!(
+            patch(R_HEX_16_X, 0, 0x4980_c000, 0x2_1324, 0),
+            Ok(0x4980_c480)
+        );
+        assert_eq!(
+            patch(R_HEX_16_X, 0, 0x7800_c001, 0x3_06fc, 0),
+            Ok(0x7800_c781)
+        );
+        assert_eq!(
+            patch(R_HEX_6_X, 0, 0x6802_3c40, 0x3_06fc, 0),
+            Ok(0x6bc2_3c40)
+        );
+        assert_eq!(
+            patch(R_HEX_6_X, 0, 0x9d83_f000, 0x2_0568, 0),
+            Ok(0x9d83_fa00)
+        );
+        assert_eq!(
+            patch(R_HEX_32_6_X, 0, 0x0000_4000, 0x3_06fc, 0),
+            Ok(0x0000_4000 | scatter_bits(0x0fff_3fff, 0x3_06fc >> 6))
+        );
+        assert_eq!(
+            patch(R_HEX_B22_PCREL, 0, 0x5a00_c000, 0x1_0400, 0x1_0000),
+            Ok(0x5a00_c000 | scatter_bits(0x01ff_3ffe, 0x100))
+        );
+        assert_eq!(
+            patch(R_HEX_B22_PCREL, 0, 0x5a00_c000, 0x1_0402, 0x1_0000),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            patch(R_HEX_B22_PCREL, 0, 0x5a00_c000, 0x100_0000, 0),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert_eq!(
+            patch(R_HEX_16_X, 0, 0x1100_c000, 0x3_0738, 0),
+            Err(RelocationFailure::Unsupported)
+        );
+        assert_eq!(scatter_bits(0x0000_0ff0, 0x5), 0x50);
+        assert_eq!(scatter_bits(0x0000_1f18, 0x7f), 0x1f18);
     }
 }
 

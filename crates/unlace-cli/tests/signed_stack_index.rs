@@ -6,10 +6,11 @@ use std::process::Command;
 
 #[test]
 fn emitted_signed_stack_index_matches_the_stored_word() {
-    let xml = include_str!(concat!(
+    let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-signed-stack-index.xml"
-    ));
+        "/../../tests/stages/kuna-signed-stack-index.toml"
+    )))
+    .unwrap();
     let chunk = regex::Regex::new(r#"<bytechunk[^>]*>([0-9a-f]+)</bytechunk>"#).unwrap();
     let hex = &chunk.captures(xml).unwrap()[1];
     let bytes: Vec<u8> = (0..hex.len())

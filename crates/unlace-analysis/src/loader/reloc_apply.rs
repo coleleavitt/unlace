@@ -97,6 +97,11 @@ enum Specific {
     HexBranch { mask: u32, extended: bool },
     HexExtender { pc: bool },
     HexLow6 { form: HexLow6 },
+    AvrPcrel { bits: u8 },
+    AvrLdi { shift: u8, neg: bool, pm: bool },
+    AvrCall,
+    AvrWordPm,
+    AmdgpuHalf { pc: bool, high: bool },
     Aarch64AdrLo21,
     Aarch64Imm19 { load: bool },
     Aarch64Imm14,
@@ -256,6 +261,8 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::AvrPcrel { bits: 12 }
+                    | Specific::AvrCall
                     | Specific::CudaAbs47
                     | Specific::HexBranch { .. }
                     | Specific::Aarch64Imm19 { load: false }
@@ -289,6 +296,7 @@ pub fn classify_elf(
     match (arch, machine) {
         (Architecture::Unknown, Some(EM_LANAI)) => classify_lanai(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_CUDA)) => classify_cuda(RelocationInfo::from(reloc)),
+        (Architecture::Unknown, Some(EM_AMDGPU)) => classify_amdgpu(RelocationInfo::from(reloc)),
         _ => classify(arch, reloc),
     }
 }
@@ -313,6 +321,91 @@ fn classify_lanai(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, Reloc
     Ok(Some(RelocationSpec {
         specific,
         width: 4,
+        call: false,
+        got: false,
+    }))
+}
+
+const R_AVR_7_PCREL: u32 = 2;
+const R_AVR_13_PCREL: u32 = 3;
+const R_AVR_16_PM: u32 = 5;
+const R_AVR_LO8_LDI: u32 = 6;
+const R_AVR_HH8_LDI_PM: u32 = 14;
+const R_AVR_CALL: u32 = 18;
+
+/// AVR (little-endian 16-bit words, RELA): `13_PCREL` (`rjmp`/`rcall`) and
+/// `7_PCREL` (`brbs`/`brbc`) take the word displacement from the next
+/// instruction, `(S + A - P - 2) >> 1`; the `LDI` family (6..14) a byte of
+/// `S + A` (`LO8`/`HI8`/`HH8`), of its negation (`_NEG`) or of the word
+/// address `(S + A) >> 1` (`_PM`) into `ldi`'s split K; `CALL` the 22-bit word
+/// address of `call`/`jmp`; `16_PM` a data word holding a word address.
+fn classify_avr(r_type: u32) -> Option<(Specific, bool)> {
+    Some(match r_type {
+        R_AVR_13_PCREL => (Specific::AvrPcrel { bits: 12 }, false),
+        R_AVR_7_PCREL => (Specific::AvrPcrel { bits: 7 }, false),
+        R_AVR_LO8_LDI..=R_AVR_HH8_LDI_PM => {
+            let n = r_type - R_AVR_LO8_LDI;
+            let shift = (n % 3) as u8 * 8;
+            (
+                Specific::AvrLdi {
+                    shift,
+                    neg: n / 3 == 1,
+                    pm: n / 3 == 2,
+                },
+                false,
+            )
+        }
+        R_AVR_CALL => (Specific::AvrCall, false),
+        R_AVR_16_PM => (Specific::AvrWordPm, false),
+        _ => return None,
+    })
+}
+
+/// `EM_AMDGPU`, which the `object` crate maps to no architecture.
+pub const EM_AMDGPU: u16 = 224;
+const R_AMDGPU_ABS32_LO: u32 = 1;
+const R_AMDGPU_ABS32_HI: u32 = 2;
+const R_AMDGPU_ABS64: u32 = 3;
+const R_AMDGPU_REL32: u32 = 4;
+const R_AMDGPU_REL64: u32 = 5;
+const R_AMDGPU_ABS32: u32 = 6;
+const R_AMDGPU_REL32_LO: u32 = 10;
+const R_AMDGPU_REL32_HI: u32 = 11;
+
+/// AMDGPU (little-endian, RELA): the 32-bit literal halves of `S + A`
+/// (`ABS32_LO`/`_HI`) and of `S + A - P` (`REL32_LO`/`_HI`, the
+/// `s_getpc_b64` + `s_add_u32`/`s_addc_u32` pair of a call or a global, whose
+/// addend already counts from the `s_getpc_b64` result), and the 32- and
+/// 64-bit data words.
+fn classify_amdgpu(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let half = |pc, high| Specific::AmdgpuHalf { pc, high };
+    let (specific, width) = match reloc.r_type {
+        Some(0) => return Ok(None),
+        Some(R_AMDGPU_ABS32_LO) => (half(false, false), 4),
+        Some(R_AMDGPU_ABS32_HI) => (half(false, true), 4),
+        Some(R_AMDGPU_REL32_LO) => (half(true, false), 4),
+        Some(R_AMDGPU_REL32_HI) => (half(true, true), 4),
+        Some(R_AMDGPU_ABS32) => (
+            Specific::Data {
+                bytes: 4,
+                pc: false,
+            },
+            4,
+        ),
+        Some(R_AMDGPU_REL32) => (Specific::Data { bytes: 4, pc: true }, 4),
+        Some(R_AMDGPU_ABS64) => (
+            Specific::Data {
+                bytes: 8,
+                pc: false,
+            },
+            8,
+        ),
+        Some(R_AMDGPU_REL64) => (Specific::Data { bytes: 8, pc: true }, 8),
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width,
         call: false,
         got: false,
     }))
@@ -731,6 +824,7 @@ fn classify_info(
         (Architecture::LoongArch32 | Architecture::LoongArch64, Some(elf::R_LARCH_B16)) => {
             Some((Specific::LarchBranch { bits: 16 }, false))
         }
+        (Architecture::Avr, Some(r_type)) if classify_avr(r_type).is_some() => classify_avr(r_type),
         (Architecture::Hexagon, Some(r_type)) if classify_hexagon(r_type).is_some() => {
             classify_hexagon(r_type)
         }
@@ -783,6 +877,7 @@ fn classify_info(
         let width = match specific {
             Specific::Ppc64Toc16 { .. } | Specific::PpcHalf16 { .. } => 2,
             Specific::RiscvRvcBranch | Specific::RiscvRvcJump => 2,
+            Specific::AvrPcrel { .. } | Specific::AvrLdi { .. } | Specific::AvrWordPm => 2,
             Specific::Ppc64Toc64
             | Specific::RiscvCall
             | Specific::BpfCall
@@ -933,6 +1028,21 @@ fn apply_info(
         Specific::LarchBranch { bits } => larch_branch(field, reloc, symbol, place, bits),
         Specific::LanaiBranch25 => lanai_field(field, reloc, symbol, 0x01ff_fffc, true),
         Specific::LanaiAbs21 => lanai_abs21(field, reloc, symbol),
+        Specific::AvrPcrel { bits } => avr_pcrel(field, reloc, symbol, place, bits),
+        Specific::AvrLdi { shift, neg, pm } => avr_ldi(field, reloc, symbol, shift, neg, pm),
+        Specific::AvrCall => avr_call(field, reloc, symbol),
+        Specific::AvrWordPm => {
+            let value = symbol as i128 + reloc.addend as i128;
+            require_aligned(value, 2)?;
+            write_u16(field, true, (value >> 1) as u16);
+            Ok(())
+        }
+        Specific::AmdgpuHalf { pc, high } => {
+            let value = symbol as i128 + reloc.addend as i128 - if pc { place as i128 } else { 0 };
+            let word = if high { value >> 32 } else { value };
+            write_u32(field, true, word as u32);
+            Ok(())
+        }
         Specific::HexBranch { mask, extended } => {
             hexagon_branch(field, reloc, symbol, place, mask, extended)
         }
@@ -2093,6 +2203,83 @@ fn lanai_abs21(
     let mut insn = read_u32(field, false);
     insn = (insn & !0x007c_ffff) | (((v >> 16) & 0x1f) << 18) | (v & 0xffff);
     write_u32(field, false, insn);
+    Ok(())
+}
+
+/// AVR `rjmp`/`rcall` (12-bit k at bits 11..0) and `brbs`/`brbc` (7-bit k at
+/// bits 9..3): the signed word displacement from the next instruction.
+fn avr_pcrel(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: u64,
+    bits: u8,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u16(field, true);
+    let (form, at) = if bits == 12 {
+        (insn & 0xe000 == 0xc000, 0)
+    } else {
+        (insn & 0xf800 == 0xf000, 3)
+    };
+    if !form || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - place as i128 - 2;
+    require_aligned(value, 2)?;
+    require_signed(value >> 1, bits)?;
+    let mask = ((1u16 << bits) - 1) << at;
+    insn = (insn & !mask) | ((((value >> 1) as u16) << at) & mask);
+    write_u16(field, true, insn);
+    Ok(())
+}
+
+/// AVR `ldi Rd, K` (`1110 KKKK dddd KKKK`): one byte of `S + A`, of its
+/// negation, or of its word address.
+fn avr_ldi(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    shift: u8,
+    neg: bool,
+    pm: bool,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u16(field, true);
+    if insn & 0xf000 != 0xe000 || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let mut value = symbol as i128 + reloc.addend as i128;
+    if neg {
+        value = -value;
+    }
+    if pm {
+        value >>= 1;
+    }
+    let k = ((value >> shift) as u16) & 0xff;
+    insn = (insn & 0xf0f0) | ((k & 0xf0) << 4) | (k & 0xf);
+    write_u16(field, true, insn);
+    Ok(())
+}
+
+/// AVR `call`/`jmp k` (`1001 010k kkkk 11xk`, then k[15:0]): the 22-bit word
+/// address `(S + A) >> 1`.
+fn avr_call(field: &mut [u8], reloc: RelocationInfo, symbol: u64) -> Result<(), RelocationFailure> {
+    let insn = read_u16(&field[..2], true);
+    if insn & 0xfe0c != 0x940c || reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128;
+    require_aligned(value, 2)?;
+    if !(0..1 << 23).contains(&value) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    let words = (value >> 1) as u32;
+    let high = (words >> 16) as u16;
+    write_u16(
+        &mut field[..2],
+        true,
+        (insn & !0x01f1) | ((high >> 1) << 4) | (high & 1),
+    );
+    write_u16(&mut field[2..], true, words as u16);
     Ok(())
 }
 
@@ -3540,6 +3727,123 @@ mod tests {
             );
             assert_eq!(field, before);
         }
+    }
+}
+
+#[cfg(test)]
+mod avr_amdgpu_tests {
+    use super::*;
+
+    fn info(r_type: u32, addend: i64) -> RelocationInfo {
+        RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        }
+    }
+
+    fn avr(
+        r_type: u32,
+        addend: i64,
+        bytes: &[u8],
+        symbol: u64,
+        place: u64,
+    ) -> Result<Vec<u8>, RelocationFailure> {
+        let info = info(r_type, addend);
+        let spec = classify_info(Architecture::Avr, info)?.expect("not a no-op");
+        let mut field = bytes.to_vec();
+        assert_eq!(field.len(), spec.width());
+        apply_info(spec, info, &mut field, true, symbol, place, None, None)?;
+        Ok(field)
+    }
+
+    // Words as ld.lld writes them for clang -mmcu=atmega2560/atmega328p and zig avr objects.
+    #[test]
+    fn avr_branches_ldi_bytes_and_calls_match_the_linker() {
+        assert_eq!(
+            avr(R_AVR_13_PCREL, 0, &[0xff, 0xdf], 0, 0x1d4),
+            Ok(vec![0x15, 0xdf])
+        );
+        assert_eq!(
+            avr(9, 0, &[0x00, 0x50], 0x2234, 0x12e),
+            Ok(vec![0x0c, 0x5c])
+        );
+        assert_eq!(
+            avr(10, 0, &[0x10, 0x40], 0x2234, 0x130),
+            Ok(vec![0x1d, 0x4d])
+        );
+        assert_eq!(
+            avr(R_AVR_LO8_LDI, 1, &[0x80, 0xe0], 0x1204, 0x198),
+            Ok(vec![0x85, 0xe0])
+        );
+        assert_eq!(
+            avr(7, 1, &[0x90, 0xe0], 0x1204, 0x19a),
+            Ok(vec![0x92, 0xe1])
+        );
+        assert_eq!(avr(13, 0, &[0x90, 0xe0], 0x2468, 0), Ok(vec![0x92, 0xe1]));
+        assert_eq!(
+            avr(R_AVR_CALL, 0, &[0x0e, 0x94, 0, 0], 0x1234, 0x106),
+            Ok(vec![0x0e, 0x94, 0x1a, 0x09])
+        );
+        assert_eq!(
+            avr(R_AVR_CALL, 0, &[0x0e, 0x94, 0, 0], 0x3_4568, 0x106),
+            Ok(vec![0x0f, 0x94, 0xb4, 0xa2])
+        );
+        assert_eq!(
+            avr(R_AVR_7_PCREL, 0, &[0x01, 0xf0], 0x120, 0x100),
+            Ok(vec![0x79, 0xf0])
+        );
+        assert_eq!(
+            avr(R_AVR_16_PM, 0, &[0, 0], 0x1234, 0),
+            Ok(vec![0x1a, 0x09])
+        );
+        assert_eq!(
+            avr(R_AVR_13_PCREL, 0, &[0x00, 0xe0], 0x120, 0x100),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+        assert_eq!(
+            avr(R_AVR_7_PCREL, 0, &[0x01, 0xf0], 0x400, 0x100),
+            Err(RelocationFailure::OutOfRange)
+        );
+    }
+
+    #[test]
+    fn amdgpu_literal_halves_and_data_words() {
+        let apply = |r_type, addend, symbol, place| {
+            let spec = classify_amdgpu(info(r_type, addend)).unwrap().unwrap();
+            let mut field = vec![0; spec.width()];
+            apply_info(
+                spec,
+                info(r_type, addend),
+                &mut field,
+                true,
+                symbol,
+                place,
+                None,
+                None,
+            )
+            .unwrap();
+            field
+        };
+        // `s_add_u32 s6, s6, lit` / `s_addc_u32 s7, s7, lit` of a call 0x100 back.
+        assert_eq!(
+            apply(R_AMDGPU_REL32_LO, 4, 0x40_0000, 0x40_00fc),
+            (-0xf8i32).to_le_bytes()
+        );
+        assert_eq!(
+            apply(R_AMDGPU_REL32_HI, 12, 0x40_0000, 0x40_0104),
+            (-1i32).to_le_bytes()
+        );
+        assert_eq!(
+            apply(R_AMDGPU_ABS32_HI, 0, 0x1_2345_6789, 0),
+            1u32.to_le_bytes()
+        );
+        assert_eq!(apply(R_AMDGPU_ABS64, 8, 0x1000, 0), 0x1008u64.to_le_bytes());
+        assert!(classify_amdgpu(info(0, 0)).unwrap().is_none());
+        assert!(classify_amdgpu(info(7, 0)).is_err(), "GOTPCREL");
     }
 }
 

@@ -1320,7 +1320,16 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   the low six bits of `16_X`, `11_X`, `10_X` and `6_X` for the instruction
   classes measured against `ld.lld` (by top byte, or bits 25..20 of a duplex
   for `6_X`), ORed in as the linker does. Other classes and `8_X`, `12_X`,
-  `9_X`, `7_X` are reported unsupported and leave the field untouched. eBPF objects are REL-only and every program ships as one,
+  `9_X`, `7_X` are reported unsupported and leave the field untouched.
+  AVR (unlace#757, little-endian 16-bit words) covers `13_PCREL` (`rjmp`/
+  `rcall`) and `7_PCREL` (`brbs`/`brbc`), the word displacement from the next
+  instruction; the nine `LDI` forms (`LO8`/`HI8`/`HH8` of `S + A`, of its
+  negation, or of the word address `(S + A) >> 1`) into `ldi`'s split K; `CALL`
+  (the 22-bit word address of `call`/`jmp`); and `16_PM`. AMDGPU (`EM_AMDGPU`,
+  no object architecture, told apart by `e_machine`) covers the 32-bit literal
+  halves `REL32_LO`/`REL32_HI` (`S + A - P`, the `s_getpc_b64` pair of every
+  call and global) and `ABS32_LO`/`ABS32_HI`, and the `ABS32`, `REL32`, `ABS64`
+  and `REL64` data words; the GOT forms stay unsupported. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from
@@ -7263,7 +7272,10 @@ every other binary's pass list is byte-identical to before the pass existed):
   to 64 hops, and the call site is the source position at that instruction.
   With `lines`, a second pass (`gopcln_lines`) also comments `<file>:<line>`
   at each PC where the position changes, the Go counterpart of `dwarf_lines`.
-  Both passes read the option themselves, so a default run decodes nothing;
+  Both passes run at the commit point, only when the option is on
+  (`crates/unlace-analysis/src/passes.rs (run_gopcln)`): a load-time pass sees
+  the option's constructor default, so registered at load they never wrote a
+  comment. A default run decodes nothing;
   a function is read only when its entry lies in executable bytes, and at most
   2,000,000 comments are written per image. The comments go through the same
   comment database as `dwarf_lines`, so they appear in the C text and in the
@@ -14587,7 +14599,12 @@ What counts as "no valid fall-through" is the positive-evidence predicate of
 (DIV-92; formerly the `noreturn_discstrict` option, now simply how
 `noreturn_disc` reads a call site). A call with no fall-through address at all —
 a tail jump lowered to a call — is evidence: that is a property of the call
-instruction. For its *successor* only **positive** evidence counts: the successor
+instruction. A call whose p-code ends in a RETURN behind a CBRANCH to the next
+instruction has a fall-through there (`listing/classify.rs`; unlace#756): SPARC
+lifts `call` as `didrestore = 0; CALL f; if (didrestore == 0) goto next; RETURN`,
+the RETURN only for a callee that ran `restore` in its delay slot, and reading
+the last op alone made every SPARC call a terminal one, so any function with
+three callers in a linked image was concluded no-return. For its *successor* only **positive** evidence counts: the successor
 is data (outside every executable range, so the compiler emitted nothing there to
 fall into), or the successor is another function's entry (the compiler left the
 caller no tail at all). The legacy tally had a third arm ahead of those two — the

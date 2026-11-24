@@ -5,10 +5,11 @@ use std::process::Command;
 
 #[test]
 fn aggregate_calls_and_function_pointers_compile_and_execute() {
-    let xml = include_str!(concat!(
+    let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-indirect-value-arguments.xml"
-    ));
+        "/../../tests/stages/kuna-indirect-value-arguments.toml"
+    )))
+    .unwrap();
     let chunk =
         regex::Regex::new(r#"<bytechunk[^>]*offset="0x([0-9a-f]+)"[^>]*>([0-9a-f]+)</bytechunk>"#)
             .unwrap();

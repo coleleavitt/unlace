@@ -29,6 +29,7 @@ pub mod kuna_javasync; // (kuna `javasync`) synchronized and finally from a DEX 
 pub mod kuna_javatry; // (kuna `javatry`) exception edges and try dispatches from a DEX method's try items
 pub mod kuna_jumpassist; // (kuna) the JumpAssisted model: switches computed by a <jumpassist> user-op
 pub mod kuna_jumptablefault;
+pub mod kuna_jumptablework; // (kuna `jumptablework`) bound the jump-table recovery work of one function's flow
 pub mod kuna_kernelbug; // (kuna) a Linux kernel __bug_table trap prints as BUG() or __WARN(file,line)
 pub mod kuna_lanefuse; // (kuna `lanefuse`) re-fuse per-lane vector p-code into one intrinsic op
 pub mod kuna_linuxsyscall; // (kuna) name the 32-bit Linux int 0x80 sites instead of calling through swi()

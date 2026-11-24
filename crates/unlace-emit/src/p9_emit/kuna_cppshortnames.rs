@@ -273,6 +273,20 @@ fn drop_inline_namespaces(s: &str) -> String {
     out
 }
 
+/// The printed spelling of a declared or called function's name: its
+/// [`short_type`] when `cppshortnames` is on. A standalone load names a C++
+/// function by its whole demangled path (`std::__cxx11::basic_string::_M_append`),
+/// with no scope list for [`short_scopes`] to shorten.
+pub fn function_name(arch: &crate::architecture::Architecture, name: String) -> String {
+    if !arch.kuna_options.get::<CppShortNames>().0 {
+        return name;
+    }
+    match short_type(&name) {
+        Cow::Owned(short) => short,
+        Cow::Borrowed(_) => name,
+    }
+}
+
 crate::kuna_flag!(
     /// (kuna `cppshortnames`) Print the short spelling of standard C++ names.
     /// See [`crate::kuna_cppshortnames`].
@@ -286,6 +300,19 @@ crate::kuna_flag!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_qualified_function_name_loses_its_inline_namespace() {
+        assert_eq!(
+            short_type("std::__cxx11::basic_string::_M_append"),
+            "std::basic_string::_M_append"
+        );
+        assert_eq!(
+            short_type("std::__1::vector::push_back"),
+            "std::vector::push_back"
+        );
+        assert_eq!(short_type("main"), "main");
+    }
 
     #[test]
     fn a_character_template_over_its_defaults_prints_its_alias() {

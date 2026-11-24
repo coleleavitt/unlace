@@ -25,7 +25,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-# (arch, oracle). Unicorn covers the targets it emulates well enough; QEMU covers the rest.
+# (arch, oracle). Unicorn covers the targets it emulates well enough, QEMU the rest, and x86-64 also
+# runs natively on this CPU.
 CONFIGS = [
     ("x86-64", "unicorn"), ("aarch64", "unicorn"), ("riscv64", "unicorn"), ("arm", "unicorn"),
     ("thumb", "unicorn"), ("mips", "unicorn"), ("ppc", "unicorn"), ("tricore", "unicorn"),
@@ -33,6 +34,7 @@ CONFIGS = [
     ("mips", "qemu"), ("mips64", "qemu"), ("mipsr6", "qemu"), ("mips64r6", "qemu"),
     ("ppc", "qemu"), ("ppc64", "qemu"), ("ppc64le", "qemu"), ("ppc64-isa", "qemu"), ("ppc64le-isa", "qemu"),
     ("s390x", "qemu"), ("nios2", "qemu"), ("sh4", "qemu"), ("m68k", "qemu"),
+    ("x86-64-native", "native"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"
@@ -62,13 +64,10 @@ def available(arch, oracle, objdump):
         if not shutil.which(objdump):
             return f"no {objdump}"
         arch = "riscv64"
-    try:
-        import arches
-    except ImportError as e:
-        return f"cannot import arches ({e})"
+    import arches
     if arch not in arches.ARCHES:
         return "unknown arch"
-    if oracle == "qemu":
+    if oracle in ("qemu", "native"):
         import qemu_backend
         return None if qemu_backend.available(arches.ARCHES[arch]) else "no QEMU user binary"
     return None
@@ -132,6 +131,11 @@ def main():
     ap.add_argument("--known", default=str(KNOWN), help="accepted finding classes per configuration")
     args = ap.parse_args()
     args.known = json.loads(Path(args.known).read_text()) if args.known and Path(args.known).exists() else {}
+    try:
+        import arches  # noqa: F401  (needs capstone and unicorn: run with the difffuzz venv's python)
+    except ImportError as e:
+        print(f"sweep: cannot import tools/difffuzz/arches.py ({e}); run it with the difffuzz venv's python", file=sys.stderr)
+        sys.exit(2)
     configs = [c for c in CONFIGS if not args.only or re.search(args.only, f"{c[0]}/{c[1]}")]
     with tempfile.TemporaryDirectory() as tmp, concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
         rows = list(ex.map(lambda c: run(c[0], c[1], args, tmp), configs))

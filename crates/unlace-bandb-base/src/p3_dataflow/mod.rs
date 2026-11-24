@@ -49,6 +49,7 @@ pub mod kuna_prunedssa;
 pub mod kuna_rangefold;
 pub mod kuna_renamereads;
 pub mod kuna_repstring;
+pub mod kuna_maskjoin;
 pub mod kuna_satconvert;
 pub mod kuna_satmul;
 pub mod kuna_selectdiv;

@@ -787,6 +787,11 @@ pub struct FlowInfo<'a, E: FlowEnvironment> {
     insn_count: uint4,
     /// Maximum number of instructions (C++ `insn_max`).
     insn_max: uint4,
+    /// (kuna `jumptablework`) Instructions flowed at each jump-table recovery,
+    /// summed.
+    kuna_jt_work: u64,
+    /// (kuna `jumptablework`) The bound was reached and warned about.
+    kuna_jt_work_spent: bool,
     /// Start of range in which we are allowed to flow (C++ `baddr`).
     baddr: Address,
     /// End of range in which we are allowed to flow (C++ `eaddr`).
@@ -938,6 +943,8 @@ impl<'a, E: FlowEnvironment> FlowInfo<'a, E> {
             block_edge2: Vec::new(),
             insn_count: 0,
             insn_max: !0u32,
+            kuna_jt_work: 0,
+            kuna_jt_work_spent: false,
             baddr,
             eaddr,
             minaddr: entry.clone(),
@@ -5137,7 +5144,9 @@ truncating the fall-through here"
                     .get_jump_table(idx as int4)
                     .kuna_keeps_recovered_targets()
             });
-            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery") {
+            let mut mode = if crate::kuna_budget::deadline_passed_in("jump-table recovery")
+                || self.jt_work_exhausted(op)
+            {
                 Ok(None)
             } else {
                 let mode = self.data.recover_jump_table_flow(
@@ -5274,6 +5283,32 @@ truncating the fall-through here"
             }
         }
         Ok(new_tables)
+    }
+
+    /// (kuna `jumptablework`) Charge one recovery of the dispatch `op` the
+    /// instructions flowed so far; `true` (with a warning the first time) once
+    /// the function's recoveries have passed the bound.
+    fn jt_work_exhausted(&mut self, op: OpId) -> bool {
+        if !self.kuna_jt_work_spent {
+            self.kuna_jt_work = self.kuna_jt_work.saturating_add(self.visited.len() as u64);
+            let limit = self
+                .data
+                .get_arch()
+                .kuna_options
+                .get::<crate::kuna_jumptablework::JumpTableWork>()
+                .0;
+            if !crate::kuna_jumptablework::exhausted(limit, self.kuna_jt_work) {
+                return false;
+            }
+            self.kuna_jt_work_spent = true;
+            if let Some(addr) = self.data.obank().get(op).map(|o| o.get_addr().clone()) {
+                self.data.warning(
+                    "Jump-table recovery work bound reached (option jumptablework): later indirect jumps are not recovered",
+                    &addr,
+                );
+            }
+        }
+        true
     }
 
     /// (kuna `--assert callee`) Is the BRANCHIND `op` a jump the caller stated

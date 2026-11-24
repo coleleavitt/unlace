@@ -861,24 +861,26 @@ callreloff: reloc  is disp30 [reloc=inst_start+4*disp30;] { export *:$(SIZE) rel
 {
 	local res:8 = zext(RS1:4) * zext(regorimm:4);
 	Y = zext(res[32,32]);
-	zeroflags(res:4);
 @if SIZE=="4"
-	RD = res:4;     # 32 bit only gets lower 4 bytes
+	local r:4 = res:4;     # 32 bit only gets lower 4 bytes
 @else
-	RD = res;       # 64 bit gets full product
+	local r:8 = res;       # 64 bit gets full product
 @endif
+	RD = r;
+	zeroflags(r);
 	logicflags();
 }
 :smulcc  RS1,regorimm,RD             is op=2 & RD & op3=0x1b & RS1 & regorimm
 {
 	local res:8 = sext(RS1:4) * sext(regorimm:4);
 	Y = zext(res[32,32]);
-	zeroflags(res:4);
 @if SIZE=="4"
-	RD = res:4;     # 32 bit only gets lower 4 bytes
+	local r:4 = res:4;     # 32 bit only gets lower 4 bytes
 @else
-	RD = res;       # 64 bit gets full product
+	local r:8 = res;       # 64 bit gets full product
 @endif
+	RD = r;
+	zeroflags(r);
 	logicflags();
 }
 
@@ -910,19 +912,27 @@ callreloff: reloc  is disp30 [reloc=inst_start+4*disp30;] { export *:$(SIZE) rel
 # NB- Beware, the plus + operator has higher precedence than shift <<
 # (These are Java rules. C rules have shift and + at the same level, so left to right)
 
-:udiv    RS1,regorimm,RD             is op=2 & RD & op3=0x0e & RS1 & regorimm
+:udiv    RS1,regorimm,RD           is op=2 & RD & op3=0x0e & RS1 & regorimm
 {
 	numerator:8 = (zext(Y) << 32) + zext(RS1:4);
 	denom:8 = zext(regorimm:4);
 	local res:8 = numerator / denom;
-	RD = zext(res:4);
+	local ov:1 = res > 0xffffffff;
+	res = zext(ov) * 0xffffffff + zext(!ov) * res;
+	local r:$(SIZE) = zext(res:4);
+	RD = r;
 }
-:sdiv    RS1,regorimm,RD             is op=2 & RD & op3=0x0f & RS1 & regorimm
+:sdiv    RS1,regorimm,RD           is op=2 & RD & op3=0x0f & RS1 & regorimm
 {
 	numerator:8 = (sext(Y) << 32) + zext(RS1:4);
 	denom:8 = sext(regorimm:4);
 	local res:8 = numerator s/ denom;
-	RD = sext(res:4);
+	local wrap:1 = (numerator == 0x8000000000000000) && (denom == 0xffffffffffffffff);
+	local hi:1 = wrap || (res s> 0x7fffffff);
+	local lo:1 = !wrap && (res s< -0x80000000);
+	res = zext(hi) * 0x7fffffff + zext(lo) * 0xffffffff80000000 + zext(!hi && !lo) * res;
+	local r:$(SIZE) = sext(res:4);
+	RD = r;
 }
 
 :udivcc    RS1,regorimm,RD           is op=2 & RD & op3=0x1e & RS1 & regorimm
@@ -930,21 +940,29 @@ callreloff: reloc  is disp30 [reloc=inst_start+4*disp30;] { export *:$(SIZE) rel
 	numerator:8 = (zext(Y) << 32) + zext(RS1:4);
 	denom:8 = zext(regorimm:4);
 	local res:8 = numerator / denom;
-	zeroflags(res:4);
-	RD = zext(res:4);
-	i_vf = res > 0xffffffff;
+	local ov:1 = res > 0xffffffff;
+	res = zext(ov) * 0xffffffff + zext(!ov) * res;
+	local r:$(SIZE) = zext(res:4);
+	RD = r;
+	zeroflags(r);
+	i_vf = ov;
 	i_cf = 0;
 	x_vf = 0;
 	x_cf = 0;
 }
 :sdivcc    RS1,regorimm,RD           is op=2 & RD & op3=0x1f & RS1 & regorimm
 {
-	numerator:8 = (sext(Y) << 32) + (zext(RS1) & 0xffffffff);
+	numerator:8 = (sext(Y) << 32) + zext(RS1:4);
 	denom:8 = sext(regorimm:4);
 	local res:8 = numerator s/ denom;
-	zeroflags(res:4);
-	RD = sext(res:4);
-	i_vf = (res s>= 0x80000000) || (res s<= -0x7ffffffff);
+	local wrap:1 = (numerator == 0x8000000000000000) && (denom == 0xffffffffffffffff);
+	local hi:1 = wrap || (res s> 0x7fffffff);
+	local lo:1 = !wrap && (res s< -0x80000000);
+	res = zext(hi) * 0x7fffffff + zext(lo) * 0xffffffff80000000 + zext(!hi && !lo) * res;
+	local r:$(SIZE) = sext(res:4);
+	RD = r;
+	zeroflags(r);
+	i_vf = hi || lo;
 	i_cf = 0;
 	x_vf = 0;
 	x_cf = 0;

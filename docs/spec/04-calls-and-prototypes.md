@@ -427,6 +427,13 @@ SparcV9_64.cspec spelled its below-the-frame local range in 32 bits
 4 GiB, so the frame's only local range ended at the window save area and an
 open array there ran on through the parameter range. kuna's copy sign-extends
 it, as x86-64-gcc.cspec does; an array at `fp+0x7fb` now ends at the frame.
+Its default model also took every float result from `fd0` at sizes 4..8, and a
+4-byte value in a big-endian 8-byte register is its low-order half, `%f1`: the
+V9 ABI right-justifies a float *argument* there, but returns a float result in
+`%f0`, so `return v * n;` printed `return v;` (the first argument; unlace#765).
+The output list is now `fs0` (4 bytes), `fd0`/`fd2` (8), `fq0` (16), then `o0`,
+and the float `join` rule over 8..16 bytes is gone: joining from a list that
+holds `fs0` and `fd0` built a `PIECE` of two overlapping registers.
 
 The spec's **named** models are registered alongside it, in document order
 (`crates/unlace-middle/src/infra/architecture.rs (decode_named_protos,
@@ -2199,7 +2206,12 @@ classified:
   only bounded is set to the saved value there, if the bounds contain it. The
   pops after the unlink (the cookie slot, the callee-saved registers) then read
   the slots the prologue wrote, instead of unplaced stack. A later store to the
-  saved slot forgets it. This one does change what the pop proof reads, so with
+  saved slot forgets it. A call the walk cannot read that is made with the
+  stack pointer at the saved value (only its return address pushed; the
+  virtual call `mov eax,[ecx]; call [eax+4]` between statements) takes no
+  stack argument, so it pops none and the stack pointer stays at the saved
+  value. Without that, every push of a local's address after such a call reads
+  as an unplaced store. This one does change what the pop proof reads, so with
   the option on an MSVC EH function whose virtual calls left its stack pointer
   bounded can prove its pop.
   The rest of this bookkeeping runs only with the option on and never changes

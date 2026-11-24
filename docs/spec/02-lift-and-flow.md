@@ -2602,6 +2602,17 @@ table reached once the deadline has passed is not attempted — its BRANCHIND is
 truncated like any unrecovered one, so the loop drains instead of staging more
 sub-decompilations — and the budget error names the step and the indirect
 jump's address. Without a budget each probe is one thread-local read.
+(kuna `jumptablework`, default 250000) The loop is also bounded in work.
+Each recovery costs the number of instructions flowed when it starts, because
+its partial decompile covers all of them, and
+`flow.rs (FlowInfo::jt_work_exhausted)` adds that to the function's sum
+before each table. Once the sum passes the bound, that table and every later one
+are not attempted. They are truncated like an unrecovered table, and one warning
+at the first of them names the option. This is what stops a function whose
+recovered tables lead into more and more code: an obfuscated arm64e image that
+dispatches every branch through a shared table of signed pointers grows a
+972-byte function past 20,000 flowed instructions, one recovery at a time.
+`off` removes the bound.
 Two pre-checks bound the attempt:
 `funcdata_block.rs (Funcdata::early_jump_table_fail)` backtracks up to 8 ops
 through value-preserving arithmetic looking for a computation the recovery can
@@ -2922,7 +2933,8 @@ the case targets.
    or a dispatch retried after an earlier recovery, is not re-run, so a
    recovery that fails for its own reasons costs one extent scan and no
    second pipeline. A function's last table has
-   no such bound and is left as it was: an object the function merely reads
+   no such bound here (an unguarded one ends at the next function's table
+   below): an object the function merely reads
    may sit anywhere in the section, and a bound taken from one could run the
    table on into another function's, whose entries are plausible code
    addresses measured from the wrong base. The discovery Listing applies the
@@ -2958,12 +2970,18 @@ the case targets.
    functions' tables measured from the wrong base: they land all over the
    next functions and back inside this one, so the run-on cut, which keeps
    every row until the first that leaves the function, keeps them all and
-   the 45-case switch printed 1,200 lines of phantom cases. When the run-on
-   cut leaves an unguarded table whose rows leave the function,
-   `jumptable.rs (JumpBasicModel::kuna_next_table_rows)` reads its table and
-   stride as above and ends it at the lowest jump table above it in the same
-   section, of this function or of the next ones, when that leaves at least
-   two rows. The next functions' tables come from the flow: the sanity check
+   the 45-case switch printed 1,200 lines of phantom cases. A byte selector
+   with no range check is the same shape on x86-64 when the rows past the
+   table stay inside the function: gnulib's regcomp (csplit `sub_13330`)
+   reads its `unsigned char` token type straight into a 37-entry table and
+   OCaml compiles an exhaustive match the same way, so the next table's
+   offsets, measured from the wrong base, became cases that land mid-instruction.
+   For every unguarded table (no guard, or guards that leave its
+   selector's top open), `jumptable.rs (JumpBasicModel::kuna_next_table_rows)`
+   reads its table and stride as above and ends it at the lowest jump table
+   above it in the same section, of this function or of the next ones, when
+   that leaves at least two rows and fewer than the rows kept so far; the
+   run-on cut applies when no table ends it sooner. The next functions' tables come from the flow: the sanity check
    inside the recovery partial records the table it wants
    (`Funcdata::kuna_later_wanted`) and fails, and
    `flow.rs (FlowInfo::recover_jump_tables)` decodes the extents after this
@@ -2976,9 +2994,8 @@ the case targets.
    request can also come from the retry the function's own tables bound
    (a row of the bounded table lies in the next known function); the flow
    then answers it in a second round. Either way the request never leaves
-   a table unrecovered. A table whose rows all stay
-   inside the function costs nothing, and the decode runs only for a table
-   already unguarded and leaving the function.
+   a table unrecovered. A guarded table costs nothing; an unguarded one
+   costs the extent decodes and one more recovery, once per function.
 
    **Guards that leave the top open (always on).**
    `jumptable.rs (JumpBasicModel::analyze_guards)` records the
@@ -4987,7 +5004,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `Xtensa` (ESP32-S3 PIE) | Xtensa LX7 with the ESP32-S3 Processor Instruction Extensions (`EE.*`) | `Xtensa:LE:32:esp32s3` | Espressif LLVM `XtensaS3DSPInstrInfo.td` (encodings, generated), ESP32-S3 TRM PIE chapter | `unlace-cli/tests/processors.toml` (`xtensa_esp32s3_pie_*`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
-| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
+| `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a), RDNA 1/2 (gfx10) and RDNA 3 (gfx11) shader ISAs, one-lane lift (RDNA wave32, and wave64 with 64-bit lane masks; gfx11 true16 halves, VOP3P/WMMA and MIMG from generated includes) | `AMDGPU:LE:64:GFX9`, `AMDGPU:LE:64:GFX10`, `AMDGPU:LE:64:GFX11`, `AMDGPU:LE:64:GFX10-W64`, `AMDGPU:LE:64:GFX11-W64` | LLVM AMDGPU encodings (`llvm-mc -show-encoding` / `--disassemble`, `llvm-objdump` tables read by `tools/amdgpu_gfx11_probe.py`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/processors.toml` (`amdgpu*`) |
 | `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
@@ -5322,6 +5339,36 @@ register group: the overlapping registers `v0m2`..`v30m2`, `v0m4`..`v28m4` and
 `v0m8`..`v24m8` (64, 128 and 256 bytes, operand subtables `vdm<n>` and `vs2m<n>`), and
 `vmv<n>r.v` lifts as a copy of the group (`vmv1r.v` as a register copy). A register number not
 a multiple of `n` is reserved and, as in LLVM, not decoded.
+
+The other operands are register groups too, of a size `vtype` decides, so `vtype` is tracked
+as context (`tools/gen_rvv_groups.py` generates the tables and the constructors).
+- **Context.** `vsetvli` and `vsetivli` set context fields from their immediate for the
+  instructions after them (`globalset(inst_next, ...)`, subtable `vtctx`): `vknown`, and
+  log2 of the group size of each operand class. The classes are `gk` for LMUL, `wk` for 2*LMUL,
+  and `e8k`..`e64k` for EEW/SEW*LMUL; the field is 0 for one register and when the vtype makes
+  the encoding reserved. `vsetvl`, whose vtype is a register, clears `vknown`. The context holds
+  from the `vsetvli` to the next one in address order. Compiled code sets vtype before each
+  strip-mined loop and after each call, so that matches execution there.
+- **Groups.** After each constructor there is one constructor per group shape, under a pattern
+  over those fields, whose operands are fixed-size subtables (`vd_k4a4` is a 4-register group at
+  a 4-aligned vd). The register file has an overlapping register for every run of 2..8
+  registers (`v8m2`, `v9_11`); a run past v31, which only a reserved segment encoding names,
+  reaches into unused register space.
+  - Data, index and destination groups are LMUL for most operands, 2*LMUL for widening results
+    and `.w` sources, and 2*LMUL for narrowing sources.
+  - Loads and stores use EEW/SEW*LMUL for their data, and indexed ones for their index.
+  - A segment access covers nf groups; with no known vtype it still writes its nf registers.
+  - Reduction, mask and scalar-move operands stay one register.
+  - A misaligned group at a known vtype is reserved and falls back to the single-register form.
+- **Old destination.** Every user operation that writes a vector register takes the old
+  destination (group) as its first input. Tail- or mask-undisturbed elements, and every element
+  when vl = 0, keep their old values.
+- **`vset*`.** `vsetvli`, `vsetivli` and `vsetvl` write `vl` (the user operation's result, also
+  in `rd`) and `vtype`. `vtype` is the immediate, or `rs2`, unless the vtype is reserved: then
+  `vill` is set. Reserved here means bits above 7 set, LMUL encoding 4, or SEW above 64. A
+  fractional LMUL with SEW > LMUL*ELEN is implementation-defined; QEMU accepts it, and so does
+  the lift. `vsetvli x0, x0` keeps `vl`.
+- **Not written.** The accrued flags (fflags, vxsat) are not written, as in the scalar F/D lift.
 Exercised by `unlace-cli/tests/riscv_vector.rs`: all 1258 encoding shapes
 against LLVM's names (`fixtures/riscv_vector/probe64.txt`) and LLVM-lowered
 vector functions (load/add/store, a reduction into a scalar, an FMA with a

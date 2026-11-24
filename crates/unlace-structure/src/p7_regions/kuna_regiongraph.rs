@@ -276,33 +276,30 @@ struct Adjacency {
 /// `networkx.DiGraph` analog: nodes carry insertion-ordered predecessor and
 /// successor lists (mirroring networkx adjacency-dict insertion order), edges
 /// are deduplicated on insert, self-loops are supported, and whole-graph node
-/// iteration is in `KunaNodeOrder` (the `BTreeMap` over [`KunaNodeKey`]).  The
+/// iteration is in `KunaNodeOrder` (the `BTreeSet` over [`KunaNodeKey`]).  The
 /// `Clone` impl performs a full structural copy (the node handles themselves
 /// are shared via the pool, never owned by the graph).
 ///
-/// The graph stores [`KunaNodeKey`]s as the map key so iteration is in
-/// `KunaNodeOrder` without consulting the pool; the key carries the `(addr,
-/// ident)` and id together.
+/// The ordered key set gives `KunaNodeOrder` iteration without consulting the
+/// pool; the adjacency is reached by id through a hash map that is never
+/// iterated, so a neighbor read costs one probe instead of two tree searches.
 #[derive(Debug, Clone, Default)]
 pub struct KunaRegionGraph {
-    /// All nodes with their adjacency (C++ `NodeMap nodes`).
-    nodes: BTreeMap<KunaNodeKey, Adjacency>,
-    /// id -> key, so pointer-keyed lookups (`find(n)`) need not hit the pool.
-    keyof: BTreeMap<KunaNodeId, KunaNodeKey>,
+    /// All nodes in `KunaNodeOrder` (the keys of C++ `NodeMap nodes`).
+    order: BTreeSet<KunaNodeKey>,
+    /// id -> (key, adjacency). Membership and lookup only, never iterated.
+    adj: FxHashMap<KunaNodeId, (KunaNodeKey, Adjacency)>,
 }
 
 impl KunaRegionGraph {
     /// An empty graph.
     pub fn new() -> KunaRegionGraph {
-        KunaRegionGraph {
-            nodes: BTreeMap::new(),
-            keyof: BTreeMap::new(),
-        }
+        KunaRegionGraph::default()
     }
 
     /// Is the node in the graph? (C++ `containsNode`).
     pub fn contains_node(&self, n: KunaNodeId) -> bool {
-        self.keyof.contains_key(&n)
+        self.adj.contains_key(&n)
     }
 
     /// Add a node, with its ordered key (C++ `addNode`, idempotent).
@@ -310,8 +307,10 @@ impl KunaRegionGraph {
     /// The key must mirror `KunaNodeOrder` for `n` (use [`KunaNodePool::key`]).
     pub fn add_node_keyed(&mut self, key: KunaNodeKey) {
         // Default-construct adjacency if absent (C++ `nodes[n];`).
-        self.nodes.entry(key).or_default();
-        self.keyof.insert(key.id, key);
+        self.order.insert(key);
+        self.adj
+            .entry(key.id)
+            .or_insert_with(|| (key, Adjacency::default()));
     }
 
     /// Add a node by id, consulting the pool for its key (convenience).
@@ -319,52 +318,45 @@ impl KunaRegionGraph {
         self.add_node_keyed(pool.key(n));
     }
 
-    /// Look up a node's stored key.
-    fn key_of(&self, n: KunaNodeId) -> Option<KunaNodeKey> {
-        self.keyof.get(&n).copied()
+    fn node(&self, n: KunaNodeId) -> Option<&Adjacency> {
+        self.adj.get(&n).map(|(_, adj)| adj)
+    }
+
+    fn node_mut(&mut self, n: KunaNodeId) -> Option<&mut Adjacency> {
+        self.adj.get_mut(&n).map(|(_, adj)| adj)
     }
 
     /// Remove node and all incident edges (C++ `removeNode`).
     pub fn remove_node(&mut self, n: KunaNodeId) {
-        let key = match self.key_of(n) {
-            Some(k) => k,
-            None => return,
+        let Some((key, adj)) = self.adj.remove(&n) else {
+            return;
         };
         // Strip this node out of every neighbor's adjacency (handles
         // self-loops: the self entry lives in our own lists, erased wholesale).
-        let preds = self.nodes[&key].preds.clone();
-        for p in preds {
+        for p in adj.preds {
             if p == n {
                 continue;
             }
-            let pk = self.keyof[&p];
-            let ps = &mut self.nodes.get_mut(&pk).unwrap().succs;
+            let ps = &mut self.node_mut(p).unwrap().succs;
             if let Some(pos) = ps.iter().position(|&x| x == n) {
                 ps.remove(pos);
             }
         }
-        let succs = self.nodes[&key].succs.clone();
-        for s in succs {
+        for s in adj.succs {
             if s == n {
                 continue;
             }
-            let sk = self.keyof[&s];
-            let sp = &mut self.nodes.get_mut(&sk).unwrap().preds;
+            let sp = &mut self.node_mut(s).unwrap().preds;
             if let Some(pos) = sp.iter().position(|&x| x == n) {
                 sp.remove(pos);
             }
         }
-        self.nodes.remove(&key);
-        self.keyof.remove(&n);
+        self.order.remove(&key);
     }
 
     /// Does edge a->b exist? (C++ `hasEdge`).
     pub fn has_edge(&self, a: KunaNodeId, b: KunaNodeId) -> bool {
-        let key = match self.key_of(a) {
-            Some(k) => k,
-            None => return false,
-        };
-        self.nodes[&key].succs.contains(&b)
+        self.node(a).is_some_and(|adj| adj.succs.contains(&b))
     }
 
     /// Add edge (idempotent, auto-adds endpoints) (C++ `addEdge`).
@@ -375,60 +367,56 @@ impl KunaRegionGraph {
         if self.has_edge(a, b) {
             return;
         }
-        let ak = pool.key(a);
-        let bk = pool.key(b);
-        self.add_node_keyed(ak);
-        self.add_node_keyed(bk);
-        self.nodes.get_mut(&ak).unwrap().succs.push(b);
-        self.nodes.get_mut(&bk).unwrap().preds.push(a);
+        self.add_node_keyed(pool.key(a));
+        self.add_node_keyed(pool.key(b));
+        self.node_mut(a).unwrap().succs.push(b);
+        self.node_mut(b).unwrap().preds.push(a);
     }
 
     /// Remove edge if present (C++ `removeEdge`).
     pub fn remove_edge(&mut self, a: KunaNodeId, b: KunaNodeId) {
-        if let Some(ak) = self.key_of(a) {
-            let succs = &mut self.nodes.get_mut(&ak).unwrap().succs;
-            if let Some(pos) = succs.iter().position(|&x| x == b) {
-                succs.remove(pos);
+        if let Some(adj) = self.node_mut(a) {
+            if let Some(pos) = adj.succs.iter().position(|&x| x == b) {
+                adj.succs.remove(pos);
             }
         }
-        if let Some(bk) = self.key_of(b) {
-            let preds = &mut self.nodes.get_mut(&bk).unwrap().preds;
-            if let Some(pos) = preds.iter().position(|&x| x == a) {
-                preds.remove(pos);
+        if let Some(adj) = self.node_mut(b) {
+            if let Some(pos) = adj.preds.iter().position(|&x| x == a) {
+                adj.preds.remove(pos);
             }
         }
     }
 
     /// In-degree (C++ `sizeIn`).
     pub fn size_in(&self, n: KunaNodeId) -> KunaResult<int4> {
-        let key = self
-            .key_of(n)
+        let adj = self
+            .node(n)
             .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: sizeIn of node not in graph"))?;
-        Ok(self.nodes[&key].preds.len() as int4)
+        Ok(adj.preds.len() as int4)
     }
 
     /// Out-degree (C++ `sizeOut`).
     pub fn size_out(&self, n: KunaNodeId) -> KunaResult<int4> {
-        let key = self
-            .key_of(n)
+        let adj = self
+            .node(n)
             .ok_or_else(|| KunaError::lowlevel("kuna regiongraph: sizeOut of node not in graph"))?;
-        Ok(self.nodes[&key].succs.len() as int4)
+        Ok(adj.succs.len() as int4)
     }
 
     /// In-neighbors in insertion order (C++ `getPreds`).
     pub fn get_preds(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
-        let key = self.key_of(n).ok_or_else(|| {
+        let adj = self.node(n).ok_or_else(|| {
             KunaError::lowlevel("kuna regiongraph: getPreds of node not in graph")
         })?;
-        Ok(&self.nodes[&key].preds)
+        Ok(&adj.preds)
     }
 
     /// Out-neighbors in insertion order (C++ `getSuccs`).
     pub fn get_succs(&self, n: KunaNodeId) -> KunaResult<&[KunaNodeId]> {
-        let key = self.key_of(n).ok_or_else(|| {
+        let adj = self.node(n).ok_or_else(|| {
             KunaError::lowlevel("kuna regiongraph: getSuccs of node not in graph")
         })?;
-        Ok(&self.nodes[&key].succs)
+        Ok(&adj.succs)
     }
 
     /// Out-neighbors in `KunaNodeOrder` (C++ `getSortedSuccs`).
@@ -481,7 +469,7 @@ impl KunaRegionGraph {
 
     /// Snapshot all edges (node-major deterministic order) (C++ `allEdges`).
     pub fn all_edges(&self, res: &mut Vec<(KunaNodeId, KunaNodeId)>) {
-        for (key, adj) in self.nodes.iter() {
+        for (key, adj) in self.iter_adj() {
             for &s in adj.succs.iter() {
                 res.push((key.id, s));
             }
@@ -490,7 +478,7 @@ impl KunaRegionGraph {
 
     /// Snapshot all nodes in `KunaNodeOrder` (C++ `getNodes`).
     pub fn get_nodes(&self, res: &mut Vec<KunaNodeId>) {
-        for key in self.nodes.keys() {
+        for key in self.order.iter() {
             res.push(key.id);
         }
     }
@@ -504,12 +492,10 @@ impl KunaRegionGraph {
             res.add_node_keyed(*key);
         }
         for key in keep.iter() {
-            if !self.contains_node(key.id) {
+            let Some(adj) = self.node(key.id) else {
                 continue;
-            }
-            // get_succs cannot fail: contains_node was just checked.
-            let succs: Vec<KunaNodeId> = self.nodes[key].succs.clone();
-            for s in succs {
+            };
+            for &s in adj.succs.iter() {
                 if keep.contains(&pool.key(s)) {
                     res.add_edge(pool, key.id, s);
                 }
@@ -519,41 +505,36 @@ impl KunaRegionGraph {
 
     /// Build edge-reversed copy, same node set (C++ `buildReversed`).
     pub fn build_reversed(&self, pool: &KunaNodePool, res: &mut KunaRegionGraph) {
-        for key in self.nodes.keys() {
+        for key in self.order.iter() {
             res.add_node_keyed(*key);
         }
-        // Collect first to avoid borrowing self while mutating res via the pool.
-        let mut edges: Vec<(KunaNodeId, KunaNodeId)> = Vec::new();
-        for (key, adj) in self.nodes.iter() {
+        for (key, adj) in self.iter_adj() {
             for &s in adj.succs.iter() {
-                edges.push((s, key.id));
+                res.add_edge(pool, s, key.id);
             }
-        }
-        for (a, b) in edges {
-            res.add_edge(pool, a, b);
         }
     }
 
     /// Begin deterministic node iteration (C++ `beginNode`/`endNode`): the
     /// keys are in `KunaNodeOrder`.
     pub fn node_keys(&self) -> impl Iterator<Item = &KunaNodeKey> {
-        self.nodes.keys()
+        self.order.iter()
     }
 
     /// Iterate nodes with their adjacency in `KunaNodeOrder`.
     fn iter_adj(&self) -> impl Iterator<Item = (&KunaNodeKey, &Adjacency)> {
-        self.nodes.iter()
+        self.order.iter().map(|key| (key, &self.adj[&key.id].1))
     }
 
     /// Number of nodes (C++ `numNodes`).
     pub fn num_nodes(&self) -> int4 {
-        self.nodes.len() as int4
+        self.order.len() as int4
     }
 
     /// Number of edges (C++ `numEdges`).
     pub fn num_edges(&self) -> int4 {
         let mut count = 0;
-        for adj in self.nodes.values() {
+        for (_, adj) in self.adj.values() {
             count += adj.succs.len() as int4;
         }
         count
@@ -561,8 +542,8 @@ impl KunaRegionGraph {
 
     /// Remove all nodes and edges (C++ `clear`).
     pub fn clear(&mut self) {
-        self.nodes.clear();
-        self.keyof.clear();
+        self.order.clear();
+        self.adj.clear();
     }
 }
 
@@ -593,6 +574,8 @@ pub fn kuna_dfs_back_edges(
         cursor: int4,
     }
     let mut stack: Vec<Frame> = Vec::new();
+    // Child lists of popped frames, reused by later pushes.
+    let mut spare: Vec<Vec<KunaNodeId>> = Vec::new();
     stack.push(Frame {
         node: start,
         children: g.get_sorted_succs(pool, start)?,
@@ -616,7 +599,8 @@ pub fn kuna_dfs_back_edges(
                 }
             } else if !finished.contains(&child) {
                 // NOTE: push invalidates the C++ `frame`; nothing below uses it.
-                let children = g.get_sorted_succs(pool, child)?;
+                let mut children = spare.pop().unwrap_or_default();
+                g.get_sorted_succs_into(pool, child, &mut children)?;
                 stack.push(Frame {
                     node: child,
                     children,
@@ -625,7 +609,9 @@ pub fn kuna_dfs_back_edges(
             }
         } else {
             finished.insert(node);
-            stack.pop();
+            if let Some(frame) = stack.pop() {
+                spare.push(frame.children);
+            }
         }
     }
     Ok(())

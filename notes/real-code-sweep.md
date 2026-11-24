@@ -139,6 +139,23 @@ Also fixed in this round, before the re-run:
 
 The `elfroute_*` rows cover these.
 
+## Re-run on `unlace-f7e6edec8e` (2026-11-25)
+
+Same 98 runs as the previous re-run, no `--target` except the HiFi 4 `--target` pair. Everything loads and every function is found: 13/13, and 10/10 for BPF. VE has no spec.
+
+| family | since `5dac424f4f` | open |
+|---|---|---|
+| x86 -O0, MSP430 -O0 | UBSan and libcall externs named (#861) | |
+| AVR -O2 (.o) | fully relocated (#856) | |
+| AVR -O0 (.o) | | 23 `rcall`s to libcalls out of range, no PC wrap-around: #976 |
+| ARCv2 (.o) | `bl`/`b`/long immediates relocated (#857) | `SDA_LDST2`/`SDA16_ST2` small-data forms unsupported (by design in #857) |
+| BPF | -O2 `str_len` returns its counter by default (`retindexuse` = `bpf`, #900, #948) | |
+| C-SKY, OpenRISC, Lanai, ARC (.o) | `scale` returns its `__addsf3` sum (#901, #903) | the linked `.elf`s still print `void scale`/`sub_`: their libcalls are unresolved to 0 by how they were linked (`--unresolved-symbols=ignore-all`), not a decompiler gap |
+| m68k | | -O2 `str_len`'s `strlen` call was `sub_402000` (`R_68K_32` on `jsr`): fixed in #974 |
+| Xtensa, Xtensa HiFi 4 | | -O2 `mul_wide` still `void`: `call8` returns in `a10:a11` (#864 notes) |
+| AArch64, MIPS(el), OpenRISC, Hexagon | | `add_all`'s va_list walk reads the stack pointer as `Register0000xxxx`: #975 |
+| CUDA sm_80 | | -O2 `str_len` `void` (#865, SASS left as is); relocation type 66 still skipped |
+
 ## Bytecode and GPU families (sleigh-fam-e, 2026-11-24)
 
 Real artifacts decompiled one function or code object at a time with the pinned

@@ -3183,4 +3183,173 @@ class Bfin(ObjdumpArch):
         return set()
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin())}
+RX_DENY = re.compile(
+    r"^(b[a-z]*(\.[sbwa])?|bra(\.[sbwla])?|bsr(\.[wal])?|jmp|jsr|rts|rtsd|rte|rtfi|wait|brk|int|nop|"
+    r"mvtc|mvfc|setpsw|clrpsw|pushc|popc|mvtipl|push(\.[bwl])?|pushm|pop|popm|smovf|smovb|smovu|sstr\..|"
+    r"scmpu|suntil\..|swhile\..|rmpa\..|f[a-z]+|round|itof|mac[a-z]*|mul[hl]o|mvfac[a-z]*|mvtac[a-z]*|"
+    r"racw|racl|rdacw|rdacl|emaca|emsba|emula|msbhi|msblh|msblo|movco|movli|\.[a-z]+)$"
+)
+
+
+class Rx(ObjdumpArch):
+    """Renesas RX (RXv1, little endian) against gdb's rx simulator (--oracle gdbsim, driven with
+    dfsim_plain: sim/rx has its own main.c). R0 is the stack pointer; C, Z, S and O are compared
+    through PSW (sim/rx register 18). Branches, calls, returns, control-register moves,
+    push/pop, string, floating-point and DSP (accumulator) instructions are not generated."""
+    name = "rx"
+    lang = "RX:LE:32:RXv1"
+    elf_machine = 173
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(f"R{i}", None) for i in range(16)]
+    pc_const = None
+    flags_reg = "psw"
+    flag_bits = {"C": 0, "Z": 1, "S": 2, "O": 3}
+    deny = RX_DENY
+    gdbsim = "rx"
+    gdb_pc = "pc"
+    sim_regnums = dict([(f"R{i}", (i, 4)) for i in range(16)] + [("psw", (18, 4)), ("pc", (19, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("rx runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("rx", False, 8, b"\x03", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.4:
+            return rng.randrange(0x10000, 0xF0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def addr_ok(self, a):
+        return 0x10 <= a < 0x100000
+
+    def canonical(self, cand):
+        mn, ops = cand["mnemonic"], cand["op_str"]
+        # RXv2/RXv3-only forms (double-precision, DBT, 3-operand XOR) and encodings binutils
+        # accepts with an immediate wider than the operation (MOV.B/W #imm32)
+        if "invalid" in mn + ops or mn.startswith("d") or (mn == "xor" and ops.count(",") == 2):
+            return False
+        # ... a MOV.B/W #imm to a register, and the 06 memex prefix with a register source
+        if re.match(r"mov\.[bw]$", mn) and re.search(r", r\d+$", ops) and ops.startswith("#"):
+            return False
+        if cand["bytes"][0] == 0x06 and len(cand["bytes"]) > 1 and (cand["bytes"][1] & 3) == 3:
+            return False
+        m = re.match(r"mov\.([bw]) #(0x[0-9a-f]+|-?\d+),", ops and mn + " " + ops)
+        if m:
+            v = int(m.group(2), 0)
+            lim = 0x100 if m.group(1) == "b" else 0x10000
+            if not (-lim // 2 <= v < lim):
+                return False
+        return True
+
+    def ignored(self, mnemonic, operands, state):
+        # a register shift count uses bits 4..0 of the register; sim/rx shifts by all of it
+        m = re.match(r"(r\d+), (r\d+)$", operands)
+        if mnemonic in ("shll", "shlr", "shar", "rotl", "rotr") and m:
+            c = state.get(m.group(1).upper())
+            if m.group(1) == m.group(2) or c > 31:
+                return {"*"}
+        return set()
+
+    def mem_ignored(self, a):
+        # sim/rx keeps a byte of its own at 0x88264 (it reads back 4 whatever was written)
+        return a == 0x88264
+
+
+RL78_DENY = re.compile(
+    r"^(br|b[a-z]+|bt|bf|btclr|call|callt|ret[a-z]*|sk[a-z]+|halt|stop|brk|nop|push|pop|sel|"
+    r"oneb|clrb|\.[a-z]+|mov1|set1|clr1|not1|and1|or1|xor1)$"
+)
+RL78_GPRS = ["X", "A", "C", "B", "E", "D", "L", "H"]
+
+
+class Rl78(ObjdumpArch):
+    """Renesas RL78 (G14 core) against gdb's rl78 simulator (--oracle gdbsim, dfsim_plain, sim
+    argument g14). The language keeps the bank-0 registers and PSW at their data addresses
+    (0xffef8.., 0xffffa), so mem_registers; CY, AC and Z are compared through PSW (register bank
+    0, interrupts off). Branches, skips, calls, returns, bank selects, push/pop and the bit
+    manipulation instructions are not generated."""
+    name = "rl78"
+    lang = "RL78:LE:16:default"
+    elf_machine = 197
+    elf_flags = 0x0c                            # E_FLAG_RL78_G14
+    base = 0x1000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in RL78_GPRS + ["PSW", "SPL", "SPH"]]
+    pc_const = None
+    deny = RL78_DENY
+    mem_registers = True
+    gdbsim = "rl78"
+    gdb_pc = "pc"
+    sim_args = ("g14",)
+    misaligned_undefined = True                 # a word access at an odd address
+    sim_regnums = dict([(n, (i, 1)) for i, n in enumerate(RL78_GPRS)] + [("PSW", (32, 1)), ("pc", (35, 4)), ("SPL", (36, 1)), ("SPH", (37, 1))])
+
+    def unicorn(self):
+        raise NotImplementedError("rl78 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("rl78", False, 8, b"\x00", 1)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def rand_reg(self, rng, bits):
+        return rng.choice([0, 1, 0x7F, 0x80, 0xFF, rng.getrandbits(8)])
+
+    def fix_inputs(self, init, rng):
+        init["PSW"] &= 0x51                      # CY, AC, Z; bank 0, IE and ISP clear
+        init["SPL"] &= 0xFE                      # sim/rl78 truncates an odd SP
+
+    def partial(self, mnemonic, operands):
+        # sim/rl78 derives AC from bit 4 (bit 8 for words) of the result and a smaller low nibble,
+        # which is wrong for subtraction and for carries that leave bit 4 alone: compare CY and Z
+        return {"PSW": 0x41}
+
+    def canonical(self, cand):
+        # an ES: prefix (0x11) on a form binutils prints without ES: (SP-relative and the like)
+        # ... and the 61 x1 bytes binutils also reads as the [HL+B] forms (the manual's are 61 x0)
+        b = cand["bytes"]
+        if b[0] == 0x61 and len(b) > 1 and b[1] & 0x0F == 1 and "[hl+b]" in cand["op_str"]:
+            return False
+        return not (b[0] == 0x11 and "es:" not in cand["op_str"].lower())
+
+    def callother_fn(self, op, state):
+        # segment(seg, off) is the only pcodeop with an output: seg << 16 | off. NEARSEG is the
+        # pspec's 0xf (the near data segment), which the emulator does not load
+        ins = op["inputs"]
+        if ins[0]["offset"] != 0 or len(ins) != 3:
+            return None
+        seg = 0xF if ins[1]["space"] == "register" and ins[1]["offset"] == 0x20 else state.read(ins[1]["space"], ins[1]["offset"], ins[1]["size"])
+        return ((seg & 0xF) << 16) | (state.read(ins[2]["space"], ins[2]["offset"], ins[2]["size"]) & 0xFFFF)
+
+    def mem_ignored(self, a):
+        return a == 0xFFFFA                     # PSW, compared as a register (CY and Z)
+
+    def ignored(self, mnemonic, operands, state):
+        # a store into PSW/CS/ES/PMC through their addresses: sim/rl78 masks those registers
+        if re.search(r"0xffff[a-f]", operands.split(",")[0]) or any(0xFFFFC <= a for a in state.writes):
+            return {"*"}
+        # ADDW/SUBW SP, #imm leave the flags alone; sim/rl78 clears them
+        if mnemonic in ("addw", "subw") and operands.startswith("sp,"):
+            # and an odd adjustment is not a stack pointer (bit 0 of SP is fixed at 0)
+            return {"*"} if int(operands.split("#")[1], 0) & 1 else {"PSW"}
+        return set()
+
+    def addr_ok(self, a):
+        # RAM from 0xf8000 and the register/SP/PSW bytes; 0xf1000.. mirrors the ROM in sim/rl78
+        # and 0xfff00..0xffff7 are SFRs it simulates
+        return 0xF8000 <= a < 0xFFF00 or 0xFFFF8 <= a < 0x100000
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv(), H8300h(), Pru(), Cr16(), Avr(), Bfin(), Rx(), Rl78())}

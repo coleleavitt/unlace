@@ -171,6 +171,8 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
 
     bias = getattr(arch, "gdb_data_bias", None)
     st = State(arch.big, lambda a: fill_byte(a, seed), regs)
+    if hasattr(arch, "callother_fn"):
+        st.callother = lambda op: arch.callother_fn(op, st)
     if bias is None:
         for i, b in enumerate(cand["bytes"]):
             st.mem[addr + i] = b

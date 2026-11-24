@@ -316,6 +316,8 @@ attach variables [ j_soff7 j_soffhs ] [ s0 s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11 s1
 attach variables [ jsr16 ] [ s0_1 s4_5 s8_9 s12_13 s16_17 s20_21 s24_25 s28_29 s32_33 s36_37 s40_41 s44_45 s48_49 s52_53 s56_57 s60_61 s64_65 s68_69 s72_73 s76_77 s80_81 s84_85 s88_89 s92_93 s96_97 s100_101 xnack_mask ttmp0_1 ttmp4_5 ttmp8_9 ttmp12_13 m0_pair ];
 
 define pcodeop aperture_register;
+define pcodeop permlane16;
+define pcodeop permlanex16;
 
 # Source operands: SGPRs and special registers, inline integer and float constants, SCC,
 # VCCZ/EXECZ, a 32-bit literal after the instruction word, and (9-bit fields) VGPRs.
@@ -1857,6 +1859,14 @@ define pcodeop bpermute;
 :v_readfirstlane_b32 i17_lo7, V32_i0 is e7=0x3f ... & vop1op=2 ... & i17_lo7 ... & V32_i0 ... { i17_lo7 = V32_i0; }
 :v_readlane_b32 i0_lo7d, V32_j0, S32_j9 is e6=0x35 & vop3op=864 & i0_lo7d ; V32_j0 ... & S32_j9 ... { i0_lo7d = V32_j0; }
 :v_writelane_b32 i0v8, S32_j0, S32_j9 is e6=0x35 & vop3op=865 & i0v8 ; S32_j0 ... & S32_j9 ... { i0v8 = S32_j0; }
+
+# Cross-lane permutes within 16-lane rows (the one-lane model keeps the lane select a user op).
+:v_permlane16_b32 i0v8, V32_j0, S32_j9, S32_j18 is e6=0x35 & vop3op=603 & i0v8 ; V32_j0 ... & S32_j9 ... & S32_j18 ... {
+  a:4 = V32_j0; b:4 = S32_j9; c:4 = S32_j18; i0v8 = permlane16(i0v8, a, b, c);
+}
+:v_permlanex16_b32 i0v8, V32_j0, S32_j9, S32_j18 is e6=0x35 & vop3op=604 & i0v8 ; V32_j0 ... & S32_j9 ... & S32_j18 ... {
+  a:4 = V32_j0; b:4 = S32_j9; c:4 = S32_j18; i0v8 = permlanex16(i0v8, a, b, c);
+}
 :v_mad_co_u64_u32 i0vp, i8_lo7d, V32_j0, V32_j9, V64_j18 is e6=0x35 & vop3op=766 & i0vp & i8_lo7d ; V32_j0 ... & V32_j9 ... & V64_j18 ... {
   p:8 = zext(V32_j0) * zext(V32_j9); c:8 = V64_j18; i8_lo7d = zext(carry(p, c)); i0vp = p + c;
 }
@@ -1866,14 +1876,14 @@ define pcodeop bpermute;
 :v_div_scale_f32 i0v8, SD64_i8, F32_j0, F32_j9, F32_j18 is e6=0x35 ... & vop3op=764 ... & i0v8 ... & SD64_i8 ... & F32_j0 ... & F32_j9 ... & F32_j18 ... {
   i0v8 = div_scale(F32_j0, F32_j9, F32_j18); SD64_i8 = 0;
 }
-:v_add_co_u32_e64 i0v8, SD64_i8, V32_j0, V32_j9 is e6=0x35 & vop3op=768 & i0v8 & SD64_i8 ; V32_j0 ... & V32_j9 ... {
-  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = a + b; SD64_i8 = zext(carry(a, b)); i0v8 = r;
+:v_add_co_u32 i0v8, i8_lo7d, V32_j0, V32_j9 is e6=0x35 & vop3op=768 & i0v8 & i8_lo7d ; V32_j0 ... & V32_j9 ... {
+  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = a + b; i8_lo7d = zext(carry(a, b)); i0v8 = r;
 }
-:v_sub_co_u32_e64 i0v8, SD64_i8, V32_j0, V32_j9 is e6=0x35 & vop3op=769 & i0v8 & SD64_i8 ; V32_j0 ... & V32_j9 ... {
-  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = a - b; SD64_i8 = zext(a < b); i0v8 = r;
+:v_sub_co_u32 i0v8, i8_lo7d, V32_j0, V32_j9 is e6=0x35 & vop3op=769 & i0v8 & i8_lo7d ; V32_j0 ... & V32_j9 ... {
+  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = a - b; i8_lo7d = zext(a < b); i0v8 = r;
 }
-:v_subrev_co_u32_e64 i0v8, SD64_i8, V32_j0, V32_j9 is e6=0x35 & vop3op=770 & i0v8 & SD64_i8 ; V32_j0 ... & V32_j9 ... {
-  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = b - a; SD64_i8 = zext(b < a); i0v8 = r;
+:v_subrev_co_u32 i0v8, i8_lo7d, V32_j0, V32_j9 is e6=0x35 & vop3op=770 & i0v8 & i8_lo7d ; V32_j0 ... & V32_j9 ... {
+  a:4 = V32_j0; b:4 = V32_j9; r:4 = 0; r = b - a; i8_lo7d = zext(b < a); i0v8 = r;
 }
 :v_add_co_ci_u32 i17_vg, "vcc", V32_i0, i9_vg, "vcc" is e1=0 ... & vop2op=32 ... & i17_vg ... & V32_i0 ... & i9_vg ... {
   a:4 = V32_i0; b:4 = i9_vg; ci:4 = zext((vcc & 1) != 0); r:4 = 0; t:4 = a + b; r = t + ci; vcc = zext(carry(a, b) || carry(t, ci)); i17_vg = r;

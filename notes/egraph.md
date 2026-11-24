@@ -5,7 +5,7 @@ docs/spec/03-ssa-and-simplification.md ("Equality saturation over MBA trees"). I
 crate (MIT, pure Rust, `deterministic` feature). PRs: #508 (pass), #523 (hang fix), #559
 (once-per-value regrouping), #572/#577/#632 (docs), #613 (barren-tree memo), #698 (quick round,
 dense-tree escalation, single-bitwise trees skip the e-graph), #758 (proof before the exhaustive
-check, dense-subterm seeds; not yet measured).
+check, dense-subterm seeds).
 
 ## Verdict
 
@@ -42,6 +42,7 @@ P-core). Wall time on the shared machine is too noisy to use.
 | d963789525 (#613) | +7.6% | +8.62% | 559 / 91,216 |
 | cc4eab698b (#698) | +3.0% | +2.49% (250 binaries) | 274 |
 | 92c033f5ca (#698) | | +2.34% (255 binaries, `--max-fn-seconds 120`) | 247 |
+| 2feb8da847 (#758) | | +2.11% (255 binaries, `--max-fn-seconds 120`; median +1.10%) | 246 |
 
 - The DecBench runs exclude binaries where the per-function wall budget fired in either arm. The
   10 s default fires in different functions per arm under load, so raw totals mean nothing. With
@@ -50,7 +51,10 @@ P-core). Wall time on the shared machine is too noisy to use.
   `shuf` (+71%). The median binary is +0.93%.
 - The profile at #698 puts the remaining time in `kuna_mba::Expr::eval` (small-width check), the
   `mba` table lookups that seed subterms, `prove_equal`, and egg's e-matching. #758 cuts the
-  first three and has not been measured.
+  first three. On 2feb8da847 it brings the total from +2.34% to +2.11%, libopencm3 from about
+  +64% to +7.5% and shuf from +71% to +2.1%. It leaves the corpus wins and the changed
+  functions as they were (both: 101/108/117/118 and 136/141/144/145). That is still over the
+  2% bar, with the same non-improving changes.
 - A sample of the changed functions on DecBench:
   - neutral to good: `put_fat` `(val << 0x14) >> 0x18` becomes `(val & 0xfff) >> 4`;
     `TI1_Config` two `|=` statements fold into one store;
@@ -63,7 +67,6 @@ P-core). Wall time on the shared machine is too noisy to use.
 
 ## If it is reopened
 
-- Measure #758 first.
 - Restrict the rule to trees the obfuscators produce, rather than any mixed tree. Candidates
   are bitwise-op density, or a mixed op whose two operands share a leaf.
 - Score GED with `scripts.decbench.optsweep` once a scored tree exists.

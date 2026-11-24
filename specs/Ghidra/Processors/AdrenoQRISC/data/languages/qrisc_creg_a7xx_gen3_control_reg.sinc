@@ -1,0 +1,65 @@
+# AUTO-GENERATED instruction constructors -- do not edit.
+
+# A7XX_GEN3_CONTROL_REG names (Mesa register database, as qrisc-disasm prints them)
+# load/store address: LOAD_STORE_HI (control register 0x7a) supplies bits 63..32
+macro lsaddr(a, r) { a = (zext(*[CREG]:4 (0x7a:4 * 4)) << 32) | zext(r); }
+cbase: "@COPROCESSOR_LOCK" is preinc=0 & base12=0x14 { local t:4 = 0x14; export t; }
+cbase: "@REG_WRITE_ADDR" is preinc=0 & base12=0x18 { local t:4 = 0x18; export t; }
+cbase: "@REG_WRITE" is preinc=0 & base12=0x19 { local t:4 = 0x19; export t; }
+cbase: "@REG_READ_DWORDS" is preinc=0 & base12=0x1a { local t:4 = 0x1a; export t; }
+cbase: "@REG_READ_ADDR" is preinc=0 & base12=0x1b { local t:4 = 0x1b; export t; }
+cbase: "@APERTURE_CNTL" is preinc=0 & base12=0x1c { local t:4 = 0x1c; export t; }
+cbase: "@APERTURE_CNTL_PREEMPT" is preinc=0 & base12=0x1d { local t:4 = 0x1d; export t; }
+cbase: "@IB1_BASE" is preinc=0 & base12=0x20 { local t:4 = 0x20; export t; }
+cbase: "@IB1_BASE+0x1" is preinc=0 & base12=0x21 { local t:4 = 0x21; export t; }
+cbase: "@IB1_DWORDS" is preinc=0 & base12=0x22 { local t:4 = 0x22; export t; }
+cbase: "@IB2_BASE" is preinc=0 & base12=0x24 { local t:4 = 0x24; export t; }
+cbase: "@IB2_BASE+0x1" is preinc=0 & base12=0x25 { local t:4 = 0x25; export t; }
+cbase: "@IB2_DWORDS" is preinc=0 & base12=0x26 { local t:4 = 0x26; export t; }
+cbase: "@IB2_BASE_HI_PREEMPTION" is preinc=0 & base12=0x27 { local t:4 = 0x27; export t; }
+cbase: "@IB3_BASE" is preinc=0 & base12=0x28 { local t:4 = 0x28; export t; }
+cbase: "@IB3_BASE+0x1" is preinc=0 & base12=0x29 { local t:4 = 0x29; export t; }
+cbase: "@IB3_DWORDS" is preinc=0 & base12=0x2a { local t:4 = 0x2a; export t; }
+cbase: "@MEM_READ_ADDR" is preinc=0 & base12=0x2c { local t:4 = 0x2c; export t; }
+cbase: "@MEM_READ_ADDR+0x1" is preinc=0 & base12=0x2d { local t:4 = 0x2d; export t; }
+cbase: "@MEM_READ_DWORDS" is preinc=0 & base12=0x2e { local t:4 = 0x2e; export t; }
+cbase: "@MEM_READ_ADDR_HI_PREEMPTION" is preinc=0 & base12=0x2f { local t:4 = 0x2f; export t; }
+cbase: "@IB_LEVEL" is preinc=0 & base12=0x3d { local t:4 = 0x3d; export t; }
+cbase: "@MODE_BITMASK" is preinc=0 & base12=0x5b { local t:4 = 0x5b; export t; }
+cbase: "@PACKET_TABLE_WRITE_ADDR" is preinc=0 & base12=0x70 { local t:4 = 0x70; export t; }
+cbase: "@PACKET_TABLE_WRITE" is preinc=0 & base12=0x71 { local t:4 = 0x71; export t; }
+cbase: "@LOAD_STORE_HI" is preinc=0 & base12=0x7a { local t:4 = 0x7a; export t; }
+cbase: "@BV_INSTR_BASE" is preinc=0 & base12=0x80 { local t:4 = 0x80; export t; }
+cbase: "@BV_INSTR_BASE+0x1" is preinc=0 & base12=0x81 { local t:4 = 0x81; export t; }
+cbase: "@BV_CNTL" is preinc=0 & base12=0x82 { local t:4 = 0x82; export t; }
+cbase: "@LPAC_INSTR_BASE" is preinc=0 & base12=0x83 { local t:4 = 0x83; export t; }
+cbase: "@LPAC_INSTR_BASE+0x1" is preinc=0 & base12=0x84 { local t:4 = 0x84; export t; }
+cbase: "@LPAC_CNTL" is preinc=0 & base12=0x85 { local t:4 = 0x85; export t; }
+cbase: "@LOAD_STORE_RANGE_MIN" is preinc=0 & base12=0xa2 { local t:4 = 0xa2; export t; }
+cbase: "@LOAD_STORE_RANGE_LEN" is preinc=0 & base12=0xa3 { local t:4 = 0xa3; export t; }
+cbase: "@REG_READ_TEST_RESULT" is preinc=0 & base12=0xa8 { local t:4 = 0xa8; export t; }
+cbase: "@WFI_PEND_INCR" is preinc=0 & base12=0xb0 { local t:4 = 0xb0; export t; }
+cbase: "@QUERY_PEND_INCR" is preinc=0 & base12=0xb1 { local t:4 = 0xb1; export t; }
+cbase: "@WFI_PEND_CTR" is preinc=0 & base12=0xb2 { local t:4 = 0xb2; export t; }
+cbase: "@QUERY_PEND_CTR" is preinc=0 & base12=0xb3 { local t:4 = 0xb3; export t; }
+cbase: "@CACHE_CLEAN_PEND_INCR" is preinc=0 & base12=0xb4 { local t:4 = 0xb4; export t; }
+cbase: "@CACHE_CLEAN_PEND_CTR" is preinc=0 & base12=0xb8 { local t:4 = 0xb8; export t; }
+cbase: "@PERFCNTR_CNTL" is preinc=0 & base12=0xc9 { local t:4 = 0xc9; export t; }
+cbase: "@COMPLETED_BR_COUNT" is preinc=0 & base12=0x101 { local t:4 = 0x101; export t; }
+cbase: "@COMPLETED_BV_COUNT" is preinc=0 & base12=0x102 { local t:4 = 0x102; export t; }
+cbase: "@TIMESTAMP_SUM" is preinc=0 & base12=0x103 { local t:4 = 0x103; export t; }
+cbase: "@GLOBAL_TIMESTAMP" is preinc=0 & base12=0x104 { local t:4 = 0x104; export t; }
+cbase: "@LOCAL_TIMESTAMP" is preinc=0 & base12=0x105 { local t:4 = 0x105; export t; }
+cbase: "@CONTEXT_SWITCH_CNTL" is preinc=0 & base12=0x131 { local t:4 = 0x131; export t; }
+cbase: "@PREEMPT_COOKIE" is preinc=0 & base12=0x132 { local t:4 = 0x132; export t; }
+cbase: "@PREEMPT_ENABLE" is preinc=0 & base12=0x133 { local t:4 = 0x133; export t; }
+cbase: "@PREEMPT_TRIGGER" is preinc=0 & base12=0x134 { local t:4 = 0x134; export t; }
+cbase: "@SECURE_MODE" is preinc=0 & base12=0x136 { local t:4 = 0x136; export t; }
+cbase: "@MARKER" is preinc=0 & base12=0x138 { local t:4 = 0x138; export t; }
+cbase: "@PREEMPTION_TIMER" is preinc=0 & base12=0x140 { local t:4 = 0x140; export t; }
+cbase: "@PREEMPTION_TIMER_CNTL" is preinc=0 & base12=0x141 { local t:4 = 0x141; export t; }
+cbase: "@AQE1_PREEMPT_BASE" is preinc=0 & base12=0x26e { local t:4 = 0x26e; export t; }
+cbase: "@AQE1_PREEMPT_BASE+0x1" is preinc=0 & base12=0x26f { local t:4 = 0x26f; export t; }
+cbase: "@AQE0_PREEMPT_BASE" is preinc=0 & base12=0x275 { local t:4 = 0x275; export t; }
+cbase: "@AQE0_PREEMPT_BASE+0x1" is preinc=0 & base12=0x276 { local t:4 = 0x276; export t; }
+cbase: "@THREAD_SYNC" is preinc=0 & base12=0x27f { local t:4 = 0x27f; export t; }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="QRisc" endian="little" size="32" variant="a6xx" version="1.0.0"
+            slafile="qrisc_a6xx.sla" processorspec="qrisc_a6xx.pspec" id="QRisc:LE:32:a6xx">
+    <description>Adreno a6xx command-processor microcode (afuc/QRisc, unified SQE)</description>
+    <compiler name="default" spec="qrisc.cspec" id="default"/>
+  </language>
+  <language processor="QRisc" endian="little" size="32" variant="a7xx" version="1.0.0"
+            slafile="qrisc_a7xx.sla" processorspec="qrisc_a7xx.pspec" id="QRisc:LE:32:a7xx">
+    <description>Adreno a7xx command-processor microcode (afuc/QRisc, split BR/BV + LPAC)</description>
+    <compiler name="default" spec="qrisc.cspec" id="default"/>
+  </language>
+  <language processor="QRisc" endian="little" size="32" variant="a7xx_gen3" version="1.0.0"
+            slafile="qrisc_a7xx_gen3.sla" processorspec="qrisc_a7xx_gen3.pspec" id="QRisc:LE:32:a7xx_gen3">
+    <description>Adreno a7xx gen3 (A750) command-processor microcode (afuc/QRisc; A7XX_GEN3 control registers)</description>
+    <compiler name="default" spec="qrisc.cspec" id="default"/>
+  </language>
+  <language processor="QRisc" endian="little" size="32" variant="a8xx" version="1.0.0"
+            slafile="qrisc_a8xx.sla" processorspec="qrisc_a8xx.pspec" id="QRisc:LE:32:a8xx">
+    <description>Adreno a8xx command-processor microcode (afuc/QRisc) -- BEST EFFORT, decoded as a7xx</description>
+    <compiler name="default" spec="qrisc.cspec" id="default"/>
+  </language>
+</language_definitions>

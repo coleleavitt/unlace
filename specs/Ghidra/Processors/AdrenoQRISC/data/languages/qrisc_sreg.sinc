@@ -1,0 +1,13 @@
+# AUTO-GENERATED instruction constructors -- do not edit.
+
+# A6XX_SQE_REG names (Mesa register database, as qrisc-disasm prints them)
+sbase: "%PREEMPT_INSTR" is preinc=0 & base12=0x4 { local t:4 = 0x4; export t; }
+sbase: "%SP" is preinc=0 & base12=0x5 { local t:4 = 0x5; export t; }
+sbase: "%STACK0" is preinc=0 & base12=0x8 { local t:4 = 0x8; export t; }
+sbase: "%STACK1" is preinc=0 & base12=0x9 { local t:4 = 0x9; export t; }
+sbase: "%STACK2" is preinc=0 & base12=0xa { local t:4 = 0xa; export t; }
+sbase: "%STACK3" is preinc=0 & base12=0xb { local t:4 = 0xb; export t; }
+sbase: "%STACK4" is preinc=0 & base12=0xc { local t:4 = 0xc; export t; }
+sbase: "%STACK5" is preinc=0 & base12=0xd { local t:4 = 0xd; export t; }
+sbase: "%STACK6" is preinc=0 & base12=0xe { local t:4 = 0xe; export t; }
+sbase: "%STACK7" is preinc=0 & base12=0xf { local t:4 = 0xf; export t; }

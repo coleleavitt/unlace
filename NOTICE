@@ -241,6 +241,10 @@ specs/Ghidra/Processors/RockwellL39 vendors the Rockwell C39 / L39 SLEIGH specif
 aleph-void/ghidra-rockwell-l39 (https://github.com/aleph-void/ghidra-rockwell-l39), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/AdrenoQRISC vendors the Qualcomm Adreno SQE / QRISC SLEIGH specification of
+aleph-void/ida-adreno-qrisc (https://github.com/aleph-void/ida-adreno-qrisc), a fork of locus-x64/ida-adreno-qrisc, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

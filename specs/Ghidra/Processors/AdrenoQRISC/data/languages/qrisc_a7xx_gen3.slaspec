@@ -1,0 +1,5 @@
+# Adreno a7xx_gen3 command-processor microcode (afuc / QRisc).
+@include "qrisc.sinc"
+@include "qrisc_creg_a7xx_gen3_control_reg.sinc"
+@include "qrisc_sreg.sinc"
+@include "qrisc_gen7.sinc"

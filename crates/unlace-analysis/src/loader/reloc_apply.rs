@@ -2717,7 +2717,8 @@ fn lanai_abs21(
 }
 
 /// AVR `rjmp`/`rcall` (12-bit k at bits 11..0) and `brbs`/`brbc` (7-bit k at
-/// bits 9..3): the signed word displacement from the next instruction.
+/// bits 9..3): the signed word displacement from the next instruction, wrapped
+/// at 8 KiB for an `rjmp`/`rcall` whose ends both lie below it.
 fn avr_pcrel(
     field: &mut [u8],
     reloc: RelocationInfo,
@@ -2734,11 +2735,27 @@ fn avr_pcrel(
     if !form || reloc.implicit_addend {
         return Err(RelocationFailure::InvalidEncoding);
     }
-    let value = symbol as i128 + reloc.addend as i128 - place as i128 - 2;
+    let target = symbol as i128 + reloc.addend as i128;
+    let value = target - place as i128 - 2;
     require_aligned(value, 2)?;
-    require_signed(value >> 1, bits)?;
+    let mut words = value >> 1;
+    // An `rjmp`/`rcall` on a device with at most 8 KiB of flash reaches every
+    // word by wrapping at the flash size, which the 16-bit-PC avr8 language
+    // models (`rel12addr` masks the target to 4 KiW): when both ends lie in the
+    // first 8 KiB, encode the wrapped displacement instead of refusing it.
+    if bits == 12
+        && require_signed(words, bits).is_err()
+        && (0..0x2000).contains(&target)
+        && (0..0x2000).contains(&(place as i128))
+    {
+        words = words.rem_euclid(0x1000);
+        if words >= 0x800 {
+            words -= 0x1000;
+        }
+    }
+    require_signed(words, bits)?;
     let mask = ((1u16 << bits) - 1) << at;
-    insn = (insn & !mask) | ((((value >> 1) as u16) << at) & mask);
+    insn = (insn & !mask) | (((words as u16) << at) & mask);
     write_u16(field, true, insn);
     Ok(())
 }

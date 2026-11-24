@@ -97,3 +97,17 @@ Ranking = how much decompiled output it fixes on a typical Apple target x how di
 
 Not ranked: debugger features (row 10), Apple-protected decryption (row 21), dump-slide detection (row 26).
 Already ahead of IDA: stack blocks (5), unwind/eh_frame discovery (17), DriverKit (32).
+
+
+## Objective-C plugin cross-check (2026-11-24)
+
+Checked against the apple__objc dump (language-runtimes survey). No new row: the plugin's messages map onto
+rows already here.
+
+- "Detecting xrefs to %s" and "isa xref %a => %a" (sub_2FB60) are the receiver-resolution pass; row 6 covers
+  it (objc msgSend callee swapped, receiver from type, classref or self).
+- "added resolved isa" and "isa refs" (sub_2C650) are the isa-tracking half of the same pass; unlace's
+  class-level isa reads are in analyzers/objc/classt.rs (ISA, line 25) and objc/mod.rs (metaclass_ro).
+- "analyzing local blocks" (sub_2E170) is row 5.
+- "Identified legacy Objective-C runtime" and "Identified Objective-C runtime version >= 2.0" are the version
+  split behind row 9 (legacy ObjC 1 not read).

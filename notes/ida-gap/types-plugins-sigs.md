@@ -58,3 +58,15 @@ codegraph query "SELECT caller, caller_file, line FROM calls WHERE callee = 'til
 
 Not gaps: Lumina auto-pull (the decompiler never uses the network, by decision), ordinal names, MSVC and Itanium
 RTTI typing, Go and Rust helpers, ObjC metadata. These are at parity or ahead.
+
+
+## Language-runtime deepening (2026-11-24)
+
+Detail for the runtime plugins is in [language-runtimes.md](language-runtimes.md). Three rows here change:
+
+- Row 10 (Go) is "ours-better" for itabs, typelinks and descriptors, but the plugin also builds map types
+  (sub_1B0B0, both the old bucket and the swiss group layouts). unlace reads no map descriptors
+  (analyzers/gotypes/typeglobals.rs, the swiss-table note near line 191). Filed as row 2 there.
+- Row 10 also misses FUNCDATA_StackObjects (sub_22800): address-taken Go locals have no reader. Filed as row 3.
+- Row 6 (MSVC RTTI) and row 7 (Itanium) stand. The bdescr plugin (Borland C++ RTTI, sub_3610 and sub_32B0) is
+  not covered by analyzers/delphi, which handles Delphi only. Filed as row 7 there.

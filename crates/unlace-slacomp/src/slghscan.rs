@@ -1222,11 +1222,7 @@ impl SleighScanner {
                 if self.negative_if == -1 {
                     let varname = s.read_identifier();
                     s.skip_ws();
-                    let value = if s.peek() == Some(b'"') {
-                        preprocess_string(host, &mut s)
-                    } else {
-                        s.read_identifier()
-                    };
+                    let value = define_value(host, &mut s);
                     if varname.is_empty() {
                         host.preproc_error("Error in preprocessor definition");
                     }
@@ -1696,6 +1692,29 @@ fn check_to_endofline(host: &mut dyn ScannerHost, s: &mut ByteStream) {
     if !s.eof() && s.peek() != Some(b'#') {
         host.preproc_error("Extra characters in preprocessor directive");
     }
+}
+
+/// (kuna) The value of an `@define NAME value` line, as Ghidra's Java
+/// `SleighPreprocessor` reads it (`DEFINE1`/`DEFINE2`): a quoted value runs from
+/// the first double quote to the LAST one on the line, so `""_b32""` is
+/// `"_b32"`, and an unquoted value is the whole run of non-space characters
+/// (`0x10`, `a+b`). The C++ scanner stopped at the first closing quote and read
+/// only identifier characters, rejecting both as extra characters.
+fn define_value(host: &mut dyn ScannerHost, s: &mut ByteStream) -> Vec<u8> {
+    if s.peek() != Some(b'"') {
+        return s.read_word();
+    }
+    let rest = &s.buf[s.pos..];
+    let end = rest
+        .iter()
+        .rposition(|c| !matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .map_or(0, |p| p + 1);
+    if end < 2 || rest[end - 1] != b'"' {
+        return preprocess_string(host, s);
+    }
+    let value = rest[1..end - 1].to_vec();
+    s.pos += end;
+    value
 }
 
 /// `preprocess_string(s)` (slghscan.l:82): read a double-quoted string.

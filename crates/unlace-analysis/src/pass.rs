@@ -1365,6 +1365,11 @@ pub struct TypeLibFacts {
     /// 10..=13 EFI), which picks the IDA Windows type libraries; `None` for an
     /// image that is not a PE.
     pub subsystem: Option<u16>,
+    /// (kuna `typelib auto`) The IDA type libraries IDA would load for an ELF
+    /// or Mach-O image: per slot, candidate paths relative to an IDA `til`
+    /// directory, the first that exists being read
+    /// (`analyzers::protos::kuna_typelib::til_slots`).
+    pub til_slots: Vec<Vec<String>>,
 }
 
 /// (kuna `formatstring static`) One printf/scanf-family call site whose format

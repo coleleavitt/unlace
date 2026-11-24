@@ -491,3 +491,8 @@ specs/Ghidra/Processors/TMS320C28/data/languages/tms320c28_*.pspec name peripher
 device support headers of Texas Instruments' C2000Ware 26.02.00.00, Copyright (C) 2013-2026 Texas Instruments
 Incorporated, released under the BSD 3-Clause License (the notice is in
 specs/Ghidra/Processors/TMS320C28/LICENSE-TI-C2000Ware-device-support.txt).
+
+crates/unlace-analysis/src/loader/firmware/svd_devices.br holds CMSIS-SVD device descriptions derived from
+STMicroelectronics' STM32 device family packs (Keil) and Microchip's SAM D21/D51 packs, under the Apache
+License, Version 2.0, and from Nordic Semiconductor's nRF device family pack and Raspberry Pi's RP2xxx pack,
+under the BSD 3-Clause License (the notices are in svd_devices.LICENSES.txt beside it).

@@ -108,6 +108,7 @@ pub mod kuna_mipsgot;
 pub mod kuna_dataptrs;
 // (kuna) `pltlocal`: the PLT stubs the image's own relocations bind to a
 // function it defines.
+pub mod kuna_machodataincode;
 pub mod kuna_machodataslots;
 pub(crate) mod kuna_pltlocal;
 // (kuna) `msvcfpconst`: recover an MSVC `__real@` floating-point constant COMDAT

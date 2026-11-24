@@ -2750,7 +2750,11 @@ the case targets.
    *common to every path* — the candidates for the switch variable — ordered
    from the branch backwards.
 2. **Guards.** `jumptable.rs (JumpBasicModel::analyze_guards)` walks up the
-   CFG from the branch through at most 2 dominating CBRANCHes; each guard's
+   CFG from the branch through at most 2 dominating CBRANCHes, not counting up
+   to 2 that test one value for equality (`jumptable.rs (tests_one_value)`;
+   kuna: such a test removes one value, so the range check behind it still
+   bounds the switch, and OCaml puts `r == 0x41` between its two checks,
+   `tests/stages/ocaml-eq-guard.toml`); each guard's
    branch condition is pulled back through at most 2 defining ops
    (`jumptable.rs (circlerange_pull_back)`, the op-coupled `CircleRange`
    pull-back, non-zero-mask-refined) into a `jumptable.rs (GuardRecord)`: a

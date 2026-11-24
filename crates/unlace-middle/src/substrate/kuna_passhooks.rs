@@ -180,6 +180,8 @@ declare_hooks! {
     exclusivearguse_access_cannot_reach_call: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
     /// `kuna_retindexuse::index_only_load`.
     retindexuse_index_only_load: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
+    /// `kuna_carryuse::carry_test`.
+    carryuse_carry_test: fn(&Funcdata, OpId, OpId, VarnodeId) -> bool;
     /// `kuna_exclusivecallret::applies`.
     exclusivecallret_applies: fn(&Funcdata, OpId, &ParamTrial) -> bool;
     /// `kuna_exclusivecallret::skips_use`.

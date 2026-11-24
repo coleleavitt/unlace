@@ -475,16 +475,48 @@ fn newest_til(dir: &Path, family: &str) -> Option<PathBuf> {
     })
 }
 
-/// The IDA type libraries IDA itself would load for a PE of `target` with
-/// this optional-header `subsystem`, found in `dir`: the SDK library for a
-/// user-mode image (`mssdk`), the driver kit for a native one (`ntddk`), each
-/// with the Native API library (`ntapi`), and `uefi` for an EFI image; the
-/// `64` libraries for an x64 image. Empty for any other target.
-fn til_choice(dir: &Path, target: &str, subsystem: Option<u16>) -> Vec<PathBuf> {
+/// The first of `candidates` (paths relative to an IDA `til` directory) found
+/// in `dir`, or by its file name alone in `dir` when `dir` is itself the
+/// subdirectory (`til/arm`).
+fn first_til(dir: &Path, candidates: &[String]) -> Option<PathBuf> {
+    candidates.iter().find_map(|name| {
+        let rel = Path::new(name);
+        [Some(dir.join(rel)), rel.file_name().map(|f| dir.join(f))]
+            .into_iter()
+            .flatten()
+            .find(|p| p.is_file())
+    })
+}
+
+/// The IDA type libraries IDA itself would load for an image of `target`,
+/// found in `dir`. For a PE, with this optional-header `subsystem`: the SDK
+/// library for a user-mode image (`mssdk`), the driver kit for a native one
+/// (`ntddk`), each with the Native API library (`ntapi`), and `uefi` for an
+/// EFI image; the `64` libraries for an x64 image, `arm/uefi64` for an AArch64
+/// EFI image. For any other image, the first existing candidate of each of
+/// `slots` (`TypeLibFacts::til_slots`: `gnulnx`/`android` for a Linux ELF, the
+/// macOS or iOS SDK library for a Mach-O).
+fn til_choice(
+    dir: &Path,
+    target: &str,
+    subsystem: Option<u16>,
+    slots: &[Vec<String>],
+) -> Vec<PathBuf> {
     let wide = match target {
         "windows x86" => "",
         "windows x86_64" => "64",
-        _ => return Vec::new(),
+        "windows aarch64" if matches!(subsystem, Some(10..=13)) => {
+            return first_til(dir, &["arm/uefi64.til".to_string()])
+                .into_iter()
+                .collect();
+        }
+        _ if target.starts_with("windows ") => return Vec::new(),
+        _ => {
+            return slots
+                .iter()
+                .filter_map(|slot| first_til(dir, slot))
+                .collect();
+        }
     };
     let families: Vec<String> = match subsystem {
         Some(10..=13) => vec![format!("uefi{wide}")],
@@ -532,12 +564,14 @@ struct Source {
 /// The libraries the option selects for an image of `target`, in the order
 /// they are asked (the first that declares a name wins), and a note on what
 /// `auto` chose or could not read from `til_dir`. `auto` reads the
-/// libraries IDA would choose from `til_dir` for a PE, then the built-in
-/// library; a list of files reads those files, and an unreadable one is an error.
+/// libraries IDA would choose from `til_dir` for the image (`til_choice`),
+/// then the built-in library; a list of files reads those files, and an
+/// unreadable one is an error.
 fn library_sources(
     choice: &TypeLib,
     target: &str,
     subsystem: Option<u16>,
+    slots: &[Vec<String>],
     addr_size: u8,
     til_dir: Option<&Path>,
 ) -> Result<(Vec<Source>, Option<String>), String> {
@@ -547,7 +581,7 @@ fn library_sources(
         TypeLib::Auto => {
             let mut sources = Vec::new();
             let mut said = Vec::new();
-            for path in til_dir.map_or_else(Vec::new, |d| til_choice(d, target, subsystem)) {
+            for path in til_dir.map_or_else(Vec::new, |d| til_choice(d, target, subsystem, slots)) {
                 match file_text(&path, target, addr_size) {
                     Ok(text) => {
                         said.push(format!("read {}", path.display()));
@@ -644,6 +678,7 @@ pub fn seed(
         &typelib,
         facts.target,
         facts.subsystem,
+        &facts.til_slots,
         u8::try_from(addr_size).unwrap_or(8),
         til_dir.as_deref(),
     )?;

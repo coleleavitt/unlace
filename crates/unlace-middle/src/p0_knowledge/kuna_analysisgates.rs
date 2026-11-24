@@ -1245,3 +1245,43 @@ crate::kuna_flag!(
     unset: true,
     shipped: true
 );
+
+/// (kuna `movwpairs`) How the discovery Listing reads an address an ARM `movw`/`movt` or
+/// AArch64 `movz`/`movk` pair builds in 16-bit halves: `off` (the low half starts
+/// nothing), `access` (a load or store through the completed register is a read or a
+/// write of that address), `on` (and the pair is a reference to the address where it lands
+/// in a mapped section).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum MovwPairs {
+    #[default]
+    Off,
+    Access,
+    On,
+}
+
+impl crate::kuna_optionset::KunaOption for MovwPairs {
+    const NAME: &'static str = "movwpairs";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        MovwPairs::Off
+    }
+
+    fn shipped() -> Self {
+        MovwPairs::Off
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let mode = match value {
+            "off" => MovwPairs::Off,
+            "access" => MovwPairs::Access,
+            "on" => MovwPairs::On,
+            _ => {
+                return Err(unlace_base::error::KunaError::parse(
+                    "Must specify off, access or on",
+                ));
+            }
+        };
+        Ok((mode, format!("movw/movt address pairs set to {value}")))
+    }
+}

@@ -82,14 +82,14 @@ name = 'DUPLABELS #3: the first copy calls intarith'
 count = 1
 literal = [
     'label_4010a7:',
-    'v6 = intarith(a0,a1,v5,v6);',
+    'v3 = intarith(a0,a1,v7,v4);',
 ]
 
 [[match]]
 name = 'DUPLABELS #4: the converted integer path jumps to the first copy'
 count = 1
 literal = [
-    'v6 = v4;',
+    'v4 = v6;',
     'goto label_4010a7;',
 ]
 
@@ -97,7 +97,7 @@ literal = [
 name = 'DUPLABELS #5: the default path jumps to the copy that stores v3'
 count = 1
 literal = [
-    'v3 = 0x13;',
+    'v5 = 0x13;',
     'goto label_4010a7_2;',
 ]
 
@@ -106,5 +106,5 @@ name = 'DUPLABELS #6: the second copy stores the tag the path chose'
 count = 1
 literal = [
     'label_4010a7_2:',
-    'a4->field_0x8 = v3;',
+    'a4->field_0x8 = v5;',
 ]

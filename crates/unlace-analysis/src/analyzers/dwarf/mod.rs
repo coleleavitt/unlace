@@ -1355,11 +1355,12 @@ impl DwarfPass {
                 let companion = ctx
                     .image_path
                     .and_then(|path| crate::loader::elf_debuglink::find_companion(ctx.file, path));
-                if let Some((_, bytes)) = companion {
+                if let Some((path, bytes)) = companion {
                     if let Ok(file) = object::File::parse(&*bytes) {
                         if dwarf_section_data(&file, gimli::SectionId::DebugInfo).is_some() {
                             return DwarfPass.run(&AnalysisCtx {
                                 file: &file,
+                                image_path: Some(path.as_path()),
                                 ..*ctx
                             });
                         }
@@ -1384,7 +1385,25 @@ impl DwarfPass {
         let Ok(sections) = gimli::DwarfSections::load(load) else {
             return out;
         };
-        let dwarf = sections.borrow(|bytes| gimli::EndianSlice::new(bytes, endian));
+        // (kuna `debuglink`) A DWZ-compressed debug file keeps the strings and
+        // types it shares with other packages' debug files in a supplementary
+        // file its `.gnu_debugaltlink` names; its `strp_alt`/`strp_sup` names
+        // then resolve through `Dwarf::sup`.
+        let sup_bytes = unlace_decomp::kuna_debuglink::debuglink_enabled()
+            .then(|| crate::loader::elf_debuglink::find_altlink(ctx.file, ctx.image_path))
+            .flatten()
+            .map(|(_, bytes)| bytes);
+        let sup_sections = sup_bytes.as_deref().and_then(|bytes| {
+            let sup = object::File::parse(bytes).ok()?;
+            gimli::DwarfSections::load(|id| -> Result<Vec<u8>, gimli::Error> {
+                Ok(dwarf_section_data(&sup, id).unwrap_or_default())
+            })
+            .ok()
+        });
+        let mut dwarf = sections.borrow(|bytes| gimli::EndianSlice::new(bytes, endian));
+        if let Some(sup) = &sup_sections {
+            dwarf.set_sup(sup.borrow(|bytes| gimli::EndianSlice::new(bytes, endian)));
+        }
 
         let types = ctx.arch.types();
         let (_addr_size, word_size) = ctx.arch.data_org();

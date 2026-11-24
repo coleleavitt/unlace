@@ -432,9 +432,14 @@ The ABIs differ in the frame header below the parameter save area: ELFv1's is
 the save area, is therefore at SP+112 under ELFv1 and at SP+96 under ELFv2. A
 big-endian image that declares ABI version 2 (musl, `-mabi=elfv2`) selects
 `PowerPC:BE:64:default:elfv2` (`ppc_64_be_elfv2.cspec`); version 1 and an
-unspecified version keep the ELFv1 default model. The little-endian default
-model is ELFv2, so a little-endian image that declares ELFv1 is read with
-ELFv2 offsets. Explicit `--target` takes precedence, and the explicit
+unspecified version keep the ELFv1 default model. A little-endian image that
+does not declare ABI version 1 is ELFv2, whose ABI requires a POWER8
+processor, so it selects the Power ISA language `PowerPC:LE:64:A2ALT:default`
+(`ppc_64_isa_altivec_le.sla`, the same ELFv2 `ppc_64_le.cspec`): the generic
+language does not decode `popcntd`, `isel`, `ldbrx` or VSX, and 55 of the 114
+functions of a static musl ppc64le image halted on them (10 with A2ALT, all on
+`0x00000000` trap words). A little-endian image that declares ELFv1 keeps
+`PowerPC:LE:64:default` and is read with ELFv2 offsets. Explicit `--target` takes precedence, and the explicit
 `PowerPC:BE:64:A2ALT` language offers only the ELFv1 model.
 
 

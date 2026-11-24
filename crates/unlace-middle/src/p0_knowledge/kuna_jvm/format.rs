@@ -338,7 +338,7 @@ impl ClassFile {
     /// The text of UTF-8 entry `index`.
     pub fn utf8(&self, index: u16) -> Option<&str> {
         match self.constant(index)? {
-            Constant::Utf8(text, _) => Some(text),
+            Constant::Utf8(text, _) => Some(text.as_str()),
             _ => None,
         }
     }

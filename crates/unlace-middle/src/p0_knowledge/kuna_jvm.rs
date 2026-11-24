@@ -770,7 +770,7 @@ pub fn emit_payload(
             } else {
                 tag::GETFIELD
             };
-            let (size, extend) = match descriptor.as_bytes()[0] {
+            let (size, extend) = match descriptor.as_bytes().first().copied().unwrap_or(b'I') {
                 b'B' | b'S' => (
                     if descriptor.starts_with('B') { 1 } else { 2 },
                     Some(OpCode::CPUI_INT_SEXT),
@@ -802,7 +802,7 @@ pub fn emit_payload(
         b"putStaticCallOther" | b"putFieldCallOther" => {
             let descriptor = field_descriptor()?;
             let statik = name == b"putStaticCallOther";
-            let size: u32 = match descriptor.as_bytes()[0] {
+            let size: u32 = match descriptor.as_bytes().first().copied().unwrap_or(b'I') {
                 b'B' | b'Z' => 1,
                 b'S' | b'C' => 2,
                 b'J' | b'D' => 8,

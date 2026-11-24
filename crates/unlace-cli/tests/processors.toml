@@ -1104,3 +1104,76 @@ expect = [
     "dat_2000 = a0 + a1;",  # the store to 0x2000
     "return;",  # the returns
 ]
+
+# The SuperH SH-5 SHmedia language (written from the SH-5 CPU core architecture
+# manual) decompiles routines built with sh64-elf-as --abi=32 --little.
+[[family]]
+name = "sh5"
+language = "SH5:LE:64:SHmedia"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs.bin"
+forbid = ["baddata"]
+
+# add r2,r3,r2; ptabs r18,tr0; blink tr0,r63
+[[family.function]]
+test = "sh5_add_and_return_through_r18"
+address = "0x1000"
+expect = [
+    "return a0 + a1;",
+]
+
+# pta 1f,tr0; bge r2,r3,tr0; or r3,r63,r2; 1: ptabs r18,tr0; blink tr0,r63
+[[family.function]]
+test = "sh5_pta_branch_signed_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+    "a0 = a1;",
+]
+
+# movi 0x1234,r1; shori 0x5678,r1; ld.l r1,0,r2; return
+[[family.function]]
+test = "sh5_movi_shori_absolute_load"
+address = "0x1030"
+expect = [
+    "dat_12345678",
+]
+
+# pta f_add,tr0; movi 7,r3; blink tr0,r18 (the tracked target makes it a direct call)
+[[family.function]]
+test = "sh5_pta_blink_is_a_direct_call"
+address = "0x1050"
+expect = [
+    "sub_1000(a0,7);",
+]
+
+# fadd.s fr0,fr1,fr0; return
+[[family.function]]
+test = "sh5_float_add"
+address = "0x1080"
+expect = [
+    "float sub_1080(float a0,float a1)",
+    "return a0 + a1;",
+]
+
+# The same routines built with sh64-elf-as --abi=32 --big.
+[[family]]
+name = "sh5-be"
+language = "SH5:BE:64:SHmedia"
+base = "0x1000"
+fixture = "crates/unlace-cli/tests/fixtures/sh5/funcs_be.bin"
+forbid = ["baddata"]
+
+[[family.function]]
+test = "sh5_big_endian_max"
+address = "0x1010"
+expect = [
+    "if (a0 < a1)",
+]
+
+[[family.function]]
+test = "sh5_big_endian_direct_call"
+address = "0x1050"
+expect = [
+    "sub_1000(a0,7);",
+]

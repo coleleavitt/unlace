@@ -4416,6 +4416,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 | `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
+| `SH5` | SuperH SH-5 (SHmedia) | `SH5:LE:64:SHmedia`, `SH5:BE:64:SHmedia` | written for unlace from the SH-5 CPU Core Architecture manual (SHmedia); decode checked against `sh64-elf-objdump` 2.29.1, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### Data General Nova (#98)
@@ -4430,6 +4431,22 @@ comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
 frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
 `unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
 load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
+
+### SuperH SH-5 SHmedia (#98)
+
+`specs/Ghidra/Processors/SH5` is a SLEIGH module written for unlace from the
+SuperH SH-5 CPU Core Architecture manual (no prior SLEIGH existed):
+`SH5:LE:64:SHmedia` and `SH5:BE:64:SHmedia`, the 32-bit SHmedia instruction set.
+Branches go through the eight target registers: `pta`/`ptb`/`ptabs`/`ptrel` load
+one and the conditional branches and `blink` use it. The target a `pta` loads is
+tracked in the decode context along the flow (cleared when a target register is
+rewritten, after a call and at a return), so `pta label,tr0; blink tr0,r18` is a
+direct call; `ptabs r18,trN; blink trN,r63` returns. r63 reads as zero; the
+multimedia, matrix and cache instructions are user ops; SHcompact is not decoded.
+The decode agrees with `sh64-elf-objdump` (binutils 2.29.1) on a 6,639-word probe
+except the reserved odd FP register forms. Exercised by the `sh5` and `sh5-be`
+families of `unlace-cli/tests/processors.toml` (add, signed max, absolute load,
+direct call and float add routines built with `sh64-elf-as`).
 
 ### IBM ROMP (#98)
 

@@ -74,6 +74,10 @@ xtensa_esp32s3_pie_fused = """
 # The native Blackfin language decompiles a raw image: a zero-overhead
 # hardware loop (LSETUP) becomes a loop, and a CALL with register arguments
 # and a multi-issue bundle decompiles to a call.
+x86_64_cmpccxadd = """
+4889f0c4e2e9e407c30f1f800000000031c0f20f38f83e0f94c0c3
+"""
+
 [[family]]
 name = "blackfin"
 language = "Blackfin:LE:32:default"
@@ -1029,6 +1033,28 @@ expect = [
     "= ee_vadds_s16(",
     "v2 = a0 + 0x10;",
 ]
+
+# CMPccXADD and ENQCMD in the 64-bit x86 language: a compare-and-add on memory and an
+# enqueue store whose status is ZF (cas: mov rax,rsi; cmpexadd [rdi],rax,rdx; ret).
+[[family]]
+name = "x86_64_cmpccxadd"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_cmpccxadd"
+
+[[family.function]]
+test = "x86_cmpexadd_is_a_conditional_add"
+address = "0x0"
+expect = [
+    "if (v1 == a1)",       # the compare of the old value with the reg operand
+    "*a0 = v1 + a2;",      # the add happens only when the condition holds
+    "return v1;",          # the reg operand gets the old memory value
+]
+
+[[family.function]]
+test = "x86_enqcmd_status_is_zf"
+address = "0x10"
+expect = ["return enqcmd(a0,*a1);"]
 
 # The eZ80 ADL-mode language decompiles a hand-assembled add/compare/store routine.
 [[family]]

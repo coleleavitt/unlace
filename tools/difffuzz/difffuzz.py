@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""Differential fuzzing of unlace's SLEIGH lifter against Unicorn.
+
+Random instruction encodings that Capstone decodes are packed into a small ELF, lifted with
+`unlace raw-pcode --json`, and each lifted instruction is run from the same random register state
+through tools/difffuzz/pcode_emu.py and through Unicorn. Registers, flags, the next pc and every
+byte written to memory are compared; memory that was never written reads the same deterministic
+filler in both. A mismatch, an instruction Capstone decodes but SLEIGH does not, and a length
+disagreement are written to a JSON report and summarised by mnemonic.
+
+    python3 tools/difffuzz/difffuzz.py --arch x86-64 --count 2000 --seed 1 --out report.json
+"""
+import argparse
+import collections
+import json
+import os
+import random
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import unicorn as uc  # noqa: E402
+
+from arches import ARCHES  # noqa: E402
+from pcode_emu import State, Unmodeled, step  # noqa: E402
+from slaregs import register_map  # noqa: E402
+
+PAGE = 0x1000
+
+
+def fill_byte(addr, seed):
+    x = (addr * 0x9E3779B97F4A7C15 + seed * 0xC2B2AE3D27D4EB4F) & 0xFFFFFFFFFFFFFFFF
+    x ^= x >> 29
+    return (x * 0xBF58476D1CE4E5B9 >> 56) & 0xFF
+
+
+def make_elf(code, arch):
+    e = ">" if arch.big else "<"
+    ident = b"\x7fELF" + bytes([2 if arch.elf64 else 1, 2 if arch.big else 1, 1, 0]) + b"\0" * 8
+    off = PAGE
+    if arch.elf64:
+        hdr = ident + struct.pack(e + "HHIQQQIHHHHHH", 2, arch.elf_machine, 1, arch.base, 64, 0, 0, 64, 56, 1, 64, 0, 0)
+        ph = struct.pack(e + "IIQQQQQQ", 1, 5, off, arch.base, arch.base, len(code), len(code), PAGE)
+    else:
+        hdr = ident + struct.pack(e + "HHIIIIIHHHHHH", 2, arch.elf_machine, 1, arch.base, 52, 0, 0, 52, 32, 1, 40, 0, 0)
+        ph = struct.pack(e + "IIIIIIII", 1, off, arch.base, arch.base, len(code), len(code), 5, PAGE)
+    img = hdr + ph
+    return img + b"\0" * (off - len(img)) + code
+
+
+def lift(unlace, arch, cands, tmp, sleighpath=None):
+    """{address: raw-pcode row} for the candidates, plus per-candidate lift problems."""
+    code = b"".join(c["bytes"] for c in cands)
+    addrs = []
+    a = arch.base
+    for c in cands:
+        c["addr"] = a
+        addrs.append(a)
+        a += len(c["bytes"])
+    end = a
+    elf = os.path.join(tmp, "batch.elf")
+    Path(elf).write_bytes(make_elf(code, arch))
+    rows, problems = {}, {}
+    idx = {x: i for i, x in enumerate(addrs)}
+    start = arch.base
+    while start < end:
+        cmd = [unlace, "raw-pcode", elf, f"{start:#x}-{end:#x}", "--json", "--target", arch.lang]
+        if sleighpath:
+            cmd += ["--sleighpath", sleighpath]
+        p = subprocess.run(cmd,
+                           capture_output=True, text=True)
+        try:
+            doc = json.loads(p.stdout)
+        except json.JSONDecodeError:
+            problems[start] = ("unlace-error", p.stderr.strip()[:300])
+            nxt = [x for x in addrs if x > start]
+            start = nxt[0] if nxt else end
+            continue
+        resume = end
+        for r in doc.get("instructions", []):
+            at = r["address"]
+            if at not in idx:
+                resume = next((x for x in addrs if x > at), end)
+                break
+            c = cands[idx[at]]
+            if r["size"] != len(c["bytes"]):
+                problems[at] = ("length", f"sleigh {r['size']} bytes ({r['mnemonic']} {r['operands']}), capstone {len(c['bytes'])}")
+                resume = next((x for x in addrs if x > at), end)
+                break
+            rows[at] = r
+        else:
+            err = doc.get("error")
+            if err:
+                at = err["address"]
+                problems[at] = ("decode", err.get("message", ""))
+                resume = next((x for x in addrs if x > at), end)
+        start = resume
+    return rows, problems
+
+
+class Mapper:
+    def __init__(self, emu, seed):
+        self.emu, self.seed, self.pages = emu, seed, set()
+
+    def ensure(self, addr, size):
+        for pg in range(addr & ~(PAGE - 1), (addr + max(size, 1) + PAGE - 1) & ~(PAGE - 1), PAGE):
+            pg &= 0xFFFFFFFFFFFFFFFF
+            if pg in self.pages:
+                continue
+            self.emu.mem_map(pg, PAGE)
+            self.emu.mem_write(pg, bytes(fill_byte(pg + i, self.seed) for i in range(PAGE)))
+            self.pages.add(pg)
+
+
+def run_case(arch, regs, row, cand, rng, seed):
+    addr, size = cand["addr"], len(cand["bytes"])
+    bits = 64 if arch.elf64 else 32
+    init = {n: arch.rand_reg(rng, bits) for n, _ in arch.gprs}
+    if arch.name == "x86-64":
+        init["RSP"] = rng.randrange(0x680000, 0x6F0000) & ~0xF
+    init_vec = {n: rng.getrandbits(8 * 16) for n, _ in arch.vecs}
+    flags = rng.getrandbits(32) & sum(1 << b for b in arch.flag_bits.values())
+    big = arch.big
+
+    emu = arch.unicorn()
+    arch.setup(emu)
+    mp = Mapper(emu, seed)
+    mp.ensure(addr, size)
+    emu.mem_write(addr, cand["bytes"])
+    for n, k in arch.gprs:
+        emu.reg_write(k, init[n])
+    for n, k in arch.vecs:
+        emu.reg_write(k, init_vec[n] & ((1 << (8 * regs[n][1])) - 1) if n in regs and regs[n][1] < 16 else init_vec[n])
+    if arch.flags_reg is not None:
+        emu.reg_write(arch.flags_reg, flags | (2 if arch.name == "x86-64" else 0))
+    uwrites = {}
+
+    def on_unmapped(u, access, a, sz, val, data):
+        try:
+            mp.ensure(a, sz)
+            return True
+        except uc.UcError:
+            return False
+
+    def on_write(u, access, a, sz, val, data):
+        uwrites[a] = sz
+    emu.hook_add(uc.UC_HOOK_MEM_READ_UNMAPPED | uc.UC_HOOK_MEM_WRITE_UNMAPPED | uc.UC_HOOK_MEM_FETCH_UNMAPPED, on_unmapped)
+    emu.hook_add(uc.UC_HOOK_MEM_WRITE, on_write)
+    pc_k = arch.pc_const
+    emu.reg_write(pc_k, addr)
+    try:
+        emu.emu_start(addr, 0xFFFFFFFFFFFFFFFF if bits == 64 else 0xFFFFFFFF, count=1)
+    except uc.UcError as e:
+        return {"status": "ref-exception", "why": str(e)}
+
+    st = State(big, lambda a: fill_byte(a, seed), regs)
+    for i, b in enumerate(cand["bytes"]):
+        st.mem[addr + i] = b
+    for n, _ in arch.gprs:
+        st.set(n, init[n])
+    for n, _ in arch.vecs:
+        if n in regs:
+            st.set(n, init_vec[n] & ((1 << (8 * regs[n][1])) - 1))
+    for n, b in arch.flag_bits.items():
+        st.set(n, (flags >> b) & 1)
+    st.set(arch.pc, addr)
+    try:
+        nxt = step(st, row["ops"], addr, size)
+    except Unmodeled as e:
+        return {"status": "unmodeled", "why": str(e)}
+    if not all(arch.addr_ok(a) and arch.addr_ok(a + s - 1) for a, s in st.accesses):
+        return {"status": "bad-address"}
+
+    ignore = arch.ignored(cand["mnemonic"], cand["op_str"], st)
+    if "*" in ignore:
+        return {"status": "undefined"}
+    diffs = {}
+    for n, k in arch.gprs + arch.vecs:
+        if n in ignore or n not in regs:
+            continue
+        w = (1 << (8 * regs[n][1])) - 1
+        a, b = arch.normalize(n, st.get(n) & w, emu.reg_read(k) & w)
+        if a != b:
+            diffs[n] = (a, b)
+    if arch.flags_reg is not None:
+        fv = emu.reg_read(arch.flags_reg)
+        for n, b in arch.flag_bits.items():
+            if n in ignore:
+                continue
+            a, r = st.get(n) & 1, (fv >> b) & 1
+            if a != r:
+                diffs[n] = (a, r)
+    upc = emu.reg_read(pc_k)
+    if nxt & ((1 << bits) - 1) != upc:
+        diffs["pc"] = (nxt, upc)
+    touched = set(st.writes)
+    for a, sz in uwrites.items():
+        touched.update(range(a, a + sz))
+    for a in sorted(touched):
+        pv = st.mem.get(a, fill_byte(a, seed))
+        rv = emu.mem_read(a, 1)[0] if (a & ~(PAGE - 1)) in mp.pages else fill_byte(a, seed)
+        if pv != rv:
+            diffs[f"mem[{a:#x}]"] = (pv, rv)
+    if not diffs:
+        return {"status": "match"}
+    if st.skipped_callother:
+        return {"status": "unmodeled", "why": "CALLOTHER side effect"}
+    return {"status": "mismatch", "diffs": {k: [hex(x), hex(y)] for k, (x, y) in diffs.items()},
+            "input": {k: hex(v) for k, v in init.items()}, "flags_in": hex(flags),
+            "vec_in": {k: hex(v) for k, v in init_vec.items()}}
+
+
+def generate(arch, rng, n):
+    dis = arch.capstone()
+    out, seen = [], set()
+    tries = 0
+    while len(out) < n and tries < n * 200:
+        tries += 1
+        raw = arch.gen(rng)
+        ins = next(dis.disasm(raw, arch.base), None)
+        if ins is None:
+            continue
+        b = bytes(ins.bytes)
+        if b in seen or arch.deny.match(ins.mnemonic):
+            continue
+        seen.add(b)
+        out.append({"bytes": b, "mnemonic": ins.mnemonic, "op_str": ins.op_str})
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--arch", required=True, choices=sorted(ARCHES))
+    ap.add_argument("--count", type=int, default=1000, help="instructions to generate")
+    ap.add_argument("--trials", type=int, default=3, help="random input states per instruction")
+    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--batch", type=int, default=400)
+    ap.add_argument("--unlace", default=os.environ.get("UNLACE", "unlace"))
+    ap.add_argument("--sleighpath", help="SLEIGH tree holding freshly compiled .sla files (unlace --sleighpath)")
+    ap.add_argument("--out", help="JSON report path")
+    ap.add_argument("--bytes", help="hex encodings to test instead of random ones, comma separated")
+    args = ap.parse_args()
+    arch = ARCHES[args.arch]
+    regs, big = register_map(arch.lang)
+    arch.big = big
+    rng = random.Random(args.seed)
+    if args.bytes:
+        dis = arch.capstone()
+        cands = []
+        for h in args.bytes.split(","):
+            b = bytes.fromhex(h)
+            ins = next(dis.disasm(b, arch.base), None)
+            cands.append({"bytes": b, "mnemonic": ins.mnemonic if ins else "?", "op_str": ins.op_str if ins else ""})
+    else:
+        cands = generate(arch, rng, args.count)
+    dis = arch.capstone()
+    counts = collections.Counter()
+    findings = []
+    unmodeled = collections.Counter()
+    refexc = collections.Counter()
+    with tempfile.TemporaryDirectory() as tmp:
+        for i in range(0, len(cands), args.batch):
+            batch = cands[i:i + args.batch]
+            rows, problems = lift(args.unlace, arch, batch, tmp, args.sleighpath)
+            for c in batch:
+                if c["addr"] in problems:
+                    kind, why = problems[c["addr"]]
+                    kind = arch.classify_decode(c["bytes"], kind)
+                    counts[kind] += 1
+                    findings.append({"kind": kind, "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}", "why": why})
+                    continue
+                row = rows.get(c["addr"])
+                if arch.skip(c):
+                    counts["skipped"] += 1
+                    continue
+                if row is None:
+                    counts["not-lifted"] += 1
+                    continue
+                at = next(dis.disasm(c["bytes"], c["addr"]), None)
+                cap_ops = at.op_str if at else c["op_str"]
+                why = arch.operand_mismatch(cap_ops, row["operands"]) if c["mnemonic"] == row["mnemonic"].lower() else None
+                if why:
+                    counts["operand"] += 1
+                    findings.append({"kind": "operand", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",
+                                     "sleigh": f"{row['mnemonic']} {row['operands']}", "why": why})
+                for t in range(args.trials):
+                    res = run_case(arch, regs, row, c, random.Random(f"{args.seed}:{c['bytes'].hex()}:{t}"), args.seed + t)
+                    counts[res["status"]] += 1
+                    if res["status"] == "ref-exception":
+                        refexc[c["mnemonic"] + ": " + res["why"]] += 1
+                        break
+                    if res["status"] == "unmodeled":
+                        unmodeled[c["mnemonic"] + ": " + res["why"]] += 1
+                        break
+                    if res["status"] == "mismatch":
+                        findings.append({"kind": "mismatch", "bytes": c["bytes"].hex(), "capstone": f"{c['mnemonic']} {c['op_str']}",
+                                         "sleigh": f"{row['mnemonic']} {row['operands']}", "addr": hex(c["addr"]), **res})
+                        break
+    by_mn = collections.Counter(f["capstone"].split()[0] + " [" + f["kind"] + "]" for f in findings)
+    summary = {"arch": arch.name, "lang": arch.lang, "instructions": len(cands), "outcomes": dict(counts),
+               "findings_by_mnemonic": dict(by_mn.most_common()), "unmodeled": dict(unmodeled.most_common(40)),
+               "reference_exceptions": dict(refexc.most_common(20))}
+    print(json.dumps(summary, indent=1))
+    if args.out:
+        Path(args.out).write_text(json.dumps({"summary": summary, "findings": findings}, indent=1))
+
+
+if __name__ == "__main__":
+    main()

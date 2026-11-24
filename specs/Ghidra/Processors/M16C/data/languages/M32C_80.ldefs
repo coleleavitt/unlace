@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="M32C/80"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="M32C_80.sla"
+            processorspec="M32C_80.pspec"
+            id="M32C/80:LE:24:default">
+    <description>Renesas M32C/80 Series (M16C/80 instruction set plus the M32C 32-bit multiply, divide and non-carry shifts)</description>
+    <compiler name="default" spec="M16C_80.cspec" id="default"/>
+    <external_name tool="gnu" name="m32c"/>
+  </language>
+</language_definitions>

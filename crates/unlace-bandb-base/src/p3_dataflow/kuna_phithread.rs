@@ -21,6 +21,14 @@
 //!   MULTIEQUAL comes from a MULTIEQUAL in A with a constant input, is split along
 //!   each such edge with `Funcdata::node_split_through`, so the clone passes a
 //!   constant that the thread step can then use.
+//! - **ranges**: when the inputs on an edge are not constants, a join whose
+//!   condition compares one value against a constant is still decided along an
+//!   in edge when the value's range there lies inside one outcome. The range
+//!   comes from a conditional branch on the same value that ends the
+//!   predecessor or a single-predecessor chain above it (at most
+//!   [`MAX_RANGE_DEPTH`] blocks), so `if (x == 3) { .. } if (x > 0)` sends the
+//!   first arm straight to the second's true branch. This is Hex-Rays'
+//!   `BACKPROP_CC` (hexx64 `sub_18F960`), jump threading on value ranges.
 
 use std::collections::BTreeMap;
 
@@ -30,6 +38,7 @@ use unlace_num::opcodes::OpCode;
 use crate::action::{Action, ActionBase, ActionContext, ActionGroupList, ApplyResult};
 use crate::context::{BlockId, OpId, VarnodeId};
 use crate::funcdata::Funcdata;
+use crate::rangeutil::CircleRange;
 
 /// Most edge moves and splits per function.
 pub const MAX_EDITS: int4 = 32;
@@ -39,6 +48,8 @@ pub const MAX_ARM_OPS: usize = 8;
 pub const MAX_ARM_PREDS: int4 = 8;
 /// Largest join (in p-code ops) the thread step looks through.
 pub const MAX_JOIN_OPS: usize = 16;
+/// Most blocks the range step walks up from a predecessor.
+pub const MAX_RANGE_DEPTH: usize = 4;
 
 /// The ops of a join block the thread step can look through.
 struct Join {
@@ -110,9 +121,6 @@ fn join_shape(data: &Funcdata, j: BlockId) -> Option<Join> {
         if !inside {
             return None;
         }
-    }
-    if phis.is_empty() {
-        return None;
     }
     Some(Join {
         phis,
@@ -198,10 +206,18 @@ fn eval(data: &Funcdata, env: &BTreeMap<VarnodeId, uintb>, op: OpId) -> Option<u
 /// edge `slot`, when the MULTIEQUAL inputs on that edge decide it.
 pub fn decided_target(data: &Funcdata, j: BlockId, slot: int4) -> Option<int4> {
     let join = join_shape(data, j)?;
-    decided_by(data, &join, slot)
+    decided_by(data, j, &join, slot, false)
 }
 
-fn decided_by(data: &Funcdata, join: &Join, slot: int4) -> Option<int4> {
+fn decided_by(data: &Funcdata, j: BlockId, join: &Join, slot: int4, ranges: bool) -> Option<int4> {
+    decided_by_constants(data, join, slot).or_else(|| {
+        ranges
+            .then(|| decided_by_range(data, j, join, slot))
+            .flatten()
+    })
+}
+
+fn decided_by_constants(data: &Funcdata, join: &Join, slot: int4) -> Option<int4> {
     let mut env: BTreeMap<VarnodeId, uintb> = BTreeMap::new();
     for &phi in &join.phis {
         let o = data.obank().get(phi)?;
@@ -229,8 +245,154 @@ fn decided_by(data: &Funcdata, join: &Join, slot: int4) -> Option<int4> {
     })
 }
 
+/// The values of the non-constant operand of the comparison `cond` reduces to
+/// (through BOOL_NEGATEs) for which `cond` is `value`.
+fn range_of(data: &Funcdata, cond: VarnodeId, value: bool) -> Option<(VarnodeId, CircleRange)> {
+    let mut vn = cond;
+    let mut value = value;
+    for _ in 0..4 {
+        let def = data.vbank().get(vn)?.get_def()?;
+        let o = data.obank().get(def)?;
+        if o.code() != OpCode::CPUI_BOOL_NEGATE {
+            break;
+        }
+        value = !value;
+        vn = o.get_in(0)?;
+    }
+    let def = data.vbank().get(vn)?.get_def()?;
+    let o = data.obank().get(def)?;
+    if !matches!(
+        o.code(),
+        OpCode::CPUI_INT_EQUAL
+            | OpCode::CPUI_INT_NOTEQUAL
+            | OpCode::CPUI_INT_LESS
+            | OpCode::CPUI_INT_LESSEQUAL
+            | OpCode::CPUI_INT_SLESS
+            | OpCode::CPUI_INT_SLESSEQUAL
+    ) {
+        return None;
+    }
+    let (a, b) = (o.get_in(0)?, o.get_in(1)?);
+    let (x, k, slot) = match (const_of(data, a), const_of(data, b)) {
+        (None, Some(k)) => (a, k, 0),
+        (Some(k), None) => (b, k, 1),
+        _ => return None,
+    };
+    let size = data.vbank().get(x)?.get_size();
+    let mut range = CircleRange::new_bool(value);
+    range
+        .pull_back_binary(o.code(), k & mask(size), slot, size, 1)
+        .then_some((x, range))
+}
+
+/// `vn` with the COPYs that define it looked through.
+fn copy_root(data: &Funcdata, mut vn: VarnodeId) -> VarnodeId {
+    for _ in 0..4 {
+        let Some(def) = data.vbank().get(vn).and_then(|v| v.get_def()) else {
+            break;
+        };
+        match data.obank().get(def) {
+            Some(o) if o.code() == OpCode::CPUI_COPY => match o.get_in(0) {
+                Some(next) => vn = next,
+                None => break,
+            },
+            _ => break,
+        }
+    }
+    vn
+}
+
+/// The value `x`, read in join `j`, has when control enters along in edge
+/// `slot`: the MULTIEQUAL input for a value `j` merges, `x` itself for a
+/// value defined above `j`.
+fn value_on_edge(data: &Funcdata, j: BlockId, mut x: VarnodeId, slot: int4) -> Option<VarnodeId> {
+    for _ in 0..4 {
+        let Some(def) = data.vbank().get(x)?.get_def() else {
+            return Some(x);
+        };
+        let o = data.obank().get(def)?;
+        if o.get_parent() != Some(j) {
+            return Some(x);
+        }
+        match o.code() {
+            OpCode::CPUI_MULTIEQUAL => return o.get_in(slot),
+            OpCode::CPUI_COPY => x = o.get_in(0)?,
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// The range `vn` is known to lie in on the edge from `p` into `j`, from a
+/// conditional branch on it that ends `p` or a single-predecessor chain above
+/// `p`.
+fn edge_range(data: &Funcdata, p: BlockId, j: BlockId, vn: VarnodeId) -> Option<CircleRange> {
+    let root = copy_root(data, vn);
+    let size = data.vbank().get(vn)?.get_size();
+    let (mut b, mut child) = (p, j);
+    for _ in 0..MAX_RANGE_DEPTH {
+        let blk = data.bblocks_ref().block(b);
+        let outs: Vec<BlockId> = (0..blk.size_out()).map(|i| blk.get_out(i)).collect();
+        let tail = data.bb_op_tail(b).and_then(|op| data.obank().get(op));
+        if let Some(cb) = tail.filter(|o| o.code() == OpCode::CPUI_CBRANCH)
+            && outs.len() == 2
+            && outs[0] != outs[1]
+            && let Some(idx) = outs.iter().position(|&o| o == child)
+            && let Some((x, range)) = cb
+                .get_in(1)
+                .and_then(|c| range_of(data, c, (idx == 1) != cb.is_boolean_flip()))
+            && data.vbank().get(x).map(|v| v.get_size()) == Some(size)
+            && copy_root(data, x) == root
+            && !range.is_empty()
+        {
+            return Some(range);
+        }
+        if blk.size_in() != 1 {
+            return None;
+        }
+        child = b;
+        b = blk.get_in(0);
+        if b == j || b == p {
+            return None;
+        }
+    }
+    None
+}
+
+/// The out-edge index of `join`'s CBRANCH taken along in edge `slot` when the
+/// branch compares a value against a constant and that value's range on the
+/// edge ([`edge_range`]) lies inside one outcome.
+fn decided_by_range(data: &Funcdata, j: BlockId, join: &Join, slot: int4) -> Option<int4> {
+    let cb = data.obank().get(join.cbranch)?;
+    let cond = cb.get_in(1)?;
+    let (x, taken) = range_of(data, cond, true)?;
+    let (_, not_taken) = range_of(data, cond, false)?;
+    let vn = value_on_edge(data, j, x, slot)?;
+    if data.vbank().get(vn)?.is_constant() {
+        return None;
+    }
+    let p = data.bblocks_ref().block(j).get_in(slot);
+    let range = edge_range(data, p, j, vn)?;
+    let cond_true = if taken.contains(&range) {
+        true
+    } else if not_taken.contains(&range) {
+        false
+    } else {
+        return None;
+    };
+    Some(if cond_true != cb.is_boolean_flip() {
+        1
+    } else {
+        0
+    })
+}
+
 /// Move one decided in edge of `j` past it; `true` when an edge moved.
-fn thread_one(data: &mut Funcdata, j: BlockId) -> unlace_base::error::KunaResult<bool> {
+fn thread_one(
+    data: &mut Funcdata,
+    j: BlockId,
+    ranges: bool,
+) -> unlace_base::error::KunaResult<bool> {
     let Some(join) = join_shape(data, j) else {
         return Ok(false);
     };
@@ -241,7 +403,7 @@ fn thread_one(data: &mut Funcdata, j: BlockId) -> unlace_base::error::KunaResult
         if p == j {
             continue;
         }
-        let Some(taken) = decided_by(data, &join, slot) else {
+        let Some(taken) = decided_by(data, j, &join, slot, ranges) else {
             continue;
         };
         let t = data.bblocks_ref().block(j).get_out(taken);
@@ -387,7 +549,8 @@ impl Action for ActionPhiThread {
         }))
     }
     fn apply(&mut self, data: &mut Funcdata, _ctx: &mut ActionContext) -> ApplyResult {
-        if !data.get_arch().kuna_options.get::<PhiThread>().0 {
+        let opt = data.get_arch().kuna_options.get::<PhiThread>();
+        if !opt.on {
             return 0;
         }
         let mut count: int4 = 0;
@@ -395,7 +558,7 @@ impl Action for ActionPhiThread {
             let root = data.bblocks_root_pub();
             let blocks: Vec<BlockId> = data.bblocks_ref().block(root).get_list().to_vec();
             for &b in &blocks {
-                if matches!(thread_one(data, b), Ok(true)) {
+                if matches!(thread_one(data, b, opt.ranges), Ok(true)) {
                     count += 1;
                     continue 'outer;
                 }
@@ -413,43 +576,58 @@ impl Action for ActionPhiThread {
     }
 }
 
-/// (kuna) Parse `option phithread on|off`.
+/// (kuna) Parse `option phithread on|off|ranges`.
 pub struct OptionPhiThread;
 
 impl OptionPhiThread {
     /// The option name.
     pub const NAME: &'static str = "phithread";
 
-    /// Parse and validate the value.
-    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, String)> {
+    /// Parse and validate the value: `(on, ranges)`.
+    pub fn apply(&self, p1: &str) -> unlace_base::error::KunaResult<(bool, bool, String)> {
+        if p1 == "ranges" {
+            return Ok((
+                true,
+                true,
+                "Jump threading through merged constants and value ranges turned on".to_string(),
+            ));
+        }
         let on = crate::options::on_or_off(p1)?;
         let state = if on { "on" } else { "off" };
         Ok((
             on,
+            false,
             format!("Jump threading through merged constants turned {state}"),
         ))
     }
 }
 
-/// (kuna) Run [`ActionPhiThread`] (option `phithread`, default off).
+/// (kuna) Run [`ActionPhiThread`] (option `phithread`, default off); `ranges`
+/// also threads on value ranges.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PhiThread(pub bool);
+pub struct PhiThread {
+    pub on: bool,
+    pub ranges: bool,
+}
 
 impl crate::kuna_optionset::KunaOption for PhiThread {
     const NAME: &'static str = "phithread";
     crate::kuna_option_id!();
 
     fn unset() -> Self {
-        PhiThread(false)
+        PhiThread {
+            on: false,
+            ranges: false,
+        }
     }
 
     fn shipped() -> Self {
-        PhiThread(false)
+        Self::unset()
     }
 
     fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
-        let (on, msg) = OptionPhiThread.apply(value)?;
-        Ok((PhiThread(on), msg))
+        let (on, ranges, msg) = OptionPhiThread.apply(value)?;
+        Ok((PhiThread { on, ranges }, msg))
     }
 }
 
@@ -460,8 +638,25 @@ mod tests {
 
     #[test]
     fn option_parses_and_ships_off() {
-        assert_eq!(PhiThread::shipped(), PhiThread(false));
-        assert_eq!(PhiThread::parse("on").unwrap().0, PhiThread(true));
+        let off = PhiThread {
+            on: false,
+            ranges: false,
+        };
+        assert_eq!(PhiThread::shipped(), off);
+        assert_eq!(
+            PhiThread::parse("on").unwrap().0,
+            PhiThread {
+                on: true,
+                ranges: false
+            }
+        );
+        assert_eq!(
+            PhiThread::parse("ranges").unwrap().0,
+            PhiThread {
+                on: true,
+                ranges: true
+            }
+        );
         assert!(PhiThread::parse("x").is_err());
     }
 

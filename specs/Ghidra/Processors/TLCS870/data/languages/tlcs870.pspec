@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- Toshiba TLCS-870. The reset vector is the word at FFFE, SWI uses FFFC, interrupt vectors
+     sit below them; CALLV n calls through the word table at FFC0-FFDF and CALLP n calls FF00+n.
+     The on-chip I/O registers occupy 0000-003F; the register banks are in RAM. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <register name="JF" group="Flags"/>
+    <register name="ZF" group="Flags"/>
+    <register name="CF" group="Flags"/>
+    <register name="HF" group="Flags"/>
+    <register name="RBS" group="Bank"/>
+  </register_data>
+</processor_spec>

@@ -1146,6 +1146,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR64.8B & b_1115=0x3 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = Rd_VPR64.8B ^ ((Rd_VPR64.8B ^ Rn_VPR64.8B) & ~Rm_VPR64.8B);
+	zext_zd(Zd);
 }
 
 # C7.2.23 BIT page C7-2054 line 119875 MATCH x2ea01c00/mask=xbfe0fc00
@@ -1168,6 +1169,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.8B & b_1115=0x3 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = Rd_VPR64.8B ^ ((Rd_VPR64.8B ^ Rn_VPR64.8B) & Rm_VPR64.8B);
+	zext_zd(Zd);
 }
 
 # C7.2.24 BSL page C7-2056 line 119959 MATCH x2e601c00/mask=xbfe0fc00
@@ -1190,6 +1192,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.8B & b_1115=0x3 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = Rm_VPR64.8B ^ ((Rm_VPR64.8B ^ Rn_VPR64.8B) & Rd_VPR64.8B);
+	zext_zd(Zd);
 }
 
 # C7.2.25 CLS (vector) page C7-2058 line 120043 MATCH x0e204800/mask=xbf3ffc00
@@ -1202,6 +1205,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.8B 
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000010010 & Rd_VPR64.8B & Rn_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_cls(Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.25 CLS (vector) page C7-2058 line 120043 MATCH x0e204800/mask=xbf3ffc00
@@ -1226,6 +1230,7 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b00 & b_1021=0b100000010010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000010010 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_cls(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.25 CLS (vector) page C7-2058 line 120043 MATCH x0e204800/mask=xbf3ffc00
@@ -1250,6 +1255,7 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b01 & b_1021=0b100000010010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_1021=0b100000010010 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_cls(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.25 CLS (vector) page C7-2058 line 120043 MATCH x0e204800/mask=xbf3ffc00
@@ -3521,6 +3527,7 @@ is b_3131=0 & q=1 & b_2429=0x2e & b_2223=0b00 & b_2121=0 & Rm_VPR128.16B & b_151
 is b_3131=0 & q=0 & b_2429=0x2e & b_2223=0b00 & b_2121=0 & Rm_VPR64.8B & b_1415=0 & imm4 & b_1010=0 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_ext(Rn_VPR64.8B, Rm_VPR64.8B, imm4:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.44 FABD page C7-2104 line 122507 MATCH x2ec01400/mask=xbfe0fc00
@@ -4396,6 +4403,7 @@ fcadd_rotate: "#"^val is b_12  [ val = 90 + 180 * b_12; ] { export *[const]:2 va
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b01 & b_21=0 & b_1315=0b111 & b_1011=0b01 & fcadd_rotate & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fcadd(Rn_VPR64.4H, Rm_VPR64.4H, fcadd_rotate, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.53 FCADD page C7-2127 line 123874 MATCH x2e00e400/mask=xbf20ec00
@@ -4420,6 +4428,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b01 & b_21=0 & b_1315=0b111 & b_1
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_21=0 & b_1315=0b111 & b_1011=0b01 & fcadd_rotate & Rd_VPR64.2S & Rn_VPR64.2S & Rm_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fcadd(Rn_VPR64.2S, Rm_VPR64.2S, fcadd_rotate, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.53 FCADD page C7-2127 line 123874 MATCH x2e00e400/mask=xbf20ec00
@@ -5356,6 +5365,7 @@ is b_31=0 & b_30=0 & b_2429=0b101111 & b_2223=0b01 & b_15=0 & b_12=1 & b_11=0 & 
 {
 	local tmp1:2 = SIMD_PIECE(Re_VPR128.H, vIndexHL:1);
 	Rd_VPR64.4H = NEON_fcmla(Rn_VPR64.4H, tmp1, fcmla_rotate, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.62 FCMLA (by element) page C7-2154 line 125620 MATCH x2f001000/mask=xbf009400
@@ -5395,6 +5405,7 @@ is b_31=0 & b_30=1 & b_2429=0b101111 & b_2223=0b10 & b_21=0 & b_15=0 & b_12=1 & 
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b01 & b_21=0 & b_1315=0b110 & b_10=1 & fcmla_rotate & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fcmla(Rn_VPR64.4H, Rm_VPR64.4H, fcmla_rotate, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.63 FCMLA page C7-2157 line 125798 MATCH x2e00c400/mask=xbf20e400
@@ -5419,6 +5430,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b01 & b_21=0 & b_1315=0b110 & b_1
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_21=0 & b_1315=0b110 & b_10=1 & fcmla_rotate & Rd_VPR64.2S & Rn_VPR64.2S & Rm_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fcmla(Rn_VPR64.2S, Rm_VPR64.2S, fcmla_rotate, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.63 FCMLA page C7-2157 line 125798 MATCH x2e00c400/mask=xbf20e400
@@ -6945,6 +6957,7 @@ is b_2331=0b010111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm64 & Rn_FPR64 & Rd
 {
 	local tmp1:8 = zext(Imm_shr_imm64);
 	Rd_FPR64 = NEON_fcvtzs(Rn_FPR64, tmp1);
+	zext_zd(Zd);
 }
 
 # C7.2.89 FCVTZS (vector, fixed-point) page C7-2221 line 129809 MATCH x5f00fc00/mask=xff80fc00
@@ -6957,6 +6970,7 @@ is b_2331=0b010111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm64 & Rn_FPR64 & Rd
 is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fcvtzs(Rn_FPR32, Imm_shr_imm32:4);
+	zext_zs(Zd);
 }
 
 # C7.2.89 FCVTZS (vector, fixed-point) page C7-2221 line 129809 MATCH x5f00fc00/mask=xff80fc00
@@ -6969,6 +6983,7 @@ is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR32
 is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b111111 & Imm_shr_imm16 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_fcvtzs(Rn_FPR16, Imm_shr_imm16);
+	zext_zh(Zd);
 }
 
 # C7.2.89 FCVTZS (vector, fixed-point) page C7-2221 line 129809 MATCH x0f00fc00/mask=xbf80fc00
@@ -6994,6 +7009,7 @@ is b_31=0 & b_30=1 & b_2329=0b0011110 & b_22=1 & b_1015=0b111111 & Rd_VPR128.2D 
 is b_31=0 & b_30=0 & b_2329=0b0011110 & b_2122=0b01 & b_1015=0b111111 & Rd_VPR64.2S & Rn_VPR64.2S & Imm_shr_imm32 & Zd
 {
 	Rd_VPR64.2S = NEON_fcvtzs(Rn_VPR64.2S, Imm_shr_imm32:4, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.89 FCVTZS (vector, fixed-point) page C7-2221 line 129809 MATCH x0f00fc00/mask=xbf80fc00
@@ -7018,6 +7034,7 @@ is b_31=0 & b_30=1 & b_2329=0b0011110 & b_2122=0b01 & b_1015=0b111111 & Rd_VPR12
 is b_31=0 & b_30=0 & b_2329=0b0011110 & b_2022=0b001 & b_1015=0b111111 & Rd_VPR64.4H & Rn_VPR64.4H & Imm_shr_imm16 & Zd
 {
 	Rd_VPR64.4H = NEON_fcvtzs(Rn_VPR64.4H, Imm_shr_imm16, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.89 FCVTZS (vector, fixed-point) page C7-2221 line 129809 MATCH x0f00fc00/mask=xbf80fc00
@@ -7141,6 +7158,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1f
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1f & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fcvtzu(Rn_VPR64.2S, Imm_shr_imm32:4, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.93 FCVTZU (vector, fixed-point) page C7-2231 line 130422 MATCH x2f00fc00/mask=xbf80fc00
@@ -7163,6 +7181,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1f & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1f & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fcvtzu(Rn_VPR64.4H, Imm_shr_imm16, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.93 FCVTZU (vector, fixed-point) page C7-2231 line 130422 MATCH x2f00fc00/mask=xbf80fc00
@@ -7183,10 +7202,10 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1f & 
 # AUNIT --inst x7f10fc00/mask=xfff0fc00 --rand hfp --status noqemu --comment "nofpround"
 # FCVTZU (vector, fixed-point) Scalar immh=001x
 
-:fcvtzu Rd_FPR16, Rn_FPR16, Imm_shr_imm32
-is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR16 & Rd_FPR16 & Zd
+:fcvtzu Rd_FPR16, Rn_FPR16, Imm_shr_imm16
+is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b111111 & Imm_shr_imm16 & Rn_FPR16 & Rd_FPR16 & Zd
 {
-	local tmp1:2 = 1:2 << Imm_shr_imm32;
+	local tmp1:2 = 1:2 << Imm_shr_imm16;
 	local tmp2:2 = int2float(tmp1);
 	local tmp3:2 = Rn_FPR16 f* tmp2;
 	local tmp4:2 = abs(tmp3);
@@ -7219,10 +7238,10 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR32
 # AUNIT --inst x7f40fc00/mask=xffc0fc00 --rand dfp --status fail --comment "nofpround"
 # FCVTZU (vector, fixed-point) Scalar immh=1xxx
 
-:fcvtzu Rd_FPR64, Rn_FPR64, Imm_shr_imm32
-is b_2331=0b011111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm32 & Rn_FPR64 & Rd_FPR64 & Zd
+:fcvtzu Rd_FPR64, Rn_FPR64, Imm_shr_imm64
+is b_2331=0b011111110 & b_22=1 & b_1015=0b111111 & Imm_shr_imm64 & Rn_FPR64 & Rd_FPR64 & Zd
 {
-	local tmp1:8 = zext(Imm_shr_imm32);
+	local tmp1:8 = zext(Imm_shr_imm64);
 	local tmp2:8 = 1:8 << tmp1;
 	local tmp3:8 = int2float(tmp2);
 	local tmp4:8 = Rn_FPR64 f* tmp3;
@@ -7460,6 +7479,7 @@ is b_1031=0b0001111001111110000000 & Rd_GPR32 & Rn_FPR64 & Rd_GPR64
 is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=1 & b_21=0 & Rm_FPR64 & b_15=0 & Ra_FPR64 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = Ra_FPR64 f+ (Rm_FPR64 f* Rn_FPR64); #NEON_fmadd(Rn_FPR64, Rm_FPR64, Ra_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.100 FMADD page C7-2246 line 131323 MATCH x1f000000/mask=xff208000
@@ -7471,6 +7491,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=1 & b_21=0 & Rm_FPR64 & b_15=0 & R
 is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=0 & b_21=0 & Rm_FPR32 & b_15=0 & Ra_FPR32 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = Ra_FPR32 f+ (Rm_FPR32 f* Rn_FPR32); #NEON_fmadd(Rn_FPR32, Rm_FPR32, Ra_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.100 FMADD page C7-2246 line 131323 MATCH x1f000000/mask=xff208000
@@ -7482,6 +7503,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=0 & b_21=0 & Rm_FPR32 & b_15=0 & R
 is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=3 & b_21=0 & Rm_FPR16 & b_15=0 & Ra_FPR16 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = Ra_FPR16 f+ (Rm_FPR16 f* Rn_FPR16); #NEON_fmadd(Rn_FPR16, Rm_FPR16, Ra_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.101 FMAX (vector) page C7-2248 line 131451 MATCH x0e20f400/mask=xbfa0fc00
@@ -7504,6 +7526,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x1e & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmax(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.101 FMAX (vector) page C7-2248 line 131451 MATCH x0e20f400/mask=xbfa0fc00
@@ -7527,6 +7550,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b001110010 & b_1015=0b001101 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fmax(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.101 FMAX (vector) page C7-2248 line 131451 MATCH x0e403400/mask=xbfe0fc00
@@ -7611,6 +7635,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x18 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmaxnm(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.103 FMAXNM (vector) page C7-2252 line 131688 MATCH x0e20c400/mask=xbfa0fc00
@@ -7634,6 +7659,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b001110010 & b_1015=0b000001 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fmaxnm(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.103 FMAXNM (vector) page C7-2252 line 131688 MATCH x0e400400/mask=xbfe0fc00
@@ -7708,6 +7734,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=1 & Rm_FPR16 & b_1215=0
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x38 & b_1216=0xc & b_1011=2 & Rn_VPR128.2D & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fmaxnmp(Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.105 FMAXNMP (scalar) page C7-2256 line 131930 MATCH x7e30c800/mask=xffbffc00
@@ -7719,6 +7746,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x38 & b_1216=0xc & b_1011=2 &
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x18 & b_1216=0xc & b_1011=2 & Rn_VPR64.2S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fmaxnmp(Rn_VPR64.2S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.105 FMAXNMP (scalar) page C7-2256 line 131930 MATCH x5e30c800/mask=xffbffc00
@@ -7731,6 +7759,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x18 & b_1216=0xc & b_1011=2 &
 is b_1031=0b0101111000110000110010 & Rd_FPR16 & vRn_VPR128 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_fmaxnmp(Rn_FPR32, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.106 FMAXNMP (vector) page C7-2258 line 132036 MATCH x2e20c400/mask=xbfa0fc00
@@ -7753,6 +7782,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x18 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmaxnmp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.106 FMAXNMP (vector) page C7-2258 line 132036 MATCH x2e20c400/mask=xbfa0fc00
@@ -7776,6 +7806,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b101110010 & b_1015=0b000001 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fmaxnmp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.106 FMAXNMP (vector) page C7-2258 line 132036 MATCH x2e400400/mask=xbfe0fc00
@@ -7799,6 +7830,7 @@ is b_31=0 & b_30=1 & b_2129=0b101110010 & b_1015=0b000001 & Rd_VPR128.8H & Rn_VP
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xc & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fmaxnmv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.107 FMAXNMV page C7-2260 line 132171 MATCH x0e30c800/mask=xbffffc00
@@ -7811,6 +7843,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_31=0 & b_30=0 & b_1029=0b00111000110000110010 & Rd_FPR16 & Rn_VPR64.4H & Zd
 {
 	Rd_FPR16 = NEON_fmaxnmv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.107 FMAXNMV page C7-2260 line 132171 MATCH x0e30c800/mask=xbffffc00
@@ -7823,6 +7856,7 @@ is b_31=0 & b_30=0 & b_1029=0b00111000110000110010 & Rd_FPR16 & Rn_VPR64.4H & Zd
 is b_31=0 & b_30=1 & b_1029=0b00111000110000110010 & Rd_FPR16 & Rn_VPR128.8H & Zd
 {
 	Rd_FPR16 = NEON_fmaxnmv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.108 FMAXP (scalar) page C7-2262 line 132280 MATCH x7e30f800/mask=xffbffc00
@@ -7834,6 +7868,7 @@ is b_31=0 & b_30=1 & b_1029=0b00111000110000110010 & Rd_FPR16 & Rn_VPR128.8H & Z
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x38 & b_1216=0xf & b_1011=2 & Rn_VPR128.2D & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fmaxnmv(Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.108 FMAXP (scalar) page C7-2262 line 132280 MATCH x7e30f800/mask=xffbffc00
@@ -7845,6 +7880,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x38 & b_1216=0xf & b_1011=2 &
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x18 & b_1216=0xf & b_1011=2 & Rn_VPR64.2S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fmaxp(Rn_VPR64.2S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.108 FMAXP (scalar) page C7-2262 line 132280 MATCH x5e30f800/mask=xffbffc00
@@ -7857,6 +7893,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=0 & b_1722=0x18 & b_1216=0xf & b_1011=2 &
 is b_1031=0b0101111000110000111110 & Rd_FPR16 & vRn_VPR128 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_fmaxp(Rn_FPR32, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.109 FMAXP (vector) page C7-2264 line 132387 MATCH x2e20f400/mask=xbfa0fc00
@@ -7879,6 +7916,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x1e & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmaxp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.109 FMAXP (vector) page C7-2264 line 132387 MATCH x2e20f400/mask=xbfa0fc00
@@ -7902,6 +7940,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b101110010 & b_1015=0b001101 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fmaxp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.109 FMAXP (vector) page C7-2264 line 132387 MATCH x2e403400/mask=xbfe0fc00
@@ -7925,6 +7964,7 @@ is b_31=0 & b_30=1 & b_2129=0b101110010 & b_1015=0b001101 & Rd_VPR128.8H & Rn_VP
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xf & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fmaxv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.110 FMAXV page C7-2266 line 132519 MATCH x0e30f800/mask=xbffffc00
@@ -7937,6 +7977,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_31=0 & b_30=0 & b_1029=0b00111000110000111110 & Rd_FPR16 & Rn_VPR64.4H & Zd
 {
 	Rd_FPR16 = NEON_fmaxv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.110 FMAXV page C7-2266 line 132519 MATCH x0e30f800/mask=xbffffc00
@@ -7949,6 +7990,7 @@ is b_31=0 & b_30=0 & b_1029=0b00111000110000111110 & Rd_FPR16 & Rn_VPR64.4H & Zd
 is b_31=0 & b_30=1 & b_1029=0b00111000110000111110 & Rd_FPR16 & Rn_VPR128.8H & Zd
 {
 	Rd_FPR16 = NEON_fmaxv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.111 FMIN (vector) page C7-2268 line 132628 MATCH x0ea0f400/mask=xbfa0fc00
@@ -7971,6 +8013,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR64.2S & b_1115=0x1e & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmin(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.111 FMIN (vector) page C7-2268 line 132628 MATCH x0ea0f400/mask=xbfa0fc00
@@ -7994,6 +8037,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b001110110 & b_1015=0b001101 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fmin(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.111 FMIN (vector) page C7-2268 line 132628 MATCH x0ec03400/mask=xbfe0fc00
@@ -8076,6 +8120,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR64.2S & b_1115=0x18 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fminnm(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.113 FMINNM (vector) page C7-2272 line 132865 MATCH x0ea0c400/mask=xbfa0fc00
@@ -8099,6 +8144,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b001110110 & b_1015=0b000001 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fminnm(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.113 FMINNM (vector) page C7-2272 line 132865 MATCH x0ec00400/mask=xbfe0fc00
@@ -8122,6 +8168,7 @@ is b_31=0 & b_30=1 & b_2129=0b001110110 & b_1015=0b000001 & Rd_VPR128.8H & Rn_VP
 is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=1 & b_2121=1 & Rm_FPR64 & b_1215=0x7 & b_1011=2 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fminnm(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.114 FMINNM (scalar) page C7-2274 line 132998 MATCH x1e207800/mask=xff20fc00
@@ -8133,6 +8180,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=1 & b_2121=1 & Rm_FPR64 & b_1215=0
 is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=0 & b_2121=1 & Rm_FPR32 & b_1215=0x7 & b_1011=2 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fminnm(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.114 FMINNM (scalar) page C7-2274 line 132998 MATCH x1e207800/mask=xff20fc00
@@ -8144,6 +8192,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=0 & b_2121=1 & Rm_FPR32 & b_1215=0
 is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=1 & Rm_FPR16 & b_1215=0x7 & b_1011=2 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_fminnm(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.115 FMINNMP (scalar) page C7-2276 line 133108 MATCH x7eb0c800/mask=xffbffc00
@@ -8155,6 +8204,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1e & ftype=3 & b_2121=1 & Rm_FPR16 & b_1215=0
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x38 & b_1216=0xc & b_1011=2 & Rn_VPR128.2D & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fminnmp(Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.115 FMINNMP (scalar) page C7-2276 line 133108 MATCH x7eb0c800/mask=xffbffc00
@@ -8166,6 +8216,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x38 & b_1216=0xc & b_1011=2 &
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x18 & b_1216=0xc & b_1011=2 & Rn_VPR64.2S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fminnmp(Rn_VPR64.2S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.115 FMINNMP (scalar) page C7-2276 line 133108 MATCH x5eb0c800/mask=xffbffc00
@@ -8178,6 +8229,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x18 & b_1216=0xc & b_1011=2 &
 is b_1031=0b0101111010110000110010 & Rd_FPR16 & vRn_VPR128 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_fminnmp(Rn_FPR32, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.116 FMINNMP (vector) page C7-2278 line 133214 MATCH x2ea0c400/mask=xbfa0fc00
@@ -8200,6 +8252,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR64.2S & b_1115=0x18 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fminnmp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.116 FMINNMP (vector) page C7-2278 line 133214 MATCH x2ea0c400/mask=xbfa0fc00
@@ -8223,6 +8276,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b101110110 & b_1015=0b000001 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fminnmp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.116 FMINNMP (vector) page C7-2278 line 133214 MATCH x2ec00400/mask=xbfe0fc00
@@ -8246,6 +8300,7 @@ is b_31=0 & b_30=1 & b_2129=0b101110110 & b_1015=0b000001 & Rd_VPR128.8H & Rn_VP
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0xc & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fminnmv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.117 FMINNMV page C7-2280 line 133349 MATCH x0eb0c800/mask=xbffffc00
@@ -8258,6 +8313,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x
 is b_31=0 & b_30=0 & b_1029=0b00111010110000110010 & Rd_FPR16 & Rn_VPR64.4H & Zd
 {
 	Rd_FPR16 = NEON_fminnmv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.117 FMINNMV page C7-2280 line 133349 MATCH x0eb0c800/mask=xbffffc00
@@ -8270,6 +8326,7 @@ is b_31=0 & b_30=0 & b_1029=0b00111010110000110010 & Rd_FPR16 & Rn_VPR64.4H & Zd
 is b_31=0 & b_30=1 & b_1029=0b00111010110000110010 & Rd_FPR16 & Rn_VPR128.8H & Zd
 {
 	Rd_FPR16 = NEON_fminnmv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.118 FMINP (scalar) page C7-2282 line 133458 MATCH x7eb0f800/mask=xffbffc00
@@ -8281,6 +8338,7 @@ is b_31=0 & b_30=1 & b_1029=0b00111010110000110010 & Rd_FPR16 & Rn_VPR128.8H & Z
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x38 & b_1216=0xf & b_1011=2 & Rn_VPR128.2D & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fminp(Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.118 FMINP (scalar) page C7-2282 line 133458 MATCH x7eb0f800/mask=xffbffc00
@@ -8292,6 +8350,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x38 & b_1216=0xf & b_1011=2 &
 is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x18 & b_1216=0xf & b_1011=2 & Rn_VPR64.2S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fminp(Rn_VPR64.2S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.118 FMINP (scalar) page C7-2282 line 133458 MATCH x5eb0f800/mask=xffbffc00
@@ -8304,6 +8363,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & b_23=1 & b_1722=0x18 & b_1216=0xf & b_1011=2 &
 is b_1031=0b0101111010110000111110 & Rd_FPR16 & vRn_VPR128 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_fminp(Rn_FPR32, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.119 FMINP (vector) page C7-2284 line 133565 MATCH x2ea0f400/mask=xbfa0fc00
@@ -8326,6 +8386,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR64.2S & b_1115=0x1e & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fminp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.119 FMINP (vector) page C7-2284 line 133565 MATCH x2ea0f400/mask=xbfa0fc00
@@ -8349,6 +8410,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_21=1 & Rm_VPR128.4S &
 is b_31=0 & b_30=0 & b_2129=0b101110110 & b_1015=0b001101 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_fminp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.119 FMINP (vector) page C7-2284 line 133565 MATCH x2ec03400/mask=xbfe0fc00
@@ -8372,6 +8434,7 @@ is b_31=0 & b_30=1 & b_2129=0b101110110 & b_1015=0b001101 & Rd_VPR128.8H & Rn_VP
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0xf & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fminv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.120 FMINV page C7-2286 line 133697 MATCH x0eb0f800/mask=xbffffc00
@@ -8384,6 +8447,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x
 is b_31=0 & b_30=0 & b_1029=0b00111010110000111110 & Rd_FPR16 & Rn_VPR64.4H & Zd
 {
 	Rd_FPR16 = NEON_fminv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.120 FMINV page C7-2286 line 133697 MATCH x0eb0f800/mask=xbffffc00
@@ -8396,6 +8460,7 @@ is b_31=0 & b_30=0 & b_1029=0b00111010110000111110 & Rd_FPR16 & Rn_VPR64.4H & Zd
 is b_31=0 & b_30=1 & b_1029=0b00111010110000111110 & Rd_FPR16 & Rn_VPR128.8H & Zd
 {
 	Rd_FPR16 = NEON_fminv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.121 FMLA (by element) page C7-2288 line 133806 MATCH x0f801000/mask=xbf80f400
@@ -9405,6 +9470,7 @@ is b_3131=0 & q=1 & b_29=1 & b_2428=0xf & b_1923=0x0 & Imm_neon_uimm8Shift & cmo
 is b_3131=0 & q=0 & b_29=0 & b_2428=0xf & b_1923=0x0 & Imm_neon_uimm8Shift & cmode=0xf & b_1011=1 & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmov(Imm_neon_uimm8Shift:4, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.129 FMOV (vector, immediate) page C7-2308 line 135048 MATCH x0f00f400/mask=x9ff8fc00
@@ -9748,6 +9814,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=1 & b_21=0 & Rm_FPR64 & b_15=1 & R
 {
 	Rd_FPR64 = Ra_FPR64 f- (Rm_FPR64 f* Rn_FPR64);
 
+	zext_zd(Zd);
 }
 
 # C7.2.133 FMSUB page C7-2318 line 135582 MATCH x1f008000/mask=xff208000
@@ -9759,6 +9826,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=1 & b_21=0 & Rm_FPR64 & b_15=1 & R
 is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=0 & b_21=0 & Rm_FPR32 & b_15=1 & Ra_FPR32 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = Ra_FPR32 f- (Rm_FPR32 f* Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.133 FMSUB page C7-2318 line 135582 MATCH x1f008000/mask=xff208000
@@ -9770,6 +9838,7 @@ is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=0 & b_21=0 & Rm_FPR32 & b_15=1 & R
 is m=0 & b_3030=0 & s=0 & b_2428=0x1f & ftype=3 & b_21=0 & Rm_FPR16 & b_15=1 & Ra_FPR16 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = Ra_FPR16 f- (Rm_FPR16 f* Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.134 FMUL (by element) page C7-2320 line 135711 MATCH x5f009000/mask=xffc0f400
@@ -10197,6 +10266,7 @@ is b_31=0 & b_30=1 & b_2229=0b10111100 & b_1215=0b1001 & b_10=0 & Rd_VPR128.8H &
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=3 & Rm_FPR64 & b_1115=0x1b & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_fmulx(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.138 FMULX page C7-2332 line 136418 MATCH x5e20dc00/mask=xffa0fc00
@@ -10208,6 +10278,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=3 & Rm_FPR64 & b_1115=0x1
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=1 & Rm_FPR32 & b_1115=0x1b & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_fmulx(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.138 FMULX page C7-2332 line 136418 MATCH x0e20dc00/mask=xbfa0fc00
@@ -10230,6 +10301,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x1b & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_fmulx(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.138 FMULX page C7-2332 line 136418 MATCH x0e20dc00/mask=xbfa0fc00
@@ -10557,6 +10629,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & size_high=1 & b_1722=0x30 & b_1216=0x1d &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & size_high=1 & b_1722=0x10 & b_1216=0x1d & b_1011=2 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_frecpe(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.144 FRECPE page C7-2345 line 137191 MATCH x0ea1d800/mask=xbfbffc00
@@ -10579,6 +10652,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & size_high=1 & b_1722=0x10 & b_1216=0x1d &
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=1 & b_1722=0x30 & b_1216=0x1d & b_1011=2 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_frecpe(Rn_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.144 FRECPE page C7-2345 line 137191 MATCH x5ea1d800/mask=xffbffc00
@@ -10590,6 +10664,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & size_high=1 & b_1722=0x30 & b_1216=0x1d & b_10
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=1 & b_1722=0x10 & b_1216=0x1d & b_1011=2 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_frecpe(Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.144 FRECPE page C7-2345 line 137191 MATCH x5ef9d800/mask=xfffffc00
@@ -10602,6 +10677,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & size_high=1 & b_1722=0x10 & b_1216=0x1d & b_10
 is b_1031=0b0101111011111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_frecpe(Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.144 FRECPE page C7-2345 line 137191 MATCH x0ef9d800/mask=xbffffc00
@@ -10614,6 +10690,7 @@ is b_1031=0b0101111011111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 is b_31=0 & b_30=0 & b_1029=0b00111011111001110110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_frecpe(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.144 FRECPE page C7-2345 line 137191 MATCH x0ef9d800/mask=xbffffc00
@@ -10637,6 +10714,7 @@ is b_31=0 & b_30=1 & b_1029=0b00111011111001110110 & Rd_VPR128.8H & Rn_VPR128.8H
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=3 & Rm_FPR64 & b_1115=0x1f & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_frecps(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.145 FRECPS page C7-2348 line 137379 MATCH x5e20fc00/mask=xffa0fc00
@@ -10648,6 +10726,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=3 & Rm_FPR64 & b_1115=0x1
 is b_3031=1 & u=0 & b_2428=0x1e & size_high=0 & b_2122=1 & Rm_FPR32 & b_1115=0x1f & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_frecps(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.145 FRECPS page C7-2348 line 137379 MATCH x0e20fc00/mask=xbfa0fc00
@@ -10670,6 +10749,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_21=1 & Rm_VPR128.2D &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR64.2S & b_1115=0x1f & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_frecps(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.145 FRECPS page C7-2348 line 137379 MATCH x0e20fc00/mask=xbfa0fc00
@@ -10693,6 +10773,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_21=1 & Rm_VPR128.4S &
 is b_2131=0b01011110010 & b_1015=0b001111 & Rd_FPR16 & Rn_FPR16 & Rm_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_frecps(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.145 FRECPS page C7-2348 line 137379 MATCH x0e403c00/mask=xbfe0fc00
@@ -10705,6 +10786,7 @@ is b_2131=0b01011110010 & b_1015=0b001111 & Rd_FPR16 & Rn_FPR16 & Rm_FPR16 & Zd
 is b_31=0 & b_30=0 & b_2129=0b001110010 & b_1015=0b001111 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_frecps(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.145 FRECPS page C7-2348 line 137379 MATCH x0e403c00/mask=xbfe0fc00
@@ -10729,6 +10811,7 @@ is b_31=0 & b_30=1 & b_2129=0b001110010 & b_1015=0b001111 & Rd_VPR128.8H & Rn_VP
 is b_1031=0b0101111011111001111110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_frecpx(Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.146 FRECPX page C7-2351 line 137576 MATCH x5ea1f800/mask=xffbffc00
@@ -10741,6 +10824,7 @@ is b_1031=0b0101111011111001111110 & Rd_FPR16 & Rn_FPR16 & Zd
 is b_2331=0b010111101 & b_22=0 & b_1021=0b100001111110 & Rd_FPR32 & Rn_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_frecpx(Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.146 FRECPX page C7-2351 line 137576 MATCH x5ea1f800/mask=xffbffc00
@@ -10753,6 +10837,7 @@ is b_2331=0b010111101 & b_22=0 & b_1021=0b100001111110 & Rd_FPR32 & Rn_FPR32 & Z
 is b_2331=0b010111101 & b_22=1 & b_1021=0b100001111110 & Rd_FPR64 & Rn_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_frecpx(Rn_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.140 FRINTA (vector) page C7-1313 line 76386 KEEPWITH
@@ -11227,6 +11312,7 @@ is b_2431=0b00011110 & b_2223=0b01 & b_1821=0b1001 & b_1517 & b_1014=0b10000 & f
 is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=1 & b_1021=0b111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_frsqrte(Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.169 FRSQRTE page C7-2397 line 140071 MATCH x7ea1d800/mask=xffbffc00
@@ -11239,6 +11325,7 @@ is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=1 & b_1021=0b111001110110 & Rd_FPR1
 is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=0 & b_1021=0b100001110110 & Rd_FPR32 & Rn_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_frsqrte(Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.169 FRSQRTE page C7-2397 line 140071 MATCH x7ea1d800/mask=xffbffc00
@@ -11251,6 +11338,7 @@ is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=0 & b_1021=0b100001110110 & Rd_FPR3
 is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=1 & b_1021=0b100001110110 & Rd_FPR64 & Rn_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_frsqrte(Rn_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.169 FRSQRTE page C7-2397 line 140071 MATCH x2ef9d800/mask=xbffffc00
@@ -11263,6 +11351,7 @@ is b_31=0 & b_30=1 & b_2329=0b1111101 & b_22=1 & b_1021=0b100001110110 & Rd_FPR6
 is b_31=0 & b_30=0 & b_2329=0b1011101 & b_22=1 & b_1021=0b111001110110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_frsqrte(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.169 FRSQRTE page C7-2397 line 140071 MATCH x2ef9d800/mask=xbffffc00
@@ -11287,6 +11376,7 @@ is b_31=0 & b_30=1 & b_2329=0b1011101 & b_22=1 & b_1021=0b111001110110 & Rd_VPR1
 is b_31=0 & b_30=0 & b_2329=0b1011101 & b_22=0 & b_1021=0b100001110110 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_frsqrte(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.169 FRSQRTE page C7-2397 line 140071 MATCH x2ea1d800/mask=xbfbffc00
@@ -11323,6 +11413,7 @@ is b_31=0 & b_30=1 & b_2329=0b1011101 & b_22=1 & b_1021=0b100001110110 & Rd_VPR1
 is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=1 & b_21=0 & b_1015=0b001111 & Rd_FPR16 & Rn_FPR16 & Rm_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_frsqrts(Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.170 FRSQRTS page C7-2400 line 140259 MATCH x5ea0fc00/mask=xffa0fc00
@@ -11335,6 +11426,7 @@ is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=1 & b_21=0 & b_1015=0b001111 & Rd_F
 is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=0 & b_21=1 & b_1015=0b111111 & Rd_FPR32 & Rn_FPR32 & Rm_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_frsqrts(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.170 FRSQRTS page C7-2400 line 140259 MATCH x5ea0fc00/mask=xffa0fc00
@@ -11347,6 +11439,7 @@ is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=0 & b_21=1 & b_1015=0b111111 & Rd_F
 is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=1 & b_21=1 & b_1015=0b111111 & Rd_FPR64 & Rn_FPR64 & Rm_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_frsqrts(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.170 FRSQRTS page C7-2400 line 140259 MATCH x0ec03c00/mask=xbfe0fc00
@@ -11359,6 +11452,7 @@ is b_31=0 & b_30=1 & b_2329=0b0111101 & b_22=1 & b_21=1 & b_1015=0b111111 & Rd_F
 is b_31=0 & b_30=0 & b_2329=0b0011101 & b_22=1 & b_21=0 & b_1015=0b001111 & Rd_VPR64.4H & Rn_VPR64.4H & Rm_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_frsqrts(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.170 FRSQRTS page C7-2400 line 140259 MATCH x0ec03c00/mask=xbfe0fc00
@@ -11383,6 +11477,7 @@ is b_31=0 & b_30=1 & b_2329=0b0011101 & b_22=1 & b_21=0 & b_1015=0b001111 & Rd_V
 is b_31=0 & b_30=0 & b_2329=0b0011101 & b_22=0 & b_21=1 & b_1015=0b111111 & Rd_VPR64.2S & Rn_VPR64.2S & Rm_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_frsqrts(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.170 FRSQRTS page C7-2400 line 140259 MATCH x0ea0fc00/mask=xbfa0fc00
@@ -13881,6 +13976,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x13 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_pmul(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.215 PMULL, PMULL2 page C7-2513 line 147032 MATCH x0e20e000/mask=xbf20fc00
@@ -14023,6 +14119,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.2D & b_1215=0x4 & b_1011=0 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_raddhn(Rd_VPR64.2S, Rn_VPR128.2D, Rm_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.216 RADDHN, RADDHN2 page C7-2515 line 147152 MATCH x2e204000/mask=xbf20fc00
@@ -14034,6 +14131,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S & b_1215=0x4 & b_1011=0 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_raddhn(Rd_VPR64.4H, Rn_VPR128.4S, Rm_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.216 RADDHN, RADDHN2 page C7-2515 line 147152 MATCH x2e204000/mask=xbf20fc00
@@ -14045,6 +14143,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.8H & b_1215=0x4 & b_1011=0 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_raddhn(Rd_VPR64.8B, Rn_VPR128.8H, Rm_VPR128.8H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.217 RAX1 page C7-2517 line 147279 MATCH xce608c00/mask=xffe0fc00
@@ -14074,6 +14173,7 @@ is b_2131=0b11001110011 & b_1015=0b100011 & Rd_VPR128.2D & Rn_VPR128.2D & Rm_VPR
 is b_31=0 & b_30=0 & b_1029=0b10111001100000010110 & Rd_VPR64.8B & Rn_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rbit(Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.218 RBIT (vector) page C7-2518 line 147347 MATCH x2e605800/mask=xbffffc00
@@ -14107,6 +14207,7 @@ is b_3131=0 & Q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x1 & b_1011=2 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rev16(Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.220 REV32 (vector) page C7-2522 line 147553 MATCH x2e200800/mask=xbf3ffc00
@@ -14129,6 +14230,7 @@ is b_3131=0 & Q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x0 & b_1011=2 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_rev32(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.220 REV32 (vector) page C7-2522 line 147553 MATCH x2e200800/mask=xbf3ffc00
@@ -14140,6 +14242,7 @@ is b_3131=0 & Q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x0 & b_1011=2 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rev32(Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.220 REV32 (vector) page C7-2522 line 147553 MATCH x2e200800/mask=xbf3ffc00
@@ -14173,6 +14276,7 @@ is b_3131=0 & Q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x0 & b_1011=2 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_rev64(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.221 REV64 page C7-2524 line 147671 MATCH x0e200800/mask=xbf3ffc00
@@ -14184,6 +14288,7 @@ is b_3131=0 & Q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x0 & b_1011=2 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_rev64(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.221 REV64 page C7-2524 line 147671 MATCH x0e200800/mask=xbf3ffc00
@@ -14206,6 +14311,7 @@ is b_3131=0 & Q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & Q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x0 & b_1011=2 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rev64(Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.221 REV64 page C7-2524 line 147671 MATCH x0e200800/mask=xbf3ffc00
@@ -14239,6 +14345,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x11 &
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_rshrn(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.222 RSHRN, RSHRN2 page C7-2526 line 147791 MATCH x0f008c00/mask=xbf80fc00
@@ -14250,6 +14357,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x11 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_rshrn(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.222 RSHRN, RSHRN2 page C7-2526 line 147791 MATCH x0f008c00/mask=xbf80fc00
@@ -14272,6 +14380,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x11 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rshrn(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.222 RSHRN, RSHRN2 page C7-2526 line 147791 MATCH x0f008c00/mask=xbf80fc00
@@ -14327,6 +14436,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.2D & b_1215=0x6 & b_1011=0 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_rsubhn(Rd_VPR64.2S, Rn_VPR128.2D, Rm_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.223 RSUBHN, RSUBHN2 page C7-2528 line 147915 MATCH x2e206000/mask=xbf20fc00
@@ -14338,6 +14448,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S & b_1215=0x6 & b_1011=0 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_rsubhn(Rd_VPR64.4H, Rn_VPR128.4S, Rm_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.223 RSUBHN, RSUBHN2 page C7-2528 line 147915 MATCH x2e206000/mask=xbf20fc00
@@ -14349,6 +14460,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.8H & b_1215=0x6 & b_1011=0 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_rsubhn(Rd_VPR64.8B, Rn_VPR128.8H, Rm_VPR128.8H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.224 SABA page C7-2530 line 148042 MATCH x0e207c00/mask=xbf20fc00
@@ -14371,6 +14483,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xf & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_saba(Rd_VPR64.2S, Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.224 SABA page C7-2530 line 148042 MATCH x0e207c00/mask=xbf20fc00
@@ -14382,6 +14495,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xf & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_saba(Rd_VPR64.4H, Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.224 SABA page C7-2530 line 148042 MATCH x0e207c00/mask=xbf20fc00
@@ -14404,6 +14518,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xf & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_saba(Rd_VPR64.8B, Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.224 SABA page C7-2530 line 148042 MATCH x0e207c00/mask=xbf20fc00
@@ -15880,6 +15995,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=2 
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.4S & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_saddlv(Rn_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.231 SADDLV page C7-2544 line 148829 MATCH x0e303800/mask=xbf3ffc00
@@ -15891,6 +16007,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.16B & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_saddlv(Rn_VPR128.16B, 1:1);
+	zext_zh(Zd);
 }
 
 # C7.2.231 SADDLV page C7-2544 line 148829 MATCH x0e303800/mask=xbf3ffc00
@@ -15902,6 +16019,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR64.8B & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_saddlv(Rn_VPR64.8B, 1:1);
+	zext_zh(Zd);
 }
 
 # C7.2.231 SADDLV page C7-2544 line 148829 MATCH x0e303800/mask=xbf3ffc00
@@ -15913,6 +16031,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR64.4H & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_saddlv(Rn_VPR64.4H, 2:1);
+	zext_zs(Zd);
 }
 
 # C7.2.231 SADDLV page C7-2544 line 148829 MATCH x0e303800/mask=xbf3ffc00
@@ -15924,6 +16043,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.8H & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_saddlv(Rn_VPR128.8H, 2:1);
+	zext_zs(Zd);
 }
 
 # C7.2.232 SADDW, SADDW2 page C7-2546 line 148929 MATCH x0e201000/mask=xbf20fc00
@@ -16078,6 +16198,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3031=1 & u=0 & b_2428=0x1f & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_scvtf(Rn_FPR64, Imm_shr_imm64:4);
+	zext_zd(Zd);
 }
 
 # C7.2.233 SCVTF (vector, fixed-point) page C7-2548 line 149051 MATCH x5f00e400/mask=xff80fc00
@@ -16089,6 +16210,7 @@ is b_3031=1 & u=0 & b_2428=0x1f & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c & b_
 is b_3031=1 & u=0 & b_2428=0x1f & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_scvtf(Rn_FPR32, Imm_shr_imm32:4);
+	zext_zs(Zd);
 }
 
 # C7.2.233 SCVTF (vector, fixed-point) page C7-2548 line 149051 MATCH x5f00e400/mask=xff80fc00
@@ -16100,6 +16222,7 @@ is b_3031=1 & u=0 & b_2428=0x1f & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_101
 is b_3031=1 & u=0 & b_2428=0x1f & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_scvtf(Rn_FPR16, Imm_shr_imm16:4);
+	zext_zh(Zd);
 }
 
 # C7.2.233 SCVTF (vector, fixed-point) page C7-2548 line 149051 MATCH x0f00e400/mask=xbf80fc00
@@ -16122,6 +16245,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_scvtf(Rn_VPR64.2S, Imm_shr_imm32:4, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.233 SCVTF (vector, fixed-point) page C7-2548 line 149051 MATCH x0f00e400/mask=xbf80fc00
@@ -16140,10 +16264,11 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & 
 # SMACRO(pseudo) ARG1 ARG2 ARG3:4 =NEON_scvtf/2@2
 # AUNIT --inst x0f10e400/mask=xfff0fc00 --status noqemu --comment "nofpround"
 
-:scvtf Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm32
-is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
+:scvtf Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm16
+is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	Rd_VPR64.4H = NEON_scvtf(Rn_VPR64.4H, Imm_shr_imm32:4, 2:1);
+	Rd_VPR64.4H = NEON_scvtf(Rn_VPR64.4H, Imm_shr_imm16:4, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.233 SCVTF (vector, fixed-point) page C7-2548 line 149051 MATCH x0f00e400/mask=xbf80fc00
@@ -16151,10 +16276,10 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & 
 # SMACRO(pseudo) ARG1 ARG2 ARG3:4 =NEON_scvtf/2@2
 # AUNIT --inst x4f10e400/mask=xfff0fc00 --status noqemu --comment "nofpround"
 
-:scvtf Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm32
-is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
+:scvtf Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm16
+is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	Rd_VPR128.8H = NEON_scvtf(Rn_VPR128.8H, Imm_shr_imm32:4, 2:1);
+	Rd_VPR128.8H = NEON_scvtf(Rn_VPR128.8H, Imm_shr_imm16:4, 2:1);
 }
 
 # C7.2.234 SCVTF (vector, integer) page C7-2551 line 149206 MATCH x5e21d800/mask=xffbffc00
@@ -16203,6 +16328,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & size_high=0 & b_1722=0x30 & b_1216=0x1d &
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & size_high=0 & b_1722=0x10 & b_1216=0x1d & b_1011=2 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_scvtf(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.234 SCVTF (vector, integer) page C7-2551 line 149206 MATCH x0e21d800/mask=xbfbffc00
@@ -16240,6 +16366,7 @@ is b_1031=0b0101111001111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 is b_31=0 & b_30=0 & b_1029=0b00111001111001110110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_scvtf(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.234 SCVTF (vector, integer) page C7-2551 line 149206 MATCH x0e79d800/mask=xbffffc00
@@ -16429,6 +16556,7 @@ is b_31=0 & b_30=0 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b1110 & b_10=0 & Rd
 {
 	local tmp1:4 = SIMD_PIECE(Re_VPR128.S, vIndex:1);
 	Rd_VPR64.2S = NEON_sdot(Rn_VPR64.8B, tmp1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.237 SDOT (by element) page C7-2558 line 149653 MATCH x0f00e000/mask=xbf00f400
@@ -16454,6 +16582,7 @@ is b_31=0 & b_30=1 & b_2429=0b001111 & b_2223=0b10 & b_1215=0b1110 & b_10=0 & Rd
 is b_31=0 & b_30=0 & b_2429=0b001110 & b_2223=0b10 & b_21=0 & b_1015=0b100101 & Rd_VPR64.2S & Rn_VPR64.8B & Rm_VPR64.8B & Zd
 {
 	Rd_VPR64.2S = NEON_sdot(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.238 SDOT (vector) page C7-2560 line 149755 MATCH x0e009400/mask=xbf20fc00
@@ -16644,6 +16773,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x0 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_shadd(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.253 SHADD page C7-2580 line 150875 MATCH x0e200400/mask=xbf20fc00
@@ -16655,6 +16785,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x0 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_shadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.253 SHADD page C7-2580 line 150875 MATCH x0e200400/mask=xbf20fc00
@@ -16677,6 +16808,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x0 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_shadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.253 SHADD page C7-2580 line 150875 MATCH x0e200400/mask=xbf20fc00
@@ -16699,6 +16831,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3031=1 & u=0 & b_2428=0x1f & b_2223=0b01 & Imm_imm0_63 & b_1115=0xa & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_shl(Rn_FPR64, Imm_imm0_63:1);
+	zext_zd(Zd);
 }
 
 # C7.2.254 SHL page C7-2582 line 150977 MATCH x0f005400/mask=xbf80fc00
@@ -17156,6 +17289,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x4 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_shsub(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.257 SHSUB page C7-2589 line 151368 MATCH x0e202400/mask=xbf20fc00
@@ -17167,6 +17301,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x4 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_shsub(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.257 SHSUB page C7-2589 line 151368 MATCH x0e202400/mask=xbf20fc00
@@ -17189,6 +17324,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x4 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_shsub(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.257 SHSUB page C7-2589 line 151368 MATCH x0e202400/mask=xbf20fc00
@@ -17233,6 +17369,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_imm0_63 & b_1115=0xa & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xa & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sli(Rd_VPR64.2S, Rn_VPR64.2S, Imm_uimm5:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.258 SLI page C7-2591 line 151468 MATCH x2f005400/mask=xbf80fc00
@@ -17244,6 +17381,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xa & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xa & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sli(Rd_VPR64.4H, Rn_VPR64.4H, Imm_uimm4:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.258 SLI page C7-2591 line 151468 MATCH x2f005400/mask=xbf80fc00
@@ -17266,6 +17404,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xa & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_uimm3 & b_1115=0xa & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sli(Rd_VPR64.8B, Rn_VPR64.8B, Imm_uimm3:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.258 SLI page C7-2591 line 151468 MATCH x2f005400/mask=xbf80fc00
@@ -17288,6 +17427,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xa & b_1
 is b_2331=0b011111110 & b_22=1 & b_1015=0b010101 & Rd_VPR64 & Rn_VPR64 & Imm_uimm5 & Zd
 {
 	Rd_VPR64 = NEON_sli(Rd_VPR64, Rn_VPR64, Imm_uimm5:1);
+	zext_zd(Zd);
 }
 
 # C7.2.259 SM3PARTW1 page C7-2594 line 151635 MATCH xce60c000/mask=xffe0fc00
@@ -17418,6 +17558,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xc & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_smax(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.268 SMAX page C7-2612 line 152509 MATCH x0e206400/mask=xbf20fc00
@@ -17429,6 +17570,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xc & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_smax(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.268 SMAX page C7-2612 line 152509 MATCH x0e206400/mask=xbf20fc00
@@ -17451,6 +17593,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xc & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_smax(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.268 SMAX page C7-2612 line 152509 MATCH x0e206400/mask=xbf20fc00
@@ -17484,6 +17627,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x14 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_smaxp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.269 SMAXP page C7-2614 line 152611 MATCH x0e20a400/mask=xbf20fc00
@@ -17495,6 +17639,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x14 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_smaxp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.269 SMAXP page C7-2614 line 152611 MATCH x0e20a400/mask=xbf20fc00
@@ -17517,6 +17662,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x14 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_smaxp(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.269 SMAXP page C7-2614 line 152611 MATCH x0e20a400/mask=xbf20fc00
@@ -17539,6 +17685,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.16B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_smaxv(Rn_VPR128.16B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.270 SMAXV page C7-2616 line 152715 MATCH x0e30a800/mask=xbf3ffc00
@@ -17550,6 +17697,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR64.8B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_smaxv(Rn_VPR64.8B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.270 SMAXV page C7-2616 line 152715 MATCH x0e30a800/mask=xbf3ffc00
@@ -17561,6 +17709,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR64.4H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_smaxv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.270 SMAXV page C7-2616 line 152715 MATCH x0e30a800/mask=xbf3ffc00
@@ -17572,6 +17721,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.8H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_smaxv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.270 SMAXV page C7-2616 line 152715 MATCH x0e30a800/mask=xbf3ffc00
@@ -17583,6 +17733,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_smaxv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.271 SMIN page C7-2618 line 152818 MATCH x0e206c00/mask=xbf20fc00
@@ -17605,6 +17756,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xd & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_smin(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.271 SMIN page C7-2618 line 152818 MATCH x0e206c00/mask=xbf20fc00
@@ -17616,6 +17768,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xd & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_smin(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.271 SMIN page C7-2618 line 152818 MATCH x0e206c00/mask=xbf20fc00
@@ -17638,6 +17791,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xd & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_smin(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.271 SMIN page C7-2618 line 152818 MATCH x0e206c00/mask=xbf20fc00
@@ -17671,6 +17825,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x15 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sminp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.272 SMINP page C7-2620 line 152920 MATCH x0e20ac00/mask=xbf20fc00
@@ -17682,6 +17837,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x15 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sminp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.272 SMINP page C7-2620 line 152920 MATCH x0e20ac00/mask=xbf20fc00
@@ -17704,6 +17860,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x15 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sminp(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.272 SMINP page C7-2620 line 152920 MATCH x0e20ac00/mask=xbf20fc00
@@ -17726,6 +17883,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.16B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sminv(Rn_VPR128.16B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.273 SMINV page C7-2622 line 153024 MATCH x0e31a800/mask=xbf3ffc00
@@ -17737,6 +17895,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR64.8B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sminv(Rn_VPR64.8B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.273 SMINV page C7-2622 line 153024 MATCH x0e31a800/mask=xbf3ffc00
@@ -17748,6 +17907,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR64.4H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sminv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.273 SMINV page C7-2622 line 153024 MATCH x0e31a800/mask=xbf3ffc00
@@ -17759,6 +17919,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.8H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sminv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.273 SMINV page C7-2622 line 153024 MATCH x0e31a800/mask=xbf3ffc00
@@ -17770,6 +17931,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sminv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.274 SMLAL, SMLAL2 (by element) page C7-2624 line 153127 MATCH x0f002000/mask=xbf00f400
@@ -18975,6 +19137,7 @@ is b_31=0 & b_30=1 & b_2429=0b001110 & b_2223=0b11 & b_1021=0b100000011110 & Rd_
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x1 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sqadd(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x5e200c00/mask=xff20fc00
@@ -18986,6 +19149,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x1 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sqadd(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x5e200c00/mask=xff20fc00
@@ -18997,6 +19161,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x1 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqadd(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x5e200c00/mask=xff20fc00
@@ -19008,6 +19173,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x1 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqadd(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x0e200c00/mask=xbf20fc00
@@ -19041,6 +19207,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x1 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqadd(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x0e200c00/mask=xbf20fc00
@@ -19052,6 +19219,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x1 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x0e200c00/mask=xbf20fc00
@@ -19074,6 +19242,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x1 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.283 SQADD page C7-2644 line 154278 MATCH x0e200c00/mask=xbf20fc00
@@ -19970,6 +20139,7 @@ is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b1100 & b_10=0 & Rd_FPR32 & Rn_FPR3
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x16 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqdmulh(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.289 SQDMULH (vector) page C7-2663 line 155365 MATCH x5e20b400/mask=xff20fc00
@@ -19981,6 +20151,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x16 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqdmulh(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.289 SQDMULH (vector) page C7-2663 line 155365 MATCH x0e20b400/mask=xbf20fc00
@@ -19992,6 +20163,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x16 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqdmulh(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.289 SQDMULH (vector) page C7-2663 line 155365 MATCH x0e20b400/mask=xbf20fc00
@@ -20003,6 +20175,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x16 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqdmulh(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.289 SQDMULH (vector) page C7-2663 line 155365 MATCH x0e20b400/mask=xbf20fc00
@@ -20802,6 +20975,7 @@ is b_2431=0b01011111 & b_2223=0b10 & b_1215=0b1101 & b_10=0 & Rd_FPR32 & Rn_FPR3
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x16 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqrdmulh(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.298 SQRDMULH (vector) page C7-2688 line 156859 MATCH x7e20b400/mask=xff20fc00
@@ -20813,6 +20987,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x16 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqrdmulh(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.298 SQRDMULH (vector) page C7-2688 line 156859 MATCH x2e20b400/mask=xbf20fc00
@@ -20824,6 +20999,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x16 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqrdmulh(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.298 SQRDMULH (vector) page C7-2688 line 156859 MATCH x2e20b400/mask=xbf20fc00
@@ -20835,6 +21011,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x16 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqrdmulh(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.298 SQRDMULH (vector) page C7-2688 line 156859 MATCH x2e20b400/mask=xbf20fc00
@@ -20868,6 +21045,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0xb & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sqrshl(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x5e205c00/mask=xff20fc00
@@ -20879,6 +21057,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0xb & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sqrshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x5e205c00/mask=xff20fc00
@@ -20890,6 +21069,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0xb & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqrshl(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x5e205c00/mask=xff20fc00
@@ -20901,6 +21081,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0xb & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqrshl(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x0e205c00/mask=xbf20fc00
@@ -20934,6 +21115,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xb & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqrshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x0e205c00/mask=xbf20fc00
@@ -20945,6 +21127,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xb & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqrshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x0e205c00/mask=xbf20fc00
@@ -20967,6 +21150,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xb & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqrshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.299 SQRSHL page C7-2690 line 156988 MATCH x0e205c00/mask=xbf20fc00
@@ -21000,6 +21184,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x13 &
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqrshrn(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.300 SQRSHRN, SQRSHRN2 page C7-2692 line 157131 MATCH x0f009c00/mask=xbf80fc00
@@ -21011,6 +21196,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x13 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqrshrn(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.300 SQRSHRN, SQRSHRN2 page C7-2692 line 157131 MATCH x0f009c00/mask=xbf80fc00
@@ -21033,6 +21219,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x13 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqrshrn2(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.300 SQRSHRN, SQRSHRN2 page C7-2692 line 157131 MATCH x0f009c00/mask=xbf80fc00
@@ -21056,6 +21243,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x13 
 is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b100111 & Rd_FPR8 & Rn_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqrshrn(Rd_FPR8, Rn_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.300 SQRSHRN, SQRSHRN2 page C7-2692 line 157131 MATCH x5f009c00/mask=xff80fc00
@@ -21068,6 +21256,7 @@ is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b100111 & Rd_FPR8 & Rn_FPR16 & I
 is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b100111 & Rd_FPR16 & Rn_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqrshrn(Rd_FPR16, Rn_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.300 SQRSHRN, SQRSHRN2 page C7-2692 line 157131 MATCH x5f009c00/mask=xff80fc00
@@ -21080,6 +21269,7 @@ is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b100111 & Rd_FPR16 & Rn_FPR32 & I
 is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b100111 & Rd_FPR32 & Rn_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqrshrn(Rd_FPR32, Rn_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x2f008c00/mask=xbf80fc00
@@ -21102,6 +21292,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x11 &
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqrshrun(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x2f008c00/mask=xbf80fc00
@@ -21113,6 +21304,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x11 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqrshrun(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x2f008c00/mask=xbf80fc00
@@ -21135,6 +21327,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x11 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x11 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqrshrun(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x2f008c00/mask=xbf80fc00
@@ -21158,6 +21351,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x11 
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100011 & Rd_FPR8 & Rn_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqrshrun(Rd_FPR8, Rn_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x7f008c00/mask=xff80fc00
@@ -21170,6 +21364,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100011 & Rd_FPR8 & Rn_FPR16 & I
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100011 & Rd_FPR16 & Rn_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqrshrun(Rd_FPR16, Rn_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.301 SQRSHRUN, SQRSHRUN2 page C7-2695 line 157316 MATCH x7f008c00/mask=xff80fc00
@@ -21182,6 +21377,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100011 & Rd_FPR16 & Rn_FPR32 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100011 & Rd_FPR32 & Rn_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqrshrun(Rd_FPR32, Rn_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x0f007400/mask=xbf80fc00
@@ -21215,6 +21411,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2223=0b01 & Imm_imm0_63 & b_1115=0xe & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqshl(Rn_VPR64.2S, Imm_uimm5:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x0f007400/mask=xbf80fc00
@@ -21226,6 +21423,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_101
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqshl(Rn_VPR64.4H, Imm_uimm4:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x0f007400/mask=xbf80fc00
@@ -21248,6 +21446,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_101
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_uimm3 & b_1115=0xe & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqshl(Rn_VPR64.8B, Imm_uimm3:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x0f007400/mask=xbf80fc00
@@ -21271,6 +21470,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1
 is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqshl(Rn_FPR8, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x5f007400/mask=xff80fc00
@@ -21283,6 +21483,7 @@ is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Im
 is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqshl(Rn_FPR16, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x5f007400/mask=xff80fc00
@@ -21295,6 +21496,7 @@ is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & I
 is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqshl(Rn_FPR32, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.302 SQSHL (immediate) page C7-2698 line 157500 MATCH x5f007400/mask=xff80fc00
@@ -21307,6 +21509,7 @@ is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Im
 is b_2331=0b010111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
 	Rd_FPR64 = NEON_sqshl(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x5e204c00/mask=xff20fc00
@@ -21318,6 +21521,7 @@ is b_2331=0b010111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x9 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sqshl(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x5e204c00/mask=xff20fc00
@@ -21329,6 +21533,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x9 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sqshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x5e204c00/mask=xff20fc00
@@ -21340,6 +21545,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x9 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqshl(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x5e204c00/mask=xff20fc00
@@ -21351,6 +21557,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x9 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqshl(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x0e204c00/mask=xbf20fc00
@@ -21384,6 +21591,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x9 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x0e204c00/mask=xbf20fc00
@@ -21395,6 +21603,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x9 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x0e204c00/mask=xbf20fc00
@@ -21417,6 +21626,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x9 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.303 SQSHL (register) page C7-2701 line 157665 MATCH x0e204c00/mask=xbf20fc00
@@ -21461,6 +21671,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_imm0_63 & b_1115=0xc & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xc & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqshlu(Rn_VPR64.2S, Imm_uimm5:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x2f006400/mask=xbf80fc00
@@ -21472,6 +21683,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xc & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xc & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqshlu(Rn_VPR64.4H, Imm_uimm4:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x2f006400/mask=xbf80fc00
@@ -21494,6 +21706,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xc & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_uimm3 & b_1115=0xc & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqshlu(Rn_VPR64.8B, Imm_uimm3:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x2f006400/mask=xbf80fc00
@@ -21517,6 +21730,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xc & b_1
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011001 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqshlu(Rn_FPR8, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x7f006400/mask=xff80fc00
@@ -21529,6 +21743,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011001 & Rd_FPR8 & Rn_FPR8 & Im
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011001 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqshlu(Rn_FPR16, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x7f006400/mask=xff80fc00
@@ -21541,6 +21756,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011001 & Rd_FPR16 & Rn_FPR16 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011001 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqshlu(Rn_FPR32, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.304 SQSHLU page C7-2703 line 157807 MATCH x7f006400/mask=xff80fc00
@@ -21553,6 +21769,7 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011001 & Rd_FPR32 & Rn_FPR32 & Im
 is b_2331=0b011111110 & b_22=1 & b_1015=0b011001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
 	Rd_FPR64 = NEON_sqshlu(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x0f009400/mask=xbf80fc00
@@ -21575,6 +21792,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x12 &
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqshrn(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x0f009400/mask=xbf80fc00
@@ -21586,6 +21804,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x12 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqshrn(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x0f009400/mask=xbf80fc00
@@ -21608,6 +21827,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x12 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqshrn(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x0f009400/mask=xbf80fc00
@@ -21631,6 +21851,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x12 
 is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b100101 & Rd_FPR8 & Rd_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqshrn(Rd_FPR8, Rd_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x5f009400/mask=xff80fc00
@@ -21643,6 +21864,7 @@ is b_2331=0b010111110 & b_1922=0b0001 & b_1015=0b100101 & Rd_FPR8 & Rd_FPR16 & I
 is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b100101 & Rd_FPR16 & Rd_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqshrn(Rd_FPR16, Rd_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.305 SQSHRN, SQSHRN2 page C7-2706 line 157972 MATCH x5f009400/mask=xff80fc00
@@ -21655,6 +21877,7 @@ is b_2331=0b010111110 & b_2022=0b001 & b_1015=0b100101 & Rd_FPR16 & Rd_FPR32 & I
 is b_2331=0b010111110 & b_2122=0b01 & b_1015=0b100101 & Rd_FPR32 & Rd_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqshrn(Rd_FPR32, Rd_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x2f008400/mask=xbf80fc00
@@ -21677,6 +21900,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x10 &
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x10 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqshrun(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x2f008400/mask=xbf80fc00
@@ -21688,6 +21912,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x10 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x10 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqshrun(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x2f008400/mask=xbf80fc00
@@ -21710,6 +21935,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x10 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x10 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqshrun(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x2f008400/mask=xbf80fc00
@@ -21733,6 +21959,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x10 
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100001 & Rd_FPR8 & Rd_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_sqshrun(Rd_FPR8, Rd_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x7f008400/mask=xff80fc00
@@ -21745,6 +21972,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100001 & Rd_FPR8 & Rd_FPR16 & I
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100001 & Rd_FPR16 & Rd_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_sqshrun(Rd_FPR16, Rd_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.306 SQSHRUN, SQSHRUN2 page C7-2709 line 158157 MATCH x7f008400/mask=xff80fc00
@@ -21757,6 +21985,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100001 & Rd_FPR16 & Rd_FPR32 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100001 & Rd_FPR32 & Rd_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_sqshrun(Rd_FPR32, Rd_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x5e202c00/mask=xff20fc00
@@ -21768,6 +21997,7 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100001 & Rd_FPR32 & Rd_FPR64 & Im
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x5 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sqsub(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x5e202c00/mask=xff20fc00
@@ -21779,6 +22009,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x5 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sqsub(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x5e202c00/mask=xff20fc00
@@ -21790,6 +22021,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x5 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqsub(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x5e202c00/mask=xff20fc00
@@ -21801,6 +22033,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x5 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqsub(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x0e202c00/mask=xbf20fc00
@@ -21834,6 +22067,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x5 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqsub(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x0e202c00/mask=xbf20fc00
@@ -21845,6 +22079,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x5 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqsub(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x0e202c00/mask=xbf20fc00
@@ -21867,6 +22102,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x5 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqsub(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.307 SQSUB page C7-2712 line 158339 MATCH x0e202c00/mask=xbf20fc00
@@ -21889,6 +22125,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_FPR16 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_sqxtn(Rd_FPR8, Rn_FPR16);
+	zext_zb(Zd);
 }
 
 # C7.2.308 SQXTN, SQXTN2 page C7-2714 line 158467 MATCH x5e214800/mask=xff3ffc00
@@ -21900,6 +22137,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x14 & 
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_FPR32 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_sqxtn(Rd_FPR16, Rn_FPR32);
+	zext_zh(Zd);
 }
 
 # C7.2.308 SQXTN, SQXTN2 page C7-2714 line 158467 MATCH x5e214800/mask=xff3ffc00
@@ -21911,6 +22149,7 @@ is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x14 & 
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_FPR64 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_sqxtn(Rd_FPR32, Rn_FPR64);
+	zext_zs(Zd);
 }
 
 # C7.2.308 SQXTN, SQXTN2 page C7-2714 line 158467 MATCH x0e214800/mask=xbf3ffc00
@@ -21955,6 +22194,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sqxtn(Rd_VPR64.2S, Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.308 SQXTN, SQXTN2 page C7-2714 line 158467 MATCH x0e214800/mask=xbf3ffc00
@@ -21966,6 +22206,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sqxtn(Rd_VPR64.4H, Rn_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.308 SQXTN, SQXTN2 page C7-2714 line 158467 MATCH x0e214800/mask=xbf3ffc00
@@ -21977,6 +22218,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x10 & b_1216=0x
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x14 & b_1011=2 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sqxtn(Rd_VPR64.8B, Rn_VPR128.8H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x7e212800/mask=xff3ffc00
@@ -21989,6 +22231,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100001001010 & Rd_FPR8 & Rn_FPR16 & Zd
 {
 	Rd_FPR8 = NEON_sqxtun(Rd_FPR8, Rn_FPR16);
+	zext_zb(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x7e212800/mask=xff3ffc00
@@ -22001,6 +22244,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100001001010 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100001001010 & Rd_FPR16 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_sqxtun(Rd_FPR16, Rn_FPR32);
+	zext_zh(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x7e212800/mask=xff3ffc00
@@ -22013,6 +22257,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100001001010 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100001001010 & Rd_FPR32 & Rn_FPR64 & Zd
 {
 	Rd_FPR32 = NEON_sqxtun(Rd_FPR32, Rn_FPR64);
+	zext_zs(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x2e212800/mask=xbf3ffc00
@@ -22025,6 +22270,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100001001010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100001001010 & Rd_VPR64.8B & Rn_VPR128.8H & Zd
 {
 	Rd_VPR64.8B = NEON_sqxtun(Rd_VPR64.8B, Rn_VPR128.8H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x2e212800/mask=xbf3ffc00
@@ -22049,6 +22295,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100001001010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100001001010 & Rd_VPR64.4H & Rn_VPR128.4S & Zd
 {
 	Rd_VPR64.4H = NEON_sqxtun(Rd_VPR64.4H, Rn_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x2e212800/mask=xbf3ffc00
@@ -22073,6 +22320,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100001001010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_1021=0b100001001010 & Rd_VPR64.2S & Rn_VPR128.2D & Zd
 {
 	Rd_VPR64.2S = NEON_sqxtun(Rd_VPR64.2S, Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.309 SQXTUN, SQXTUN2 page C7-2717 line 158622 MATCH x2e212800/mask=xbf3ffc00
@@ -22107,6 +22355,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x2 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rn_VPR64.2S = NEON_srhadd(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.310 SRHADD page C7-2720 line 158773 MATCH x0e201400/mask=xbf20fc00
@@ -22118,6 +22367,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x2 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rn_VPR64.4H = NEON_srhadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.310 SRHADD page C7-2720 line 158773 MATCH x0e201400/mask=xbf20fc00
@@ -22140,6 +22390,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x2 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rn_VPR64.8B = NEON_srhadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.310 SRHADD page C7-2720 line 158773 MATCH x0e201400/mask=xbf20fc00
@@ -22184,6 +22435,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x8 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x8 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sri(Rd_VPR64.2S, Rn_VPR64.2S, Imm_shr_imm32:4, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.311 SRI page C7-2722 line 158861 MATCH x2f004400/mask=xbf80fc00
@@ -22195,6 +22447,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x8 & b
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x8 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sri(Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm16:4, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.311 SRI page C7-2722 line 158861 MATCH x2f004400/mask=xbf80fc00
@@ -22217,6 +22470,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x8 & b
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x8 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sri(Rd_VPR64.8B, Rn_VPR64.8B, Imm_shr_imm8:4, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.311 SRI page C7-2722 line 158861 MATCH x2f004400/mask=xbf80fc00
@@ -22239,6 +22493,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x8 &
 is b_2331=0b011111110 & b_22=1 & b_1015=0b010001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
 	Rd_FPR64 = NEON_sri(Rd_FPR64, Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.312 SRSHL page C7-2725 line 159028 MATCH x5e205400/mask=xff20fc00
@@ -22250,6 +22505,7 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b010001 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0xa & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_srshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.312 SRSHL page C7-2725 line 159028 MATCH x0e205400/mask=xbf20fc00
@@ -22283,6 +22539,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xa & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_srshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.312 SRSHL page C7-2725 line 159028 MATCH x0e205400/mask=xbf20fc00
@@ -22294,6 +22551,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xa & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_srshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.312 SRSHL page C7-2725 line 159028 MATCH x0e205400/mask=xbf20fc00
@@ -22316,6 +22574,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xa & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_srshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.312 SRSHL page C7-2725 line 159028 MATCH x0e205400/mask=xbf20fc00
@@ -22360,6 +22619,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x4 
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_srshr(Rn_VPR64.2S, Imm_shr_imm32:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.313 SRSHR page C7-2727 line 159165 MATCH x0f002400/mask=xbf80fc00
@@ -22371,6 +22631,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x4 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_srshr(Rn_VPR64.4H, Imm_shr_imm16:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.313 SRSHR page C7-2727 line 159165 MATCH x0f002400/mask=xbf80fc00
@@ -22393,6 +22654,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b
 is b_3131=0 & q=0 & u=0 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x4 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_srshr(Rn_VPR64.8B, Imm_shr_imm8:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.313 SRSHR page C7-2727 line 159165 MATCH x0f002400/mask=xbf80fc00
@@ -22415,6 +22677,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x4 &
 is b_2331=0b010111110 & b_22=1 & b_1015=0b001001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
 	Rd_FPR64 = NEON_srshr(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.314 SRSRA page C7-2730 line 159316 MATCH x0f003400/mask=xbf80fc00
@@ -22628,6 +22891,7 @@ is b_2331=0b010111110 & b_22=1 & b_1015=0b001101 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_3031=1 & u=0 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x8 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.315 SSHL page C7-2733 line 159467 MATCH x0e204400/mask=xbf20fc00
@@ -22661,6 +22925,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x8 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_sshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.315 SSHL page C7-2733 line 159467 MATCH x0e204400/mask=xbf20fc00
@@ -22672,6 +22937,7 @@ is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x8 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_sshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.315 SSHL page C7-2733 line 159467 MATCH x0e204400/mask=xbf20fc00
@@ -22694,6 +22960,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=0 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x8 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_sshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.315 SSHL page C7-2733 line 159467 MATCH x0e204400/mask=xbf20fc00
@@ -22871,6 +23138,7 @@ is b_3131=0 & q=1 & u=0 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0x14 & b_
 is b_3031=1 & u=0 & b_2428=0x1f & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x0 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_sshr(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.317 SSHR page C7-2738 line 159757 MATCH x0f000400/mask=xbf80fc00
@@ -25055,6 +25323,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xf & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uaba(Rd_VPR64.2S, Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.343 UABA page C7-2809 line 164146 MATCH x2e207c00/mask=xbf20fc00
@@ -25066,6 +25335,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xf & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uaba(Rd_VPR64.4H, Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.343 UABA page C7-2809 line 164146 MATCH x2e207c00/mask=xbf20fc00
@@ -25088,6 +25358,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xf & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uaba(Rd_VPR64.8B, Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.343 UABA page C7-2809 line 164146 MATCH x2e207c00/mask=xbf20fc00
@@ -25401,6 +25672,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xe & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uabd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.345 UABD page C7-2813 line 164369 MATCH x2e207400/mask=xbf20fc00
@@ -25423,6 +25695,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xe & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uabd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.345 UABD page C7-2813 line 164369 MATCH x2e207400/mask=xbf20fc00
@@ -26250,6 +26523,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b10 & b_1021=0b100000001010 & Rd_
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.4S & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_uaddlv(Rn_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.350 UADDLV page C7-2823 line 164935 MATCH x2e303800/mask=xbf3ffc00
@@ -26261,6 +26535,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.16B & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uaddlv(Rn_VPR128.16B, 1:1);
+	zext_zh(Zd);
 }
 
 # C7.2.350 UADDLV page C7-2823 line 164935 MATCH x2e303800/mask=xbf3ffc00
@@ -26272,6 +26547,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR64.8B & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uaddlv(Rn_VPR64.8B, 1:1);
+	zext_zh(Zd);
 }
 
 # C7.2.350 UADDLV page C7-2823 line 164935 MATCH x2e303800/mask=xbf3ffc00
@@ -26283,6 +26559,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR64.4H & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uaddlv(Rn_VPR64.4H, 2:1);
+	zext_zs(Zd);
 }
 
 # C7.2.350 UADDLV page C7-2823 line 164935 MATCH x2e303800/mask=xbf3ffc00
@@ -26294,6 +26571,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x3 & b_1011=2 & Rn_VPR128.8H & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uaddlv(Rn_VPR128.8H, 2:1);
+	zext_zs(Zd);
 }
 
 # C7.2.351 UADDW, UADDW2 page C7-2825 line 165035 MATCH x2e201000/mask=xbf20fc00
@@ -26448,6 +26726,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B 
 is b_3031=1 & u=1 & b_2428=0x1f & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_ucvtf(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.352 UCVTF (vector, fixed-point) page C7-2827 line 165158 MATCH x7f00e400/mask=xff80fc00
@@ -26459,6 +26738,7 @@ is b_3031=1 & u=1 & b_2428=0x1f & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c & b_
 is b_3031=1 & u=1 & b_2428=0x1f & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_ucvtf(Rn_FPR32, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.352 UCVTF (vector, fixed-point) page C7-2827 line 165158 MATCH x7f00e400/mask=xff80fc00
@@ -26470,6 +26750,7 @@ is b_3031=1 & u=1 & b_2428=0x1f & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_101
 is b_3031=1 & u=1 & b_2428=0x1f & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_ucvtf(Rn_FPR16, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.352 UCVTF (vector, fixed-point) page C7-2827 line 165158 MATCH x2f00e400/mask=xbf80fc00
@@ -26492,6 +26773,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x1c
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_ucvtf(Rn_VPR64.2S, Imm_shr_imm32:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.352 UCVTF (vector, fixed-point) page C7-2827 line 165158 MATCH x2f00e400/mask=xbf80fc00
@@ -26510,10 +26792,11 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x1c & 
 # SMACRO(pseudo) ARG1 ARG2 ARG3:1 =NEON_ucvtf/2@2
 # AUNIT --inst x2f10e400/mask=xfff0fc00 --status noqemu --comment "nofpround"
 
-:ucvtf Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm32
-is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
+:ucvtf Rd_VPR64.4H, Rn_VPR64.4H, Imm_shr_imm16
+is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
-	Rd_VPR64.4H = NEON_ucvtf(Rn_VPR64.4H, Imm_shr_imm32:1, 2:1);
+	Rd_VPR64.4H = NEON_ucvtf(Rn_VPR64.4H, Imm_shr_imm16:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.352 UCVTF (vector, fixed-point) page C7-2827 line 165158 MATCH x2f00e400/mask=xbf80fc00
@@ -26521,10 +26804,10 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & 
 # SMACRO(pseudo) ARG1 ARG2 ARG3:1 =NEON_ucvtf/2@2
 # AUNIT --inst x6f10e400/mask=xfff0fc00 --status noqemu --comment "nofpround"
 
-:ucvtf Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm32
-is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
+:ucvtf Rd_VPR128.8H, Rn_VPR128.8H, Imm_shr_imm16
+is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm16 & b_1115=0x1c & b_1010=1 & Rn_VPR128.8H & Rd_VPR128.8H & Zd
 {
-	Rd_VPR128.8H = NEON_ucvtf(Rn_VPR128.8H, Imm_shr_imm32:1, 2:1);
+	Rd_VPR128.8H = NEON_ucvtf(Rn_VPR128.8H, Imm_shr_imm16:1, 2:1);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x7e21d800/mask=xffbffc00
@@ -26536,6 +26819,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=1 & Imm_shr_imm32 & b_1115=0x1c & 
 is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x10 & b_1216=0x1d & b_1011=2 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_ucvtf(Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x7e21d800/mask=xffbffc00
@@ -26547,6 +26831,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x10 & b_1216=0x1d & b_10
 is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x30 & b_1216=0x1d & b_1011=2 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_ucvtf(Rn_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x2e21d800/mask=xbfbffc00
@@ -26558,6 +26843,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & size_high=0 & b_1722=0x30 & b_1216=0x1d & b_10
 is sf=0 & q=0 & b_2929=1 & b_2428=0x0e & advSIMD3.size=0 & b_1721=0x10 & b_1216=0x1d & b_1011=2 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_ucvtf(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x2e21d800/mask=xbfbffc00
@@ -26592,6 +26878,7 @@ is sf=0 & q=1 & b_2929=1 & b_2428=0x0e & advSIMD3.size=1 & b_1721=0x10 & b_1216=
 is b_1031=0b0111111001111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_ucvtf(Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x2e79d800/mask=xbffffc00
@@ -26604,6 +26891,7 @@ is b_1031=0b0111111001111001110110 & Rd_FPR16 & Rn_FPR16 & Zd
 is b_31=0 & b_30=0 & b_1029=0b10111001111001110110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_ucvtf(Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.353 UCVTF (vector, integer) page C7-2830 line 165313 MATCH x2e79d800/mask=xbffffc00
@@ -26807,6 +27095,7 @@ is b_31=0 & b_30=0 & b_2429=0b101111 & b_2223=0b10 & b_1215=0b1110 & b_10=0 & Rd
 {
 	local tmp1:4 = SIMD_PIECE(Re_VPR128.S, vIndex:1);
 	Rd_VPR64.2S = NEON_udot(Rn_VPR64.8B, tmp1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.356 UDOT (by element) page C7-2837 line 165760 MATCH x2f00e000/mask=xbf00f400
@@ -26832,6 +27121,7 @@ is b_31=0 & b_30=1 & b_2429=0b101111 & b_2223=0b10 & b_1215=0b1110 & b_10=0 & Rd
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_21=0 & b_1015=0b100101 & Rd_VPR64.2S & Rn_VPR64.8B & Rm_VPR64.8B & Zd
 {
 	Rd_VPR64.2S = NEON_udot(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.357 UDOT (vector) page C7-2839 line 165862 MATCH x2e009400/mask=xbf20fc00
@@ -26866,6 +27156,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x0 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uhadd(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.358 UHADD page C7-2841 line 165961 MATCH x2e200400/mask=xbf20fc00
@@ -26877,6 +27168,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x0 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uhadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.358 UHADD page C7-2841 line 165961 MATCH x2e200400/mask=xbf20fc00
@@ -26899,6 +27191,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x0 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uhadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.358 UHADD page C7-2841 line 165961 MATCH x2e200400/mask=xbf20fc00
@@ -26932,6 +27225,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x4 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uhsub(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.359 UHSUB page C7-2843 line 166063 MATCH x2e202400/mask=xbf20fc00
@@ -26943,6 +27237,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x4 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uhsub(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.359 UHSUB page C7-2843 line 166063 MATCH x2e202400/mask=xbf20fc00
@@ -26965,6 +27260,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x4 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uhsub(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.359 UHSUB page C7-2843 line 166063 MATCH x2e202400/mask=xbf20fc00
@@ -26998,6 +27294,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xc & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_umax(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.360 UMAX page C7-2845 line 166163 MATCH x2e206400/mask=xbf20fc00
@@ -27009,6 +27306,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xc & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_umax(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.360 UMAX page C7-2845 line 166163 MATCH x2e206400/mask=xbf20fc00
@@ -27031,6 +27329,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xc & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_umax(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.360 UMAX page C7-2845 line 166163 MATCH x2e206400/mask=xbf20fc00
@@ -27064,6 +27363,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x14 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_umaxp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.361 UMAXP page C7-2847 line 166265 MATCH x2e20a400/mask=xbf20fc00
@@ -27075,6 +27375,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x14 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_umaxp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.361 UMAXP page C7-2847 line 166265 MATCH x2e20a400/mask=xbf20fc00
@@ -27097,6 +27398,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x14 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_umaxp(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.361 UMAXP page C7-2847 line 166265 MATCH x2e20a400/mask=xbf20fc00
@@ -27119,6 +27421,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.16B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_umaxv(Rn_VPR128.16B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.362 UMAXV page C7-2849 line 166369 MATCH x2e30a800/mask=xbf3ffc00
@@ -27130,6 +27433,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR64.8B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_umaxv(Rn_VPR64.8B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.362 UMAXV page C7-2849 line 166369 MATCH x2e30a800/mask=xbf3ffc00
@@ -27141,6 +27445,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR64.4H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_umaxv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.362 UMAXV page C7-2849 line 166369 MATCH x2e30a800/mask=xbf3ffc00
@@ -27152,6 +27457,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.8H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_umaxv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.362 UMAXV page C7-2849 line 166369 MATCH x2e30a800/mask=xbf3ffc00
@@ -27163,6 +27469,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0xa & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_umaxv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.363 UMIN page C7-2851 line 166472 MATCH x2e206c00/mask=xbf20fc00
@@ -27185,6 +27492,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xd & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_umin(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.363 UMIN page C7-2851 line 166472 MATCH x2e206c00/mask=xbf20fc00
@@ -27196,6 +27504,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xd & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_umin(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.363 UMIN page C7-2851 line 166472 MATCH x2e206c00/mask=xbf20fc00
@@ -27218,6 +27527,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xd & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_umin(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.363 UMIN page C7-2851 line 166472 MATCH x2e206c00/mask=xbf20fc00
@@ -27251,6 +27561,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x15 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uminp(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.364 UMINP page C7-2853 line 166574 MATCH x2e20ac00/mask=xbf20fc00
@@ -27262,6 +27573,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x15 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uminp(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.364 UMINP page C7-2853 line 166574 MATCH x2e20ac00/mask=xbf20fc00
@@ -27284,6 +27596,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x15 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uminp(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.364 UMINP page C7-2853 line 166574 MATCH x2e20ac00/mask=xbf20fc00
@@ -27306,6 +27619,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.16B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uminv(Rn_VPR128.16B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.365 UMINV page C7-2855 line 166678 MATCH x2e31a800/mask=xbf3ffc00
@@ -27317,6 +27631,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR64.8B & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uminv(Rn_VPR64.8B, 1:1);
+	zext_zb(Zd);
 }
 
 # C7.2.365 UMINV page C7-2855 line 166678 MATCH x2e31a800/mask=xbf3ffc00
@@ -27328,6 +27643,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR64.4H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uminv(Rn_VPR64.4H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.365 UMINV page C7-2855 line 166678 MATCH x2e31a800/mask=xbf3ffc00
@@ -27339,6 +27655,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.8H & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uminv(Rn_VPR128.8H, 2:1);
+	zext_zh(Zd);
 }
 
 # C7.2.365 UMINV page C7-2855 line 166678 MATCH x2e31a800/mask=xbf3ffc00
@@ -27350,6 +27667,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_1721=0x18 & b_1216=0x
 is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_1721=0x18 & b_1216=0x1a & b_1011=2 & Rn_VPR128.4S & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uminv(Rn_VPR128.4S, 4:1);
+	zext_zs(Zd);
 }
 
 # C7.2.366 UMLAL, UMLAL2 (by element) page C7-2857 line 166781 MATCH x2f002000/mask=xbf00f400
@@ -28259,6 +28577,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B 
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x1 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uqadd(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x7e200c00/mask=xff20fc00
@@ -28270,6 +28589,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x1 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_uqadd(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x7e200c00/mask=xff20fc00
@@ -28281,6 +28601,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x1 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uqadd(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x7e200c00/mask=xff20fc00
@@ -28292,6 +28613,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x1 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uqadd(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x2e200c00/mask=xbf20fc00
@@ -28325,6 +28647,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x1 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqadd(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x2e200c00/mask=xbf20fc00
@@ -28336,6 +28659,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x1 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x2e200c00/mask=xbf20fc00
@@ -28358,6 +28682,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x1 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.374 UQADD page C7-2875 line 167821 MATCH x2e200c00/mask=xbf20fc00
@@ -28380,6 +28705,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0xb & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uqrshl(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x7e205c00/mask=xff20fc00
@@ -28391,6 +28717,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0xb & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_uqrshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x7e205c00/mask=xff20fc00
@@ -28402,6 +28729,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0xb & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uqrshl(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x7e205c00/mask=xff20fc00
@@ -28413,6 +28741,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0xb & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uqrshl(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x2e205c00/mask=xbf20fc00
@@ -28446,6 +28775,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xb & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqrshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x2e205c00/mask=xbf20fc00
@@ -28457,6 +28787,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xb & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqrshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x2e205c00/mask=xbf20fc00
@@ -28479,6 +28810,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xb & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqrshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.375 UQRSHL page C7-2877 line 167948 MATCH x2e205c00/mask=xbf20fc00
@@ -28512,6 +28844,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x13 &
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqrshrn(Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.376 UQRSHRN, UQRSHRN2 page C7-2879 line 168091 MATCH x2f009c00/mask=xbf80fc00
@@ -28523,6 +28856,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x13 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqrshrn(Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.376 UQRSHRN, UQRSHRN2 page C7-2879 line 168091 MATCH x2f009c00/mask=xbf80fc00
@@ -28545,6 +28879,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x13 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x13 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqrshrn(Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.376 UQRSHRN, UQRSHRN2 page C7-2879 line 168091 MATCH x2f009c00/mask=xbf80fc00
@@ -28568,6 +28903,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x13 
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100111 & Rd_FPR8 & Rn_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_uqrshrn(Rn_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.376 UQRSHRN, UQRSHRN2 page C7-2879 line 168091 MATCH x7f009c00/mask=xff80fc00
@@ -28580,6 +28916,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100111 & Rd_FPR8 & Rn_FPR16 & I
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100111 & Rd_FPR16 & Rn_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_uqrshrn(Rn_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.376 UQRSHRN, UQRSHRN2 page C7-2879 line 168091 MATCH x7f009c00/mask=xff80fc00
@@ -28592,6 +28929,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100111 & Rd_FPR16 & Rn_FPR32 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100111 & Rd_FPR32 & Rn_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_uqrshrn(Rn_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x2f007400/mask=xbf80fc00
@@ -28625,6 +28963,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_imm0_63 & b_1115=0xe & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqshl(Rn_VPR64.2S, Imm_uimm5:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x2f007400/mask=xbf80fc00
@@ -28636,6 +28975,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqshl(Rn_VPR64.4H, Imm_uimm4:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x2f007400/mask=xbf80fc00
@@ -28658,6 +28998,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_uimm5 & b_1115=0xe & b_101
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_uimm3 & b_1115=0xe & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqshl(Rn_VPR64.8B, Imm_uimm3:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x2f007400/mask=xbf80fc00
@@ -28681,6 +29022,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_uimm4 & b_1115=0xe & b_1
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_uqshl(Rn_FPR8, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x7f007400/mask=xff80fc00
@@ -28693,6 +29035,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b011101 & Rd_FPR8 & Rn_FPR8 & Im
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_uqshl(Rn_FPR16, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x7f007400/mask=xff80fc00
@@ -28705,6 +29048,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b011101 & Rd_FPR16 & Rn_FPR16 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_uqshl(Rn_FPR32, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.377 UQSHL (immediate) page C7-2882 line 168276 MATCH x7f007400/mask=xff80fc00
@@ -28717,6 +29061,7 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b011101 & Rd_FPR32 & Rn_FPR32 & Im
 is b_2331=0b011111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
 	Rd_FPR64 = NEON_uqshl(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x7e204c00/mask=xff20fc00
@@ -28728,6 +29073,7 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b011101 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x9 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uqshl(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x7e204c00/mask=xff20fc00
@@ -28739,6 +29085,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x9 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_uqshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x7e204c00/mask=xff20fc00
@@ -28750,6 +29097,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x9 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uqshl(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x7e204c00/mask=xff20fc00
@@ -28761,6 +29109,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x9 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uqshl(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x2e204c00/mask=xbf20fc00
@@ -28794,6 +29143,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x9 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x2e204c00/mask=xbf20fc00
@@ -28805,6 +29155,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x9 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x2e204c00/mask=xbf20fc00
@@ -28827,6 +29178,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x9 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.378 UQSHL (register) page C7-2885 line 168441 MATCH x2e204c00/mask=xbf20fc00
@@ -28860,6 +29212,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x12 &
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & b_1010=1 & Rn_VPR128.2D & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqshrn(Rd_VPR64.2S, Rn_VPR128.2D, Imm_shr_imm32:1, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.379 UQSHRN, UQSHRN2 page C7-2887 line 168584 MATCH x2f009400/mask=xbf80fc00
@@ -28871,6 +29224,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x12 & b_1010=1 & Rn_VPR128.4S & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqshrn(Rd_VPR64.4H, Rn_VPR128.4S, Imm_shr_imm16:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.379 UQSHRN, UQSHRN2 page C7-2887 line 168584 MATCH x2f009400/mask=xbf80fc00
@@ -28893,6 +29247,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x12 & 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x12 & b_1010=1 & Rn_VPR128.8H & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqshrn(Rd_VPR64.8B, Rn_VPR128.8H, Imm_shr_imm8:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.379 UQSHRN, UQSHRN2 page C7-2887 line 168584 MATCH x2f009400/mask=xbf80fc00
@@ -28916,6 +29271,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x12 
 is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100101 & Rd_FPR8 & Rn_FPR16 & Imm_shr_imm8 & Zd
 {
 	Rd_FPR8 = NEON_uqshrn(Rd_FPR8, Rn_FPR16, Imm_shr_imm8:1);
+	zext_zb(Zd);
 }
 
 # C7.2.379 UQSHRN, UQSHRN2 page C7-2887 line 168584 MATCH x7f009400/mask=xff80fc00
@@ -28928,6 +29284,7 @@ is b_2331=0b011111110 & b_1922=0b0001 & b_1015=0b100101 & Rd_FPR8 & Rn_FPR16 & I
 is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100101 & Rd_FPR16 & Rn_FPR32 & Imm_shr_imm16 & Zd
 {
 	Rd_FPR16 = NEON_uqshrn(Rd_FPR16, Rn_FPR32, Imm_shr_imm16:1);
+	zext_zh(Zd);
 }
 
 # C7.2.379 UQSHRN, UQSHRN2 page C7-2887 line 168584 MATCH x7f009400/mask=xff80fc00
@@ -28940,6 +29297,7 @@ is b_2331=0b011111110 & b_2022=0b001 & b_1015=0b100101 & Rd_FPR16 & Rn_FPR32 & I
 is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100101 & Rd_FPR32 & Rn_FPR64 & Imm_shr_imm32 & Zd
 {
 	Rd_FPR32 = NEON_uqshrn(Rd_FPR32, Rn_FPR64, Imm_shr_imm32:1);
+	zext_zs(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x7e202c00/mask=xff20fc00
@@ -28951,6 +29309,7 @@ is b_2331=0b011111110 & b_2122=0b01 & b_1015=0b100101 & Rd_FPR32 & Rn_FPR64 & Im
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=0x5 & b_1010=1 & Rn_FPR8 & Rd_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_uqsub(Rn_FPR8, Rm_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x7e202c00/mask=xff20fc00
@@ -28962,6 +29321,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=0 & b_2121=1 & Rm_FPR8 & b_1115=
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x5 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_uqsub(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x7e202c00/mask=xff20fc00
@@ -28973,6 +29333,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115=0x5 & b_1010=1 & Rn_FPR16 & Rd_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_uqsub(Rn_FPR16, Rm_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x7e202c00/mask=xff20fc00
@@ -28984,6 +29345,7 @@ is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=1 & b_2121=1 & Rm_FPR16 & b_1115
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=2 & b_2121=1 & Rm_FPR32 & b_1115=0x5 & b_1010=1 & Rn_FPR32 & Rd_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_uqsub(Rn_FPR32, Rm_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x2e202c00/mask=xbf20fc00
@@ -29017,6 +29379,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x5 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_uqsub(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x2e202c00/mask=xbf20fc00
@@ -29028,6 +29391,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x5 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_uqsub(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x2e202c00/mask=xbf20fc00
@@ -29050,6 +29414,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x5 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_uqsub(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.380 UQSUB page C7-2890 line 168769 MATCH x2e202c00/mask=xbf20fc00
@@ -29073,6 +29438,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100001010010 & Rd_FPR8 & Rn_FPR16 & Zd
 {
 	Rd_FPR8 = NEON_uqxtn(Rd_FPR8, Rn_FPR16);
+	zext_zb(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x7e214800/mask=xff3ffc00
@@ -29085,6 +29451,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100001010010 & Rd_FPR16 & Rn_FPR32 & Zd
 {
 	Rd_FPR16 = NEON_uqxtn(Rd_FPR16, Rn_FPR32);
+	zext_zh(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x7e214800/mask=xff3ffc00
@@ -29097,6 +29464,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100001010010 & Rd_FPR32 & Rn_FPR64 & Zd
 {
 	Rd_FPR32 = NEON_uqxtn(Rd_FPR32, Rn_FPR64);
+	zext_zs(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x2e214800/mask=xbf3ffc00
@@ -29109,6 +29477,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100001010010 & Rd_VPR64.8B & Rn_VPR128.8H & Zd
 {
 	Rd_VPR64.8B = NEON_uqxtn(Rd_VPR64.8B, Rn_VPR128.8H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x2e214800/mask=xbf3ffc00
@@ -29133,6 +29502,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100001010010 & Rd_VPR64.4H & Rn_VPR128.4S & Zd
 {
 	Rd_VPR64.4H = NEON_uqxtn(Rd_VPR64.4H, Rn_VPR128.4S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x2e214800/mask=xbf3ffc00
@@ -29157,6 +29527,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_1021=0b100001010010 & Rd_VPR64.2S & Rn_VPR128.2D & Zd
 {
 	Rd_VPR64.2S = NEON_uqxtn(Rd_VPR64.2S, Rn_VPR128.2D, 8:1);
+	zext_zd(Zd);
 }
 
 # C7.2.381 UQXTN, UQXTN2 page C7-2892 line 168897 MATCH x2e214800/mask=xbf3ffc00
@@ -29181,6 +29552,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b10 & b_1021=0b100001010010 & Rd_
 is b_31=0 & b_30=0 & b_2329=0b0011101 & b_22=0 & b_1021=0b100001110010 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_urecpe(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.382 URECPE page C7-2895 line 169051 MATCH x0ea1c800/mask=xbfbffc00
@@ -29215,6 +29587,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR128.16
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x2 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_urhadd(Rn_VPR64.2S, Rm_VPR64.2S, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.383 URHADD page C7-2896 line 169117 MATCH x2e201400/mask=xbf20fc00
@@ -29226,6 +29599,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x2 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_urhadd(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.383 URHADD page C7-2896 line 169117 MATCH x2e201400/mask=xbf20fc00
@@ -29248,6 +29622,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x2 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_urhadd(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.383 URHADD page C7-2896 line 169117 MATCH x2e201400/mask=xbf20fc00
@@ -29270,6 +29645,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR128.8H
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0xa & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_urshl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.384 URSHL page C7-2898 line 169205 MATCH x2e205400/mask=xbf20fc00
@@ -29303,6 +29679,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0xa & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_urshl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.384 URSHL page C7-2898 line 169205 MATCH x2e205400/mask=xbf20fc00
@@ -29314,6 +29691,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0xa & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_urshl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.384 URSHL page C7-2898 line 169205 MATCH x2e205400/mask=xbf20fc00
@@ -29336,6 +29714,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0xa & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_urshl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.384 URSHL page C7-2898 line 169205 MATCH x2e205400/mask=xbf20fc00
@@ -29380,6 +29759,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2223=0b01 & Imm_shr_imm64 & b_1115=0x4 
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_urshr(Rn_VPR64.2S, Imm_shr_imm32:1, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.385 URSHR page C7-2900 line 169341 MATCH x2f002400/mask=xbf80fc00
@@ -29391,6 +29771,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x4 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_urshr(Rn_VPR64.4H, Imm_shr_imm16:1, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.385 URSHR page C7-2900 line 169341 MATCH x2f002400/mask=xbf80fc00
@@ -29413,6 +29794,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2123=1 & Imm_shr_imm32 & b_1115=0x4 & b
 is b_3131=0 & q=0 & u=1 & b_2428=0xf & b_1923=0x1 & Imm_shr_imm8 & b_1115=0x4 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_urshr(Rn_VPR64.8B, Imm_shr_imm8:1, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.385 URSHR page C7-2900 line 169341 MATCH x2f002400/mask=xbf80fc00
@@ -29432,10 +29814,11 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xf & b_2023=0x1 & Imm_shr_imm16 & b_1115=0x4 &
 # AUNIT --inst x7f402400/mask=xffc0fc00 --status nopcodeop --comment "nointround"
 # Scalar variant
 
-:urshr Rd_FPR64, Rn_FPR64, Imm_shr_imm32
-is b_2331=0b011111110 & b_22=1 & b_1015=0b001001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm32 & Zd
+:urshr Rd_FPR64, Rn_FPR64, Imm_shr_imm64
+is b_2331=0b011111110 & b_22=1 & b_1015=0b001001 & Rd_FPR64 & Rn_FPR64 & Imm_shr_imm64 & Zd
 {
-	Rd_FPR64 = NEON_urshr(Rn_FPR64, Imm_shr_imm32:1);
+	Rd_FPR64 = NEON_urshr(Rn_FPR64, Imm_shr_imm64:1);
+	zext_zd(Zd);
 }
 
 # C7.2.386 URSQRTE page C7-2903 line 169492 MATCH x2ea1c800/mask=xbfbffc00
@@ -29448,6 +29831,7 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b001001 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_31=0 & b_30=0 & b_2329=0b1011101 & b_22=0 & b_1021=0b100001110010 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_ursqrte(Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.386 URSQRTE page C7-2903 line 169492 MATCH x2ea1c800/mask=xbfbffc00
@@ -29674,6 +30058,7 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b001101 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_3031=1 & u=1 & b_2428=0x1e & advSIMD3.size=3 & b_2121=1 & Rm_FPR64 & b_1115=0x8 & b_1010=1 & Rn_FPR64 & Rd_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_ushl(Rn_FPR64, Rm_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.390 USHL page C7-2911 line 169885 MATCH x2e204400/mask=xbf20fc00
@@ -29707,6 +30092,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=3 & b_2121=1 & Rm_VPR128.2D
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S & b_1115=0x8 & b_1010=1 & Rn_VPR64.2S & Rd_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_ushl(Rn_VPR64.2S, Rm_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.390 USHL page C7-2911 line 169885 MATCH x2e204400/mask=xbf20fc00
@@ -29718,6 +30104,7 @@ is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR64.2S 
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=1 & b_2121=1 & Rm_VPR64.4H & b_1115=0x8 & b_1010=1 & Rn_VPR64.4H & Rd_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_ushl(Rn_VPR64.4H, Rm_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.390 USHL page C7-2911 line 169885 MATCH x2e204400/mask=xbf20fc00
@@ -29740,6 +30127,7 @@ is b_3131=0 & q=1 & u=1 & b_2428=0xe & advSIMD3.size=2 & b_2121=1 & Rm_VPR128.4S
 is b_3131=0 & q=0 & u=1 & b_2428=0xe & advSIMD3.size=0 & b_2121=1 & Rm_VPR64.8B & b_1115=0x8 & b_1010=1 & Rn_VPR64.8B & Rd_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_ushl(Rn_VPR64.8B, Rm_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.390 USHL page C7-2911 line 169885 MATCH x2e204400/mask=xbf20fc00
@@ -30071,6 +30459,7 @@ is b_2331=0b011111110 & b_22=1 & b_1015=0b000001 & Rd_FPR64 & Rn_FPR64 & Imm_shr
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_FPR8 & Rn_FPR8 & Zd
 {
 	Rd_FPR8 = NEON_usqadd(Rd_FPR8, Rn_FPR8);
+	zext_zb(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x7e203800/mask=xff3ffc00
@@ -30083,6 +30472,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_FPR16 & Rn_FPR16 & Zd
 {
 	Rd_FPR16 = NEON_usqadd(Rd_FPR16, Rn_FPR16);
+	zext_zh(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x7e203800/mask=xff3ffc00
@@ -30095,6 +30485,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_FPR32 & Rn_FPR32 & Zd
 {
 	Rd_FPR32 = NEON_usqadd(Rd_FPR32, Rn_FPR32);
+	zext_zs(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x7e203800/mask=xff3ffc00
@@ -30107,6 +30498,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b11 & b_1021=0b100000001110 & Rd_FPR64 & Rn_FPR64 & Zd
 {
 	Rd_FPR64 = NEON_usqadd(Rd_FPR64, Rn_FPR64);
+	zext_zd(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x2e203800/mask=xbf3ffc00
@@ -30119,6 +30511,7 @@ is b_31=0 & b_30=1 & b_2429=0b111110 & b_2223=0b11 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_VPR64.8B & Rn_VPR64.8B & Zd
 {
 	Rd_VPR64.8B = NEON_usqadd(Rd_VPR64.8B, Rn_VPR64.8B, 1:1);
+	zext_zd(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x2e203800/mask=xbf3ffc00
@@ -30143,6 +30536,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b00 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_VPR64.4H & Rn_VPR64.4H & Zd
 {
 	Rd_VPR64.4H = NEON_usqadd(Rd_VPR64.4H, Rn_VPR64.4H, 2:1);
+	zext_zd(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x2e203800/mask=xbf3ffc00
@@ -30167,6 +30561,7 @@ is b_31=0 & b_30=1 & b_2429=0b101110 & b_2223=0b01 & b_1021=0b100000001110 & Rd_
 is b_31=0 & b_30=0 & b_2429=0b101110 & b_2223=0b10 & b_1021=0b100000001110 & Rd_VPR64.2S & Rn_VPR64.2S & Zd
 {
 	Rd_VPR64.2S = NEON_usqadd(Rd_VPR64.2S, Rn_VPR64.2S, 4:1);
+	zext_zd(Zd);
 }
 
 # C7.2.394 USQADD page C7-2920 line 170396 MATCH x2e203800/mask=xbf3ffc00

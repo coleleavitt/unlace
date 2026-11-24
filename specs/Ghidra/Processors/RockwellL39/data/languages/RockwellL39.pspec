@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+
+  <default_symbols>
+    <!-- L3902 vector table at top of ROM. Per L39 TRM §3.5 / Table 3-5. -->
+    <symbol name="VEC_IRQ6"  address="FFF0" entry="false" type="code_ptr"/>
+    <symbol name="VEC_IRQ5"  address="FFF2" entry="false" type="code_ptr"/>
+    <symbol name="VEC_IRQ4"  address="FFF4" entry="false" type="code_ptr"/>
+    <symbol name="VEC_IRQ3"  address="FFF6" entry="false" type="code_ptr"/>
+    <symbol name="VEC_IRQ2"  address="FFF8" entry="false" type="code_ptr"/>
+    <symbol name="VEC_IRQ1"  address="FFFA" entry="false" type="code_ptr"/>
+    <symbol name="VEC_NMI"   address="FFFC" entry="false" type="code_ptr"/>
+    <symbol name="VEC_RESET" address="FFFE" entry="true"  type="code_ptr"/>
+
+    <!-- JSB# fixed-target subroutine table (R65C19 datasheet Appendix A; opcodes $0B/$1B/.../$7B). -->
+    <symbol name="JSB0_target" address="FFE0" entry="false" type="code_ptr"/>
+    <symbol name="JSB1_target" address="FFE2" entry="false" type="code_ptr"/>
+    <symbol name="JSB2_target" address="FFE4" entry="false" type="code_ptr"/>
+    <symbol name="JSB3_target" address="FFE6" entry="false" type="code_ptr"/>
+    <symbol name="JSB4_target" address="FFE8" entry="false" type="code_ptr"/>
+    <symbol name="JSB5_target" address="FFEA" entry="false" type="code_ptr"/>
+    <symbol name="JSB6_target" address="FFEC" entry="false" type="code_ptr"/>
+    <symbol name="JSB7_target" address="FFEE" entry="false" type="code_ptr"/>
+
+    <!-- I/O register file at $0000-$003F (L39 TRM Tables 3-1a/b/c, 3-2a/b/c/d). -->
+    <symbol name="PORTA"  address="0000"/>
+    <symbol name="PORTB"  address="0001"/>
+    <symbol name="PORTC"  address="0002"/>
+    <symbol name="PORTD"  address="0003"/>
+    <symbol name="PADIR"  address="0004"/>
+    <symbol name="PBSEL"  address="0005"/>
+    <symbol name="PCDIR"  address="0006"/>
+    <symbol name="PORTE"  address="0007"/>
+    <symbol name="MOR"    address="0008"/>
+    <symbol name="LPR"    address="0009"/>
+    <symbol name="EIR"    address="000A"/>
+    <symbol name="CIR"    address="000B"/>
+    <symbol name="PBM"    address="000C"/>
+    <symbol name="PBB"    address="000D"/>
+    <symbol name="PBUL"   address="000E"/>
+    <symbol name="PBLL"   address="000F"/>
+    <symbol name="TAM"    address="0010"/>
+    <symbol name="TALL"   address="0011"/>
+    <symbol name="TAUL"   address="0012"/>
+    <symbol name="TAS"    address="0013"/>
+    <symbol name="TBM"    address="0014"/>
+    <symbol name="TBLL"   address="0015"/>
+    <symbol name="TBUL"   address="0016"/>
+    <symbol name="TBS"    address="0017"/>
+    <symbol name="BSR0"   address="0018"/>
+    <symbol name="BSR1"   address="0019"/>
+    <symbol name="BSR2"   address="001A"/>
+    <symbol name="BSR3"   address="001B"/>
+    <symbol name="BSR4"   address="001C"/>
+    <symbol name="BSR5"   address="001D"/>
+    <symbol name="BSR6"   address="001E"/>
+    <symbol name="BSR7"   address="001F"/>
+    <symbol name="HOST_RXTX_FIFO" address="0020"/>
+    <symbol name="LSR"    address="0021"/>
+    <symbol name="MSR"    address="0022"/>
+    <symbol name="LCR"    address="0023"/>
+    <symbol name="MCR"    address="0024"/>
+    <symbol name="FCR"    address="0025"/>
+    <symbol name="DLAB_LSB" address="0028"/>
+    <symbol name="DLAB_MSB" address="0029"/>
+    <symbol name="GPFS"   address="002E"/>
+    <symbol name="HHR"    address="002F"/>
+    <symbol name="FSR"    address="0030"/>
+    <symbol name="FIER"   address="0031"/>
+    <symbol name="HCR"    address="0032"/>
+    <symbol name="ESS"    address="0033"/>
+    <symbol name="PAM"    address="0034"/>
+    <symbol name="PAB"    address="0035"/>
+    <symbol name="PAUL"   address="0036"/>
+    <symbol name="PAS"    address="0037"/>
+    <symbol name="SIB_SOB" address="0038"/>
+    <symbol name="SIR"    address="0039"/>
+    <symbol name="SMR"    address="003A"/>
+    <symbol name="SLC"    address="003B"/>
+    <symbol name="SSR"    address="003C"/>
+    <symbol name="SFR"    address="003D"/>
+    <symbol name="SODL"   address="003E"/>
+    <symbol name="SIDL"   address="003F"/>
+    <symbol name="CRC_L"  address="05FE"/>
+    <symbol name="CRC_H"  address="05FF"/>
+  </default_symbols>
+
+  <default_memory_blocks>
+    <!-- Block layout for users who load via Ghidra's BinaryLoader rather
+         than the L39 loader. The L39 loader supersedes these. -->
+    <memory_block name="IOREG"   start_address="0x0000" length="0x0040" initialized="false"/>
+    <memory_block name="HOSTBUS" start_address="0x0020" length="0x0020" initialized="false"/>
+    <memory_block name="PAGE0"   start_address="0x0040" length="0x00C0" initialized="false"/>
+    <memory_block name="STACK"   start_address="0x0100" length="0x0100" initialized="false"/>
+    <memory_block name="PAGE2"   start_address="0x0200" length="0x0100" initialized="false"/>
+    <memory_block name="PAGE3"   start_address="0x0300" length="0x0100" initialized="false"/>
+    <memory_block name="PAGE4"   start_address="0x0400" length="0x0100" initialized="false"/>
+    <memory_block name="PAGE5"   start_address="0x0500" length="0x00FE" initialized="false"/>
+    <memory_block name="CRC"     start_address="0x05FE" length="0x0002" initialized="false"/>
+  </default_memory_blocks>
+</processor_spec>

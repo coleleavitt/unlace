@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+
+  <language processor="RockwellL39"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="RockwellL39.sla"
+            processorspec="RockwellL39.pspec"
+            id="RockwellL39:LE:16:default">
+    <description>Rockwell C40 / L39 / L3902 modem MCU (enhanced 6502 / R65C19 core)</description>
+    <compiler name="default" spec="RockwellL39.cspec" id="default"/>
+  </language>
+
+</language_definitions>

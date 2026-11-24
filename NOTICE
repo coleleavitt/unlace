@@ -237,6 +237,10 @@ specs/Ghidra/Processors/TeakLite vendors the CEVA-TeakLite SLEIGH specification 
 aleph-void/TeakLite-SLEIGH (https://github.com/aleph-void/TeakLite-SLEIGH), a fork of SachinVin/TeakLite-SLEIGH, released under the
 MIT License (its license file is in that directory).
 
+specs/Ghidra/Processors/RockwellL39 vendors the Rockwell C39 / L39 SLEIGH specification of
+aleph-void/ghidra-rockwell-l39 (https://github.com/aleph-void/ghidra-rockwell-l39), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

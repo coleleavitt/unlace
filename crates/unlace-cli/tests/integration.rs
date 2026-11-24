@@ -34,6 +34,8 @@ mod kr1878_raw;
 mod lanai_raw;
 #[path = "lua54.rs"]
 mod lua54;
+#[path = "m32c_raw.rs"]
+mod m32c_raw;
 #[path = "m32r_raw.rs"]
 mod m32r_raw;
 #[path = "m6800_family.rs"]
@@ -46,16 +48,27 @@ mod mep;
 mod mmix_raw;
 #[path = "meta_raw.rs"]
 mod meta_raw;
+#[path = "mips_ase.rs"]
+mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "nfp_raw.rs"]
+mod nfp_raw;
 #[path = "nios2_raw.rs"]
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "propeller_raw.rs"]
+mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
+#[path = "tlcs870_raw.rs"]
+mod tlcs870_raw;
+
+#[path = "v60.rs"]
+mod v60;
 
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
@@ -67,6 +80,10 @@ mod aarch64_sve2;
 mod cdp1802_raw;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "nova_raw.rs"]
+mod nova_raw;
+#[path = "ppc_spe2.rs"]
+mod ppc_spe2;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -111,6 +128,8 @@ mod st20_raw;
 
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tilegx_raw.rs"]
+mod tilegx_raw;
 #[path = "tlcs90_raw.rs"]
 mod tlcs90_raw;
 #[path = "tms320c3x_raw.rs"]
@@ -1107,5 +1126,9 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvccookie_return_cli.rs"]
+mod msvccookie_return_cli;
+#[path = "msvcexport_cli.rs"]
+mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]
 mod vexzeroupper_cli;

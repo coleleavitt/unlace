@@ -1,8 +1,8 @@
 //! Packed instruction reads with the parser's zero-filled buffer tail.
 
 #[inline]
-pub(crate) fn read_bytes(buf: &[u8; 16], offset: usize, size: i32) -> u32 {
-    if offset <= 12 && (1..=4).contains(&size) {
+pub(crate) fn read_bytes<const N: usize>(buf: &[u8; N], offset: usize, size: i32) -> u32 {
+    if offset + 4 <= N && (1..=4).contains(&size) {
         let word = u32::from_be_bytes(buf[offset..offset + 4].try_into().unwrap());
         return word >> (8 * (4 - size));
     }
@@ -14,8 +14,8 @@ pub(crate) fn read_bytes(buf: &[u8; 16], offset: usize, size: i32) -> u32 {
 }
 
 #[inline]
-pub(crate) fn read_bits(buf: &[u8; 16], offset: usize, bit: i32, size: i32) -> u32 {
-    if offset <= 12 && bit >= 0 && (1..=32).contains(&size) && bit + size <= 32 {
+pub(crate) fn read_bits<const N: usize>(buf: &[u8; N], offset: usize, bit: i32, size: i32) -> u32 {
+    if offset + 4 <= N && bit >= 0 && (1..=32).contains(&size) && bit + size <= 32 {
         let word = u32::from_be_bytes(buf[offset..offset + 4].try_into().unwrap());
         return word
             .wrapping_shl(bit as u32)

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="V60"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="v60.sla"
+            processorspec="v60.pspec"
+            id="V60:LE:32:default">
+    <description>NEC V60 (uPD70616) and V70 (uPD70632), the shared V60 instruction set</description>
+    <compiler name="default" spec="v60.cspec" id="default"/>
+  </language>
+</language_definitions>

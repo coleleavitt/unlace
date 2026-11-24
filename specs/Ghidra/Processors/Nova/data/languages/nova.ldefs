@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="Nova"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="nova.sla"
+            processorspec="nova.pspec"
+            id="Nova:BE:16:default">
+    <description>Data General Nova (Nova 1200/800/2/3/4, word addressed)</description>
+    <compiler name="default" spec="nova.cspec" id="default"/>
+  </language>
+</language_definitions>

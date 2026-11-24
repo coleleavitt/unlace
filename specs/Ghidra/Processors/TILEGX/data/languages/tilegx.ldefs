@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="TILEGX"
+            endian="little"
+            size="64"
+            variant="default"
+            version="1.0"
+            slafile="tilegx.sla"
+            processorspec="tilegx.pspec"
+            id="TILEGX:LE:64:default">
+    <description>Tilera TILE-Gx (TILE-Gx8000 family), 64-bit VLIW bundles</description>
+    <compiler name="default" spec="tilegx.cspec" id="default"/>
+    <external_name tool="gnu" name="tilegx"/>
+    <external_name tool="IDA-PRO" name="tilegx"/>
+  </language>
+</language_definitions>

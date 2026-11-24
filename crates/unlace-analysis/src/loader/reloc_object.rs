@@ -375,6 +375,7 @@ struct ResolvedRelocationTarget {
 pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocLayout {
     let mut diagnostics = RelocDiagnostics::default();
     let architecture = file.architecture();
+    let machine = elf_machine(file);
     let little_endian = file.is_little_endian();
 
     // --- Pass 1: assign a load VMA to every SHF_ALLOC section, snapshot bytes.
@@ -498,7 +499,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         .filter_map(|l| file.section_by_index(l.index).ok())
         .flat_map(|sec| sec.relocations().collect::<Vec<_>>())
         .filter(|(_, reloc)| {
-            reloc_apply::classify(architecture, reloc)
+            reloc_apply::classify_elf(architecture, machine, reloc)
                 .is_ok_and(|spec| spec.is_some_and(|s| s.via_got()))
         })
         .count() as u64;
@@ -658,7 +659,7 @@ pub fn layout_relocatable(file: &object::File, fmt: &dyn ObjectFormat) -> RelocL
         let mut riscv_hi: HashMap<u64, i128> = HashMap::new();
         for (offset, reloc) in relocs {
             let r_type = kuna_mipsreloc::r_type_of(&reloc);
-            let spec = match reloc_apply::classify(architecture, &reloc) {
+            let spec = match reloc_apply::classify_elf(architecture, machine, &reloc) {
                 Ok(Some(spec)) => spec,
                 Ok(None) => continue,
                 Err(reason) => {
@@ -1222,6 +1223,16 @@ fn relocation_name(architecture: Architecture, r_type: u32) -> &'static str {
 }
 
 /// Round `value` up to a multiple of `align` (a power of two ≥ 1).
+/// The ELF `e_machine` of `file`, `None` for any other format.
+fn elf_machine(file: &object::File) -> Option<u16> {
+    use object::read::elf::FileHeader;
+    match file {
+        object::File::Elf32(elf) => Some(elf.elf_header().e_machine(elf.endian())),
+        object::File::Elf64(elf) => Some(elf.elf_header().e_machine(elf.endian())),
+        _ => None,
+    }
+}
+
 fn align_up(value: u64, align: u64) -> u64 {
     debug_assert!(align >= 1);
     let mask = align - 1;

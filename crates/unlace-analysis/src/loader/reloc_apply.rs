@@ -88,6 +88,9 @@ enum Specific {
     LarchLo12,
     LarchCall36,
     LarchBranch { bits: u8 },
+    LanaiBranch25,
+    LanaiAbs21,
+    LanaiHalf { high: bool },
     Aarch64AdrLo21,
     Aarch64Imm19 { load: bool },
     Aarch64Imm14,
@@ -236,6 +239,7 @@ impl RelocationSpec {
                     | Specific::SparcWdisp16
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
+                    | Specific::LanaiBranch25
                     | Specific::Aarch64Imm19 { load: false }
                     | Specific::Aarch64Imm14
                     | Specific::RiscvCall
@@ -246,6 +250,53 @@ impl RelocationSpec {
                     | Specific::BpfCall
             )
     }
+}
+
+/// `EM_LANAI`, which the `object` crate maps to no architecture.
+pub const EM_LANAI: u16 = 244;
+const R_LANAI_21: u32 = 1;
+const R_LANAI_25: u32 = 3;
+const R_LANAI_32: u32 = 4;
+const R_LANAI_HI16: u32 = 5;
+const R_LANAI_LO16: u32 = 6;
+
+/// [`classify`] for an ELF object whose `e_machine` is `machine`: the machines
+/// `object` has no architecture for (`Architecture::Unknown`) are told apart
+/// by it.
+pub fn classify_elf(
+    arch: Architecture,
+    machine: Option<u16>,
+    reloc: &Relocation,
+) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    match (arch, machine) {
+        (Architecture::Unknown, Some(EM_LANAI)) => classify_lanai(RelocationInfo::from(reloc)),
+        _ => classify(arch, reloc),
+    }
+}
+
+/// Lanai (big-endian, RELA): `25` is the absolute word address of a `bcc`
+/// (bits 24..2), `21` the absolute 21-bit address of an SLS/SLI load, store or
+/// `mov` (bits 22..18 and 15..0), `HI16`/`LO16` the halves of `S + A` in an
+/// RI immediate, and `32` a data word.
+fn classify_lanai(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let specific = match reloc.r_type {
+        Some(0) => return Ok(None),
+        Some(R_LANAI_25) => Specific::LanaiBranch25,
+        Some(R_LANAI_21) => Specific::LanaiAbs21,
+        Some(R_LANAI_HI16) => Specific::LanaiHalf { high: true },
+        Some(R_LANAI_LO16) => Specific::LanaiHalf { high: false },
+        Some(R_LANAI_32) => Specific::Data {
+            bytes: 4,
+            pc: false,
+        },
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width: 4,
+        call: false,
+        got: false,
+    }))
 }
 
 /// `Ok(None)` means a no-op relocation (`R_*_NONE`).
@@ -771,6 +822,16 @@ fn apply_info(
         Specific::LarchLo12 => larch_lo12(field, reloc, symbol),
         Specific::LarchCall36 => larch_call36(field, reloc, symbol, place),
         Specific::LarchBranch { bits } => larch_branch(field, reloc, symbol, place, bits),
+        Specific::LanaiBranch25 => lanai_field(field, reloc, symbol, 0x01ff_fffc, true),
+        Specific::LanaiAbs21 => lanai_abs21(field, reloc, symbol),
+        Specific::LanaiHalf { high } => {
+            let value = symbol as i128 + reloc.addend as i128;
+            let half = if high { value >> 16 } else { value };
+            let mut insn = read_u32(field, false);
+            insn = (insn & !0xffff) | ((half as u32) & 0xffff);
+            write_u32(field, false, insn);
+            Ok(())
+        }
         Specific::Aarch64AdrLo21 => aarch64_adr_lo21(field, little_endian, reloc, symbol, place),
         Specific::Aarch64Imm19 { .. } => {
             aarch64_pcrel_imm(field, little_endian, reloc, symbol, place, 19)
@@ -1823,6 +1884,51 @@ fn larch_branch(
     };
     insn = (insn & !(0xffff << 10) & !high) | ((words & 0xffff) << 10) | ((words >> 16) & high);
     write_u32(field, true, insn);
+    Ok(())
+}
+
+/// A Lanai absolute field: `S + A` into the `mask` bits of a big-endian word,
+/// range-checked against the field (and word alignment for a branch).
+fn lanai_field(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+    mask: u32,
+    branch: bool,
+) -> Result<(), RelocationFailure> {
+    let mut insn = read_u32(field, false);
+    if reloc.implicit_addend || (branch && insn >> 28 != 0xe) {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128;
+    if branch {
+        require_aligned(value, 4)?;
+    }
+    if value < 0 || value > i128::from(mask | 3) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    insn = (insn & !mask) | ((value as u32) & mask);
+    write_u32(field, false, insn);
+    Ok(())
+}
+
+/// Lanai `21`: bits 20..16 of `S + A` into bits 22..18, bits 15..0 into 15..0.
+fn lanai_abs21(
+    field: &mut [u8],
+    reloc: RelocationInfo,
+    symbol: u64,
+) -> Result<(), RelocationFailure> {
+    let value = symbol as i128 + reloc.addend as i128;
+    if reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    if !(0..1 << 21).contains(&value) {
+        return Err(RelocationFailure::OutOfRange);
+    }
+    let v = value as u32;
+    let mut insn = read_u32(field, false);
+    insn = (insn & !0x007c_ffff) | (((v >> 16) & 0x1f) << 18) | (v & 0xffff);
+    write_u32(field, false, insn);
     Ok(())
 }
 
@@ -3201,6 +3307,70 @@ mod tests {
             );
             assert_eq!(field, before);
         }
+    }
+}
+
+#[cfg(test)]
+mod lanai_tests {
+    use super::*;
+
+    fn patch(r_type: u32, addend: i64, insn: u32, symbol: u64) -> Result<u32, RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        };
+        let spec = classify_lanai(info)?.expect("not a no-op");
+        let mut field = insn.to_be_bytes();
+        apply_info(spec, info, &mut field, false, symbol, 0, None, None)?;
+        Ok(u32::from_be_bytes(field))
+    }
+
+    #[test]
+    fn branches_halves_and_21_bit_addresses_are_absolute() {
+        // `bt .L0+0x18` with .text at 0x400000.
+        assert_eq!(
+            patch(R_LANAI_25, 0x18, 0xe000_0000, 0x40_0000),
+            Ok(0xe040_0018)
+        );
+        assert_eq!(
+            patch(R_LANAI_25, 2, 0xe000_0000, 0x40_0000),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            patch(R_LANAI_25, 0, 0xe000_0000, 0x200_0000),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert_eq!(
+            patch(R_LANAI_25, 0, 0x0000_0000, 0x40_0000),
+            Err(RelocationFailure::InvalidEncoding)
+        );
+        // `mov hi(g_table), %r9`; `or %r9, lo(g_table), %r9`.
+        assert_eq!(
+            patch(R_LANAI_HI16, 0, 0x0481_0000, 0x40_0710),
+            Ok(0x0481_0040)
+        );
+        assert_eq!(
+            patch(R_LANAI_LO16, 0, 0x5524_0000, 0x40_0710),
+            Ok(0x5524_0710)
+        );
+        assert_eq!(patch(R_LANAI_21, 4, 0xf480_0000, 0x1_2340), Ok(0xf484_2344));
+        assert_eq!(patch(R_LANAI_32, 8, 0, 0x40_0700), Ok(0x40_0708));
+        assert!(
+            classify_lanai(RelocationInfo {
+                kind: RelocationKind::Unknown,
+                encoding: RelocationEncoding::Unknown,
+                size: 0,
+                addend: 0,
+                implicit_addend: false,
+                r_type: Some(0),
+            })
+            .unwrap()
+            .is_none()
+        );
     }
 }
 

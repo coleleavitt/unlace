@@ -1,0 +1,2027 @@
+# sleigh specification file for Broadcom VideoCore IV
+
+## Scalar instructions: decoding checked against binutils-vc4, p-code against resim and gcc-vc4
+## output (Ghidra-Rare, see GHIDRA-RARE.md). Vector instructions: decoded from the manual's
+## tables, operations are pcodeops (the vector register file is not modelled; see below).
+
+define endian=little;
+define alignment=2;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+# General registers
+define register offset=0 size=4 [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 gp sp lr r27 r28 r29 sr pc ];
+
+# Status register fields
+@define SR_U  "sr[31,1]"
+@define SR_I  "sr[30,1]"
+@define SR_S  "sr[29,1]"
+@define SR_CB "sr[ 4,2]"
+@define SR_Z  "sr[ 3,1]"
+@define SR_N  "sr[ 2,1]"
+@define SR_C  "sr[ 1,1]"
+@define SR_V  "sr[ 0,1]"
+
+# Flags: named bit ranges of sr, so that every write to sr (mov, ldm, rti, ALU results with
+# rd = sr) is seen by the condition codes
+define bitrange Z=sr[3,1] N=sr[2,1] C=sr[1,1] V=sr[0,1];
+
+# Processor control registers
+@define PCTL_REG_BASE "0x200"
+define register offset=$(PCTL_REG_BASE) size=4 [
+	p0 p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 p15
+	p16 p17 p18 p19 p20 p21 p22 p23 p24 p25 p26 p27 p28 p29 p30 p31 ];
+
+
+################################################################
+# Context
+################################################################
+
+define register offset=0x2000 size=4 contextreg;
+
+define context contextreg
+  # common fields
+  chkcc    = (28,31)	# condition code to be checked
+
+  # load/store
+  ldstop   = ( 0, 2)	# load/store operation
+
+  # ALU
+  aluop    = ( 0, 5)	# ALU operation (full)
+
+  # ldm/stm
+  storesp  = (21,21)	# stm: save resulting sp?
+  loadsp   = (20,20)	# ldm: restore sp at end?
+  loadpc   = (19,19)	# ldm: make a jump?
+  mspoff   = (11,18)	# ldm/stm: memory offset of the sp register
+  mregidx  = ( 6,10)	# ldm/stm: current register
+  mcount   = ( 0, 5)	# ldm/stm: remaining number of registers
+;
+
+################################################################
+# Tokens
+################################################################
+
+define token opword(16)
+  Op16    = ( 0,15)
+  op11    = ( 5,15)
+  Op8     = ( 8,15)
+  Op7     = ( 9,15)
+  Rr      = ( 5, 9)
+  Sbit6   = (10,10)
+  Uoff5   = ( 4, 8)
+  OpAux   = ( 5, 7)
+  Rbase2  = ( 8, 9)
+  Pd      = ( 0, 4)
+  Rd      = ( 0, 4)
+
+  # conditional branches
+  Cc      = ( 7,10)
+  Off7    = ( 0, 6) signed
+
+  # ldm/stm
+  Op9     = ( 7,15)
+  Rmbase  = ( 5, 6)
+  Count   = ( 0, 4)
+  Rd6     = ( 0, 4)
+  Rd16    = ( 0, 4)
+  Rd24    = ( 0, 4)
+
+  # sp-relative addressing
+  Off6    = ( 5,10) signed
+
+  # load/store
+  LdStOp    = ( 5, 7)
+  # load/store with 12-bit offset
+  Off12Sign = ( 8, 8)
+  LdStOpLo  = ( 8,10)
+
+  # instruction using RdLo and RrLo
+  RrLo  = ( 4, 7)
+  RdLo  = ( 0, 3)
+    # 32-bit load/store with base and aligned offset
+    Op4     = (12,15)
+    Uoff4   = ( 8,11)
+    # 16-bit ALU instructions
+    Op3     = (13,15)
+      # ALU with register
+      AluLo = ( 8,12)
+      # ALU with 5-bit unsigned immediate
+      Alu4  = ( 9,12)
+      Imm5  = ( 4, 8)
+
+  # ALU with immediate
+  Op6     = (10,15)
+  Alu5    = ( 5, 9)
+
+  # triadic ALU
+  Op5     = (11,15)
+  Alu6    = ( 5,10)
+    # scaled addition/subtraction
+    ScAdd = ( 5, 6)
+    ScSub = ( 5, 8)
+;
+
+define token argword (16)
+  # common fields
+  Ra        = (11,15)
+
+  # all conditional instructions
+  CcSfx     = ( 7,10)
+
+  # argument B
+  argHasImm = ( 6, 6)
+  argBit5   = ( 5, 5)
+  Rb        = ( 0, 4)
+  argImm6   = ( 0, 5) signed
+  argUimm6  = ( 0, 5)
+  argLow7   = ( 0, 6)
+
+  # load/store with 12-bit offset
+  argOff11  = ( 0,10) signed
+  argUoff11 = ( 0,10)
+
+  # move to/from control registers
+  argOp11   = ( 5,15)
+  Pb        = ( 0, 4)
+;
+
+define token opdword(32)
+  # common fields
+  dwOp4    = (12,15)
+
+  # all conditional instructions
+  dwCc     = ( 8,11)
+
+  # branches
+  dwLink    = ( 7, 7)
+
+  # conditional branches
+  dwOff23Hi = ( 0, 6) signed
+  dwOff23Lo = (16,31)
+
+  # branch and link
+  dwOff27Hi  = ( 8,11) signed
+  dwOff27Mid = ( 0, 6)
+  dwOff27Lo  = (16,31)
+
+  # loop instructions
+  dwImmA    = ( 4, 7) signed
+  dwRa      = ( 4, 7)
+  dwRd      = ( 0, 3)
+  dwHasImmB = (31,31)
+  dwHasImmA = (30,30)
+  # with register B
+  dwRb      = (26,29)
+  dwOff10   = (16,25) signed
+  # with immediate B
+  dwImmB    = (24,29)
+  dwOff8    = (16,23) signed
+;
+
+define token arg16(16)
+  Imm16   = ( 0,15) signed
+  Sbit16  = (15,15)
+;
+
+define token arg32(32)
+  Imm32   = ( 0,31)
+  Imm27   = ( 0,26) signed
+  Sbit27  = (26,26)
+  Rbase   = (27,31)
+;
+
+define token vec48(48)
+  # first halfword (bits 0-15)
+  Vclass   = (11,15)   # 11110: 48-bit, 11111: 80-bit
+  Vkind    = (10,10)   # 0: memory operation, 1: data operation
+  Vmop     = ( 5, 9)   # memory operation
+  Vmwidth  = ( 3, 4)
+  Vaccw    = ( 3, 4)   # readacc: plain, saturate to 32 bits, (no-op), saturate to 16 bits
+  VX       = ( 9, 9)   # data operation width / multiply table
+  Vaop     = ( 3, 8)   # data operation
+  Vrs      = ( 0, 2)   # 48-bit: scalar offset register r0-r7
+  Vrep     = ( 0, 2)   # 80-bit: repeat
+  # second and third halfwords: d:10 a:10 F z b:10 (bits 16-47, from the top)
+  Vdk      = (29,31)   # D kind (H/HX/HY and x base); 7: discard
+  Vddir    = (28,28)   # D direction (48-bit: of all operands)
+  Vdy      = (22,27)
+  Vdyhi    = (26,27)
+  Vdxlo    = (22,25)
+  Vak      = (19,21)
+  Vadir    = (18,18)   # 80-bit: A direction; 48-bit: add rs to A
+  Vayhi    = (16,17)
+  Vaylo    = (44,47)
+  Vdoff    = (43,43)   # 48-bit: add rs to D
+  Vsetf80  = (43,43)
+  Vimm     = (42,42)   # B is an immediate
+  Vbk      = (39,41)
+  Vbdir    = (38,38)   # 80-bit: B direction; 48-bit: add rs to B
+  Vsetf48  = (38,38)   # 48-bit: SETF when B is an immediate or a scalar register
+  Vpred48  = (39,41)
+  Vby      = (32,37)
+  Vbyhi    = (36,37)
+  Vbxlo    = (32,35)
+  Vimm6    = (32,37)
+  Vbreg    = (32,35)
+  Vbreg45  = (36,37)
+  Vbreg6   = (32,37)
+  Vimm10   = (32,41)
+  Vl7      = (32,38)
+;
+
+define token vecaux(32)
+  # fourth halfword: f_d:6 f_a:6 Ra_x:4
+  Vfdr     = (12,15)   # scalar register added to D (15: none)
+  Vfdinc   = (11,11)
+  Vfdcb    = (10,10)
+  Vfar     = ( 6, 9)
+  Vfainc   = ( 5, 5)
+  Vfacb    = ( 4, 4)
+  Vrax     = ( 0, 3)
+  # fifth halfword: P:3 f_i:7 f_b:6
+  Vpred80  = (29,31)
+  Vsru     = (22,28)
+  Vsruop   = (25,28)
+  Vsrureg  = (22,24)
+  Vsrusel  = (28,28)
+  Vfbr     = (18,21)
+  Vfbinc   = (17,17)
+  Vfbcb    = (16,16)
+  Vfb      = (16,21)
+  Vi2      = (16,17)
+  Vi2hi    = (17,17)
+  Vrsb     = (18,21)
+  Vi7      = (22,28)
+;
+
+attach variables [ Rd Ra Rb Rr Rbase ] [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 gp sp lr r27 r28 r29 sr pc ];
+
+attach variables [ RdLo RrLo dwRa dwRb dwRd ] [
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+
+
+# Base register for ldm/stm
+attach variables [ Rmbase ] [ r0 r6 r16 gp ];
+
+# Base register for ld/st with 16-bit offset
+attach variables [ Rbase2 ] [ gp sp pc r0 ];
+
+# last register for ldm/stm depends on first register
+attach variables [ Rd6 ] [
+	r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21
+	r22 r23 gp sp lr r27 r28 r29 sr pc r0 r1 r2 r3 r4 r5 ];
+attach variables [ Rd16 ] [
+	r16 r17 r18 r19 r20 r21 r22 r23 gp sp lr r27 r28 r29 sr pc
+	r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+attach variables [ Rd24 ] [
+	gp sp lr r27 r28 r29 sr pc r0 r1 r2 r3 r4 r5 r6 r7
+	r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 ];
+
+attach variables [ Pd Pb ] [
+	p0 p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 p15
+	p16 p17 p18 p19 p20 p21 p22 p23 p24 p25 p26 p27 p28 p29 p30 p31 ];
+
+attach names [ Cc CcSfx dwCc ] [
+  "eq" "ne" "cs" "cc" "mi" "pl" "vs" "vc"
+  "hi" "ls" "ge" "lt" "gt" "le" ""   "f" ];
+
+
+################################################################
+# Macros
+################################################################
+
+macro pack_sr()
+{
+}
+
+macro unpack_sr()
+{
+}
+
+macro push(val) {
+  sp = sp - 4;
+  *[ram]:4 sp = val;
+}
+
+macro pop(val) {
+  val = *[ram]:4 sp;
+  sp = sp + 4;
+}
+
+macro pop_pc() {
+  local tmp:4;
+  pop(tmp);
+  return [tmp];
+}
+
+################################################################
+# Memory Offset
+################################################################
+
+# 12-bit displacement: sign bit in the first halfword (Off12Sign), low 11 bits in the second
+with memoff12: {
+  : +argUoff11 is Off12Sign=0 ; argUoff11
+	{ local tmp:4 = argUoff11; export tmp; }
+  : -noff      is Off12Sign=1 ; argUoff11 [ noff = 0x800 - argUoff11; ]
+	{ local tmp:4 = -noff; export tmp; }
+  :           is Off12Sign=0 ; argUoff11=0
+	{ local tmp:4 = 0; export tmp; }
+}
+
+with memoff16: {
+  : +Imm16 is Sbit16=0 & Imm16
+	{ local tmp:4 = Imm16; export tmp; }
+  :  Imm16 is Sbit16=1 & Imm16
+	{ local tmp:4 = Imm16; export tmp; }
+  :        is Sbit16=0 & Imm16=0
+	{ local tmp:4 = 0; export tmp; }
+}
+
+with memoff27: {
+  : +Imm27 is Sbit27=0 & Imm27
+	{ local tmp:4 = Imm27; export tmp; }
+  :  Imm27 is Sbit27=1 & Imm27
+	{ local tmp:4 = Imm27; export tmp; }
+  :        is Sbit27=0 & Imm27=0
+	{ local tmp:4 = 0; export tmp; }
+}
+
+with spoff5: {
+  : sp+off is Uoff5 & sp [ off = Uoff5 << 2; ]
+	{ local tmp:4 = sp + off; export tmp; }
+  : sp is Uoff5=0 & sp
+	{ export sp; }
+}
+
+with spoff6: {
+  : sp+off is Sbit6=0 & Off6 & sp [ off = Off6 << 2; ]
+	{ local tmp:4 = sp + off; export tmp; }
+  : sp^off is Sbit6=1 & Off6 & sp [ off = Off6 << 2; ]
+	{ local tmp:4 = sp + off; export tmp; }
+  : sp     is Sbit6=0 & Off6=0 & sp
+	{ export sp; }
+}
+
+# Indexed form with an immediate (bit 6 set): signed 6-bit byte offset, not scaled
+with idxoff: {
+  : +argImm6 is Op16 ; argHasImm=1 & argBit5=0 & argImm6
+	{ local tmp:4 = argImm6; export tmp; }
+  :  argImm6 is Op16 ; argHasImm=1 & argBit5=1 & argImm6
+	{ local tmp:4 = argImm6; export tmp; }
+}
+
+################################################################
+# Memory Locations
+################################################################
+
+rel7: reloc is Off7 [ reloc = inst_start + (Off7 << 1); ]
+	{ export *:4 reloc; }
+rel8: reloc is dwOff8 [ reloc = inst_start + (dwOff8 << 1); ]
+	{ export *:4 reloc; }
+rel10: reloc is dwOff10 [ reloc = inst_start + (dwOff10 << 1); ]
+	{ export *:4 reloc; }
+rel16: reloc is Imm16 [ reloc = inst_start + Imm16; ]
+	{ export *:4 reloc; }
+rel23: reloc is dwOff23Hi & dwOff23Lo
+	[ reloc = inst_start + (dwOff23Hi << 17 | dwOff23Lo << 1); ]
+	{ export *:4 reloc; }
+rel27: reloc is dwOff27Hi & dwOff27Mid & dwOff27Lo
+	[ reloc = inst_start +
+		(dwOff27Hi << 24 | dwOff27Mid << 17 | dwOff27Lo << 1); ]
+	{ export *:4 reloc; }
+rel32: reloc is Imm32 [ reloc = inst_start + Imm32; ]
+	{ export *:4 reloc; }
+
+abs32: Imm32 is Imm32 { export *:4 Imm32; }
+
+################################################################
+# Condition codes
+################################################################
+
+with chkcond: {
+  : is chkcc=0  { local tmp:1 = Z; export tmp; }	# eq
+  : is chkcc=1  { local tmp:1 = !Z; export tmp; }	# ne
+  : is chkcc=2  { local tmp:1 = C; export tmp; }	# cs / lo
+  : is chkcc=3  { local tmp:1 = !C; export tmp; }	# cc / hs
+  : is chkcc=4  { local tmp:1 = N; export tmp; }	# mi
+  : is chkcc=5  { local tmp:1 = !N; export tmp; }	# pl
+  : is chkcc=6  { local tmp:1 = V; export tmp; }	# vs
+  : is chkcc=7  { local tmp:1 = !V; export tmp; }	# vc
+  : is chkcc=8  { local tmp:1 = !C && !Z; export tmp; }	# hi
+  : is chkcc=9  { local tmp:1 =  C ||  Z; export tmp; }	# ls
+  : is chkcc=10 { local tmp:1 = (N == V); export tmp; }	# ge
+  : is chkcc=11 { local tmp:1 = (N != V); export tmp; }	# lt
+  : is chkcc=12 { local tmp:1 = (N == V) && !Z; export tmp; }	# gt
+  : is chkcc=13 { local tmp:1 = (N != V) ||  Z; export tmp; }	# le
+  # chkcc=14 (always) never reaches this table: every user has its own cc=14 constructor
+  : is chkcc=15 { local tmp:1 = 0; export tmp; }
+}
+
+# Conditional instructions
+ccsfx: is epsilon ... {}
+cond: is epsilon ... {}
+with : (Op5=0x18 | Op7=0x50 | Op7=0x52 | Op6=0x32) ... {
+  ccsfx: "."^CcSfx is (Op16 ; CcSfx) {}
+  cond:  "."^CcSfx is (Op16 ; CcSfx) & chkcond [ chkcc = CcSfx; ]
+	{ if (!chkcond) goto inst_next; }
+
+  ccsfx: is Op16 ; CcSfx=14 {}
+  cond:  is Op16 ; CcSfx=14 {}
+}
+
+################################################################
+# System instructions
+################################################################
+
+define pcodeop swi;
+macro exception(num) {
+  local tmp:1 = num;
+  local intloc:4 = swi(tmp);
+  call [intloc];
+}
+
+:bkpt is Op16=0x0000
+	{ exception(0x0e); }
+:nop is Op16=0x0001 {}
+
+define pcodeop version;
+:version Rd is op11=0x007 & Rd
+	{ Rd = version(); }
+
+# provisional in the manual: wait for an interrupt
+define pcodeop sleep;
+:sleep is Op16=0x0002
+	{ sleep(); }
+
+:mov Pd, Rb is Op8=0xcc & OpAux=0 & Pd ; argOp11=0 & Rb
+	{ Pd = Rb; }
+:mov Rd, Pb is Op8=0xcc & OpAux=1 & Rd ; argOp11=0 & Pb
+	{ Rd = Pb; }
+
+:user is Op16=0x0003 {
+  $(SR_U) = 1;
+}
+
+define pcodeop irq_enable;
+:ei is Op16=0x0004 {
+  $(SR_I) = 1;
+  irq_enable();
+}
+
+define pcodeop irq_disable;
+:di is Op16=0x0005 {
+  $(SR_I) = 0;
+  irq_disable();
+}
+
+:cbclr is Op16=0x0006 {
+  $(SR_CB) = 0;
+}
+:cbadd1 is Op16=0x0007 {
+  $(SR_CB) = $(SR_CB) + 1;
+}
+:cbadd2 is Op16=0x0008 {
+  $(SR_CB) = $(SR_CB) + 2;
+}
+:cbadd3 is Op16=0x0009 {
+  $(SR_CB) = $(SR_CB) + 3;
+}
+
+:rti is Op16=0x000a {
+  local new_sr:4;
+  local new_pc:4;
+  pop(new_sr);
+  pop(new_pc);
+  sr = new_sr;
+  unpack_sr();
+  return [new_pc];
+}
+
+:swi Rd is op11=0x001 & Rd {
+  exception(0x20 + (Rd:1 & 0x1f));
+}
+
+:swi Count is op11=0x00e & Count
+	{ exception(0x20 + Count); }
+# "0000 0001 11uu uuuu swi u" (manual): a 6-bit u raising interrupt 0x20 + (u & 0x1f), so u = 32..63
+# is the same interrupt as u - 32 (binutils-vc4 prints it as swi 0x20..0x3f)
+:swi num is op11=0x00f & Count [ num = Count + 32; ]
+	{ exception(0x20 + Count); }
+
+# 0000 0000 110d dddd ".short 0x%04x{0x00c0+d} ; mov unknown_reg, r%i{d}"
+
+# 0000 0001 010d dddd ".short 0x%04x{0x0140+d} ; r%i{d}"
+# 0000 0001 011d dddd ".short 0x%04x{0x0160+d} ; r%i{d}"
+# 0000 0001 10dd dddd ".short 0x%04x{0x0180+d} ; r%i{d}"
+
+################################################################
+# Branch Instructions
+################################################################
+
+:b rel32 is Op16=0xe100 ; rel32
+	{ goto rel32; }
+
+:j abs32 is Op16=0xe000 ; abs32
+	{ goto abs32; }
+
+with : op11=0x002 {
+  :b Rd is Rd {
+    goto [Rd];
+  }
+  :rts is Rd=26 {
+    return [lr];
+  }
+}
+
+:bl Rd is op11=0x003 & Rd {
+  lr = inst_next;
+  call [Rd];
+}
+
+:bl rel27 is dwOp4=0x9 & dwLink=1 & rel27 {
+  lr = inst_next;
+  call rel27;
+}
+
+:bl rel32 is Op16=0xe300 ; rel32 {
+  lr = inst_next;
+  call rel32;
+}
+
+:jl abs32 is Op16=0xe200 ; abs32 {
+  lr = inst_next;
+  call abs32;
+}
+
+# Table/Switch instructions
+
+# branch using indirect byte displacement  b *(pc+rd)
+:switch.b Rd is op11=0x004 & Rd {
+  local tbl:4 = inst_next;
+  local val:1 = *(tbl + Rd);
+  local target:4 = inst_next + (sext(val) << 1);
+  goto [target];
+}
+
+:switch Rd is op11=0x005 & Rd {
+  local tbl:4 = inst_next;
+  local val:2 = *(tbl + (Rd << 1));
+  local target:4 = inst_next + (sext(val) << 1);
+  goto [target];
+}
+
+# Conditional Branches
+# Make a separate constructor for unconditional branches using the
+# "true" condition to mark these instructions as UNCONDITIONAL_JUMP.
+with : Op5=0x03 {
+  :b^Cc rel7 is Cc & rel7 & chkcond [ chkcc = Cc; ]
+	{ if (chkcond) goto rel7; }
+  :b rel7 is Cc=14 & rel7
+	{ goto rel7; }
+}
+with : dwOp4=0x9 & dwLink=0 {
+  :b^dwCc rel23 is dwCc & rel23 & chkcond [ chkcc = dwCc; ]
+	{ if (chkcond) goto rel23; }
+  :b rel23 is dwCc=14 & rel23
+	{ goto rel23; }
+}
+
+################################################################
+# Loop Instructions
+################################################################
+
+loopinc: dwRa   is dwHasImmA=0 & dwRa   { export dwRa; }
+loopinc: dwImmA is dwHasImmA=1 & dwImmA
+	{ local tmp:4 = dwImmA; export tmp; }
+
+loopend: dwRb   is dwHasImmB=0 & dwRb    { export dwRb; }
+loopend: dwImmB is dwHasImmB=1 & dwImmB
+	{ local tmp:4 = dwImmB; export tmp; }
+
+disploopend: dwRb   is dwHasImmB=0 & dwRb    {}
+disploopend: dwImmB is dwHasImmB=1 & dwImmB  {}
+
+looprel: rel10 is dwHasImmB=0 & rel10 { export rel10; }
+looprel: rel8  is dwHasImmB=1 & rel8  { export rel8; }
+
+with loopchkcond: {
+  : is dwCc=0 & dwRd & loopend		# eq
+	{ local tmp:1 = (dwRd == loopend); export tmp; }
+  : is dwCc=1 & dwRd & loopend		# ne
+	{ local tmp:1 = (dwRd != loopend); export tmp; }
+  : is dwCc=2 & dwRd & loopend		# cs / lo
+	{ local tmp:1 = (dwRd < loopend); export tmp; }
+  : is dwCc=3 & dwRd & loopend		# cc / hs
+	{ local tmp:1 = (dwRd >= loopend); export tmp; }
+  : is dwCc=4 & dwRd & loopend		# mi
+	{ local tmp:1 = (dwRd - loopend) s< 0; export tmp; }
+  : is dwCc=5 & dwRd & loopend		# pl
+	{ local tmp:1 = (dwRd - loopend) s>= 0; export tmp; }
+  : is dwCc=6 & dwRd & loopend		# vs
+	{ local tmp:1 = sborrow(dwRd, loopend); export tmp; }
+  : is dwCc=7 & dwRd & loopend		# vc
+	{ local tmp:1 = !sborrow(dwRd, loopend); export tmp; }
+  : is dwCc=8 & dwRd & loopend		# hi
+	{ local tmp:1 = (dwRd > loopend); export tmp; }
+  : is dwCc=9 & dwRd & loopend		# ls
+	{ local tmp:1 = (dwRd <= loopend); export tmp; }
+  : is dwCc=10 & dwRd & loopend		# ge
+	{ local tmp:1 = (dwRd s>= loopend); export tmp; }
+  : is dwCc=11 & dwRd & loopend		# lt
+	{ local tmp:1 = (dwRd s< loopend); export tmp; }
+  : is dwCc=12 & dwRd & loopend		# gt
+	{ local tmp:1 = (dwRd s> loopend); export tmp; }
+  : is dwCc=13 & dwRd & loopend		# le
+	{ local tmp:1 = (dwRd s<= loopend); export tmp; }
+  : is dwCc=14				# t
+	{ local tmp:1 = 1; export tmp; }
+  : is dwCc=15				# f
+	{ local tmp:1 = 0; export tmp; }
+}
+
+loopcond: dwCc is dwCc & loopchkcond { export loopchkcond; }
+
+with : dwOp4=0x8 {
+  :addcmpb^loopcond dwRd, loopinc, disploopend, looprel
+	is loopcond & dwRd & loopinc & disploopend & looprel {
+    dwRd = dwRd + loopinc;
+    build loopcond;
+    if (loopcond)
+      goto looprel;
+  }
+  :b^loopcond dwRd, disploopend, looprel
+	is loopcond & dwRd & dwHasImmA=1 & dwImmA=0 & disploopend & looprel {
+    if (loopcond)
+      goto looprel;
+  }
+}
+
+################################################################
+# Stack-relative and PC-relative Addressing
+################################################################
+
+:lea Rd, rel16 is op11=0x5ff & Rd ; rel16
+	{ Rd = &rel16; }
+
+:lea Rd, rel32 is op11=0x728 & Rd ; rel32
+	{ Rd = &rel32; }
+
+with : Op5=0x02 {
+  :lea Rd, (spoff6) is Rd & spoff6
+	{ Rd = spoff6; }
+  :add sp, off is Rd=25 & sp & Off6
+	[ off = Off6 << 2; ]
+	{ sp = sp + off; }
+}
+
+################################################################
+# Stack Manipulation Instructions
+################################################################
+
+# Register index to register mapping
+with mreg: {
+  : r0  is r0  & mregidx=0  { export r0; }
+  : r1  is r1  & mregidx=1  { export r1; }
+  : r2  is r2  & mregidx=2  { export r2; }
+  : r3  is r3  & mregidx=3  { export r3; }
+  : r4  is r4  & mregidx=4  { export r4; }
+  : r5  is r5  & mregidx=5  { export r5; }
+  : r6  is r6  & mregidx=6  { export r6; }
+  : r7  is r7  & mregidx=7  { export r7; }
+  : r8  is r8  & mregidx=8  { export r8; }
+  : r9  is r9  & mregidx=9  { export r9; }
+  : r10 is r10 & mregidx=10 { export r10; }
+  : r11 is r11 & mregidx=11 { export r11; }
+  : r12 is r12 & mregidx=12 { export r12; }
+  : r13 is r13 & mregidx=13 { export r13; }
+  : r14 is r14 & mregidx=14 { export r14; }
+  : r15 is r15 & mregidx=15 { export r15; }
+  : r16 is r16 & mregidx=16 { export r16; }
+  : r17 is r17 & mregidx=17 { export r17; }
+  : r18 is r18 & mregidx=18 { export r18; }
+  : r19 is r19 & mregidx=19 { export r19; }
+  : r20 is r20 & mregidx=20 { export r20; }
+  : r21 is r21 & mregidx=21 { export r21; }
+  : r22 is r22 & mregidx=22 { export r22; }
+  : r23 is r23 & mregidx=23 { export r23; }
+  : gp  is gp  & mregidx=24 { export gp; }
+  # sp (25) is handled by stm_body/ldm_body directly
+  : lr  is lr  & mregidx=26 { export lr; }
+  : r27 is r27 & mregidx=27 { export r27; }
+  : r28 is r28 & mregidx=28 { export r28; }
+  : r29 is r29 & mregidx=29 { export r29; }
+  : sr  is sr  & mregidx=30 { export sr; }
+  : pc  is pc  & mregidx=31 { export pc; }
+}
+
+with mendreg: {
+  : Rd   is Rmbase=0 & Rd   { export Rd; }
+  : Rd6  is Rmbase=1 & Rd6  { export Rd6; }
+  : Rd16 is Rmbase=2 & Rd16 { export Rd16; }
+  : Rd24 is Rmbase=3 & Rd24 { export Rd24; }
+}
+
+with stm_tail: {
+  : is storesp=0          {}
+  : is storesp=1 & mspoff { *(sp + mspoff) = sp; }
+}
+
+with stm_body: {
+  : is mcount=0 & stm_tail { build stm_tail; }
+  with : mcount!=0
+  {
+    : is mregidx!=24 & mreg & stm_body
+	[ mregidx = mregidx + 1; mcount = mcount - 1; ]
+	{ push(mreg); build stm_body; }
+    : is mregidx=24 & stm_body
+	[ mregidx = 25; mcount = mcount - 1;
+	  mspoff = mcount * 4; storesp = 1; ]
+	{ sp = sp - 4; build stm_body; }
+  }
+}
+
+with stm_start: {
+  : is Rmbase=0 & Count & stm_body
+	[ mcount = Count + 1; mregidx =  0 - 1; ] {}
+  : is Rmbase=1 & Count & stm_body
+	[ mcount = Count + 1; mregidx =  6 - 1; ] {}
+  : is Rmbase=2 & Count & stm_body
+	[ mcount = Count + 1; mregidx = 16 - 1; ] {}
+  : is Rmbase=3 & Count & stm_body
+	[ mcount = Count + 1; mregidx = 24 - 1; ] {}
+}
+
+with ldm_tail: {
+  : is loadsp=0 & loadpc=0
+	{}
+  : is loadsp=0 & loadpc=1
+	{ pop_pc(); }
+  # sp in the range: its stack slot is skipped, sp ends up just above the popped block (resim)
+  : is loadsp=1 & loadpc=0
+	{}
+  : is loadsp=1 & loadpc=1
+	{ pop_pc(); }
+}
+
+with ldm_body: {
+  : is mcount=0 & ldm_tail { build ldm_tail; }
+  with : mcount!=0
+  {
+    : is mregidx!=26 & mregidx!=31 & mreg & ldm_body
+	[ mregidx = mregidx - 1; mcount = mcount - 1; ]
+	{ pop(mreg); build ldm_body; }
+    : is mregidx=26 & ldm_body
+	[ mspoff = (mcount + loadpc) * 4; loadsp = 1;
+	  mregidx = 25; mcount = mcount - 1; ]
+	{ sp = sp + 4; build ldm_body; }
+    : is mregidx=31 & ldm_body
+	[ mregidx = 30; mcount = mcount - 1; ]
+	{ pop(sr); unpack_sr(); build ldm_body; }
+  }
+}
+
+with ldm_start: {
+  : is Rmbase=0 & Count & ldm_body
+	[ mcount = Count + 1; mregidx =  0 + mcount; ] {}
+  : is Rmbase=1 & Count & ldm_body
+	[ mcount = Count + 1; mregidx =  6 + mcount; ] {}
+  : is Rmbase=2 & Count & ldm_body
+	[ mcount = Count + 1; mregidx = 16 + mcount; ] {}
+  : is Rmbase=3 & Count & ldm_body
+	[ mcount = Count + 1; mregidx = 24 + mcount; ] {}
+}
+
+stm_lr:      is Op9=0x05      & stm_start
+	{ build stm_start; }
+stm_lr: , lr is Op9=0x07 & lr & stm_start
+	{ push(lr); build stm_start; }
+
+ldm_pc:      is Op9=0x04      & ldm_start [ loadpc = 0; ]
+	{ build ldm_start; }
+ldm_pc: , pc is Op9=0x06 & pc & ldm_start [ loadpc = 1; ]
+	{ build ldm_start; }
+
+:stm Rmbase-mendreg^stm_lr, ("--sp") is Rmbase & mendreg & stm_lr
+	{ build stm_lr; }
+:ldm Rmbase-mendreg^ldm_pc, ("sp++") is Rmbase & mendreg & ldm_pc
+	{ build ldm_pc; }
+
+# Omit range if only one register is stored
+:stm Rmbase^stm_lr, ("--sp") is Rmbase & Count=0 & stm_lr
+	{ build stm_lr; }
+:ldm Rmbase^ldm_pc, ("sp++") is Rmbase & Count=0 & ldm_pc
+	{ build ldm_pc; }
+
+# If count is 31 and lr/pc is stored/loaded, then no registers
+# but lr/pc are stored/loaded
+:stm lr, ("--sp") is Op9=0x07 & Count=31 & lr
+	{ push(lr); }
+:ldm pc, ("sp++") is Op9=0x06 & Count=31 & pc
+	{ pop_pc(); }
+
+# The manual observed the same for "stm r24-r7, lr, (--sp)" (count 15 from base r24). Other bases
+# with count 15 are ordinary 16-register ranges: gcc-vc4 saves and restores r6-r21 that way.
+:stm lr, ("--sp") is Op9=0x07 & Rmbase=3 & Count=15 & lr
+	{ push(lr); }
+:ldm pc, ("sp++") is Op9=0x06 & Rmbase=3 & Count=15 & pc {
+  pop_pc();
+}
+
+################################################################
+# Load and Store Instructions
+################################################################
+
+with ldstreg: {
+  : Rd is Rd ... { export Rd; }
+  : RdLo is (Op5=0x1 & RdLo) ... { export RdLo; }
+}
+
+with basereg: {
+  : Rbase  is Op8=0xe6 ; Rbase
+	{ export Rbase; }
+  : Rbase2 is (Op6=0x2a & Rbase2) ...
+	{ export Rbase2; }
+  : pc     is (Op6=0x2a & Rbase2=2 & pc) ...
+	{ local tmp:4 = inst_start; export tmp; }
+}
+
+with memoffset: {
+  : memoff16 is Op6=0x2a ; memoff16 { export memoff16; }
+  : memoff27 is Op8=0xe6 ; memoff27 { export memoff27; }
+}
+
+with ldstmem32: {
+  : (RrLo) is (Op5=0x1 & RrLo) ... { export *:4 RrLo; }
+  : (Ra^memoff12) is (Op7=0x51 ; Ra) & memoff12
+	{ local tmp:4 = Ra + memoff12; export *:4 tmp; }
+  : (basereg^memoffset) is (Op6=0x2a | Op8=0xe6) ... & basereg & memoffset
+	{ local tmp:4 = basereg + memoffset; export *:4 tmp; }
+  : reloc is Op8=0xe7 ; Rbase=31 & Imm27
+	[ reloc = inst_start + Imm27; ]
+	{ export *:4 reloc; }
+  with : ldstop=0 | ldstop=1 {
+    : (Ra+Rb<<2) is Op8=0xa0 ; Ra & argHasImm=0 & argBit5=0 & Rb
+	{ local tmp:4 = Ra + (Rb << 2); export *:4 tmp; }
+    : (Ra^idxoff) is (Op8=0xa0 ; Ra) & idxoff
+	{ local tmp:4 = Ra + idxoff; export *:4 tmp; }
+    : (--Ra) is Op8=0xa4 ; Ra & argLow7=0
+	{ Ra = Ra - 4; export *:4 Ra; }
+    : (Ra++) is Op8=0xa5 ; Ra & argLow7=0
+	{ local tmp = Ra; Ra = Ra + 4; export *:4 tmp; }
+  }
+}
+with ldstmem16: {
+  : (RrLo) is (Op5=0x1 & RrLo) ... { export *:2 RrLo; }
+  : (Ra^memoff12) is (Op7=0x51 ; Ra) & memoff12
+	{ local tmp:4 = Ra + memoff12; export *:2 tmp; }
+  : (basereg^memoffset) is (Op6=0x2a | Op8=0xe6) ... & basereg & memoffset
+	{ local tmp:4 = basereg + memoffset; export *:2 tmp; }
+  : reloc is Op8=0xe7 ; Rbase=31 & Imm27
+	[ reloc = inst_start + Imm27; ]
+	{ export *:2 reloc; }
+  with : ldstop=2 | ldstop=3 | ldstop=6 {
+    : (Ra+Rb<<1) is Op8=0xa0 ; Ra & argHasImm=0 & argBit5=0 & Rb
+	{ local tmp:4 = Ra + (Rb << 1); export *:2 tmp; }
+    : (Ra^idxoff) is (Op8=0xa0 ; Ra) & idxoff
+	{ local tmp:4 = Ra + idxoff; export *:2 tmp; }
+    : (--Ra) is Op8=0xa4 ; Ra & argLow7=0
+	{ Ra = Ra - 2; export *:2 Ra; }
+    : (Ra++) is Op8=0xa5 ; Ra & argLow7=0
+	{ local tmp = Ra; Ra = Ra + 2; export *:2 tmp; }
+  }
+}
+with ldstmem8: {
+  : (RrLo) is (Op5=0x1 & RrLo) ... { export *:1 RrLo; }
+  : (Ra^memoff12) is (Op7=0x51 ; Ra) & memoff12
+	{ local tmp:4 = Ra + memoff12; export *:1 tmp; }
+  : (basereg^memoffset) is (Op6=0x2a | Op8=0xe6) ... & basereg & memoffset
+	{ local tmp:4 = basereg + memoffset; export *:1 tmp; }
+  : reloc is Op8=0xe7 ; Rbase=31 & Imm27
+	[ reloc = inst_start + Imm27; ]
+	{ export *:1 reloc; }
+  with : ldstop=4 | ldstop=5 | ldstop=7 {
+    : (Ra+Rb) is Op8=0xa0 ; Ra & argHasImm=0 & argBit5=0 & Rb
+	{ local tmp:4 = Ra + Rb; export *:1 tmp; }
+    : (Ra^idxoff) is (Op8=0xa0 ; Ra) & idxoff
+	{ local tmp:4 = Ra + idxoff; export *:1 tmp; }
+    : (--Ra) is Op8=0xa4 ; Ra & argLow7=0
+	{ Ra = Ra - 1; export *:1 Ra; }
+    : (Ra++) is Op8=0xa5 ; Ra & argLow7=0
+	{ local tmp = Ra; Ra = Ra + 1; export *:1 tmp; }
+  }
+}
+
+with ldstinst: {
+  :"ld"^ccsfx ldstreg, ldstmem32 is ldstop=0 & ccsfx & ldstreg & ldstmem32 {
+    ldstreg = ldstmem32;
+  }
+  :"st"^ccsfx ldstreg, ldstmem32 is ldstop=1 & ccsfx & ldstreg & ldstmem32 {
+    ldstmem32 = ldstreg;
+  }
+  :"ldh"^ccsfx ldstreg, ldstmem16 is ldstop=2 & ccsfx & ldstreg & ldstmem16 {
+    ldstreg = zext(ldstmem16);
+  }
+  :"sth"^ccsfx ldstreg, ldstmem16 is ldstop=3 & ccsfx & ldstreg & ldstmem16 {
+    ldstmem16 = ldstreg:2;
+  }
+  :"ldb"^ccsfx ldstreg, ldstmem8 is ldstop=4 & ccsfx & ldstreg & ldstmem8 {
+    ldstreg = zext(ldstmem8);
+  }
+  :"stb"^ccsfx ldstreg, ldstmem8 is ldstop=5 & ccsfx & ldstreg & ldstmem8 {
+    ldstmem8 = ldstreg:1;
+  }
+  :"ldsh"^ccsfx ldstreg, ldstmem16 is ldstop=6 & ccsfx & ldstreg & ldstmem16 {
+    ldstreg = sext(ldstmem16);
+  }
+  :"ldsb"^ccsfx ldstreg, ldstmem8 is ldstop=7 & ccsfx & ldstreg & ldstmem8 {
+    ldstreg = sext(ldstmem8);
+  }
+}
+
+ldstcond: ldstinst is ldstinst & cond
+	{ build cond; build ldstinst; }
+
+:^ldstcond is ldstcond & (Op5=0x1 & LdStOpLo) ...
+	[ ldstop=LdStOpLo; ] {}
+:^ldstcond is ldstcond & (Op8=0xa0 & LdStOp) ...
+	[ ldstop=LdStOp; ] {}
+:^ldstcond is ldstcond & (Op7=0x51 & LdStOp) ...
+	[ ldstop=LdStOp; ] {}
+:^ldstcond is ldstcond & (Op8=0xa4 & LdStOp) ...
+	[ ldstop=LdStOp; ] {}
+:^ldstcond is ldstcond & (Op8=0xa5 & LdStOp) ...
+	[ ldstop=LdStOp; ] {}
+:^ldstcond is ldstcond & (Op6=0x2a & OpAux) ...
+	[ ldstop=OpAux; ] {}
+:^ldstcond is ldstcond & (Op8=0xe6 & OpAux) ...
+	[ ldstop=OpAux; ] {}
+:^ldstcond is ldstcond & (Op8=0xe7 & OpAux ; Rbase=31)
+	[ ldstop=OpAux; ] {}
+
+# Aligned stack addressing
+:ld RdLo, (spoff5) is Op7=0x02 & RdLo & spoff5 {
+  RdLo = *:4 spoff5;
+}
+:st RdLo, (spoff5) is Op7=0x03 & RdLo & spoff5 {
+  *:4 spoff5 = RdLo;
+}
+
+# Small offsets
+:ld RdLo, (RrLo+off) is Op4=0x2 & RdLo & RrLo & Uoff4
+	[ off = Uoff4 << 2; ] {
+  RdLo = *:4 (RrLo + off);
+}
+:st RdLo, (RrLo+off) is Op4=0x3 & RdLo & RrLo & Uoff4
+	[ off = Uoff4 << 2; ] {
+  *:4 (RrLo + off) = RdLo;
+}
+
+################################################################
+# Arithmetic and Logical Operations
+################################################################
+
+
+# Argument defaults
+argd: Rd is Rd ... { export Rd; }
+arga: argd is argd { export argd; }
+# triadic register operand B: bits 6..5 of the second halfword must be 00
+argb: Rb is Op5=0x18 ; argHasImm=0 & argBit5=0 & Rb { export Rb; }
+
+# Display defaults
+dispargd: argd is argd {}
+disparga: arga is arga {}
+dispargb: argb is argb {}
+args: dispargd, dispargb is dispargd & dispargb {}
+
+# ALU with r0-r15
+@define ALU_RLO	"Op3=0x02"
+
+# ALU with 5-bit unsigned immediate
+@define ALU_IMM5 "Op3=0x03"
+
+# ALU with 16-bit immediate
+@define ALU_IMM16 "Op6=0x2c"
+
+# ALU with 32-bit immediate
+@define ALU_IMM32 "Op6=0x3a"
+
+# Triadic ALU
+@define ALU_TRIADIC "Op5=0x18"
+
+with : $(ALU_RLO) {
+  argd: RdLo is RdLo { export RdLo; }
+  argb: RrLo is RrLo { export RrLo; }
+}
+with : $(ALU_IMM5) {
+  argd: RdLo is RdLo { export RdLo; }
+  argb: Imm5 is Imm5 { local tmp:4 = Imm5; export tmp; }
+  dispargb: Imm5 is Imm5 {}
+}
+with : $(ALU_IMM16) ... {
+  argb: Imm16 is Op6 ; Imm16 { local tmp:4 = Imm16; export tmp; }
+  dispargb: Imm16 is Op6 ; Imm16 {}
+}
+with : $(ALU_IMM32) ... {
+  argb: Imm32 is Op6 ; Imm32 { local tmp:4 = Imm32; export tmp; }
+  dispargb: Imm32 is Op6 ; Imm32 {}
+}
+
+with : $(ALU_TRIADIC) ... {
+  arga: Ra is Op5 ; Ra { export Ra; }
+  with : ... argHasImm=1 {
+    argb: argImm6 is Op5 ; argImm6 { local tmp:4 = argImm6; export tmp; }
+    dispargb: argImm6 is Op5 ; argImm6 {}
+  }
+  args: dispargd, disparga, dispargb is dispargd & disparga & dispargb {}
+}
+
+with aluinst: {
+  :"mov"^ccsfx argd, argb is ccsfx & aluop=0 & argd & argb {
+    argd = argb;
+  }
+  :"cmn"^ccsfx arga, argb is ccsfx & aluop=1 & arga & argb {
+    # flags of ra + rb (the manual: ZNCV = cc(rd + ra)); C is the carry out
+    local res:4 = arga + argb;
+    Z = res == 0;
+    N = res s< 0;
+    C = carry(arga, argb);
+    V = scarry(arga, argb);
+    pack_sr();
+  }
+  :"add"^ccsfx args is ccsfx & aluop=2 & args & argd & arga & argb {
+    argd = arga + argb;
+  }
+  :"bic"^ccsfx args is ccsfx & aluop=3 & args & argd & arga & argb {
+    argd = arga & ~argb;
+  }
+  :"mul"^ccsfx args is ccsfx & aluop=4 & args & argd & arga & argb {
+    argd = arga * argb;
+  }
+  :"eor"^ccsfx args is ccsfx & aluop=5 & args & argd & arga & argb {
+    argd = arga ^ argb;
+  }
+  :"sub"^ccsfx args is ccsfx & aluop=6 & args & argd & arga & argb {
+    argd = arga - argb;
+  }
+  :"and"^ccsfx args is ccsfx & aluop=7 & args & argd & arga & argb {
+    argd = arga & argb;
+  }
+  :"not"^ccsfx argd, argb is ccsfx & aluop=8 & argd & argb {
+    argd = ~argb;
+  }
+  :"ror"^ccsfx args is ccsfx & aluop=9 & args & argd & arga & argb {
+    local n:4 = argb & 31;
+    argd = (arga >> n) | (arga << ((32 - n) & 31));
+  }
+  :"cmp"^ccsfx arga, argb is ccsfx & aluop=10 & arga & argb {
+    Z = arga == argb;
+    N = (arga - argb) s< 0;
+    C = arga < argb;
+    V = sborrow(arga, argb);
+    pack_sr();
+  }
+  :"rsub"^ccsfx args is ccsfx & aluop=11 & args & argd & arga & argb {
+    argd = argb - arga;
+  }
+  :"btest"^ccsfx arga, argb is ccsfx & aluop=12 & arga & argb {
+    Z = (arga & (1 << (argb & 31))) == 0;
+    N = 0;
+    C = (arga & (1 << (argb & 31))) == 0;
+    V = 0;
+  }
+  :"or"^ccsfx args is ccsfx & aluop=13 & args & argd & arga & argb {
+    argd = arga | argb;
+  }
+  :"bmask"^ccsfx args is ccsfx & aluop=14 & args & argd & arga & argb {
+    argd = arga & ((1 << (argb & 31)) - 1);
+  }
+  :"max"^ccsfx args is ccsfx & aluop=15 & args & argd & arga & argb {
+    local tmp:4 = arga;
+    if (tmp s>= argb)
+      goto <end>;
+    tmp = argb;
+  <end>
+    argd = tmp;
+  }
+  :"bitset"^ccsfx args is ccsfx & aluop=16 & args & argd & arga & argb {
+    argd = arga | (1 << (argb & 31));
+  }
+  :"min"^ccsfx args is ccsfx & aluop=17 & args & argd & arga & argb {
+    local tmp:4 = arga;
+    if (tmp s<= argb)
+      goto <end>;
+    tmp = argb;
+  <end>
+    argd = tmp;
+  }
+  :"bitclear"^ccsfx args is ccsfx & aluop=18 & args & argd & arga & argb {
+    argd = arga & ~(1 << (argb & 31));
+  }
+  :"addscale"^ccsfx args<<1 is ccsfx & aluop=19 & args & argd & arga & argb {
+    argd = arga + (argb << 1);
+  }
+  :"bitflip"^ccsfx args is ccsfx & aluop=20 & args & argd & arga & argb {
+    argd = arga ^ (1 << (argb & 31));
+  }
+  :"addscale"^ccsfx args<<2 is ccsfx & aluop=21 & args & argd & arga & argb {
+    argd = arga + (argb << 2);
+  }
+  :"addscale"^ccsfx args<<3 is ccsfx & aluop=22 & args & argd & arga & argb {
+    argd = arga + (argb << 3);
+  }
+  :"addscale"^ccsfx args<<4 is ccsfx & aluop=23 & args & argd & arga & argb {
+    argd = arga + (argb << 4);
+  }
+  :"signext"^ccsfx args is ccsfx & aluop=24 & args & argd & arga & argb {
+    # sign-extend from bit b: signext rd, 7 is a signed char
+    local shift:4 = 31 - (argb & 31);
+    argd = (arga << shift) s>> shift;
+  }
+  :"neg"^ccsfx argd, argb is ccsfx & aluop=25 & args & argd & argb {
+    argd = -argb;
+  }
+  :"lsr"^ccsfx args is ccsfx & aluop=26 & args & argd & arga & argb {
+    argd = arga >> (argb & 31);
+  }
+  :"msb"^ccsfx argd, argb is ccsfx & aluop=27 & args & argd & argb {
+    # position of the most significant 1 bit; msb(0) = -1
+    argd = 31 - lzcount(argb);
+  }
+  :"shl"^ccsfx args is ccsfx & aluop=28 & args & argd & arga & argb {
+    argd = arga << (argb & 31);
+  }
+  :"brev"^ccsfx argd, argb is ccsfx & aluop=29 & args & argd & argb {
+    # bit reversal (vcdb; the manual describes a two-operand form, unverified)
+    local x:4 = argb;
+    x = ((x >> 1) & 0x55555555) | ((x & 0x55555555) << 1);
+    x = ((x >> 2) & 0x33333333) | ((x & 0x33333333) << 2);
+    x = ((x >> 4) & 0x0f0f0f0f) | ((x & 0x0f0f0f0f) << 4);
+    x = ((x >> 8) & 0x00ff00ff) | ((x & 0x00ff00ff) << 8);
+    argd = (x >> 16) | (x << 16);
+  }
+  :"asr"^ccsfx args is ccsfx & aluop=30 & args & argd & arga & argb {
+    argd = arga s>> (argb & 31);
+  }
+  :"abs"^ccsfx argd, argb is ccsfx & aluop=31 & argd & argb {
+    local tmp:4 = argb;
+    if (tmp s>= 0)
+      goto <end>;
+    tmp = -argb;
+  <end>
+    argd = tmp;
+  }
+  :"mulhd.ss"^ccsfx args is ccsfx & aluop=32 & args & argd & arga & argb {
+    local tmp:8 = sext(arga) * sext(argb);
+    argd = tmp(4);
+  }
+  :"mulhd.su"^ccsfx args is ccsfx & aluop=33 & args & argd & arga & argb {
+    local tmp:8 = sext(arga) * zext(argb);
+    argd = tmp(4);
+  }
+  :"mulhd.us"^ccsfx args is ccsfx & aluop=34 & args & argd & arga & argb {
+    local tmp:8 = zext(arga) * sext(argb);
+    argd = tmp(4);
+  }
+  :"mulhd.uu"^ccsfx args is ccsfx & aluop=35 & args & argd & arga & argb {
+    local tmp:8 = zext(arga) * zext(argb);
+    argd = tmp(4);
+  }
+  :"div.ss"^ccsfx args is ccsfx & aluop=36 & args & argd & arga & argb {
+    argd = arga s/ argb;
+  }
+  :"div.su"^ccsfx args is ccsfx & aluop=37 & args & argd & arga & argb {
+    local tmp:8 = sext(arga) s/ zext(argb);
+    argd = tmp:4;
+  }
+  :"div.us"^ccsfx args is ccsfx & aluop=38 & args & argd & arga & argb {
+    local tmp:8 = zext(arga) s/ sext(argb);
+    argd = tmp:4;
+  }
+  :"div.uu"^ccsfx args is ccsfx & aluop=39 & args & argd & arga & argb {
+    argd = arga / argb;
+  }
+  :"adds"^ccsfx args is ccsfx & aluop=40 & args & argd & arga & argb {
+    # saturate32(ra + rb)
+    local r:4 = arga + argb;
+    local o:1 = scarry(arga, argb);
+    local sat:4 = 0x7fffffff + zext(arga s< 0);
+    argd = (zext(o) * sat) + (zext(!o) * r);
+  }
+  :"subs"^ccsfx args is ccsfx & aluop=41 & args & argd & arga & argb {
+    # saturate32(ra - rb)
+    local r:4 = arga - argb;
+    local o:1 = sborrow(arga, argb);
+    local sat:4 = 0x7fffffff + zext(arga s< 0);
+    argd = (zext(o) * sat) + (zext(!o) * r);
+  }
+  :"shls"^ccsfx args is ccsfx & aluop=42 & args & argd & arga & argb {
+    # saturate32(ra << (rb & 31)): saturates when bits shifted out differ from the sign
+    local n:4 = argb & 31;
+    local r:4 = arga << n;
+    local o:1 = (r s>> n) != arga;
+    local sat:4 = 0x7fffffff + zext(arga s< 0);
+    argd = (zext(o) * sat) + (zext(!o) * r);
+  }
+  :"clipsh"^ccsfx argd, argb is ccsfx & aluop=43 & argd & argb {
+    # saturate16(rb)
+    local v:4 = argb;
+    local hi:1 = v s> 0x7fff;
+    local lo:1 = v s< -0x8000;
+    argd = (zext(hi) * 0x7fff) + (zext(lo) * 0xffff8000) + (zext(!hi && !lo) * v);
+  }
+
+  with : (aluop>=44 & aluop<=47) ... {
+    :"addscale"^ccsfx args<<shift
+	is ccsfx & args & argd & arga & argb & ScAdd ...
+	[ shift = ScAdd + 5; ] {
+      argd = arga + (argb << shift);
+    }
+    :"add"^ccsfx argd, arga, imm
+	is ccsfx & argd & arga & (ScAdd ; argHasImm=1 & argImm6)
+	[ imm = argImm6 << (ScAdd + 5); ] {
+      argd = arga + imm;
+    }
+  }
+
+  :"count"^ccsfx argd, argb is ccsfx & aluop=48 & argd & argb {
+    argd = popcount(argb);
+  }
+
+  with : (aluop>=49 & aluop<=56) ... {
+    :"subscale"^ccsfx args<<ScSub
+	is ccsfx & args & argd & arga & argb & ScSub ... {
+      argd = arga - (argb << ScSub);
+    }
+
+    :"sub"^ccsfx argd, arga, imm
+	is ccsfx & argd & arga & (ScSub ; argHasImm=1 & argImm6)
+	[ imm = argImm6 << ScSub; ] {
+      argd = arga - imm;
+    }
+  }
+}
+
+# Special cases for addscale immediate
+with aluinst: $(ALU_IMM5) ... {
+  :"add"^ccsfx argd, imm is ccsfx & aluop=22 & argd & Imm5 ...
+	[ imm = Imm5 << 3; ]   { argd = argd + imm; }
+}
+with aluinst: $(ALU_IMM16) ... {
+  :"add"^ccsfx argd, imm is ccsfx & aluop=19 & argd & (Op16 ; Imm16)
+	[ imm = Imm16 << 1; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=21 & argd & (Op16 ; Imm16)
+	[ imm = Imm16 << 2; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=22 & argd & (Op16 ; Imm16)
+	[ imm = Imm16 << 3; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=23 & argd & (Op16 ; Imm16)
+	[ imm = Imm16 << 4; ]  { argd = argd + imm; }
+}
+with aluinst: $(ALU_IMM32) ... {
+  :"add"^ccsfx argd, imm is ccsfx & aluop=19 & argd & (Op16 ; Imm32)
+	[ imm = Imm32 << 1; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=21 & argd & (Op16 ; Imm32)
+	[ imm = Imm32 << 2; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=22 & argd & (Op16 ; Imm32)
+	[ imm = Imm32 << 3; ]  { argd = argd + imm; }
+  :"add"^ccsfx argd, imm is ccsfx & aluop=23 & argd & (Op16 ; Imm32)
+	[ imm = Imm32 << 4; ]  { argd = argd + imm; }
+}
+with aluinst: $(ALU_TRIADIC) ; argHasImm=1 {
+  :"add"^ccsfx argd, arga, imm
+	is ccsfx & aluop=19 & argd & arga & (Op16 ; argImm6)
+	[ imm = argImm6 << 1; ]
+	{ argd = arga + imm; }
+  :"add"^ccsfx argd, arga, imm
+	is ccsfx & aluop=21 & argd & arga & (Op16 ; argImm6)
+	[ imm = argImm6 << 2; ]
+	{ argd = arga + imm; }
+  :"add"^ccsfx argd, arga, imm
+	is ccsfx & aluop=22 & argd & arga & (Op16 ; argImm6)
+	[ imm = argImm6 << 3; ]
+	{ argd = arga + imm; }
+  :"add"^ccsfx argd, arga, imm
+	is ccsfx & aluop=23 & argd & arga & (Op16 ; argImm6)
+	[ imm = argImm6 << 4; ]
+	{ argd = arga + imm; }
+}
+
+alucond: aluinst is aluinst & cond
+	{ build cond; build aluinst; }
+
+:^alucond is alucond & ($(ALU_RLO)  & AluLo) ... [ aluop = AluLo; ] {}
+:^alucond is alucond & ($(ALU_IMM5) & Alu4) ... [ aluop = Alu4 << 1; ] {}
+:^alucond is alucond & ($(ALU_IMM16) & Alu5) ... [ aluop = Alu5; ] {}
+:^alucond is alucond & ($(ALU_IMM32) & Alu5) ... [ aluop = Alu5; ] {}
+:^alucond is alucond & ($(ALU_TRIADIC) & Alu6) ... [ aluop = Alu6; ] {}
+
+# Triadic add immediate
+:add Rd, Rr, Imm16 is Op6=0x2d & Rr & Rd ; Imm16 {
+  Rd = Rr + Imm16;
+}
+:add Rd, Rr, Imm32 is Op6=0x3b & Rr & Rd ; Imm32 {
+  Rd = Rr + Imm32;
+}
+
+################################################################
+# Floating Point Operations
+################################################################
+
+# p-code has no logarithm or exponential operation
+define pcodeop flog2;
+define pcodeop fexp2;
+
+# Argument B for floating point instructions: a register, or a 6-bit float immediate
+# (1 sign bit, 3 exponent bits biased by 3 -- 124 + e in single precision --, 2 mantissa bits;
+# exponent 0 is +-0.0). Shown as the raw 6-bit field, as binutils does.
+fargb: Rb       is argHasImm=0 & argBit5=0 & Rb { export Rb; }
+f6val: fbits is argUimm6
+	[ fbits = ((argUimm6 >> 5) << 31) |
+		  (((((argUimm6 >> 2) & 7) + 7) >> 3) *
+		   (((((argUimm6 >> 2) & 7) + 124) << 23) | ((argUimm6 & 3) << 21))); ]
+	{ local tmp:4 = fbits; export tmp; }
+fargb: argUimm6 is argHasImm=1 & argUimm6 & f6val { export f6val; }
+
+# Shift count of the float/integer conversions: a register or a signed 6-bit immediate
+fshift: Rb      is argHasImm=0 & argBit5=0 & Rb { export Rb; }
+fshift: argImm6 is argHasImm=1 & argImm6 { local tmp:4 = argImm6; export tmp; }
+
+# 2^n as a single-precision float (n clamped to the normal exponent range)
+macro pow2(res, n) {
+  local e:4 = n;
+  e = e + (zext(e s< -126) * (-126 - e)) + (zext(e s> 127) * (127 - e));
+  res = (e + 127) << 23;
+}
+
+with finst: {
+  :"fadd"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=0 & Rd ; Ra & fargb) {
+    Rd = Ra f+ fargb;
+  }
+  :"fsub"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=1 & Rd ; Ra & fargb) {
+    Rd = Ra f- fargb;
+  }
+  :"fmul"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=2 & Rd ; Ra & fargb) {
+    Rd = Ra f* fargb;
+  }
+  :"fdiv"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=3 & Rd ; Ra & fargb) {
+    Rd = Ra f/ fargb;
+  }
+  :"fcmp"^ccsfx Ra, fargb is ccsfx & (Alu5=4 ; Ra & fargb) {
+    local d:4 = Ra f- fargb;
+    Z = Ra f== fargb;
+    N = Ra f< fargb;
+    C = Ra f< fargb;
+    V = nan(d);
+    pack_sr();
+  }
+  :"fabs"^ccsfx Rd, fargb is ccsfx & (Alu5=5 & Rd ; fargb) {
+    Rd = abs(fargb);
+  }
+  :"frsub"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=6 & Rd ; Ra & fargb) {
+    Rd = fargb f- Ra;
+  }
+  :"fmax"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=7 & Rd ; Ra & fargb) {
+    local tmp:4 = Ra;
+    if (tmp f>= fargb)
+      goto <end>;
+    tmp = fargb;
+  <end>
+    Rd = tmp;
+  }
+  :"frcp"^ccsfx Rd, fargb is ccsfx & (Alu5=8 & Rd ; fargb) {
+    local one:4 = 0x3f800000;
+    Rd = one f/ fargb;
+  }
+  :"frsqrt"^ccsfx Rd, fargb is ccsfx & (Alu5=9 & Rd ; fargb) {
+    local one:4 = 0x3f800000;
+    Rd = one f/ sqrt(fargb);
+  }
+  :"fnmul"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=10 & Rd ; Ra & fargb) {
+    Rd = f- (Ra f* fargb);
+  }
+  :"fmin"^ccsfx Rd, Ra, fargb is ccsfx & (Alu5=11 & Rd ; Ra & fargb) {
+    local tmp:4 = Ra;
+    if (tmp f<= fargb)
+      goto <end>;
+    tmp = fargb;
+  <end>
+    Rd = tmp;
+  }
+  :"fceil"^ccsfx Rd, fargb is ccsfx & (Alu5=12 & Rd ; fargb) {
+    Rd = ceil(fargb);
+  }
+  :"ffloor"^ccsfx Rd, fargb is ccsfx & (Alu5=13 & Rd ; fargb) {
+    Rd = floor(fargb);
+  }
+  :"flog2"^ccsfx Rd, fargb is ccsfx & (Alu5=14 & Rd ; fargb) {
+    Rd = flog2(fargb);
+  }
+  :"fexp2"^ccsfx Rd, fargb is ccsfx & (Alu5=15 & Rd ; fargb) {
+    Rd = fexp2(fargb);
+  }
+  # float -> integer: rd = (int)(ra * 2^b), rounding towards zero / down
+  :"ftrunc"^ccsfx Rd, Ra, "sasl"^fshift is ccsfx & (Alu5=16 & Rd ; Ra & fshift) {
+    local p:4;
+    pow2(p, fshift);
+    Rd = trunc(Ra f* p);
+  }
+  :"floor"^ccsfx Rd, Ra, "sasl"^fshift is ccsfx & (Alu5=17 & Rd ; Ra & fshift) {
+    local p:4;
+    pow2(p, fshift);
+    Rd = trunc(floor(Ra f* p));
+  }
+  # integer -> float: rd = (float)ra / 2^b
+  :"flts"^ccsfx Rd, Ra, "sasr"^fshift is ccsfx & (Alu5=18 & Rd ; Ra & fshift) {
+    local p:4;
+    pow2(p, -fshift);
+    Rd = int2float(Ra) f* p;
+  }
+  :"fltu"^ccsfx Rd, Ra, "sasr"^fshift is ccsfx & (Alu5=19 & Rd ; Ra & fshift) {
+    local p:4;
+    pow2(p, -fshift);
+    local w:8 = zext(Ra);
+    local f:4 = int2float(w);
+    Rd = f f* p;
+  }
+}
+
+:^finst is finst & cond & Op6=0x32 ...
+	{ build cond; build finst; }
+
+################################################################
+# Vector Instructions
+################################################################
+#
+# Encodings and operand forms follow the reverse-engineered VideoCore IV Programmers Manual
+# (github.com/hermanhermitage/videocoreiv wiki); the operand spelling follows binutils-vc4:
+# H/HX/HY(y,x) and V/VX/VY(y,x) for 16 8/16/32-bit cells of the 64x64-byte vector register
+# file, "-" for a discarded result or unused source, "+rN" scalar offset, "++" increment per
+# repetition, "*" column offset from sr.CB.
+#
+# The vector register file, the accumulators and the lookup table are not modelled: there is no
+# vendor documentation, simulator or hardware reference for their behaviour (the manual calls
+# its vector section "very preliminary"), so every vector operation is a pcodeop. Effects on
+# scalar state are modelled: SRU writes of r0-r7, and memory operations take their address.
+
+define pcodeop vector_load;
+define pcodeop vector_store;
+define pcodeop vector_lut;
+define pcodeop vector_acc;
+define pcodeop vector_op;
+define pcodeop vector_sru;
+attach names [ Vrep ] [ "" " REP2" " REP4" " REP8" " REP16" " REP32" " REP64" " REP r0" ];
+attach names [ Vsetf48 Vsetf80 ] [ "" " SETF" ];
+attach names [ Vpred48 Vpred80 ] [ "" " NONE" " IFZ" " IFNZ" " IFN" " IFNN" " IFC" " IFNC" ];
+attach names [ Vsru ] [
+  "" "" "" "" "" "" "" ""
+  "" "" "" "" "" "" "" ""
+  "" "" "" "" "" "" "" ""
+  "" "" "" "" "" "" "" ""
+  " UADD" " USUB" " UACC" " UDEC" " CLRA UADD" " CLRA USUB" " CLRA UACC" " CLRA UDEC"
+  " SADD" " SSUB" " SACC" " SDEC" " CLRA SADD" " CLRA SSUB" " CLRA SACC" " CLRA SDEC"
+  " UADDH" " USUBH" " UACCH" " UDECH" " CLRA UADDH" " CLRA USUBH" " CLRA UACCH" " CLRA UDECH"
+  " SADDH" " SSUBH" " SACCH" " SDECH" " CLRA SADDH" " CLRA SSUBH" " CLRA SACCH" " CLRA SDECH"
+  " SUMU r0" " SUMU r1" " SUMU r2" " SUMU r3" " SUMU r4" " SUMU r5" " SUMU r6" " SUMU r7"
+  " SUMS r0" " SUMS r1" " SUMS r2" " SUMS r3" " SUMS r4" " SUMS r5" " SUMS r6" " SUMS r7"
+  " max2 r0" " max2 r1" " max2 r2" " max2 r3" " max2 r4" " max2 r5" " max2 r6" " max2 r7"
+  " IMIN r0" " IMIN r1" " IMIN r2" " IMIN r3" " IMIN r4" " IMIN r5" " IMIN r6" " IMIN r7"
+  " max4 r0" " max4 r1" " max4 r2" " max4 r3" " max4 r4" " max4 r5" " max4 r6" " max4 r7"
+  " IMAX r0" " IMAX r1" " IMAX r2" " IMAX r3" " IMAX r4" " IMAX r5" " IMAX r6" " IMAX r7"
+  " max6 r0" " max6 r1" " max6 r2" " max6 r3" " max6 r4" " max6 r5" " max6 r6" " max6 r7"
+  " MAX r0" " MAX r1" " MAX r2" " MAX r3" " MAX r4" " MAX r5" " MAX r6" " MAX r7" ];
+attach variables [ Vfdr Vfar Vfbr Vbreg Vrsb ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
+attach variables [ Vrs ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+attach names [ Vfdcb Vfacb Vfbcb ] [ "" "*" ];
+attach names [ Vmwidth ] [ "8" "16" "32" "unk" ];
+attach names [ Vaccw ] [ "" "s32" "unk" "s16" ];
+attach variables [ Vsrureg ] [ r0 r1 r2 r3 r4 r5 r6 r7 ];
+
+# 48-bit operands (direction of all operands from D; A and B add rs when their direction bit is set)
+vrs48d: is Vdoff=0 {}
+vrs48d: "+"^Vrs is Vrs & Vdoff=1 {}
+vrs48a: is Vadir=0 {}
+vrs48a: "+"^Vrs is Vrs & Vadir=1 {}
+vrs48b: is Vbdir=0 {}
+vrs48b: "+"^Vrs is Vrs & Vbdir=1 {}
+vd48: "H("^Vdy^",0)"^vrs48d is Vdk=0 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "H("^Vdy^",16)"^vrs48d is Vdk=1 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "H("^Vdy^",32)"^vrs48d is Vdk=2 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "H("^Vdy^",48)"^vrs48d is Vdk=3 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "HX("^Vdy^",0)"^vrs48d is Vdk=4 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "HX("^Vdy^",32)"^vrs48d is Vdk=5 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "HY("^Vdy^",0)"^vrs48d is Vdk=6 & Vddir=0 & Vdy  & vrs48d  {}
+vd48: "V("^vy^","^vx^")"^vrs48d is Vdk=0 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+vd48: "V("^vy^","^vx^")"^vrs48d is Vdk=1 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 16 + Vdxlo; ] {}
+vd48: "V("^vy^","^vx^")"^vrs48d is Vdk=2 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 32 + Vdxlo; ] {}
+vd48: "V("^vy^","^vx^")"^vrs48d is Vdk=3 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 48 + Vdxlo; ] {}
+vd48: "VX("^vy^","^vx^")"^vrs48d is Vdk=4 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+vd48: "VX("^vy^","^vx^")"^vrs48d is Vdk=5 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 32 + Vdxlo; ] {}
+vd48: "VY("^vy^","^vx^")"^vrs48d is Vdk=6 & Vddir=1 & Vdyhi & Vdxlo  & vrs48d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+vd48: "-"^vrs48d is Vdk=7  & vrs48d {}
+vay48: y is Vayhi & Vaylo [ y = (Vayhi << 4) | Vaylo; ] { export *[const]:1 y; }
+va48: "H("^vay48^",0)"^vrs48a is Vak=0 & Vddir=0 & vay48 & vrs48a {}
+va48: "H("^vay48^",16)"^vrs48a is Vak=1 & Vddir=0 & vay48 & vrs48a {}
+va48: "H("^vay48^",32)"^vrs48a is Vak=2 & Vddir=0 & vay48 & vrs48a {}
+va48: "H("^vay48^",48)"^vrs48a is Vak=3 & Vddir=0 & vay48 & vrs48a {}
+va48: "HX("^vay48^",0)"^vrs48a is Vak=4 & Vddir=0 & vay48 & vrs48a {}
+va48: "HX("^vay48^",32)"^vrs48a is Vak=5 & Vddir=0 & vay48 & vrs48a {}
+va48: "HY("^vay48^",0)"^vrs48a is Vak=6 & Vddir=0 & vay48 & vrs48a {}
+va48: "V("^vay48^",0)"^vrs48a is Vak=0 & Vddir=1 & vay48 & vrs48a {}
+va48: "V("^vay48^",16)"^vrs48a is Vak=1 & Vddir=1 & vay48 & vrs48a {}
+va48: "V("^vay48^",32)"^vrs48a is Vak=2 & Vddir=1 & vay48 & vrs48a {}
+va48: "V("^vay48^",48)"^vrs48a is Vak=3 & Vddir=1 & vay48 & vrs48a {}
+va48: "VX("^vay48^",0)"^vrs48a is Vak=4 & Vddir=1 & vay48 & vrs48a {}
+va48: "VX("^vay48^",32)"^vrs48a is Vak=5 & Vddir=1 & vay48 & vrs48a {}
+va48: "VY("^vay48^",0)"^vrs48a is Vak=6 & Vddir=1 & vay48 & vrs48a {}
+va48: "-"^vrs48a is Vak=7 & vrs48a {}
+vb48v: "H("^Vby^",0)"^vrs48b is Vbk=0 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "H("^Vby^",16)"^vrs48b is Vbk=1 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "H("^Vby^",32)"^vrs48b is Vbk=2 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "H("^Vby^",48)"^vrs48b is Vbk=3 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "HX("^Vby^",0)"^vrs48b is Vbk=4 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "HX("^Vby^",32)"^vrs48b is Vbk=5 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "HY("^Vby^",0)"^vrs48b is Vbk=6 & Vddir=0 & Vby & Vimm=0 & vrs48b  {}
+vb48v: "V("^vy^","^vx^")"^vrs48b is Vbk=0 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vb48v: "V("^vy^","^vx^")"^vrs48b is Vbk=1 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 16 + Vbxlo; ] {}
+vb48v: "V("^vy^","^vx^")"^vrs48b is Vbk=2 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 32 + Vbxlo; ] {}
+vb48v: "V("^vy^","^vx^")"^vrs48b is Vbk=3 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 48 + Vbxlo; ] {}
+vb48v: "VX("^vy^","^vx^")"^vrs48b is Vbk=4 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vb48v: "VX("^vy^","^vx^")"^vrs48b is Vbk=5 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 32 + Vbxlo; ] {}
+vb48v: "VY("^vy^","^vx^")"^vrs48b is Vbk=6 & Vddir=1 & Vbyhi & Vbxlo & Vimm=0 & vrs48b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vflags48: is Vimm=0 & Vbk!=7 {}
+vflags48: Vsetf48 is Vimm=0 & Vbk=7 & Vsetf48 {}
+vflags48: Vsetf48^Vpred48 is Vimm=1 & Vsetf48 & Vpred48 {}
+vb48: vb48v is vb48v { local t:4 = 0; export t; }
+vb48: Vbreg is Vimm=0 & Vbk=7 & Vbreg45=0 & Vbreg { export Vbreg; }
+vb48: "r"^Vbreg6 is Vimm=0 & Vbk=7 & Vbreg6 { local t:4 = 0; export t; }
+vb48: Vimm6 is Vimm=1 & Vimm6 { local t:4 = Vimm6; export t; }
+
+# 80-bit operands: own direction bits, flags f_d/f_a/f_b (scalar register r0-r14 or none, ++, *)
+vf80d: "+"^Vfdr^Vfdcb is Vfdr & Vfdinc & Vfdcb {}
+vf80d: Vfdcb is Vfdr=15 & Vfdcb {}
+vinc80d: is Vfdinc=0 {}
+vinc80d: "++" is Vfdinc=1 {}
+vf80a: "+"^Vfar^Vfacb is Vfar & Vfainc & Vfacb {}
+vf80a: Vfacb is Vfar=15 & Vfacb {}
+vinc80a: is Vfainc=0 {}
+vinc80a: "++" is Vfainc=1 {}
+vf80b: "+"^Vfbr^Vfbcb is Vfbr & Vfbinc & Vfbcb {}
+vf80b: Vfbcb is Vfbr=15 & Vfbcb {}
+vinc80b: is Vfbinc=0 {}
+vinc80b: "++" is Vfbinc=1 {}
+vd80: "H("^Vdy^vinc80d^",0)"^vf80d is Vdk=0 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "V("^vy^","^vx^vinc80d^")"^vf80d is Vdk=0 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+va80: "H("^vay48^vinc80a^","^vx^")"^vf80a is Vak=0 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+va80: "V("^vay48^","^vx^vinc80a^")"^vf80a is Vak=0 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+vb80v: "H("^Vby^vinc80b^",0)"^vf80b is Vbk=0 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "V("^vy^","^vx^vinc80b^")"^vf80b is Vbk=0 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vd80: "H("^Vdy^vinc80d^",16)"^vf80d is Vdk=1 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "V("^vy^","^vx^vinc80d^")"^vf80d is Vdk=1 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 16 + Vdxlo; ] {}
+va80: "H("^vay48^vinc80a^","^vx^")"^vf80a is Vak=1 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 16 + Vrax; ] {}
+va80: "V("^vay48^","^vx^vinc80a^")"^vf80a is Vak=1 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 16 + Vrax; ] {}
+vb80v: "H("^Vby^vinc80b^",16)"^vf80b is Vbk=1 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "V("^vy^","^vx^vinc80b^")"^vf80b is Vbk=1 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 16 + Vbxlo; ] {}
+vd80: "H("^Vdy^vinc80d^",32)"^vf80d is Vdk=2 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "V("^vy^","^vx^vinc80d^")"^vf80d is Vdk=2 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 32 + Vdxlo; ] {}
+va80: "H("^vay48^vinc80a^","^vx^")"^vf80a is Vak=2 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 32 + Vrax; ] {}
+va80: "V("^vay48^","^vx^vinc80a^")"^vf80a is Vak=2 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 32 + Vrax; ] {}
+vb80v: "H("^Vby^vinc80b^",32)"^vf80b is Vbk=2 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "V("^vy^","^vx^vinc80b^")"^vf80b is Vbk=2 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 32 + Vbxlo; ] {}
+vd80: "H("^Vdy^vinc80d^",48)"^vf80d is Vdk=3 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "V("^vy^","^vx^vinc80d^")"^vf80d is Vdk=3 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 48 + Vdxlo; ] {}
+va80: "H("^vay48^vinc80a^","^vx^")"^vf80a is Vak=3 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 48 + Vrax; ] {}
+va80: "V("^vay48^","^vx^vinc80a^")"^vf80a is Vak=3 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 48 + Vrax; ] {}
+vb80v: "H("^Vby^vinc80b^",48)"^vf80b is Vbk=3 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "V("^vy^","^vx^vinc80b^")"^vf80b is Vbk=3 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 48 + Vbxlo; ] {}
+vd80: "HX("^Vdy^vinc80d^",0)"^vf80d is Vdk=4 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "VX("^vy^","^vx^vinc80d^")"^vf80d is Vdk=4 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+va80: "HX("^vay48^vinc80a^","^vx^")"^vf80a is Vak=4 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+va80: "VX("^vay48^","^vx^vinc80a^")"^vf80a is Vak=4 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+vb80v: "HX("^Vby^vinc80b^",0)"^vf80b is Vbk=4 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "VX("^vy^","^vx^vinc80b^")"^vf80b is Vbk=4 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vd80: "HX("^Vdy^vinc80d^",32)"^vf80d is Vdk=5 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "VX("^vy^","^vx^vinc80d^")"^vf80d is Vdk=5 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 32 + Vdxlo; ] {}
+va80: "HX("^vay48^vinc80a^","^vx^")"^vf80a is Vak=5 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 32 + Vrax; ] {}
+va80: "VX("^vay48^","^vx^vinc80a^")"^vf80a is Vak=5 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 32 + Vrax; ] {}
+vb80v: "HX("^Vby^vinc80b^",32)"^vf80b is Vbk=5 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "VX("^vy^","^vx^vinc80b^")"^vf80b is Vbk=5 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 32 + Vbxlo; ] {}
+vd80: "HY("^Vdy^vinc80d^",0)"^vf80d is Vdk=6 & Vddir=0 & Vdy ; vinc80d & vf80d {}
+vd80: "VY("^vy^","^vx^vinc80d^")"^vf80d is Vdk=6 & Vddir=1 & Vdyhi & Vdxlo ; vinc80d & vf80d [ vy = Vdyhi << 4; vx = 0 + Vdxlo; ] {}
+va80: "HY("^vay48^vinc80a^","^vx^")"^vf80a is Vak=6 & Vadir=0 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+va80: "VY("^vay48^","^vx^vinc80a^")"^vf80a is Vak=6 & Vadir=1 & vay48 ; vinc80a & vf80a & Vrax [ vx = 0 + Vrax; ] {}
+vb80v: "HY("^Vby^vinc80b^",0)"^vf80b is Vbk=6 & Vbdir=0 & Vby ; vinc80b & vf80b {}
+vb80v: "VY("^vy^","^vx^vinc80b^")"^vf80b is Vbk=6 & Vbdir=1 & Vbyhi & Vbxlo ; vinc80b & vf80b [ vy = Vbyhi << 4; vx = 0 + Vbxlo; ] {}
+vd80: "-" is Vdk=7 ; Vfdr {}
+va80: "-" is Vak=7 ; Vfar {}
+vb80: vb80v is Vimm=0 ... & vb80v { local t:4 = 0; export t; }
+vbs9: is Vl7=0 ; Vi2=0 { local t:4 = 0; export t; }
+vbs9: "+"^off is Vl7 ; Vi2 [ off = ((Vi2 & 1) << 7) | Vl7; ] { local t:4 = off; export t; }
+vbs9: "-"^off is Vl7 ; Vi2 & Vi2hi=1 [ off = 256 - (((Vi2 & 1) << 7) | Vl7); ] { local t:4 = -off; export t; }
+vb80: Vfbr^vbs9 is (Vimm=0 & Vbk=7 ; Vfbr) & vbs9 { local t:4 = Vfbr + vbs9; export t; }
+vb80: imm is Vimm=1 & Vimm10 ; Vfb [ imm = (Vfb << 10) | Vimm10; ] { local t:4 = imm; export t; }
+vsru80: Vsru is Vsrusel=0 & Vsru {}
+vsru80: Vsru is Vsrusel=1 & Vsru & Vsrureg & Vsruop { local t:1 = Vsruop; Vsrureg = vector_sru(t); }
+vflags80: Vrep^Vsetf80^Vpred80^vsru80 is Vrep & Vsetf80 ; Vpred80 & vsru80 { build vsru80; }
+
+# memory operand: (rb) in the 48-bit forms; in the 80-bit forms either a vector/immediate operand
+# or imm16(rs+=rX) when D or A is the 1110 discard pattern carrying the stride register
+vmemb48: (Vbreg) is Vimm=0 & Vbk=7 & Vbreg45=0 & Vbreg { export Vbreg; }
+# rb:6 with bit 4 or 5 set: no scalar register (binutils-vc4 marks the bits "?bitN?")
+vmemb48: ("r"^Vbreg6) is Vimm=0 & Vbk=7 & Vbreg6 { local t:4 = 0; export t; }
+vmemb48: vb48 is vb48 { export vb48; }
+vmemimm: off is Vl7 ; Vi7 & Vi2 [ off = (((Vi7 << 2) | Vi2) << 7) | Vl7; ] { local t:4 = off; export t; }
+
+# 48-bit memory operations
+:"v"^Vmwidth^"ld" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=0 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_load(0:1, vmemb48); }
+:"v"^Vmwidth^"lookupmh" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=1 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_load(1:1, vmemb48); }
+:"v"^Vmwidth^"lookupml" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=2 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_load(2:1, vmemb48); }
+:"v"^Vmwidth^"mem03" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=3 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(3:1, vmemb48); }
+:"v"^Vmwidth^"st" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=4 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_store(4:1, vmemb48); }
+:"v"^Vmwidth^"indexwritemh" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=5 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_store(5:1, vmemb48); }
+:"v"^Vmwidth^"indexwriteml" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=6 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_store(6:1, vmemb48); }
+:"v"^Vmwidth^"mem07" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=7 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(7:1, vmemb48); }
+:"v"^Vmwidth^"readlut" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=8 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_lut(8:1, vmemb48); }
+:"v"^Vmwidth^"writelut" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=9 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_lut(9:1, vmemb48); }
+:"v"^Vmwidth^"mem10" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=10 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(10:1, vmemb48); }
+:"v"^Vmwidth^"mem11" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=11 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(11:1, vmemb48); }
+:"v"^Vmwidth^"mem12" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=12 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(12:1, vmemb48); }
+:"v"^Vmwidth^"mem13" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=13 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(13:1, vmemb48); }
+:"v"^Vmwidth^"mem14" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=14 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(14:1, vmemb48); }
+:"v"^Vmwidth^"mem15" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=15 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(15:1, vmemb48); }
+:"v"^Vmwidth^"mem16" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=16 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(16:1, vmemb48); }
+:"v"^Vmwidth^"mem17" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=17 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(17:1, vmemb48); }
+:"v"^Vmwidth^"mem18" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=18 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(18:1, vmemb48); }
+:"v"^Vmwidth^"mem19" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=19 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(19:1, vmemb48); }
+:"v"^Vmwidth^"mem20" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=20 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(20:1, vmemb48); }
+:"v"^Vmwidth^"mem21" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=21 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(21:1, vmemb48); }
+:"v"^Vmwidth^"mem22" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=22 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(22:1, vmemb48); }
+:"v"^Vmwidth^"mem23" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=23 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(23:1, vmemb48); }
+:"vgetacc"^Vaccw vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=24 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_acc(24:1, vmemb48); }
+:"v"^Vmwidth^"mem25" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=25 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(25:1, vmemb48); }
+:"v"^Vmwidth^"mem26" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=26 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(26:1, vmemb48); }
+:"v"^Vmwidth^"mem27" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=27 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(27:1, vmemb48); }
+:"v"^Vmwidth^"mem28" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=28 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(28:1, vmemb48); }
+:"v"^Vmwidth^"mem29" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=29 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(29:1, vmemb48); }
+:"v"^Vmwidth^"mem30" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=30 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(30:1, vmemb48); }
+:"v"^Vmwidth^"mem31" vd48, va48, vmemb48^vflags48 is Vclass=0x1e & Vkind=0 & Vmop=31 & Vmwidth & Vaccw & vd48 & va48 & vmemb48 & vflags48 { vector_op(31:1, vmemb48); }
+
+# 80-bit memory operations
+:"v"^Vmwidth^"ld" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=0 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_load(0:1, vb80); build vflags80; }
+:"v"^Vmwidth^"ld" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=0 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(0:1, a); build vflags80; }
+:"v"^Vmwidth^"ld" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=0 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(0:1, a); build vflags80; }
+:"v"^Vmwidth^"lookupmh" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=1 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_load(1:1, vb80); build vflags80; }
+:"v"^Vmwidth^"lookupmh" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=1 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(1:1, a); build vflags80; }
+:"v"^Vmwidth^"lookupmh" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=1 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(1:1, a); build vflags80; }
+:"v"^Vmwidth^"lookupml" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=2 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_load(2:1, vb80); build vflags80; }
+:"v"^Vmwidth^"lookupml" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=2 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(2:1, a); build vflags80; }
+:"v"^Vmwidth^"lookupml" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=2 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_load(2:1, a); build vflags80; }
+:"v"^Vmwidth^"mem03" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=3 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(3:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem03" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=3 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(3:1, a); build vflags80; }
+:"v"^Vmwidth^"mem03" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=3 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(3:1, a); build vflags80; }
+:"v"^Vmwidth^"st" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=4 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_store(4:1, vb80); build vflags80; }
+:"v"^Vmwidth^"st" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=4 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(4:1, a); build vflags80; }
+:"v"^Vmwidth^"st" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=4 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(4:1, a); build vflags80; }
+:"v"^Vmwidth^"indexwritemh" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=5 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_store(5:1, vb80); build vflags80; }
+:"v"^Vmwidth^"indexwritemh" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=5 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(5:1, a); build vflags80; }
+:"v"^Vmwidth^"indexwritemh" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=5 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(5:1, a); build vflags80; }
+:"v"^Vmwidth^"indexwriteml" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=6 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_store(6:1, vb80); build vflags80; }
+:"v"^Vmwidth^"indexwriteml" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=6 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(6:1, a); build vflags80; }
+:"v"^Vmwidth^"indexwriteml" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=6 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_store(6:1, a); build vflags80; }
+:"v"^Vmwidth^"mem07" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=7 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(7:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem07" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=7 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(7:1, a); build vflags80; }
+:"v"^Vmwidth^"mem07" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=7 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(7:1, a); build vflags80; }
+:"v"^Vmwidth^"readlut" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=8 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_lut(8:1, vb80); build vflags80; }
+:"v"^Vmwidth^"readlut" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=8 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_lut(8:1, a); build vflags80; }
+:"v"^Vmwidth^"readlut" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=8 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_lut(8:1, a); build vflags80; }
+:"v"^Vmwidth^"writelut" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=9 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_lut(9:1, vb80); build vflags80; }
+:"v"^Vmwidth^"writelut" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=9 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_lut(9:1, a); build vflags80; }
+:"v"^Vmwidth^"writelut" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=9 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_lut(9:1, a); build vflags80; }
+:"v"^Vmwidth^"mem10" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=10 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(10:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem10" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=10 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(10:1, a); build vflags80; }
+:"v"^Vmwidth^"mem10" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=10 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(10:1, a); build vflags80; }
+:"v"^Vmwidth^"mem11" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=11 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(11:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem11" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=11 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(11:1, a); build vflags80; }
+:"v"^Vmwidth^"mem11" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=11 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(11:1, a); build vflags80; }
+:"v"^Vmwidth^"mem12" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=12 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(12:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem12" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=12 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(12:1, a); build vflags80; }
+:"v"^Vmwidth^"mem12" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=12 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(12:1, a); build vflags80; }
+:"v"^Vmwidth^"mem13" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=13 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(13:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem13" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=13 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(13:1, a); build vflags80; }
+:"v"^Vmwidth^"mem13" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=13 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(13:1, a); build vflags80; }
+:"v"^Vmwidth^"mem14" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=14 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(14:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem14" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=14 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(14:1, a); build vflags80; }
+:"v"^Vmwidth^"mem14" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=14 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(14:1, a); build vflags80; }
+:"v"^Vmwidth^"mem15" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=15 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(15:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem15" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=15 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(15:1, a); build vflags80; }
+:"v"^Vmwidth^"mem15" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=15 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(15:1, a); build vflags80; }
+:"v"^Vmwidth^"mem16" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=16 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(16:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem16" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=16 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(16:1, a); build vflags80; }
+:"v"^Vmwidth^"mem16" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=16 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(16:1, a); build vflags80; }
+:"v"^Vmwidth^"mem17" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=17 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(17:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem17" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=17 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(17:1, a); build vflags80; }
+:"v"^Vmwidth^"mem17" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=17 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(17:1, a); build vflags80; }
+:"v"^Vmwidth^"mem18" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=18 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(18:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem18" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=18 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(18:1, a); build vflags80; }
+:"v"^Vmwidth^"mem18" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=18 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(18:1, a); build vflags80; }
+:"v"^Vmwidth^"mem19" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=19 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(19:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem19" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=19 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(19:1, a); build vflags80; }
+:"v"^Vmwidth^"mem19" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=19 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(19:1, a); build vflags80; }
+:"v"^Vmwidth^"mem20" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=20 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(20:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem20" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=20 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(20:1, a); build vflags80; }
+:"v"^Vmwidth^"mem20" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=20 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(20:1, a); build vflags80; }
+:"v"^Vmwidth^"mem21" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=21 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(21:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem21" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=21 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(21:1, a); build vflags80; }
+:"v"^Vmwidth^"mem21" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=21 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(21:1, a); build vflags80; }
+:"v"^Vmwidth^"mem22" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=22 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(22:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem22" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=22 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(22:1, a); build vflags80; }
+:"v"^Vmwidth^"mem22" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=22 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(22:1, a); build vflags80; }
+:"v"^Vmwidth^"mem23" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=23 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(23:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem23" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=23 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(23:1, a); build vflags80; }
+:"v"^Vmwidth^"mem23" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=23 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(23:1, a); build vflags80; }
+:"vgetacc"^Vaccw vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=24 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_acc(24:1, vb80); build vflags80; }
+:"vgetacc"^Vaccw "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=24 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_acc(24:1, a); build vflags80; }
+:"vgetacc"^Vaccw vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=24 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_acc(24:1, a); build vflags80; }
+:"v"^Vmwidth^"mem25" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=25 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(25:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem25" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=25 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(25:1, a); build vflags80; }
+:"v"^Vmwidth^"mem25" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=25 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(25:1, a); build vflags80; }
+:"v"^Vmwidth^"mem26" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=26 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(26:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem26" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=26 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(26:1, a); build vflags80; }
+:"v"^Vmwidth^"mem26" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=26 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(26:1, a); build vflags80; }
+:"v"^Vmwidth^"mem27" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=27 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(27:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem27" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=27 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(27:1, a); build vflags80; }
+:"v"^Vmwidth^"mem27" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=27 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(27:1, a); build vflags80; }
+:"v"^Vmwidth^"mem28" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=28 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(28:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem28" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=28 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(28:1, a); build vflags80; }
+:"v"^Vmwidth^"mem28" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=28 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(28:1, a); build vflags80; }
+:"v"^Vmwidth^"mem29" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=29 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(29:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem29" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=29 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(29:1, a); build vflags80; }
+:"v"^Vmwidth^"mem29" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=29 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(29:1, a); build vflags80; }
+:"v"^Vmwidth^"mem30" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=30 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(30:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem30" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=30 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(30:1, a); build vflags80; }
+:"v"^Vmwidth^"mem30" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=30 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(30:1, a); build vflags80; }
+:"v"^Vmwidth^"mem31" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=31 & Vmwidth & Vaccw) ... & vd80 & va80 & vb80 & vflags80 { vector_op(31:1, vb80); build vflags80; }
+:"v"^Vmwidth^"mem31" "-", va80, vmemimm^"("^Vrsb^"+="^Vfdr^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=31 & Vmwidth & Vaccw & Vdk=7 & Vddir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfdr) & va80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(31:1, a); build vflags80; }
+:"v"^Vmwidth^"mem31" vd80, "-", vmemimm^"("^Vrsb^"+="^Vfar^")"^vflags80 is (Vclass=0x1f & Vkind=0 & Vmop=31 & Vmwidth & Vaccw & Vak=7 & Vadir=0 & Vimm=0 & Vbk=7 & Vbdir=0 ; Vrsb & Vfar) & vd80 & vmemimm & vflags80 { local a:4 = Vrsb + vmemimm; vector_op(31:1, a); build vflags80; }
+
+# data operations
+:"v16mov" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=0 & vd48 & va48 & vb48 & vflags48 { vector_op(0:1, vb48); }
+:"v16mov" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=0) ... & vd80 & va80 & vb80 & vflags80 { vector_op(0:1, vb80); build vflags80; }
+:"v16bitplanes" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=1 & vd48 & va48 & vb48 & vflags48 { vector_op(1:1, vb48); }
+:"v16bitplanes" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=1) ... & vd80 & va80 & vb80 & vflags80 { vector_op(1:1, vb80); build vflags80; }
+:"v16even" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=2 & vd48 & va48 & vb48 & vflags48 { vector_op(2:1, vb48); }
+:"v16even" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=2) ... & vd80 & va80 & vb80 & vflags80 { vector_op(2:1, vb80); build vflags80; }
+:"v16odd" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=3 & vd48 & va48 & vb48 & vflags48 { vector_op(3:1, vb48); }
+:"v16odd" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=3) ... & vd80 & va80 & vb80 & vflags80 { vector_op(3:1, vb80); build vflags80; }
+:"v16interl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=4 & vd48 & va48 & vb48 & vflags48 { vector_op(4:1, vb48); }
+:"v16interl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=4) ... & vd80 & va80 & vb80 & vflags80 { vector_op(4:1, vb80); build vflags80; }
+:"v16interh" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=5 & vd48 & va48 & vb48 & vflags48 { vector_op(5:1, vb48); }
+:"v16interh" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=5) ... & vd80 & va80 & vb80 & vflags80 { vector_op(5:1, vb80); build vflags80; }
+:"v16bitrev" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=6 & vd48 & va48 & vb48 & vflags48 { vector_op(6:1, vb48); }
+:"v16bitrev" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=6) ... & vd80 & va80 & vb80 & vflags80 { vector_op(6:1, vb80); build vflags80; }
+:"v16ror" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=7 & vd48 & va48 & vb48 & vflags48 { vector_op(7:1, vb48); }
+:"v16ror" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=7) ... & vd80 & va80 & vb80 & vflags80 { vector_op(7:1, vb80); build vflags80; }
+:"v16shl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=8 & vd48 & va48 & vb48 & vflags48 { vector_op(8:1, vb48); }
+:"v16shl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=8) ... & vd80 & va80 & vb80 & vflags80 { vector_op(8:1, vb80); build vflags80; }
+:"v16shls" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=9 & vd48 & va48 & vb48 & vflags48 { vector_op(9:1, vb48); }
+:"v16shls" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=9) ... & vd80 & va80 & vb80 & vflags80 { vector_op(9:1, vb80); build vflags80; }
+:"v16lsr" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=10 & vd48 & va48 & vb48 & vflags48 { vector_op(10:1, vb48); }
+:"v16lsr" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=10) ... & vd80 & va80 & vb80 & vflags80 { vector_op(10:1, vb80); build vflags80; }
+:"v16asr" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=11 & vd48 & va48 & vb48 & vflags48 { vector_op(11:1, vb48); }
+:"v16asr" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=11) ... & vd80 & va80 & vb80 & vflags80 { vector_op(11:1, vb80); build vflags80; }
+:"v16signshl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=12 & vd48 & va48 & vb48 & vflags48 { vector_op(12:1, vb48); }
+:"v16signshl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=12) ... & vd80 & va80 & vb80 & vflags80 { vector_op(12:1, vb80); build vflags80; }
+:"v16op13" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=13 & vd48 & va48 & vb48 & vflags48 { vector_op(13:1, vb48); }
+:"v16op13" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=13) ... & vd80 & va80 & vb80 & vflags80 { vector_op(13:1, vb80); build vflags80; }
+:"v16signasl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=14 & vd48 & va48 & vb48 & vflags48 { vector_op(14:1, vb48); }
+:"v16signasl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=14) ... & vd80 & va80 & vb80 & vflags80 { vector_op(14:1, vb80); build vflags80; }
+:"v16signasls" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=15 & vd48 & va48 & vb48 & vflags48 { vector_op(15:1, vb48); }
+:"v16signasls" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=15) ... & vd80 & va80 & vb80 & vflags80 { vector_op(15:1, vb80); build vflags80; }
+:"v16and" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=16 & vd48 & va48 & vb48 & vflags48 { vector_op(16:1, vb48); }
+:"v16and" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=16) ... & vd80 & va80 & vb80 & vflags80 { vector_op(16:1, vb80); build vflags80; }
+:"v16or" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=17 & vd48 & va48 & vb48 & vflags48 { vector_op(17:1, vb48); }
+:"v16or" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=17) ... & vd80 & va80 & vb80 & vflags80 { vector_op(17:1, vb80); build vflags80; }
+:"v16eor" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=18 & vd48 & va48 & vb48 & vflags48 { vector_op(18:1, vb48); }
+:"v16eor" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=18) ... & vd80 & va80 & vb80 & vflags80 { vector_op(18:1, vb80); build vflags80; }
+:"v16bic" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=19 & vd48 & va48 & vb48 & vflags48 { vector_op(19:1, vb48); }
+:"v16bic" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=19) ... & vd80 & va80 & vb80 & vflags80 { vector_op(19:1, vb80); build vflags80; }
+:"v16count" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=20 & vd48 & va48 & vb48 & vflags48 { vector_op(20:1, vb48); }
+:"v16count" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=20) ... & vd80 & va80 & vb80 & vflags80 { vector_op(20:1, vb80); build vflags80; }
+:"v16msb" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=21 & vd48 & va48 & vb48 & vflags48 { vector_op(21:1, vb48); }
+:"v16msb" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=21) ... & vd80 & va80 & vb80 & vflags80 { vector_op(21:1, vb80); build vflags80; }
+:"v16op22" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=22 & vd48 & va48 & vb48 & vflags48 { vector_op(22:1, vb48); }
+:"v16op22" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=22) ... & vd80 & va80 & vb80 & vflags80 { vector_op(22:1, vb80); build vflags80; }
+:"v16op23" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=23 & vd48 & va48 & vb48 & vflags48 { vector_op(23:1, vb48); }
+:"v16op23" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=23) ... & vd80 & va80 & vb80 & vflags80 { vector_op(23:1, vb80); build vflags80; }
+:"v16min" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=24 & vd48 & va48 & vb48 & vflags48 { vector_op(24:1, vb48); }
+:"v16min" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=24) ... & vd80 & va80 & vb80 & vflags80 { vector_op(24:1, vb80); build vflags80; }
+:"v16max" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=25 & vd48 & va48 & vb48 & vflags48 { vector_op(25:1, vb48); }
+:"v16max" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=25) ... & vd80 & va80 & vb80 & vflags80 { vector_op(25:1, vb80); build vflags80; }
+:"v16dist" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=26 & vd48 & va48 & vb48 & vflags48 { vector_op(26:1, vb48); }
+:"v16dist" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=26) ... & vd80 & va80 & vb80 & vflags80 { vector_op(26:1, vb80); build vflags80; }
+:"v16dists" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=27 & vd48 & va48 & vb48 & vflags48 { vector_op(27:1, vb48); }
+:"v16dists" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=27) ... & vd80 & va80 & vb80 & vflags80 { vector_op(27:1, vb80); build vflags80; }
+:"v16clip" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=28 & vd48 & va48 & vb48 & vflags48 { vector_op(28:1, vb48); }
+:"v16clip" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=28) ... & vd80 & va80 & vb80 & vflags80 { vector_op(28:1, vb80); build vflags80; }
+:"v16sign" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=29 & vd48 & va48 & vb48 & vflags48 { vector_op(29:1, vb48); }
+:"v16sign" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=29) ... & vd80 & va80 & vb80 & vflags80 { vector_op(29:1, vb80); build vflags80; }
+:"v16clips" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=30 & vd48 & va48 & vb48 & vflags48 { vector_op(30:1, vb48); }
+:"v16clips" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=30) ... & vd80 & va80 & vb80 & vflags80 { vector_op(30:1, vb80); build vflags80; }
+:"v16testmag" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=31 & vd48 & va48 & vb48 & vflags48 { vector_op(31:1, vb48); }
+:"v16testmag" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=31) ... & vd80 & va80 & vb80 & vflags80 { vector_op(31:1, vb80); build vflags80; }
+:"v16add" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=32 & vd48 & va48 & vb48 & vflags48 { vector_op(32:1, vb48); }
+:"v16add" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=32) ... & vd80 & va80 & vb80 & vflags80 { vector_op(32:1, vb80); build vflags80; }
+:"v16adds" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=33 & vd48 & va48 & vb48 & vflags48 { vector_op(33:1, vb48); }
+:"v16adds" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=33) ... & vd80 & va80 & vb80 & vflags80 { vector_op(33:1, vb80); build vflags80; }
+:"v16addc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=34 & vd48 & va48 & vb48 & vflags48 { vector_op(34:1, vb48); }
+:"v16addc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=34) ... & vd80 & va80 & vb80 & vflags80 { vector_op(34:1, vb80); build vflags80; }
+:"v16addsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=35 & vd48 & va48 & vb48 & vflags48 { vector_op(35:1, vb48); }
+:"v16addsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=35) ... & vd80 & va80 & vb80 & vflags80 { vector_op(35:1, vb80); build vflags80; }
+:"v16sub" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=36 & vd48 & va48 & vb48 & vflags48 { vector_op(36:1, vb48); }
+:"v16sub" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=36) ... & vd80 & va80 & vb80 & vflags80 { vector_op(36:1, vb80); build vflags80; }
+:"v16subs" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=37 & vd48 & va48 & vb48 & vflags48 { vector_op(37:1, vb48); }
+:"v16subs" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=37) ... & vd80 & va80 & vb80 & vflags80 { vector_op(37:1, vb80); build vflags80; }
+:"v16subc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=38 & vd48 & va48 & vb48 & vflags48 { vector_op(38:1, vb48); }
+:"v16subc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=38) ... & vd80 & va80 & vb80 & vflags80 { vector_op(38:1, vb80); build vflags80; }
+:"v16subsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=39 & vd48 & va48 & vb48 & vflags48 { vector_op(39:1, vb48); }
+:"v16subsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=39) ... & vd80 & va80 & vb80 & vflags80 { vector_op(39:1, vb80); build vflags80; }
+:"v16rsub" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=40 & vd48 & va48 & vb48 & vflags48 { vector_op(40:1, vb48); }
+:"v16rsub" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=40) ... & vd80 & va80 & vb80 & vflags80 { vector_op(40:1, vb80); build vflags80; }
+:"v16rsubs" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=41 & vd48 & va48 & vb48 & vflags48 { vector_op(41:1, vb48); }
+:"v16rsubs" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=41) ... & vd80 & va80 & vb80 & vflags80 { vector_op(41:1, vb80); build vflags80; }
+:"v16rsubc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=42 & vd48 & va48 & vb48 & vflags48 { vector_op(42:1, vb48); }
+:"v16rsubc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=42) ... & vd80 & va80 & vb80 & vflags80 { vector_op(42:1, vb80); build vflags80; }
+:"v16rsubsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=43 & vd48 & va48 & vb48 & vflags48 { vector_op(43:1, vb48); }
+:"v16rsubsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=43) ... & vd80 & va80 & vb80 & vflags80 { vector_op(43:1, vb80); build vflags80; }
+:"v16op44" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=44 & vd48 & va48 & vb48 & vflags48 { vector_op(44:1, vb48); }
+:"v16op44" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=44) ... & vd80 & va80 & vb80 & vflags80 { vector_op(44:1, vb80); build vflags80; }
+:"v16op45" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=45 & vd48 & va48 & vb48 & vflags48 { vector_op(45:1, vb48); }
+:"v16op45" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=45) ... & vd80 & va80 & vb80 & vflags80 { vector_op(45:1, vb80); build vflags80; }
+:"v16op46" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=46 & vd48 & va48 & vb48 & vflags48 { vector_op(46:1, vb48); }
+:"v16op46" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=46) ... & vd80 & va80 & vb80 & vflags80 { vector_op(46:1, vb80); build vflags80; }
+:"v16op47" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=47 & vd48 & va48 & vb48 & vflags48 { vector_op(47:1, vb48); }
+:"v16op47" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=47) ... & vd80 & va80 & vb80 & vflags80 { vector_op(47:1, vb80); build vflags80; }
+:"vmull.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=48 & vd48 & va48 & vb48 & vflags48 { vector_op(48:1, vb48); }
+:"vmull.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=48) ... & vd80 & va80 & vb80 & vflags80 { vector_op(48:1, vb80); build vflags80; }
+:"vmulls.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=49 & vd48 & va48 & vb48 & vflags48 { vector_op(49:1, vb48); }
+:"vmulls.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=49) ... & vd80 & va80 & vb80 & vflags80 { vector_op(49:1, vb80); build vflags80; }
+:"vmulm.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=50 & vd48 & va48 & vb48 & vflags48 { vector_op(50:1, vb48); }
+:"vmulm.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=50) ... & vd80 & va80 & vb80 & vflags80 { vector_op(50:1, vb80); build vflags80; }
+:"vmulms.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=51 & vd48 & va48 & vb48 & vflags48 { vector_op(51:1, vb48); }
+:"vmulms.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=51) ... & vd80 & va80 & vb80 & vflags80 { vector_op(51:1, vb80); build vflags80; }
+:"vmulhd.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=52 & vd48 & va48 & vb48 & vflags48 { vector_op(52:1, vb48); }
+:"vmulhd.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=52) ... & vd80 & va80 & vb80 & vflags80 { vector_op(52:1, vb80); build vflags80; }
+:"vmulhd.su" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=53 & vd48 & va48 & vb48 & vflags48 { vector_op(53:1, vb48); }
+:"vmulhd.su" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=53) ... & vd80 & va80 & vb80 & vflags80 { vector_op(53:1, vb80); build vflags80; }
+:"vmulhd.us" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=54 & vd48 & va48 & vb48 & vflags48 { vector_op(54:1, vb48); }
+:"vmulhd.us" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=54) ... & vd80 & va80 & vb80 & vflags80 { vector_op(54:1, vb80); build vflags80; }
+:"vmulhd.uu" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=55 & vd48 & va48 & vb48 & vflags48 { vector_op(55:1, vb48); }
+:"vmulhd.uu" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=55) ... & vd80 & va80 & vb80 & vflags80 { vector_op(55:1, vb80); build vflags80; }
+:"vmulhn.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=56 & vd48 & va48 & vb48 & vflags48 { vector_op(56:1, vb48); }
+:"vmulhn.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=56) ... & vd80 & va80 & vb80 & vflags80 { vector_op(56:1, vb80); build vflags80; }
+:"vmulhn.su" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=57 & vd48 & va48 & vb48 & vflags48 { vector_op(57:1, vb48); }
+:"vmulhn.su" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=57) ... & vd80 & va80 & vb80 & vflags80 { vector_op(57:1, vb80); build vflags80; }
+:"vmulhn.us" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=58 & vd48 & va48 & vb48 & vflags48 { vector_op(58:1, vb48); }
+:"vmulhn.us" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=58) ... & vd80 & va80 & vb80 & vflags80 { vector_op(58:1, vb80); build vflags80; }
+:"vmulhn.uu" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=59 & vd48 & va48 & vb48 & vflags48 { vector_op(59:1, vb48); }
+:"vmulhn.uu" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=59) ... & vd80 & va80 & vb80 & vflags80 { vector_op(59:1, vb80); build vflags80; }
+:"vmulhdt.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=60 & vd48 & va48 & vb48 & vflags48 { vector_op(60:1, vb48); }
+:"vmulhdt.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=60) ... & vd80 & va80 & vb80 & vflags80 { vector_op(60:1, vb80); build vflags80; }
+:"vmulhdt.su" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=61 & vd48 & va48 & vb48 & vflags48 { vector_op(61:1, vb48); }
+:"vmulhdt.su" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=61) ... & vd80 & va80 & vb80 & vflags80 { vector_op(61:1, vb80); build vflags80; }
+:"vop62.0" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=62 & vd48 & va48 & vb48 & vflags48 { vector_op(62:1, vb48); }
+:"vop62.0" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=62) ... & vd80 & va80 & vb80 & vflags80 { vector_op(62:1, vb80); build vflags80; }
+:"vop63.0" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=0 & Vaop=63 & vd48 & va48 & vb48 & vflags48 { vector_op(63:1, vb48); }
+:"vop63.0" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=0 & Vaop=63) ... & vd80 & va80 & vb80 & vflags80 { vector_op(63:1, vb80); build vflags80; }
+:"v32mov" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=0 & vd48 & va48 & vb48 & vflags48 { vector_op(64:1, vb48); }
+:"v32mov" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=0) ... & vd80 & va80 & vb80 & vflags80 { vector_op(64:1, vb80); build vflags80; }
+:"v32bitplanes" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=1 & vd48 & va48 & vb48 & vflags48 { vector_op(65:1, vb48); }
+:"v32bitplanes" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=1) ... & vd80 & va80 & vb80 & vflags80 { vector_op(65:1, vb80); build vflags80; }
+:"v32even" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=2 & vd48 & va48 & vb48 & vflags48 { vector_op(66:1, vb48); }
+:"v32even" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=2) ... & vd80 & va80 & vb80 & vflags80 { vector_op(66:1, vb80); build vflags80; }
+:"v32odd" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=3 & vd48 & va48 & vb48 & vflags48 { vector_op(67:1, vb48); }
+:"v32odd" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=3) ... & vd80 & va80 & vb80 & vflags80 { vector_op(67:1, vb80); build vflags80; }
+:"v32interl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=4 & vd48 & va48 & vb48 & vflags48 { vector_op(68:1, vb48); }
+:"v32interl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=4) ... & vd80 & va80 & vb80 & vflags80 { vector_op(68:1, vb80); build vflags80; }
+:"v32interh" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=5 & vd48 & va48 & vb48 & vflags48 { vector_op(69:1, vb48); }
+:"v32interh" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=5) ... & vd80 & va80 & vb80 & vflags80 { vector_op(69:1, vb80); build vflags80; }
+:"v32bitrev" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=6 & vd48 & va48 & vb48 & vflags48 { vector_op(70:1, vb48); }
+:"v32bitrev" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=6) ... & vd80 & va80 & vb80 & vflags80 { vector_op(70:1, vb80); build vflags80; }
+:"v32ror" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=7 & vd48 & va48 & vb48 & vflags48 { vector_op(71:1, vb48); }
+:"v32ror" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=7) ... & vd80 & va80 & vb80 & vflags80 { vector_op(71:1, vb80); build vflags80; }
+:"v32shl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=8 & vd48 & va48 & vb48 & vflags48 { vector_op(72:1, vb48); }
+:"v32shl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=8) ... & vd80 & va80 & vb80 & vflags80 { vector_op(72:1, vb80); build vflags80; }
+:"v32shls" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=9 & vd48 & va48 & vb48 & vflags48 { vector_op(73:1, vb48); }
+:"v32shls" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=9) ... & vd80 & va80 & vb80 & vflags80 { vector_op(73:1, vb80); build vflags80; }
+:"v32lsr" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=10 & vd48 & va48 & vb48 & vflags48 { vector_op(74:1, vb48); }
+:"v32lsr" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=10) ... & vd80 & va80 & vb80 & vflags80 { vector_op(74:1, vb80); build vflags80; }
+:"v32asr" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=11 & vd48 & va48 & vb48 & vflags48 { vector_op(75:1, vb48); }
+:"v32asr" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=11) ... & vd80 & va80 & vb80 & vflags80 { vector_op(75:1, vb80); build vflags80; }
+:"v32signshl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=12 & vd48 & va48 & vb48 & vflags48 { vector_op(76:1, vb48); }
+:"v32signshl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=12) ... & vd80 & va80 & vb80 & vflags80 { vector_op(76:1, vb80); build vflags80; }
+:"v32op13" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=13 & vd48 & va48 & vb48 & vflags48 { vector_op(77:1, vb48); }
+:"v32op13" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=13) ... & vd80 & va80 & vb80 & vflags80 { vector_op(77:1, vb80); build vflags80; }
+:"v32signasl" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=14 & vd48 & va48 & vb48 & vflags48 { vector_op(78:1, vb48); }
+:"v32signasl" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=14) ... & vd80 & va80 & vb80 & vflags80 { vector_op(78:1, vb80); build vflags80; }
+:"v32signasls" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=15 & vd48 & va48 & vb48 & vflags48 { vector_op(79:1, vb48); }
+:"v32signasls" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=15) ... & vd80 & va80 & vb80 & vflags80 { vector_op(79:1, vb80); build vflags80; }
+:"v32and" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=16 & vd48 & va48 & vb48 & vflags48 { vector_op(80:1, vb48); }
+:"v32and" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=16) ... & vd80 & va80 & vb80 & vflags80 { vector_op(80:1, vb80); build vflags80; }
+:"v32or" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=17 & vd48 & va48 & vb48 & vflags48 { vector_op(81:1, vb48); }
+:"v32or" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=17) ... & vd80 & va80 & vb80 & vflags80 { vector_op(81:1, vb80); build vflags80; }
+:"v32eor" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=18 & vd48 & va48 & vb48 & vflags48 { vector_op(82:1, vb48); }
+:"v32eor" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=18) ... & vd80 & va80 & vb80 & vflags80 { vector_op(82:1, vb80); build vflags80; }
+:"v32bic" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=19 & vd48 & va48 & vb48 & vflags48 { vector_op(83:1, vb48); }
+:"v32bic" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=19) ... & vd80 & va80 & vb80 & vflags80 { vector_op(83:1, vb80); build vflags80; }
+:"v32count" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=20 & vd48 & va48 & vb48 & vflags48 { vector_op(84:1, vb48); }
+:"v32count" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=20) ... & vd80 & va80 & vb80 & vflags80 { vector_op(84:1, vb80); build vflags80; }
+:"v32msb" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=21 & vd48 & va48 & vb48 & vflags48 { vector_op(85:1, vb48); }
+:"v32msb" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=21) ... & vd80 & va80 & vb80 & vflags80 { vector_op(85:1, vb80); build vflags80; }
+:"v32op22" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=22 & vd48 & va48 & vb48 & vflags48 { vector_op(86:1, vb48); }
+:"v32op22" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=22) ... & vd80 & va80 & vb80 & vflags80 { vector_op(86:1, vb80); build vflags80; }
+:"v32op23" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=23 & vd48 & va48 & vb48 & vflags48 { vector_op(87:1, vb48); }
+:"v32op23" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=23) ... & vd80 & va80 & vb80 & vflags80 { vector_op(87:1, vb80); build vflags80; }
+:"v32min" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=24 & vd48 & va48 & vb48 & vflags48 { vector_op(88:1, vb48); }
+:"v32min" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=24) ... & vd80 & va80 & vb80 & vflags80 { vector_op(88:1, vb80); build vflags80; }
+:"v32max" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=25 & vd48 & va48 & vb48 & vflags48 { vector_op(89:1, vb48); }
+:"v32max" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=25) ... & vd80 & va80 & vb80 & vflags80 { vector_op(89:1, vb80); build vflags80; }
+:"v32dist" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=26 & vd48 & va48 & vb48 & vflags48 { vector_op(90:1, vb48); }
+:"v32dist" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=26) ... & vd80 & va80 & vb80 & vflags80 { vector_op(90:1, vb80); build vflags80; }
+:"v32dists" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=27 & vd48 & va48 & vb48 & vflags48 { vector_op(91:1, vb48); }
+:"v32dists" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=27) ... & vd80 & va80 & vb80 & vflags80 { vector_op(91:1, vb80); build vflags80; }
+:"v32clip" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=28 & vd48 & va48 & vb48 & vflags48 { vector_op(92:1, vb48); }
+:"v32clip" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=28) ... & vd80 & va80 & vb80 & vflags80 { vector_op(92:1, vb80); build vflags80; }
+:"v32sign" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=29 & vd48 & va48 & vb48 & vflags48 { vector_op(93:1, vb48); }
+:"v32sign" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=29) ... & vd80 & va80 & vb80 & vflags80 { vector_op(93:1, vb80); build vflags80; }
+:"v32clips" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=30 & vd48 & va48 & vb48 & vflags48 { vector_op(94:1, vb48); }
+:"v32clips" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=30) ... & vd80 & va80 & vb80 & vflags80 { vector_op(94:1, vb80); build vflags80; }
+:"v32testmag" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=31 & vd48 & va48 & vb48 & vflags48 { vector_op(95:1, vb48); }
+:"v32testmag" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=31) ... & vd80 & va80 & vb80 & vflags80 { vector_op(95:1, vb80); build vflags80; }
+:"v32add" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=32 & vd48 & va48 & vb48 & vflags48 { vector_op(96:1, vb48); }
+:"v32add" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=32) ... & vd80 & va80 & vb80 & vflags80 { vector_op(96:1, vb80); build vflags80; }
+:"v32adds" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=33 & vd48 & va48 & vb48 & vflags48 { vector_op(97:1, vb48); }
+:"v32adds" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=33) ... & vd80 & va80 & vb80 & vflags80 { vector_op(97:1, vb80); build vflags80; }
+:"v32addc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=34 & vd48 & va48 & vb48 & vflags48 { vector_op(98:1, vb48); }
+:"v32addc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=34) ... & vd80 & va80 & vb80 & vflags80 { vector_op(98:1, vb80); build vflags80; }
+:"v32addsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=35 & vd48 & va48 & vb48 & vflags48 { vector_op(99:1, vb48); }
+:"v32addsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=35) ... & vd80 & va80 & vb80 & vflags80 { vector_op(99:1, vb80); build vflags80; }
+:"v32sub" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=36 & vd48 & va48 & vb48 & vflags48 { vector_op(100:1, vb48); }
+:"v32sub" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=36) ... & vd80 & va80 & vb80 & vflags80 { vector_op(100:1, vb80); build vflags80; }
+:"v32subs" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=37 & vd48 & va48 & vb48 & vflags48 { vector_op(101:1, vb48); }
+:"v32subs" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=37) ... & vd80 & va80 & vb80 & vflags80 { vector_op(101:1, vb80); build vflags80; }
+:"v32subc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=38 & vd48 & va48 & vb48 & vflags48 { vector_op(102:1, vb48); }
+:"v32subc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=38) ... & vd80 & va80 & vb80 & vflags80 { vector_op(102:1, vb80); build vflags80; }
+:"v32subsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=39 & vd48 & va48 & vb48 & vflags48 { vector_op(103:1, vb48); }
+:"v32subsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=39) ... & vd80 & va80 & vb80 & vflags80 { vector_op(103:1, vb80); build vflags80; }
+:"v32rsub" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=40 & vd48 & va48 & vb48 & vflags48 { vector_op(104:1, vb48); }
+:"v32rsub" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=40) ... & vd80 & va80 & vb80 & vflags80 { vector_op(104:1, vb80); build vflags80; }
+:"v32rsubs" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=41 & vd48 & va48 & vb48 & vflags48 { vector_op(105:1, vb48); }
+:"v32rsubs" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=41) ... & vd80 & va80 & vb80 & vflags80 { vector_op(105:1, vb80); build vflags80; }
+:"v32rsubc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=42 & vd48 & va48 & vb48 & vflags48 { vector_op(106:1, vb48); }
+:"v32rsubc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=42) ... & vd80 & va80 & vb80 & vflags80 { vector_op(106:1, vb80); build vflags80; }
+:"v32rsubsc" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=43 & vd48 & va48 & vb48 & vflags48 { vector_op(107:1, vb48); }
+:"v32rsubsc" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=43) ... & vd80 & va80 & vb80 & vflags80 { vector_op(107:1, vb80); build vflags80; }
+:"v32op44" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=44 & vd48 & va48 & vb48 & vflags48 { vector_op(108:1, vb48); }
+:"v32op44" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=44) ... & vd80 & va80 & vb80 & vflags80 { vector_op(108:1, vb80); build vflags80; }
+:"v32op45" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=45 & vd48 & va48 & vb48 & vflags48 { vector_op(109:1, vb48); }
+:"v32op45" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=45) ... & vd80 & va80 & vb80 & vflags80 { vector_op(109:1, vb80); build vflags80; }
+:"v32op46" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=46 & vd48 & va48 & vb48 & vflags48 { vector_op(110:1, vb48); }
+:"v32op46" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=46) ... & vd80 & va80 & vb80 & vflags80 { vector_op(110:1, vb80); build vflags80; }
+:"v32op47" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=47 & vd48 & va48 & vb48 & vflags48 { vector_op(111:1, vb48); }
+:"v32op47" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=47) ... & vd80 & va80 & vb80 & vflags80 { vector_op(111:1, vb80); build vflags80; }
+:"vop48.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=48 & vd48 & va48 & vb48 & vflags48 { vector_op(112:1, vb48); }
+:"vop48.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=48) ... & vd80 & va80 & vb80 & vflags80 { vector_op(112:1, vb80); build vflags80; }
+:"vop49.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=49 & vd48 & va48 & vb48 & vflags48 { vector_op(113:1, vb48); }
+:"vop49.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=49) ... & vd80 & va80 & vb80 & vflags80 { vector_op(113:1, vb80); build vflags80; }
+:"vop50.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=50 & vd48 & va48 & vb48 & vflags48 { vector_op(114:1, vb48); }
+:"vop50.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=50) ... & vd80 & va80 & vb80 & vflags80 { vector_op(114:1, vb80); build vflags80; }
+:"vop51.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=51 & vd48 & va48 & vb48 & vflags48 { vector_op(115:1, vb48); }
+:"vop51.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=51) ... & vd80 & va80 & vb80 & vflags80 { vector_op(115:1, vb80); build vflags80; }
+:"vmul32.ss" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=52 & vd48 & va48 & vb48 & vflags48 { vector_op(116:1, vb48); }
+:"vmul32.ss" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=52) ... & vd80 & va80 & vb80 & vflags80 { vector_op(116:1, vb80); build vflags80; }
+:"vmul32.su" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=53 & vd48 & va48 & vb48 & vflags48 { vector_op(117:1, vb48); }
+:"vmul32.su" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=53) ... & vd80 & va80 & vb80 & vflags80 { vector_op(117:1, vb80); build vflags80; }
+:"vmul32.us" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=54 & vd48 & va48 & vb48 & vflags48 { vector_op(118:1, vb48); }
+:"vmul32.us" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=54) ... & vd80 & va80 & vb80 & vflags80 { vector_op(118:1, vb80); build vflags80; }
+:"vmul32.uu" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=55 & vd48 & va48 & vb48 & vflags48 { vector_op(119:1, vb48); }
+:"vmul32.uu" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=55) ... & vd80 & va80 & vb80 & vflags80 { vector_op(119:1, vb80); build vflags80; }
+:"vop56.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=56 & vd48 & va48 & vb48 & vflags48 { vector_op(120:1, vb48); }
+:"vop56.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=56) ... & vd80 & va80 & vb80 & vflags80 { vector_op(120:1, vb80); build vflags80; }
+:"vop57.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=57 & vd48 & va48 & vb48 & vflags48 { vector_op(121:1, vb48); }
+:"vop57.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=57) ... & vd80 & va80 & vb80 & vflags80 { vector_op(121:1, vb80); build vflags80; }
+:"vop58.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=58 & vd48 & va48 & vb48 & vflags48 { vector_op(122:1, vb48); }
+:"vop58.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=58) ... & vd80 & va80 & vb80 & vflags80 { vector_op(122:1, vb80); build vflags80; }
+:"vop59.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=59 & vd48 & va48 & vb48 & vflags48 { vector_op(123:1, vb48); }
+:"vop59.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=59) ... & vd80 & va80 & vb80 & vflags80 { vector_op(123:1, vb80); build vflags80; }
+:"vop60.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=60 & vd48 & va48 & vb48 & vflags48 { vector_op(124:1, vb48); }
+:"vop60.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=60) ... & vd80 & va80 & vb80 & vflags80 { vector_op(124:1, vb80); build vflags80; }
+:"vop61.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=61 & vd48 & va48 & vb48 & vflags48 { vector_op(125:1, vb48); }
+:"vop61.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=61) ... & vd80 & va80 & vb80 & vflags80 { vector_op(125:1, vb80); build vflags80; }
+:"vop62.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=62 & vd48 & va48 & vb48 & vflags48 { vector_op(126:1, vb48); }
+:"vop62.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=62) ... & vd80 & va80 & vb80 & vflags80 { vector_op(126:1, vb80); build vflags80; }
+:"vop63.1" vd48, va48, vb48^vflags48 is Vclass=0x1e & Vkind=1 & VX=1 & Vaop=63 & vd48 & va48 & vb48 & vflags48 { vector_op(127:1, vb48); }
+:"vop63.1" vd80, va80, vb80^vflags80 is (Vclass=0x1f & Vkind=1 & VX=1 & Vaop=63) ... & vd80 & va80 & vb80 & vflags80 { vector_op(127:1, vb80); build vflags80; }

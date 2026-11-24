@@ -1,0 +1,6 @@
+<opinions>
+    <constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+        <!-- EM_VIDEOCORE3 (137): the machine number binutils-vc4 / gcc-vc4 write -->
+        <constraint primary="137" processor="vc4" endian="little" size="32" />
+    </constraint>
+</opinions>

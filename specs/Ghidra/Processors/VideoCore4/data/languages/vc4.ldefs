@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+
+  <language processor="vc4"
+	    endian="little"
+	    size="32"
+	    variant="default"
+	    version="1.0"
+	    slafile="vc4.sla"
+	    processorspec="vc4.pspec"
+	    id="vc4:LE:32:default">
+    <description>Broadcom VideoCore IV VPU (scalar and vector instructions)</description>
+    <compiler name="default" spec="vc4.cspec" id="default"/>
+    <external_name tool="gnu" name="vc4"/>
+    <external_name tool="DWARF.register.mapping.file" name="vc4.dwarf"/>
+  </language>
+
+</language_definitions>

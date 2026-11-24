@@ -194,6 +194,77 @@ expect = [
     "return 99;",
 ]
 
+# C-SKY FPUv2 (CSKY:LE:32:v2) built with csky-elf-as -mcpu=ck810f: single-precision
+# multiply-add through fmtvrl/fmfvrl, loads and stores, a compare with zero feeding bt,
+# and the int-to-double conversion.
+[[family]]
+name = "csky_fpuv2"
+language = "CSKY:LE:32:v2"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/fpuv2.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_fpuv2_multiply_add_decompiles"
+address = "0x8000"
+expect = [
+    "return a0 * a1 + a0;",  # fmuls + fadds on the moved-in arguments
+]
+
+[[family.function]]
+test = "csky_fpuv2_compare_and_convert_decompiles"
+address = "0x8028"
+expect = [
+    "if (!(0.0f <= a0))",  # fcmpzhss + bt
+    "return (int)a0;",  # fstosi.rz
+]
+
+[[family.function]]
+test = "csky_fpuv2_int_to_double_decompiles"
+address = "0x8040"
+expect = [
+    "*a1 = (double)a0;",  # fsitod + fstd
+]
+
+# C-SKY FPUv3 (CSKY:LE:32:ck860) built with csky-elf-as -mcpu=ck860f: fr16-fr31, double
+# multiply, and an fmovi constant.
+[[family]]
+name = "csky_fpuv3"
+language = "CSKY:LE:32:ck860"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/fpuv3.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_fpuv3_double_multiply_decompiles"
+address = "0x8016"
+expect = [
+    "*a1 = a0->field_0x0 * a0->field_0x8;",  # fld.64 into fr0 and fr17, fmul.64, fst.64
+]
+
+[[family.function]]
+test = "csky_fpuv3_fmovi_constant_decompiles"
+address = "0x8028"
+expect = [
+    "*a0 = *a0 * 0.5f;",  # fmovi.32 fr1, 0.5
+]
+
+# C-SKY VDSP (CSKY:LE:32:ck810v) built with csky-elf-as -mcpu=ck810v: 128-bit vector
+# loads and stores around a lane add.
+[[family]]
+name = "csky_vdsp"
+language = "CSKY:LE:32:ck810v"
+base = "0x8000"
+fixture = "crates/unlace-cli/tests/fixtures/csky/vdsp.bin"
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "csky_vdsp_vector_add_decompiles"
+address = "0x8000"
+expect = [
+    "*a2 = vadd_s32(*a0,*a1);",  # vldq.32, vadd.s32, vstq.32
+]
+
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
 [[family]]

@@ -1,2 +1,3 @@
-# C-SKY ABIv2, little endian.
+# C-SKY ABIv2 (CK801-CK810) with FPUv2, little endian.
+@define CSKY_FPUV2 ""
 @include "csky.sinc"

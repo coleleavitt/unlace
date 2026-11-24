@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_341() {
-    assert_eq!(kuna_num_settables(), 341);
-    assert_eq!(SETTABLE_TABLE.len(), 341);
+fn settable_count_is_342() {
+    assert_eq!(kuna_num_settables(), 342);
+    assert_eq!(SETTABLE_TABLE.len(), 342);
 }
 
 #[test]
-fn tier_counts_are_70_core_169_transform_102_analysis() {
+fn tier_counts_are_70_core_170_transform_102_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_169_transform_102_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 169, 102));
+    assert_eq!((core, transform, analysis), (70, 170, 102));
 }
 
 #[test]
@@ -334,6 +334,9 @@ fn option_values_live_value_present_for_129() {
         // an on/off engine gate read console-side via kuna_live_value, like
         // `gotypeglobals`. Default-on.
         "gonewtype",
+        // (kuna) Go interface method calls -- read at the DWARF signature commit
+        // and by the printer, no codegen live reader. Default-off.
+        "goitabcalls",
         // (kuna) The MS-DOS data segment in DS -- an on/off engine gate
         // (the registered option `MzDgroupOn`) read console-side via kuna_live_value,
         // like `gonewtype`. Default-on, MZ loads only.

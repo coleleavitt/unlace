@@ -608,9 +608,11 @@ Three tiers:
 | if (c) { return a; } else { return b; } where the source returned c ? a : b | [`retternary`](#retternary----on--off-default-off) |
 | a function ends in two returns of a variable and a constant | [`retternary`](#retternary----on--off-default-off) |
 | if (a) goto L; if (b) goto L; where the source wrote one if (a  | [`orexit`](#orexit----on--off-default-off) |
-|  | [`orexit`](#orexit----on--off-default-off) |
 |  b) | [`orexit`](#orexit----on--off-default-off) |
 | several adjacent ifs each return the same constant | [`orexit`](#orexit----on--off-default-off) |
+| go interface method calls print as anonymous indirect calls through tab + 0x18 | [`goitabcalls`](#goitabcalls----on--off-default-off) |
+| a go function taking an interface shows no method names at its calls | [`goitabcalls`](#goitabcalls----on--off-default-off) |
+| go itab dispatch renders as code pointer arithmetic | [`goitabcalls`](#goitabcalls----on--off-default-off) |
 | rule pools spend most of their time re-testing ops nothing changed | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a large function's simplification repeats full sweeps for a handful of rewrites | [`dirtypool`](#dirtypool----on--off-default-off) |
 | a DOS program's globals print as *(short *)0x308e near-pointer dereferences instead of named globals | [`mzdgroup`](#mzdgroup----on--off-default-on) |
@@ -2629,6 +2631,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Turn on when consecutive tests share one exit (argument validation, early-out chains) and read better as one condition. Leave off to keep one if per test, as Ghidra prints it.
 - **Where / provenance:** P9/condition-form · kuna · structure-recovery · kuna-orexit
 - **Example:** `option orexit on`
+
+### `goitabcalls` -- on | off, default `off`
+
+- **Symptoms:** go interface method calls print as anonymous indirect calls through tab + 0x18; a go function taking an interface shows no method names at its calls; go itab dispatch renders as code pointer arithmetic.
+- **What it does:** Name Go interface method calls. A Go interface value is an itab pointer and a data pointer, and a method call through it loads one slot of the itab's `Fun` array and calls it with the data word as receiver, so it printed as an anonymous `(*(code **)(tab + 0x18))(data)`. The gotypes harvest (64-bit images) reads every non-empty interface descriptor's method set, the `Imethod` names in the order every itab of that interface lays out its `Fun` array, and interns one record per interface, `go.itab.` plus the interface's linker spelling (`go.itab.io.Writer`): the `inter`, `_type` and `hash` header words, then one function-pointer slot per method at offset 24 plus 8 per method, named after the method, with a language facet naming the interface; an interface spelling two descriptors give different method lists, an anonymous interface literal, or a method name that is not an ASCII identifier gets no record. Interning is output-neutral. With the option on, a Go DWARF signature (`godwarfsig`) whose formal is a nominal interface over the `runtime.iface` storage, passed in a register pair, keeps its two ABI words as two inputs, `s_tab` typed as a pointer to the interface's record and `s_data` an opaque pointer, and an indirect call whose target is a load of one method slot of such a record prints as `Interface.Method(receiver, ...)` (`main.Shape.Area(s_data)`). A function whose interface record is missing keeps the inference it had. Method signatures are not applied: the slots are untyped function pointers, so argument recovery at the call is unchanged.
+- **When to flip:** Turn on to read interface calls in a Go binary that keeps its DWARF by method name. Off by default while the typing only reaches interface formals (stripped binaries, struct fields and type assertion results keep their anonymous calls), and because it changes the signature of every function that takes an interface. Non-Go binaries are byte-identical either way.
+- **Where / provenance:** P1/external-refinement · kuna · type-inference · unlace-25-go-interface-calls
+- **Example:** `option goitabcalls on`
 
 ## Analysis & loader passes
 

@@ -532,6 +532,7 @@ kuna_options! { self, p1;
     },
     "dwarfnocall" => registered!(crate::kuna_analysisgates::Dwarfnocall),
     "godwarfsig" => registered!(crate::kuna_analysisgates::Godwarfsig),
+    "goitabcalls" => registered!(crate::kuna_goitabcalls::GoItabCalls),
     "cppsig" => registered!(crate::kuna_cppsig::CppSigMode),
     "dwarfglobaltypes" => registered!(crate::kuna_analysisgates::Dwarfglobaltypes),
     "dwarfscopes" => {

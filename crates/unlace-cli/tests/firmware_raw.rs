@@ -142,6 +142,24 @@ fn intel_hex_with_svd_names_peripherals_and_interrupts() {
     assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"));
 }
 
+/// `cortexm3_raw.elf`: `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3 -Os
+/// -ffreestanding -nostdlib -fuse-ld=lld -Wl,-T,cortexm3_raw.ld
+/// -Wl,-e,Reset_Handler -Wl,-z,max-page-size=4 cortexm3_raw.c -o
+/// cortexm3_raw.elf && llvm-strip --strip-debug cortexm3_raw.elf`.
+#[test]
+fn svd_types_the_peripherals_of_an_elf() {
+    let elf = common::fixture("cortexm3_raw.elf");
+    let svd = common::fixture("cortexm3_raw.svd");
+    let (out, err, code) = common::run_kuna(&["decompile-all", &elf, "--svd", &svd]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        err.contains("SVD MINI_F4: 3 peripherals, 1 interrupts"),
+        "{err}"
+    );
+    assert!(out.contains("USART1.DR = "), "{out}");
+    assert!(out.contains("GPIOA.ODR = GPIOA.ODR ^ 0x20;"), "{out}");
+}
+
 #[test]
 fn a_mediatek_md1img_loads_its_modem_rom_with_debug_names() {
     let img = common::fixture("md1img_mipsel_test.img");

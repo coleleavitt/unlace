@@ -52,7 +52,7 @@ ignored_fixtures() {
      'tests/stages' 'tests/fixtures' 'crates/*/tests/fixtures' 'integrations/web/test/fixtures' 2>/dev/null \
      | grep -vE '(^|/)core(\.[0-9]+)?$|\.sla$')"
   local f bad=""
-  for f in $hits; do git grep -qF "$(basename "$f")" -- '*.rs' '*.xml' '*.md' '*.mjs' && bad+="$f"$'\n'; done
+  for f in $hits; do git grep -qF "$(basename "$f")" -- '*.rs' '*.xml' '*.toml' '*.md' '*.mjs' && bad+="$f"$'\n'; done
   [ -z "$bad" ] || { echo "ignored by the global gitignore but read by a tracked test (git add -f them):"; printf '%s' "$bad"; return 1; }
 }
 fmt() { (cargo fmt --all --check >/dev/null) || { echo "run: cargo fmt --all"; return 1; }; }

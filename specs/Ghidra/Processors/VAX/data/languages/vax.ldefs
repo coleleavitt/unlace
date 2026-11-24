@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="VAX"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="vax.sla"
+            processorspec="vax.pspec"
+            id="VAX:LE:32:default">
+    <description>DEC VAX (VAX-11 and later), base, G/H floating and vector instruction encodings</description>
+    <compiler name="default" spec="vax.cspec" id="default"/>
+  </language>
+</language_definitions>

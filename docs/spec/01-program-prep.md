@@ -406,6 +406,18 @@ so `in`/`out` and `lds`/`sts` reach the same bytes; R0-R31 outside the data spac
 labels every data-space register `<instance>_<register>` (`PORTA_DIR`, `TCA0_CNT`), so a
 peripheral access prints by name, not as `dat_400`.
 
+(unlace) The MSP430 families have their own languages, chosen with `--target` (an MSP430 ELF does
+not name its device): `TI_MSP430:LE:16:f1xx`, `f2xx`, `g2xx`, `f4xx` and `i2xx` on `TI_MSP430.sla`, and
+`TI_MSP430X:LE:32:f5xx`, `f6xx`, `fr2xx` (with FR4xx), `fr5xx` and `fr6xx` on `TI_MSP430X.sla`. Each
+has a pspec, `TI_MSP430_<family>.pspec`, which `tools/gen_msp430_pspec.py` writes from TI's BSD-3
+MSP430 GCC support files (the `<device>_symbols.ld` of every device). An address is labelled with
+the name every device of the family gives it, the spelling most of them use, and left unlabelled
+where the devices disagree (LCD_B against LCD_C, Timer_A against Timer_B); the legacy first-timer
+names (`TACTL`) count as the current ones (`TA0CTL`). A word port's halves take the byte port
+names code uses (`PAOUT` is labelled `P1OUT`, its high byte `P2OUT`). The peripheral space (to
+0x1ff, or 0xfff on the 5xx/6xx/FR cores) is volatile. The `default` languages keep Ghidra's F1xx
+pspec.
+
 (unlace) The PIC18F Q-series families have their own languages, `PIC-18:LE:24:Q10`, `Q20`, `Q24`,
 `Q35`, `Q40`, `Q41`, `Q43`, `Q83` and `Q84`, chosen with `--target`. Each family has a pspec,
 `pic18q_<family>.pspec`, which `tools/gen_pic18q_pspec.py` writes from Microchip's Apache-2.0

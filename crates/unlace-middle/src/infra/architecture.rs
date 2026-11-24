@@ -2892,6 +2892,13 @@ impl Architecture {
             } else if nm == "range" {
                 // C++ `Range::Range` range branch: resolve the space, widen the
                 // empty form to spc->getHighest().  No register lookup needed.
+                // A range over a space that only a cspec `<spacebase>` declares
+                // (not modelled here) is skipped rather than failing the load.
+                if let Some(space_name) = attr_str(child, "space") {
+                    if self.manage().get_space_by_name(&space_name).is_none() {
+                        continue;
+                    }
+                }
                 let mut decoder = XmlDecode::new_with_root(&manager, &registry, child, 0);
                 let mut props = RangeProperties::new();
                 props.decode(&mut decoder)?;

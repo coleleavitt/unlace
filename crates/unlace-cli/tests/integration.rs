@@ -72,6 +72,8 @@ mod rust_signature_summary;
 mod sparc_prologue_start;
 #[path = "stm8_raw.rs"]
 mod stm8_raw;
+#[path = "tricore_tc18.rs"]
+mod tricore_tc18;
 #[path = "upd7725.rs"]
 mod upd7725;
 #[path = "uxn.rs"]

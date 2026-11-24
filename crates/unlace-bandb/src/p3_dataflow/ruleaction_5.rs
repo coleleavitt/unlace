@@ -7,7 +7,7 @@
 //!   4. [`RuleSLess2Zero`]      — INT_SLESS against 0 / -1
 //!   5. [`RuleEqual2Zero`]      — `0 == V + W*-1  =>  V == W`
 //!   6. [`RuleEqual2Constant`]  — `V op c == d  =>  V == d'`
-//!   7. [`RulePtrArith`]        — INT_ADD tree -> PTRADD/PTRSUB  *(STUB-stubbed)*
+//!   7. [`RulePtrArith`]        — INT_ADD tree -> PTRADD/PTRSUB  *(live: AddTreeState)*
 //!   8. [`RuleStructOffset0`]   — LOAD/STORE of first struct field -> PTRSUB *(STUB-stubbed)*
 //!   9. [`RulePushPtr`]         — push a pointer to the bottom of its add tree *(STUB-stubbed)*
 //!
@@ -882,20 +882,18 @@ impl Rule for RuleEqual2Constant {
 }
 
 // =============================================================================
-// RulePtrArith (ruleaction.cc:6639)   --- STUB-stubbed (W6 + W3-varnode)
+// RulePtrArith (ruleaction.cc:6639)
 // =============================================================================
 
 /// \brief Transform pointer arithmetic: convert a string of INT_ADDs into
 /// PTRADDs and PTRSUBs (C++ `RulePtrArith`).
 ///
-/// STUB(W6)/STUB(W3-varnode): the `applyOp` body drives `AddTreeState`, which
-/// reads `Varnode::getTypeReadFacing(op)` and `TypePointer`/`TypePointerRel`
-/// internals (W6, unported) and rewrites the tree with `newOpBefore`/
-/// `newUniqueOut`/`newVarnodeOut`/`opSetOutput` and
-/// `distributeIntMultAdd`/`collapseIntMultMult`/`inheritUnionField`/
-/// `forceFacingType` (W3-varnode op-creation surfaces that are themselves
-/// deferred — `Funcdata::op_set_output` is an `Err` stub in the merged IR).
-/// Ported structurally (name/getOpList/specs); the transform is a no-op stub.
+/// Live port of `RulePtrArith::applyOp`: the pointer slot search, `evaluatePointerExpression`,
+/// `verifyPreferredPointer` and the `AddTreeState` apply / alternate-form retry
+/// (ruleaction.cc:6596-6670).  Types are read through `vn_type_read_facing`, and the
+/// rewrite uses `new_op_before`, `op_set_output`, `distribute_int_mult_add` and
+/// `collapse_int_mult_mult`.  Gated on `has_type_recovery_started` and, for unlace's
+/// Swift value-witness tables, `valuewitness::keeps_offset`.
 pub struct RulePtrArith {
     group: &'static str,
 }

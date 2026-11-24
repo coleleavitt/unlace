@@ -791,10 +791,11 @@ impl<'a> AddTreeState<'a> {
             self.calc_subtype();
         }
         if !self.valid {
-            // STUB(print-markup): warningHeader emits a comment ("Problems
-            // distributing in pointer arithmetic at <addr>"); the comment surface
-            // is not part of the transform.  Only reachable on a distribution
-            // failure (not exercised by the pointer/array/struct corpus).
+            let mut message = String::from("Problems distributing in pointer arithmetic at ");
+            if let Some(base) = self.data.obank().get(self.base_op) {
+                let _ = base.get_addr().print_raw(&mut message);
+            }
+            self.data.warning_header(&message);
             return true;
         }
         self.build_tree();
@@ -909,8 +910,14 @@ impl<'a> AddTreeState<'a> {
         let newop = match newop {
             Some(o) => o,
             None => {
-                // STUB(print-markup): data.warning("ptrarith problems", addr); comment
-                // emission only — never reached when a multiple/subtype/extra exists.
+                let addr = self
+                    .data
+                    .obank()
+                    .get(self.base_op)
+                    .map(|o| o.get_addr().clone());
+                if let Some(addr) = addr {
+                    self.data.warning("ptrarith problems", &addr);
+                }
                 return;
             }
         };

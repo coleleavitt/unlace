@@ -2956,6 +2956,15 @@ member access from pointer types, and `ruleaction_6.rs (RulePtraddUndo,
 RulePtrsubUndo)` in the main pool reverts them when the types they were built
 from degrade — the visible ping that the 7-pass ceiling exists to bound.
 
+`RulePtrArith` is a live port of `ruleaction.cc:6639`: it finds the pointer slot
+of an INT_ADD, checks `evaluatePointerExpression` and `verifyPreferredPointer`, and
+hands the tree to `AddTreeState` (`crates/unlace-middle/src/substrate/addtreestate.rs`).
+Two comment-only warnings follow the C++ and are the only output change outside
+the rewritten tree: `WARNING: ptrarith problems` at the INT_ADD address when
+`buildTree` finds no PTRADD, PTRSUB or residual INT_ADD to emit, and the header
+`Problems distributing in pointer arithmetic at <addr>` when the distribution loop
+cannot settle.
+
 ### A static TLS variable is a field of the block at the thread pointer (`tlsnames.rs`)
 
 A local-exec access to a `__thread` variable is a load or store at a constant

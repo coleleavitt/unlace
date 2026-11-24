@@ -424,7 +424,7 @@ OPAQUE_NAMES = {'Data', 'cur_privilege', 'TriggerAddress_AMO', 'TriggerAddress_L
 OPAQUE_CALLS = {'Load', 'Store', 'Atomic', 'Read', 'Write', 'ReadWrite', 'Execute', 'default_access_info', 'effectivePrivilege',
                 'access_is_gva', 'TriggerAddress', 'TriggerAMOData', 'TriggerLoadData', 'TriggerStoreData', 'exception_vaddr'}
 
-CANON_NAN = {16: 0x7e00, 32: 0x7fc00000, 64: 0x7ff8000000000000}
+CANON_NAN = {16: 0x7e00, 32: 0x7fc00000, 64: 0x7ff8000000000000, 128: 0x7fff8 << 108}
 
 class T:
     """A tuple of values."""
@@ -467,11 +467,22 @@ class Compiler:
         self.emit('local %s:%d = %s;' % (n, size, expr))
         return V(n, w, kind)
 
+    def const(self, v, size):
+        """A size-byte constant: a literal when it fits 64 bits, else a local built from 64-bit
+        pieces (SLEIGH constants hold 64 bits)."""
+        v &= mask(size * 8)
+        if size <= 8 or v >> 64 == 0:
+            return '0x%x:%d' % (v, size)
+        t = self.tmp(size * 8, 'zext(0x%x:8) << 64' % (v >> 64)).name
+        if v & mask(64):
+            t = self.tmp(size * 8, '%s | zext(0x%x:8)' % (t, v & mask(64))).name
+        return t
+
     def operand(self, x, size):
         if isinstance(x, C):
             if x.kind == 'bool':
                 return '1:1' if x.v else '0:1'
-            return '0x%x:%d' % (x.v & mask(size * 8), size)
+            return self.const(x.v, size)
         return x.name
 
     def size(self, x):
@@ -484,7 +495,7 @@ class Compiler:
     def fit(self, x, size):
         """x as a varnode or constant of exactly size bytes, zero-extended."""
         if isinstance(x, C):
-            return '0x%x:%d' % (x.v & mask(size * 8), size)
+            return self.const(x.v, size)
         if x.imm:
             return self.tmp(size * 8, x.name).name
         s = self.size(x)
@@ -496,6 +507,9 @@ class Compiler:
 
     def masked(self, v, w):
         if w % 8 and isinstance(v, V):
+            if w > 64:
+                pad = nbytes(w) * 8 - w
+                return self.tmp(w, '(%s << %d) >> %d' % (v.name, pad, pad))
             return self.tmp(w, '%s & 0x%x' % (v.name, mask(w)))
         return v
 
@@ -754,11 +768,11 @@ class Compiler:
             v = self.coerce(self.expr(rhs, env, self.flen), self.flen)
             self.emit('%s = %s;' % (reg.name, self.fit(v, self.flen // 8)))
             return C(0, None, 'int')
-        if lhs[0] == 'call' and lhs[1] in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
+        if lhs[0] == 'call' and lhs[1] in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D', 'F_or_X_Q'):
             lhs = ('call', 'F_' + lhs[1][-1], lhs[2])
         if lhs[0] == 'call' and lhs[1] == 'F_BF16':
             lhs = ('call', 'F_H', lhs[2])
-        if lhs[0] == 'call' and lhs[1] in ('F_H', 'F_S', 'F_D'):
+        if lhs[0] == 'call' and lhs[1] in ('F_H', 'F_S', 'F_D', 'F_Q'):
             reg = self.expr(lhs[2][0], env, None)
             w = self.fwidth(lhs[1])
             v = self.coerce(self.expr(rhs, env, w), w)
@@ -959,8 +973,22 @@ class Compiler:
         return v
 
     def compare(self, op, l, r, env):
-        a = self.expr(l, env, None)
+        # unsigned(x) <op> unsigned(y) over bits wider than the 64-bit int: compare the bits
+        if all(e[0] == 'call' and e[1] == 'unsigned' and len(e[2]) == 1 for e in (l, r)):
+            x, y = self.expr(l[2][0], env, None), self.expr(r[2][0], env, None)
+            if x.kind == 'bits' and y.kind == 'bits' and x.w and x.w == y.w and x.w > 64:
+                return self.compare(op + '_u' if op in ('<', '>', '<=', '>=') else op, ('#bits', x), ('#bits', y), env)
+        if l[0] == '#bits':
+            a = l[1]
+        else:
+            a = self.expr(l, env, None)
+        if r[0] == '#bits':
+            b = r[1]
+            return self._compare(op, a, b)
         b = self.expr(r, env, a.w if a.kind == 'bits' else None)
+        return self._compare(op, a, b)
+
+    def _compare(self, op, a, b):
         if a.kind == 'enum' or b.kind == 'enum':
             eq = a.v == b.v
             return C(eq if op == '==' else not eq, None, 'bool')
@@ -1106,7 +1134,7 @@ class Compiler:
 
     # ---- calls
     def fwidth(self, f):
-        return {'H': 16, 'S': 32, 'D': 64}[f[-1]]
+        return {'H': 16, 'S': 32, 'D': 64, 'Q': 128}[f[-1]]
 
     def freg_read(self, reg, w):
         """F_H/F_S/F_D: the register, NaN-unboxed to w bits."""
@@ -1116,7 +1144,7 @@ class Compiler:
         if self.unbox == 'truncate':
             return self.coerce_zext(full, w)
         hi = self.coerce_zext(self.shr(full, C(w, None, 'int'), self.flen), self.flen - w)
-        boxed = self.tmp(1, '%s == 0x%x:%d' % (self.fit(hi, nbytes(self.flen - w)), mask(self.flen - w), nbytes(self.flen - w)), 'bool')
+        boxed = self.tmp(1, '%s == %s' % (self.fit(hi, nbytes(self.flen - w)), self.const(mask(self.flen - w), nbytes(self.flen - w))), 'bool')
         r = self.mutable(C(CANON_NAN[w], w), 'unbox')
         self.nlab += 1
         lab = 'sgbox%d' % self.nlab
@@ -1135,7 +1163,7 @@ class Compiler:
     def softfloat(self, f, args, env, want):
         """The softfloat wrappers of the Sail model, as p-code float operations where the
         rounding mode makes them exact (round-to-nearest-even for the inexact ones)."""
-        m = re.match(r'^riscv_f(16|32|64)(Add|Sub|Mul|Div|Sqrt)$', f)
+        m = re.match(r'^riscv_f(16|32|64|128)(Add|Sub|Mul|Div|Sqrt)$', f)
         if m:
             rm = self.expr(args[0], env, None)
             xs = [self.expr(a, env, None) for a in args[1:]]
@@ -1148,7 +1176,7 @@ class Compiler:
             else:
                 r = self.tmp(w, '%s %s %s' % (ops[0], {'Add': 'f+', 'Sub': 'f-', 'Mul': 'f*', 'Div': 'f/'}[m.group(2)], ops[1]))
             return T([C(0, 5), r])
-        m = re.match(r'^riscv_f(16|32|64)ToF(16|32|64)$', f)
+        m = re.match(r'^riscv_f(16|32|64|128)ToF(16|32|64|128)$', f)
         if m:
             rm = self.expr(args[0], env, None)
             x = self.expr(args[1], env, None)
@@ -1156,7 +1184,7 @@ class Compiler:
             if b < a and (not isinstance(rm, C) or rm.v != 0):
                 raise Unsupported('%s with rounding mode %r' % (f, getattr(rm, 'v', rm)))
             return T([C(0, 5), self.tmp(b, 'float2float(%s)' % self.fit(x, a // 8))])
-        m = re.match(r'^riscv_(i|ui)(32|64)ToF(16|32|64)$', f)
+        m = re.match(r'^riscv_(i|ui)(32|64)ToF(16|32|64|128)$', f)
         if m:
             rm = self.expr(args[0], env, None)
             x = self.expr(args[1], env, None)
@@ -1183,7 +1211,7 @@ class Compiler:
             self.depth -= 1
             self.emit('<%s>' % lab)
             return T([C(0, 5), r])
-        m = re.match(r'^riscv_f(16|32|64)To(I|Ui)(32|64)$', f)
+        m = re.match(r'^riscv_f(16|32|64|128)To(I|Ui)(32|64)$', f)
         if m:
             rm = self.expr(args[0], env, None)
             x = self.expr(args[1], env, None)
@@ -1193,7 +1221,7 @@ class Compiler:
         if f == 'float_class_onehot_bits' and args and args[0][0] == 'call' and args[0][1] == 'float_classify':
             x = self.expr(args[0][2][0], env, None)
             return self.fclass(x)
-        if re.match(r'^riscv_f(16|32|64)MulAdd$', f):
+        if re.match(r'^riscv_f(16|32|64|128)MulAdd$', f):
             raise Unsupported('fused multiply-add has no p-code operation')
         return None
 
@@ -1201,13 +1229,13 @@ class Compiler:
         """The fclass one-hot mask: bit 0 -inf, 1 negative normal, 2 negative subnormal, 3 -0,
         4 +0, 5 positive subnormal, 6 positive normal, 7 +inf, 8 signalling NaN, 9 quiet NaN."""
         w = x.w
-        e = {16: 5, 32: 8, 64: 11}[w]
+        e = {16: 5, 32: 8, 64: 11, 128: 15}[w]
         m = w - 1 - e
         b = nbytes(w)
         xs = self.fit(x, b)
         sign = self.tmp(1, '%s s< 0' % xs, 'bool')
         ex = self.tmp(w, '(%s >> %d) & 0x%x' % (xs, m, mask(e)))
-        man = self.tmp(w, '%s & 0x%x' % (xs, mask(m)))
+        man = self.tmp(w, '(%s << %d) >> %d' % (xs, w - m, w - m) if m > 64 else '%s & 0x%x' % (xs, mask(m)))
         ez = self.tmp(1, '%s == 0' % ex.name, 'bool')
         emax = self.tmp(1, '%s == 0x%x' % (ex.name, mask(e)), 'bool')
         mz = self.tmp(1, '%s == 0' % man.name, 'bool')
@@ -1286,7 +1314,7 @@ class Compiler:
         return r
 
     def float_intrinsic(self, f, args, env, want):
-        m = re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)_quiet$', f) or re.match(r'^riscv_f(16|32|64)(Le|Lt|Eq)$', f)
+        m = re.match(r'^riscv_f(16|32|64|128)(Le|Lt|Eq)_quiet$', f) or re.match(r'^riscv_f(16|32|64|128)(Le|Lt|Eq)$', f)
         if m:
             a, b = (self.expr(x, env, None) for x in args)
             r = self.fcmp({'Le': 'f<=', 'Lt': 'f<', 'Eq': 'f=='}[m.group(2)], a, b)
@@ -1305,12 +1333,12 @@ class Compiler:
             a = self.expr(args[0], env, None)
             w = self.fwidth(f)
             k = (1 << (w - 1)) if m.group(1) == 'neg' else 0
-            return self.tmp(1, '%s == 0x%x:%d' % (self.fit(a, nbytes(w)), k, nbytes(w)), 'bool')
+            return self.tmp(1, '%s == %s' % (self.fit(a, nbytes(w)), self.const(k, nbytes(w))), 'bool')
         m = re.match(r'^canonical_NaN_(H|S|D)$', f)
         if m:
             w = self.fwidth(f)
             return C(CANON_NAN[w], w)
-        m = re.match(r'^riscv_f(16|32|64)roundToInt$', f)
+        m = re.match(r'^riscv_f(16|32|64|128)roundToInt$', f)
         if m:
             rm = self.expr(args[0], env, None)
             x = self.expr(args[1], env, None)
@@ -1428,11 +1456,11 @@ class Compiler:
             if v.w == w:
                 return v
             return self.bor(C(mask(w) & ~mask(v.w), w), self.coerce_zext(v, w), w)
-        if f in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D'):
+        if f in ('F_or_X_H', 'F_or_X_S', 'F_or_X_D', 'F_or_X_Q'):
             f = 'F_' + f[-1]
         if f == 'F_BF16':
             f = 'F_H'
-        if f in ('F_H', 'F_S', 'F_D') and len(args) == 1:
+        if f in ('F_H', 'F_S', 'F_D', 'F_Q') and len(args) == 1:
             reg = self.expr(args[0], env, None)
             return self.freg_read(reg, self.fwidth(f))
         if f == 'X':
@@ -1933,10 +1961,11 @@ class Gen:
             parts = mnem.split('.')
             fmt = parts[1] if parts[0] == 'fcvt' and len(parts) > 2 else parts[-1]
             width = {'s': 4, 'h': 2, 'bf16': 2}.get(fmt) if dest == 'frd' else None
-            if width and self.flen == 64:
-                # an S or H result is written NaN-boxed, as every F/Zfh instruction writes it
+            if width and self.flen > 8 * width:
+                # a narrower result is written NaN-boxed, as every F/Zfh instruction writes it
                 r = comp.tmp(8 * width, '%s(%s)' % (op, ', '.join(args)))
-                comp.emit('%s = 0x%x:8 | zext(%s);' % (ops[0], mask(64) & ~mask(8 * width), r.name))
+                fb = self.flen // 8
+                comp.emit('%s = %s | zext(%s);' % (ops[0], comp.const(mask(self.flen) & ~mask(8 * width), fb), r.name))
             elif dest:
                 comp.emit('%s = %s(%s);' % (dest, op, ', '.join(args)))
             else:
@@ -2160,7 +2189,7 @@ def aliases(gen, xlen, pseudo):
             for p in gen.parts.get(xlen, []):
                 if p['mnem'] != base or p['mask'] != m_p or p['match'] != v_p or 'frs2' not in p['ops'] or name not in gen.idioms:
                     continue
-                reg = {'s': 'F_S', 'h': 'F_H'}.get(base.rsplit('.', 1)[-1], 'F_D')
+                reg = {'s': 'F_S', 'h': 'F_H', 'q': 'F_Q'}.get(base.rsplit('.', 1)[-1], 'F_D')
                 comp = Compiler(gen.m, xlen, gen.budget, gen.flen)
                 comp.unbox = gen.unbox
                 body = ('assign', ('call', reg, [('id', 'rd')]), ('call', '#' + gen.idioms[name], [('call', reg, [('id', 'rs1')])]))

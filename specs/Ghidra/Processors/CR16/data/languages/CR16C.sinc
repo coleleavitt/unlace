@@ -240,11 +240,10 @@ macro addflags(op1, op2) {
     $(F) = (scarry(op1, op2));      # Check for overflow
 }
 # Flags set by add instructions (3 operands)
-macro addflags2(op1, op2, op3) {    
-    local tmp = (carry(op1,op2));         # Check for carry
-    $(C) = (carry(zext(tmp), op3));
-    tmp = (scarry(op1,op2));        # Check for overflow
-    $(F) = (scarry(zext(tmp), op3));   
+# op1 + op2 + op3, op3 the carry in (the same size as op1)
+macro addflags2(op1, op2, op3) {
+    $(C) = carry(op1, op2) || carry(op1 + op2, op3);
+    $(F) = scarry(op1, op2) ^^ scarry(op1 + op2, op3);
 }
 # Flags set by sub instructions
 macro subflags(op1, op2) {          
@@ -252,10 +251,10 @@ macro subflags(op1, op2) {
     $(F) = sborrow(op1, op2);       # Check for overflow
 }
 # Flags set by sub instructions (3 operands)
-macro subflags2(op1, op2, op3) {    
-    $(C) = (op1 < (op2 + op3));     # Check for borrow
-    local tmp = sborrow(op1, op2);        # Check for overflow
-    $(F) = sborrow(zext(tmp), op3);
+# op1 - op2 - op3, op3 the borrow in (the same size as op1)
+macro subflags2(op1, op2, op3) {
+    $(C) = (op1 < op2) || ((op1 - op2) < op3);
+    $(F) = sborrow(op1, op2) ^^ sborrow(op1 - op2, op3);
 }
 
 # Flags set by the compare instructions
@@ -458,18 +457,24 @@ cinv6:  "[d,i,u]"   is epsilon  { }
 
 # ADDCB - add with carry low-order byte only
 :ADDCB imm4, dst    is hi=0x34 & dst & imm4 {
-    addflags2(dst:1, imm4, $(C));
-    tmp:1 = dst:1 + imm4 + $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    addflags2(a, imm4, c);
+    tmp:1 = a + imm4 + c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 :ADDCB imm16, dst   is hi=0x34 & x2=11 & dst ; imm16 {
-    addflags2(dst:1, imm16:1, $(C));
-    tmp:1 = dst:1 + imm16:1 + $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    addflags2(a, imm16:1, c);
+    tmp:1 = a + imm16:1 + c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 :ADDCB src, dst     is hi=0x35 & src & dst {
-    addflags2(dst:1, src:1, $(C));
-    tmp:1 = dst:1 + src:1 + $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    addflags2(a, src:1, c);
+    tmp:1 = a + src:1 + c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 
@@ -663,18 +668,24 @@ cinv6:  "[d,i,u]"   is epsilon  { }
 
 # SUBCB - subtract with carry low-order byte only
 :SUBCB imm4, dst    is hi=0x3c & dst & imm4 {
-    subflags2(dst:1, imm4, $(C));
-    tmp:1 = dst:1 - imm4 - $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    subflags2(a, imm4, c);
+    tmp:1 = a - imm4 - c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 :SUBCB imm16, dst   is hi=0x3c & x2=11 & dst ; imm16 {
-    subflags2(dst:1, imm16:1, $(C));
-    tmp:1 = dst:1 - imm16:1 - $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    subflags2(a, imm16:1, c);
+    tmp:1 = a - imm16:1 - c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 :SUBCB src, dst     is hi=0x3d & src & dst {
-    subflags2(dst:1, src:1, $(C));
-    tmp:1 = dst:1 - src:1 - $(C);
+    local c:1 = zext($(C));
+    local a:1 = dst:1;
+    subflags2(a, src:1, c);
+    tmp:1 = a - src:1 - c;
     dst = (dst & 0xff00) + zext(tmp);
 }
 
@@ -895,7 +906,7 @@ macro do_ash(count, dest) {
 }
 
 macro do_ashb(count, dest) {
-    local tmp = dest & 0xff;
+    local tmp:2 = sext(dest:1);
     do_ash(count, tmp);
     dest = (dest & 0xff00) | (tmp & 0x00ff);
 }

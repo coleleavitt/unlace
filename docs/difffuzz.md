@@ -240,6 +240,17 @@ afterwards. The register file is unchanged.
     than 20 operands (75 bytes and up from rN.b0) are the byte loop the other start bytes use, since
     the engine stops at 20 operands ("SLEIGH parser out of state space"). A simulator stopped by a
     signal is restarted. Seed 5, 1500 encodings: 2836 matches, no mismatches.
+  - CR16C (`--arch cr16`, `CR16C:LE:16:default`): sim/cr16 reaches control register N through
+    register 16 + N, so PSR (control register 10) is register 26, not SIM_CR16_PSR_REGNUM; it stores
+    only the low 16 bits of R12..SP written from outside, so those inputs are 16-bit. C, L, F, Z, N
+    are compared. Fixed in `CR16C.sinc`: ADDC*/SUBC* computed their flags before the result and
+    then added the new carry, and their flags tested the carry bit instead of the partial sum;
+    ASHUB shifted a zero-extended byte, so its right shift was logical. sim/cr16 bugs, ignored: the
+    add/subtract carry (computed after truncation), [R12]/[R13] index forms (binutils and the
+    simulator read the index bit from the register field), memory bit operations (wrong bit),
+    ADDCW reg,reg (adds the destination to itself), LOADD abs20 (drops the high word), stores to
+    abs20 above 0xeffff (no remap), the high byte SUBCB writes, the high word of R12..SP after a
+    word operation, shift counts out of range. Seed 7, 2500 encodings: 3286 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

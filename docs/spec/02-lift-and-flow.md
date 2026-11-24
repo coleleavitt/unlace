@@ -5174,6 +5174,12 @@ Found by `tools/difffuzz` against Unicorn and checked against the Arm ARM.
   `#fbits` and scalar `URSHR d,d,#shift` decode their shift with the element size of the
   destination (`Imm_shr_imm64`/`Imm_shr_imm16`); `fcvtzu d22,d5,#50` printed `#-0xe`.
 
+### RISC-V compressed indirect jumps clear bit 0
+
+`c.jr`, `c.jalr` and `ret` (`riscv.rvc.sinc`) expand to `jalr`, which clears bit 0 of the
+target; they now jump to `rs1 & ~1` as the `jalr` constructors in `riscv.rv32i.sinc` already
+did. Found by `tools/difffuzz`.
+
 ## 2.9 Go stack-growth prologue folding
 
 **(kuna) `option gomorestack off|auto|always`, default auto,

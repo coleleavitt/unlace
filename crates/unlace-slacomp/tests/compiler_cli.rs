@@ -262,3 +262,30 @@ fn recursive_mode_counts_failed_specs_and_exits_non_zero() {
     assert!(scratch.path().join("good/data_le_64.sla").exists());
     assert!(!scratch.path().join("bad/redefined.sla").exists());
 }
+
+/// A minimal spec's definitions, ahead of the constructors a test adds.
+const PRELUDE: &str = "define endian = little;\n\
+    define alignment = 1;\n\
+    define space ram type=ram_space size=4 default;\n\
+    define space register type=register_space size=4;\n\
+    define register offset=0 size=4 [ r0 r1 ];\n\
+    define token instr8(8) op=(0,7) imm=(0,3);\n";
+
+/// Compile `body` after [`PRELUDE`] as `main.slaspec` in `directory`.
+fn compile_body(directory: &Path, body: &str) -> (Output, std::path::PathBuf) {
+    let spec = directory.join("main.slaspec");
+    fs::write(&spec, format!("{PRELUDE}{body}")).unwrap();
+    let destination = directory.join("main.sla");
+    (compile(&[&spec, &destination]), destination)
+}
+
+#[test]
+fn a_subtable_display_may_start_with_a_caret() {
+    let scratch = tempfile::tempdir().unwrap();
+    let (result, destination) = compile_body(
+        scratch.path(),
+        "sub: ^imm is imm { r0 = 0; }\n\
+         :inst sub is op=1 & sub { build sub; }\n",
+    );
+    assert_compiled(result, &destination);
+}

@@ -957,16 +957,15 @@ impl SleighParser {
                     }
                 }
                 TokenKind::Char1(b'^') => {
+                    // (kuna) A leading '^' is an empty concatenation in every table, as
+                    // Ghidra's Java SleighCompiler reads it (`printpiece: OP_CONCATENATE`);
+                    // the C++ parser accepted it only in the root table.
                     self.next(d)?;
-                    if first {
-                        if !d.is_in_root(ct) {
-                            d.report_error("Unexpected '^' at start of print pieces");
-                            return Err(KunaError::parse("caret at start".to_string()));
-                        }
-                        d.trace("constructprint/caret0");
+                    d.trace(if first {
+                        "constructprint/caret0"
                     } else {
-                        d.trace("constructprint/caret");
-                    }
+                        "constructprint/caret"
+                    });
                 }
                 TokenKind::Char1(b' ') => {
                     self.next(d)?;

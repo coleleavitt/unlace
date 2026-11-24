@@ -34,6 +34,10 @@ specs/Ghidra/Processors/SM83 vendors the Sharp SM83 (Game Boy LR35902) SLEIGH sp
 aleph-void/ghidra-sm83 (https://github.com/aleph-void/ghidra-sm83), a fork of minorum/ghidra-sm83, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/VAX vendors the DEC VAX SLEIGH specification of
+kkaempf/ghidra-vax (https://github.com/kkaempf/ghidra-vax), released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

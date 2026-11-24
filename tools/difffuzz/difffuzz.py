@@ -206,7 +206,7 @@ def run_case(arch, regs, row, cand, rng, seed):
             diffs[f"mem[{a:#x}]"] = (pv, rv)
     if not diffs:
         return {"status": "match"}
-    if st.skipped_callother:
+    if st.skipped_callother and all(k.startswith("mem[") for k in diffs):
         return {"status": "unmodeled", "why": "CALLOTHER side effect"}
     return {"status": "mismatch", "diffs": {k: [hex(x), hex(y)] for k, (x, y) in diffs.items()},
             "input": {k: hex(v) for k, v in init.items()}, "flags_in": hex(flags),

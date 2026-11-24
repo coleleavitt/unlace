@@ -12768,6 +12768,13 @@ unmatched `PUSH`/`SUB SP` still open) was implemented, measured, and dominated b
 it on both precision and recall. As with `ptrentry`, the region is the
 entry-ordered one — the nearest preceding discovered entry — which is the
 granularity the tier has and errs conservative on a sparsely discovered image.
+An accepted target becomes a region boundary for the next pass, and the scan
+repeats until it finds nothing new (at most eight rounds). A routine reached by
+a tail branch from another tail-branch target lies inside the first one's region
+until that one is accepted. libopencm3's `_usbd_standard_request` is found in
+the first round, and the `_usbd_standard_request_device`, `_interface` and
+`_endpoint` it tail-branches to are found in the second. Before, their bodies
+printed inside it.
 Two of the four guards are satisfied by an *absent* model rather than by
 evidence: the predecessor test reads the reference model and the epilogue test
 the disassembly text, and a walk can be told to capture neither (above), which

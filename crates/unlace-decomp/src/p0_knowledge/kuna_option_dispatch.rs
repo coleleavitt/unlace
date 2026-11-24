@@ -257,6 +257,7 @@ kuna_options! { self, p1;
     "pairbranch" => registered!(crate::kuna_borrowcompare::PairBranch),
     "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
     "retindexuse" => registered!(crate::kuna_retindexuse::RetIndexUse),
+    "carryuse" => registered!(crate::kuna_carryuse::CarryUse),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -403,6 +404,9 @@ kuna_options! { self, p1;
     "ptrfromuse" => registered!(crate::kuna_ptrfromuse::PtrFromUseMode),
     "charptr" => registered!(crate::kuna_charptr::CharPtr),
     "cstringconst" => registered!(crate::kuna_cstringconst::CstringConst),
+    "charnum" => registered!(crate::kuna_charnum::CharNum),
+    "constright" => registered!(crate::kuna_constright::ConstRight),
+    "signeddec" => registered!(crate::kuna_signeddec::SignedDec),
     "wideconst" => registered!(crate::kuna_wideconst::WideConst),
     "selectmul" => registered!(crate::kuna_selectmul::SelectMul),
     "elemptr" => registered!(crate::kuna_elemptr::ElemPtr),

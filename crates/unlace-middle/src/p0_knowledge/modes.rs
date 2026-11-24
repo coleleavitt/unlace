@@ -649,6 +649,12 @@ mod tests {
         /// `gopairreturns` remains explicit while aggregate ABI interactions across
         /// Go corpus sizes are evaluated for automatic selection.
         const UNEVALUATED: &[&str] = &[
+            // `charnum`, `constright` and `signeddec` (the Hex-Rays printer survey,
+            // notes/ida-gap/hexrays-ctree-printer.md) print only; each is measured in its
+            // own sweep before a preset or default decision.
+            "charnum",
+            "constright",
+            "signeddec",
             // `orchainbool` (issue #10) is swept in its own PR; preset membership waits on it.
             "orchainbool",
             // `orchainlive` (issue #10) is swept in its own PR; preset membership waits on it.

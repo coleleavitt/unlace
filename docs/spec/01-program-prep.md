@@ -10040,7 +10040,12 @@ header comment per try block,
 and a count of its cleanup funclets; each catch funclet gets
 `eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
 cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
-also a discovered entry. The handler bodies are not spliced into the parent's
+also a discovered entry, and one that still has a placeholder name is renamed
+`<parent>$catch$<n>` or `<parent>$dtor$<n>` (numbered per parent in handler and
+unwind-map order), as MSVC and IDA name them; x64 SEH filter and `__finally`
+funclets become `<parent>$filt$<n>` and `<parent>$fin$<n>`. The parent is named
+by the image's own symbol or export at its address, else `sub_<addr>`. Like the other
+metadata renames, they replace only a placeholder name. The handler bodies are not spliced into the parent's
 flow.
 
 **(kuna) SEH scope tables and x86 C++ `FuncInfo` are listed too** (`msvceh`,

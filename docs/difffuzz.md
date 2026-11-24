@@ -208,7 +208,8 @@ The exit status is 1 when a configuration has a finding of a failing kind (`mism
 accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
 `arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
 fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
-vector classes below. A value mismatch is never accepted.
+vector accrued flags (fflags, vxsat), which the lift leaves out as the scalar F/D lift does. A value
+mismatch is never accepted.
 
 First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
 `ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no

@@ -4040,6 +4040,26 @@ entry alone and `--from` an instruction proves every entry. Pointer-only and
 non-call kind filters prove none. An entry whose flow fails or exceeds the
 budget is reported as a coverage note, since its import calls are then missing.
 
+### Anti-debug probe naming — `option antidebug`, default off (unlace)
+
+A direct call whose callee the flow pass named `IsDebuggerPresent`,
+`CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`,
+`NtSetInformationThread`, `ptrace`, `rdtsc`, `GetTickCount`,
+`GetTickCount64`, `QueryPerformanceCounter`, `OutputDebugStringA` or
+`OutputDebugStringW` is an anti-debug probe. The flow pass consults the name
+recorded on the call spec, immediately after it builds that spec
+(`crates/unlace-lift/src/p2_lift/antidebug.rs`, `warn_probe`). Under
+`option antidebug warn` it buffers one warning at the call address, reading
+`anti-debug probe: <api> (<category>)`. The categories are a debugger check, a
+`ptrace` self-trace, a timing probe and a debugger-channel side effect.
+
+Under the default `off` nothing is matched and the flow is unchanged. Under
+`warn` the call statement, its types and the control flow around it are left
+as they are: the warning is the only output. The probe is a reviewable signal
+that evasion logic is present, not a proof that the binary is malicious: the warning names the call and
+makes no claim about intent. Indirect calls are not matched, since the callee
+name is not known at flow time.
+
 ## 2.5 Arch quirks
 
 **(unlace) SPARC struct return — `option sparcstructret`, default on, SPARC-gated,

@@ -142,6 +142,7 @@ unlace_options! { self, p1;
     "stackexitanchor" => registered!(crate::stackexitanchor::StackExitAnchor),
     "fdeflowbound" => registered!(crate::flow::FdeFlowBound),
     "int3pad" => registered!(crate::int3pad::Int3PadMode),
+    "antidebug" => registered!(crate::antidebug::AntiDebugMode),
     "x64syscall" => registered!(crate::x64syscall::X64SyscallMode),
     "fpuemu" => {
         let msg = registered!(crate::fpuemu::FpuEmuMode);

@@ -605,7 +605,7 @@ deliberately unnamed so the shape-only claim is what is tested.
 two-arm shared epilogue; its checker
 failure tail enters a helper with an ordinary returning call before fast-fail,
 so generic callee-body inference is deliberately unavailable.
-`tests/stages/kuna-declaring-double-score-return.xml` pins the non-destructive
+`tests/stages/kuna-declaring-double-score-return.toml` pins the non-destructive
 locked-void handoff, including a loop-carried cookie, a double XMM0 return, an
 exact-cookie callee that writes XMM0 before an unresolved nested call, and a
 16-byte XMM0 overlap whose low ABI-output lane survives while its upper scratch
@@ -642,7 +642,7 @@ guard edge goes the unreachable sweep removes the arm, its join inputs with
 it — each surviving phi collapses to the hot-path value. One guard edge is
 cut per apply, so a shared arm converges one guard at a time and every cut
 re-validates the shape against the edited graph. The witness is
-`tests/stages/kuna-gowbphi.xml` (a double-guarded shared arm whose buffer
+`tests/stages/kuna-gowbphi.toml` (a double-guarded shared arm whose buffer
 stores read the call result), and the unlace-console `verify_go_writebarrier`
 family carries the store-preservation oracle over real Go builds.
 

@@ -1551,7 +1551,7 @@ decompiled once more with the body copied in. Only a drive where some
 one-destination table reached a known function pays for the extra
 decompiles. A nested drive (a callee being decompiled for its contract),
 `protoorder off` and `tailcalljump direct|off` keep the copied-in body.
-`tests/stages/kuna-gottailcall.xml` pins the extern arm, with
+`tests/stages/kuna-gottailcall.toml` pins the extern arm, with
 an unmapped non-function and a jump to the function's own code as controls,
 `tests/stages/kuna-xnutables.xml` (#15) and `tests/stages/kuna-veneer-tailcall.xml`
 (#10) the single-function arm, and
@@ -5472,12 +5472,12 @@ is Go — the `sourcelang` fact (chapter 01), so the pass is a structural no-op
 on every non-Go binary and the XML datatest corpus cannot see it; `always`
 drops the language test for corpora with no detection signal (the stage test's
 bytechunk); `off` keeps the guard for auditing a hand-patched stackguard.
-Pinned by `tests/stages/kuna-gomorestack.xml` (four passes: off/always over
+Pinned by `tests/stages/kuna-gomorestack.toml` (four passes: off/always over
 the loop form, then `option noreturn runtime.morestack_noctxt` reproduces the
 truncated form and off/always pin it) and by the unlace-console
 `verify_go_morestack` gate, which builds a real stripped Go binary and proves
 the detection-driven `auto` path end to end.
-Pinned by `tests/stages/kuna-gomorestack.xml` (two-pass, off = the `while` loop
+Pinned by `tests/stages/kuna-gomorestack.toml` (two-pass, off = the `while` loop
 and the `morestack_noctxt()` call render, always = both gone and the body
 survives) and by the unlace-console `verify_go_morestack` gate, which builds a
 real stripped Go binary and proves the detection-driven `auto` path end to end.
@@ -5521,7 +5521,7 @@ dropped.
 language is Go (the `sourcelang` fact, chapter 01); `always` drops the
 language test for no-signal corpora (the stage test's bytechunk); `off` keeps
 the barrier for auditing GC behavior. Pinned by
-`tests/stages/kuna-gowritebarrier.xml` (two-pass, hand-assembled diamond in
+`tests/stages/kuna-gowritebarrier.toml` (two-pass, hand-assembled diamond in
 the compiler's own polarity) and by the unlace-console `verify_go_writebarrier`
 gate, which builds a real stripped Go binary and proves the detection-driven
 `auto` path end to end.

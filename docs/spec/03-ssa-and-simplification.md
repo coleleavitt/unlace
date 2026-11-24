@@ -3659,10 +3659,10 @@ Floats, saturating and sign-extended lanes are not matched, and neither is a
 vector loop the compiler also unrolled (two vector iterations per trip with an
 odd-trip epilogue, clang 14's x86-64 `-O2`/`-O3` default) nor any gcc 11 shape
 measured.
-`tests/stages/kuna-devectorize.xml` runs the byte-sum witness in both passes
+`tests/stages/kuna-devectorize.toml` runs the byte-sum witness in both passes
 (off: the guard, eight accumulators, fold and remainder loop; on: one
 `do { v1 += bytes[v2]; ... } while (length != v2)`);
-`tests/stages/kuna-devectorize-effects.xml` keeps the vector arm of two
+`tests/stages/kuna-devectorize-effects.toml` keeps the vector arm of two
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —

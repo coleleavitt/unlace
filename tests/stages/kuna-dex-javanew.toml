@@ -1,0 +1,60 @@
+# Kuna DEX loader, Java allocation: P9 presentation, option javanew
+# (default on). The script loads the committed DEX fixture built from
+# tests/stages/fixtures/dex/Hello.java and prints Java.
+#
+# Asserts #1-#2 are the off pass: the bytecode's two steps, an allocation
+# new(T) and a separate call to the constructor <init>.
+# Asserts #3-#4 are the default pass: one new T(args) expression, with
+# the constructor's arguments in place.
+
+[image]
+arch = 'Dalvik:LE:32:DEX_Android12'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+readonly = true
+hex = '0e00'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/hello.dex',
+    'option setlanguage java-language',
+    'option javanew off',
+    'read symbols',
+    'load function demo::Hello::main',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/hello.dex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'javanew #1: off allocates with new(T)'
+count = 1
+literal = '= new(Hello);'
+
+[[match]]
+name = 'javanew #2: off calls the constructor as <init>'
+count = 1
+literal = '.<init>("x",3);'
+
+[[match]]
+name = 'javanew #3: on folds the pair into new T(args)'
+count = 1
+literal = '= new Hello("x",3);'
+
+[[match]]
+name = 'javanew #4: on folds a no-argument constructor'
+count = 1
+literal = '= new StringBuilder();'

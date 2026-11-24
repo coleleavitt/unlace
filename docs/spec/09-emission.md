@@ -2135,7 +2135,7 @@ tree it came from, and only a right operand needs the parentheses to survive the
 round trip. So the two orderings a compiler can emit stay distinguishable in the
 output -- `a * b * c` for the left-grouped one and `a * (b * c)` for the
 right-grouped one -- where before they printed identically
-(`tests/stages/kuna-floatgrouping.xml`). Float subtraction and division already
+(`tests/stages/kuna-floatgrouping.toml`). Float subtraction and division already
 reached the right answer through the non-associative integer tokens they share.
 
 `printc.rs (PrintC::push_atom)` emits a leaf and then unwinds every operator whose

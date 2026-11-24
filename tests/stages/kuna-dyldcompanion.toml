@@ -1,0 +1,64 @@
+# dyld shared cache companion images (`option dyldimage A+B`).
+#
+# A rebuilt cache image held one image's code: a call into another image
+# was named, but the callee itself could not be loaded or decompiled in the
+# same program. Naming companions after the primary image (`+`-separated)
+# adds their segments, their symbols (as locals) and the names of their own
+# calls to the rebuilt Mach-O, so the session spans several images.
+#
+# Stage / sub-stage: P1 environment-binding, the dyld cache rebuild
+# (`kuna_dyldcache/extract.rs (DyldCache::extract_with)`), inside
+# `load file`; `option dyldimage` is set before `load file`.
+#
+# Pass 1 (`dyldimage /usr/lib/libcaller.dylib`, the BUG): libcallee's
+# `callee_add` is not in the program's function list. Pass 2
+# (`dyldimage /usr/lib/libcaller.dylib+libcallee`, the FIX): it decompiles,
+# and the primary's call into it keeps its import name.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'option dyldimage /usr/lib/libcaller.dylib',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e',
+    'read symbols',
+    'functions',
+    'option dyldimage /usr/lib/libcaller.dylib+libcallee',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e',
+    'read symbols',
+    'functions',
+    'load function callee_add',
+    'decompile',
+    'print C',
+    'load function caller_entry',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "dyldcompanion #1: only the merged pass lists the companion's function"
+count = 1
+literal = '0x180002800 _callee_add'
+
+[[match]]
+name = 'dyldcompanion #2: with the companion the callee decompiles'
+count = 1
+literal = 'return a0 + a1;'
+
+[[match]]
+name = "dyldcompanion #3: the primary's call keeps its import name"
+count = 1
+literal = 'v1 = callee_entry();'

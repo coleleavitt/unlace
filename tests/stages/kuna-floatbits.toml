@@ -1,0 +1,447 @@
+# GH-890 (follow-up to GH-888). Stage P5, type propagation
+# (kuna_floatbits.rs, always on).
+#
+# A float helper that only works on the bits of its float-register input is
+# a float on both sides. newlib's fabsf is GET_FLOAT_WORD / SET_FLOAT_WORD:
+# hard-float ARM compiles it to vmov r0,s0; bic r0,r0,#0x80000000; vmov s0,r0,
+# and x86-64 gcc -O2 to movd %xmm0,%eax; and $0x7fffffff,%eax; movd %eax,%xmm0.
+# Every op on the value is an integer op, so the fold typed the helper
+# unsigned int (unsigned int), a prototype C passes in r0 / edi, and each
+# caller printed the call as a reinterpretation of its result.
+#
+# The XML wrapper only provides the harness architecture. The script loads
+# three in-tree fixtures built from floatbitshelper.c (source beside them): clang
+# -O2 for Cortex-M4F hard-float, gcc -O2 for x86-64, clang -O0 for AArch64.
+# fb_fabsf, fb_negf and fb_copysignf are typed float on both sides and
+# fb_fabs double (x86-64, AArch64), and the classifier fb_isnanf, which answers in
+# an integer register, takes a float parameter only. fb_bump adds 1 to the
+# bits, fb_store stores them, and fb_mix ors in an integer parameter before
+# returning them in s0 / xmm0: all three keep their integer types, and
+# fb_mix keeps them on both sides.
+#
+# The last pass loads floatbitsrefuse.c built for the same three targets
+# (clang -O2 on AArch64). An == or != of the bits prints as a float
+# comparison once the input is a float, so it keeps the integer unless the
+# other side is a normal number or an infinity: zero (-0.0 == 0.0), a NaN
+# pattern and another input's bits refuse. A NaN payload or 0xffffffff
+# merged into the returned value would print as NAN and refuses; the
+# canonical NaN spells. An == with a float constant passes only when the
+# literal the printer writes, which C reads as a double, is that float:
+# 1.0 and 16777218.0 do, 0.1f, FLT_MAX, FLT_MIN, 1.0000001f and
+# 0.33333334f do not. The low word of a _Float128 compared with zero or with
+# its bit 63 flipped, the second float of a struct in xmm0 with its sign
+# flipped, and two integer lanes masked with 0x7fffffff7fffffff keep their
+# integers.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitshelper_armhf.o',
+    'read symbols',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'load function fb_fabsf',
+    'decompile',
+    'print C',
+    'load function fb_negf',
+    'decompile',
+    'print C',
+    'load function fb_copysignf',
+    'decompile',
+    'print C',
+    'load function fb_isnanf',
+    'decompile',
+    'print C',
+    'load function fb_bump',
+    'decompile',
+    'print C',
+    'load function fb_store',
+    'decompile',
+    'print C',
+    'load function fb_mix',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitshelper_x86_64_O2.o',
+    'read symbols',
+    'load function fb_fabsf',
+    'decompile',
+    'print C',
+    'load function fb_negf',
+    'decompile',
+    'print C',
+    'load function fb_copysignf',
+    'decompile',
+    'print C',
+    'load function fb_isnanf',
+    'decompile',
+    'print C',
+    'load function fb_fabs',
+    'decompile',
+    'print C',
+    'load function fb_bump',
+    'decompile',
+    'print C',
+    'load function fb_store',
+    'decompile',
+    'print C',
+    'load function fb_mix',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitshelper_a64_O0.o',
+    'read symbols',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'load function fb_fabsf',
+    'decompile',
+    'print C',
+    'load function fb_negf',
+    'decompile',
+    'print C',
+    'load function fb_copysignf',
+    'decompile',
+    'print C',
+    'load function fb_isnanf',
+    'decompile',
+    'print C',
+    'load function fb_bump',
+    'decompile',
+    'print C',
+    'load function fb_store',
+    'decompile',
+    'print C',
+    'load function fb_mix',
+    'decompile',
+    'print C',
+    'load function fb_fabs',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitsrefuse_armhf.o',
+    'read symbols',
+    'option armfloatreturn off',
+    'option armfloatargs off',
+    'load function fr_isqnan0',
+    'decompile',
+    'print C',
+    'load function fr_iszero',
+    'decompile',
+    'print C',
+    'load function fr_eqbits',
+    'decompile',
+    'print C',
+    'load function fr_ne0',
+    'decompile',
+    'print C',
+    'load function fr_isinf',
+    'decompile',
+    'print C',
+    'load function fr_isone',
+    'decompile',
+    'print C',
+    'load function fr_tenth',
+    'decompile',
+    'print C',
+    'load function fr_fmax',
+    'decompile',
+    'print C',
+    'load function fr_fmin',
+    'decompile',
+    'print C',
+    'load function fr_onep',
+    'decompile',
+    'print C',
+    'load function fr_third',
+    'decompile',
+    'print C',
+    'load function fr_big',
+    'decompile',
+    'print C',
+    'load function fr_sel',
+    'decompile',
+    'print C',
+    'load function fr_unset',
+    'decompile',
+    'print C',
+    'load function fr_canon',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitsrefuse_x86_64_O2.o',
+    'read symbols',
+    'load function fr_isqnan0',
+    'decompile',
+    'print C',
+    'load function fr_iszero',
+    'decompile',
+    'print C',
+    'load function fr_eqbits',
+    'decompile',
+    'print C',
+    'load function fr_ne0',
+    'decompile',
+    'print C',
+    'load function fr_isinf',
+    'decompile',
+    'print C',
+    'load function fr_isone',
+    'decompile',
+    'print C',
+    'load function fr_tenth',
+    'decompile',
+    'print C',
+    'load function fr_fmax',
+    'decompile',
+    'print C',
+    'load function fr_fmin',
+    'decompile',
+    'print C',
+    'load function fr_onep',
+    'decompile',
+    'print C',
+    'load function fr_third',
+    'decompile',
+    'print C',
+    'load function fr_big',
+    'decompile',
+    'print C',
+    'load function fr_sel',
+    'decompile',
+    'print C',
+    'load function fr_unset',
+    'decompile',
+    'print C',
+    'load function fr_lowzero',
+    'decompile',
+    'print C',
+    'load function fr_andv',
+    'decompile',
+    'print C',
+    'load function fr_negy',
+    'decompile',
+    'print C',
+    'load function fr_lowflip',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatbitsrefuse_a64_O2.o',
+    'read symbols',
+    'load function fr_isqnan0',
+    'decompile',
+    'print C',
+    'load function fr_iszero',
+    'decompile',
+    'print C',
+    'load function fr_eqbits',
+    'decompile',
+    'print C',
+    'load function fr_ne0',
+    'decompile',
+    'print C',
+    'load function fr_isinf',
+    'decompile',
+    'print C',
+    'load function fr_isone',
+    'decompile',
+    'print C',
+    'load function fr_tenth',
+    'decompile',
+    'print C',
+    'load function fr_fmax',
+    'decompile',
+    'print C',
+    'load function fr_fmin',
+    'decompile',
+    'print C',
+    'load function fr_onep',
+    'decompile',
+    'print C',
+    'load function fr_third',
+    'decompile',
+    'print C',
+    'load function fr_big',
+    'decompile',
+    'print C',
+    'load function fr_canon',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'FLOATBITS #1: fabsf never prints integer on both sides'
+count = 0
+literal = 'uint4 fb_fabsf(uint4 a0)'
+
+[[match]]
+name = 'FLOATBITS #2: fabsf is float on both sides'
+count = 3
+literal = 'float4 fb_fabsf(float4 a0)'
+
+[[match]]
+name = 'FLOATBITS #3: the sign mask of a float prints as ABS'
+count = 5
+literal = 'return ABS(a0);'
+
+[[match]]
+name = 'FLOATBITS #4: the sign flip never prints integer on both sides'
+count = 0
+regex = 'int4 fb_negf\(u?int4 a0\)'
+
+[[match]]
+name = 'FLOATBITS #5: the sign flip is float on both sides'
+count = 3
+literal = 'float4 fb_negf(float4 a0)'
+
+[[match]]
+name = 'FLOATBITS #6: copysignf never prints integer on both sides'
+count = 0
+literal = 'uint4 fb_copysignf(uint4 a0,uint4 a1)'
+
+[[match]]
+name = 'FLOATBITS #7: copysignf is float on both sides'
+count = 3
+literal = 'float4 fb_copysignf(float4 a0,float4 a1)'
+
+[[match]]
+name = "FLOATBITS #8: the classifier's parameter is never an integer"
+count = 0
+literal = 'bool fb_isnanf(uint4 a0)'
+
+[[match]]
+name = 'FLOATBITS #9: a classifier answering in an integer register takes a float'
+count = 3
+literal = 'bool fb_isnanf(float4 a0)'
+
+[[match]]
+name = 'FLOATBITS #10: x86-64 and AArch64 fabs never print integer on both sides'
+count = 0
+literal = 'uint8 fb_fabs(uint8 a0)'
+
+[[match]]
+name = 'FLOATBITS #11: x86-64 and AArch64 fabs are double on both sides'
+count = 2
+literal = 'float8 fb_fabs(float8 a0)'
+
+[[match]]
+name = 'FLOATBITS #12: arithmetic on the bits keeps the integer'
+count = 3
+literal = 'int4 fb_bump(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #13: storing the bits keeps the integer'
+count = 3
+literal = 'void fb_store(uint4 a0,uint4 *a1)'
+
+[[match]]
+name = 'FLOATBITS #14: an integer parameter in the returned bits keeps both sides integer'
+count = 3
+literal = 'uint4 fb_mix(uint4 a0,uint4 a1)'
+
+[[match]]
+name = 'FLOATBITS #15: an == of the bits with zero keeps the integer (a float == also matches -0.0)'
+count = 3
+literal = 'bool fr_iszero(int4 a0)'
+
+[[match]]
+name = "FLOATBITS #16: an == of two inputs' bits keeps the integers (a float == fails for equal NaNs)"
+count = 3
+literal = 'bool fr_eqbits(int4 a0,int4 a1)'
+
+[[match]]
+name = 'FLOATBITS #17: a != of the bits with zero keeps the integer'
+count = 3
+literal = 'bool fr_ne0(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #18: an == with a NaN pattern keeps the integer (a float == with NaN is never true)'
+count = 3
+literal = 'bool fr_isqnan0(uint4 a0)'
+
+[[match]]
+name = 'FLOATBITS #19: an == with infinity is exact as a float comparison'
+count = 3
+literal = 'return ABS(a0) == INFINITY;'
+
+[[match]]
+name = 'FLOATBITS #20: an == with a normal number is exact as a float comparison'
+count = 3
+regex = 'return a0 == 1\.0f?;'
+
+[[match]]
+name = 'FLOATBITS #21: a NaN payload returned as the value keeps the integer'
+count = 2
+literal = 'uint4 fr_sel(uint4 a0,int4 a1)'
+
+[[match]]
+name = 'FLOATBITS #22: an erased-flash 0xffffffff returned as the value keeps the integer'
+count = 2
+literal = 'uint4 fr_unset(uint4 a0,int4 a1)'
+
+[[match]]
+name = 'FLOATBITS #23: the canonical NaN returned as the value is a float'
+count = 2
+literal = 'float4 fr_canon(float4 a0)'
+
+[[match]]
+name = 'FLOATBITS #24: the low word of a _Float128 in xmm0 keeps the integer'
+count = 1
+literal = 'bool fr_lowzero(int8 a0)'
+
+[[match]]
+name = 'FLOATBITS #25: two integer lanes masked in one 8-byte register keep the integer'
+count = 1
+literal = 'uint8 fr_andv(uint8 a0)'
+
+[[match]]
+name = 'FLOATBITS #26: an == with 0.1f keeps the integer (C reads the literal 0.1 as a double)'
+count = 3
+literal = 'bool fr_tenth(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #27: an == with FLT_MAX keeps the integer'
+count = 3
+literal = 'bool fr_fmax(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #28: an == with FLT_MIN keeps the integer'
+count = 3
+literal = 'bool fr_fmin(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #29: a != with 1.0000001f keeps the integer'
+count = 3
+literal = 'bool fr_onep(int4 a0)'
+
+[[match]]
+name = 'FLOATBITS #30: an == of the magnitude with 0.33333334f keeps the integer'
+count = 3
+literal = 'bool fr_third(uint4 a0)'
+
+[[match]]
+name = 'FLOATBITS #31: an == with a float a double literal spells exactly is a float comparison'
+count = 3
+regex = 'return a0 == 16777218\.0f?;'
+
+[[match]]
+name = 'FLOATBITS #32: a sign flip of the second float of a struct in xmm0 keeps the integer'
+count = 1
+literal = 'uint8 fr_negy(uint8 a0)'
+
+[[match]]
+name = "FLOATBITS #33: a sign flip of a _Float128's low word keeps the integer"
+count = 1
+literal = 'uint8 fr_lowflip(uint8 a0)'

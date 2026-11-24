@@ -5,7 +5,7 @@
 //   - `bytes_are_text`: text, UTF-8, control-byte and no-alnum refusals.
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - the W3 facet table: register + lookup through the `TypeFactory` trait
-//     (the end-to-end rewrite is pinned by `tests/stages/kuna-fatstr.xml`).
+//     (the end-to-end rewrite is pinned by `tests/stages/kuna-fatstr.toml`).
 
 use super::*;
 

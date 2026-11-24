@@ -1,0 +1,98 @@
+# angr GoCheckRemover: P7 edge-virtualization, option gobounds.
+# cmp rsi,rdx; jae panic; return buf[idx]+1; panic: runtime.panicIndex(idx,len).
+# Source language is forced because bytechunks carry no Go buildinfo.
+# The off arm keeps the check; default on removes it but keeps the access.
+# A third C-language pass must retain the same branch even with gobounds on.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'pick' },
+    { space = 'ram', offset = '0x101000', name = 'runtime.panicIndex' },
+    { space = 'ram', offset = '0x110000', name = 'store_then_panic' },
+    { space = 'ram', offset = '0x120000', name = 'panic_wrapper' },
+    { space = 'ram', offset = '0x130000', name = 'global_then_panic' },
+    { space = 'ram', offset = '0x300000', name = 'marker' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4839d673068b04b7ffc0c34889f74889d6e8ea0f0000cc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x110000'
+readonly = true
+hex = '4839d673068b04b7ffc0c3c70701000000e8ea0fffffcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x120000'
+readonly = true
+hex = 'e8fb0ffeffcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x130000'
+readonly = true
+hex = '4839d673068b04b7ffc0c3c705ebff1c0001000000e8e60ffdffcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x300000'
+readonly = false
+hex = '00000000'
+
+[script]
+commands = [
+    'option sourcelang go',
+    'option gobounds off',
+    'lo fu pick',
+    'decompile',
+    'print C',
+    'option gobounds on',
+    'decompile',
+    'print C',
+    'option sourcelang c',
+    'decompile',
+    'print C',
+    'option sourcelang go',
+    'lo fu store_then_panic',
+    'decompile',
+    'print C',
+    'lo fu panic_wrapper',
+    'decompile',
+    'print C',
+    'lo fu global_then_panic',
+    'decompile',
+    'print C',
+    'option sourcelang auto',
+    'quit',
+]
+
+[[match]]
+name = 'gobounds: panic retained when disabled or non-Go'
+count = 5
+regex = 'runtime.panicIndex\('
+
+[[match]]
+name = 'gobounds: conditional retained when disabled or non-Go'
+count = 4
+literal = 'if ('
+
+[[match]]
+name = 'gobounds: every pass retains the indexed load'
+count = 5
+literal = 'a0[a1] + 1'
+
+[[match]]
+name = 'gobounds: side effect before panic retained'
+count = 1
+literal = '*a0 = 1;'
+
+[[match]]
+name = 'gobounds: global write before panic retained'
+count = 1
+literal = 'dat_300000 = 1;'

@@ -1,0 +1,213 @@
+# A double accumulator is copied from nonvolatile XMM6 to return register XMM0
+# before a locked-void MSVC cookie checker. The cookie slot is carried through a
+# loop, and the checker's failure tail contains a nested call before int 0x29,
+# so the generic body probe cannot justify preservation. The exact
+# `(cookie ^ SP) ^ SP` marker can. The final function is a negative control: its
+# void callee writes XMM0 and then reaches a nested call, so the incomplete
+# production probe must retain that recovered write and veto preservation.
+#
+# wide_exact_caller loads both lanes of XMM0 before a proven cookie call. Its
+# low 8-byte lane is the Win64 logical return storage and survives; the upper
+# lane is scratch and must remain killed. Reading the upper lane after the call
+# makes a whole-register downgrade observable as the wrong constant 3.5.
+#
+# refined_score computes a double division, copies the exact low dword through
+# MOVSS to force the real target's XMM0_Da/XMM0_Db heritage partition, and then
+# crosses the same cookie checker. It must return the complete division.
+
+[image]
+arch = 'x86:LE:64:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'score' },
+    { space = 'ram', offset = '0x1070', name = 'log_helper' },
+    { space = 'ram', offset = '0x1080', name = 'cookie' },
+    { space = 'ram', offset = '0x10c0', name = 'cookie_failure' },
+    { space = 'ram', offset = '0x10e0', name = 'nested' },
+    { space = 'ram', offset = '0x10e4', name = 'clobber' },
+    { space = 'ram', offset = '0x10f0', name = 'clobber_caller' },
+    { space = 'ram', offset = '0x1100', name = 'cookie_clobber' },
+    { space = 'ram', offset = '0x1120', name = 'exact_clobber_caller' },
+    { space = 'ram', offset = '0x1150', name = 'wide_exact_caller' },
+    { space = 'ram', offset = '0x11a0', name = 'refined_score' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '''
+4883ec38488b05bd1000004833c448894424280f2974241048895c2420bb0200
+0000e8b9000000ffcb75f7f20f10359d100000f20f10059d100000e8300000
+00f20f58f00f28c6488b4c24284833cce82c0000000f28742410488b5c2420
+4883c438c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1070'
+readonly = true
+hex = 'f20f58c0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1080'
+readonly = true
+hex = '483b0d41100000751048c1c11066f7c1ffff7501c348c1c910e9220000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10c0'
+readonly = true
+hex = '4883ec28e817000000b902000000cd294883c428c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10e0'
+readonly = true
+hex = '31c0c300660fefc0c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10f0'
+readonly = true
+hex = 'f20f1005d80f0000e8e7ffffffc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+readonly = true
+hex = '660fefc0e8d7ffffffc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1120'
+readonly = true
+hex = '''
+4883ec28488b059d0f00004833c44889442420f20f1005950f0000488b4c2420
+4833cce8b8ffffff4883c428c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1150'
+readonly = true
+hex = '''
+4883ec28488b056d0f00004833c44889442420660f1005650f0000488b4c2420
+4833cce808ffffff0f12c8f20f58c14883c428c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x11a0'
+readonly = true
+hex = '''
+4883ec38488b051d0f00004833c448894424280f29742410f20f1035100f0000
+f20f1005100f0000f20f5ef00f28c6660f7e442408f30f104c2408f30f10c1
+488b4c24284833cce894feffff0f287424104883c438c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x20c8'
+hex = 'efcdab8967452301000000000000f83f0000000000000040'
+
+[script]
+commands = [
+    'option msvcstackguard off',
+    'read symbols',
+    'lo fu log_helper',
+    'parse line extern float8 log_helper(float8 x);',
+    'lo fu cookie',
+    'parse line extern void cookie(uint8 c);',
+    'lo fu clobber',
+    'parse line extern void clobber(void);',
+    'lo fu score',
+    'parse line extern float8 score(void);',
+    'decompile',
+    'print C',
+    'lo fu clobber_caller',
+    'parse line extern float8 clobber_caller(void);',
+    'decompile',
+    'print C',
+    'lo fu cookie_clobber',
+    'parse line extern void cookie_clobber(uint8 c);',
+    'lo fu exact_clobber_caller',
+    'parse line extern float8 exact_clobber_caller(void);',
+    'decompile',
+    'print C',
+    'lo fu wide_exact_caller',
+    'parse line extern float8 wide_exact_caller(void);',
+    'decompile',
+    'print C',
+    'lo fu refined_score',
+    'decompile',
+    'print C',
+    'parse line extern float8 refined_score(void);',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #1: the log result is never discarded'
+count = 0
+regex = '^  log_helper\(dat_20d8\);$'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #2: the pipeline assigns the log result'
+count = 1
+literal = '= log_helper(dat_20d8);'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #3: the pipeline returns both additive doubles'
+count = 2
+regex = 'return .* \+ .*;'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #4: preserving XMM0 does not remove any cookie call'
+count = 4
+regex = 'cookie\(.*\^'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #5: a body write vetoes preservation of the pre-call XMM0 value'
+count = 1
+regex = '^  float8 v1; // xmm0_qa$'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #6: an exact cookie marker yields to a recovered XMM0 body write'
+count = 1
+regex = [
+    '',
+    '^  cookie_clobber\(.*\);$',
+    '^  return v[0-9]+;$',
+]
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #7: a wide XMM0 range retains the exact low double'
+count = 1
+regex = '^  return v1 \+ v3;$'
+
+[[match]]
+name = 'DECLARING-DOUBLE-SCORE #8: the overlapping upper XMM0 scratch lane remains killed'
+count = 1
+regex = '^  float8 v3; // ([^\n]+ \| )?xmm0_qb( \| [^\n]+)?$'
+
+[[match]]
+name = 'EXPLICIT-DOUBLE-SCORE #1: the refined high return cell is never left unassigned'
+count = 0
+regex = '^  unsigned int v[0-9]+; // xmm0_db$'
+
+[[match]]
+name = 'EXPLICIT-DOUBLE-SCORE #2: the declared caller returns the complete double division'
+count = 1
+regex = [
+    '',
+    '^  v1 = dat_20d0 / dat_20d8;$',
+    '^  cookie\(.*\);$',
+    '^  return v1;$',
+]
+
+[[match]]
+name = 'EXPLICIT-DOUBLE-SCORE #3: an unlocked inferred output does not gain the unjustified cell'
+count = 1
+regex = '^  return \(int4\)\(\(union \{ double from; unsigned long long to; \}\)\{ \.from = v1 \}\)\.to;$'

@@ -1,0 +1,41 @@
+# GH-1034, P3 heritage, early restart. main (the floatret_wrap fixture)
+# reaches a stack slot in its second heritage pass whose dead code the
+# first pass already removed: heritage records a longer dead-code delay
+# for the stack and asks for a restart, which re-follows flow and analyses
+# main again. The pass stops after that heritage and the restart begins at
+# once, where upstream finishes the doomed pass first; the body and the IR
+# are the ones upstream's order leaves.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatret_wrap_gcc_O2',
+    'read symbols',
+    'load function main',
+    'decompile',
+    'print C',
+    'count pcode',
+]
+
+[[match]]
+name = 'earlyrestart #1: main prints'
+count = 1
+regex = '^unsigned long main\(unsigned long a0,int4 a1\)$'
+
+[[match]]
+name = 'earlyrestart #2: the time-zone call prints'
+count = 1
+literal = 'set_tz('
+
+[[match]]
+name = "earlyrestart #3: the live IR is upstream's"
+count = 1
+literal = 'Count - pcode = 100'
+
+[[match]]
+name = "earlyrestart #4: the ops created after the restart are upstream's"
+count = 1
+literal = 'Count - created = 1056'

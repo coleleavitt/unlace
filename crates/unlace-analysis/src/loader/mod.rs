@@ -55,7 +55,9 @@ pub mod noretrules;
 // (unlace `debuglink`) separate debug files and MiniDebugInfo for stripped ELFs.
 pub mod elf_debuglink;
 // (unlace `debuglink`) a Mach-O image's `.dSYM` bundle, matched by LC_UUID.
+// (unlace) A Mach-O image's dependency list and `LC_RPATH` run paths.
 pub mod macho_dsym;
+pub mod macho_dylibs;
 // (unlace `globalref`) The sections a program's own data objects live in.
 pub mod elfv1;
 mod elfv1_imports;
@@ -67,6 +69,8 @@ pub use ppc32picimports::{ImportProofMemo, ImportProofScope};
 // (unlace) ELF section-table tolerance: an image whose section headers are
 // unreadable still has program headers describing every loadable byte.
 pub mod elf_shdr;
+// (unlace `btf`) BTF type-section reader for eBPF objects (`.BTF`); parse only, not yet consumed.
+pub mod btf;
 // (unlace) PE data-directory tolerance: a `NumberOfRvaAndSizes` larger than its own
 // optional header is clamped to the directories that are really present.
 pub mod pe_datadirs;

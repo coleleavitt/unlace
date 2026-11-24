@@ -42,6 +42,9 @@ pub struct DecompileArgs {
     /// `--trace`: report the maturity the function's last pass reached and the
     /// facts settled there (`phase status`) on stderr after the C.
     pub trace: bool,
+    /// `--cfg-dot`: print the function's basic-block graph as Graphviz DOT on stdout
+    /// instead of the C.
+    pub cfg_dot: bool,
     pub options: Vec<(String, String)>,
     /// Run the first by-name attempt with `fast_funcdisc off` after every other
     /// option; a name miss retries without it ([`defers_fast_funcdisc`]).
@@ -636,6 +639,8 @@ struct DecompileOutcome {
     regions: Option<String>,
     /// The `phase status` dump for `--trace`.
     trace: Option<String>,
+    /// The Graphviz DOT dump for `--cfg-dot`.
+    cfg_dot: Option<String>,
     failure: Option<String>,
     /// One row per `--assert` directive, recovered from the transcript.
     assertions: Vec<unlace_console::assertions::Outcome>,
@@ -693,8 +698,16 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
     } else {
         None
     };
+    let cfg_dot_path = if args.cfg_dot {
+        Some(temp_path("unlace_cfgdot_", ".dot")?)
+    } else {
+        None
+    };
     // These are ours, but their directory is the caller's `TMPDIR`.
     reject_unquotable("temp directory", &out_path.display().to_string())?;
+    if let Some(cp) = &cfg_dot_path {
+        reject_unquotable("temp directory", &cp.display().to_string())?;
+    }
     if let Some(rp) = &regions_path {
         reject_unquotable("temp directory", &rp.display().to_string())?;
     }
@@ -745,6 +758,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             defer_fast_funcdisc,
             regions_path.as_deref(),
             trace_path.as_deref(),
+            cfg_dot_path.as_deref(),
         );
 
         let mut cmd = engine.command();
@@ -864,6 +878,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
                     ),
                     regions: None,
                     trace: None,
+                    cfg_dot: None,
                     failure: None,
                     assertions: assertion_outcomes(&stdout_text, &args.assertions, selected),
                     name: args.target.clone(),
@@ -931,9 +946,18 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
             }
             trace_text = Some(trim_newlines(&buf));
         }
+        let mut cfg_dot_text = None;
+        if let Some(cp) = &cfg_dot_path {
+            let mut buf = String::new();
+            if let Ok(mut fh) = std::fs::File::open(cp) {
+                let _ = fh.read_to_string(&mut buf);
+            }
+            cfg_dot_text = Some(trim_newlines(&buf));
+        }
         Ok(DecompileOutcome {
             c: c_text,
             regions: regions_text,
+            cfg_dot: cfg_dot_text,
             trace: trace_text,
             failure,
             assertions: assertion_outcomes(&stdout_text, &args.assertions, selected),
@@ -970,7 +994,9 @@ fn trim_newlines(s: &str) -> String {
 pub fn run(args: &DecompileArgs) -> i32 {
     match decompile(args) {
         Ok(out) => {
-            let text = if args.regions {
+            let text = if args.cfg_dot {
+                format!("{}\n", out.cfg_dot.unwrap_or_default())
+            } else if args.regions {
                 format!(
                     "{}\n\n// ==== unlace regions (S7) ====\n{}\n",
                     out.c,
@@ -1048,6 +1074,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
     let mut raw = false;
     let mut regions = false;
     let mut trace = false;
+    let mut cfg_dot = false;
     let mut options: Vec<(String, String)> = Vec::new();
     // The `--option` / `--language` tokens in argv order, replayed verbatim into
     // the `--json` argument list: option precedence and the `--language auto`
@@ -1102,6 +1129,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             "--base" => base = Some(parse_cli_address(&take_value(argv, &mut i, "--base")?)?),
             "--regions" => regions = true,
             "--trace" => trace = true,
+            "--cfg-dot" => cfg_dot = true,
             "--slice" => slice = Some(take_value(argv, &mut i, "--slice")?),
             "--isa" => {
                 isa = ArmIsa::parse(&take_value(argv, &mut i, "--isa")?)?;
@@ -1245,6 +1273,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
             ("--raw", raw),
             ("--regions", regions),
             ("--trace", trace),
+            ("--cfg-dot", cfg_dot),
             ("--kassert", !kasserts.is_empty()),
             ("--decomp-dbg", decomp_dbg.is_some()),
         ] {
@@ -1323,6 +1352,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
         raw,
         regions,
         trace,
+        cfg_dot,
         options,
         defer_fast_funcdisc,
         kasserts,
@@ -1343,7 +1373,7 @@ pub fn main(argv: &[String]) -> Result<i32, String> {
 
 fn usage() {
     eprintln!(
-        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] \\\n\
+        "usage: unlace decompile <binary> <name|0xaddr> [--addr] [--json] [--raw] [--regions] [--trace] [--cfg-dot] \\\n\
          \x20                     [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                     [--language auto|c|rust|java|go] [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                     [--option N V].. [--kassert ARGS].. \\\n\
@@ -1366,6 +1396,8 @@ fn usage() {
          and leaves `variables` empty, as on decompile-all.\n\
          --trace prints, on stderr after the C, the maturity the function's last\n\
          pass reached and the facts settled there (`phase status`); stdout is unchanged.\n\
+         --cfg-dot prints the function's basic-block graph as Graphviz DOT on stdout\n\
+         instead of the C (pipe it to `dot -Tsvg`); it is refused with --json.\n\
          \n\
          --apply-rust-signatures PATH trusts an explicit hashed Rust signature manifest;\n\
          only a complete unique profile and both-bank name/address agreement propose names.\n\
@@ -1711,6 +1743,7 @@ mod tests {
             raw: false,
             regions: false,
             trace: false,
+            cfg_dot: false,
             options: Vec::new(),
             defer_fast_funcdisc: false,
             kasserts: Vec::new(),
@@ -1743,6 +1776,7 @@ mod tests {
             injected,
             false,
             regions_path,
+            None,
             None,
         )
     }
@@ -1793,6 +1827,7 @@ mod tests {
                 out,
                 LISTING,
                 defer,
+                None,
                 None,
                 None,
             )

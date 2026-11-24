@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 
-from scripts.quality import cfg, db, metrics, report, runner
+from scripts.quality import cfg, db, metrics, report, runner, textmetrics
 
 
 SOURCE = """
@@ -86,10 +86,93 @@ class MetricTests(unittest.TestCase):
         self.assertEqual(card["addr_coverage"], 1.0)
         self.assertEqual(metrics.score(fn, None, {}), {"found": 0.0})
 
+    def test_output_sanity_counters(self):
+        code = ("int f(void)\n{\n  long v3; // temp\n  long v_12; // temp\n"
+                "  *(_QWORD *)(0LL) = 1;\n  *(_DWORD *)0x10 = 2;\n"
+                "  x = *(_QWORD *)(rsp + 0x8);\n  return result;\n}\n")
+        card = metrics.source_free({"code": code})
+        self.assertEqual(card["null_deref_sites"], 1.0)
+        self.assertEqual(card["impossible_lvalue_sites"], 1.0)
+        self.assertEqual(card["lost_frame_offset_sites"], 1.0)
+        self.assertEqual(card["leaked_temp_decls"], 2.0)
+        self.assertEqual(card["stale_return_result"], 1.0)
+        clean = "int f(void)\n{\n  int result;\n  result = 0;\n  return result;\n}\n"
+        card = metrics.source_free({"code": clean})
+        self.assertEqual(card["stale_return_result"], 0.0)
+        self.assertEqual(card["leaked_temp_decls"], 0.0)
+
     def test_every_metric_has_a_direction_entry(self):
         for name, (hib, text) in metrics.METRICS.items():
             self.assertIn(hib, (True, False, None), name)
             self.assertTrue(text, name)
+
+
+class TextMetricTests(unittest.TestCase):
+    def test_flags_carriers_temps_and_stack_derefs(self):
+        body = r"""int f(__int64 a1) {
+    __int64 v16; // temp
+    __int64 c4; // rsp
+    __int64 c3 = a1; // rbx
+    _BOOL c12 = !c3; // ZF
+    char c10 = 0; // CF
+    *(_BYTE *)(c4 + 8) = 0;
+    *(_QWORD *)(rbp - 0x10) = v16;
+    if (c12) {
+    } else {
+        goto label_1;
+    }
+label_1:;
+    return c3;
+}
+"""
+        m = textmetrics.measure(body)
+        self.assertEqual(m["flag_vars"], 2)
+        self.assertEqual(m["leaked_temps"], 1)
+        self.assertEqual(m["register_carriers"], 2)
+        self.assertEqual(m["raw_stack_accesses"], 2)
+        self.assertEqual(m["empty_blocks"], 1)
+        self.assertEqual(m["dead_stores"], 1, "c10 is written and never read")
+
+    def test_aarch64_nzcv_pack_and_overflow_idioms(self):
+        body = r"""void g(void * a1) {
+    __int64 c2 = 5; // r9
+    _BOOL c8 = c2 == 3LL; // reg?
+    char v20 = LOBYTE(c2 < 2LL); // temp
+    _BOOL c9 = (_QWORD)2LL <= (_QWORD)c2; // reg?
+    _BOOL c10 = __OFSUB__(c2, 2LL); // reg?
+    int c11 = ((_DWORD)(v20) << 0x1f) | ((_DWORD)(c8) << 0x1e) | ((_DWORD)(c9) << 0x1d) | ((_DWORD)(c10) << 0x1c); // reg?
+}
+"""
+        m = textmetrics.measure(body)
+        self.assertEqual(m["flag_vars"], 5)
+        self.assertEqual(m["dead_stores"], 1, "only the NZCV word is never read")
+
+    def test_compound_assignments_and_stores_through_pointers_are_reads(self):
+        body = r"""int h(struct s * a1) {
+    int n = 0;
+    n += 2;
+    a1->x = n;
+    *a1 = 0;
+    return 0;
+}
+"""
+        self.assertEqual(textmetrics.measure(body)["dead_stores"], 0)
+
+    def test_ghidra_engine_flags_and_register_inputs(self):
+        body = r"""int f(int a1) {
+  char in_CF;
+  long in_RAX;
+  bool v1;
+  v1 = SCARRY4(a1, 1);
+  if (v1 != in_CF) {
+    return (int)in_RAX;
+  }
+  return 0;
+}
+"""
+        m = textmetrics.measure(body)
+        self.assertEqual(m["flag_vars"], 2)
+        self.assertEqual(m["register_carriers"], 1)
 
 
 class PairTests(unittest.TestCase):

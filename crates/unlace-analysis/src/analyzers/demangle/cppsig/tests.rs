@@ -175,6 +175,22 @@ fn last_token_drops_a_return_type_but_not_a_template_space() {
 }
 
 #[test]
+fn a_template_class_keeps_its_arguments_in_the_scope_but_not_the_class() {
+    let d = decl("_ZNSt6vectorIiSaIiEE9push_backERKi");
+    assert_eq!(d.class, "vector");
+    assert_eq!(d.scope, "std::vector<int, std::allocator<int> >");
+    assert!(d.template_class);
+    assert_eq!(this_class(&d, false), "vector");
+    assert_eq!(
+        this_class(&d, true),
+        "std::vector<int, std::allocator<int> >"
+    );
+    let plain = decl("_ZN7leveldb5CacheD2Ev");
+    assert!(!plain.template_class);
+    assert_eq!(this_class(&plain, true), "Cache");
+}
+
+#[test]
 fn cv_ref_only_accepts_exactly_the_member_suffixes() {
     assert!(is_cv_ref_only(""));
     assert!(is_cv_ref_only(" const"));

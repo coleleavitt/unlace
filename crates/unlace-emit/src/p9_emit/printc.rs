@@ -4052,6 +4052,34 @@ impl PrintC {
         // candidates that render the same NAME, so restricting the plan to
         // sole-named candidates keeps a flip from moving a collapse key or
         // re-signing a line a non-flipped sibling reads through.
+        // (unlace renumberlocals) Hex-Rays-style spelling of the synthetic locals: `vN`
+        // renumbered from `v1` in collection order. Runs before the sign plan and the
+        // collapses so every later name-keyed pass sees the final spellings.
+        if arch
+            .unlace_options
+            .get::<crate::renumberlocals::RenumberLocals>()
+            .0
+        {
+            let globals = fd.get_arch().global_name_scope();
+            let taken = |name: &str| globals.as_ref().is_some_and(|g| g.has_symbol_name(name));
+            let reserved: std::collections::BTreeSet<String> =
+                declaration_occupied_names(fd, param_names.iter().cloned())
+                    .into_iter()
+                    .chain(decls.iter().map(|(_, name)| name.clone()))
+                    .filter(|name| !crate::renumberlocals::is_synthetic_local_name(name))
+                    .collect();
+            let mapping = crate::renumberlocals::renumber_synthetic_locals(
+                decls.iter().map(|(_, name)| name.as_str()),
+                &reserved,
+                &taken,
+            );
+            for (high, name) in &mut decls {
+                if let Some(fresh) = mapping.get(name.as_str()) {
+                    self.local_name_overrides.insert(*high, fresh.clone());
+                    *name = fresh.clone();
+                }
+            }
+        }
         self.sign_plan
             .retain_sole_named(decls.iter().map(|(h, n)| (*h, n.as_str())));
         // C++ `emitScopeVarDecls` walks the ScopeLocal *Symbol* table and emits
@@ -9399,7 +9427,13 @@ impl PrintC {
                     .and_then(|v| fd.vbank().get(v))
                     .map(|v| v.get_size())
                     .unwrap_or(0);
-                if let Some((intr, args)) = crate::avxintrin::intrinsic(&nm, size) {
+                let src = (nin >= 2)
+                    .then(|| fd.obank().get(op).and_then(|o| o.get_in(nin - 1)))
+                    .flatten()
+                    .and_then(|v| fd.vbank().get(v))
+                    .map(|v| v.get_size())
+                    .unwrap_or(0);
+                if let Some((intr, args)) = crate::avxintrin::intrinsic_sized(&nm, size, src) {
                     if args.len() == order.len() {
                         nm = intr;
                         order = args.iter().map(|&a| a as int4 + 1).collect();
@@ -10577,6 +10611,9 @@ impl PrintC {
             self.push_cast_close(&target);
             return;
         }
+        if self.push_part_macro(fd, arch, op) {
+            return;
+        }
         // Non-special-print SUBPIECE (printc.cc:892-897): isSubpieceCast decides
         // between opTypeCast and opFunc.
         // The cast arm was previously gated out because it tripped a spurious
@@ -11444,7 +11481,19 @@ impl PrintC {
         {
             let callee = self.call_callee_name(fd, op);
             if let Some(throw) = super::msvcthrow::recover(fd, arch, op, &callee) {
-                self.push_msvc_throw(fd, arch, op, throw);
+                self.push_throw_call(fd, arch, op, throw);
+                return;
+            }
+        }
+        if self.out_lang == crate::lang::OutLang::C
+            && arch
+                .unlace_options
+                .get::<crate::coreoptions::ItaniumEh>()
+                .on
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some(throw) = super::itaniumthrow::recover(fd, arch, op, &callee) {
+                self.push_throw_call(fd, arch, op, throw);
                 return;
             }
         }
@@ -11715,7 +11764,7 @@ impl PrintC {
     /// (unlace `msvceh`) `throw obj` or `throw` for a `_CxxThrowException` call: the
     /// object is printed as a load through the first argument would be, so
     /// `&local` reads as `local`.
-    fn push_msvc_throw(
+    fn push_throw_call(
         &mut self,
         fd: &Funcdata,
         arch: &Architecture,
@@ -14170,7 +14219,7 @@ impl PrintC {
         let name = if !regname.is_empty() {
             regname
         } else if unlace_global_naming(spc) {
-            unlace_global_data_name(arch.unlace_name_style(), vaddr.get_offset())
+            crate::stringglobalnames::global_name(arch, vaddr.get_offset())
         } else {
             let mut s = String::new();
             let sn = spc.get_name();
@@ -14949,7 +14998,7 @@ impl PrintC {
             self.push_op(tok, Some(op_key(op)));
         }
         self.push_atom(&Atom::with_op_vn(
-            unlace_global_data_name(arch.unlace_name_style(), addr),
+            crate::stringglobalnames::global_name(arch, addr),
             TagType::VarToken,
             crate::printlanguage::SyntaxHighlight::special_color,
             op_key(op),
@@ -16901,7 +16950,7 @@ pub fn declaration_text(
 
 /// (unlace `globalref`) The name the printer gives the unnamed global at `addr`.
 pub fn global_data_name(arch: &Architecture, addr: u64) -> String {
-    unlace_global_data_name(arch.unlace_name_style(), addr)
+    crate::stringglobalnames::global_name(arch, addr)
 }
 
 /// (unlace) One member declaration `<front><name><back>` via the C-declarator
@@ -17490,8 +17539,8 @@ fn unlace_unnamed_location_name(
         return Some(regname);
     }
     if unlace_global_naming(spc) {
-        return Some(unlace_global_data_name(
-            arch.unlace_name_style(),
+        return Some(crate::stringglobalnames::global_name(
+            arch,
             loc.get_offset(),
         ));
     }

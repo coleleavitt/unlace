@@ -390,6 +390,9 @@ mod fid_db_status_cli;
 #[path = "fid_proto_cli.rs"]
 mod fid_proto_cli;
 
+#[path = "flirt_inspect_cli.rs"]
+mod flirt_inspect_cli;
+
 #[path = "flirt_make_cli.rs"]
 mod flirt_make_cli;
 

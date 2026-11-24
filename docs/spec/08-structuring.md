@@ -1337,6 +1337,25 @@ switchreturn's incremental effect is precisely the wide tables. Flipped on
 by DIV-25 (incremental ablation on top of earlyreturn: +2 perfect, −107
 summed GED, 3:0 improved:regressed, zero regressions).
 
+### irreduciblesplit — controlled node splitting of irreducible loops (original unlace)
+
+`crates/unlace-structure/src/p8_structure/irreducible_split.rs (ActionIrreducibleSplit)`, option
+`irreduciblesplit` (default off). *Pattern:* a strongly connected region of the block graph with two
+or more entry blocks, such as the two-entry loop `0 -> 1, 0 -> 2, 1 -> 2, 2 -> 1`. No natural loop
+header dominates it, so the structurer prints it with a `goto`. *Detection:* an iterative Tarjan SCC
+over the top-level basic blocks; a region is irreducible when two or more of its blocks have an
+in-edge from outside it (or no in-edge at all). *Transform:* duplicate one entry block `e` for one
+external in-edge with `Funcdata::node_split_through` (the primitive `returndupcalls` drives): the copy
+keeps the entry's single out-edge and takes that external predecessor. The region loses an entry per
+split and becomes a natural loop once one is left. *Bounds/failure:* `e` must have exactly one out-edge
+and at least two in-edges; `node_split_through` refuses a conditional branch, a call, a tied output and
+a value read outside the block except through the successor's MULTIEQUALs, and such an entry is skipped
+for the next candidate. At most `MAX_IRREDUCIBLE_SPLITS` = 16 splits per function, each logged
+`irreduciblesplit:`. *Scope:* original unlace (`origin/master`, `unlace-struct/src/node_split.rs`)
+duplicates every multi-predecessor entry block, including entries with several out-edges; main has no
+primitive for that, so this port takes only the single-out-edge entries and leaves the rest goto-shaped.
+Off by default because the copy grows the code; the effect is not yet measured.
+
 ### loopbreak_recovery — `goto` → `break;` (Ghidra `scopeBreak`, angr-surfaced)
 
 `crates/unlace-structure/src/p8_structure/loopbreak_recovery.rs
@@ -1995,3 +2014,21 @@ in 44 binaries; with the loop printed at the top, GED over those binaries' 21,65
 scored functions goes from 208,492 to 207,801 (-691; 99 functions better, 29
 worse). The 29 are sources that wrote the `do { reg = REG & BIT; } while (!reg);`
 form, such as libopencm3 `console_putc` (0 to 10).
+
+
+## 8.6 Reaching conditions (DREAM core)
+
+`crates/unlace-structure/src/p8_structure/reachingconditions.rs` is the pure core of
+condition-based structuring (DREAM, NDSS 2015, section IV-A), ported from the archived
+engine. It computes `cr(h, n)` for each node of a region relative to its header `h`:
+the header's condition is `True`, and every other node's is the OR over its forward
+incoming edges of `cr(h, p) AND label(p, n)`. Back-edges are found first by a DFS from
+the header (an edge into a node still on the DFS stack) and are left out of the sweep,
+which runs in topological order over the acyclic skeleton. A node budget bounds each
+condition tree; when a term or an OR would pass it, the sweep stops, `limited` is set,
+and no further node is materialized.
+
+Nothing in the default pipeline calls it yet, so it changes no output. Wiring it into the
+region structurer as the goto-free fallback for regions the fixed schemas reject (today
+those fall back to CollapseStructure and emit gotos) is the remaining step, and it will
+ship behind a default-off option with its row here.

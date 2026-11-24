@@ -2579,6 +2579,19 @@ reach `push_ptr_char_constant_ir`, which reads and escapes the bytes as for a
 `char *` constant and declines when they are not a string. Off keeps the
 integer or address.
 
+(unlace `stringglobalnames`, default off) An unnamed global whose bytes are a C string
+prints under a name taken from the string, as IDA does: `"hello world"` gives
+`aHelloWorld`, so a pointer to it prints `&aHelloWorld` where `&dat_<addr>` would
+(`crates/unlace-emit/src/p9_emit/stringglobalnames.rs`). `string_label` capitalises the
+words of the text, drops non-alphanumeric bytes and reads `aEmpty` when nothing is left.
+`string_at` reads the printable run from the global's address up to a NUL from the loaded
+image, at least two bytes long and holding a letter or digit, and rejects a run longer than
+256 bytes. `global_name` is the one spelling the printer's unnamed-global sites use
+(the varnode leaf, the global-reference arm, `global_data_name` for the project header,
+and the symbol-less location name), so the header and the body agree. Two globals holding
+the same text get the same name: the printer does not uniquify them, which is why the option
+is off by default. Off keeps `dat_<addr>`.
+
 (unlace) **The ghidra-mode third style (Phase 3, DIV-77).** The ghidra-mode
 process sets a separate `name_style_ghidra` flag alongside (not instead of)
 the angr default; the resolver `Architecture::unlace_name_style` /
@@ -3031,6 +3044,8 @@ the high bank's own order (`printc.rs (SameNamed)`). Each test walks only its
 name's group instead of every high of the function, and finds the same first
 sibling it found before. With the other GH-1034 fixes in, serde-hkx's 174 KB
 deserializer drops from 238 s to 152 s, nearly all of it in these walks.
+
+**(unlace) renumberlocals — Hex-Rays-style synthetic local numbering.** The naming pass gives an unnamed local the default spelling `v<N>` (`p6_variables/varmap.rs (pick_default_number)`), numbered in the order the naming pass met it, so a function can read `v3, v7, v12`. With `renumberlocals on` (default off; a readability choice, so it ships behind an option), `printc.rs (PrintC::emit_local_var_decls)` renumbers those spellings before the sign plan and the collapses run: every declared synthetic name, taken in collection order, becomes `v1`, `v2`, ... in turn (`p9_emit/renumberlocals.rs (renumber_synthetic_locals)`). A spelling in the function's occupied set (parameters, call names) or a global the function references is skipped, and names that are not `v<digits>` are unchanged. Each renamed high is recorded in the local name overrides, so body references follow its declaration. The order is the collection order of the declarations, an approximation of first appearance; the Hex-Rays rules for the sole returned local (`result`) and for argument-register carriers are not implemented.
 
 **(angr) dedupvardecls — collapsing duplicate declarations.** unlace's
 declaration emitter walks HighVariables, not the upstream symbol table (which
@@ -5013,11 +5028,13 @@ argument when the op has no result. The table covers:
 The element-pair conversions are named from the element pair, as IDA 9.5's
 avxlifter names them (`vpmovsxbw` → `_mm256_cvtepi8_epi16`, `vpmovzxdq` →
 `_mm256_cvtepu32_epi64`; the width comes from the result). The truncating and
-saturating narrowings are named from the AVX-512F and AVX-512BW forms only
+saturating narrowings take their width from the source operand, not the result:
+the AVX-512F and AVX-512BW forms always read a 512-bit source
 (`vpmovdb_avx512f` → `_mm512_cvtepi32_epi8`, `vpmovusdw` →
-`_mm512_cvtusepi32_epi16`), because those forms always read a 512-bit source;
-the VL forms read a 128- or 256-bit source under the same name and stay as
-SLEIGH prints them. The float conversions (`vcvt*`) are not named yet: their
+`_mm512_cvtusepi32_epi16`), and the VL forms read a 128- or 256-bit source under
+one SLEIGH name, so the printer passes the widest input's size (`intrinsic_sized`)
+and they print as `_mm_cvtepi32_epi8` (xmm source) or `_mm256_cvtepi32_epi8`
+(ymm source). The VL mask forms take the same prefix. The float conversions (`vcvt*`) are not named yet: their
 source and result differ in element kind, and the kind table gives one kind per
 user-op, so a name would mistype one operand.
 
@@ -5879,6 +5896,20 @@ prefix with the precedence of an assignment. Any other call shape prints as a
 call. The thrown type is not printed here; it stays on the `ThrowInfo<T>` label
 of the second argument and, on x64, on the call-site comment.
 
+### Itanium throws (`itaniumeh`)
+
+Under `itaniumeh` (default on, see the option row in `phases.toml`) a direct
+C-output call of `__cxa_throw` (leading underscores and any `@plt` suffix) with
+its three arguments (object, `typeinfo`, destructor) prints as `throw *p`,
+where `p` is the object the first argument points to, read the way a load
+through that pointer is printed (`printc.rs (push_throw_call)`). A call of
+`__cxa_rethrow` with no argument prints as a bare `throw`. The module is
+`crates/unlace-emit/src/p9_emit/itaniumthrow.rs` and reuses the `msvceh`
+throw token and argument printing. The allocate and construct calls that
+precede the throw still print as calls: the `throw T(...)` form that folds them
+into the throw is not done, so the thrown type stays in the `typeinfo` argument.
+With `itaniumeh` off the calls print as calls.
+
 ### Apple unified-logging calls (`oslog`)
 
 `oslog` (default on) uses
@@ -6165,3 +6196,33 @@ through `emit_block`. At `built` each of these prints exactly the calls the
 block printer makes for the same block, so the output with the option on is the
 output with it off; a difference is a bug. The tree is dropped when the body is
 printed.
+
+## (unlace) Part macros (`partmacro`) -- `option partmacro`, default off
+
+With `option partmacro on` (C output; default off), a SUBPIECE that takes a part of an
+integer prints as the IDA part macro that names it (`partmacro.rs`, `macro_name`):
+`LOBYTE`, `BYTEn` for one byte at byte offset `n`, `LOWORD`/`WORDn` for two bytes,
+`HIWORD` for a two-byte part at offset 2 of a four-byte value, `LODWORD` and
+`HIDWORD` for four bytes at offset 0 or 4 of an eight-byte value. A part is named only when
+its offset is a multiple of its width and it lies inside the value (2, 4 or 8 bytes, a
+scalar integer or unknown type, not a float, pointer, bool or aggregate).
+
+Nested parts fold before naming. A SUBPIECE whose input is a SUBPIECE, or a whole-byte
+`INT_RIGHT`/`INT_SRIGHT` by a constant, is read from its source with the byte offsets
+added, so `LOBYTE(HIWORD(x))` prints `BYTE2(x)` and `(uint1)(x >> 8)` prints `BYTE1(x)`.
+A step is taken only when the part still lies inside the value it reads: a byte past the
+top of an arithmetic shift keeps its cast, since its bits are sign fill. The fold stops
+at the first step that would leave the window, and the macro names the part of the
+value it has reached.
+
+The printer pushes the macro as a one-argument function call from
+`op_subpiece_ir`, after the struct-member, byte-array and bit-cast arms, so those keep
+their own spelling. With the option on, `print_c_recompile_prelude` defines every macro
+the naming can produce, each under `#ifndef`, so a `decompile-project` header compiles.
+Single-function output carries no definitions; the names are IDA's, so a reader who
+knows them can read the text without the header.
+
+The option is off by default because it changes the text of every truncation of a
+scalar; the stage and datatest corpora were not measured with it on. Its catalog row is
+`crates/unlace-decomp/phases.toml`, and the dispatch arm is
+`crates/unlace-decomp/src/p0_knowledge/option_dispatch.rs`.

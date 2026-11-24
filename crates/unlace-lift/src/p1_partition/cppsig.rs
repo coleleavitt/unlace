@@ -90,6 +90,17 @@ impl crate::optionset::UnlaceOption for CppSigMode {
     }
 }
 
+crate::unlace_flag!(
+    /// (unlace `cppclassargs`) Keep the template arguments of a demangled class
+    /// name on the `this` of its member functions. See the `cppsig` analyzer's
+    /// `this_class`.
+    CppClassArgs,
+    "cppclassargs",
+    "C++ template class arguments",
+    unset: false,
+    shipped: false
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

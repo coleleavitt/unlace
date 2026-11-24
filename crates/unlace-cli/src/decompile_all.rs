@@ -3326,6 +3326,7 @@ pub(crate) fn parse_args_with_filters(
     let mut func_decls: Vec<crate::funcdecl::FuncDecl> = Vec::new();
     let mut assertions: Vec<unlace_console::assertions::Directive> = Vec::new();
     let mut assert_strict = false;
+    let mut project_file: Option<String> = None;
     let mut types: Vec<String> = Vec::new();
     let mut types_cpp: Option<String> = None;
     let mut mode: Option<String> = None;
@@ -3405,6 +3406,7 @@ pub(crate) fn parse_args_with_filters(
                 assertions.extend(crate::assertdecl::parse_flag(&v)?);
             }
             "--assert-strict" => assert_strict = true,
+            "--project" => project_file = Some(take(argv, &mut i, "--project")?),
             "--types" => types.push(take(argv, &mut i, "--types")?),
             "--types-cpp" => types_cpp = Some(take(argv, &mut i, "--types-cpp")?),
             "--jobs" if jobs_flag => {
@@ -3535,6 +3537,15 @@ pub(crate) fn parse_args_with_filters(
     }
 
     let binary = binary.ok_or_else(|| format!("{cmd} requires <binary>"))?;
+    // `--project`: its overrides come first, so a command-line --assert still wins.
+    if let Some(project) = &project_file {
+        let mut stored = Vec::new();
+        for directive in crate::project::directives_for(project, &binary)? {
+            stored.extend(crate::assertdecl::parse_flag(&directive)?);
+        }
+        stored.append(&mut assertions);
+        assertions = stored;
+    }
     let assertions = crate::assertdecl::with_types(&types, types_cpp.as_deref(), assertions)?;
     if filters.rust_signature_manifest.is_some() {
         if apply_rust_signatures.is_some() {
@@ -3784,7 +3795,7 @@ fn parse_entry_selector(s: &str) -> Result<EntrySelector, String> {
 
 fn usage_decompile_all() {
     eprintln!(
-        "usage: unlace decompile-all <binary> [--json] [--functions a,b,..] [--addr 0xVMA].. \\\n\
+        "usage: unlace decompile-all <binary> [--json] [--project FILE] [--functions a,b,..] [--addr 0xVMA].. \\\n\
          \x20                   [--no-vars] [--omit aliases,line_mappings,variables,types] \\\n\
          \x20                   [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\

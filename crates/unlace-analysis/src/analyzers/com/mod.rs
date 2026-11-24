@@ -1,7 +1,7 @@
 //! (kuna `com`) COM class and interface ids, and the interfaces they name.
 //!
 //! On a PE image the pass:
-//! - names every 16-byte value in a data section that equals a known class id
+//! - names every 16-byte value in a data or code section that equals a known class id
 //!   or interface id (`CLSID_ShellLink`, `IID_IShellLinkW`, ...) and types it
 //!   `GUID`;
 //! - builds, for each interface id it found, the interface struct (`IShellLinkW`,
@@ -487,8 +487,9 @@ fn cfg_ids(arch: &unlace_decomp::architecture::Architecture) -> BTreeMap<[u8; 16
     parse_clsid_cfg(&String::from_utf8_lossy(&bytes))
 }
 
-/// Every known id in the data sections of `file`: (address, name), the
-/// built-in table first, then `extra`.
+/// Every known id in the data and code sections of `file` (an i386 MSVC
+/// image merges `.rdata` into `.text`): (address, name), the built-in table
+/// first, then `extra`.
 pub fn find_ids<'a>(
     file: &object::File<'_>,
     extra: &'a BTreeMap<[u8; 16], String>,
@@ -498,7 +499,7 @@ pub fn find_ids<'a>(
     for section in file.sections() {
         if !matches!(
             section.kind(),
-            SectionKind::Data | SectionKind::ReadOnlyData
+            SectionKind::Data | SectionKind::ReadOnlyData | SectionKind::Text
         ) {
             continue;
         }

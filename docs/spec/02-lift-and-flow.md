@@ -4226,6 +4226,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `PRU` | TI PRU / PRU-ICSS | `PRU:LE:32:v0`, `PRU:LE:32:v1`, `PRU:LE:32:v2`, `PRU:LE:32:v3`, `PRU:LE:32:v4` | aleph-void/Ghidra-Rare (PRU) @ `87cc554e33`, MIT |
 | `MicroBlaze` | AMD/Xilinx MicroBlaze | `MicroBlaze:BE:32:default`, `MicroBlaze:LE:32:default`, `MicroBlaze:BE:64:default`, `MicroBlaze:LE:64:default` | aleph-void/Ghidra-Rare (MicroBlaze) @ `87cc554e33`, MIT |
 | `xCORE` | XMOS xCORE | `xCORE:LE:32:XS3`, `xCORE:LE:32:XS2`, `xCORE:LE:32:XS1` | aleph-void/Ghidra-Rare (xCORE) @ `87cc554e33`, MIT |
+| `C7x` | TI C7000 DSP | `C7x:LE:64:C7100`, `C7x:LE:64:C7120`, `C7x:LE:64:C7504`, `C7x:LE:64:C7524` | aleph-void/Ghidra-Rare (C7x) @ `87cc554e33`, MIT |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

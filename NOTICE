@@ -257,6 +257,10 @@ specs/Ghidra/Processors/xCORE vendors the XMOS xCORE SLEIGH module xCORE of
 Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
 License (its license files are in that directory).
 
+specs/Ghidra/Processors/C7x vendors the TI C7000 DSP SLEIGH module C7x of
+Ghidra-Rare (https://github.com/aleph-void/Ghidra-Rare), released under the MIT
+License (its license files are in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

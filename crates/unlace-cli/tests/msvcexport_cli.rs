@@ -8,7 +8,8 @@ use common::process;
 use std::process::Command;
 
 fn kuna() -> std::ffi::OsString {
-    std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
+    unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into())
 }
 
 fn bodies() -> std::collections::HashMap<String, String> {

@@ -80,8 +80,8 @@ fn decompile(elf: &std::path::Path, assertions: &str, functions: &str, options: 
         "--json",
     ];
     args.extend_from_slice(options);
-    let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let binary = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let output = process::required_output(Command::new(binary).args(args));
     let doc: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     for function in doc["functions"].as_array().unwrap() {

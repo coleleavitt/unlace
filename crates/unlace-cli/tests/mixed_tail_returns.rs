@@ -62,8 +62,8 @@ int main(void) {
 "#;
 
 fn decompile_all(path: &std::path::Path, mixed: bool) -> Vec<(String, String)> {
-    let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let binary = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let mut command = Command::new(binary);
     command.args(["decompile-all", path.to_str().unwrap(), "--json"]);
     if mixed {

@@ -13,8 +13,8 @@ const NAMES: &[&str] = &[
 ];
 
 fn capture(strategy: &str) -> serde_json::Value {
-    let binary =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let binary = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let selected = format!("{},interior_address,data_address", NAMES.join(","));
     let result = process::required_output(Command::new(binary).args([
         "decompile-all",

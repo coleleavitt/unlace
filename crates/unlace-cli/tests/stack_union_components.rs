@@ -38,7 +38,7 @@ fn union_array_interior_keeps_later_stack_references_declared() {
             .arg("-o")
             .arg(&original),
     );
-    let engine = std::env::var_os("KUNA_DECOMP_DBG")
+    let engine = unlace_base::env::var_os("UNLACE_DECOMP_DBG")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| {
             std::path::Path::new(env!("CARGO_BIN_EXE_unlace"))

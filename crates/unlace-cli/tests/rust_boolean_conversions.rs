@@ -9,8 +9,8 @@ fn boolean_conversions_preserve_narrowing_and_single_call_evaluation() {
     if process::optional_output(Command::new("cc").arg("--version")).is_none() {
         return;
     }
-    let kuna =
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
+    let kuna = unlace_base::env::var_os("UNLACE_TEST_BIN")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into());
     let declarations = [
         "prototype as_unsigned8 bool as_unsigned8(uint1 value)",
         "prototype as_signed8 bool as_signed8(int1 value)",

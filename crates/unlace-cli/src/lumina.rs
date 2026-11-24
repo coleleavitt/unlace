@@ -256,7 +256,7 @@ fn parse(sub: &str, argv: &[String]) -> Result<Args, String> {
 }
 
 fn env(name: &str) -> Option<String> {
-    std::env::var(name).ok().filter(|v| !v.is_empty())
+    unlace_base::env::var(name).ok().filter(|v| !v.is_empty())
 }
 
 fn env_flag(name: &str) -> bool {

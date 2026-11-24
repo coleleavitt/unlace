@@ -58,7 +58,7 @@ fn fixture() -> Vec<u8> {
 fn generated() -> (String, Vec<String>) {
     let image = common::scratch_file("conditional-registers", "o");
     std::fs::write(&image, fixture()).unwrap();
-    let wrapper = std::env::var_os("KUNA_CLI_WRAPPER");
+    let wrapper = unlace_base::env::var_os("UNLACE_CLI_WRAPPER");
     let mut command = Command::new(
         wrapper
             .as_deref()

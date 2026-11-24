@@ -1,5 +1,11 @@
 //! Bounded i386 table successors proved from a local unsigned guard and the
 //! computed jump's own pointer load. Missing or ambiguous evidence declines.
+//!
+//! MSVC's two-level form is read too: the guarded index selects a byte of an
+//! index table, and that byte, zero-extended and scaled by 4, selects the
+//! pointer (`movzx edx, byte [ecx+idx]; jmp [edx*4+table]`). The index table
+//! is read for exactly the proved range, and the pointer table for every entry
+//! up to the largest byte read.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
@@ -289,10 +295,20 @@ impl<'a> X86Tables<'a> {
                 ops: capture.ops().to_vec(),
             });
             if guard.is_some() && protected_path(&backwards, state, incoming) {
-                if let Some((address, lo, hi)) =
-                    prove_path(&backwards, guard?, code_space, &self.data_space)
-                {
-                    return self.read_bounded(dispatch, address, lo, hi, state, max_targets);
+                match prove_path(&backwards, guard?, code_space, &self.data_space) {
+                    Some((Table::Direct(address), lo, hi)) => {
+                        return self.read_bounded(dispatch, address, lo, hi, state, max_targets);
+                    }
+                    Some((Table::TwoLevel(index, scale, offset), lo, hi)) => {
+                        return self.read_two_level(
+                            dispatch,
+                            (index, scale, offset),
+                            (lo, hi),
+                            state,
+                            max_targets,
+                        );
+                    }
+                    None => {}
                 }
             }
             let (&previous, pred) = state.insns.range(..at).next_back()?;
@@ -347,6 +363,70 @@ impl<'a> X86Tables<'a> {
             self.max_entries,
         );
         if cases.len() != read_count {
+            return None;
+        }
+        for target in &cases {
+            if state.funcs.contains_key(target) {
+                return None;
+            }
+            if state
+                .insns
+                .range(target.saturating_sub(MAX_INSN_BYTES)..*target)
+                .any(|(&start, insn)| start.saturating_add(u64::from(insn.len)) > *target)
+            {
+                return None;
+            }
+        }
+        Some(Ok(cases))
+    }
+
+    /// The cases of a two-level table: the index bytes at `index` for every
+    /// proved index, then the pointers at `scale * byte + offset` up to the
+    /// largest byte read.
+    fn read_two_level(
+        &self,
+        dispatch: u64,
+        (index, scale, offset): (Affine, i128, i128),
+        (lo, hi): (u64, u64),
+        state: &WalkState,
+        max_targets: usize,
+    ) -> Option<Result<Vec<u64>, ()>> {
+        if index.value.scale != 1 || scale != 4 || !index.without_wrap(lo, hi) {
+            return None;
+        }
+        let first = u64::try_from(index.value.at(lo)?).ok()?;
+        let count = hi.checked_sub(lo)?.checked_add(1)?;
+        if count > self.max_entries as u64 || !self.pool.contains_bytes(first, count) {
+            return None;
+        }
+        let mut largest = 0u64;
+        for i in 0..count {
+            largest = largest.max(self.pool.uword_at(first.checked_add(i)?, 1)?);
+        }
+        let entries = usize::try_from(largest.checked_add(1)?).ok()?;
+        if entries < MIN_ENTRIES {
+            return None;
+        }
+        if entries > max_targets {
+            return Some(Err(()));
+        }
+        let base = u64::try_from(offset).ok()?;
+        if base >= WORD_LIMIT
+            || !self
+                .pool
+                .contains_bytes(base, (entries as u64).checked_mul(4)?)
+        {
+            return None;
+        }
+        let cases = super::kuna_switchtable::targets(
+            base,
+            dispatch,
+            &self.pool,
+            &self.exec,
+            Some(entries),
+            self.max_entries,
+        );
+        if cases.len() != entries {
             return None;
         }
         for target in &cases {
@@ -512,6 +592,18 @@ enum Value {
     Index(Affine),
     Condition(usize),
     Loaded(Affine),
+    /// A byte of an index table at an address affine in the guarded index.
+    Byte(Affine),
+    /// `scale * byte + offset` for such a byte.
+    Second(Affine, i128, i128),
+    /// A pointer loaded from `scale * byte + offset`.
+    Loaded2(Affine, i128, i128),
+}
+
+/// The table a proved dispatch reads.
+enum Table {
+    Direct(Affine),
+    TwoLevel(Affine, i128, i128),
 }
 
 #[derive(Clone, Copy)]
@@ -559,14 +651,48 @@ enum Condition {
 struct Proof {
     values: Vec<(Key, Option<Value>)>,
     conditions: Vec<Condition>,
+    /// A frame slot was read as an index root ([`Proof::slot`]): from then on
+    /// any store in the path may change it, so a store declines the proof.
+    slots: bool,
 }
+
+/// The tag of a frame-slot index root's key.
+const SLOT_TAG: u64 = 1 << 63;
 
 impl Proof {
     fn new() -> Self {
         Self {
             values: Vec::new(),
             conditions: Vec::new(),
+            slots: false,
         }
+    }
+
+    /// A word loaded from `[reg + c]` (a frame slot such as `[ebp-0x8b4]`) is
+    /// an index root of its own, the same at every load of that slot while no
+    /// store intervenes. Unoptimized MSVC code compares the slot
+    /// (`cmp dword ptr [ebp-0x8b4],0x64; ja`) and reloads it for the jump
+    /// (`mov ecx,[ebp-0x8b4]`), so the guarded value is the slot's.
+    fn slot(&mut self, value: Value) -> Value {
+        let Value::Loaded(address) = &value else {
+            return value;
+        };
+        let (root, scale, offset) = (
+            address.value.root,
+            address.value.scale,
+            address.value.offset,
+        );
+        let (Key::Reg(reg, 4), 1) = (root, scale) else {
+            return value;
+        };
+        let Ok(offset) = u32::try_from(offset.rem_euclid(i128::from(WORD_LIMIT))) else {
+            return value;
+        };
+        self.slots = true;
+        Value::Index(Affine::root(Key::Tmp(
+            SLOT_TAG | ((reg & 0x7fff_ffff) << 32) | u64::from(offset),
+            4,
+        )))
     }
 
     fn get(&self, vn: &VarnodeData, data: &Rc<AddrSpace>) -> Option<Value> {
@@ -604,8 +730,12 @@ impl Proof {
 
     fn fold(&mut self, op: &FullOp, data: &Rc<AddrSpace>) -> Option<Value> {
         let out = op.out.as_ref()?;
-        let a = self.get(op.ins.first()?, data);
-        let b = op.ins.get(1).and_then(|v| self.get(v, data));
+        let mut a = self.get(op.ins.first()?, data);
+        let mut b = op.ins.get(1).and_then(|v| self.get(v, data));
+        if !matches!(op.opcode, OpCode::CPUI_COPY | OpCode::CPUI_LOAD) {
+            a = a.map(|v| self.slot(v));
+            b = b.map(|v| self.slot(v));
+        }
         match op.opcode {
             OpCode::CPUI_COPY if out.size == op.ins[0].size => a,
             OpCode::CPUI_INT_ADD | OpCode::CPUI_INT_SUB | OpCode::CPUI_INT_MULT
@@ -623,6 +753,20 @@ impl Proof {
                         OpCode::CPUI_INT_MULT => v.scaled(i128::from(c))?,
                         _ => return None,
                     })),
+                    (Value::Second(x, s, o), Value::Constant(c))
+                    | (Value::Constant(c), Value::Second(x, s, o))
+                        if op.opcode != OpCode::CPUI_INT_SUB
+                            || matches!(op.ins.get(1).map(|v| is_constant(v)), Some(true)) =>
+                    {
+                        let c = i128::from(c);
+                        let (s, o) = match op.opcode {
+                            OpCode::CPUI_INT_ADD => (s, o.checked_add(c)?),
+                            OpCode::CPUI_INT_SUB => (s, o.checked_sub(c)?),
+                            OpCode::CPUI_INT_MULT => (s.checked_mul(c)?, o.checked_mul(c)?),
+                            _ => return None,
+                        };
+                        Some(Value::Second(x, s, o))
+                    }
                     (Value::Constant(a), Value::Constant(b)) => {
                         let value = match op.opcode {
                             OpCode::CPUI_INT_ADD => a.checked_add(b)?,
@@ -635,14 +779,20 @@ impl Proof {
                     _ => None,
                 }
             }
-            OpCode::CPUI_INT_LEFT if out.size == 4 && op.ins[0].size == 4 => {
-                let (Value::Index(index), Value::Constant(shift)) = (a?, b?) else {
-                    return None;
-                };
-                Some(Value::Index(
+            OpCode::CPUI_INT_LEFT if out.size == 4 && op.ins[0].size == 4 => match (a?, b?) {
+                (Value::Index(index), Value::Constant(shift)) => Some(Value::Index(
                     index.scaled(1i128.checked_shl(u32::try_from(shift).ok()?)?)?,
-                ))
-            }
+                )),
+                (Value::Second(x, s, o), Value::Constant(shift)) => {
+                    let k = 1i128.checked_shl(u32::try_from(shift).ok()?)?;
+                    Some(Value::Second(x, s.checked_mul(k)?, o.checked_mul(k)?))
+                }
+                _ => None,
+            },
+            OpCode::CPUI_INT_ZEXT if out.size == 4 && op.ins[0].size == 1 => match a? {
+                Value::Byte(x) => Some(Value::Second(x, 1, 0)),
+                _ => None,
+            },
             OpCode::CPUI_INT_LESS
             | OpCode::CPUI_INT_LESSEQUAL
             | OpCode::CPUI_INT_EQUAL
@@ -699,10 +849,23 @@ impl Proof {
                 {
                     return None;
                 }
+                match b? {
+                    Value::Index(address) => Some(Value::Loaded(address)),
+                    Value::Second(x, s, o) => Some(Value::Loaded2(x, s, o)),
+                    _ => None,
+                }
+            }
+            OpCode::CPUI_LOAD if out.size == 1 => {
+                if !is_constant(&op.ins[0])
+                    || op.ins[0].offset != u64::try_from(data.get_index()).ok()?
+                    || op.ins.get(1)?.size != 4
+                {
+                    return None;
+                }
                 let Value::Index(address) = b? else {
                     return None;
                 };
-                Some(Value::Loaded(address))
+                Some(Value::Byte(address))
             }
             _ => None,
         }
@@ -793,7 +956,7 @@ fn prove_path(
     guard: u64,
     code_space: &Rc<AddrSpace>,
     data: &Rc<AddrSpace>,
-) -> Option<(Affine, u64, u64)> {
+) -> Option<(Table, u64, u64)> {
     let mut proof = Proof::new();
     let mut condition = None;
     let dispatch = backwards.first()?;
@@ -829,16 +992,20 @@ fn prove_path(
                     if input.size != 4 {
                         return None;
                     }
-                    let Value::Loaded(address) = proof.get(input, data)? else {
-                        return None;
-                    };
-                    loaded = Some(address);
+                    loaded = Some(match proof.get(input, data)? {
+                        Value::Loaded(address) => Table::Direct(address),
+                        Value::Loaded2(index, scale, offset) => {
+                            Table::TwoLevel(index, scale, offset)
+                        }
+                        _ => return None,
+                    });
                 }
                 OpCode::CPUI_BRANCH
                 | OpCode::CPUI_RETURN
                 | OpCode::CPUI_CALL
                 | OpCode::CPUI_CALLIND
                 | OpCode::CPUI_CALLOTHER => return None,
+                OpCode::CPUI_STORE if proof.slots => return None,
                 _ => {
                     if let Some(key) = op.out.as_ref().and_then(|out| key_of(out, Some(data))) {
                         let value = proof.fold(op, data);
@@ -848,9 +1015,12 @@ fn prove_path(
             }
         }
     }
-    let address = loaded?;
-    let (lo, hi) = proof.interval(condition?, address.value.root)?;
-    Some((address, lo, hi))
+    let table = loaded?;
+    let root = match &table {
+        Table::Direct(address) | Table::TwoLevel(address, ..) => address.value.root,
+    };
+    let (lo, hi) = proof.interval(condition?, root)?;
+    Some((table, lo, hi))
 }
 
 fn overlap(a: Key, b: Key) -> bool {
@@ -1000,8 +1170,11 @@ mod tests {
     #[test]
     fn cmp_ja_proves_the_loaded_index_despite_wrapped_flag_subtraction() {
         let spaces = Spaces::new();
-        let (address, lo, hi) =
+        let (table, lo, hi) =
             prove_path(&spaces.path(0, 4, false), 0x1007, &spaces.ram, &spaces.ram).unwrap();
+        let Table::Direct(address) = table else {
+            panic!("a one-level table");
+        };
         assert_eq!((lo, hi), (0, 3));
         assert_eq!(address.value.at(lo), Some(0x2000));
         assert!(address.without_wrap(lo, hi));
@@ -1080,6 +1253,48 @@ mod tests {
             condition = proof.push(Condition::And(condition, condition));
         }
         assert_eq!(proof.interval(condition, root), Some((0, 3)));
+    }
+
+    #[test]
+    fn a_two_level_table_reads_pointers_up_to_the_largest_index_byte() {
+        let spaces = Spaces::new();
+        let pointers: Vec<u8> = [0x1010u32, 0x1020, 0x1030]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let index = [0u8, 2, 1, 2, 0];
+        let tables = X86Tables {
+            pool: PoolImage::from_ranges(
+                vec![
+                    (0x2000, 0x200c, &pointers[..]),
+                    (0x3000, 0x3005, &index[..]),
+                ],
+                4,
+                true,
+            )
+            .unwrap(),
+            data_space: spaces.ram,
+            exec: vec![(0x1000, 0x1100)],
+            max_entries: 64,
+        };
+        let bytes = Affine::root(Key::Reg(0, 4)).shifted(0x3000).unwrap();
+        assert_eq!(
+            tables
+                .read_two_level(
+                    0x1009,
+                    (bytes.clone(), 4, 0x2000),
+                    (0, 4),
+                    &empty_state(),
+                    64
+                )
+                .and_then(Result::ok),
+            Some(vec![0x1010, 0x1020, 0x1030])
+        );
+        assert!(
+            tables
+                .read_two_level(0x1009, (bytes, 4, 0x2000), (0, 5), &empty_state(), 64)
+                .is_none()
+        );
     }
 
     #[test]

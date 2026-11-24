@@ -661,6 +661,8 @@ mod tests {
             "orchainlive",
             // `phithread` (issue #20) landed without a corpus sweep.
             "phithread",
+            // `structassign` (IDA types survey item #4) landed without a corpus sweep.
+            "structassign",
             // `dextrpc` landed measured on 17 macOS dexts only; preset membership
             // would make it the default under 500 KiB, which is the lead's call.
             "dextrpc",

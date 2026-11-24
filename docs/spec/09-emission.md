@@ -1131,6 +1131,22 @@ the machine's does), all printing the binary's values for negative inputs,
 0x80000000..0xffffffff, sums past 32 bits and squares past 2^32, including the
 shared, parenthesized and regrouped shapes above.
 
+**Whole-struct copies as assignments (kuna `structassign`).** A compiler copies a
+struct with `memcpy` (or inlines the copy, which kuna's copy folds turn back into
+`memcpy`), so `*d = *s;` prints as `memcpy(d,s,0x18);`. With the option
+`structassign` on (default off), the C printer's call path asks
+`crates/unlace-emit/src/p9_emit/kuna_structassign.rs (recover)` before it
+prints a direct call: a call of `memcpy` (leading underscores ignored) with
+three arguments, an unused result and a constant size, whose destination and
+source varnodes are both typed as pointers to one and the same struct or union
+type (`Rc` identity) of exactly that size, prints as an assignment instead
+(`printc.rs (push_struct_assign)`). Each side is pushed as the load through its
+pointer would be, so the address of a variable prints as the variable
+(`v1 = *a0;`), and the right side is pushed first, as `opStore` does. Only the
+text changes; the call stays in the IR. This is Hex-Rays' structure-copy
+recognition (hexx64 `sub_4C8BB0`), which checks the same size against the
+pointee type.
+
 **Narrowings C performs by itself (kuna `castnarrow`).** `castimplied` leaves
 a widening out where the destination converts the value anyway, and keeps every
 truncation and sign change. So a value narrowed into a destination of exactly

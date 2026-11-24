@@ -11298,6 +11298,18 @@ impl PrintC {
         if self.out_lang == crate::kuna_lang::OutLang::C
             && arch
                 .kuna_options
+                .get::<super::kuna_structassign::StructAssign>()
+                .0
+        {
+            let callee = self.call_callee_name(fd, op);
+            if let Some((dst, src)) = super::kuna_structassign::recover(fd, arch, op, &callee) {
+                self.push_struct_assign(fd, arch, op, dst, src);
+                return;
+            }
+        }
+        if self.out_lang == crate::kuna_lang::OutLang::C
+            && arch
+                .kuna_options
                 .get::<crate::kuna_analysisgates::Msvceh>()
                 .0
         {
@@ -11601,6 +11613,29 @@ impl PrintC {
             self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
         }
         self.push_vn_ir_m(fd, arch, obj, op, m);
+    }
+
+    /// (kuna `structassign`) `*dst = *src` for a whole-struct `memcpy`: each side
+    /// is printed as a load through its pointer would be, so `&local` reads as
+    /// `local`. Operands are pushed right side first, as `opStore` does.
+    fn push_struct_assign(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        op: OpId,
+        dst: VarnodeId,
+        src: VarnodeId,
+    ) {
+        self.push_op(&tokens::ASSIGNMENT, Some(op_key(op)));
+        for vn in [src, dst] {
+            let mut m = self.context.mods();
+            if self.check_array_deref(fd, vn) && !self.context.is_set(modifiers::FORCE_POINTER) {
+                m |= modifiers::PRINT_LOAD_VALUE;
+            } else {
+                self.push_op(&tokens::DEREFERENCE, Some(op_key(op)));
+            }
+            self.push_vn_ir_m(fd, arch, vn, op, m);
+        }
     }
 
     /// (kuna `oslog`) A direct os_log call: the dso as its header symbol and

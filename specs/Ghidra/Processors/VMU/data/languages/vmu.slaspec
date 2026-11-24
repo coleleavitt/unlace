@@ -1,0 +1,2 @@
+# Sanyo LC8670 (Sega Dreamcast VMU), PSW bank bits tracked as context.
+@include "vmu.sinc"

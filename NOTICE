@@ -205,6 +205,10 @@ specs/Ghidra/Processors/VideoCore4 vendors the Broadcom VideoCore IV SLEIGH spec
 aleph-void/ghidra-videocore4 (https://github.com/aleph-void/ghidra-videocore4), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/VMU vendors the Sega Dreamcast VMU (LC86K) SLEIGH specification of
+aleph-void/Ghidra-VMU-Processor (https://github.com/aleph-void/Ghidra-VMU-Processor), a fork of RossMeikleham/Ghidra-VMU-Processor, released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

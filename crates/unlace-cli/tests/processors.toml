@@ -2124,3 +2124,33 @@ expect = ["return sub_0(0x1234) + 1;"]
 test = "m7700_sem_store_is_one_byte"
 address = "0x20"
 expect = ["dat_40 = 0x7f;"]
+
+[[family]]
+name = "multos_mel"
+language = "MULTOS:BE:16:MEL"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/multos/apdu_handler.bin"
+
+# Hand-assembled from the MDRM instruction map: LOAD SB[0],2; ADDW ,0x10; STORE SB[2],2;
+# CMPB SB[4],0x80; BEQ +3; EXITSW 0x6D,0x00; INCN DB[0],1; SETLA 2; EXITSW 0x90,0x00.
+[[family.function]]
+test = "multos_mel_full_forms_decompile"
+address = "0x0"
+expect = [
+    "v1->field_0x2 = v1->field_0x0 + 0x10;",
+    "if (v1->field_0x4 != '\\x80') {",
+    "mel_set_sw(0x6d00);",
+    "mel_set_la(2);",
+    "mel_set_sw(0x9000);",
+]
+
+# At 0x40: CEN, then the compact LOAD DB[3],2, ADDW DB[3],1 and STORE DB[5],2, then CDIS
+# and EXIT.
+[[family.function]]
+test = "multos_mel_compact_forms_decompile"
+address = "0x40"
+expect = [
+    "v1 = *(unsigned short *)(v2 + 3);",
+    "*(short *)(v2 + 3) = *(short *)(v2 + 3) + 1;",
+    "*(unsigned short *)(v2 + 5) = v1;",
+]

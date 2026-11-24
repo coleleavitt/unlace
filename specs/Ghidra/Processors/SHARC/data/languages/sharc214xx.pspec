@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- ADSP-214xx SHARC.  The code space sw is addressed in 16-bit short words; 48-bit ISA
+     code lives at the short-word alias of its 48-bit address (sharc214xx.slaspec).  The
+     interrupt vector table is fixed in internal block 0 at 48-bit 0x8c000-0x8c0ff
+     (ADSP-2146x/2147x/2148x), i.e. sw:124000-sw:1242ff, and is always 48-bit code.
+     Vector names and order: SHARC Processor Programming Reference, Table B-2.
+     On-chip peripheral (IOP) registers differ between family members and are not named
+     here; their range is volatile. -->
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="dm" first="0x0" last="0x3ffff"/>
+  </volatile>
+  <context_data>
+    <context_set space="sw">
+      <set name="visa" val="1"/>
+    </context_set>
+    <context_set space="sw" first="0x124000" last="0x1242ff">
+      <set name="visa" val="0"/>
+    </context_set>
+  </context_data>
+  <default_symbols>
+    <symbol name="VEC_EMUI" address="sw:124000" entry="true"/>
+    <symbol name="VEC_RSTI" address="sw:12400c" entry="true"/>
+    <symbol name="VEC_IICDI" address="sw:124018" entry="true"/>
+    <symbol name="VEC_SOVFI" address="sw:124024" entry="true"/>
+    <symbol name="VEC_TMZHI" address="sw:124030" entry="true"/>
+    <symbol name="VEC_SPERRI" address="sw:12403c" entry="true"/>
+    <symbol name="VEC_BKPI" address="sw:124048" entry="true"/>
+    <symbol name="VEC_IRQ2I" address="sw:124060" entry="true"/>
+    <symbol name="VEC_IRQ1I" address="sw:12406c" entry="true"/>
+    <symbol name="VEC_IRQ0I" address="sw:124078" entry="true"/>
+    <symbol name="VEC_P0I" address="sw:124084" entry="true"/>
+    <symbol name="VEC_P1I" address="sw:124090" entry="true"/>
+    <symbol name="VEC_P2I" address="sw:12409c" entry="true"/>
+    <symbol name="VEC_P3I" address="sw:1240a8" entry="true"/>
+    <symbol name="VEC_P4I" address="sw:1240b4" entry="true"/>
+    <symbol name="VEC_P5I" address="sw:1240c0" entry="true"/>
+    <symbol name="VEC_P6I" address="sw:1240cc" entry="true"/>
+    <symbol name="VEC_P7I" address="sw:1240d8" entry="true"/>
+    <symbol name="VEC_P8I" address="sw:1240e4" entry="true"/>
+    <symbol name="VEC_P9I" address="sw:1240f0" entry="true"/>
+    <symbol name="VEC_P10I" address="sw:1240fc" entry="true"/>
+    <symbol name="VEC_P11I" address="sw:124108" entry="true"/>
+    <symbol name="VEC_P12I" address="sw:124114" entry="true"/>
+    <symbol name="VEC_P13I" address="sw:124120" entry="true"/>
+    <symbol name="VEC_P14I" address="sw:12412c" entry="true"/>
+    <symbol name="VEC_P15I" address="sw:124138" entry="true"/>
+    <symbol name="VEC_P16I" address="sw:124144" entry="true"/>
+    <symbol name="VEC_P17I" address="sw:124150" entry="true"/>
+    <symbol name="VEC_P18I" address="sw:12415c" entry="true"/>
+    <symbol name="VEC_CB7I" address="sw:124168" entry="true"/>
+    <symbol name="VEC_CB15I" address="sw:124174" entry="true"/>
+    <symbol name="VEC_TMZLI" address="sw:124180" entry="true"/>
+    <symbol name="VEC_FIXI" address="sw:12418c" entry="true"/>
+    <symbol name="VEC_FLTOI" address="sw:124198" entry="true"/>
+    <symbol name="VEC_FLTUI" address="sw:1241a4" entry="true"/>
+    <symbol name="VEC_FLTII" address="sw:1241b0" entry="true"/>
+    <symbol name="VEC_EMULI" address="sw:1241bc" entry="true"/>
+    <symbol name="VEC_SFT0I" address="sw:1241c8" entry="true"/>
+    <symbol name="VEC_SFT1I" address="sw:1241d4" entry="true"/>
+    <symbol name="VEC_SFT2I" address="sw:1241e0" entry="true"/>
+    <symbol name="VEC_SFT3I" address="sw:1241ec" entry="true"/>
+  </default_symbols>
+</processor_spec>

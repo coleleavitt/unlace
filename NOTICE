@@ -173,6 +173,10 @@ specs/Ghidra/Processors/SCORE7 vendors the Sunplus S+core (SCORE7) SLEIGH specif
 aleph-void/ghidra-score7 (https://github.com/aleph-void/ghidra-score7), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/SHARC vendors the Analog Devices SHARC (ADSP-21xxx) SLEIGH specification of
+aleph-void/ghidra-sharc (https://github.com/aleph-void/ghidra-sharc), a fork of roblg/ghidra-sharc, released under the
+Apache License, Version 2.0 (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

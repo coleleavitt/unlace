@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="SHARC"
+            endian="big"
+            size="32"
+            variant="214xx"
+            version="1.0"
+            slafile="sharc214xx.sla"
+            processorspec="sharc214xx.pspec"
+            id="SHARC:BE:32:214xx">
+    <description>Analog Devices ADSP-214xx SHARC, 48-bit ISA and VISA, short-word code space</description>
+    <compiler name="VisualDSP++ / CCES" spec="sharc214xx.cspec" id="default"/>
+  </language>
+</language_definitions>

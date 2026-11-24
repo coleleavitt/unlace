@@ -6,6 +6,12 @@
 @define SFR_BASE 0x0F80
 @define BANK15_BASE 0x0F00
 
+# The page of the 12-bit data address that holds the core SFRs (0xf60-0xfff); a PIC18 with the
+# SFRs at 0x460-0x4ff (K42/Q-series) sets 0x4, and ACCESS_LOW to where access-bank 0x00-0x5f goes.
+@ifndef SFR_PAGE
+@define SFR_PAGE "0xf"
+@endif
+
 # STATUS bit definitions
 @define STATUS_N_BIT	4
 @define STATUS_OV_BIT	3

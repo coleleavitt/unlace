@@ -2,14 +2,19 @@
 # Hexadecimal floating point, packed decimal, decimal floating point and the remaining
 # storage-to-storage, translate and mode-setting instructions.
 
+define register offset=0x2000 size=8 [ c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
+
 macro ccFrom(cc) { CC0 = (cc == 0); CC1 = (cc == 1); CC2 = (cc == 2); CC3 = (cc == 3); ccAux(); }
 
+attach variables [ b_ya0 b_ya16 b_ya20 b_ya4 c_ya32 c_ya36 ] [ a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 ];
+attach variables [ b_yc16 b_yc20 c_yc32 c_yc36 ] [ c0 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 ];
 attach variables [ a_yf0 a_yf4 b_yf0 b_yf12 b_yf20 b_yf4 c_yf12 c_yf36 ] [ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 ];
 attach variables [ a_yfq0 a_yfq4 b_yfq0 b_yfq12 b_yfq20 b_yfq4 c_yfq12 c_yfq36 ] [ f2 f3 f2 f3 f6 f7 f6 f7 f10 f11 f10 f11 f14 f15 f14 f15 ];
 attach variables [ a_yfs0 a_yfs4 b_yfs0 b_yfs12 b_yfs20 b_yfs4 c_yfs12 c_yfs36 ] [ f0s f1s f2s f3s f4s f5s f6s f7s f8s f9s f10s f11s f12s f13s f14s f15s ];
 attach variables [ a_yr0 a_yr4 b_yr0 b_yr12 b_yr16 b_yr20 b_yr4 c_yr12 c_yr28 c_yr32 c_yr36 ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 ];
-attach variables [ b_yrl0 b_yrl16 b_yrl20 b_yrl4 c_yrl36 ] [ r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l ];
-attach variables [ b_yrp0 b_yrp16 b_yrp20 b_yrp4 ] [ r1 r1 r3 r3 r5 r5 r7 r7 r9 r9 r11 r11 r13 r13 r15 r15 ];
+attach variables [ b_yrh0 b_yrh12 b_yrh4 c_yrh36 ] [ r0h r1h r2h r3h r4h r5h r6h r7h r8h r9h r10h r11h r12h r13h r14h r15h ];
+attach variables [ a_yrl4 b_yrl0 b_yrl12 b_yrl16 b_yrl20 b_yrl4 c_yrl36 ] [ r0l r1l r2l r3l r4l r5l r6l r7l r8l r9l r10l r11l r12l r13l r14l r15l ];
+attach variables [ a_yrp0 a_yrp4 b_yrp0 b_yrp12 b_yrp16 b_yrp20 b_yrp4 c_yrp32 c_yrp36 ] [ r1 r1 r3 r3 r5 r5 r7 r7 r9 r9 r11 r11 r13 r13 r15 r15 ];
 
 define pcodeop hd_ad;
 define pcodeop hd_ad_cc;
@@ -42,6 +47,11 @@ define pcodeop hd_axtr_cc;
 define pcodeop hd_axtra;
 define pcodeop hd_axtra_1;
 define pcodeop hd_axtra_cc;
+define pcodeop hd_bakr;
+define pcodeop hd_bpp;
+define pcodeop hd_bprp;
+define pcodeop hd_bsa;
+define pcodeop hd_bsg;
 define pcodeop hd_cd;
 define pcodeop hd_cd_cc;
 define pcodeop hd_cdfr;
@@ -69,12 +79,18 @@ define pcodeop hd_cer;
 define pcodeop hd_cer_cc;
 define pcodeop hd_cextr;
 define pcodeop hd_cextr_cc;
+define pcodeop hd_cfc;
+define pcodeop hd_cfc_1;
+define pcodeop hd_cfc_2;
+define pcodeop hd_cfc_cc;
 define pcodeop hd_cfdr;
 define pcodeop hd_cfdr_cc;
 define pcodeop hd_cfdtr;
 define pcodeop hd_cfdtr_cc;
 define pcodeop hd_cfer;
 define pcodeop hd_cfer_cc;
+define pcodeop hd_cfxr;
+define pcodeop hd_cfxr_cc;
 define pcodeop hd_cfxtr;
 define pcodeop hd_cfxtr_cc;
 define pcodeop hd_cgdr;
@@ -91,6 +107,25 @@ define pcodeop hd_cgxtr;
 define pcodeop hd_cgxtr_cc;
 define pcodeop hd_cgxtra;
 define pcodeop hd_cgxtra_cc;
+define pcodeop hd_cksm;
+define pcodeop hd_cksm_1;
+define pcodeop hd_cksm_2;
+define pcodeop hd_cksm_cc;
+define pcodeop hd_clcl;
+define pcodeop hd_clcl_1;
+define pcodeop hd_clcl_2;
+define pcodeop hd_clcl_3;
+define pcodeop hd_clcl_cc;
+define pcodeop hd_clcle;
+define pcodeop hd_clcle_1;
+define pcodeop hd_clcle_2;
+define pcodeop hd_clcle_3;
+define pcodeop hd_clcle_cc;
+define pcodeop hd_clclu;
+define pcodeop hd_clclu_1;
+define pcodeop hd_clclu_2;
+define pcodeop hd_clclu_3;
+define pcodeop hd_clclu_cc;
 define pcodeop hd_clfdtr;
 define pcodeop hd_clfdtr_cc;
 define pcodeop hd_clfxtr;
@@ -103,19 +138,58 @@ define pcodeop hd_cmpsc;
 define pcodeop hd_cmpsc_1;
 define pcodeop hd_cmpsc_2;
 define pcodeop hd_cmpsc_3;
+define pcodeop hd_cmpsc_4;
 define pcodeop hd_cmpsc_cc;
 define pcodeop hd_cp;
 define pcodeop hd_cp_cc;
 define pcodeop hd_cpdt;
 define pcodeop hd_cpxt;
+define pcodeop hd_cpya;
+define pcodeop hd_crdte;
+define pcodeop hd_crdte_cc;
+define pcodeop hd_csch;
+define pcodeop hd_csch_cc;
 define pcodeop hd_csdtr;
+define pcodeop hd_csp;
+define pcodeop hd_csp_1;
+define pcodeop hd_csp_cc;
+define pcodeop hd_cspg;
+define pcodeop hd_cspg_1;
+define pcodeop hd_cspg_cc;
+define pcodeop hd_csst;
+define pcodeop hd_csst_cc;
 define pcodeop hd_csxtr;
 define pcodeop hd_csxtr_1;
+define pcodeop hd_cu12;
+define pcodeop hd_cu12_1;
+define pcodeop hd_cu12_2;
+define pcodeop hd_cu12_3;
+define pcodeop hd_cu12_cc;
+define pcodeop hd_cu14;
+define pcodeop hd_cu14_1;
+define pcodeop hd_cu14_2;
+define pcodeop hd_cu14_3;
+define pcodeop hd_cu14_cc;
+define pcodeop hd_cu21;
+define pcodeop hd_cu21_1;
+define pcodeop hd_cu21_2;
+define pcodeop hd_cu21_3;
+define pcodeop hd_cu21_cc;
 define pcodeop hd_cu24;
 define pcodeop hd_cu24_1;
 define pcodeop hd_cu24_2;
 define pcodeop hd_cu24_3;
 define pcodeop hd_cu24_cc;
+define pcodeop hd_cu41;
+define pcodeop hd_cu41_1;
+define pcodeop hd_cu41_2;
+define pcodeop hd_cu41_3;
+define pcodeop hd_cu41_cc;
+define pcodeop hd_cu42;
+define pcodeop hd_cu42_1;
+define pcodeop hd_cu42_2;
+define pcodeop hd_cu42_3;
+define pcodeop hd_cu42_cc;
 define pcodeop hd_cudtr;
 define pcodeop hd_cuse;
 define pcodeop hd_cuse_1;
@@ -164,6 +238,12 @@ define pcodeop hd_ddtr;
 define pcodeop hd_ddtra;
 define pcodeop hd_de;
 define pcodeop hd_der;
+define pcodeop hd_dfltcc;
+define pcodeop hd_dfltcc_1;
+define pcodeop hd_dfltcc_2;
+define pcodeop hd_dfltcc_3;
+define pcodeop hd_dfltcc_cc;
+define pcodeop hd_diag;
 define pcodeop hd_didbr;
 define pcodeop hd_didbr_1;
 define pcodeop hd_didbr_cc;
@@ -177,16 +257,36 @@ define pcodeop hd_dxtr;
 define pcodeop hd_dxtr_1;
 define pcodeop hd_dxtra;
 define pcodeop hd_dxtra_1;
+define pcodeop hd_ecag;
 define pcodeop hd_ecctr;
 define pcodeop hd_ecctr_cc;
+define pcodeop hd_ecpga;
+define pcodeop hd_ecpga_cc;
+define pcodeop hd_ectg;
+define pcodeop hd_ectg_1;
 define pcodeop hd_ed;
 define pcodeop hd_ed_cc;
 define pcodeop hd_edmk;
 define pcodeop hd_edmk_cc;
 define pcodeop hd_eedtr;
 define pcodeop hd_eextr;
+define pcodeop hd_epair;
+define pcodeop hd_epar;
+define pcodeop hd_epctr;
+define pcodeop hd_epctr_cc;
+define pcodeop hd_epsw;
+define pcodeop hd_epsw_1;
+define pcodeop hd_ereg;
+define pcodeop hd_eregg;
+define pcodeop hd_esair;
+define pcodeop hd_esar;
 define pcodeop hd_esdtr;
+define pcodeop hd_esea;
+define pcodeop hd_esta;
+define pcodeop hd_esta_1;
+define pcodeop hd_esta_cc;
 define pcodeop hd_esxtr;
+define pcodeop hd_etnd;
 define pcodeop hd_fidr;
 define pcodeop hd_fidtr;
 define pcodeop hd_fier;
@@ -196,27 +296,132 @@ define pcodeop hd_fixtr;
 define pcodeop hd_fixtr_1;
 define pcodeop hd_hdr;
 define pcodeop hd_her;
+define pcodeop hd_hsch;
+define pcodeop hd_hsch_cc;
+define pcodeop hd_iac;
+define pcodeop hd_idte;
 define pcodeop hd_iedtr;
 define pcodeop hd_iextr;
 define pcodeop hd_iextr_1;
+define pcodeop hd_ipk;
+define pcodeop hd_ipte;
+define pcodeop hd_irbm;
+define pcodeop hd_iske;
+define pcodeop hd_ivsk;
+define pcodeop hd_kdsa;
+define pcodeop hd_kdsa_1;
+define pcodeop hd_kdsa_cc;
 define pcodeop hd_kdtr;
 define pcodeop hd_kdtr_cc;
+define pcodeop hd_kimd;
+define pcodeop hd_kimd_1;
+define pcodeop hd_kimd_2;
+define pcodeop hd_kimd_cc;
+define pcodeop hd_klmd;
+define pcodeop hd_klmd_1;
+define pcodeop hd_klmd_2;
+define pcodeop hd_klmd_cc;
+define pcodeop hd_km;
+define pcodeop hd_km_1;
+define pcodeop hd_km_2;
+define pcodeop hd_km_3;
+define pcodeop hd_km_cc;
+define pcodeop hd_kma;
+define pcodeop hd_kma_1;
+define pcodeop hd_kma_2;
+define pcodeop hd_kma_3;
+define pcodeop hd_kma_4;
+define pcodeop hd_kma_5;
+define pcodeop hd_kma_cc;
+define pcodeop hd_kmac;
+define pcodeop hd_kmac_1;
+define pcodeop hd_kmac_cc;
+define pcodeop hd_kmc;
+define pcodeop hd_kmc_1;
+define pcodeop hd_kmc_2;
+define pcodeop hd_kmc_3;
+define pcodeop hd_kmc_cc;
+define pcodeop hd_kmctr;
+define pcodeop hd_kmctr_1;
+define pcodeop hd_kmctr_2;
+define pcodeop hd_kmctr_3;
+define pcodeop hd_kmctr_4;
+define pcodeop hd_kmctr_5;
+define pcodeop hd_kmctr_cc;
+define pcodeop hd_kmf;
+define pcodeop hd_kmf_1;
+define pcodeop hd_kmf_2;
+define pcodeop hd_kmf_3;
+define pcodeop hd_kmf_cc;
+define pcodeop hd_kmo;
+define pcodeop hd_kmo_1;
+define pcodeop hd_kmo_2;
+define pcodeop hd_kmo_3;
+define pcodeop hd_kmo_cc;
 define pcodeop hd_kxtr;
 define pcodeop hd_kxtr_cc;
+define pcodeop hd_lam;
+define pcodeop hd_lam_1;
+define pcodeop hd_lamy;
+define pcodeop hd_lamy_1;
+define pcodeop hd_lasp;
+define pcodeop hd_lasp_cc;
+define pcodeop hd_lbear;
+define pcodeop hd_lcctl;
+define pcodeop hd_lcctl_cc;
+define pcodeop hd_lctl;
+define pcodeop hd_lctl_1;
+define pcodeop hd_lctlg;
+define pcodeop hd_lctlg_1;
+define pcodeop hd_lcxr;
+define pcodeop hd_lcxr_1;
+define pcodeop hd_lcxr_cc;
 define pcodeop hd_ldetr;
 define pcodeop hd_ldxr;
 define pcodeop hd_ldxtr;
 define pcodeop hd_ldxtr_1;
 define pcodeop hd_ledr;
 define pcodeop hd_ledtr;
+define pcodeop hd_lexr;
+define pcodeop hd_lfas;
+define pcodeop hd_lgg;
+define pcodeop hd_lgsc;
+define pcodeop hd_llgfsg;
+define pcodeop hd_lmd;
+define pcodeop hd_lmd_1;
 define pcodeop hd_lnxr;
 define pcodeop hd_lnxr_1;
 define pcodeop hd_lnxr_cc;
+define pcodeop hd_lpctl;
+define pcodeop hd_lpctl_cc;
+define pcodeop hd_lpp;
+define pcodeop hd_lpsw;
+define pcodeop hd_lpswe;
+define pcodeop hd_lpswey;
+define pcodeop hd_lptea;
+define pcodeop hd_lptea_1;
+define pcodeop hd_lptea_cc;
+define pcodeop hd_lpxr;
+define pcodeop hd_lpxr_1;
+define pcodeop hd_lpxr_cc;
+define pcodeop hd_lra;
+define pcodeop hd_lra_cc;
+define pcodeop hd_lrag;
+define pcodeop hd_lrag_cc;
+define pcodeop hd_lray;
+define pcodeop hd_lray_cc;
+define pcodeop hd_lsctl;
+define pcodeop hd_lsctl_cc;
 define pcodeop hd_ltdtr;
 define pcodeop hd_ltdtr_cc;
+define pcodeop hd_ltxr;
+define pcodeop hd_ltxr_1;
+define pcodeop hd_ltxr_cc;
 define pcodeop hd_ltxtr;
 define pcodeop hd_ltxtr_1;
 define pcodeop hd_ltxtr_cc;
+define pcodeop hd_lura;
+define pcodeop hd_lurag;
 define pcodeop hd_lxd;
 define pcodeop hd_lxd_1;
 define pcodeop hd_lxdr;
@@ -237,6 +442,7 @@ define pcodeop hd_mayhr;
 define pcodeop hd_mayl;
 define pcodeop hd_maylr;
 define pcodeop hd_mayr;
+define pcodeop hd_mc;
 define pcodeop hd_md;
 define pcodeop hd_mde;
 define pcodeop hd_mder;
@@ -246,19 +452,39 @@ define pcodeop hd_mdtra;
 define pcodeop hd_mee;
 define pcodeop hd_meer;
 define pcodeop hd_mp;
+define pcodeop hd_msch;
+define pcodeop hd_msch_cc;
 define pcodeop hd_msd;
 define pcodeop hd_msdr;
 define pcodeop hd_mse;
 define pcodeop hd_mser;
+define pcodeop hd_msta;
+define pcodeop hd_mvcdk;
 define pcodeop hd_mvcin;
 define pcodeop hd_mvck;
 define pcodeop hd_mvck_cc;
+define pcodeop hd_mvcl;
+define pcodeop hd_mvcl_1;
+define pcodeop hd_mvcl_2;
+define pcodeop hd_mvcl_3;
+define pcodeop hd_mvcl_cc;
 define pcodeop hd_mvcle;
 define pcodeop hd_mvcle_1;
 define pcodeop hd_mvcle_2;
 define pcodeop hd_mvcle_3;
 define pcodeop hd_mvcle_cc;
+define pcodeop hd_mvclu;
+define pcodeop hd_mvclu_1;
+define pcodeop hd_mvclu_2;
+define pcodeop hd_mvclu_3;
+define pcodeop hd_mvclu_cc;
+define pcodeop hd_mvcos;
+define pcodeop hd_mvcp;
+define pcodeop hd_mvcp_cc;
 define pcodeop hd_mvcrl;
+define pcodeop hd_mvcs;
+define pcodeop hd_mvcs_cc;
+define pcodeop hd_mvcsk;
 define pcodeop hd_mvn;
 define pcodeop hd_mvo;
 define pcodeop hd_mvpg;
@@ -282,23 +508,81 @@ define pcodeop hd_myl;
 define pcodeop hd_mylr;
 define pcodeop hd_myr;
 define pcodeop hd_myr_1;
+define pcodeop hd_niai;
+define pcodeop hd_nnpa;
+define pcodeop hd_nnpa_cc;
+define pcodeop hd_ntstg;
 define pcodeop hd_pack;
+define pcodeop hd_palb;
+define pcodeop hd_pc;
+define pcodeop hd_pcc;
+define pcodeop hd_pcc_cc;
+define pcodeop hd_pckmo;
+define pcodeop hd_pfmf;
+define pcodeop hd_pfpo;
+define pcodeop hd_pfpo_1;
+define pcodeop hd_pfpo_cc;
+define pcodeop hd_pgin;
+define pcodeop hd_pgin_cc;
+define pcodeop hd_pgout;
+define pcodeop hd_pgout_cc;
 define pcodeop hd_pka;
 define pcodeop hd_pku;
 define pcodeop hd_plo;
 define pcodeop hd_plo_cc;
+define pcodeop hd_ppa;
+define pcodeop hd_ppno;
+define pcodeop hd_ppno_1;
+define pcodeop hd_ppno_2;
+define pcodeop hd_ppno_3;
+define pcodeop hd_ppno_cc;
+define pcodeop hd_pr;
+define pcodeop hd_pr_cc;
+define pcodeop hd_pt;
+define pcodeop hd_ptf;
+define pcodeop hd_ptff;
+define pcodeop hd_ptff_cc;
+define pcodeop hd_pti;
+define pcodeop hd_ptlb;
 define pcodeop hd_qadtr;
 define pcodeop hd_qadtr_1;
 define pcodeop hd_qaxtr;
 define pcodeop hd_qaxtr_1;
 define pcodeop hd_qaxtr_2;
 define pcodeop hd_qaxtr_3;
+define pcodeop hd_qctri;
+define pcodeop hd_qpaci;
+define pcodeop hd_qpaci_cc;
+define pcodeop hd_qsi;
+define pcodeop hd_rchp;
+define pcodeop hd_rchp_cc;
+define pcodeop hd_rdp;
+define pcodeop hd_rp;
+define pcodeop hd_rp_cc;
+define pcodeop hd_rrbe;
+define pcodeop hd_rrbe_cc;
+define pcodeop hd_rrbm;
 define pcodeop hd_rrdtr;
 define pcodeop hd_rrdtr_1;
 define pcodeop hd_rrxtr;
 define pcodeop hd_rrxtr_1;
 define pcodeop hd_rrxtr_2;
 define pcodeop hd_rrxtr_3;
+define pcodeop hd_rsch;
+define pcodeop hd_rsch_cc;
+define pcodeop hd_sac;
+define pcodeop hd_sacf;
+define pcodeop hd_sal;
+define pcodeop hd_sam24;
+define pcodeop hd_sam31;
+define pcodeop hd_sam64;
+define pcodeop hd_scctr;
+define pcodeop hd_scctr_cc;
+define pcodeop hd_schm;
+define pcodeop hd_sck;
+define pcodeop hd_sck_cc;
+define pcodeop hd_sckc;
+define pcodeop hd_sckpf;
 define pcodeop hd_sd;
 define pcodeop hd_sd_cc;
 define pcodeop hd_sdr;
@@ -311,11 +595,30 @@ define pcodeop hd_se;
 define pcodeop hd_se_cc;
 define pcodeop hd_ser;
 define pcodeop hd_ser_cc;
+define pcodeop hd_sfasr;
+define pcodeop hd_sie;
+define pcodeop hd_sie_cc;
+define pcodeop hd_siga;
+define pcodeop hd_siga_cc;
+define pcodeop hd_sigp;
+define pcodeop hd_sigp_cc;
 define pcodeop hd_sldt;
 define pcodeop hd_slxt;
 define pcodeop hd_slxt_1;
+define pcodeop hd_sortl;
+define pcodeop hd_sortl_1;
+define pcodeop hd_sortl_2;
+define pcodeop hd_sortl_3;
+define pcodeop hd_sortl_cc;
 define pcodeop hd_sp;
 define pcodeop hd_sp_cc;
+define pcodeop hd_spctr;
+define pcodeop hd_spctr_cc;
+define pcodeop hd_spka;
+define pcodeop hd_spm;
+define pcodeop hd_spm_cc;
+define pcodeop hd_spt;
+define pcodeop hd_spx;
 define pcodeop hd_sqd;
 define pcodeop hd_sqdr;
 define pcodeop hd_sqe;
@@ -330,6 +633,45 @@ define pcodeop hd_srstu_1;
 define pcodeop hd_srstu_cc;
 define pcodeop hd_srxt;
 define pcodeop hd_srxt_1;
+define pcodeop hd_ssair;
+define pcodeop hd_ssar;
+define pcodeop hd_ssch;
+define pcodeop hd_ssch_cc;
+define pcodeop hd_sske;
+define pcodeop hd_sske_cc;
+define pcodeop hd_ssm;
+define pcodeop hd_stam;
+define pcodeop hd_stamy;
+define pcodeop hd_stap;
+define pcodeop hd_stbear;
+define pcodeop hd_stck;
+define pcodeop hd_stck_cc;
+define pcodeop hd_stckc;
+define pcodeop hd_stcke;
+define pcodeop hd_stcke_cc;
+define pcodeop hd_stckf;
+define pcodeop hd_stckf_cc;
+define pcodeop hd_stcps;
+define pcodeop hd_stcrw;
+define pcodeop hd_stcrw_cc;
+define pcodeop hd_stctg;
+define pcodeop hd_stctl;
+define pcodeop hd_stfl;
+define pcodeop hd_stfle;
+define pcodeop hd_stfle_cc;
+define pcodeop hd_stgsc;
+define pcodeop hd_stidp;
+define pcodeop hd_stnsm;
+define pcodeop hd_stosm;
+define pcodeop hd_stpt;
+define pcodeop hd_stpx;
+define pcodeop hd_strag;
+define pcodeop hd_stsch;
+define pcodeop hd_stsch_cc;
+define pcodeop hd_stsi;
+define pcodeop hd_stsi_cc;
+define pcodeop hd_stura;
+define pcodeop hd_sturg;
 define pcodeop hd_su;
 define pcodeop hd_su_cc;
 define pcodeop hd_sur;
@@ -347,10 +689,21 @@ define pcodeop hd_sxtr_cc;
 define pcodeop hd_sxtra;
 define pcodeop hd_sxtra_1;
 define pcodeop hd_sxtra_cc;
+define pcodeop hd_tabort;
+define pcodeop hd_tam;
+define pcodeop hd_tam_cc;
+define pcodeop hd_tar;
+define pcodeop hd_tar_cc;
+define pcodeop hd_tb;
+define pcodeop hd_tb_cc;
 define pcodeop hd_tbdr;
 define pcodeop hd_tbdr_cc;
 define pcodeop hd_tbedr;
 define pcodeop hd_tbedr_cc;
+define pcodeop hd_tbegin;
+define pcodeop hd_tbegin_cc;
+define pcodeop hd_tbeginc;
+define pcodeop hd_tbeginc_cc;
 define pcodeop hd_tdcdt;
 define pcodeop hd_tdcdt_cc;
 define pcodeop hd_tdcet;
@@ -363,15 +716,25 @@ define pcodeop hd_tdget;
 define pcodeop hd_tdget_cc;
 define pcodeop hd_tdgxt;
 define pcodeop hd_tdgxt_cc;
+define pcodeop hd_tend;
+define pcodeop hd_tend_cc;
 define pcodeop hd_thder;
 define pcodeop hd_thder_cc;
 define pcodeop hd_thdr;
 define pcodeop hd_thdr_cc;
 define pcodeop hd_tp;
 define pcodeop hd_tp_cc;
+define pcodeop hd_tpei;
+define pcodeop hd_tpei_cc;
+define pcodeop hd_tpi;
+define pcodeop hd_tpi_cc;
+define pcodeop hd_tprot;
+define pcodeop hd_tprot_cc;
 define pcodeop hd_tr;
 define pcodeop hd_trace;
 define pcodeop hd_tracg;
+define pcodeop hd_trap2;
+define pcodeop hd_trap4;
 define pcodeop hd_tre;
 define pcodeop hd_tre_1;
 define pcodeop hd_tre_2;
@@ -384,6 +747,7 @@ define pcodeop hd_trot_1;
 define pcodeop hd_trot_2;
 define pcodeop hd_trot_cc;
 define pcodeop hd_trt;
+define pcodeop hd_trt_1;
 define pcodeop hd_trt_cc;
 define pcodeop hd_trte;
 define pcodeop hd_trte_1;
@@ -394,6 +758,7 @@ define pcodeop hd_trto_1;
 define pcodeop hd_trto_2;
 define pcodeop hd_trto_cc;
 define pcodeop hd_trtr;
+define pcodeop hd_trtr_1;
 define pcodeop hd_trtr_cc;
 define pcodeop hd_trtre;
 define pcodeop hd_trtre_1;
@@ -403,11 +768,21 @@ define pcodeop hd_trtt;
 define pcodeop hd_trtt_1;
 define pcodeop hd_trtt_2;
 define pcodeop hd_trtt_cc;
+define pcodeop hd_tsch;
+define pcodeop hd_tsch_cc;
 define pcodeop hd_unpk;
 define pcodeop hd_unpka;
 define pcodeop hd_unpka_cc;
 define pcodeop hd_unpku;
 define pcodeop hd_unpku_cc;
+define pcodeop hd_upt;
+define pcodeop hd_upt_1;
+define pcodeop hd_upt_2;
+define pcodeop hd_upt_3;
+define pcodeop hd_upt_4;
+define pcodeop hd_upt_cc;
+define pcodeop hd_xsch;
+define pcodeop hd_xsch_cc;
 define pcodeop hd_zap;
 define pcodeop hd_zap_cc;
 
@@ -450,38 +825,50 @@ Ac_28_8_x32: disp(c_yr32) is c_yr32 & c_y28_31=0 & c_y16_27 & c_ys8_15 [ disp = 
 Ac_28_8_x32: disp(c_yr28) is c_y32_35=0 & c_yr28 & c_y16_27 & c_ys8_15 [ disp = (c_ys8_15 << 12) | c_y16_27; ] { local ea:8 = c_yr28 + disp; export ea; }
 Ac_28_8_x32: disp is c_y32_35=0 & c_y28_31=0 & c_y16_27 & c_ys8_15 [ disp = (c_ys8_15 << 12) | c_y16_27; ] { export *[const]:8 disp; }
 
-:ad b_yf20,Ab_12_0_x16 is b_y24_31=106 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_ad(b_yf20, Ab_12_0_x16); b_yf20 = o0; local cc:1 = hd_ad_cc(b_yf20, Ab_12_0_x16); ccFrom(cc); }
-:adr a_yf4,a_yf0 is a_y8_15=42 & a_yf4 & a_yf0 { local o0:8 = hd_adr(a_yf4, a_yf0); a_yf4 = o0; local cc:1 = hd_adr_cc(a_yf4, a_yf0); ccFrom(cc); }
-:adtr b_yf4,b_yf0,b_yf12 is b_y16_31=46034 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_adtr(b_yf0, b_yf12); b_yf4 = o0; local cc:1 = hd_adtr_cc(b_yf0, b_yf12); ccFrom(cc); }
-:adtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46034 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_adtra(b_yf0, b_yf12, imm_b_y8_11); b_yf4 = o0; local cc:1 = hd_adtra_cc(b_yf0, b_yf12, imm_b_y8_11); ccFrom(cc); }
-:ae b_yfs20,Ab_12_0_x16 is b_y24_31=122 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_ae(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; local cc:1 = hd_ae_cc(b_yfs20, Ab_12_0_x16); ccFrom(cc); }
-:aer a_yfs4,a_yfs0 is a_y8_15=58 & a_yfs4 & a_yfs0 { local o0:4 = hd_aer(a_yfs4, a_yfs0); a_yfs4 = o0; local cc:1 = hd_aer_cc(a_yfs4, a_yfs0); ccFrom(cc); }
+REL_c_ys0_15: reloc is c_ys0_15 [ reloc = inst_start + 2 * c_ys0_15; ] { export *[const]:8 reloc; }
+
+REL_c_ys0_23: reloc is c_ys0_23 [ reloc = inst_start + 2 * c_ys0_23; ] { export *[const]:8 reloc; }
+
+REL_c_ys24_35: reloc is c_ys24_35 [ reloc = inst_start + 2 * c_ys24_35; ] { export *[const]:8 reloc; }
+
+:ad b_yf20,Ab_12_0_x16 is b_y24_31=106 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_ad(b_yf20, Ab_12_0_x16); local cc:1 = hd_ad_cc(b_yf20, Ab_12_0_x16); b_yf20 = o0; ccFrom(cc); }
+:adr a_yf4,a_yf0 is a_y8_15=42 & a_yf4 & a_yf0 { local o0:8 = hd_adr(a_yf4, a_yf0); local cc:1 = hd_adr_cc(a_yf4, a_yf0); a_yf4 = o0; ccFrom(cc); }
+:adtr b_yf4,b_yf0,b_yf12 is b_y16_31=46034 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_adtr(b_yf0, b_yf12, fpc); local cc:1 = hd_adtr_cc(b_yf0, b_yf12, fpc); b_yf4 = o0; ccFrom(cc); }
+:adtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46034 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_adtra(b_yf0, b_yf12, imm_b_y8_11, fpc); local cc:1 = hd_adtra_cc(b_yf0, b_yf12, imm_b_y8_11, fpc); b_yf4 = o0; ccFrom(cc); }
+:ae b_yfs20,Ab_12_0_x16 is b_y24_31=122 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_ae(b_yfs20, Ab_12_0_x16); local cc:1 = hd_ae_cc(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; ccFrom(cc); }
+:aer a_yfs4,a_yfs0 is a_y8_15=58 & a_yfs4 & a_yfs0 { local o0:4 = hd_aer(a_yfs4, a_yfs0); local cc:1 = hd_aer_cc(a_yfs4, a_yfs0); a_yfs4 = o0; ccFrom(cc); }
 :ap Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=250 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_ap(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); local cc:1 = hd_ap_cc(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); ccFrom(cc); }
-:au b_yfs20,Ab_12_0_x16 is b_y24_31=126 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_au(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; local cc:1 = hd_au_cc(b_yfs20, Ab_12_0_x16); ccFrom(cc); }
-:aur a_yfs4,a_yfs0 is a_y8_15=62 & a_yfs4 & a_yfs0 { local o0:4 = hd_aur(a_yfs4, a_yfs0); a_yfs4 = o0; local cc:1 = hd_aur_cc(a_yfs4, a_yfs0); ccFrom(cc); }
-:aw b_yf20,Ab_12_0_x16 is b_y24_31=110 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_aw(b_yf20, Ab_12_0_x16); b_yf20 = o0; local cc:1 = hd_aw_cc(b_yf20, Ab_12_0_x16); ccFrom(cc); }
-:awr a_yf4,a_yf0 is a_y8_15=46 & a_yf4 & a_yf0 { local o0:8 = hd_awr(a_yf4, a_yf0); a_yf4 = o0; local cc:1 = hd_awr_cc(a_yf4, a_yf0); ccFrom(cc); }
-:axr a_yf4,a_yf0 is a_y8_15=54 & a_yf4 & a_yfq4 & a_yf0 & a_yfq0 { local o0:8 = hd_axr(a_yf4, a_yfq4, a_yf0, a_yfq0); local o1:8 = hd_axr_1(a_yf4, a_yfq4, a_yf0, a_yfq0); a_yf4 = o0; a_yfq4 = o1; local cc:1 = hd_axr_cc(a_yf4, a_yfq4, a_yf0, a_yfq0); ccFrom(cc); }
-:axtr b_yf4,b_yf0,b_yf12 is b_y16_31=46042 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_axtr(b_yf0, b_yfq0, b_yf12, b_yfq12); local o1:8 = hd_axtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_axtr_cc(b_yf0, b_yfq0, b_yf12, b_yfq12); ccFrom(cc); }
-:axtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46042 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_axtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); local o1:8 = hd_axtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_axtra_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); ccFrom(cc); }
+:au b_yfs20,Ab_12_0_x16 is b_y24_31=126 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_au(b_yfs20, Ab_12_0_x16); local cc:1 = hd_au_cc(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; ccFrom(cc); }
+:aur a_yfs4,a_yfs0 is a_y8_15=62 & a_yfs4 & a_yfs0 { local o0:4 = hd_aur(a_yfs4, a_yfs0); local cc:1 = hd_aur_cc(a_yfs4, a_yfs0); a_yfs4 = o0; ccFrom(cc); }
+:aw b_yf20,Ab_12_0_x16 is b_y24_31=110 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_aw(b_yf20, Ab_12_0_x16); local cc:1 = hd_aw_cc(b_yf20, Ab_12_0_x16); b_yf20 = o0; ccFrom(cc); }
+:awr a_yf4,a_yf0 is a_y8_15=46 & a_yf4 & a_yf0 { local o0:8 = hd_awr(a_yf4, a_yf0); local cc:1 = hd_awr_cc(a_yf4, a_yf0); a_yf4 = o0; ccFrom(cc); }
+:axr a_yf4,a_yf0 is a_y8_15=54 & a_yf4 & a_yfq4 & a_yf0 & a_yfq0 { local o0:8 = hd_axr(a_yf4, a_yfq4, a_yf0, a_yfq0); local o1:8 = hd_axr_1(a_yf4, a_yfq4, a_yf0, a_yfq0); local cc:1 = hd_axr_cc(a_yf4, a_yfq4, a_yf0, a_yfq0); a_yf4 = o0; a_yfq4 = o1; ccFrom(cc); }
+:axtr b_yf4,b_yf0,b_yf12 is b_y16_31=46042 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_axtr(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local o1:8 = hd_axtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local cc:1 = hd_axtr_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:axtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46042 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_axtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local o1:8 = hd_axtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local cc:1 = hd_axtra_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:bakr b_yr4,b_yr0 is b_y8_31=11681792 & b_yr4 & b_yr0 { hd_bakr(b_yr4, b_yr0); }
 :bassm a_yr4,a_yr0 is a_y8_15=12 & a_yr4 & a_yr0 { local tg:8 = a_yr0 & ~1; a_yr4 = inst_next | 1; call [tg]; }
 :bassm a_yr4,0 is a_y8_15=12 & a_yr4 & a_y0_3=0 { a_yr4 = inst_next | 1; }
+:bic 0,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=71 & Ac_28_8_x32 & c_y36_39=0 {  }
+:bpp c_y36_39,REL_c_ys0_15,Ac_28_16 is c_y40_47=199 & c_y32_35=0 & c_y36_39 & REL_c_ys0_15 & Ac_28_16 { local imm_c_y36_39:8 = c_y36_39; hd_bpp(imm_c_y36_39, REL_c_ys0_15, Ac_28_16); }
+:bprp c_y36_39,REL_c_ys24_35,REL_c_ys0_23 is c_y40_47=197 & c_y36_39 & REL_c_ys24_35 & REL_c_ys0_23 { local imm_c_y36_39:8 = c_y36_39; hd_bprp(imm_c_y36_39, REL_c_ys24_35, REL_c_ys0_23); }
+:bsa b_yr4,b_yr0 is b_y8_31=11688448 & b_yr4 & b_yr0 { local o0:8 = hd_bsa(b_yr0); b_yr4 = o0; }
+:bsg b_yr4,b_yr0 is b_y8_31=11687936 & b_yr4 & b_yr0 { local o0:8 = hd_bsg(b_yr0); b_yr4 = o0; }
 :bsm 0,a_yr0 is a_y8_15=11 & a_y4_7=0 & a_yr0 { local tg:8 = a_yr0 & ~1; goto [tg]; }
 :bsm a_yr4,a_yr0 is a_y8_15=11 & a_yr4 & a_yr0 { local tg:8 = a_yr0 & ~1; a_yr4 = a_yr4 | 1; goto [tg]; }
 :bsm a_yr4,0 is a_y8_15=11 & a_yr4 & a_y0_3=0 { a_yr4 = a_yr4 | 1; }
 :bsm 0,0 is a_y8_15=11 & a_y4_7=0 & a_y0_3=0 {  }
 :cd b_yf20,Ab_12_0_x16 is b_y24_31=105 & b_yf20 & Ab_12_0_x16 { hd_cd(b_yf20, Ab_12_0_x16); local cc:1 = hd_cd_cc(b_yf20, Ab_12_0_x16); ccFrom(cc); }
 :cdfr b_yf4,b_yrl0 is b_y8_31=11777280 & b_yf4 & b_yrl0 { local o0:8 = hd_cdfr(b_yrl0); b_yf4 = o0; }
-:cdftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47441 & b_yf4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdftr(imm_b_y12_15, b_yrl0, imm_b_y8_11); b_yf4 = o0; }
+:cdftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47441 & b_yf4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdftr(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; }
 :cdgr b_yf4,b_yr0 is b_y8_31=11781376 & b_yf4 & b_yr0 { local o0:8 = hd_cdgr(b_yr0); b_yf4 = o0; }
-:cdgtr b_yf4,b_yr0 is b_y8_31=11792640 & b_yf4 & b_yr0 { local o0:8 = hd_cdgtr(b_yr0); b_yf4 = o0; }
-:cdgtra b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=46065 & b_yf4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdgtra(imm_b_y12_15, b_yr0, imm_b_y8_11); b_yf4 = o0; }
-:cdlftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47443 & b_yf4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdlftr(imm_b_y12_15, b_yrl0, imm_b_y8_11); b_yf4 = o0; }
-:cdlgtr b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=47442 & b_yf4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdlgtr(imm_b_y12_15, b_yr0, imm_b_y8_11); b_yf4 = o0; }
+:cdgtr b_yf4,b_yr0 is b_y8_31=11792640 & b_yf4 & b_yr0 { local o0:8 = hd_cdgtr(b_yr0, fpc); b_yf4 = o0; }
+:cdgtra b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=46065 & b_yf4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdgtra(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); b_yf4 = o0; }
+:cdlftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47443 & b_yf4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdlftr(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; }
+:cdlgtr b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=47442 & b_yf4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cdlgtr(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); b_yf4 = o0; }
 :cdpt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=174 & c_yf12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; local o0:8 = hd_cdpt(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); c_yf12 = o0; }
 :cdr a_yf4,a_yf0 is a_y8_15=41 & a_yf4 & a_yf0 { hd_cdr(a_yf4, a_yf0); local cc:1 = hd_cdr_cc(a_yf4, a_yf0); ccFrom(cc); }
 :cdstr b_yf4,b_yr0 is b_y8_31=11793152 & b_yf4 & b_yr0 { local o0:8 = hd_cdstr(b_yr0); b_yf4 = o0; }
-:cdtr b_yf4,b_yf0 is b_y8_31=11789312 & b_yf4 & b_yf0 { hd_cdtr(b_yf4, b_yf0); local cc:1 = hd_cdtr_cc(b_yf4, b_yf0); ccFrom(cc); }
+:cdtr b_yf4,b_yf0 is b_y8_31=11789312 & b_yf4 & b_yf0 { hd_cdtr(b_yf4, b_yf0, fpc); local cc:1 = hd_cdtr_cc(b_yf4, b_yf0, fpc); ccFrom(cc); }
 :cdutr b_yf4,b_yr0 is b_y8_31=11792896 & b_yf4 & b_yr0 { local o0:8 = hd_cdutr(b_yr0); b_yf4 = o0; }
 :cdzt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=170 & c_yf12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; local o0:8 = hd_cdzt(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); c_yf12 = o0; }
 :ce b_yfs20,Ab_12_0_x16 is b_y24_31=121 & b_yfs20 & Ab_12_0_x16 { hd_ce(b_yfs20, Ab_12_0_x16); local cc:1 = hd_ce_cc(b_yfs20, Ab_12_0_x16); ccFrom(cc); }
@@ -490,31 +877,116 @@ Ac_28_8_x32: disp is c_y32_35=0 & c_y28_31=0 & c_y16_27 & c_ys8_15 [ disp = (c_y
 :cegr b_yfs4,b_yr0 is b_y8_31=11781120 & b_yfs4 & b_yr0 { local o0:4 = hd_cegr(b_yr0); b_yfs4 = o0; }
 :cer a_yfs4,a_yfs0 is a_y8_15=57 & a_yfs4 & a_yfs0 { hd_cer(a_yfs4, a_yfs0); local cc:1 = hd_cer_cc(a_yfs4, a_yfs0); ccFrom(cc); }
 :cextr b_yf4,b_yf0 is b_y8_31=11795456 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_cextr(b_yf4, b_yfq4, b_yf0, b_yfq0); local cc:1 = hd_cextr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0); ccFrom(cc); }
-:cfdr b_yrl4,b_y12_15,b_yf0 is b_y16_31=46009 & b_y8_11=0 & b_yrl4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_cfdr(imm_b_y12_15, b_yf0); b_yrl4 = o0; local cc:1 = hd_cfdr_cc(imm_b_y12_15, b_yf0); ccFrom(cc); }
-:cfdtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47425 & b_yrl4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_cfdtr(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yrl4 = o0; local cc:1 = hd_cfdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11); ccFrom(cc); }
-:cfer b_yrl4,b_y12_15,b_yfs0 is b_y16_31=46008 & b_y8_11=0 & b_yrl4 & b_y12_15 & b_yfs0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_cfer(imm_b_y12_15, b_yfs0); b_yrl4 = o0; local cc:1 = hd_cfer_cc(imm_b_y12_15, b_yfs0); ccFrom(cc); }
-:cfxtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47433 & b_yrl4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_cfxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yrl4 = o0; local cc:1 = hd_cfxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); ccFrom(cc); }
-:cgdr b_yr4,b_y12_15,b_yf0 is b_y16_31=46025 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgdr(imm_b_y12_15, b_yf0); b_yr4 = o0; local cc:1 = hd_cgdr_cc(imm_b_y12_15, b_yf0); ccFrom(cc); }
-:cgdtr b_yr4,b_y12_15,b_yf0 is b_y16_31=46049 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgdtr(imm_b_y12_15, b_yf0); b_yr4 = o0; local cc:1 = hd_cgdtr_cc(imm_b_y12_15, b_yf0); ccFrom(cc); }
-:cgdtra b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46049 & b_yr4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cgdtra(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yr4 = o0; local cc:1 = hd_cgdtra_cc(imm_b_y12_15, b_yf0, imm_b_y8_11); ccFrom(cc); }
-:cger b_yr4,b_y12_15,b_yfs0 is b_y16_31=46024 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yfs0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cger(imm_b_y12_15, b_yfs0); b_yr4 = o0; local cc:1 = hd_cger_cc(imm_b_y12_15, b_yfs0); ccFrom(cc); }
-:cgxr b_yr4,b_y12_15,b_yf0 is b_y16_31=46026 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgxr(imm_b_y12_15, b_yf0, b_yfq0); b_yr4 = o0; local cc:1 = hd_cgxr_cc(imm_b_y12_15, b_yf0, b_yfq0); ccFrom(cc); }
-:cgxtr b_yr4,b_y12_15,b_yf0 is b_y16_31=46057 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgxtr(imm_b_y12_15, b_yf0, b_yfq0); b_yr4 = o0; local cc:1 = hd_cgxtr_cc(imm_b_y12_15, b_yf0, b_yfq0); ccFrom(cc); }
-:cgxtra b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46057 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cgxtra(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yr4 = o0; local cc:1 = hd_cgxtra_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); ccFrom(cc); }
-:clfdtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47427 & b_yrl4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_clfdtr(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yrl4 = o0; local cc:1 = hd_clfdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11); ccFrom(cc); }
-:clfxtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47435 & b_yrl4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_clfxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yrl4 = o0; local cc:1 = hd_clfxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); ccFrom(cc); }
-:clgdtr b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47426 & b_yr4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_clgdtr(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yr4 = o0; local cc:1 = hd_clgdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11); ccFrom(cc); }
-:clgxtr b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47434 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_clgxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yr4 = o0; local cc:1 = hd_clgxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); ccFrom(cc); }
-:cmpsc b_yr4,b_yr0 is b_y8_31=11690752 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cmpsc(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cmpsc_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cmpsc_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cmpsc_3(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; local cc:1 = hd_cmpsc_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); ccFrom(cc); }
+:cfc Ab_12_0 is b_y16_31=45594 & Ab_12_0 { local o0:8 = hd_cfc(Ab_12_0, r1, r2, r3); local o1:8 = hd_cfc_1(Ab_12_0, r1, r2, r3); local o2:8 = hd_cfc_2(Ab_12_0, r1, r2, r3); local cc:1 = hd_cfc_cc(Ab_12_0, r1, r2, r3); r1 = o0; r2 = o1; r3 = o2; ccFrom(cc); }
+:cfdr b_yrl4,b_y12_15,b_yf0 is b_y16_31=46009 & b_y8_11=0 & b_yrl4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_cfdr(imm_b_y12_15, b_yf0); local cc:1 = hd_cfdr_cc(imm_b_y12_15, b_yf0); b_yrl4 = o0; ccFrom(cc); }
+:cfdtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47425 & b_yrl4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_cfdtr(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); local cc:1 = hd_cfdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yrl4 = o0; ccFrom(cc); }
+:cfer b_yrl4,b_y12_15,b_yfs0 is b_y16_31=46008 & b_y8_11=0 & b_yrl4 & b_y12_15 & b_yfs0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_cfer(imm_b_y12_15, b_yfs0); local cc:1 = hd_cfer_cc(imm_b_y12_15, b_yfs0); b_yrl4 = o0; ccFrom(cc); }
+:cfxr b_yrl4,b_y12_15,b_yf0 is b_y16_31=46010 & b_y8_11=0 & b_yrl4 & b_y12_15 & b_yf0 & b_yfq0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_cfxr(imm_b_y12_15, b_yf0, b_yfq0); local cc:1 = hd_cfxr_cc(imm_b_y12_15, b_yf0, b_yfq0); b_yrl4 = o0; ccFrom(cc); }
+:cfxtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47433 & b_yrl4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_cfxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local cc:1 = hd_cfxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yrl4 = o0; ccFrom(cc); }
+:cgdr b_yr4,b_y12_15,b_yf0 is b_y16_31=46025 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgdr(imm_b_y12_15, b_yf0); local cc:1 = hd_cgdr_cc(imm_b_y12_15, b_yf0); b_yr4 = o0; ccFrom(cc); }
+:cgdtr b_yr4,b_y12_15,b_yf0 is b_y16_31=46049 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgdtr(imm_b_y12_15, b_yf0, fpc); local cc:1 = hd_cgdtr_cc(imm_b_y12_15, b_yf0, fpc); b_yr4 = o0; ccFrom(cc); }
+:cgdtra b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46049 & b_yr4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cgdtra(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); local cc:1 = hd_cgdtra_cc(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yr4 = o0; ccFrom(cc); }
+:cger b_yr4,b_y12_15,b_yfs0 is b_y16_31=46024 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yfs0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cger(imm_b_y12_15, b_yfs0); local cc:1 = hd_cger_cc(imm_b_y12_15, b_yfs0); b_yr4 = o0; ccFrom(cc); }
+:cgit c_yr36,c_ys16_31,0 is c_y40_47=236 & c_y32_35=0 & c_y0_11=112 & c_yr36 & c_ys16_31 & c_y12_15=0 {  }
+:cgit c_yr36,c_ys16_31,1 is c_y40_47=236 & c_y32_35=0 & c_y0_11=112 & c_yr36 & c_ys16_31 & c_y12_15=1 {  }
+:cgit c_yr36,c_ys16_31,14 is c_y40_47=236 & c_y32_35=0 & c_y0_11=112 & c_yr36 & c_ys16_31 & c_y12_15=14 { local x:8 = c_yr36; local y:8 = c_ys16_31; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cgit c_yr36,c_ys16_31,15 is c_y40_47=236 & c_y32_35=0 & c_y0_11=112 & c_yr36 & c_ys16_31 & c_y12_15=15 { local x:8 = c_yr36; local y:8 = c_ys16_31; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cgrt b_yr4,b_yr0,0 is b_y16_31=47456 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=0 {  }
+:cgrt b_yr4,b_yr0,1 is b_y16_31=47456 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=1 {  }
+:cgrt b_yr4,b_yr0,14 is b_y16_31=47456 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=14 { local x:8 = b_yr4; local y:8 = b_yr0; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cgrt b_yr4,b_yr0,15 is b_y16_31=47456 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=15 { local x:8 = b_yr4; local y:8 = b_yr0; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cgxr b_yr4,b_y12_15,b_yf0 is b_y16_31=46026 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgxr(imm_b_y12_15, b_yf0, b_yfq0); local cc:1 = hd_cgxr_cc(imm_b_y12_15, b_yf0, b_yfq0); b_yr4 = o0; ccFrom(cc); }
+:cgxtr b_yr4,b_y12_15,b_yf0 is b_y16_31=46057 & b_y8_11=0 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cgxtr(imm_b_y12_15, b_yf0, b_yfq0, fpc); local cc:1 = hd_cgxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, fpc); b_yr4 = o0; ccFrom(cc); }
+:cgxtra b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46057 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cgxtra(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local cc:1 = hd_cgxtra_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yr4 = o0; ccFrom(cc); }
+:cit c_yrl36,c_ys16_31,0 is c_y40_47=236 & c_y32_35=0 & c_y0_11=114 & c_yrl36 & c_ys16_31 & c_y12_15=0 {  }
+:cit c_yrl36,c_ys16_31,1 is c_y40_47=236 & c_y32_35=0 & c_y0_11=114 & c_yrl36 & c_ys16_31 & c_y12_15=1 {  }
+:cit c_yrl36,c_ys16_31,14 is c_y40_47=236 & c_y32_35=0 & c_y0_11=114 & c_yrl36 & c_ys16_31 & c_y12_15=14 { local x:4 = c_yrl36; local y:4 = c_ys16_31; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cit c_yrl36,c_ys16_31,15 is c_y40_47=236 & c_y32_35=0 & c_y0_11=114 & c_yrl36 & c_ys16_31 & c_y12_15=15 { local x:4 = c_yrl36; local y:4 = c_ys16_31; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:cksm b_yrl4,b_yr0 is b_y8_31=11682048 & b_yrl4 & b_yr0 & b_yrp0 { local o0:4 = hd_cksm(b_yrl4, b_yr0, b_yrp0); local o1:8 = hd_cksm_1(b_yrl4, b_yr0, b_yrp0); local o2:8 = hd_cksm_2(b_yrl4, b_yr0, b_yrp0); local cc:1 = hd_cksm_cc(b_yrl4, b_yr0, b_yrp0); b_yrl4 = o0; b_yr0 = o1; b_yrp0 = o2; ccFrom(cc); }
+:clcl a_yr4,a_yr0 is a_y8_15=15 & a_yr4 & a_yrp4 & a_yr0 & a_yrp0 { local o0:8 = hd_clcl(a_yr4, a_yrp4, a_yr0, a_yrp0); local o1:8 = hd_clcl_1(a_yr4, a_yrp4, a_yr0, a_yrp0); local o2:8 = hd_clcl_2(a_yr4, a_yrp4, a_yr0, a_yrp0); local o3:8 = hd_clcl_3(a_yr4, a_yrp4, a_yr0, a_yrp0); local cc:1 = hd_clcl_cc(a_yr4, a_yrp4, a_yr0, a_yrp0); a_yr4 = o0; a_yrp4 = o1; a_yr0 = o2; a_yrp0 = o3; ccFrom(cc); }
+:clcle b_yr20,b_yr16,Ab_12_0 is b_y24_31=169 & b_yr20 & b_yrp20 & b_yr16 & b_yrp16 & Ab_12_0 { local o0:8 = hd_clcle(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o1:8 = hd_clcle_1(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o2:8 = hd_clcle_2(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o3:8 = hd_clcle_3(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local cc:1 = hd_clcle_cc(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); b_yr20 = o0; b_yrp20 = o1; b_yr16 = o2; b_yrp16 = o3; ccFrom(cc); }
+:clclu c_yr36,c_yr32,Ac_28_8 is c_y40_47=235 & c_y0_7=143 & c_yr36 & c_yrp36 & c_yr32 & c_yrp32 & Ac_28_8 { local o0:8 = hd_clclu(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o1:8 = hd_clclu_1(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o2:8 = hd_clclu_2(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o3:8 = hd_clclu_3(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local cc:1 = hd_clclu_cc(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); c_yr36 = o0; c_yrp36 = o1; c_yr32 = o2; c_yrp32 = o3; ccFrom(cc); }
+:clfdtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47427 & b_yrl4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_clfdtr(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); local cc:1 = hd_clfdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yrl4 = o0; ccFrom(cc); }
+:clfit c_yrl36,c_y16_31,0 is c_y40_47=236 & c_y32_35=0 & c_y0_11=115 & c_yrl36 & c_y16_31 & c_y12_15=0 {  }
+:clfit c_yrl36,c_y16_31,1 is c_y40_47=236 & c_y32_35=0 & c_y0_11=115 & c_yrl36 & c_y16_31 & c_y12_15=1 {  }
+:clfit c_yrl36,c_y16_31,14 is c_y40_47=236 & c_y32_35=0 & c_y0_11=115 & c_yrl36 & c_y16_31 & c_y12_15=14 { local x:4 = c_yrl36; local y:4 = c_y16_31; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clfit c_yrl36,c_y16_31,15 is c_y40_47=236 & c_y32_35=0 & c_y0_11=115 & c_yrl36 & c_y16_31 & c_y12_15=15 { local x:4 = c_yrl36; local y:4 = c_y16_31; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clfxtr b_yrl4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47435 & b_yrl4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_clfxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local cc:1 = hd_clfxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yrl4 = o0; ccFrom(cc); }
+:clgdtr b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47426 & b_yr4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_clgdtr(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); local cc:1 = hd_clgdtr_cc(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yr4 = o0; ccFrom(cc); }
+:clgit c_yr36,c_y16_31,0 is c_y40_47=236 & c_y32_35=0 & c_y0_11=113 & c_yr36 & c_y16_31 & c_y12_15=0 {  }
+:clgit c_yr36,c_y16_31,1 is c_y40_47=236 & c_y32_35=0 & c_y0_11=113 & c_yr36 & c_y16_31 & c_y12_15=1 {  }
+:clgit c_yr36,c_y16_31,14 is c_y40_47=236 & c_y32_35=0 & c_y0_11=113 & c_yr36 & c_y16_31 & c_y12_15=14 { local x:8 = c_yr36; local y:8 = c_y16_31; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgit c_yr36,c_y16_31,15 is c_y40_47=236 & c_y32_35=0 & c_y0_11=113 & c_yr36 & c_y16_31 & c_y12_15=15 { local x:8 = c_yr36; local y:8 = c_y16_31; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgrt b_yr4,b_yr0,0 is b_y16_31=47457 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=0 {  }
+:clgrt b_yr4,b_yr0,1 is b_y16_31=47457 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=1 {  }
+:clgrt b_yr4,b_yr0,14 is b_y16_31=47457 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=14 { local x:8 = b_yr4; local y:8 = b_yr0; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgrt b_yr4,b_yr0,15 is b_y16_31=47457 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=15 { local x:8 = b_yr4; local y:8 = b_yr0; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgt c_yr36,0,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=0 {  }
+:clgt c_yr36,1,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=1 {  }
+:clgth c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=2 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x > y))) goto inst_next; trap(); }
+:clgt c_yr36,3,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=3 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x > y))) goto inst_next; trap(); }
+:clgtl c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=4 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x < y))) goto inst_next; trap(); }
+:clgt c_yr36,5,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=5 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x < y))) goto inst_next; trap(); }
+:clgtlh c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=6 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x < y) || (x > y))) goto inst_next; trap(); }
+:clgt c_yr36,7,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=7 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x < y) || (x > y))) goto inst_next; trap(); }
+:clgte c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=8 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y))) goto inst_next; trap(); }
+:clgt c_yr36,9,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=9 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y))) goto inst_next; trap(); }
+:clgthe c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=10 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x > y))) goto inst_next; trap(); }
+:clgt c_yr36,11,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=11 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x > y))) goto inst_next; trap(); }
+:clgtle c_yr36,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=12 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x < y))) goto inst_next; trap(); }
+:clgt c_yr36,13,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=13 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x < y))) goto inst_next; trap(); }
+:clgt c_yr36,14,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=14 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgt c_yr36,15,Ac_28_8 is c_y40_47=235 & c_y0_7=43 & c_yr36 & Ac_28_8 & c_y32_35=15 { local x:8 = c_yr36; local y:8 = *:8 Ac_28_8; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clgxtr b_yr4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=47434 & b_yr4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_clgxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local cc:1 = hd_clgxtr_cc(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yr4 = o0; ccFrom(cc); }
+:clrt b_yrl4,b_yrl0,0 is b_y16_31=47475 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=0 {  }
+:clrt b_yrl4,b_yrl0,1 is b_y16_31=47475 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=1 {  }
+:clrt b_yrl4,b_yrl0,14 is b_y16_31=47475 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=14 { local x:4 = b_yrl4; local y:4 = b_yrl0; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clrt b_yrl4,b_yrl0,15 is b_y16_31=47475 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=15 { local x:4 = b_yrl4; local y:4 = b_yrl0; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clt c_yrl36,0,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=0 {  }
+:clt c_yrl36,1,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=1 {  }
+:clth c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=2 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x > y))) goto inst_next; trap(); }
+:clt c_yrl36,3,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=3 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x > y))) goto inst_next; trap(); }
+:cltl c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=4 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x < y))) goto inst_next; trap(); }
+:clt c_yrl36,5,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=5 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x < y))) goto inst_next; trap(); }
+:cltlh c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=6 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x < y) || (x > y))) goto inst_next; trap(); }
+:clt c_yrl36,7,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=7 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x < y) || (x > y))) goto inst_next; trap(); }
+:clte c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=8 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y))) goto inst_next; trap(); }
+:clt c_yrl36,9,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=9 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y))) goto inst_next; trap(); }
+:clthe c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=10 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x > y))) goto inst_next; trap(); }
+:clt c_yrl36,11,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=11 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x > y))) goto inst_next; trap(); }
+:cltle c_yrl36,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=12 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x < y))) goto inst_next; trap(); }
+:clt c_yrl36,13,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=13 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x < y))) goto inst_next; trap(); }
+:clt c_yrl36,14,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=14 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:clt c_yrl36,15,Ac_28_8 is c_y40_47=235 & c_y0_7=35 & c_yrl36 & Ac_28_8 & c_y32_35=15 { local x:4 = c_yrl36; local y:4 = *:4 Ac_28_8; if (!((x == y) || (x < y) || (x > y))) goto inst_next; trap(); }
+:cmpsc b_yr4,b_yr0 is b_y8_31=11690752 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cmpsc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_cmpsc_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_cmpsc_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_cmpsc_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o4:8 = hd_cmpsc_4(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_cmpsc_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; r1 = o4; ccFrom(cc); }
 :cp Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=249 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_cp(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); local cc:1 = hd_cp_cc(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); ccFrom(cc); }
 :cpdt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=172 & c_yf12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; hd_cpdt(c_yf12, Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); }
 :cpxt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=173 & c_yf12 & c_yfq12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; hd_cpxt(c_yf12, c_yfq12, Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); }
+:cpya b_ya4,b_ya0 is b_y8_31=11685120 & b_ya4 & b_ya0 { local o0:4 = hd_cpya(b_ya0); b_ya4 = o0; }
+:crdte b_yr4,b_yr12,b_yr0,b_y8_11 is b_y16_31=47503 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_yr12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; hd_crdte(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, imm_b_y8_11); local cc:1 = hd_crdte_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, imm_b_y8_11); ccFrom(cc); }
+:crdte b_yr4,b_yr12,b_yr0 is b_y16_31=47503 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_yr12 { hd_crdte(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12); local cc:1 = hd_crdte_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12); ccFrom(cc); }
+:crt b_yrl4,b_yrl0,0 is b_y16_31=47474 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=0 {  }
+:crt b_yrl4,b_yrl0,1 is b_y16_31=47474 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=1 {  }
+:crt b_yrl4,b_yrl0,14 is b_y16_31=47474 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=14 { local x:4 = b_yrl4; local y:4 = b_yrl0; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:crt b_yrl4,b_yrl0,15 is b_y16_31=47474 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=15 { local x:4 = b_yrl4; local y:4 = b_yrl0; if (!((x == y) || (x s< y) || (x s> y))) goto inst_next; trap(); }
+:csch is b_y0_31=2989490176 { hd_csch(r1l); local cc:1 = hd_csch_cc(r1l); ccFrom(cc); }
 :csdtr b_yr4,b_yf0,b_y8_11 is b_y12_31=736816 & b_yr4 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_csdtr(b_yf0, imm_b_y8_11); b_yr4 = o0; }
+:csp b_yr4,b_yr0 is b_y8_31=11685888 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_csp(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_csp_1(b_yr4, b_yrp4, b_yr0); local cc:1 = hd_csp_cc(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; ccFrom(cc); }
+:cspg b_yr4,b_yr0 is b_y8_31=12159488 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_cspg(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_cspg_1(b_yr4, b_yrp4, b_yr0); local cc:1 = hd_cspg_cc(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; ccFrom(cc); }
+:csst Ac_28_16,Ac_12_0,c_yr36 is c_y40_47=200 & c_y32_35=2 & Ac_28_16 & Ac_12_0 & c_yr36 { hd_csst(Ac_28_16, Ac_12_0, c_yr36, r0l, r1); local cc:1 = hd_csst_cc(Ac_28_16, Ac_12_0, c_yr36, r0l, r1); ccFrom(cc); }
 :csxtr b_yr4,b_yf0,b_y8_11 is b_y12_31=736944 & b_yr4 & b_yrp4 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_csxtr(b_yf0, b_yfq0, imm_b_y8_11); local o1:8 = hd_csxtr_1(b_yf0, b_yfq0, imm_b_y8_11); b_yr4 = o0; b_yrp4 = o1; }
-:cu24 b_yr4,b_yr0,b_y12_15 is b_y16_31=47537 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cu24(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o1:8 = hd_cu24_1(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o2:8 = hd_cu24_2(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o3:8 = hd_cu24_3(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; local cc:1 = hd_cu24_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); ccFrom(cc); }
-:cu24 b_yr4,b_yr0 is b_y8_31=12169472 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu24(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu24_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu24_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu24_3(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; local cc:1 = hd_cu24_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); ccFrom(cc); }
+:cu12 b_yr4,b_yr0,b_y12_15 is b_y16_31=45735 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cu12(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o1:8 = hd_cu12_1(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o2:8 = hd_cu12_2(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o3:8 = hd_cu12_3(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local cc:1 = hd_cu12_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu12 b_yr4,b_yr0 is b_y8_31=11708160 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu12(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu12_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu12_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu12_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu12_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu14 b_yr4,b_yr0,b_y12_15 is b_y16_31=47536 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cu14(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o1:8 = hd_cu14_1(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o2:8 = hd_cu14_2(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o3:8 = hd_cu14_3(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local cc:1 = hd_cu14_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu14 b_yr4,b_yr0 is b_y8_31=12169216 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu14(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu14_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu14_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu14_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu14_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu21 b_yr4,b_yr0,b_y12_15 is b_y16_31=45734 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cu21(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o1:8 = hd_cu21_1(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o2:8 = hd_cu21_2(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o3:8 = hd_cu21_3(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local cc:1 = hd_cu21_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu21 b_yr4,b_yr0 is b_y8_31=11707904 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu21(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu21_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu21_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu21_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu21_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu24 b_yr4,b_yr0,b_y12_15 is b_y16_31=47537 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_cu24(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o1:8 = hd_cu24_1(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o2:8 = hd_cu24_2(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local o3:8 = hd_cu24_3(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); local cc:1 = hd_cu24_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu24 b_yr4,b_yr0 is b_y8_31=12169472 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu24(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu24_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu24_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu24_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu24_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu41 b_yr4,b_yr0 is b_y8_31=12169728 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu41(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu41_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu41_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu41_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu41_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:cu42 b_yr4,b_yr0 is b_y8_31=12169984 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cu42(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cu42_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cu42_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cu42_3(b_yr4, b_yrp4, b_yr0, b_yrp0); local cc:1 = hd_cu42_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
 :cudtr b_yr4,b_yf0 is b_y8_31=11788800 & b_yr4 & b_yf0 { local o0:8 = hd_cudtr(b_yf0); b_yr4 = o0; }
-:cuse b_yr4,b_yr0 is b_y8_31=11687680 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cuse(b_yr4, b_yrp4, b_yr0, b_yrp0); local o1:8 = hd_cuse_1(b_yr4, b_yrp4, b_yr0, b_yrp0); local o2:8 = hd_cuse_2(b_yr4, b_yrp4, b_yr0, b_yrp0); local o3:8 = hd_cuse_3(b_yr4, b_yrp4, b_yr0, b_yrp0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; local cc:1 = hd_cuse_cc(b_yr4, b_yrp4, b_yr0, b_yrp0); ccFrom(cc); }
+:cuse b_yr4,b_yr0 is b_y8_31=11687680 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_cuse(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1l); local o1:8 = hd_cuse_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1l); local o2:8 = hd_cuse_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1l); local o3:8 = hd_cuse_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1l); local cc:1 = hd_cuse_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1l); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
 :cuxtr b_yr4,b_yf0 is b_y8_31=11790848 & b_yr4 & b_yrp4 & b_yf0 & b_yfq0 { local o0:8 = hd_cuxtr(b_yf0, b_yfq0); local o1:8 = hd_cuxtr_1(b_yf0, b_yfq0); b_yr4 = o0; b_yrp4 = o1; }
 :cvb b_yrl20,Ab_12_0_x16 is b_y24_31=79 & b_yrl20 & Ab_12_0_x16 { local o0:4 = hd_cvb(b_yrl20, Ab_12_0_x16); b_yrl20 = o0; }
 :cvbg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=14 & c_yr36 & Ac_28_8_x32 { local o0:8 = hd_cvbg(c_yr36, Ac_28_8_x32); c_yr36 = o0; }
@@ -523,71 +995,176 @@ Ac_28_8_x32: disp is c_y32_35=0 & c_y28_31=0 & c_y16_27 & c_ys8_15 [ disp = (c_y
 :cvdg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=46 & c_yr36 & Ac_28_8_x32 { hd_cvdg(c_yr36, Ac_28_8_x32); }
 :cvdy c_yrl36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=38 & c_yrl36 & Ac_28_8_x32 { hd_cvdy(c_yrl36, Ac_28_8_x32); }
 :cxfr b_yf4,b_yrl0 is b_y8_31=11777536 & b_yf4 & b_yfq4 & b_yrl0 { local o0:8 = hd_cxfr(b_yrl0); local o1:8 = hd_cxfr_1(b_yrl0); b_yf4 = o0; b_yfq4 = o1; }
-:cxftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47449 & b_yf4 & b_yfq4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxftr(imm_b_y12_15, b_yrl0, imm_b_y8_11); local o1:8 = hd_cxftr_1(imm_b_y12_15, b_yrl0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:cxftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47449 & b_yf4 & b_yfq4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxftr(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); local o1:8 = hd_cxftr_1(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :cxgr b_yf4,b_yr0 is b_y8_31=11781632 & b_yf4 & b_yfq4 & b_yr0 { local o0:8 = hd_cxgr(b_yr0); local o1:8 = hd_cxgr_1(b_yr0); b_yf4 = o0; b_yfq4 = o1; }
-:cxgtr b_yf4,b_yr0 is b_y8_31=11794688 & b_yf4 & b_yfq4 & b_yr0 { local o0:8 = hd_cxgtr(b_yr0); local o1:8 = hd_cxgtr_1(b_yr0); b_yf4 = o0; b_yfq4 = o1; }
-:cxgtra b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=46073 & b_yf4 & b_yfq4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxgtra(imm_b_y12_15, b_yr0, imm_b_y8_11); local o1:8 = hd_cxgtra_1(imm_b_y12_15, b_yr0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
-:cxlftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47451 & b_yf4 & b_yfq4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxlftr(imm_b_y12_15, b_yrl0, imm_b_y8_11); local o1:8 = hd_cxlftr_1(imm_b_y12_15, b_yrl0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
-:cxlgtr b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=47450 & b_yf4 & b_yfq4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxlgtr(imm_b_y12_15, b_yr0, imm_b_y8_11); local o1:8 = hd_cxlgtr_1(imm_b_y12_15, b_yr0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:cxgtr b_yf4,b_yr0 is b_y8_31=11794688 & b_yf4 & b_yfq4 & b_yr0 { local o0:8 = hd_cxgtr(b_yr0, fpc); local o1:8 = hd_cxgtr_1(b_yr0, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:cxgtra b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=46073 & b_yf4 & b_yfq4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxgtra(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); local o1:8 = hd_cxgtra_1(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:cxlftr b_yf4,b_y12_15,b_yrl0,b_y8_11 is b_y16_31=47451 & b_yf4 & b_yfq4 & b_y12_15 & b_yrl0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxlftr(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); local o1:8 = hd_cxlftr_1(imm_b_y12_15, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:cxlgtr b_yf4,b_y12_15,b_yr0,b_y8_11 is b_y16_31=47450 & b_yf4 & b_yfq4 & b_y12_15 & b_yr0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_cxlgtr(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); local o1:8 = hd_cxlgtr_1(imm_b_y12_15, b_yr0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :cxpt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=175 & c_yf12 & c_yfq12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; local o0:8 = hd_cxpt(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); local o1:8 = hd_cxpt_1(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); c_yf12 = o0; c_yfq12 = o1; }
 :cxr b_yf4,b_yf0 is b_y8_31=11757824 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_cxr(b_yf4, b_yfq4, b_yf0, b_yfq0); local cc:1 = hd_cxr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0); ccFrom(cc); }
 :cxstr b_yf4,b_yr0 is b_y8_31=11795200 & b_yf4 & b_yfq4 & b_yr0 & b_yrp0 { local o0:8 = hd_cxstr(b_yr0, b_yrp0); local o1:8 = hd_cxstr_1(b_yr0, b_yrp0); b_yf4 = o0; b_yfq4 = o1; }
-:cxtr b_yf4,b_yf0 is b_y8_31=11791360 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_cxtr(b_yf4, b_yfq4, b_yf0, b_yfq0); local cc:1 = hd_cxtr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0); ccFrom(cc); }
+:cxtr b_yf4,b_yf0 is b_y8_31=11791360 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_cxtr(b_yf4, b_yfq4, b_yf0, b_yfq0, fpc); local cc:1 = hd_cxtr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0, fpc); ccFrom(cc); }
 :cxutr b_yf4,b_yr0 is b_y8_31=11794944 & b_yf4 & b_yfq4 & b_yr0 & b_yrp0 { local o0:8 = hd_cxutr(b_yr0, b_yrp0); local o1:8 = hd_cxutr_1(b_yr0, b_yrp0); b_yf4 = o0; b_yfq4 = o1; }
 :cxzt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=171 & c_yf12 & c_yfq12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; local o0:8 = hd_cxzt(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); local o1:8 = hd_cxzt_1(Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); c_yf12 = o0; c_yfq12 = o1; }
 :czdt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=168 & c_yf12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; hd_czdt(c_yf12, Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); }
 :czxt c_yf12,Ac_28_16_l32,c_y8_11 is c_y40_47=237 & c_y0_7=169 & c_yf12 & c_yfq12 & Ac_28_16_l32 & c_y32_39 & c_y8_11 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local imm_c_y8_11:8 = c_y8_11; hd_czxt(c_yf12, c_yfq12, Ac_28_16_l32, len_Ac_28_16_l32, imm_c_y8_11); }
 :dd b_yf20,Ab_12_0_x16 is b_y24_31=109 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_dd(b_yf20, Ab_12_0_x16); b_yf20 = o0; }
 :ddr a_yf4,a_yf0 is a_y8_15=45 & a_yf4 & a_yf0 { local o0:8 = hd_ddr(a_yf4, a_yf0); a_yf4 = o0; }
-:ddtr b_yf4,b_yf0,b_yf12 is b_y16_31=46033 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_ddtr(b_yf0, b_yf12); b_yf4 = o0; }
-:ddtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46033 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ddtra(b_yf0, b_yf12, imm_b_y8_11); b_yf4 = o0; }
+:ddtr b_yf4,b_yf0,b_yf12 is b_y16_31=46033 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_ddtr(b_yf0, b_yf12, fpc); b_yf4 = o0; }
+:ddtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46033 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ddtra(b_yf0, b_yf12, imm_b_y8_11, fpc); b_yf4 = o0; }
 :de b_yfs20,Ab_12_0_x16 is b_y24_31=125 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_de(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; }
 :der a_yfs4,a_yfs0 is a_y8_15=61 & a_yfs4 & a_yfs0 { local o0:4 = hd_der(a_yfs4, a_yfs0); a_yfs4 = o0; }
-:didbr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=45915 & b_yf4 & b_yf12 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_didbr(b_yf4, b_yf0, imm_b_y8_11); local o1:8 = hd_didbr_1(b_yf4, b_yf0, imm_b_y8_11); b_yf4 = o0; b_yf12 = o1; local cc:1 = hd_didbr_cc(b_yf4, b_yf0, imm_b_y8_11); ccFrom(cc); }
-:diebr b_yfs4,b_yfs12,b_yfs0,b_y8_11 is b_y16_31=45907 & b_yfs4 & b_yfs12 & b_yfs0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_diebr(b_yfs4, b_yfs0, imm_b_y8_11); local o1:4 = hd_diebr_1(b_yfs4, b_yfs0, imm_b_y8_11); b_yfs4 = o0; b_yfs12 = o1; local cc:1 = hd_diebr_cc(b_yfs4, b_yfs0, imm_b_y8_11); ccFrom(cc); }
+:dfltcc b_yr4,b_yr0,b_yr12 is b_y16_31=47417 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_yr12 { local o0:8 = hd_dfltcc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, r0l, r1); local o1:8 = hd_dfltcc_1(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, r0l, r1); local o2:8 = hd_dfltcc_2(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, r0l, r1); local o3:8 = hd_dfltcc_3(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, r0l, r1); local cc:1 = hd_dfltcc_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:diag b_yrl20,b_yrl16,Ab_12_0 is b_y24_31=131 & b_yrl20 & b_yrl16 & Ab_12_0 { hd_diag(b_yrl20, b_yrl16, Ab_12_0); }
+:didbr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=45915 & b_yf4 & b_yf12 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_didbr(b_yf4, b_yf0, imm_b_y8_11, fpc); local o1:8 = hd_didbr_1(b_yf4, b_yf0, imm_b_y8_11, fpc); local cc:1 = hd_didbr_cc(b_yf4, b_yf0, imm_b_y8_11, fpc); b_yf4 = o0; b_yf12 = o1; ccFrom(cc); }
+:diebr b_yfs4,b_yfs12,b_yfs0,b_y8_11 is b_y16_31=45907 & b_yfs4 & b_yfs12 & b_yfs0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_diebr(b_yfs4, b_yfs0, imm_b_y8_11, fpc); local o1:4 = hd_diebr_1(b_yfs4, b_yfs0, imm_b_y8_11, fpc); local cc:1 = hd_diebr_cc(b_yfs4, b_yfs0, imm_b_y8_11, fpc); b_yfs4 = o0; b_yfs12 = o1; ccFrom(cc); }
 :dp Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=253 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_dp(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); }
 :dxr b_yf4,b_yf0 is b_y8_31=11676928 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_dxr(b_yf4, b_yfq4, b_yf0, b_yfq0); local o1:8 = hd_dxr_1(b_yf4, b_yfq4, b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; }
-:dxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46041 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_dxtr(b_yf0, b_yfq0, b_yf12, b_yfq12); local o1:8 = hd_dxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12); b_yf4 = o0; b_yfq4 = o1; }
-:dxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46041 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_dxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); local o1:8 = hd_dxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
-:ecctr b_yr4,b_yr0 is b_y8_31=11723776 & b_yr4 & b_yr0 { local o0:8 = hd_ecctr(b_yr0); b_yr4 = o0; local cc:1 = hd_ecctr_cc(b_yr0); ccFrom(cc); }
+:dxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46041 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_dxtr(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local o1:8 = hd_dxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:dxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46041 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_dxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local o1:8 = hd_dxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:ecag c_yr36,c_yr32,Ac_28_8 is c_y40_47=235 & c_y0_7=76 & c_yr36 & c_yr32 & Ac_28_8 { local o0:8 = hd_ecag(c_yr32, Ac_28_8); c_yr36 = o0; }
+:ecctr b_yr4,b_yr0 is b_y8_31=11723776 & b_yr4 & b_yr0 { local o0:8 = hd_ecctr(b_yr0); local cc:1 = hd_ecctr_cc(b_yr0); b_yr4 = o0; ccFrom(cc); }
+:ecpga b_yrl4,b_yr0 is b_y8_31=11726080 & b_yrl4 & b_yr0 { local o0:4 = hd_ecpga(b_yr0); local cc:1 = hd_ecpga_cc(b_yr0); b_yrl4 = o0; ccFrom(cc); }
+:ectg Ac_28_16,Ac_12_0,c_yr36 is c_y40_47=200 & c_y32_35=1 & Ac_28_16 & Ac_12_0 & c_yr36 { local o0:8 = hd_ectg(Ac_28_16, Ac_12_0, c_yr36); local o1:8 = hd_ectg_1(Ac_28_16, Ac_12_0, c_yr36); r0 = o0; r1 = o1; }
 :ed Ac_28_16_l32,Ac_12_0 is c_y40_47=222 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_ed(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_ed_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
 :edmk Ac_28_16_l32,Ac_12_0 is c_y40_47=223 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_edmk(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_edmk_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
 :eedtr b_yr4,b_yf0 is b_y8_31=11789568 & b_yr4 & b_yf0 { local o0:8 = hd_eedtr(b_yf0); b_yr4 = o0; }
 :eextr b_yr4,b_yf0 is b_y8_31=11791616 & b_yr4 & b_yf0 & b_yfq0 { local o0:8 = hd_eextr(b_yf0, b_yfq0); b_yr4 = o0; }
+:epair b_yr4 is b_y8_31=12163584 & b_y0_3=0 & b_yr4 { local o0:8 = hd_epair(); b_yr4 = o0; }
+:epar b_yrl4 is b_y8_31=11675136 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_epar(); b_yrl4 = o0; }
+:epctr b_yr4,b_yr0 is b_y8_31=11724032 & b_yr4 & b_yr0 { local o0:8 = hd_epctr(b_yr0); local cc:1 = hd_epctr_cc(b_yr0); b_yr4 = o0; ccFrom(cc); }
+:epsw b_yrl4,b_yrl0 is b_y8_31=12160256 & b_yrl4 & b_yrl0 { local o0:4 = hd_epsw(); local o1:4 = hd_epsw_1(); b_yrl4 = o0; b_yrl0 = o1; }
+:ereg b_yrl4,b_yrl0 is b_y8_31=11684096 & b_yrl4 & b_yrl0 { hd_ereg(b_yrl4, b_yrl0); }
+:eregg b_yr4,b_yr0 is b_y8_31=12127744 & b_yr4 & b_yr0 { hd_eregg(b_yr4, b_yr0); }
+:esair b_yr4 is b_y8_31=12163840 & b_y0_3=0 & b_yr4 { local o0:8 = hd_esair(); b_yr4 = o0; }
+:esar b_yrl4 is b_y8_31=11675392 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_esar(); b_yrl4 = o0; }
 :esdtr b_yr4,b_yf0 is b_y8_31=11790080 & b_yr4 & b_yf0 { local o0:8 = hd_esdtr(b_yf0); b_yr4 = o0; }
+:esea b_yrl4 is b_y8_31=12164352 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_esea(b_yrl4); b_yrl4 = o0; }
+:esta b_yr4,b_yrl0 is b_y8_31=11684352 & b_yr4 & b_yrp4 & b_yrl0 { local o0:8 = hd_esta(b_yrl0); local o1:8 = hd_esta_1(b_yrl0); local cc:1 = hd_esta_cc(b_yrl0); b_yr4 = o0; b_yrp4 = o1; ccFrom(cc); }
 :esxtr b_yr4,b_yf0 is b_y8_31=11792128 & b_yr4 & b_yf0 & b_yfq0 { local o0:8 = hd_esxtr(b_yf0, b_yfq0); b_yr4 = o0; }
+:etnd b_yrl4 is b_y8_31=11725824 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_etnd(); b_yrl4 = o0; }
 :fidr b_yf4,b_yf0 is b_y8_31=11763456 & b_yf4 & b_yf0 { local o0:8 = hd_fidr(b_yf0); b_yf4 = o0; }
-:fidtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46039 & b_yf4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_fidtr(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yf4 = o0; }
+:fidtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46039 & b_yf4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_fidtr(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yf4 = o0; }
 :fier b_yfs4,b_yfs0 is b_y8_31=11761408 & b_yfs4 & b_yfs0 { local o0:4 = hd_fier(b_yfs0); b_yfs4 = o0; }
 :fixr b_yf4,b_yf0 is b_y8_31=11757312 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_fixr(b_yf0, b_yfq0); local o1:8 = hd_fixr_1(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; }
-:fixtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46047 & b_yf4 & b_yfq4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_fixtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); local o1:8 = hd_fixtr_1(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:fixtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46047 & b_yf4 & b_yfq4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_fixtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local o1:8 = hd_fixtr_1(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :hdr a_yf4,a_yf0 is a_y8_15=36 & a_yf4 & a_yf0 { local o0:8 = hd_hdr(a_yf0); a_yf4 = o0; }
 :her a_yfs4,a_yfs0 is a_y8_15=52 & a_yfs4 & a_yfs0 { local o0:4 = hd_her(a_yfs0); a_yfs4 = o0; }
+:hsch is b_y0_31=2989555712 { hd_hsch(r1l); local cc:1 = hd_hsch_cc(r1l); ccFrom(cc); }
+:iac b_yrl4 is b_y8_31=11674624 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_iac(); b_yrl4 = o0; }
+:idte b_yr4,b_yr12,b_yr0,b_y8_11 is b_y16_31=47502 & b_yr4 & b_yr0 & b_yr12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; hd_idte(b_yr4, b_yr0, b_yr12, imm_b_y8_11); }
+:idte b_yr4,b_yr12,b_yr0 is b_y16_31=47502 & b_y8_11=0 & b_yr4 & b_yr0 & b_yr12 { hd_idte(b_yr4, b_yr0, b_yr12); }
 :iedtr b_yf4,b_yf12,b_yr0 is b_y16_31=46070 & b_y8_11=0 & b_yf4 & b_yr0 & b_yf12 { local o0:8 = hd_iedtr(b_yr0, b_yf12); b_yf4 = o0; }
 :iextr b_yf4,b_yf12,b_yr0 is b_y16_31=46078 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yr0 & b_yf12 & b_yfq12 { local o0:8 = hd_iextr(b_yr0, b_yf12, b_yfq12); local o1:8 = hd_iextr_1(b_yr0, b_yf12, b_yfq12); b_yf4 = o0; b_yfq4 = o1; }
-:kdtr b_yf4,b_yf0 is b_y8_31=11788288 & b_yf4 & b_yf0 { hd_kdtr(b_yf4, b_yf0); local cc:1 = hd_kdtr_cc(b_yf4, b_yf0); ccFrom(cc); }
-:kxtr b_yf4,b_yf0 is b_y8_31=11790336 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_kxtr(b_yf4, b_yfq4, b_yf0, b_yfq0); local cc:1 = hd_kxtr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0); ccFrom(cc); }
+:ipk is b_y0_31=2987065344 { local o0:4 = hd_ipk(r2l); r2l = o0; }
+:ipte b_yr4,b_yrl0,b_yrl12,b_y8_11 is b_y16_31=45601 & b_yr4 & b_yrl0 & b_yrl12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; hd_ipte(b_yr4, b_yrl0, b_yrl12, imm_b_y8_11); }
+:ipte b_yr4,b_yrl0,b_yrl12 is b_y16_31=45601 & b_y8_11=0 & b_yr4 & b_yrl0 & b_yrl12 { hd_ipte(b_yr4, b_yrl0, b_yrl12); }
+:ipte b_yr4,b_yrl0 is b_y8_31=11673856 & b_yr4 & b_yrl0 { hd_ipte(b_yr4, b_yrl0); }
+:irbm b_yr4,b_yr0 is b_y8_31=12168192 & b_yr4 & b_yr0 { local o0:8 = hd_irbm(b_yr0); b_yr4 = o0; }
+:iske b_yrl4,b_yr0 is b_y8_31=11675904 & b_yrl4 & b_yr0 { local o0:4 = hd_iske(b_yrl4, b_yr0); b_yrl4 = o0; }
+:ivsk b_yrl4,b_yr0 is b_y8_31=11674368 & b_yrl4 & b_yr0 { local o0:4 = hd_ivsk(b_yrl4, b_yr0); b_yrl4 = o0; }
+:kdsa b_yr4,b_yr0 is b_y8_31=12139008 & b_yr0 & b_yrp0 & b_yr4 { local o0:8 = hd_kdsa(b_yr4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kdsa_1(b_yr4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kdsa_cc(b_yr4, b_yr0, b_yrp0, r0l, r1); b_yr0 = o0; b_yrp0 = o1; ccFrom(cc); }
+:kdtr b_yf4,b_yf0 is b_y8_31=11788288 & b_yf4 & b_yf0 { hd_kdtr(b_yf4, b_yf0, fpc); local cc:1 = hd_kdtr_cc(b_yf4, b_yf0, fpc); ccFrom(cc); }
+:kimd b_yr4,b_yr0 is b_y8_31=12140032 & b_yr0 & b_yrp0 & b_yr4 { local o0:8 = hd_kimd(b_yr4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kimd_1(b_yr4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kimd_cc(b_yr4, b_yr0, b_yrp0, r0l, r1); b_yr0 = o0; b_yrp0 = o1; ccFrom(cc); }
+:kimd b_yr4,b_yr0,b_y12_15 is b_y16_31=47422 & b_y8_11=0 & b_yr4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_kimd(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local o1:8 = hd_kimd_1(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local o2:8 = hd_kimd_2(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local cc:1 = hd_kimd_cc(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yr0 = o1; b_yrp0 = o2; ccFrom(cc); }
+:klmd b_yr4,b_yr0 is b_y8_31=12140288 & b_yr0 & b_yrp0 & b_yr4 { local o0:8 = hd_klmd(b_yr4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_klmd_1(b_yr4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_klmd_cc(b_yr4, b_yr0, b_yrp0, r0l, r1); b_yr0 = o0; b_yrp0 = o1; ccFrom(cc); }
+:klmd b_yr4,b_yr0,b_y12_15 is b_y16_31=47423 & b_y8_11=0 & b_yr4 & b_yr0 & b_yrp0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_klmd(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local o1:8 = hd_klmd_1(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local o2:8 = hd_klmd_2(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); local cc:1 = hd_klmd_cc(b_yr4, b_yr0, b_yrp0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yr0 = o1; b_yrp0 = o2; ccFrom(cc); }
+:km b_yr4,b_yr0 is b_y8_31=12135936 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_km(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_km_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_km_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_km_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_km_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:kma b_yr4,b_yr12,b_yr0 is b_y16_31=47401 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_yr12 & b_yrp12 { local o0:8 = hd_kma(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o1:8 = hd_kma_1(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o2:8 = hd_kma_2(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o3:8 = hd_kma_3(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o4:8 = hd_kma_4(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o5:8 = hd_kma_5(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local cc:1 = hd_kma_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; b_yr12 = o4; b_yrp12 = o5; ccFrom(cc); }
+:kmac b_yr4,b_yr0 is b_y8_31=12131840 & b_yr0 & b_yrp0 & b_yr4 { local o0:8 = hd_kmac(b_yr4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kmac_1(b_yr4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kmac_cc(b_yr4, b_yr0, b_yrp0, r0l, r1); b_yr0 = o0; b_yrp0 = o1; ccFrom(cc); }
+:kmc b_yr4,b_yr0 is b_y8_31=12136192 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_kmc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kmc_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_kmc_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_kmc_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kmc_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:kmctr b_yr4,b_yr12,b_yr0 is b_y16_31=47405 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 & b_yr12 & b_yrp12 { local o0:8 = hd_kmctr(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o1:8 = hd_kmctr_1(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o2:8 = hd_kmctr_2(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o3:8 = hd_kmctr_3(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o4:8 = hd_kmctr_4(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local o5:8 = hd_kmctr_5(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); local cc:1 = hd_kmctr_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, b_yr12, b_yrp12, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; b_yr12 = o4; b_yrp12 = o5; ccFrom(cc); }
+:kmf b_yr4,b_yr0 is b_y8_31=12134912 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_kmf(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kmf_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_kmf_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_kmf_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kmf_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:kmo b_yr4,b_yr0 is b_y8_31=12135168 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_kmo(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_kmo_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_kmo_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_kmo_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_kmo_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:kxtr b_yf4,b_yf0 is b_y8_31=11790336 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { hd_kxtr(b_yf4, b_yfq4, b_yf0, b_yfq0, fpc); local cc:1 = hd_kxtr_cc(b_yf4, b_yfq4, b_yf0, b_yfq0, fpc); ccFrom(cc); }
+:lam b_ya20,b_ya16,Ab_12_0 is b_y24_31=154 & b_ya20 & b_ya16 & Ab_12_0 { local o0:4 = hd_lam(Ab_12_0); local o1:4 = hd_lam_1(Ab_12_0); b_ya20 = o0; b_ya16 = o1; }
+:lamy c_ya36,c_ya32,Ac_28_8 is c_y40_47=235 & c_y0_7=154 & c_ya36 & c_ya32 & Ac_28_8 { local o0:4 = hd_lamy(Ac_28_8); local o1:4 = hd_lamy_1(Ac_28_8); c_ya36 = o0; c_ya32 = o1; }
+:lasp Ac_28_16,Ac_12_0 is c_y32_47=58624 & Ac_28_16 & Ac_12_0 { hd_lasp(Ac_28_16, Ac_12_0); local cc:1 = hd_lasp_cc(Ac_28_16, Ac_12_0); ccFrom(cc); }
+:lbear Ab_12_0 is b_y16_31=45568 & Ab_12_0 { hd_lbear(Ab_12_0); }
+:lcctl Ab_12_0 is b_y16_31=45700 & Ab_12_0 { hd_lcctl(Ab_12_0); local cc:1 = hd_lcctl_cc(Ab_12_0); ccFrom(cc); }
 :lcdr a_yf4,a_yf0 is a_y8_15=35 & a_yf4 & a_yf0 { local x:8 = a_yf0; local res:8 = x ^ 0x8000000000000000; local z:1 = (res & 0xffffffffffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yf4 = res; }
 :lcer a_yfs4,a_yfs0 is a_y8_15=51 & a_yfs4 & a_yfs0 { local x:4 = a_yfs0; local res:4 = x ^ 0x80000000; local z:1 = (res & 0xffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yfs4 = res; }
-:ldetr b_yf4,b_yfs0,b_y8_11 is b_y12_31=736576 & b_yf4 & b_yfs0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ldetr(b_yfs0, imm_b_y8_11); b_yf4 = o0; }
+:lctl b_yc20,b_yc16,Ab_12_0 is b_y24_31=183 & b_yc20 & b_yc16 & Ab_12_0 { local o0:8 = hd_lctl(Ab_12_0); local o1:8 = hd_lctl_1(Ab_12_0); b_yc20 = o0; b_yc16 = o1; }
+:lctlg c_yc36,c_yc32,Ac_28_8 is c_y40_47=235 & c_y0_7=47 & c_yc36 & c_yc32 & Ac_28_8 { local o0:8 = hd_lctlg(Ac_28_8); local o1:8 = hd_lctlg_1(Ac_28_8); c_yc36 = o0; c_yc32 = o1; }
+:lcxr b_yf4,b_yf0 is b_y8_31=11756288 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_lcxr(b_yf0, b_yfq0); local o1:8 = hd_lcxr_1(b_yf0, b_yfq0); local cc:1 = hd_lcxr_cc(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:ldetr b_yf4,b_yfs0,b_y8_11 is b_y12_31=736576 & b_yf4 & b_yfs0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ldetr(b_yfs0, imm_b_y8_11, fpc); b_yf4 = o0; }
 :ldxr a_yf4,a_yf0 is a_y8_15=37 & a_yf4 & a_yf0 & a_yfq0 { local o0:8 = hd_ldxr(a_yf0, a_yfq0); a_yf4 = o0; }
-:ldxtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46045 & b_yf4 & b_yfq4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ldxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); local o1:8 = hd_ldxtr_1(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:ldxtr b_yf4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46045 & b_yf4 & b_yfq4 & b_y12_15 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_ldxtr(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); local o1:8 = hd_ldxtr_1(imm_b_y12_15, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :ledr a_yfs4,a_yf0 is a_y8_15=53 & a_yfs4 & a_yf0 { local o0:4 = hd_ledr(a_yf0); a_yfs4 = o0; }
-:ledtr b_yfs4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46037 & b_yfs4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_ledtr(imm_b_y12_15, b_yf0, imm_b_y8_11); b_yfs4 = o0; }
+:ledtr b_yfs4,b_y12_15,b_yf0,b_y8_11 is b_y16_31=46037 & b_yfs4 & b_y12_15 & b_yf0 & b_y8_11 { local imm_b_y12_15:8 = b_y12_15; local imm_b_y8_11:8 = b_y8_11; local o0:4 = hd_ledtr(imm_b_y12_15, b_yf0, imm_b_y8_11, fpc); b_yfs4 = o0; }
+:lexr b_yfs4,b_yf0 is b_y8_31=11757056 & b_yfs4 & b_yf0 & b_yfq0 { local o0:4 = hd_lexr(b_yf0, b_yfq0); b_yfs4 = o0; }
+:lfas Ab_12_0 is b_y16_31=45757 & Ab_12_0 { local o0:4 = hd_lfas(Ab_12_0); fpc = o0; }
+:lfpc Ab_12_0 is b_y16_31=45725 & Ab_12_0 { fpc = *:4 Ab_12_0; }
+:lgg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=76 & c_yr36 & Ac_28_8_x32 { local o0:8 = hd_lgg(Ac_28_8_x32); c_yr36 = o0; }
+:lgsc c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=77 & c_yr36 & Ac_28_8_x32 { hd_lgsc(c_yr36, Ac_28_8_x32); }
+:llgfsg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=72 & c_yr36 & Ac_28_8_x32 { local o0:8 = hd_llgfsg(Ac_28_8_x32); c_yr36 = o0; }
+:llzrgf c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=58 & c_yr36 & Ac_28_8_x32 { local v:4 = *:4 Ac_28_8_x32; c_yr36 = zext(v & 0xffffff00); }
+:lmd c_yr36,c_yr32,Ac_28_16,Ac_12_0 is c_y40_47=239 & c_yr36 & c_yr32 & Ac_28_16 & Ac_12_0 { local o0:8 = hd_lmd(Ac_28_16, Ac_12_0); local o1:8 = hd_lmd_1(Ac_28_16, Ac_12_0); c_yr36 = o0; c_yr32 = o1; }
 :lndr a_yf4,a_yf0 is a_y8_15=33 & a_yf4 & a_yf0 { local x:8 = a_yf0; local res:8 = x | 0x8000000000000000; local z:1 = (res & 0xffffffffffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yf4 = res; }
 :lner a_yfs4,a_yfs0 is a_y8_15=49 & a_yfs4 & a_yfs0 { local x:4 = a_yfs0; local res:4 = x | 0x80000000; local z:1 = (res & 0xffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yfs4 = res; }
-:lnxr b_yf4,b_yf0 is b_y8_31=11755776 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_lnxr(b_yf0, b_yfq0); local o1:8 = hd_lnxr_1(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_lnxr_cc(b_yf0, b_yfq0); ccFrom(cc); }
+:lnxr b_yf4,b_yf0 is b_y8_31=11755776 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_lnxr(b_yf0, b_yfq0); local o1:8 = hd_lnxr_1(b_yf0, b_yfq0); local cc:1 = hd_lnxr_cc(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:loc c_yrl36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=242 & c_yrl36 & Ac_28_8 & c_y32_35=0 {  }
+:loc c_yrl36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=242 & c_yrl36 & Ac_28_8 & c_y32_35=15 { c_yrl36 = *:4 Ac_28_8; }
+:locfh c_yrh36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=0 {  }
+:locfho c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=1 { if (!(CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=2 { if (!(CC2)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhnle c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=3 { if (!(CC2 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhl c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=4 { if (!(CC1)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhnhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=5 { if (!(CC1 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhlh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=6 { if (!(CC1 || CC2)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhne c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=7 { if (!(CC1 || CC2 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=8 { if (!(CC0)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhnlh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=9 { if (!(CC0 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=10 { if (!(CC0 || CC2)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhnl c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=11 { if (!(CC0 || CC2 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhle c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=12 { if (!(CC0 || CC1)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhnh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=13 { if (!(CC0 || CC1 || CC3)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfhno c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=14 { if (!(CC0 || CC1 || CC2)) goto inst_next; c_yrh36 = *:4 Ac_28_8; }
+:locfh c_yrh36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=224 & c_yrh36 & Ac_28_8 & c_y32_35=15 { c_yrh36 = *:4 Ac_28_8; }
+:locfhr b_yrh4,b_yrh0,0 is b_y16_31=47584 & b_y8_11=0 & b_yrh4 & b_yrh0 & b_y12_15=0 {  }
+:locfhr b_yrh4,b_yrh0,15 is b_y16_31=47584 & b_y8_11=0 & b_yrh4 & b_yrh0 & b_y12_15=15 { b_yrh4 = b_yrh0; }
+:locg c_yr36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=226 & c_yr36 & Ac_28_8 & c_y32_35=0 {  }
+:locg c_yr36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=226 & c_yr36 & Ac_28_8 & c_y32_35=15 { c_yr36 = *:8 Ac_28_8; }
+:locghi c_yr36,c_ys16_31,0 is c_y40_47=236 & c_y0_15=70 & c_yr36 & c_ys16_31 & c_y32_35=0 {  }
+:locghi c_yr36,c_ys16_31,15 is c_y40_47=236 & c_y0_15=70 & c_yr36 & c_ys16_31 & c_y32_35=15 { local v:8 = c_ys16_31; c_yr36 = v; }
+:locgr b_yr4,b_yr0,0 is b_y16_31=47586 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=0 {  }
+:locgr b_yr4,b_yr0,15 is b_y16_31=47586 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15=15 { b_yr4 = b_yr0; }
+:lochhi c_yrh36,c_ys16_31,0 is c_y40_47=236 & c_y0_15=78 & c_yrh36 & c_ys16_31 & c_y32_35=0 {  }
+:lochhi c_yrh36,c_ys16_31,15 is c_y40_47=236 & c_y0_15=78 & c_yrh36 & c_ys16_31 & c_y32_35=15 { local v:4 = c_ys16_31; c_yrh36 = v; }
+:lochi c_yrl36,c_ys16_31,0 is c_y40_47=236 & c_y0_15=66 & c_yrl36 & c_ys16_31 & c_y32_35=0 {  }
+:lochi c_yrl36,c_ys16_31,15 is c_y40_47=236 & c_y0_15=66 & c_yrl36 & c_ys16_31 & c_y32_35=15 { local v:4 = c_ys16_31; c_yrl36 = v; }
+:locr b_yrl4,b_yrl0,0 is b_y16_31=47602 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=0 {  }
+:locr b_yrl4,b_yrl0,15 is b_y16_31=47602 & b_y8_11=0 & b_yrl4 & b_yrl0 & b_y12_15=15 { b_yrl4 = b_yrl0; }
+:lpctl Ab_12_0 is b_y16_31=45701 & Ab_12_0 { hd_lpctl(Ab_12_0); local cc:1 = hd_lpctl_cc(Ab_12_0); ccFrom(cc); }
+:lpd c_yr36,Ac_28_16,Ac_12_0 is c_y40_47=200 & c_y32_35=4 & c_yr36 & c_yrp36 & Ac_28_16 & Ac_12_0 { local a:4 = *:4 Ac_28_16; local b:4 = *:4 Ac_12_0; c_yr36 = zext(a) | (c_yr36 & 0xffffffff00000000); c_yrp36 = zext(b) | (c_yrp36 & 0xffffffff00000000); CC0 = 1; CC1 = 0; CC2 = 0; CC3 = 0; ccAux(); }
+:lpdg c_yr36,Ac_28_16,Ac_12_0 is c_y40_47=200 & c_y32_35=5 & c_yr36 & c_yrp36 & Ac_28_16 & Ac_12_0 { local a:8 = *:8 Ac_28_16; local b:8 = *:8 Ac_12_0; c_yr36 = a; c_yrp36 = b; CC0 = 1; CC1 = 0; CC2 = 0; CC3 = 0; ccAux(); }
 :lpdr a_yf4,a_yf0 is a_y8_15=32 & a_yf4 & a_yf0 { local x:8 = a_yf0; local res:8 = x & 0x7fffffffffffffff; local z:1 = (res & 0xffffffffffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yf4 = res; }
 :lper a_yfs4,a_yfs0 is a_y8_15=48 & a_yfs4 & a_yfs0 { local x:4 = a_yfs0; local res:4 = x & 0x7fffffff; local z:1 = (res & 0xffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yfs4 = res; }
+:lpp Ab_12_0 is b_y16_31=45696 & Ab_12_0 { hd_lpp(Ab_12_0); }
+:lpsw Ab_12_0 is b_y16_31=33280 & Ab_12_0 { local na:4 = *:4 (Ab_12_0 + 4); local tg:8 = zext(na & 0x7fffffff); hd_lpsw(Ab_12_0); return [tg]; }
+:lpswe Ab_12_0 is b_y16_31=45746 & Ab_12_0 { local tg:8 = *:8 (Ab_12_0 + 8); hd_lpswe(Ab_12_0); return [tg]; }
+:lpswey Ac_28_8 is c_y32_47=60160 & c_y0_7=113 & Ac_28_8 { local tg:8 = *:8 (Ac_28_8 + 8); hd_lpswey(Ac_28_8); return [tg]; }
+:lptea b_yr4,b_yr12,b_yr0,b_y8_11 is b_y16_31=47530 & b_yr4 & b_yr12 & b_yr0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_lptea(b_yr4, b_yr0, imm_b_y8_11); local o1:8 = hd_lptea_1(b_yr4, b_yr0, imm_b_y8_11); local cc:1 = hd_lptea_cc(b_yr4, b_yr0, imm_b_y8_11); b_yr4 = o0; b_yr12 = o1; ccFrom(cc); }
+:lpxr b_yf4,b_yf0 is b_y8_31=11755520 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_lpxr(b_yf0, b_yfq0); local o1:8 = hd_lpxr_1(b_yf0, b_yfq0); local cc:1 = hd_lpxr_cc(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:lra b_yr20,Ab_12_0_x16 is b_y24_31=177 & b_yr20 & Ab_12_0_x16 { local o0:8 = hd_lra(Ab_12_0_x16); local cc:1 = hd_lra_cc(Ab_12_0_x16); b_yr20 = o0; ccFrom(cc); }
+:lrag c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=3 & c_yr36 & Ac_28_8_x32 { local o0:8 = hd_lrag(Ac_28_8_x32); local cc:1 = hd_lrag_cc(Ac_28_8_x32); c_yr36 = o0; ccFrom(cc); }
+:lray c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=19 & c_yr36 & Ac_28_8_x32 { local o0:8 = hd_lray(Ac_28_8_x32); local cc:1 = hd_lray_cc(Ac_28_8_x32); c_yr36 = o0; ccFrom(cc); }
+:lsctl Ab_12_0 is b_y16_31=45703 & Ab_12_0 { hd_lsctl(Ab_12_0); local cc:1 = hd_lsctl_cc(Ab_12_0); ccFrom(cc); }
 :ltdr a_yf4,a_yf0 is a_y8_15=34 & a_yf4 & a_yf0 { local x:8 = a_yf0; local res:8 = x; local z:1 = (res & 0xffffffffffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yf4 = res; }
-:ltdtr b_yf4,b_yf0 is b_y8_31=11785728 & b_yf4 & b_yf0 { local o0:8 = hd_ltdtr(b_yf0); b_yf4 = o0; local cc:1 = hd_ltdtr_cc(b_yf0); ccFrom(cc); }
+:ltdtr b_yf4,b_yf0 is b_y8_31=11785728 & b_yf4 & b_yf0 { local o0:8 = hd_ltdtr(b_yf0, fpc); local cc:1 = hd_ltdtr_cc(b_yf0, fpc); b_yf4 = o0; ccFrom(cc); }
 :lter a_yfs4,a_yfs0 is a_y8_15=50 & a_yfs4 & a_yfs0 { local x:4 = a_yfs0; local res:4 = x; local z:1 = (res & 0xffffff) == 0; CC0 = z; CC1 = !z && (res s< 0); CC2 = !z && (res s>= 0); CC3 = 0; ccAux(); a_yfs4 = res; }
-:ltxtr b_yf4,b_yf0 is b_y8_31=11787776 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_ltxtr(b_yf0, b_yfq0); local o1:8 = hd_ltxtr_1(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_ltxtr_cc(b_yf0, b_yfq0); ccFrom(cc); }
+:ltxr b_yf4,b_yf0 is b_y8_31=11756032 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_ltxr(b_yf0, b_yfq0); local o1:8 = hd_ltxr_1(b_yf0, b_yfq0); local cc:1 = hd_ltxr_cc(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:ltxtr b_yf4,b_yf0 is b_y8_31=11787776 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_ltxtr(b_yf0, b_yfq0, fpc); local o1:8 = hd_ltxtr_1(b_yf0, b_yfq0, fpc); local cc:1 = hd_ltxtr_cc(b_yf0, b_yfq0, fpc); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:lura b_yrl4,b_yr0 is b_y8_31=11684608 & b_yrl4 & b_yr0 { local o0:4 = hd_lura(b_yr0); b_yrl4 = o0; }
+:lurag b_yr4,b_yr0 is b_y8_31=12125440 & b_yr4 & b_yr0 { local o0:8 = hd_lurag(b_yr0); b_yr4 = o0; }
 :lxd c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=37 & c_yf36 & c_yfq36 & Ac_28_16_x32 { local o0:8 = hd_lxd(Ac_28_16_x32); local o1:8 = hd_lxd_1(Ac_28_16_x32); c_yf36 = o0; c_yfq36 = o1; }
 :lxdr b_yf4,b_yf0 is b_y8_31=11740416 & b_yf4 & b_yfq4 & b_yf0 { local o0:8 = hd_lxdr(b_yf0); local o1:8 = hd_lxdr_1(b_yf0); b_yf4 = o0; b_yfq4 = o1; }
-:lxdtr b_yf4,b_yf0,b_y8_11 is b_y12_31=736704 & b_yf4 & b_yfq4 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_lxdtr(b_yf0, imm_b_y8_11); local o1:8 = hd_lxdtr_1(b_yf0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:lxdtr b_yf4,b_yf0,b_y8_11 is b_y12_31=736704 & b_yf4 & b_yfq4 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_lxdtr(b_yf0, imm_b_y8_11, fpc); local o1:8 = hd_lxdtr_1(b_yf0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :lxe c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=38 & c_yf36 & c_yfq36 & Ac_28_16_x32 { local o0:8 = hd_lxe(Ac_28_16_x32); local o1:8 = hd_lxe_1(Ac_28_16_x32); c_yf36 = o0; c_yfq36 = o1; }
 :lxer b_yf4,b_yfs0 is b_y8_31=11740672 & b_yf4 & b_yfq4 & b_yfs0 { local o0:8 = hd_lxer(b_yfs0); local o1:8 = hd_lxer_1(b_yfs0); b_yf4 = o0; b_yfq4 = o1; }
+:lzrf c_yrl36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=59 & c_yrl36 & Ac_28_8_x32 { local v:4 = *:4 Ac_28_8_x32; c_yrl36 = v & 0xffffff00; }
+:lzrg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=42 & c_yr36 & Ac_28_8_x32 { local v:8 = *:8 Ac_28_8_x32; c_yr36 = v & 0xffffffffffffff00; }
 :mad c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=62 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_mad(c_yf12, c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :madb c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=30 & c_yf12 & c_yf36 & Ac_28_16_x32 { local m:8 = *:8 Ac_28_16_x32; c_yf12 = (c_yf36 f* m) f+ c_yf12; }
 :madr b_yf12,b_yf4,b_yf0 is b_y16_31=45886 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_madr(b_yf12, b_yf4, b_yf0); b_yf12 = o0; }
@@ -600,107 +1177,243 @@ Ac_28_8_x32: disp is c_y32_35=0 & c_y28_31=0 & c_y16_27 & c_ys8_15 [ disp = (c_y
 :mayl c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=56 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_mayl(c_yf12, c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :maylr b_yf12,b_yf4,b_yf0 is b_y16_31=45880 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_maylr(b_yf12, b_yf4, b_yf0); b_yf12 = o0; }
 :mayr b_yf12,b_yf4,b_yf0 is b_y16_31=45882 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_mayr(b_yf12, b_yf4, b_yf0); b_yf12 = o0; }
+:mc Ab_12_0,b_y16_23 is b_y24_31=175 & Ab_12_0 & b_y16_23 { local imm_b_y16_23:8 = b_y16_23; hd_mc(Ab_12_0, imm_b_y16_23); }
 :md b_yf20,Ab_12_0_x16 is b_y24_31=108 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_md(b_yf20, Ab_12_0_x16); b_yf20 = o0; }
 :mde b_yf20,Ab_12_0_x16 is b_y24_31=124 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_mde(b_yf20, Ab_12_0_x16); b_yf20 = o0; }
 :mdeb c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=12 & c_yf36 & Ac_28_16_x32 { local m:4 = *:4 Ac_28_16_x32; local l:8 = c_yf36; local h:4 = l(4); local a:8 = float2float(h); local b:8 = float2float(m); c_yf36 = a f* b; }
 :mdebr b_yf4,b_yfs0 is b_y8_31=11734016 & b_yf4 & b_yfs0 { local l:8 = b_yf4; local h:4 = l(4); local a:8 = float2float(h); local b:8 = float2float(b_yfs0); b_yf4 = a f* b; }
 :mder a_yf4,a_yfs0 is a_y8_15=60 & a_yf4 & a_yfs0 { local o0:8 = hd_mder(a_yf4, a_yfs0); a_yf4 = o0; }
 :mdr a_yf4,a_yf0 is a_y8_15=44 & a_yf4 & a_yf0 { local o0:8 = hd_mdr(a_yf4, a_yf0); a_yf4 = o0; }
-:mdtr b_yf4,b_yf0,b_yf12 is b_y16_31=46032 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_mdtr(b_yf0, b_yf12); b_yf4 = o0; }
-:mdtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46032 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_mdtra(b_yf0, b_yf12, imm_b_y8_11); b_yf4 = o0; }
+:mdtr b_yf4,b_yf0,b_yf12 is b_y16_31=46032 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_mdtr(b_yf0, b_yf12, fpc); b_yf4 = o0; }
+:mdtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46032 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_mdtra(b_yf0, b_yf12, imm_b_y8_11, fpc); b_yf4 = o0; }
 :mee c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=55 & c_yfs36 & Ac_28_16_x32 { local o0:4 = hd_mee(c_yfs36, Ac_28_16_x32); c_yfs36 = o0; }
 :meer b_yfs4,b_yfs0 is b_y8_31=11745024 & b_yfs4 & b_yfs0 { local o0:4 = hd_meer(b_yfs4, b_yfs0); b_yfs4 = o0; }
 :mp Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=252 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_mp(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); }
+:msch Ab_12_0 is b_y16_31=45618 & Ab_12_0 { hd_msch(Ab_12_0, r1l); local cc:1 = hd_msch_cc(Ab_12_0, r1l); ccFrom(cc); }
 :msd c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=63 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_msd(c_yf12, c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :msdb c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=31 & c_yf12 & c_yf36 & Ac_28_16_x32 { local m:8 = *:8 Ac_28_16_x32; c_yf12 = (c_yf36 f* m) f- c_yf12; }
 :msdr b_yf12,b_yf4,b_yf0 is b_y16_31=45887 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_msdr(b_yf12, b_yf4, b_yf0); b_yf12 = o0; }
 :mse c_yfs12,c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=47 & c_yfs12 & c_yfs36 & Ac_28_16_x32 { local o0:4 = hd_mse(c_yfs12, c_yfs36, Ac_28_16_x32); c_yfs12 = o0; }
 :mseb c_yfs12,c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=15 & c_yfs12 & c_yfs36 & Ac_28_16_x32 { local m:4 = *:4 Ac_28_16_x32; c_yfs12 = (c_yfs36 f* m) f- c_yfs12; }
 :mser b_yfs12,b_yfs4,b_yfs0 is b_y16_31=45871 & b_y8_11=0 & b_yfs12 & b_yfs4 & b_yfs0 { local o0:4 = hd_mser(b_yfs12, b_yfs4, b_yfs0); b_yfs12 = o0; }
+:msta b_yr4 is b_y8_31=11683584 & b_y0_3=0 & b_yr4 & b_yrp4 { hd_msta(b_yr4, b_yrp4); }
+:mvcdk Ac_28_16,Ac_12_0 is c_y32_47=58639 & Ac_28_16 & Ac_12_0 { hd_mvcdk(Ac_28_16, Ac_12_0, r0l, r1l); }
 :mvcin Ac_28_16_l32,Ac_12_0 is c_y40_47=232 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_mvcin(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); }
 :mvck Ac_28_16_r36,Ac_12_0,c_yr32 is c_y40_47=217 & Ac_28_16_r36 & c_yr36 & Ac_12_0 & c_yr32 { hd_mvck(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); local cc:1 = hd_mvck_cc(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); ccFrom(cc); }
-:mvcle b_yr20,b_yr16,Ab_12_0 is b_y24_31=168 & b_yr20 & b_yrp20 & b_yr16 & b_yrp16 & Ab_12_0 { local o0:8 = hd_mvcle(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o1:8 = hd_mvcle_1(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o2:8 = hd_mvcle_2(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o3:8 = hd_mvcle_3(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); b_yr20 = o0; b_yrp20 = o1; b_yr16 = o2; b_yrp16 = o3; local cc:1 = hd_mvcle_cc(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); ccFrom(cc); }
-:mvcrl Ac_28_16,Ac_12_0 is c_y32_47=58634 & Ac_28_16 & Ac_12_0 { hd_mvcrl(Ac_28_16, Ac_12_0); }
+:mvcl a_yr4,a_yr0 is a_y8_15=14 & a_yr4 & a_yrp4 & a_yr0 & a_yrp0 { local o0:8 = hd_mvcl(a_yr4, a_yrp4, a_yr0, a_yrp0); local o1:8 = hd_mvcl_1(a_yr4, a_yrp4, a_yr0, a_yrp0); local o2:8 = hd_mvcl_2(a_yr4, a_yrp4, a_yr0, a_yrp0); local o3:8 = hd_mvcl_3(a_yr4, a_yrp4, a_yr0, a_yrp0); local cc:1 = hd_mvcl_cc(a_yr4, a_yrp4, a_yr0, a_yrp0); a_yr4 = o0; a_yrp4 = o1; a_yr0 = o2; a_yrp0 = o3; ccFrom(cc); }
+:mvcle b_yr20,b_yr16,Ab_12_0 is b_y24_31=168 & b_yr20 & b_yrp20 & b_yr16 & b_yrp16 & Ab_12_0 { local o0:8 = hd_mvcle(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o1:8 = hd_mvcle_1(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o2:8 = hd_mvcle_2(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local o3:8 = hd_mvcle_3(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); local cc:1 = hd_mvcle_cc(b_yr20, b_yrp20, b_yr16, b_yrp16, Ab_12_0); b_yr20 = o0; b_yrp20 = o1; b_yr16 = o2; b_yrp16 = o3; ccFrom(cc); }
+:mvclu c_yr36,c_yr32,Ac_28_8 is c_y40_47=235 & c_y0_7=142 & c_yr36 & c_yrp36 & c_yr32 & c_yrp32 & Ac_28_8 { local o0:8 = hd_mvclu(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o1:8 = hd_mvclu_1(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o2:8 = hd_mvclu_2(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local o3:8 = hd_mvclu_3(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); local cc:1 = hd_mvclu_cc(c_yr36, c_yrp36, c_yr32, c_yrp32, Ac_28_8); c_yr36 = o0; c_yrp36 = o1; c_yr32 = o2; c_yrp32 = o3; ccFrom(cc); }
+:mvcos Ac_28_16,Ac_12_0,c_yr36 is c_y40_47=200 & c_y32_35=0 & Ac_28_16 & Ac_12_0 & c_yr36 { hd_mvcos(Ac_28_16, Ac_12_0, c_yr36, r0l); }
+:mvcp Ac_28_16_r36,Ac_12_0,c_yr32 is c_y40_47=218 & Ac_28_16_r36 & c_yr36 & Ac_12_0 & c_yr32 { hd_mvcp(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); local cc:1 = hd_mvcp_cc(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); ccFrom(cc); }
+:mvcrl Ac_28_16,Ac_12_0 is c_y32_47=58634 & Ac_28_16 & Ac_12_0 { hd_mvcrl(Ac_28_16, Ac_12_0, r0l); }
+:mvcs Ac_28_16_r36,Ac_12_0,c_yr32 is c_y40_47=219 & Ac_28_16_r36 & c_yr36 & Ac_12_0 & c_yr32 { hd_mvcs(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); local cc:1 = hd_mvcs_cc(Ac_28_16_r36, c_yr36, Ac_12_0, c_yr32); ccFrom(cc); }
+:mvcsk Ac_28_16,Ac_12_0 is c_y32_47=58638 & Ac_28_16 & Ac_12_0 { hd_mvcsk(Ac_28_16, Ac_12_0, r0l, r1l); }
 :mvn Ac_28_16_l32,Ac_12_0 is c_y40_47=209 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_mvn(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); }
 :mvo Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=241 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_mvo(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); }
-:mvpg b_yr4,b_yr0 is b_y8_31=11686912 & b_yr4 & b_yr0 { hd_mvpg(b_yr4, b_yr0); local cc:1 = hd_mvpg_cc(b_yr4, b_yr0); ccFrom(cc); }
+:mvpg b_yr4,b_yr0 is b_y8_31=11686912 & b_yr4 & b_yr0 { hd_mvpg(b_yr4, b_yr0, r0l); local cc:1 = hd_mvpg_cc(b_yr4, b_yr0, r0l); ccFrom(cc); }
 :mvz Ac_28_16_l32,Ac_12_0 is c_y40_47=211 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_mvz(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); }
 :mxdb c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=7 & c_yf36 & c_yfq36 & Ac_28_16_x32 { local m:8 = *:8 Ac_28_16_x32; local x:16 = float2float(c_yf36); local y:16 = float2float(m); local res:16 = x f* y; c_yf36 = res(8); c_yfq36 = res:8; }
 :mxdr a_yf4,a_yf0 is a_y8_15=39 & a_yf4 & a_yfq4 & a_yf0 { local o0:8 = hd_mxdr(a_yf4, a_yfq4, a_yf0); local o1:8 = hd_mxdr_1(a_yf4, a_yfq4, a_yf0); a_yf4 = o0; a_yfq4 = o1; }
-:mxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46040 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_mxtr(b_yf0, b_yfq0, b_yf12, b_yfq12); local o1:8 = hd_mxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12); b_yf4 = o0; b_yfq4 = o1; }
-:mxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46040 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_mxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); local o1:8 = hd_mxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; }
+:mxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46040 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_mxtr(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local o1:8 = hd_mxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); b_yf4 = o0; b_yfq4 = o1; }
+:mxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46040 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_mxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local o1:8 = hd_mxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; }
 :my c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=59 & c_yf12 & c_yfq12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_my(c_yf36, Ac_28_16_x32); local o1:8 = hd_my_1(c_yf36, Ac_28_16_x32); c_yf12 = o0; c_yfq12 = o1; }
 :myh c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=61 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_myh(c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :myhr b_yf12,b_yf4,b_yf0 is b_y16_31=45885 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_myhr(b_yf4, b_yf0); b_yf12 = o0; }
 :myl c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=57 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_myl(c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :mylr b_yf12,b_yf4,b_yf0 is b_y16_31=45881 & b_y8_11=0 & b_yf12 & b_yf4 & b_yf0 { local o0:8 = hd_mylr(b_yf4, b_yf0); b_yf12 = o0; }
 :myr b_yf12,b_yf4,b_yf0 is b_y16_31=45883 & b_y8_11=0 & b_yf12 & b_yfq12 & b_yf4 & b_yf0 { local o0:8 = hd_myr(b_yf4, b_yf0); local o1:8 = hd_myr_1(b_yf4, b_yf0); b_yf12 = o0; b_yfq12 = o1; }
+:niai b_y4_7,b_y0_3 is b_y8_31=11729408 & b_y4_7 & b_y0_3 { local imm_b_y4_7:8 = b_y4_7; local imm_b_y0_3:8 = b_y0_3; hd_niai(imm_b_y4_7, imm_b_y0_3); }
+:nnpa is b_y0_31=3107651584 { local o0:8 = hd_nnpa(r0, r1); local cc:1 = hd_nnpa_cc(r0, r1); r0 = o0; ccFrom(cc); }
+:ntstg c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=37 & c_yr36 & Ac_28_8_x32 { hd_ntstg(c_yr36, Ac_28_8_x32); }
 :pack Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=242 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_pack(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); }
+:palb is b_y0_31=2991063040 { hd_palb(); }
+:pc Ab_12_0 is b_y16_31=45592 & Ab_12_0 { hd_pc(Ab_12_0); }
+:pcc is b_y0_31=3106668544 { hd_pcc(r0l, r1); local cc:1 = hd_pcc_cc(r0l, r1); ccFrom(cc); }
+:pckmo is b_y0_31=3106406400 { hd_pckmo(r0l, r1); }
+:pfmf b_yrl4,b_yr0 is b_y8_31=12168960 & b_yr0 & b_yrl4 { local o0:8 = hd_pfmf(b_yrl4, b_yr0); b_yr0 = o0; }
+:pfpo is a_y0_15=266 { local o0:4 = hd_pfpo(fpc, r0l, f4); local o1:8 = hd_pfpo_1(fpc, r0l, f4); local cc:1 = hd_pfpo_cc(fpc, r0l, f4); r1l = o0; f0 = o1; ccFrom(cc); }
+:pgin b_yr4,b_yr0 is b_y8_31=11677184 & b_yr4 & b_yr0 { hd_pgin(b_yr4, b_yr0); local cc:1 = hd_pgin_cc(b_yr4, b_yr0); ccFrom(cc); }
+:pgout b_yr4,b_yr0 is b_y8_31=11677440 & b_yr4 & b_yr0 { hd_pgout(b_yr4, b_yr0); local cc:1 = hd_pgout_cc(b_yr4, b_yr0); ccFrom(cc); }
 :pka Ac_28_16,Ac_12_0_l32 is c_y40_47=233 & Ac_28_16 & Ac_12_0_l32 & c_y32_39 { local len_Ac_12_0_l32:8 = c_y32_39; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_pka(Ac_28_16, Ac_12_0_l32, len_Ac_12_0_l32); }
 :pku Ac_28_16,Ac_12_0_l32 is c_y40_47=225 & Ac_28_16 & Ac_12_0_l32 & c_y32_39 { local len_Ac_12_0_l32:8 = c_y32_39; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_pku(Ac_28_16, Ac_12_0_l32, len_Ac_12_0_l32); }
-:plo c_yr36,Ac_28_16,c_yr32,Ac_12_0 is c_y40_47=238 & c_yr36 & Ac_28_16 & c_yr32 & Ac_12_0 { hd_plo(c_yr36, Ac_28_16, c_yr32, Ac_12_0); local cc:1 = hd_plo_cc(c_yr36, Ac_28_16, c_yr32, Ac_12_0); ccFrom(cc); }
-:qadtr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=46069 & b_yf4 & b_yf12 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_qadtr(b_yf4, b_yf0, imm_b_y8_11); local o1:8 = hd_qadtr_1(b_yf4, b_yf0, imm_b_y8_11); b_yf4 = o0; b_yf12 = o1; }
-:qaxtr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=46077 & b_yf4 & b_yfq4 & b_yf12 & b_yfq12 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_qaxtr(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11); local o1:8 = hd_qaxtr_1(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11); local o2:8 = hd_qaxtr_2(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11); local o3:8 = hd_qaxtr_3(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; b_yf12 = o2; b_yfq12 = o3; }
-:rrdtr b_yf4,b_yf12,b_yrl0,b_y8_11 is b_y16_31=46071 & b_yf4 & b_yf12 & b_yrl0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_rrdtr(b_yf4, b_yrl0, imm_b_y8_11); local o1:8 = hd_rrdtr_1(b_yf4, b_yrl0, imm_b_y8_11); b_yf4 = o0; b_yf12 = o1; }
-:rrxtr b_yf4,b_yf12,b_yrl0,b_y8_11 is b_y16_31=46079 & b_yf4 & b_yfq4 & b_yf12 & b_yfq12 & b_yrl0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_rrxtr(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11); local o1:8 = hd_rrxtr_1(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11); local o2:8 = hd_rrxtr_2(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11); local o3:8 = hd_rrxtr_3(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; b_yf12 = o2; b_yfq12 = o3; }
-:sd b_yf20,Ab_12_0_x16 is b_y24_31=107 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_sd(b_yf20, Ab_12_0_x16); b_yf20 = o0; local cc:1 = hd_sd_cc(b_yf20, Ab_12_0_x16); ccFrom(cc); }
-:sdr a_yf4,a_yf0 is a_y8_15=43 & a_yf4 & a_yf0 { local o0:8 = hd_sdr(a_yf4, a_yf0); a_yf4 = o0; local cc:1 = hd_sdr_cc(a_yf4, a_yf0); ccFrom(cc); }
-:sdtr b_yf4,b_yf0,b_yf12 is b_y16_31=46035 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_sdtr(b_yf0, b_yf12); b_yf4 = o0; local cc:1 = hd_sdtr_cc(b_yf0, b_yf12); ccFrom(cc); }
-:sdtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46035 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_sdtra(b_yf0, b_yf12, imm_b_y8_11); b_yf4 = o0; local cc:1 = hd_sdtra_cc(b_yf0, b_yf12, imm_b_y8_11); ccFrom(cc); }
-:se b_yfs20,Ab_12_0_x16 is b_y24_31=123 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_se(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; local cc:1 = hd_se_cc(b_yfs20, Ab_12_0_x16); ccFrom(cc); }
-:ser a_yfs4,a_yfs0 is a_y8_15=59 & a_yfs4 & a_yfs0 { local o0:4 = hd_ser(a_yfs4, a_yfs0); a_yfs4 = o0; local cc:1 = hd_ser_cc(a_yfs4, a_yfs0); ccFrom(cc); }
+:plo c_yr36,Ac_28_16,c_yr32,Ac_12_0 is c_y40_47=238 & c_yr36 & Ac_28_16 & c_yr32 & Ac_12_0 { hd_plo(c_yr36, Ac_28_16, c_yr32, Ac_12_0, r0l, r1); local cc:1 = hd_plo_cc(c_yr36, Ac_28_16, c_yr32, Ac_12_0, r0l, r1); ccFrom(cc); }
+:ppa b_yr4,b_yr0,b_y12_15 is b_y16_31=45800 & b_y8_11=0 & b_yr4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; hd_ppa(b_yr4, b_yr0, imm_b_y12_15); }
+:ppno b_yr4,b_yr0 is b_y8_31=12139520 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_ppno(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_ppno_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_ppno_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_ppno_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_ppno_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
+:pr is a_y0_15=257 { hd_pr(); local cc:1 = hd_pr_cc(); ccFrom(cc); }
+:pt b_yrl4,b_yr0 is b_y8_31=11675648 & b_yrl4 & b_yr0 { hd_pt(b_yrl4, b_yr0); }
+:ptf b_yr4 is b_y8_31=12165632 & b_y0_3=0 & b_yr4 { local o0:8 = hd_ptf(b_yr4); b_yr4 = o0; }
+:ptff is a_y0_15=260 { hd_ptff(r0l, r1); local cc:1 = hd_ptff_cc(r0l, r1); ccFrom(cc); }
+:pti b_yr4,b_yr0 is b_y8_31=12164608 & b_yr4 & b_yr0 { hd_pti(b_yr4, b_yr0); }
+:ptlb is b_y0_31=2987196416 { hd_ptlb(); }
+:qadtr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=46069 & b_yf4 & b_yf12 & b_yf0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_qadtr(b_yf4, b_yf0, imm_b_y8_11, fpc); local o1:8 = hd_qadtr_1(b_yf4, b_yf0, imm_b_y8_11, fpc); b_yf4 = o0; b_yf12 = o1; }
+:qaxtr b_yf4,b_yf12,b_yf0,b_y8_11 is b_y16_31=46077 & b_yf4 & b_yfq4 & b_yf12 & b_yfq12 & b_yf0 & b_yfq0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_qaxtr(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11, fpc); local o1:8 = hd_qaxtr_1(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11, fpc); local o2:8 = hd_qaxtr_2(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11, fpc); local o3:8 = hd_qaxtr_3(b_yf4, b_yfq4, b_yf0, b_yfq0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; b_yf12 = o2; b_yfq12 = o3; }
+:qctri Ab_12_0 is b_y16_31=45710 & Ab_12_0 { hd_qctri(Ab_12_0); }
+:qpaci Ab_12_0 is b_y16_31=45711 & Ab_12_0 { local o0:8 = hd_qpaci(Ab_12_0, r0); local cc:1 = hd_qpaci_cc(Ab_12_0, r0); r0 = o0; ccFrom(cc); }
+:qsi Ab_12_0 is b_y16_31=45702 & Ab_12_0 { hd_qsi(Ab_12_0); }
+:rchp is b_y0_31=2990211072 { hd_rchp(r1l); local cc:1 = hd_rchp_cc(r1l); ccFrom(cc); }
+:rdp b_yr4,b_yr12,b_yr0,b_y8_11 is b_y16_31=47499 & b_yr4 & b_yr0 & b_yr12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; hd_rdp(b_yr4, b_yr0, b_yr12, imm_b_y8_11); }
+:rdp b_yr4,b_yr12,b_yr0 is b_y16_31=47499 & b_y8_11=0 & b_yr4 & b_yr0 & b_yr12 { hd_rdp(b_yr4, b_yr0, b_yr12); }
+:rp Ab_12_0 is b_y16_31=45687 & Ab_12_0 { hd_rp(Ab_12_0); local cc:1 = hd_rp_cc(Ab_12_0); ccFrom(cc); }
+:rrbe b_yrl4,b_yr0 is b_y8_31=11676160 & b_yrl4 & b_yr0 { hd_rrbe(b_yrl4, b_yr0); local cc:1 = hd_rrbe_cc(b_yrl4, b_yr0); ccFrom(cc); }
+:rrbm b_yr4,b_yr0 is b_y8_31=12168704 & b_yr4 & b_yr0 { local o0:8 = hd_rrbm(b_yr0); b_yr4 = o0; }
+:rrdtr b_yf4,b_yf12,b_yrl0,b_y8_11 is b_y16_31=46071 & b_yf4 & b_yf12 & b_yrl0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_rrdtr(b_yf4, b_yrl0, imm_b_y8_11, fpc); local o1:8 = hd_rrdtr_1(b_yf4, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; b_yf12 = o1; }
+:rrxtr b_yf4,b_yf12,b_yrl0,b_y8_11 is b_y16_31=46079 & b_yf4 & b_yfq4 & b_yf12 & b_yfq12 & b_yrl0 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_rrxtr(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11, fpc); local o1:8 = hd_rrxtr_1(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11, fpc); local o2:8 = hd_rrxtr_2(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11, fpc); local o3:8 = hd_rrxtr_3(b_yf4, b_yfq4, b_yrl0, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; b_yf12 = o2; b_yfq12 = o3; }
+:rsch is b_y0_31=2990014464 { hd_rsch(r1l); local cc:1 = hd_rsch_cc(r1l); ccFrom(cc); }
+:sac Ab_12_0 is b_y16_31=45593 & Ab_12_0 { hd_sac(Ab_12_0); }
+:sacf Ab_12_0 is b_y16_31=45689 & Ab_12_0 { hd_sacf(Ab_12_0); }
+:sal is b_y0_31=2989948928 { hd_sal(r1l); }
+:sam24 is a_y0_15=268 { hd_sam24(); }
+:sam31 is a_y0_15=269 { hd_sam31(); }
+:sam64 is a_y0_15=270 { hd_sam64(); }
+:scctr b_yr4,b_yr0 is b_y8_31=11722752 & b_yr4 & b_yr0 { hd_scctr(b_yr4, b_yr0); local cc:1 = hd_scctr_cc(b_yr4, b_yr0); ccFrom(cc); }
+:schm is b_y0_31=2990276608 { hd_schm(r1l, r2); }
+:sck Ab_12_0 is b_y16_31=45572 & Ab_12_0 { hd_sck(Ab_12_0); local cc:1 = hd_sck_cc(Ab_12_0); ccFrom(cc); }
+:sckc Ab_12_0 is b_y16_31=45574 & Ab_12_0 { hd_sckc(Ab_12_0); }
+:sckpf is a_y0_15=263 { hd_sckpf(r0l); }
+:sd b_yf20,Ab_12_0_x16 is b_y24_31=107 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_sd(b_yf20, Ab_12_0_x16); local cc:1 = hd_sd_cc(b_yf20, Ab_12_0_x16); b_yf20 = o0; ccFrom(cc); }
+:sdr a_yf4,a_yf0 is a_y8_15=43 & a_yf4 & a_yf0 { local o0:8 = hd_sdr(a_yf4, a_yf0); local cc:1 = hd_sdr_cc(a_yf4, a_yf0); a_yf4 = o0; ccFrom(cc); }
+:sdtr b_yf4,b_yf0,b_yf12 is b_y16_31=46035 & b_y8_11=0 & b_yf4 & b_yf0 & b_yf12 { local o0:8 = hd_sdtr(b_yf0, b_yf12, fpc); local cc:1 = hd_sdtr_cc(b_yf0, b_yf12, fpc); b_yf4 = o0; ccFrom(cc); }
+:sdtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46035 & b_yf4 & b_yf0 & b_yf12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_sdtra(b_yf0, b_yf12, imm_b_y8_11, fpc); local cc:1 = hd_sdtra_cc(b_yf0, b_yf12, imm_b_y8_11, fpc); b_yf4 = o0; ccFrom(cc); }
+:se b_yfs20,Ab_12_0_x16 is b_y24_31=123 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_se(b_yfs20, Ab_12_0_x16); local cc:1 = hd_se_cc(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; ccFrom(cc); }
+:selfhr b_yrh4,b_yrh0,b_yrh12,0 is b_y16_31=47552 & b_yrh4 & b_yrh12 & b_yrh0 & b_y8_11=0 { local res:4 = b_yrh12; b_yrh4 = res; }
+:selfhr b_yrh4,b_yrh0,b_yrh12,15 is b_y16_31=47552 & b_yrh4 & b_yrh12 & b_yrh0 & b_y8_11=15 { local res:4 = b_yrh12; res = b_yrh0; b_yrh4 = res; }
+:selgr b_yr4,b_yr0,b_yr12,0 is b_y16_31=47587 & b_yr4 & b_yr12 & b_yr0 & b_y8_11=0 { local res:8 = b_yr12; b_yr4 = res; }
+:selgr b_yr4,b_yr0,b_yr12,15 is b_y16_31=47587 & b_yr4 & b_yr12 & b_yr0 & b_y8_11=15 { local res:8 = b_yr12; res = b_yr0; b_yr4 = res; }
+:selr b_yrl4,b_yrl0,b_yrl12,0 is b_y16_31=47600 & b_yrl4 & b_yrl12 & b_yrl0 & b_y8_11=0 { local res:4 = b_yrl12; b_yrl4 = res; }
+:selr b_yrl4,b_yrl0,b_yrl12,15 is b_y16_31=47600 & b_yrl4 & b_yrl12 & b_yrl0 & b_y8_11=15 { local res:4 = b_yrl12; res = b_yrl0; b_yrl4 = res; }
+:ser a_yfs4,a_yfs0 is a_y8_15=59 & a_yfs4 & a_yfs0 { local o0:4 = hd_ser(a_yfs4, a_yfs0); local cc:1 = hd_ser_cc(a_yfs4, a_yfs0); a_yfs4 = o0; ccFrom(cc); }
+:sfasr b_yrl4 is b_y8_31=11764992 & b_y0_3=0 & b_yrl4 { local o0:4 = hd_sfasr(b_yrl4); fpc = o0; }
+:sie Ab_12_0 is b_y16_31=45588 & Ab_12_0 { hd_sie(Ab_12_0); local cc:1 = hd_sie_cc(Ab_12_0); ccFrom(cc); }
+:siga Ab_12_0 is b_y16_31=45684 & Ab_12_0 { hd_siga(Ab_12_0, r0, r1, r2, r3); local cc:1 = hd_siga_cc(Ab_12_0, r0, r1, r2, r3); ccFrom(cc); }
+:sigp b_yr20,b_yr16,Ab_12_0 is b_y24_31=174 & b_yr20 & b_yr16 & Ab_12_0 { hd_sigp(b_yr20, b_yr16, Ab_12_0); local cc:1 = hd_sigp_cc(b_yr20, b_yr16, Ab_12_0); ccFrom(cc); }
 :sldt c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=64 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_sldt(c_yf36, Ac_28_16_x32); c_yf12 = o0; }
 :slxt c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=72 & c_yf12 & c_yfq12 & c_yf36 & c_yfq36 & Ac_28_16_x32 { local o0:8 = hd_slxt(c_yf36, c_yfq36, Ac_28_16_x32); local o1:8 = hd_slxt_1(c_yf36, c_yfq36, Ac_28_16_x32); c_yf12 = o0; c_yfq12 = o1; }
+:sortl b_yr4,b_yr0 is b_y8_31=12138496 & b_yr4 & b_yrp4 & b_yr0 & b_yrp0 { local o0:8 = hd_sortl(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o1:8 = hd_sortl_1(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o2:8 = hd_sortl_2(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local o3:8 = hd_sortl_3(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); local cc:1 = hd_sortl_cc(b_yr4, b_yrp4, b_yr0, b_yrp0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; b_yrp0 = o3; ccFrom(cc); }
 :sp Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=251 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_sp(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); local cc:1 = hd_sp_cc(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); ccFrom(cc); }
+:spctr b_yr4,b_yr0 is b_y8_31=11723008 & b_yr4 & b_yr0 { hd_spctr(b_yr4, b_yr0); local cc:1 = hd_spctr_cc(b_yr4, b_yr0); ccFrom(cc); }
+:spka Ab_12_0 is b_y16_31=45578 & Ab_12_0 { hd_spka(Ab_12_0); }
+:spm a_yrl4 is a_y8_15=4 & a_y0_3=0 & a_yrl4 { hd_spm(a_yrl4); local cc:1 = hd_spm_cc(a_yrl4); ccFrom(cc); }
+:spt Ab_12_0 is b_y16_31=45576 & Ab_12_0 { hd_spt(Ab_12_0); }
+:spx Ab_12_0 is b_y16_31=45584 & Ab_12_0 { hd_spx(Ab_12_0); }
 :sqd c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=53 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_sqd(Ac_28_16_x32); c_yf36 = o0; }
 :sqdr b_yf4,b_yf0 is b_y8_31=11682816 & b_yf4 & b_yf0 { local o0:8 = hd_sqdr(b_yf0); b_yf4 = o0; }
 :sqe c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=52 & c_yfs36 & Ac_28_16_x32 { local o0:4 = hd_sqe(Ac_28_16_x32); c_yfs36 = o0; }
 :sqer b_yfs4,b_yfs0 is b_y8_31=11683072 & b_yfs4 & b_yfs0 { local o0:4 = hd_sqer(b_yfs0); b_yfs4 = o0; }
 :sqxr b_yf4,b_yf0 is b_y8_31=11744768 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 { local o0:8 = hd_sqxr(b_yf0, b_yfq0); local o1:8 = hd_sqxr_1(b_yf0, b_yfq0); b_yf4 = o0; b_yfq4 = o1; }
 :srdt c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=65 & c_yf12 & c_yf36 & Ac_28_16_x32 { local o0:8 = hd_srdt(c_yf36, Ac_28_16_x32); c_yf12 = o0; }
+:srnm Ab_12_0 is b_y16_31=45721 & Ab_12_0 { local v:4 = Ab_12_0:4; fpc = (fpc & ~0x3) | ((v & 3) << 0); }
+:srnmb Ab_12_0 is b_y16_31=45752 & Ab_12_0 { local v:4 = Ab_12_0:4; fpc = (fpc & ~0x7) | ((v & 7) << 0); }
+:srnmt Ab_12_0 is b_y16_31=45753 & Ab_12_0 { local v:4 = Ab_12_0:4; fpc = (fpc & ~0x70) | ((v & 7) << 4); }
 :srp Ac_28_16_l36,Ac_12_0,c_y32_35 is c_y40_47=240 & Ac_28_16_l36 & c_y36_39 & Ac_12_0 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local imm_c_y32_35:8 = c_y32_35; hd_srp(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0, imm_c_y32_35); local cc:1 = hd_srp_cc(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0, imm_c_y32_35); ccFrom(cc); }
-:srstu b_yr4,b_yr0 is b_y8_31=12172800 & b_yr4 & b_yr0 { local o0:8 = hd_srstu(b_yr4, b_yr0); local o1:8 = hd_srstu_1(b_yr4, b_yr0); b_yr4 = o0; b_yr0 = o1; local cc:1 = hd_srstu_cc(b_yr4, b_yr0); ccFrom(cc); }
+:srstu b_yr4,b_yr0 is b_y8_31=12172800 & b_yr4 & b_yr0 { local o0:8 = hd_srstu(b_yr4, b_yr0, r0l); local o1:8 = hd_srstu_1(b_yr4, b_yr0, r0l); local cc:1 = hd_srstu_cc(b_yr4, b_yr0, r0l); b_yr4 = o0; b_yr0 = o1; ccFrom(cc); }
 :srxt c_yf12,c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_11=73 & c_yf12 & c_yfq12 & c_yf36 & c_yfq36 & Ac_28_16_x32 { local o0:8 = hd_srxt(c_yf36, c_yfq36, Ac_28_16_x32); local o1:8 = hd_srxt_1(c_yf36, c_yfq36, Ac_28_16_x32); c_yf12 = o0; c_yfq12 = o1; }
-:su b_yfs20,Ab_12_0_x16 is b_y24_31=127 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_su(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; local cc:1 = hd_su_cc(b_yfs20, Ab_12_0_x16); ccFrom(cc); }
-:sur a_yfs4,a_yfs0 is a_y8_15=63 & a_yfs4 & a_yfs0 { local o0:4 = hd_sur(a_yfs4, a_yfs0); a_yfs4 = o0; local cc:1 = hd_sur_cc(a_yfs4, a_yfs0); ccFrom(cc); }
-:sw b_yf20,Ab_12_0_x16 is b_y24_31=111 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_sw(b_yf20, Ab_12_0_x16); b_yf20 = o0; local cc:1 = hd_sw_cc(b_yf20, Ab_12_0_x16); ccFrom(cc); }
-:swr a_yf4,a_yf0 is a_y8_15=47 & a_yf4 & a_yf0 { local o0:8 = hd_swr(a_yf4, a_yf0); a_yf4 = o0; local cc:1 = hd_swr_cc(a_yf4, a_yf0); ccFrom(cc); }
-:sxr a_yf4,a_yf0 is a_y8_15=55 & a_yf4 & a_yfq4 & a_yf0 & a_yfq0 { local o0:8 = hd_sxr(a_yf4, a_yfq4, a_yf0, a_yfq0); local o1:8 = hd_sxr_1(a_yf4, a_yfq4, a_yf0, a_yfq0); a_yf4 = o0; a_yfq4 = o1; local cc:1 = hd_sxr_cc(a_yf4, a_yfq4, a_yf0, a_yfq0); ccFrom(cc); }
-:sxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46043 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_sxtr(b_yf0, b_yfq0, b_yf12, b_yfq12); local o1:8 = hd_sxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_sxtr_cc(b_yf0, b_yfq0, b_yf12, b_yfq12); ccFrom(cc); }
-:sxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46043 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_sxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); local o1:8 = hd_sxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); b_yf4 = o0; b_yfq4 = o1; local cc:1 = hd_sxtra_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11); ccFrom(cc); }
-:tbdr b_yf4,b_y12_15,b_yf0 is b_y16_31=45905 & b_y8_11=0 & b_yf4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_tbdr(imm_b_y12_15, b_yf0); b_yf4 = o0; local cc:1 = hd_tbdr_cc(imm_b_y12_15, b_yf0); ccFrom(cc); }
-:tbedr b_yfs4,b_y12_15,b_yf0 is b_y16_31=45904 & b_y8_11=0 & b_yfs4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_tbedr(imm_b_y12_15, b_yf0); b_yfs4 = o0; local cc:1 = hd_tbedr_cc(imm_b_y12_15, b_yf0); ccFrom(cc); }
+:ssair b_yr4 is b_y8_31=12164864 & b_y0_3=0 & b_yr4 { hd_ssair(b_yr4); }
+:ssar b_yrl4 is b_y8_31=11674880 & b_y0_3=0 & b_yrl4 { hd_ssar(b_yrl4); }
+:ssch Ab_12_0 is b_y16_31=45619 & Ab_12_0 { hd_ssch(Ab_12_0, r1l); local cc:1 = hd_ssch_cc(Ab_12_0, r1l); ccFrom(cc); }
+:sske b_yrl4,b_yr0,b_y12_15 is b_y16_31=45611 & b_y8_11=0 & b_yrl4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; hd_sske(b_yrl4, b_yr0, imm_b_y12_15); local cc:1 = hd_sske_cc(b_yrl4, b_yr0, imm_b_y12_15); ccFrom(cc); }
+:sske b_yrl4,b_yr0 is b_y8_31=11676416 & b_yrl4 & b_yr0 { hd_sske(b_yrl4, b_yr0); local cc:1 = hd_sske_cc(b_yrl4, b_yr0); ccFrom(cc); }
+:ssm Ab_12_0 is b_y16_31=32768 & Ab_12_0 { hd_ssm(Ab_12_0); }
+:stam b_ya20,b_ya16,Ab_12_0 is b_y24_31=155 & b_ya20 & b_ya16 & Ab_12_0 { hd_stam(b_ya20, b_ya16, Ab_12_0); }
+:stamy c_ya36,c_ya32,Ac_28_8 is c_y40_47=235 & c_y0_7=155 & c_ya36 & c_ya32 & Ac_28_8 { hd_stamy(c_ya36, c_ya32, Ac_28_8); }
+:stap Ab_12_0 is b_y16_31=45586 & Ab_12_0 { hd_stap(Ab_12_0); }
+:stbear Ab_12_0 is b_y16_31=45569 & Ab_12_0 { hd_stbear(Ab_12_0); }
+:stck Ab_12_0 is b_y16_31=45573 & Ab_12_0 { hd_stck(Ab_12_0); local cc:1 = hd_stck_cc(Ab_12_0); ccFrom(cc); }
+:stckc Ab_12_0 is b_y16_31=45575 & Ab_12_0 { hd_stckc(Ab_12_0); }
+:stcke Ab_12_0 is b_y16_31=45688 & Ab_12_0 { hd_stcke(Ab_12_0); local cc:1 = hd_stcke_cc(Ab_12_0); ccFrom(cc); }
+:stckf Ab_12_0 is b_y16_31=45692 & Ab_12_0 { hd_stckf(Ab_12_0); local cc:1 = hd_stckf_cc(Ab_12_0); ccFrom(cc); }
+:stcps Ab_12_0 is b_y16_31=45626 & Ab_12_0 { hd_stcps(Ab_12_0); }
+:stcrw Ab_12_0 is b_y16_31=45625 & Ab_12_0 { hd_stcrw(Ab_12_0); local cc:1 = hd_stcrw_cc(Ab_12_0); ccFrom(cc); }
+:stctg c_yc36,c_yc32,Ac_28_8 is c_y40_47=235 & c_y0_7=37 & c_yc36 & c_yc32 & Ac_28_8 { hd_stctg(c_yc36, c_yc32, Ac_28_8); }
+:stctl b_yc20,b_yc16,Ab_12_0 is b_y24_31=182 & b_yc20 & b_yc16 & Ab_12_0 { hd_stctl(b_yc20, b_yc16, Ab_12_0); }
+:stfl Ab_12_0 is b_y16_31=45745 & Ab_12_0 { hd_stfl(Ab_12_0); }
+:stfle Ab_12_0 is b_y16_31=45744 & Ab_12_0 { local o0:8 = hd_stfle(Ab_12_0, r0); local cc:1 = hd_stfle_cc(Ab_12_0, r0); r0 = o0; ccFrom(cc); }
+:stfpc Ab_12_0 is b_y16_31=45724 & Ab_12_0 { *:4 Ab_12_0 = fpc; }
+:stgsc c_yr36,Ac_28_8_x32 is c_y40_47=227 & c_y0_7=73 & c_yr36 & Ac_28_8_x32 { hd_stgsc(c_yr36, Ac_28_8_x32); }
+:stidp Ab_12_0 is b_y16_31=45570 & Ab_12_0 { hd_stidp(Ab_12_0); }
+:stnsm Ab_12_0,b_y16_23 is b_y24_31=172 & Ab_12_0 & b_y16_23 { local imm_b_y16_23:8 = b_y16_23; hd_stnsm(Ab_12_0, imm_b_y16_23); }
+:stoc c_yrl36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=243 & c_yrl36 & Ac_28_8 & c_y32_35=0 {  }
+:stoc c_yrl36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=243 & c_yrl36 & Ac_28_8 & c_y32_35=15 { *:4 Ac_28_8 = c_yrl36; }
+:stocfh c_yrh36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=0 {  }
+:stocfho c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=1 { if (!(CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=2 { if (!(CC2)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhnle c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=3 { if (!(CC2 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhl c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=4 { if (!(CC1)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhnhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=5 { if (!(CC1 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhlh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=6 { if (!(CC1 || CC2)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhne c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=7 { if (!(CC1 || CC2 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=8 { if (!(CC0)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhnlh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=9 { if (!(CC0 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhhe c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=10 { if (!(CC0 || CC2)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhnl c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=11 { if (!(CC0 || CC2 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhle c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=12 { if (!(CC0 || CC1)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhnh c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=13 { if (!(CC0 || CC1 || CC3)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfhno c_yrh36,Ac_28_8 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=14 { if (!(CC0 || CC1 || CC2)) goto inst_next; *:4 Ac_28_8 = c_yrh36; }
+:stocfh c_yrh36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=225 & c_yrh36 & Ac_28_8 & c_y32_35=15 { *:4 Ac_28_8 = c_yrh36; }
+:stocg c_yr36,Ac_28_8,0 is c_y40_47=235 & c_y0_7=227 & c_yr36 & Ac_28_8 & c_y32_35=0 {  }
+:stocg c_yr36,Ac_28_8,15 is c_y40_47=235 & c_y0_7=227 & c_yr36 & Ac_28_8 & c_y32_35=15 { *:8 Ac_28_8 = c_yr36; }
+:stosm Ab_12_0,b_y16_23 is b_y24_31=173 & Ab_12_0 & b_y16_23 { local imm_b_y16_23:8 = b_y16_23; hd_stosm(Ab_12_0, imm_b_y16_23); }
+:stpt Ab_12_0 is b_y16_31=45577 & Ab_12_0 { hd_stpt(Ab_12_0); }
+:stpx Ab_12_0 is b_y16_31=45585 & Ab_12_0 { hd_stpx(Ab_12_0); }
+:strag Ac_28_16,Ac_12_0 is c_y32_47=58626 & Ac_28_16 & Ac_12_0 { hd_strag(Ac_28_16, Ac_12_0); }
+:stsch Ab_12_0 is b_y16_31=45620 & Ab_12_0 { hd_stsch(Ab_12_0, r1l); local cc:1 = hd_stsch_cc(Ab_12_0, r1l); ccFrom(cc); }
+:stsi Ab_12_0 is b_y16_31=45693 & Ab_12_0 { local o0:4 = hd_stsi(Ab_12_0, r0l, r1l); local cc:1 = hd_stsi_cc(Ab_12_0, r0l, r1l); r0l = o0; ccFrom(cc); }
+:stura b_yrl4,b_yr0 is b_y8_31=11683328 & b_yrl4 & b_yr0 { hd_stura(b_yrl4, b_yr0); }
+:sturg b_yr4,b_yr0 is b_y8_31=12133632 & b_yr4 & b_yr0 { hd_sturg(b_yr4, b_yr0); }
+:su b_yfs20,Ab_12_0_x16 is b_y24_31=127 & b_yfs20 & Ab_12_0_x16 { local o0:4 = hd_su(b_yfs20, Ab_12_0_x16); local cc:1 = hd_su_cc(b_yfs20, Ab_12_0_x16); b_yfs20 = o0; ccFrom(cc); }
+:sur a_yfs4,a_yfs0 is a_y8_15=63 & a_yfs4 & a_yfs0 { local o0:4 = hd_sur(a_yfs4, a_yfs0); local cc:1 = hd_sur_cc(a_yfs4, a_yfs0); a_yfs4 = o0; ccFrom(cc); }
+:sw b_yf20,Ab_12_0_x16 is b_y24_31=111 & b_yf20 & Ab_12_0_x16 { local o0:8 = hd_sw(b_yf20, Ab_12_0_x16); local cc:1 = hd_sw_cc(b_yf20, Ab_12_0_x16); b_yf20 = o0; ccFrom(cc); }
+:swr a_yf4,a_yf0 is a_y8_15=47 & a_yf4 & a_yf0 { local o0:8 = hd_swr(a_yf4, a_yf0); local cc:1 = hd_swr_cc(a_yf4, a_yf0); a_yf4 = o0; ccFrom(cc); }
+:sxr a_yf4,a_yf0 is a_y8_15=55 & a_yf4 & a_yfq4 & a_yf0 & a_yfq0 { local o0:8 = hd_sxr(a_yf4, a_yfq4, a_yf0, a_yfq0); local o1:8 = hd_sxr_1(a_yf4, a_yfq4, a_yf0, a_yfq0); local cc:1 = hd_sxr_cc(a_yf4, a_yfq4, a_yf0, a_yfq0); a_yf4 = o0; a_yfq4 = o1; ccFrom(cc); }
+:sxtr b_yf4,b_yf0,b_yf12 is b_y16_31=46043 & b_y8_11=0 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 { local o0:8 = hd_sxtr(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local o1:8 = hd_sxtr_1(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); local cc:1 = hd_sxtr_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, fpc); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:sxtra b_yf4,b_yf0,b_yf12,b_y8_11 is b_y16_31=46043 & b_yf4 & b_yfq4 & b_yf0 & b_yfq0 & b_yf12 & b_yfq12 & b_y8_11 { local imm_b_y8_11:8 = b_y8_11; local o0:8 = hd_sxtra(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local o1:8 = hd_sxtra_1(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); local cc:1 = hd_sxtra_cc(b_yf0, b_yfq0, b_yf12, b_yfq12, imm_b_y8_11, fpc); b_yf4 = o0; b_yfq4 = o1; ccFrom(cc); }
+:tabort Ab_12_0 is b_y16_31=45820 & Ab_12_0 { hd_tabort(Ab_12_0); }
+:tam is a_y0_15=267 { hd_tam(); local cc:1 = hd_tam_cc(); ccFrom(cc); }
+:tar b_ya4,b_yrl0 is b_y8_31=11684864 & b_ya4 & b_yrl0 { hd_tar(b_ya4, b_yrl0); local cc:1 = hd_tar_cc(b_ya4, b_yrl0); ccFrom(cc); }
+:tb b_yr4,b_yr0 is b_y8_31=11676672 & b_yr4 & b_yr0 { local o0:8 = hd_tb(b_yr4, b_yr0, r0); local cc:1 = hd_tb_cc(b_yr4, b_yr0, r0); r0 = o0; ccFrom(cc); }
+:tbdr b_yf4,b_y12_15,b_yf0 is b_y16_31=45905 & b_y8_11=0 & b_yf4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_tbdr(imm_b_y12_15, b_yf0); local cc:1 = hd_tbdr_cc(imm_b_y12_15, b_yf0); b_yf4 = o0; ccFrom(cc); }
+:tbedr b_yfs4,b_y12_15,b_yf0 is b_y16_31=45904 & b_y8_11=0 & b_yfs4 & b_y12_15 & b_yf0 { local imm_b_y12_15:8 = b_y12_15; local o0:4 = hd_tbedr(imm_b_y12_15, b_yf0); local cc:1 = hd_tbedr_cc(imm_b_y12_15, b_yf0); b_yfs4 = o0; ccFrom(cc); }
+:tbegin Ac_28_16,c_y0_15 is c_y32_47=58720 & Ac_28_16 & c_y0_15 { local imm_c_y0_15:8 = c_y0_15; hd_tbegin(Ac_28_16, imm_c_y0_15); local cc:1 = hd_tbegin_cc(Ac_28_16, imm_c_y0_15); ccFrom(cc); }
+:tbeginc Ac_28_16,c_y0_15 is c_y32_47=58721 & Ac_28_16 & c_y0_15 { local imm_c_y0_15:8 = c_y0_15; hd_tbeginc(Ac_28_16, imm_c_y0_15); local cc:1 = hd_tbeginc_cc(Ac_28_16, imm_c_y0_15); ccFrom(cc); }
 :tdcdt c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=84 & c_yf36 & Ac_28_16_x32 { hd_tdcdt(c_yf36, Ac_28_16_x32); local cc:1 = hd_tdcdt_cc(c_yf36, Ac_28_16_x32); ccFrom(cc); }
 :tdcet c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=80 & c_yfs36 & Ac_28_16_x32 { hd_tdcet(c_yfs36, Ac_28_16_x32); local cc:1 = hd_tdcet_cc(c_yfs36, Ac_28_16_x32); ccFrom(cc); }
 :tdcxt c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=88 & c_yf36 & c_yfq36 & Ac_28_16_x32 { hd_tdcxt(c_yf36, c_yfq36, Ac_28_16_x32); local cc:1 = hd_tdcxt_cc(c_yf36, c_yfq36, Ac_28_16_x32); ccFrom(cc); }
 :tdgdt c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=85 & c_yf36 & Ac_28_16_x32 { hd_tdgdt(c_yf36, Ac_28_16_x32); local cc:1 = hd_tdgdt_cc(c_yf36, Ac_28_16_x32); ccFrom(cc); }
 :tdget c_yfs36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=81 & c_yfs36 & Ac_28_16_x32 { hd_tdget(c_yfs36, Ac_28_16_x32); local cc:1 = hd_tdget_cc(c_yfs36, Ac_28_16_x32); ccFrom(cc); }
 :tdgxt c_yf36,Ac_28_16_x32 is c_y40_47=237 & c_y0_15=89 & c_yf36 & c_yfq36 & Ac_28_16_x32 { hd_tdgxt(c_yf36, c_yfq36, Ac_28_16_x32); local cc:1 = hd_tdgxt_cc(c_yf36, c_yfq36, Ac_28_16_x32); ccFrom(cc); }
-:thder b_yf4,b_yfs0 is b_y8_31=11753472 & b_yf4 & b_yfs0 { local o0:8 = hd_thder(b_yfs0); b_yf4 = o0; local cc:1 = hd_thder_cc(b_yfs0); ccFrom(cc); }
-:thdr b_yf4,b_yf0 is b_y8_31=11753728 & b_yf4 & b_yf0 { local o0:8 = hd_thdr(b_yf0); b_yf4 = o0; local cc:1 = hd_thdr_cc(b_yf0); ccFrom(cc); }
+:tend is b_y0_31=3002597376 { hd_tend(); local cc:1 = hd_tend_cc(); ccFrom(cc); }
+:thder b_yf4,b_yfs0 is b_y8_31=11753472 & b_yf4 & b_yfs0 { local o0:8 = hd_thder(b_yfs0); local cc:1 = hd_thder_cc(b_yfs0); b_yf4 = o0; ccFrom(cc); }
+:thdr b_yf4,b_yf0 is b_y8_31=11753728 & b_yf4 & b_yf0 { local o0:8 = hd_thdr(b_yf0); local cc:1 = hd_thdr_cc(b_yf0); b_yf4 = o0; ccFrom(cc); }
 :tp Ac_28_16_l36 is c_y40_47=235 & c_y32_35=0 & c_y0_15=192 & Ac_28_16_l36 & c_y36_39 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; hd_tp(Ac_28_16_l36, len_Ac_28_16_l36); local cc:1 = hd_tp_cc(Ac_28_16_l36, len_Ac_28_16_l36); ccFrom(cc); }
+:tpei b_yr4,b_yr0 is b_y8_31=12165376 & b_yr4 & b_yr0 { local o0:8 = hd_tpei(b_yr0); local cc:1 = hd_tpei_cc(b_yr0); b_yr4 = o0; ccFrom(cc); }
+:tpi Ab_12_0 is b_y16_31=45622 & Ab_12_0 { hd_tpi(Ab_12_0); local cc:1 = hd_tpi_cc(Ab_12_0); ccFrom(cc); }
+:tprot Ac_28_16,Ac_12_0 is c_y32_47=58625 & Ac_28_16 & Ac_12_0 { hd_tprot(Ac_28_16, Ac_12_0); local cc:1 = hd_tprot_cc(Ac_28_16, Ac_12_0); ccFrom(cc); }
 :tr Ac_28_16_l32,Ac_12_0 is c_y40_47=220 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_tr(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); }
 :trace b_yrl20,b_yrl16,Ab_12_0 is b_y24_31=153 & b_yrl20 & b_yrl16 & Ab_12_0 { hd_trace(b_yrl20, b_yrl16, Ab_12_0); }
 :tracg c_yr36,c_yr32,Ac_28_8 is c_y40_47=235 & c_y0_7=15 & c_yr36 & c_yr32 & Ac_28_8 { hd_tracg(c_yr36, c_yr32, Ac_28_8); }
-:tre b_yr4,b_yr0 is b_y8_31=11707648 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_tre(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_tre_1(b_yr4, b_yrp4, b_yr0); local o2:8 = hd_tre_2(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; }
-:troo b_yr4,b_yr0,b_y12_15 is b_y16_31=47507 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_troo(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o1:8 = hd_troo_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o2:8 = hd_troo_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_troo_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); ccFrom(cc); }
-:troo b_yr4,b_yr0 is b_y8_31=12161792 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_troo(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_troo_1(b_yr4, b_yrp4, b_yr0); local o2:8 = hd_troo_2(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_troo_cc(b_yr4, b_yrp4, b_yr0); ccFrom(cc); }
-:trot b_yr4,b_yr0,b_y12_15 is b_y16_31=47506 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trot(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o1:8 = hd_trot_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o2:8 = hd_trot_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trot_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); ccFrom(cc); }
-:trot b_yr4,b_yr0 is b_y8_31=12161536 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trot(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_trot_1(b_yr4, b_yrp4, b_yr0); local o2:8 = hd_trot_2(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trot_cc(b_yr4, b_yrp4, b_yr0); ccFrom(cc); }
-:trt Ac_28_16_l32,Ac_12_0 is c_y40_47=221 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_trt(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_trt_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
-:trte b_yr4,b_yr0,b_y12_15 is b_y16_31=47551 & b_y8_11=0 & b_yr0 & b_yr4 & b_yrp4 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trte(b_yr4, b_yrp4, imm_b_y12_15); local o1:8 = hd_trte_1(b_yr4, b_yrp4, imm_b_y12_15); local o2:8 = hd_trte_2(b_yr4, b_yrp4, imm_b_y12_15); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; local cc:1 = hd_trte_cc(b_yr4, b_yrp4, imm_b_y12_15); ccFrom(cc); }
-:trte b_yr4,b_yr0 is b_y8_31=12173056 & b_yr0 & b_yr4 & b_yrp4 { local o0:8 = hd_trte(b_yr4, b_yrp4); local o1:8 = hd_trte_1(b_yr4, b_yrp4); local o2:8 = hd_trte_2(b_yr4, b_yrp4); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; local cc:1 = hd_trte_cc(b_yr4, b_yrp4); ccFrom(cc); }
-:trto b_yr4,b_yr0,b_y12_15 is b_y16_31=47505 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trto(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o1:8 = hd_trto_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o2:8 = hd_trto_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trto_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); ccFrom(cc); }
-:trto b_yr4,b_yr0 is b_y8_31=12161280 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trto(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_trto_1(b_yr4, b_yrp4, b_yr0); local o2:8 = hd_trto_2(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trto_cc(b_yr4, b_yrp4, b_yr0); ccFrom(cc); }
-:trtr Ac_28_16_l32,Ac_12_0 is c_y40_47=208 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_trtr(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_trtr_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
-:trtre b_yr4,b_yr0,b_y12_15 is b_y16_31=47549 & b_y8_11=0 & b_yr0 & b_yr4 & b_yrp4 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trtre(b_yr4, b_yrp4, imm_b_y12_15); local o1:8 = hd_trtre_1(b_yr4, b_yrp4, imm_b_y12_15); local o2:8 = hd_trtre_2(b_yr4, b_yrp4, imm_b_y12_15); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; local cc:1 = hd_trtre_cc(b_yr4, b_yrp4, imm_b_y12_15); ccFrom(cc); }
-:trtre b_yr4,b_yr0 is b_y8_31=12172544 & b_yr0 & b_yr4 & b_yrp4 { local o0:8 = hd_trtre(b_yr4, b_yrp4); local o1:8 = hd_trtre_1(b_yr4, b_yrp4); local o2:8 = hd_trtre_2(b_yr4, b_yrp4); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; local cc:1 = hd_trtre_cc(b_yr4, b_yrp4); ccFrom(cc); }
-:trtt b_yr4,b_yr0,b_y12_15 is b_y16_31=47504 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trtt(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o1:8 = hd_trtt_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); local o2:8 = hd_trtt_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trtt_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15); ccFrom(cc); }
-:trtt b_yr4,b_yr0 is b_y8_31=12161024 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trtt(b_yr4, b_yrp4, b_yr0); local o1:8 = hd_trtt_1(b_yr4, b_yrp4, b_yr0); local o2:8 = hd_trtt_2(b_yr4, b_yrp4, b_yr0); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; local cc:1 = hd_trtt_cc(b_yr4, b_yrp4, b_yr0); ccFrom(cc); }
+:trap2 is a_y0_15=511 { hd_trap2(); }
+:trap4 Ab_12_0 is b_y16_31=45823 & Ab_12_0 { hd_trap4(Ab_12_0); }
+:tre b_yr4,b_yr0 is b_y8_31=11707648 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_tre(b_yr4, b_yrp4, b_yr0, r0l); local o1:8 = hd_tre_1(b_yr4, b_yrp4, b_yr0, r0l); local o2:8 = hd_tre_2(b_yr4, b_yrp4, b_yr0, r0l); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; }
+:troo b_yr4,b_yr0,b_y12_15 is b_y16_31=47507 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_troo(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o1:8 = hd_troo_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o2:8 = hd_troo_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local cc:1 = hd_troo_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:troo b_yr4,b_yr0 is b_y8_31=12161792 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_troo(b_yr4, b_yrp4, b_yr0, r0l, r1); local o1:8 = hd_troo_1(b_yr4, b_yrp4, b_yr0, r0l, r1); local o2:8 = hd_troo_2(b_yr4, b_yrp4, b_yr0, r0l, r1); local cc:1 = hd_troo_cc(b_yr4, b_yrp4, b_yr0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trot b_yr4,b_yr0,b_y12_15 is b_y16_31=47506 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trot(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o1:8 = hd_trot_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o2:8 = hd_trot_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local cc:1 = hd_trot_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trot b_yr4,b_yr0 is b_y8_31=12161536 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trot(b_yr4, b_yrp4, b_yr0, r0l, r1); local o1:8 = hd_trot_1(b_yr4, b_yrp4, b_yr0, r0l, r1); local o2:8 = hd_trot_2(b_yr4, b_yrp4, b_yr0, r0l, r1); local cc:1 = hd_trot_cc(b_yr4, b_yrp4, b_yr0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trt Ac_28_16_l32,Ac_12_0 is c_y40_47=221 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local o0:4 = hd_trt(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local o1:8 = hd_trt_1(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_trt_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); r0l = o0; r1 = o1; ccFrom(cc); }
+:trte b_yr4,b_yr0,b_y12_15 is b_y16_31=47551 & b_y8_11=0 & b_yr0 & b_yr4 & b_yrp4 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trte(b_yr4, b_yrp4, imm_b_y12_15, r1); local o1:8 = hd_trte_1(b_yr4, b_yrp4, imm_b_y12_15, r1); local o2:8 = hd_trte_2(b_yr4, b_yrp4, imm_b_y12_15, r1); local cc:1 = hd_trte_cc(b_yr4, b_yrp4, imm_b_y12_15, r1); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; ccFrom(cc); }
+:trte b_yr4,b_yr0 is b_y8_31=12173056 & b_yr0 & b_yr4 & b_yrp4 { local o0:8 = hd_trte(b_yr4, b_yrp4, r1); local o1:8 = hd_trte_1(b_yr4, b_yrp4, r1); local o2:8 = hd_trte_2(b_yr4, b_yrp4, r1); local cc:1 = hd_trte_cc(b_yr4, b_yrp4, r1); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; ccFrom(cc); }
+:trto b_yr4,b_yr0,b_y12_15 is b_y16_31=47505 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trto(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o1:8 = hd_trto_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o2:8 = hd_trto_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local cc:1 = hd_trto_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trto b_yr4,b_yr0 is b_y8_31=12161280 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trto(b_yr4, b_yrp4, b_yr0, r0l, r1); local o1:8 = hd_trto_1(b_yr4, b_yrp4, b_yr0, r0l, r1); local o2:8 = hd_trto_2(b_yr4, b_yrp4, b_yr0, r0l, r1); local cc:1 = hd_trto_cc(b_yr4, b_yrp4, b_yr0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trtr Ac_28_16_l32,Ac_12_0 is c_y40_47=208 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; local o0:4 = hd_trtr(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local o1:8 = hd_trtr_1(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_trtr_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); r0l = o0; r1 = o1; ccFrom(cc); }
+:trtre b_yr4,b_yr0,b_y12_15 is b_y16_31=47549 & b_y8_11=0 & b_yr0 & b_yr4 & b_yrp4 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trtre(b_yr4, b_yrp4, imm_b_y12_15, r1); local o1:8 = hd_trtre_1(b_yr4, b_yrp4, imm_b_y12_15, r1); local o2:8 = hd_trtre_2(b_yr4, b_yrp4, imm_b_y12_15, r1); local cc:1 = hd_trtre_cc(b_yr4, b_yrp4, imm_b_y12_15, r1); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; ccFrom(cc); }
+:trtre b_yr4,b_yr0 is b_y8_31=12172544 & b_yr0 & b_yr4 & b_yrp4 { local o0:8 = hd_trtre(b_yr4, b_yrp4, r1); local o1:8 = hd_trtre_1(b_yr4, b_yrp4, r1); local o2:8 = hd_trtre_2(b_yr4, b_yrp4, r1); local cc:1 = hd_trtre_cc(b_yr4, b_yrp4, r1); b_yr0 = o0; b_yr4 = o1; b_yrp4 = o2; ccFrom(cc); }
+:trtt b_yr4,b_yr0,b_y12_15 is b_y16_31=47504 & b_y8_11=0 & b_yr4 & b_yrp4 & b_yr0 & b_y12_15 { local imm_b_y12_15:8 = b_y12_15; local o0:8 = hd_trtt(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o1:8 = hd_trtt_1(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local o2:8 = hd_trtt_2(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); local cc:1 = hd_trtt_cc(b_yr4, b_yrp4, b_yr0, imm_b_y12_15, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
+:trtt b_yr4,b_yr0 is b_y8_31=12161024 & b_yr4 & b_yrp4 & b_yr0 { local o0:8 = hd_trtt(b_yr4, b_yrp4, b_yr0, r0l, r1); local o1:8 = hd_trtt_1(b_yr4, b_yrp4, b_yr0, r0l, r1); local o2:8 = hd_trtt_2(b_yr4, b_yrp4, b_yr0, r0l, r1); local cc:1 = hd_trtt_cc(b_yr4, b_yrp4, b_yr0, r0l, r1); b_yr4 = o0; b_yrp4 = o1; b_yr0 = o2; ccFrom(cc); }
 :ts Ab_12_0 is b_y16_31=37632 & Ab_12_0 { local v:1 = *:1 Ab_12_0; *:1 Ab_12_0 = 0xff; CC0 = (v & 0x80) == 0; CC1 = (v & 0x80) != 0; CC2 = 0; CC3 = 0; ccAux(); }
+:tsch Ab_12_0 is b_y16_31=45621 & Ab_12_0 { hd_tsch(Ab_12_0, r1l); local cc:1 = hd_tsch_cc(Ab_12_0, r1l); ccFrom(cc); }
 :unpk Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=243 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_unpk(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); }
 :unpka Ac_28_16_l32,Ac_12_0 is c_y40_47=234 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_unpka(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_unpka_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
 :unpku Ac_28_16_l32,Ac_12_0 is c_y40_47=226 & Ac_28_16_l32 & c_y32_39 & Ac_12_0 { local len_Ac_28_16_l32:8 = c_y32_39; len_Ac_28_16_l32 = len_Ac_28_16_l32 + 1; hd_unpku(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); local cc:1 = hd_unpku_cc(Ac_28_16_l32, len_Ac_28_16_l32, Ac_12_0); ccFrom(cc); }
+:upt is a_y0_15=258 { local o0:8 = hd_upt(r0, r1, r2, r3, r4, r5); local o1:8 = hd_upt_1(r0, r1, r2, r3, r4, r5); local o2:8 = hd_upt_2(r0, r1, r2, r3, r4, r5); local o3:8 = hd_upt_3(r0, r1, r2, r3, r4, r5); local o4:8 = hd_upt_4(r0, r1, r2, r3, r4, r5); local cc:1 = hd_upt_cc(r0, r1, r2, r3, r4, r5); r0 = o0; r1 = o1; r2 = o2; r3 = o3; r5 = o4; ccFrom(cc); }
+:xsch is b_y0_31=2994077696 { hd_xsch(r1l); local cc:1 = hd_xsch_cc(r1l); ccFrom(cc); }
 :zap Ac_28_16_l36,Ac_12_0_l32 is c_y40_47=248 & Ac_28_16_l36 & c_y36_39 & Ac_12_0_l32 & c_y32_35 { local len_Ac_28_16_l36:8 = c_y36_39; len_Ac_28_16_l36 = len_Ac_28_16_l36 + 1; local len_Ac_12_0_l32:8 = c_y32_35; len_Ac_12_0_l32 = len_Ac_12_0_l32 + 1; hd_zap(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); local cc:1 = hd_zap_cc(Ac_28_16_l36, len_Ac_28_16_l36, Ac_12_0_l32, len_Ac_12_0_l32); ccFrom(cc); }
 :mxr a_yf4,a_yf0 is a_y8_15=38 & a_yf4 & a_yfq4 & a_yf0 & a_yfq0 { local o0:8 = hd_mxr(a_yf4, a_yfq4, a_yf0, a_yfq0); local o1:8 = hd_mxr_1(a_yf4, a_yfq4, a_yf0, a_yfq0); a_yf4 = o0; a_yfq4 = o1; }
 :mxd b_yf20,Ab_12_0_x16 is b_y24_31=103 & b_yf20 & b_yfq20 & Ab_12_0_x16 { local o0:8 = hd_mxd(b_yf20, b_yfq20, Ab_12_0_x16); local o1:8 = hd_mxd_1(b_yf20, b_yfq20, Ab_12_0_x16); b_yf20 = o0; b_yfq20 = o1; }

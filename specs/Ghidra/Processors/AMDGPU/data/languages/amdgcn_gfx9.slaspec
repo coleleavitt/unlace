@@ -61,6 +61,8 @@ define context contextreg
   cr_v2 = (136,143) noflow
   c_v3 = (144,151) noflow
   cr_v3 = (144,151) noflow
+  mi_vdn = (240,242) noflow
+  mi_tf = (243,243) noflow
 ;
 
 define token I(32)
@@ -2327,3 +2329,4 @@ DSA: "["^jv0^"+"^dsoff16^"]" is dsoff16 ; jv0 { a:4 = jv0 + dsoff16; export a; }
 @include "amdgcn_gfx9_valu.sinc"
 @include "amdgcn_gfx9_vop3p.sinc"
 @include "amdgcn_gfx9_dpp.sinc"
+@include "amdgcn_gfx9_mem.sinc"

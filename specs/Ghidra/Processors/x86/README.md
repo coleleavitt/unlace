@@ -345,3 +345,25 @@ The same work found that outside 64-bit mode VEX.vvvv bit 3 (and the is4 registe
 as a register number: `vexVVVV_XmmReg`/`YmmReg`/`r32` (and the is4 tables) now ignore it in the 16- and
 32-bit languages, as this CPU does (`c4e13058c1` is `vaddps xmm0, xmm1, xmm1` in 32-bit code; BMI
 forms with that bit clear were undecoded).
+
+## VEX operand checks, FMA3 in 32-bit code, AVX-VNNI/IFMA/SM3/SHA512
+
+Checked with the TableGen sweeps (`tools/x86_avx512_sweep.py`, EncVEX with every VEX predicate),
+random VEX encodings against llvm-objdump in 64- and 32-bit mode, and this CPU (`--oracle native`):
+
+- A VEX instruction without a vvvv operand now requires vvvv = 1111b (`vexVVVV=0`, 300 constructors in
+  `avx*.sinc`, `avx512_manual.sinc`, `amx.sinc`, `bmi2.sinc`, `ia.sinc`): `c4e13828c1` raised #UD here and
+  decoded as VMOVAPS. Random VEX encodings that LLVM rejected and SLEIGH decoded fell from 188 to 0
+  of 8000.
+- The VEX mask instructions (KAND..KXOR, KMOV, KNOT, KORTEST, KSHIFT, KTEST, KUNPCK) take a register
+  ModRM.rm only (`mod=3`) and no VEX.R/VEX.B extension; AMX tile operands likewise.
+- VPEXTRB/VPEXTRW/VPINSRB/VPINSRW ignore VEX.W (they required W0; W1 runs here).
+- Outside 64-bit mode VEX.W1 is the W0 instruction where the W1 form is 64-bit only (BMI1/BMI2,
+  VCVT*SI*, VMOVD, VPEXTRD, VPINSRD: `$(VEX_W0_COMPAT)`; checked natively in 32-bit code).
+- `fma.sinc` (FMA3) is part of the 32-bit and 16-bit languages, not only x86-64.
+- New `avx_crypto_ifma.sinc`: VEX AVX-VNNI (VPDPBUSD/S, VPDPWSSD/S, p-code, matching this CPU),
+  AVX-IFMA (VPMADD52LUQ/HUQ), SM3 (VSM3MSG1/2, VSM3RNDS2) and SHA512 (VSHA512MSG1/2, VSHA512RNDS2) as
+  user operations.
+
+Left: VBLENDPD/VBLENDPS print only the used immediate bits (LLVM prints the whole byte);
+CMPccXADD and AMX stay 64-bit only (LLVM also decodes them in 32-bit code); AMX-MOVRS is absent.

@@ -337,5 +337,33 @@ impl crate::kuna_optionset::KunaOption for KunaCalleeargs {
     }
 }
 
+/// (kuna `calleeargsmsvc`) Let the `calleeargs` walk read through the MSVC
+/// frame boilerplate: the SEH registration of a local record in `fs:[0]` and
+/// the `/GS` cookie scrambled with a stack address are not escapes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KunaCalleeargsMsvc(pub bool);
+
+impl crate::kuna_optionset::KunaOption for KunaCalleeargsMsvc {
+    const NAME: &'static str = "calleeargsmsvc";
+    crate::kuna_option_id!();
+
+    fn unset() -> Self {
+        KunaCalleeargsMsvc(false)
+    }
+
+    fn shipped() -> Self {
+        KunaCalleeargsMsvc(false)
+    }
+
+    fn parse(value: &str) -> unlace_base::error::KunaResult<(Self, String)> {
+        let v = crate::options::on_or_off(value)?;
+        let prop = if v { "on" } else { "off" };
+        Ok((
+            KunaCalleeargsMsvc(v),
+            format!("Callee stack-argument extent through MSVC frames turned {prop}"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests;

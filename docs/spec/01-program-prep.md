@@ -1280,7 +1280,13 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   and `B16` branch displacements, each encoding-checked; `RELAX` and `ALIGN`
   are no-ops, since the layout keeps the assembler's bytes. The `object`
   crate's generic `LoongArchBranch` reading of `B16`/`B21`/`B26` (a plain
-  integer field) is never used. eBPF objects are REL-only and every program ships as one,
+  integer field) is never used. Lanai (`EM_LANAI`, unlace#677), for which the
+  object reader has no architecture, is told apart by `e_machine`
+  (`reloc_apply::classify_elf`): `R_LANAI_25` writes the absolute word address
+  of a `bcc` into bits 24..2, `R_LANAI_21` the absolute 21-bit address of an
+  SLS/SLI access into bits 22..18 and 15..0, `HI16`/`LO16` the halves of
+  `S + A` into an RI immediate, and `R_LANAI_32` a big-endian data word; the
+  absolute fields are range-checked. eBPF objects are REL-only and every program ships as one,
   so its three instruction forms are encoded rather than written as plain words:
   `R_BPF_64_64` names the 16-byte `lddw` (a map or global reference) and lands
   `S + A` in the two 32-bit `imm` fields at +4 and +12, the addend read back from

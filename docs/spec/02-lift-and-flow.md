@@ -4209,6 +4209,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Si4440` | Silicon Labs Si4440 | `8051:BE:24:si4440` | aleph-void/ghidra-si4440 @ `b82633ef31`, MIT |
 | `ST7` | STMicro ST7 | `ST7:BE:16:default`, `ST72:BE:16:default` | aleph-void/ghidra-st7 @ `244cfae881`, Apache-2.0 |
 | `SuperFX` | SuperFX (GSU) | `SuperFX:LE:24:default` | aleph-void/ghidra-superfx (fork of ChekeEdd/ghidra-superfx) @ `98dd7bcd85`, BSD-3-Clause |
+| `TMS320C24x` | TI TMS320C24x | `TMS320c24x:LE:16:default`, `TMS320c24x:BE:16:default` | aleph-void/ghidra-tms320c24x (fork of banksy-git/ghidra-tms320c24x) @ `0bcad2a490`, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### WDC 65816 (#98)

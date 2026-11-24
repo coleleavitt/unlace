@@ -11948,7 +11948,10 @@ bad decode or out-of-image flow and reach either a terminal/computed jump or an
 informative call/edge into known code. Accepted bodies are claimed so a later
 candidate cannot split them. The walk then resumes with the accepted targets,
 and the entries the load-time passes committed (a Delphi VMT method, say), as
-roots, so their direct-call closure is discovered and committed too. The
+roots, so their direct-call closure is discovered and committed too. On x86 the
+functions a pass names, such as an MSVC vtable slot RTTI names or a constructor,
+are roots as well (`engine.rs (commit_pending_analysis)`). On ARM they are not,
+because their decode mode is not settled at that point. The
 functions the walk had before the resume are kept, so the resume only adds
 entries. A Delphi image's System memory-manager record is the case it was
 written for: the record in writable data holds `GetMem`, `FreeMem` and

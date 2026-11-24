@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+  <data_organization>
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="8"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="8"/>
+    <pointer_size value="8"/>
+    <wchar_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="8"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="4"/>
+      <entry size="8" alignment="8"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="sp" space="ram"/>
+  <returnaddress>
+    <register name="lr"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="0" stackshift="0">
+      <input>
+        <pentry minsize="1" maxsize="8">
+          <register name="r0"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r1"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r2"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r3"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r4"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r5"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r6"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r7"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r8"/>
+        </pentry>
+        <pentry minsize="1" maxsize="8">
+          <register name="r9"/>
+        </pentry>
+        <pentry minsize="1" maxsize="500" align="8">
+          <addr offset="16" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="8">
+          <register name="r0"/>
+        </pentry>
+        <pentry minsize="9" maxsize="16">
+          <addr space="join" piece1="r1" piece2="r0"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="r30"/>
+        <register name="r31"/>
+        <register name="r32"/>
+        <register name="r33"/>
+        <register name="r34"/>
+        <register name="r35"/>
+        <register name="r36"/>
+        <register name="r37"/>
+        <register name="r38"/>
+        <register name="r39"/>
+        <register name="r40"/>
+        <register name="r41"/>
+        <register name="r42"/>
+        <register name="r43"/>
+        <register name="r44"/>
+        <register name="r45"/>
+        <register name="r46"/>
+        <register name="r47"/>
+        <register name="r48"/>
+        <register name="r49"/>
+        <register name="r50"/>
+        <register name="r51"/>
+        <register name="r52"/>
+        <register name="tp"/>
+        <register name="sp"/>
+      </unaffected>
+      <killedbycall>
+        <register name="r0"/>
+        <register name="r1"/>
+        <register name="r2"/>
+        <register name="r3"/>
+        <register name="r4"/>
+        <register name="r5"/>
+        <register name="r6"/>
+        <register name="r7"/>
+        <register name="r8"/>
+        <register name="r9"/>
+        <register name="r10"/>
+        <register name="r11"/>
+        <register name="r12"/>
+        <register name="r13"/>
+        <register name="r14"/>
+        <register name="r15"/>
+        <register name="r16"/>
+        <register name="r17"/>
+        <register name="r18"/>
+        <register name="r19"/>
+        <register name="r20"/>
+        <register name="r21"/>
+        <register name="r22"/>
+        <register name="r23"/>
+        <register name="r24"/>
+        <register name="r25"/>
+        <register name="r26"/>
+        <register name="r27"/>
+        <register name="r28"/>
+        <register name="r29"/>
+        <register name="lr"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

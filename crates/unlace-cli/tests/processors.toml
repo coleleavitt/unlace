@@ -100,7 +100,6 @@ fixture = "crates/unlace-cli/tests/fixtures/c28x/addb_lret.bin"
 [[family.function]]
 test = "c28x_add_immediate_and_return_decompiles"
 address = "0x8000"
-xfail = "reads past the end of its 16-byte image: Unable to load N bytes at r0x00008008 (also on main at a16f4c0c42)"
 
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
@@ -842,7 +841,6 @@ fixture = "crates/unlace-cli/tests/fixtures/stm8/add_store.bin"
 [[family.function]]
 test = "stm8_add_and_store_decompiles_in_both_memory_models"
 address = "0x8000"
-xfail = "reads past the end of its 32-byte image: Unable to load N bytes at r0x8020 (also on main at a16f4c0c42)"
 expect = [
     "10",  # the store to $10 survives
 ]
@@ -985,7 +983,6 @@ fixture = "crates/unlace-cli/tests/fixtures/w65816/add16_store.bin"
 [[family.function]]
 test = "w65816_sixteen_bit_add_and_store_decompiles"
 address = "0x8000"
-xfail = "the function flows out of bounds into halt_missing, no store to $2000 (also on main at a16f4c0c42)"
 expect = [
     "2000",  # the store to $2000 survives
 ]

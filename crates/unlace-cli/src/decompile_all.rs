@@ -24,8 +24,8 @@ use std::fmt::Write as _;
 use unlace_analysis::loader::macho_fat::SlicePref;
 use unlace_base::address::Address;
 use unlace_console::engine::{
-    ArmIsa, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry, ObjectLocation,
-    bootstrap_from_image_with_isa, bootstrap_from_raw, bootstrap_from_raw_segments,
+    ArmIsa, Bootstrap, ConsoleProgram, EntryLookupError, EntrySelector, FunctionEntry,
+    ObjectLocation,
 };
 // The decompile loop + result shape live in the shared decompile-project core
 // (`unlace_console::project` — also reused by the `unlace_wasm` front-end).
@@ -1959,12 +1959,24 @@ fn load_program_with_rust_profiles(
     // the subprocess env). Keep the restoration guard alive through runtime
     // option recording too: the bridged options update their env again inside
     // `set_unlace_option` and must not leak into a later load.
+    let inventory = defaults.functions_inventory() && args.apply_rust_signatures.is_none();
     let _loadtime_env = apply_loadtime_env(
         &args.options,
         args.slice.as_deref(),
         jobs::decode_lanes(args),
-        defaults.functions_inventory() && args.apply_rust_signatures.is_none(),
+        inventory,
     );
+    // The program keeps the same settings as its load options, so its commit and
+    // its decompiles read them after the guard above restores the environment.
+    let load_options = unlace_decomp::loadoptions::LoadOptions {
+        go_version: None,
+        ..crate::loadtime::load_options(
+            &args.options,
+            args.slice.as_deref(),
+            jobs::decode_lanes(args),
+            inventory,
+        )
+    };
 
     let spec_roots = spec_roots(args.sleighpath.as_deref());
     let target = args.target.as_deref().unwrap_or("");
@@ -1999,21 +2011,24 @@ fn load_program_with_rust_profiles(
                 _ => None,
             })
             .collect();
+        let load = Bootstrap::new(&spec_roots[..])
+            .target(target)
+            .arm_isa(args.isa)
+            .options(&load_options);
         match segments {
-            Some(runs) => {
-                bootstrap_from_raw_segments(&binary, target, runs, &entries, args.isa, &spec_roots)
-            }
-            None => bootstrap_from_raw(
+            Some(runs) => load.raw_segments(&binary, runs, &entries),
+            None => load.raw(
                 &binary,
-                target,
                 args.base.expect("raw parser requires --base"),
                 &entries,
-                args.isa,
-                &spec_roots,
             ),
         }
     } else {
-        bootstrap_from_image_with_isa(&binary, target, &spec_roots, args.isa)
+        Bootstrap::new(&spec_roots[..])
+            .target(target)
+            .arm_isa(args.isa)
+            .options(&load_options)
+            .image(&binary)
     }
     .map_err(|e| {
         let detail = e.explain();

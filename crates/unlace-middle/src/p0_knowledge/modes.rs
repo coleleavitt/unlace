@@ -273,7 +273,11 @@ const AGGRESSIVE_OVERRIDES: &[(&str, &str)] = &[
     ("swiftmetadata", "on"), // Mach-O/ELF with swift5_* sections only; no-op elsewhere
     ("cfstrings", "on"),     // Mach-O-only; no-op off-Mach-O
     ("pdb", "on"),           // PE-only; no-op off-PE (a shipped default since DIV-129)
-    ("macho-arm64e", "on"),  // Mach-O arm64e-only; no-op elsewhere
+    // (kuna `pdbtypes`) PE with a matching `.pdb` only: on Mozilla's MSVC-linked
+    // softokn3/firefox/mozglue it names 1,795/2,880/2,546 parameters where the
+    // binary alone names 2/82/77, at no extra time; inert everywhere else.
+    ("pdbtypes", "on"),
+    ("macho-arm64e", "on"), // Mach-O arm64e-only; no-op elsewhere
 ];
 
 /// `fast` = avoid the three exhaustive program-wide discovery paths that dominate
@@ -653,9 +657,6 @@ mod tests {
             // `dwarfglobaltypes` was turned off by default in its own branch after
             // landing; it has no preset sweep yet.
             "dwarfglobaltypes",
-            // `pdbtypes` landed with clang-built fixtures only; its x64 frame
-            // math has not been measured on MSVC-built images.
-            "pdbtypes",
             // Stack-address liveness can be incidental; synthetic regressions and
             // a local speed measurement do not justify a broad preset flip.
             "stackaddrargtrial",

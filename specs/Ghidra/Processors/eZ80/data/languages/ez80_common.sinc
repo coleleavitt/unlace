@@ -1,0 +1,116 @@
+# Width-independent eZ80 instructions (8-bit ALU on registers, CB page on registers,
+# control, eZ80 ED extensions without a memory operand). Included under phase=2.
+
+sdisp: "+"^simm8 is sign8=0 & simm8 { export 0:1; }
+sdisp: simm8 is sign8=1 & simm8 { export 0:1; }
+
+hr0: reg0_3 is xy=0 & reg0_3 { export reg0_3; }
+hr0: xr0_3 is xy=1 & xr0_3 { export xr0_3; }
+hr0: yr0_3 is xy=2 & yr0_3 { export yr0_3; }
+
+hr3: reg3_3 is xy=0 & reg3_3 { export reg3_3; }
+hr3: xr3_3 is xy=1 & xr3_3 { export xr3_3; }
+hr3: yr3_3 is xy=2 & yr3_3 { export yr3_3; }
+
+cc: "NZ" is bits3_3=0 { c:1 = ($(Z_flag) == 0); export c; }
+cc: "Z"  is bits3_3=1 { c:1 = $(Z_flag); export c; }
+cc: "NC" is bits3_3=2 { c:1 = ($(C_flag) == 0); export c; }
+cc: "C"  is bits3_3=3 { c:1 = $(C_flag); export c; }
+cc: "PO" is bits3_3=4 { c:1 = ($(PV_flag) == 0); export c; }
+cc: "PE" is bits3_3=5 { c:1 = $(PV_flag); export c; }
+cc: "P"  is bits3_3=6 { c:1 = ($(S_flag) == 0); export c; }
+cc: "M"  is bits3_3=7 { c:1 = $(S_flag); export c; }
+
+cc2: "NZ" is bits3_3=4 { c:1 = ($(Z_flag) == 0); export c; }
+cc2: "Z"  is bits3_3=5 { c:1 = $(Z_flag); export c; }
+cc2: "NC" is bits3_3=6 { c:1 = ($(C_flag) == 0); export c; }
+cc2: "C"  is bits3_3=7 { c:1 = $(C_flag); export c; }
+
+reltgt: loc is simm8 [ loc = inst_next + simm8; ] { export *:1 loc; }
+
+n8: "#"^imm8 is imm8 { export *[const]:1 imm8; }
+
+:NOP  is op0_8=0x00 { }
+:HALT is op0_8=0x76 { halt(); }
+:DI   is op0_8=0xf3 { IEF1 = 0; IEF2 = 0; }
+:EI   is op0_8=0xfb { IEF1 = 1; IEF2 = 1; }
+:DAA  is op0_8=0x27 { A = BCDadjust(A, F); $(C_flag) = BCDadjustCarry(A, F); setResultFlags(A); setParity(A); }
+:CPL  is op0_8=0x2f { A = ~A; $(H_flag) = 1; $(N_flag) = 1; }
+:SCF  is op0_8=0x37 { $(C_flag) = 1; $(H_flag) = 0; $(N_flag) = 0; }
+:CCF  is op0_8=0x3f { $(H_flag) = $(C_flag); $(C_flag) = !$(C_flag); $(N_flag) = 0; }
+:RLCA is op0_8=0x07 { $(C_flag) = (A >> 7); A = (A << 1) | (A >> 7); $(H_flag) = 0; $(N_flag) = 0; }
+:RRCA is op0_8=0x0f { $(C_flag) = (A & 1); A = (A >> 1) | (A << 7); $(H_flag) = 0; $(N_flag) = 0; }
+:RLA  is op0_8=0x17 { local c = $(C_flag); $(C_flag) = (A >> 7); A = (A << 1) | c; $(H_flag) = 0; $(N_flag) = 0; }
+:RRA  is op0_8=0x1f { local c = $(C_flag); $(C_flag) = (A & 1); A = (A >> 1) | (c << 7); $(H_flag) = 0; $(N_flag) = 0; }
+:EX "AF","AF_" is op0_8=0x08  { local t = AF; AF = AF_; AF_ = t; }
+:EXX is op0_8=0xd9 { local t = BC; BC = BC_; BC_ = t; t = DE; DE = DE_; DE_ = t; t = HL; HL = HL_; HL_ = t; }
+
+:LD hr3,hr0 is op6_2=1 & hr3 & hr0 & bits3_3!=6 & bits0_3!=6 { hr3 = hr0; }
+:LD hr3,n8 is op6_2=0 & hr3 & bits3_3!=6 & bits0_3=6; n8 { hr3 = n8; }
+
+:INC hr3 is op6_2=0 & hr3 & bits3_3!=6 & bits0_3=4 { local o = hr3; hr3 = hr3 + 1; $(H_flag) = ((o & 0xf) == 0xf); $(PV_flag) = (o == 0x7f); $(N_flag) = 0; setResultFlags(hr3); }
+:DEC hr3 is op6_2=0 & hr3 & bits3_3!=6 & bits0_3=5 { local o = hr3; hr3 = hr3 - 1; $(H_flag) = ((o & 0xf) == 0); $(PV_flag) = (o == 0x80); $(N_flag) = 1; setResultFlags(hr3); }
+
+alu8: hr0 is hr0 & bits0_3!=6 { export hr0; }
+
+:ADD "A",alu8 is op6_2=2 & bits3_3=0 & alu8 { aluAdd(alu8); }
+:ADC "A",alu8 is op6_2=2 & bits3_3=1 & alu8 { aluAdc(alu8); }
+:SUB "A",alu8 is op6_2=2 & bits3_3=2 & alu8 { aluSub(alu8); }
+:SBC "A",alu8 is op6_2=2 & bits3_3=3 & alu8 { aluSbc(alu8); }
+:AND "A",alu8 is op6_2=2 & bits3_3=4 & alu8 { aluAnd(alu8); }
+:XOR "A",alu8 is op6_2=2 & bits3_3=5 & alu8 { aluXor(alu8); }
+:OR "A",alu8  is op6_2=2 & bits3_3=6 & alu8 { aluOr(alu8); }
+:CP "A",alu8  is op6_2=2 & bits3_3=7 & alu8 { aluCp(alu8); }
+
+:ADD "A",n8 is op0_8=0xc6; n8 { aluAdd(n8); }
+:ADC "A",n8 is op0_8=0xce; n8 { aluAdc(n8); }
+:SUB "A",n8 is op0_8=0xd6; n8 { aluSub(n8); }
+:SBC "A",n8 is op0_8=0xde; n8 { aluSbc(n8); }
+:AND "A",n8 is op0_8=0xe6; n8 { aluAnd(n8); }
+:XOR "A",n8 is op0_8=0xee; n8 { aluXor(n8); }
+:OR "A",n8  is op0_8=0xf6; n8 { aluOr(n8); }
+:CP "A",n8  is op0_8=0xfe; n8 { aluCp(n8); }
+
+:JR reltgt is op0_8=0x18; reltgt { goto reltgt; }
+:JR cc2,reltgt is op6_2=0 & cc2 & bits0_3=0; reltgt { if (cc2) goto reltgt; }
+:DJNZ reltgt is op0_8=0x10; reltgt { B = B - 1; if (B != 0) goto reltgt; }
+
+:IN "A",(n8) is op0_8=0xdb; n8 { local p:2 = (zext(A) << 8) | zext(n8); A = *[io]:1 p; }
+:OUT (n8),"A" is op0_8=0xd3; n8 { local p:2 = (zext(A) << 8) | zext(n8); *[io]:1 p = A; }
+
+# CB page, register operands
+:RLC reg0_3 is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=0 & reg0_3 & bits0_3!=6 { rotRlc(reg0_3); }
+:RRC reg0_3 is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=1 & reg0_3 & bits0_3!=6 { rotRrc(reg0_3); }
+:RL reg0_3  is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=2 & reg0_3 & bits0_3!=6 { rotRl(reg0_3); }
+:RR reg0_3  is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=3 & reg0_3 & bits0_3!=6 { rotRr(reg0_3); }
+:SLA reg0_3 is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=4 & reg0_3 & bits0_3!=6 { rotSla(reg0_3); }
+:SRA reg0_3 is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=5 & reg0_3 & bits0_3!=6 { rotSra(reg0_3); }
+:SRL reg0_3 is xy=0 & op0_8=0xcb; op6_2=0 & bits3_3=7 & reg0_3 & bits0_3!=6 { rotSrl(reg0_3); }
+:BIT bits3_3,reg0_3 is xy=0 & op0_8=0xcb; op6_2=1 & bits3_3 & reg0_3 & bits0_3!=6 { bitTest(reg0_3, bits3_3); }
+:RES bits3_3,reg0_3 is xy=0 & op0_8=0xcb; op6_2=2 & bits3_3 & reg0_3 & bits0_3!=6 { reg0_3 = reg0_3 & ~(1 << bits3_3); }
+:SET bits3_3,reg0_3 is xy=0 & op0_8=0xcb; op6_2=3 & bits3_3 & reg0_3 & bits0_3!=6 { reg0_3 = reg0_3 | (1 << bits3_3); }
+
+# ED page, width independent
+:IN reg3_3,"(BC)" is op0_8=0xed; op6_2=1 & reg3_3 & bits3_3!=6 & bits0_3=0 { reg3_3 = *[io]:1 BCs; shiftFlags(reg3_3); $(H_flag) = 0; }
+:OUT "(BC)",reg3_3 is op0_8=0xed; op6_2=1 & reg3_3 & bits3_3!=6 & bits0_3=1 { *[io]:1 BCs = reg3_3; }
+:IN0 reg3_3,(n8) is op0_8=0xed; op6_2=0 & reg3_3 & bits3_3!=6 & bits0_3=0; n8 { local p:2 = zext(n8); reg3_3 = *[io]:1 p; shiftFlags(reg3_3); }
+:OUT0 (n8),reg3_3 is op0_8=0xed; op6_2=0 & reg3_3 & bits3_3!=6 & bits0_3=1; n8 { local p:2 = zext(n8); *[io]:1 p = reg3_3; }
+:TST "A",reg3_3 is op0_8=0xed; op6_2=0 & reg3_3 & bits3_3!=6 & bits0_3=4 { local t = A & reg3_3; logicFlags(t, 1); }
+:TST "A",n8 is op0_8=0xed; op0_8=0x64; n8 { local t = A & n8; logicFlags(t, 1); }
+:TSTIO n8 is op0_8=0xed; op0_8=0x74; n8 { local p:2 = zext(C); local t = *[io]:1 p; t = t & n8; logicFlags(t, 1); }
+:NEG is op0_8=0xed; op0_8=0x44 { local o = A; subtractionFlags(0:1, o); A = -o; setResultFlags(A); }
+:IM "0" is op0_8=0xed; op0_8=0x46 { setInterruptMode(0:1); }
+:IM "1" is op0_8=0xed; op0_8=0x56 { setInterruptMode(1:1); }
+:IM "2" is op0_8=0xed; op0_8=0x5e { setInterruptMode(2:1); }
+:LD "I","A" is op0_8=0xed; op0_8=0x47 { I = (I & 0xff00) | zext(A); }
+:LD "R","A" is op0_8=0xed; op0_8=0x4f { R = A; }
+:LD "A","I" is op0_8=0xed; op0_8=0x57 { local iv:2 = I; A = iv:1; setResultFlags(A); $(H_flag) = 0; $(N_flag) = 0; $(PV_flag) = IEF2; }
+:LD "A","R" is op0_8=0xed; op0_8=0x5f { A = R; setResultFlags(A); $(H_flag) = 0; $(N_flag) = 0; $(PV_flag) = IEF2; }
+:LD "MB","A" is op0_8=0xed; op0_8=0x6d { MB = A; }
+:LD "A","MB" is op0_8=0xed; op0_8=0x6e { A = MB; }
+:SLP is op0_8=0xed; op0_8=0x76 { sleep(); }
+:STMIX is op0_8=0xed; op0_8=0x7d { MADL = 1; }
+:RSMIX is op0_8=0xed; op0_8=0x7e { MADL = 0; }
+:MLT "BC" is op0_8=0xed; op0_8=0x4c { local x:2 = zext(B); local y:2 = zext(C); BCs = x * y; }
+:MLT "DE" is op0_8=0xed; op0_8=0x5c { local x:2 = zext(D); local y:2 = zext(E); DEs = x * y; }
+:MLT "HL" is op0_8=0xed; op0_8=0x6c { local x:2 = zext(H); local y:2 = zext(L); HLs = x * y; }

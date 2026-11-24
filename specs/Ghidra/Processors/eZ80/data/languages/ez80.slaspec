@@ -1,6 +1,20 @@
-# SLEIGH specification for the Zilog eZ80 CPU (ADL and Z80 memory modes).
-# Clean-room: written from the Zilog eZ80 CPU User Manual (UM0077); the flag macros are
-# adapted from Ghidra's Z80 specification (Apache-2.0).
+# SLEIGH specification for the Zilog eZ80 CPU core (eZ80Acclaim!, eZ80F91/F92/F93,
+# eZ80L92, eZ80190) in both memory modes: ADL (24-bit registers and addresses) and Z80
+# (16-bit registers, addresses {MBASE, addr[15:0]}).
+#
+# Clean-room: written for unlace issue #98 from the Zilog eZ80 CPU User Manual (UM0077:
+# memory-mode tables, instruction summary, opcode maps) and the Zilog Z80 CPU User Manual.
+# No existing eZ80 SLEIGH module was consulted. The flag macros are adapted from the
+# in-repo Ghidra Z80 specification (Apache-2.0, specs/Ghidra/Processors/Z80).
+#
+# Decoding runs in three phases. Phase 0 reads an optional memory-mode suffix byte
+# (.SIS 40, .LIS 49, .SIL 52, .LIL 5B) and sets lm (data/register width: 1 = 24-bit
+# ADL style, 0 = 16-bit Z80 style) and im (immediate/direct-address width); without a
+# suffix both follow the adl context bit. Phase 1 reads an optional DD/FD index prefix
+# into xy (0 = HL, 1 = IX, 2 = IY). Phase 2 decodes the opcode itself. The width
+# dependent instructions live in ez80_adl.sinc (lm=1) and ez80_z80.sinc (lm=0), the
+# same text with 24-bit and 16-bit register names. MBASE is the mbase context field (0 unless the pspec or a tool sets it), so Z80
+# mode addresses are constants where the operand is constant.
 
 define endian=little;
 define alignment=1;
@@ -13,36 +27,30 @@ define register offset=0x00 size=1 [ F A ];
 define register offset=0x00 size=2 [ AF ];
 define register offset=0x04 size=1 [ C B BCU _  E D DEU _  L H HLU _  IXL IXH IXU _  IYL IYH IYU _ ];
 define register offset=0x04 size=2 [ BCs _ DEs _ HLs _ IXs _ IYs _ ];
-define register offset=0x04 size=4 [ BC4 DE4 HL4 IX4 IY4 ];
-define register offset=0x18 size=2 [ SPS ];
-define register offset=0x1c size=4 [ SPL4 ];
-define register offset=0x20 size=4 [ PC4 ];
-define register offset=0x24 size=2 [ I ];
-define register offset=0x26 size=1 [ R MB ADLF MADL IEF1 IEF2 ];
-define register offset=0x40 size=1 [ F_ A_ ];
-define register offset=0x40 size=2 [ AF_ ];
-define register offset=0x44 size=1 [ C_ B_ BCU_ _  E_ D_ DEU_ _  L_ H_ HLU_ _ ];
-define register offset=0x44 size=2 [ BCs_ _ DEs_ _ HLs_ _ ];
-define register offset=0x44 size=4 [ BC4_ DE4_ HL4_ ];
-
-# 24-bit views of the register pairs (low three bytes of each 4-byte slot)
 define register offset=0x04 size=3 [ BC ];
 define register offset=0x08 size=3 [ DE ];
 define register offset=0x0c size=3 [ HL ];
 define register offset=0x10 size=3 [ IX ];
 define register offset=0x14 size=3 [ IY ];
+define register offset=0x18 size=2 [ SPS ];
 define register offset=0x1c size=3 [ SPL ];
 define register offset=0x20 size=3 [ PC ];
+define register offset=0x24 size=2 [ I ];
+define register offset=0x26 size=1 [ R MB MADL IEF1 IEF2 ];
+define register offset=0x40 size=1 [ F_ A_ ];
+define register offset=0x40 size=2 [ AF_ ];
 define register offset=0x44 size=3 [ BC_ ];
 define register offset=0x48 size=3 [ DE_ ];
 define register offset=0x4c size=3 [ HL_ ];
 
 define register offset=0xf0 size=4 contextreg;
 define context contextreg
-  phase = (0,0)
-  adl   = (1,1)
-  lm    = (2,2)
-  im    = (3,3)
+  phase = (0,1) noflow
+  lm    = (2,2) noflow
+  im    = (3,3) noflow
+  sfx   = (4,4) noflow
+  xy    = (5,6) noflow
+  adl   = (7,7)
   mbase = (8,15)
 ;
 
@@ -54,15 +62,20 @@ define context contextreg
 @define S_flag  "F[7,1]"
 
 define token opbyte (8)
-  op0_8  = (0,7)
-  op6_2  = (6,7)
-  rp4_2  = (4,5)
-  bit4_1 = (4,4)
-  bit3_1 = (3,3)
-  reg3_3 = (3,5)
+  op0_8   = (0,7)
+  op6_2   = (6,7)
+  rp4_2   = (4,5)
+  rpa4_2  = (4,5)
+  qq4_2   = (4,5)
+  bit3_1  = (3,3)
+  reg3_3  = (3,5)
   bits3_3 = (3,5)
   bits0_4 = (0,3)
-  reg0_3 = (0,2)
+  reg0_3  = (0,2)
+  xr0_3   = (0,2)
+  yr0_3   = (0,2)
+  xr3_3   = (3,5)
+  yr3_3   = (3,5)
   bits0_3 = (0,2)
 ;
 
@@ -81,18 +94,14 @@ define token data24 (24)
 ;
 
 attach variables [ reg0_3 reg3_3 ] [ B C D E H L _ A ];
+attach variables [ xr0_3 xr3_3 ] [ B C D E IXH IXL _ A ];
+attach variables [ yr0_3 yr3_3 ] [ B C D E IYH IYL _ A ];
 
 define pcodeop BCDadjust;
-define pcodeop disableMaskableInterrupts;
-define pcodeop enableMaskableInterrupts;
+define pcodeop BCDadjustCarry;
 define pcodeop setInterruptMode;
 define pcodeop sleep;
 define pcodeop halt;
-define pcodeop returnFromInterrupt;
-define pcodeop returnFromNMI;
-define pcodeop blockIO;
-define pcodeop setMixedMode;
-define pcodeop resetMixedMode;
 
 macro setResultFlags(result) {
   $(Z_flag) = (result == 0);
@@ -107,35 +116,26 @@ macro setParity(in_byte) {
 }
 
 macro additionFlags(operand1, operand2) {
-  local AFmask = -1 >> 4;
-  $(H_flag) = (((operand1 & AFmask) + (operand2 & AFmask)) & (AFmask + 1)) != 0;
+  $(H_flag) = (((operand1 & 0xf) + (operand2 & 0xf)) & 0x10) != 0;
   $(PV_flag) = scarry(operand1, operand2);
-  $(N_flag) = 0;
-  $(C_flag) = carry(operand1, operand2);
-}
-
-macro additionFlagsNoPV(operand1, operand2) {
-  $(H_flag) = (((operand1 & 0xfff) + (operand2 & 0xfff)) & 0x1000) != 0;
   $(N_flag) = 0;
   $(C_flag) = carry(operand1, operand2);
 }
 
 macro additionWithCarry(operand1, operand2, result) {
   local Ccopy = zext($(C_flag));
-  local AFmask = -1 >> 4;
-  $(H_flag) = (((operand1 & AFmask) + (operand2 & AFmask) + Ccopy) & (AFmask + 1)) != 0;
+  $(H_flag) = (((operand1 & 0xf) + (operand2 & 0xf) + Ccopy) & 0x10) != 0;
   $(PV_flag) = scarry(operand1, operand2);
-  $(N_flag) = 0;
   $(C_flag) = carry(operand1, operand2);
   local tempResult = operand1 + operand2;
   $(C_flag) = $(C_flag) || carry(tempResult, Ccopy);
   $(PV_flag) = $(PV_flag) ^^ scarry(tempResult, Ccopy);
+  $(N_flag) = 0;
   result = tempResult + Ccopy;
 }
 
 macro subtractionFlags(operand1, operand2) {
-  local AFmask = -1 >> 4;
-  $(H_flag) = (((operand1 & AFmask) - (operand2 & AFmask)) & (AFmask + 1)) != 0;
+  $(H_flag) = (((operand1 & 0xf) - (operand2 & 0xf)) & 0x10) != 0;
   $(PV_flag) = sborrow(operand1, operand2);
   $(N_flag) = 1;
   $(C_flag) = operand1 < operand2;
@@ -143,14 +143,13 @@ macro subtractionFlags(operand1, operand2) {
 
 macro subtractionWithCarry(operand1, operand2, result) {
   local Ccopy = zext($(C_flag));
-  local AFmask = -1 >> 4;
-  $(H_flag) = (((operand1 & AFmask) - (operand2 & AFmask) - Ccopy) & (AFmask + 1)) != 0;
+  $(H_flag) = (((operand1 & 0xf) - (operand2 & 0xf) - Ccopy) & 0x10) != 0;
   $(PV_flag) = sborrow(operand1, operand2);
-  $(N_flag) = 1;
   $(C_flag) = operand1 < operand2;
   local tempResult = operand1 - operand2;
   $(C_flag) = $(C_flag) || (tempResult < Ccopy);
   $(PV_flag) = $(PV_flag) ^^ sborrow(tempResult, Ccopy);
+  $(N_flag) = 1;
   result = tempResult - Ccopy;
 }
 
@@ -162,87 +161,81 @@ macro logicFlags(res, hval) {
   $(C_flag) = 0;
 }
 
+macro shiftFlags(res) {
+  setResultFlags(res);
+  setParity(res);
+  $(H_flag) = 0;
+  $(N_flag) = 0;
+}
+
+
+macro aluAdd(v) { local o = A; additionFlags(o, v); A = o + v; setResultFlags(A); }
+macro aluAdc(v) { local o = A; local r:1 = 0; additionWithCarry(o, v, r); A = r; setResultFlags(A); }
+macro aluSub(v) { local o = A; subtractionFlags(o, v); A = o - v; setResultFlags(A); }
+macro aluSbc(v) { local o = A; local r:1 = 0; subtractionWithCarry(o, v, r); A = r; setResultFlags(A); }
+macro aluAnd(v) { A = A & v; logicFlags(A, 1); }
+macro aluXor(v) { A = A ^ v; logicFlags(A, 0); }
+macro aluOr(v)  { A = A | v; logicFlags(A, 0); }
+macro aluCp(v)  { local o = A; subtractionFlags(o, v); local r = o - v; setResultFlags(r); }
+
+macro rotRlc(r) { $(C_flag) = (r >> 7); r = (r << 1) | (r >> 7); shiftFlags(r); }
+macro rotRrc(r) { $(C_flag) = (r & 1); r = (r >> 1) | (r << 7); shiftFlags(r); }
+macro rotRl(r)  { local c = $(C_flag); $(C_flag) = (r >> 7); r = (r << 1) | c; shiftFlags(r); }
+macro rotRr(r)  { local c = $(C_flag); $(C_flag) = (r & 1); r = (r >> 1) | (c << 7); shiftFlags(r); }
+macro rotSla(r) { $(C_flag) = (r >> 7); r = r << 1; shiftFlags(r); }
+macro rotSra(r) { $(C_flag) = (r & 1); r = r s>> 1; shiftFlags(r); }
+macro rotSrl(r) { $(C_flag) = (r & 1); r = r >> 1; shiftFlags(r); }
+macro bitTest(v, b) { $(Z_flag) = ((v >> b) & 1) == 0; $(H_flag) = 1; $(N_flag) = 0; }
+
+# ADL mode: 24-bit registers address memory directly
+macro adL(a, v) { a = v; }
+macro pushL(v) { SPL = SPL - 3; *:3 SPL = v; }
+macro popL(v) { v = *:3 SPL; SPL = SPL + 3; }
+# Z80 mode: 16-bit registers address {MBASE, v}; register-relative addresses read MB at run time
+macro adS(a, v) { a = zext(v) | (zext(MB) << 16); }
+macro pushS(v) { SPS = SPS - 2; local p:3 = zext(SPS) | (zext(MB) << 16); *:2 p = v; }
+macro popS(v) { local p:3 = zext(SPS) | (zext(MB) << 16); v = *:2 p; SPS = SPS + 2; }
+
+macro ldStepL(d) { local s:3 = 0; adL(s, HL); local t:3 = 0; adL(t, DE); *:1 t = *:1 s; HL = HL + d; DE = DE + d; BC = BC - 1; $(H_flag) = 0; $(N_flag) = 0; $(PV_flag) = (BC != 0); }
+macro cpStepL(d) { local s:3 = 0; adL(s, HL); local m:1 = *:1 s; local r = A - m; $(H_flag) = ((A & 0xf) < (m & 0xf)); setResultFlags(r); $(N_flag) = 1; HL = HL + d; BC = BC - 1; $(PV_flag) = (BC != 0); }
+macro ioStepLIn(d, cd) { local s:3 = 0; adL(s, HL); local p:2 = zext(C); *:1 s = *[io]:1 p; HL = HL + d; C = C + cd; B = B - 1; $(Z_flag) = (B == 0); $(N_flag) = 1; }
+macro ioStepLOut(d, cd) { local s:3 = 0; adL(s, HL); local p:2 = zext(C); *[io]:1 p = *:1 s; HL = HL + d; C = C + cd; B = B - 1; $(Z_flag) = (B == 0); $(N_flag) = 1; }
+macro ioStep2LIn(d) { local s:3 = 0; adL(s, HL); *:1 s = *[io]:1 DE:2; HL = HL + d; DE = DE + d; BC = BC - 1; $(Z_flag) = (BC == 0); $(N_flag) = 1; }
+macro ioStep2LOut(d) { local s:3 = 0; adL(s, HL); *[io]:1 DE:2 = *:1 s; HL = HL + d; DE = DE + d; BC = BC - 1; $(Z_flag) = (BC == 0); $(N_flag) = 1; }
+macro ioStepXLIn(d) { local s:3 = 0; adL(s, HL); *:1 s = *[io]:1 DE:2; HL = HL + d; BC = BC - 1; $(Z_flag) = (BC == 0); $(N_flag) = 1; }
+macro ioStepXLOut(d) { local s:3 = 0; adL(s, HL); *[io]:1 DE:2 = *:1 s; HL = HL + d; BC = BC - 1; $(Z_flag) = (BC == 0); $(N_flag) = 1; }
+
+macro ldStepS(d) { local s:3 = 0; adS(s, HLs); local t:3 = 0; adS(t, DEs); *:1 t = *:1 s; HLs = HLs + d; DEs = DEs + d; BCs = BCs - 1; $(H_flag) = 0; $(N_flag) = 0; $(PV_flag) = (BCs != 0); }
+macro cpStepS(d) { local s:3 = 0; adS(s, HLs); local m:1 = *:1 s; local r = A - m; $(H_flag) = ((A & 0xf) < (m & 0xf)); setResultFlags(r); $(N_flag) = 1; HLs = HLs + d; BCs = BCs - 1; $(PV_flag) = (BCs != 0); }
+macro ioStepSIn(d, cd) { local s:3 = 0; adS(s, HLs); local p:2 = zext(C); *:1 s = *[io]:1 p; HLs = HLs + d; C = C + cd; B = B - 1; $(Z_flag) = (B == 0); $(N_flag) = 1; }
+macro ioStepSOut(d, cd) { local s:3 = 0; adS(s, HLs); local p:2 = zext(C); *[io]:1 p = *:1 s; HLs = HLs + d; C = C + cd; B = B - 1; $(Z_flag) = (B == 0); $(N_flag) = 1; }
+macro ioStep2SIn(d) { local s:3 = 0; adS(s, HLs); *:1 s = *[io]:1 DEs:2; HLs = HLs + d; DEs = DEs + d; BCs = BCs - 1; $(Z_flag) = (BCs == 0); $(N_flag) = 1; }
+macro ioStep2SOut(d) { local s:3 = 0; adS(s, HLs); *[io]:1 DEs:2 = *:1 s; HLs = HLs + d; DEs = DEs + d; BCs = BCs - 1; $(Z_flag) = (BCs == 0); $(N_flag) = 1; }
+macro ioStepXSIn(d) { local s:3 = 0; adS(s, HLs); *:1 s = *[io]:1 DEs:2; HLs = HLs + d; BCs = BCs - 1; $(Z_flag) = (BCs == 0); $(N_flag) = 1; }
+macro ioStepXSOut(d) { local s:3 = 0; adS(s, HLs); *[io]:1 DEs:2 = *:1 s; HLs = HLs + d; BCs = BCs - 1; $(Z_flag) = (BCs == 0); $(N_flag) = 1; }
+
 ################################################################
-# Shared operands (independent of the data width)
+# Phase 0: memory-mode suffix; phase 1: DD/FD index prefix
 ################################################################
 
-# MBASE as a disassembly-time constant: the upper address byte in Z80 mode
-MBc: is mbase [ mbv = mbase << 16; ] { export *[const]:3 mbv; }
+:^instruction is phase=0 & instruction [ phase=1; lm=adl; im=adl; sfx=0; ] {}
+:SIS^" "^instruction is phase=0 & op0_8=0x40; instruction [ phase=1; lm=0; im=0; sfx=1; ] {}
+:LIS^" "^instruction is phase=0 & op0_8=0x49; instruction [ phase=1; lm=1; im=0; sfx=1; ] {}
+:SIL^" "^instruction is phase=0 & op0_8=0x52; instruction [ phase=1; lm=0; im=1; sfx=1; ] {}
+:LIL^" "^instruction is phase=0 & op0_8=0x5b; instruction [ phase=1; lm=1; im=1; sfx=1; ] {}
 
-# 24-bit (IL) or 16-bit (IS) direct addresses
-Addr: imm24 is im=1; imm24 { export *:1 imm24; }
-Addr: loc   is im=0 & mbase; imm16 [ loc = (mbase << 16) | imm16; ] { export *:1 loc; }
+:^instruction is phase=1 & instruction [ phase=2; xy=0; ] {}
+:^instruction is phase=1 & op0_8=0xdd; instruction [ phase=2; xy=1; ] {}
+:^instruction is phase=1 & op0_8=0xfd; instruction [ phase=2; xy=2; ] {}
 
-MemA: (imm24) is im=1; imm24 { export *[const]:3 imm24; }
-MemA: (loc)   is im=0 & mbase; imm16 [ loc = (mbase << 16) | imm16; ] { export *[const]:3 loc; }
-
-Imm: imm24 is im=1; imm24 { export *[const]:3 imm24; }
-Imm: imm16 is im=0; imm16 { export *[const]:3 imm16; }
-
-RelAddr8: loc is simm8 [ loc = inst_next + simm8; ] { export *:1 loc; }
-
-RstAddr: loc is bits3_3 [ loc = bits3_3 << 3; ] { export *:1 loc; }
-
-IOAddr8: (imm8) is imm8 { export *[const]:2 imm8; }
-
-cc: "NZ" is bits3_3=0 { c:1 = !$(Z_flag); export c; }
-cc: "Z"  is bits3_3=1 { c:1 = $(Z_flag); export c; }
-cc: "NC" is bits3_3=2 { c:1 = !$(C_flag); export c; }
-cc: "C"  is bits3_3=3 { c:1 = $(C_flag); export c; }
-cc: "PO" is bits3_3=4 { c:1 = !$(PV_flag); export c; }
-cc: "PE" is bits3_3=5 { c:1 = $(PV_flag); export c; }
-cc: "P"  is bits3_3=6 { c:1 = !$(S_flag); export c; }
-cc: "M"  is bits3_3=7 { c:1 = $(S_flag); export c; }
-
-cc2: "NZ" is bits3_3=4 { c:1 = !$(Z_flag); export c; }
-cc2: "Z"  is bits3_3=5 { c:1 = $(Z_flag); export c; }
-cc2: "NC" is bits3_3=6 { c:1 = !$(C_flag); export c; }
-cc2: "C"  is bits3_3=7 { c:1 = $(C_flag); export c; }
-
-################################################################
-# Mode selection: the data width (lm) and immediate width (im) of an
-# instruction come from ADL, unless a .SIS/.LIS/.SIL/.LIL suffix byte
-# (40/49/52/5B) overrides them for the next instruction.
-################################################################
-
-:^instruction     is phase=0 & adl & instruction [ phase=1; lm=adl; im=adl; ] {}
-:SIS^" "^instruction is phase=0 & op0_8=0x40; instruction [ phase=1; lm=0; im=0; ] {}
-:LIS^" "^instruction is phase=0 & op0_8=0x49; instruction [ phase=1; lm=1; im=0; ] {}
-:SIL^" "^instruction is phase=0 & op0_8=0x52; instruction [ phase=1; lm=0; im=1; ] {}
-:LIL^" "^instruction is phase=0 & op0_8=0x5b; instruction [ phase=1; lm=1; im=1; ] {}
-
-with : phase=1 {
+with : phase=2 {
 @include "ez80_common.sinc"
 }
 
-@define X "L"
-@define W "3"
-@define BCr "BC"
-@define DEr "DE"
-@define HLr "HL"
-@define IXr "IX"
-@define IYr "IY"
-@define SPr "SPL"
-with : phase=1 & lm=1 {
-@include "ez80_wide.sinc"
+with : phase=2 & lm=1 {
+@include "ez80_adl.sinc"
 }
 
-@undef X
-@undef W
-@undef BCr
-@undef DEr
-@undef HLr
-@undef IXr
-@undef IYr
-@undef SPr
-@define X "S"
-@define W "2"
-@define BCr "BCs"
-@define DEr "DEs"
-@define HLr "HLs"
-@define IXr "IXs"
-@define IYr "IYs"
-@define SPr "SPS"
-with : phase=1 & lm=0 {
-@include "ez80_wide.sinc"
+with : phase=2 & lm=0 {
+@include "ez80_z80.sinc"
 }

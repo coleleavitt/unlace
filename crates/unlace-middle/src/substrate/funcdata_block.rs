@@ -3846,7 +3846,15 @@ impl Funcdata {
         // blocks `rule_block_or` permanently, and the source's
         // `return a || (b && c);` becomes a cascade of constant-return guards.
         let shared = (self.hooks().orchain_shortcircuit_shared_targets)(self);
-        if parents.iter().any(|p| shared.contains(p)) {
+        let bool_only = self
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_orchainbool::OrchainBool>()
+            .0;
+        if parents.iter().any(|&p| {
+            shared.contains(&p)
+                && !(bool_only && crate::kuna_orchainbool::returns_nonbool_const(self, p))
+        }) {
             return 0;
         }
 

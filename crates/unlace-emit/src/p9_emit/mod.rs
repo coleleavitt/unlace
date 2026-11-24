@@ -63,6 +63,7 @@ pub mod kuna_langrust; // (kuna) the rust-language policy objects (profile + cap
 pub mod kuna_langtypes; // (kuna) the type-spelling seam (TypeSpeller + SpellCtx)
 pub mod kuna_mapglobalsyms; // (kuna `mapglobalsyms`) keep mapGlobals' DAT_ Symbols in the global scope
 pub mod kuna_memberbase;
+pub mod kuna_msvcthrow;
 pub mod kuna_namedglobals;
 pub mod kuna_narrowselector; // (kuna) a switch on a narrow expression casts it to its own width
 pub mod kuna_oslog;

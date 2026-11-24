@@ -1727,6 +1727,43 @@ fn eval_guard_expr(
 /// The op-coupled wrapper lives in `jumptable.rs` (not `rangeutil.rs`) because it
 /// reads the function IR (`Funcdata`), which is above the value-set layer.
 #[doc(hidden)]
+/// (kuna) How many CBRANCHs that test one value (`x == c`, `x != c`)
+/// [`JumpBasicModel::analyze_guards`] looks past beyond its two range checks.
+const MAX_EQUALITY_GUARDS: int4 = 2;
+
+/// (kuna) Does the condition `vn` compare a value with one constant for
+/// equality? Such a test removes one value from the switch's range, so the
+/// range check behind it still bounds the switch: OCaml tests `r == 0x41`
+/// between `r < 0x75` and `r >= 0x57`.
+fn tests_one_value(fd: &Funcdata, vn: VarnodeId) -> bool {
+    let mut vn = vn;
+    for _ in 0..2 {
+        let Some(op) = fd
+            .vbank()
+            .get(vn)
+            .and_then(|v| v.get_def())
+            .and_then(|o| fd.obank().get(o))
+        else {
+            return false;
+        };
+        match op.code() {
+            OpCode::CPUI_BOOL_NEGATE => match op.get_in(0) {
+                Some(next) => vn = next,
+                None => return false,
+            },
+            OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => {
+                return (0..2).any(|s| {
+                    op.get_in(s)
+                        .and_then(|v| fd.vbank().get(v))
+                        .is_some_and(|v| v.is_constant())
+                });
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
 pub fn circlerange_pull_back(
     fd: &Funcdata,
     rng: &mut CircleRange,
@@ -2551,7 +2588,9 @@ impl JumpBasicModel {
 
         let mut bl = rootbl;
         let mut pathout = pathout_in;
-        for i in 0..maxbranch {
+        let mut counted = 0;
+        let mut i = 0;
+        while counted < maxbranch && i < maxbranch + MAX_EQUALITY_GUARDS {
             let prevbl;
             let indpath;
             if pathout >= 0 && fd.bblocks_ref().block(bl).size_out() == 2 {
@@ -2608,6 +2647,7 @@ impl JumpBasicModel {
             }
             bl = prevbl;
             let mut vn = fd.obank().get(cbranch).unwrap().get_in(1).unwrap();
+            let equality = tests_one_value(fd, vn);
             let mut rng = CircleRange::new_bool(toswitchval);
 
             let indpathstore = if fd.bblocks_ref().block(prevbl).get_flip_path() {
@@ -2645,6 +2685,10 @@ impl JumpBasicModel {
                     vn,
                     false,
                 ));
+            }
+            i += 1;
+            if !equality {
+                counted += 1;
             }
         }
     }

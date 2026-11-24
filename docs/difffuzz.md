@@ -102,17 +102,17 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
   `LD1`..`LD4` and `LD1R`..`LD4R` with 64-bit arrangements, ...) left bits 127:64 of the
   vector register unchanged. `FCVTZU d,d,#fbits` and `FCVTZU h,h,#fbits`, `SCVTF`/`UCVTF`
   `.4H`/`.8H` `#fbits` and scalar `URSHR d` decoded their shift with the wrong element size.
+- **AArch64 (#546).** Rounding of `SRSRA`/`URSRA` and by-element `SQRDMULH`, saturation of
+  `SQDMULH`/`SQRDMULH`/`SQDMLAL`/`SQDMLSL`/`SUQADD`, `SUDOT`/`USDOT`/`BFDOT`/`BFMLALB`/`BFMLALT` by element, and the MOPS `wt` options.
 - **RISC-V.** `c.jr`, `c.jalr` and `ret` did not clear bit 0 of the target, as `jalr` does.
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
 
-Open (issues #546, #548, #549, #563):
+Open (issues #548, #549, #563):
 
-- AArch64: the rounding of `SQRDMULH`, `SRSHR`/`URSHR`/`SRSRA`/`URSRA` and the saturation of
-  `SQDMLAL`/`SQDMLSL`/`SUQADD` are not modelled; `FCVTMU`/`FCVTZU` of a negative value
-  wraps instead of saturating to 0; `BFDOT`, `USDOT` and `SUDOT` by element fail to lift
-  (`generateLocation: null space`); the MOPS `CPY*` and `BFMLALB/T` (vector) do not decode.
+- AArch64: `FCVT*U` of a negative value wraps instead of giving 0 (kept: clamping makes every
+  `(unsigned)f` unreadable); the SVE `USDOT`/`BFMLALB` and F64MM `LD1RO*` do not decode.
 - RISC-V: single-precision results are not NaN-boxed in the 64-bit `f` registers.
 - TriCore: PSW.V is the sign bit of the 32-bit result instead of signed overflow (`overflowflags`,
   about 110 constructors), and `SHA` never sets PSW.C.

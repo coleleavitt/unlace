@@ -1,0 +1,124 @@
+lwxs zero, zero(zero)
+lwxs a2, ra(t6)
+lwxs t3, s6(s4)
+maddp zero, zero
+maddp t3, t1
+maddp a2, t1
+mflhxu zero
+mflhxu v1
+mflhxu s5
+mtlhx zero
+mtlhx t6
+mtlhx sp
+multp zero, zero
+multp s2, ra
+multp s0, a1
+pperm zero, zero
+pperm gp, t0
+pperm at, t4
+jr ra
+nop
+srl a0, zero, 0x0
+movt zero, t0, 0x0
+nop
+sll zero, zero, 0x2
+movf zero, zero, 0x0
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop
+nop

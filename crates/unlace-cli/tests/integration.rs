@@ -46,16 +46,25 @@ mod m88k_raw;
 mod mep;
 #[path = "meta_raw.rs"]
 mod meta_raw;
+#[path = "mips_ase.rs"]
+mod mips_ase;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
+#[path = "nfp_raw.rs"]
+mod nfp_raw;
 #[path = "nios2_raw.rs"]
 mod nios2_raw;
 #[path = "pdp11_raw.rs"]
 mod pdp11_raw;
+#[path = "propeller_raw.rs"]
+mod propeller_raw;
 #[path = "rabbit_raw.rs"]
 mod rabbit_raw;
+#[path = "tlcs870_raw.rs"]
+mod tlcs870_raw;
+
 #[path = "v60.rs"]
 mod v60;
 
@@ -1117,6 +1126,8 @@ mod types_header;
 #[path = "typelib.rs"]
 mod typelib;
 
+#[path = "msvccookie_return_cli.rs"]
+mod msvccookie_return_cli;
 #[path = "msvcexport_cli.rs"]
 mod msvcexport_cli;
 #[path = "vexzeroupper_cli.rs"]

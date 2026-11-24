@@ -48,9 +48,10 @@ Three tiers:
 | the same arithmetic expression on the same values is computed twice into two temporaries | [`latecse`](#latecse----on--off-default-off) |
 | v1 = a + b * 4; ... v2 = a + b * 4; where one would do | [`latecse`](#latecse----on--off-default-off) |
 | duplicated address arithmetic in both arms of an if | [`latecse`](#latecse----on--off-default-off) |
-| flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet | [`phithread`](#phithread----on--off-default-off) |
-| a variable set only to constants is tested immediately where the paths join | [`phithread`](#phithread----on--off-default-off) |
-| a small block that only assigns a constant is shared by several paths before a test of that value | [`phithread`](#phithread----on--off-default-off) |
+| flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a variable set only to constants is tested immediately where the paths join | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a small block that only assigns a constant is shared by several paths before a test of that value | [`phithread`](#phithread----on--off--ranges-default-off) |
+| a value is tested again right after a branch on it already decided the second test on one path, if (x == 3) { .. } if (x > 0) | [`phithread`](#phithread----on--off--ranges-default-off) |
 | a do/while that decrements a 0xffffffffffffffff counter while stepping a char pointer until the byte read is zero | [`strlenscan`](#strlenscan----on--off-default-on) |
 | if (!v3) break; v3 -= 1; inside a loop that reads one byte per step | [`strlenscan`](#strlenscan----on--off-default-on) |
 | ~v3 - 1 or ~v3 - 5 where the source computes a string length | [`strlenscan`](#strlenscan----on--off-default-on) |
@@ -498,6 +499,9 @@ Three tiers:
 |  y) that hide a plain multiplication | [`mba`](#mba----on--off-default-off) |
 | an or of (~a & b) and (a & ~b) instead of a ^ b | [`mba`](#mba----on--off-default-off) |
 | (x ^ 0x3039) + (x & 0x3039) * 2 instead of x + 0x3039 | [`mba`](#mba----on--off-default-off) |
+| obfuscated arithmetic that option mba leaves unsimplified | [`egraph`](#egraph----on--off-default-off) |
+| one mba identity applied to the result of another | [`egraph`](#egraph----on--off-default-off) |
+| ollvm substitution chains such as (a ^ ~b) & a instead of a & b | [`egraph`](#egraph----on--off-default-off) |
 | heavily-called custom die()/fatal() wrapper still treated as returning | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | dead code after a stripped sub_ wrapper that never falls through at 3+ call sites | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
 | caller swallows the next function after a wrapper call | [`noreturn_disc`](#noreturn_disc----on--off-default-on) |
@@ -828,6 +832,9 @@ Three tiers:
 | delphi class names missing and vmts left as unnamed data | [`delphi`](#delphi----on--off-default-off) |
 | delphi virtual methods and event handlers stay sub_<addr> | [`delphi`](#delphi----on--off-default-off) |
 | a delphi @FinalizeRecord or @DynArrayClear call passes an unnamed dat_<addr> type info | [`delphi`](#delphi----on--off-default-off) |
+| a delphi method reads eax/edx/ecx as unaffected registers and has no parameters | [`delphiabi`](#delphiabi----on--off-default-on) |
+| calls in a delphi program print with no arguments | [`delphiabi`](#delphiabi----on--off-default-on) |
+| delphi Self missing from every method | [`delphiabi`](#delphiabi----on--off-default-on) |
 | an ESP32 firmware calls through a literal like (*dat_40080504)(dst,src,n) instead of memcpy | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | a call to a fixed 0x4000xxxx address in an Espressif image has no name | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
 | sub_40000xxx callees in an ESP32-C3 image that have no body | [`esprom`](#esprom----auto--off--esp32--esp32s2--esp32s3--esp32c2--esp32c3--esp32c6--esp32h2--esp8266-default-auto) |
@@ -1426,13 +1433,13 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · kuna · transform · kuna-latecse
 - **Example:** `option latecse on`
 
-### `phithread` -- on | off, default `off`
+### `phithread` -- on | off | ranges, default `off`
 
-- **Symptoms:** flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet; a variable set only to constants is tested immediately where the paths join; a small block that only assigns a constant is shared by several paths before a test of that value.
-- **What it does:** Resolve a join that only tests a value its arms set to constants, per path. A shared arm that sets a register (`flag = 1;`) and flows into a join that immediately branches on it makes the join's MULTIEQUAL collect unrelated constants into one variable, printed as `flag = 1; ... flag = 0; ... if (flag != 0)`. ActionPhiThread (kuna_phithread.rs, after ActionConditionalExe) takes a join block ending in a CBRANCH whose condition is computed only from its MULTIEQUALs and constants and whose values are read only inside it; for each in edge whose MULTIEQUAL inputs decide the branch it moves the edge past the join to the successor the branch would take, fixing both blocks' MULTIEQUALs. An arm holding only MULTIEQUALs, COPYs and a BRANCH whose value into the join comes from a MULTIEQUAL with a constant input is first split per such predecessor (Funcdata::node_split_through), as Hex-Rays does with BREAK_PHI_ARM_MERGES, so each copy passes a constant. The join keeps at least one in edge; at most 32 edits per function. OFF, the default, is upstream byte-for-byte.
+- **Symptoms:** flag = 1; on one path and flag = 0; on another, then if (flag != 0) right after they meet; a variable set only to constants is tested immediately where the paths join; a small block that only assigns a constant is shared by several paths before a test of that value; a value is tested again right after a branch on it already decided the second test on one path, if (x == 3) { .. } if (x > 0).
+- **What it does:** Resolve a join that only tests a value its arms set to constants, per path. A shared arm that sets a register (`flag = 1;`) and flows into a join that immediately branches on it makes the join's MULTIEQUAL collect unrelated constants into one variable, printed as `flag = 1; ... flag = 0; ... if (flag != 0)`. ActionPhiThread (kuna_phithread.rs, after ActionConditionalExe) takes a join block ending in a CBRANCH whose condition is computed only from its MULTIEQUALs and constants and whose values are read only inside it; for each in edge whose MULTIEQUAL inputs decide the branch it moves the edge past the join to the successor the branch would take, fixing both blocks' MULTIEQUALs. An arm holding only MULTIEQUALs, COPYs and a BRANCH whose value into the join comes from a MULTIEQUAL with a constant input is first split per such predecessor (Funcdata::node_split_through), as Hex-Rays does with BREAK_PHI_ARM_MERGES, so each copy passes a constant. With `ranges`, when the edge's inputs are not constants, a join whose branch compares one value against a constant is also decided along the edge when the value's range there, from a conditional branch on it ending the predecessor or a single-predecessor chain above it, lies inside one outcome (Hex-Rays' BACKPROP_CC, value-range jump threading). The join keeps at least one in edge; at most 32 edits per function. OFF, the default, is upstream byte-for-byte.
 - **When to flip:** OFF by default: it changes control flow, so it moves structuring and can duplicate small arms. Turn it ON when a function sets a flag variable to constants on several paths and then branches on it straight away (state flags, found/not-found results, error codes tested at a join), or when that flag variable merges unrelated values into one name. Not yet measured on a corpus; a default change needs the datatests, the speed budget and the DecBench variable-match and GED numbers.
 - **Where / provenance:** P3/simplification-quiescence · ida · transform · unlace-20
-- **Example:** `option phithread on`
+- **Example:** `option phithread ranges`
 
 ### `strlenscan` -- on | off, default `on`
 
@@ -2434,6 +2441,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · ida95-45
 - **Example:** `--option mba on`
 
+### `egraph` -- on | off, default `off`
+
+- **Symptoms:** obfuscated arithmetic that option mba leaves unsimplified; one mba identity applied to the result of another; ollvm substitution chains such as (a ^ ~b) & a instead of a & b.
+- **What it does:** Simplify mixed boolean-arithmetic (MBA) trees by equality saturation. RuleEgraphSimplify collects the tree under an arithmetic or bitwise root the way the mba option's nonlinear path does (arithmetic under bitwise ops, the ops of several readers inlined, constants kept as numbers; at most 6 leaves and 48 nodes) when it mixes bitwise and arithmetic ops and no op of the set is its one reader, and adds it to an e-graph (the egg crate). Each subterm that the mba option's linear or polynomial solver folds is merged with its folded form, and the root with the mba option's proven nonlinear candidate. The e-graph is then saturated with ring and boolean-algebra identities (commutativity, associativity, distribution, De Morgan, ~a = -a - 1, absorption) and the MBA identities obfuscators apply (`(a ^ b) + 2*(a & b)` is `a + b`, `(a | b) - (a & b)` is `a ^ b`, `(a & ~b) - (~a & b)` is `a - b`), each an identity modulo 2^w at every width, with constant folding at the root's width, up to 4000 e-nodes or 12 iterations with deterministic hashing. The expression with the fewest ops is extracted; it replaces the tree when it has fewer ops than the tree keeps for itself, agrees on 64 random full-width inputs and on every input at a width small enough for 2^16 combinations, and is not refuted by the mba option's bit-serial proof (run for up to 3 leaves, where it proves equality at the full width). So one substitution applied to the result of another, `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, becomes `(x | y) + z`.
+- **When to flip:** Off by default. Turn it on for obfuscated code where option mba leaves xor/and/or soup: substitutions stacked on each other, or linear and nonlinear MBA mixed in one tree. It costs one saturation per such tree.
+- **Where / provenance:** P3/simplification-quiescence · kuna · new-analysis · kuna-egraph
+- **Example:** `--option egraph on`
+
 ### `noreturn_disc` -- on | off, default `on`
 
 - **Symptoms:** heavily-called custom die()/fatal() wrapper still treated as returning; dead code after a stripped sub_ wrapper that never falls through at 3+ call sites; caller swallows the next function after a wrapper call.
@@ -3181,6 +3196,14 @@ Program-prep enablement: what is discovered, decoded, and named before any funct
 - **When to flip:** Off by default. Turn it on for a Borland/Embarcadero Delphi or C++Builder VCL program (an Inno Setup installer's setup program is one): virtual methods, event handlers and message handlers get class-qualified names instead of sub_<addr>, VMTs read `TForm1::vmt` instead of dat_<addr>, and managed-type helper calls name their type info. Inert on any other image.
 - **Where / provenance:** P1/external-refinement · kuna · analysis-enablement · unlace-455
 - **Example:** `--option delphi on`
+
+### `delphiabi` -- on | off, default `on`
+
+- **Symptoms:** a delphi method reads eax/edx/ecx as unaffected registers and has no parameters; calls in a delphi program print with no arguments; delphi Self missing from every method.
+- **What it does:** On a 32-bit Delphi PE, compose the `:borlanddelphi` compiler field in the SLEIGH language id, so the image is read under the vendored `x86delphi.cspec` whose default model is Delphi's `register` convention: the first three arguments in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the return. Under the `windows` model those registers are not inputs, so a method loses `Self` and its first arguments and every call through a VMT slot prints with no arguments (`(**(code **)(*(int *)(v1 + 0x43c) + 0x130))()`); under the Delphi model the same body reads `Self` as a parameter and passes it on (`(**(code **)(**(int **)(a0 + 0x43c) + 0x130))(*(int **)(a0 + 0x43c))`). A load-time gate carried as the `KUNA_DELPHIABI` environment variable (the `goabi` pattern: the id is composed inside `load file`). It fires only on an I386 PE that holds the `TObject` class name and at least two Delphi VMTs (the `delphi` pass's own detection); every other image composes the same id as before. Each Win32 import, at its IAT slot and its jump thunk, stays `__stdcall` (a Delphi package export, `@`-mangled, takes the register model, a C runtime import `__cdecl`). The image's own routines all take the model, so one written with another convention (a `stdcall` Windows callback, a `cdecl` helper) is read with register arguments.
+- **When to flip:** On by default: a 32-bit Delphi or C++Builder program's methods get `Self` and their register arguments, and virtual and event-handler calls get their arguments (two Inno Setup stubs: calls printed with no arguments 621 -> 112 and 2245 -> 917). Flip off for a C++Builder image whose code is mostly `cdecl`/`stdcall`, or to compare with the Windows reading. Inert on any other image.
+- **Where / provenance:** P1/environment-binding · kuna · analysis-enablement · unlace-455
+- **Example:** `--option delphiabi on`
 
 ### `esprom` -- auto | off | esp32 | esp32s2 | esp32s3 | esp32c2 | esp32c3 | esp32c6 | esp32h2 | esp8266, default `auto`
 

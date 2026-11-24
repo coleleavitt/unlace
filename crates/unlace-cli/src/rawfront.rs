@@ -41,9 +41,39 @@ impl Drop for Prepared {
     }
 }
 
+/// The `--svd` argument's description: the file it names, or else the bundled
+/// device it names (`--svd STM32F405`, `--svd nrf52840`).
+fn svd_bytes(arg: &str) -> Result<Vec<u8>, String> {
+    if std::path::Path::new(arg).exists() {
+        return std::fs::read(arg).map_err(|e| format!("could not read {arg}: {e}"));
+    }
+    if let Some((name, doc)) = svd::bundled(arg) {
+        eprintln!("[kuna firmware] SVD: bundled description {name} for {arg}");
+        return Ok(doc);
+    }
+    let names = svd::bundled_names();
+    let family: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|n| {
+            arg.get(..7)
+                .is_some_and(|a| n.get(..7).is_some_and(|p| p.eq_ignore_ascii_case(a)))
+        })
+        .collect();
+    Err(format!(
+        "--svd {arg}: no such file and no bundled device of that name{}",
+        if family.is_empty() {
+            format!(" ({} bundled; any CMSIS-SVD file works too)", names.len())
+        } else {
+            format!(" (bundled: {})", family.join(", "))
+        }
+    ))
+}
+
 /// The arguments with the firmware layout filled in; `args` unchanged when
-/// nothing applies. An unreadable `--svd` file is an error. `member` is the
-/// flat image of a container member the arguments already selected.
+/// nothing applies. An unreadable `--svd` file, or a name that is neither a file
+/// nor a bundled device, is an error. `member` is the flat image of a container
+/// member the arguments already selected.
 pub fn prepare(
     sub: &str,
     args: &[String],
@@ -61,9 +91,7 @@ pub fn prepare(
         };
     }
     let device = match &svd_file {
-        Some(f) => Some(svd::parse(
-            &std::fs::read(f).map_err(|e| format!("could not read {f}: {e}"))?,
-        )?),
+        Some(f) => Some(svd::parse(&svd_bytes(f)?)?),
         None => None,
     };
     let Some(binary) = prepared

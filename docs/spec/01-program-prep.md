@@ -15125,7 +15125,15 @@ earlier one and padding gaps. The CLI asserts the structure (`typedef`), the
 peripheral as a typed global at its base (`data`) and its register range as
 volatile, for an object file (an ELF, an ESP image, the ELF a container
 wraps) as for a raw image, and names the IRQ handlers a raw image's vector
-table found from the interrupts.
+table found from the interrupts. A leading XML declaration is dropped before
+the reader sees it (the vendors' files declare `standalone="no"`, which the
+kuna XML grammar does not take). `svd.rs (bundled)` reads a device from
+`svd_devices.br`, the descriptions `tools/gen_svd_bundle.py` cuts from the
+vendors' device packs down to what `parse` reads and stores as one Brotli
+stream (180 devices, 77 KiB); `--svd` takes a bundled name when no file of
+that name exists, the bundled name equal to the argument or else the longest
+that covers it (case-insensitive, `X` matching one character, the part number
+going on past the name).
 
 `bundles.rs (Bundle::parse)` lists the members of the inputs that hold several
 images, without decoding them. A tar archive is recognized by its first

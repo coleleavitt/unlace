@@ -548,33 +548,6 @@ RefDPIndLongIdx: [<$imm8],"Y"    is imm8 & IdxY  {
     $(REF_EXPORT);
 }
 
-# Immediate.
-# In 8 bit mode you must not dereference the second byte.
-RefImm8: #$imm8    is imm8  {
-    local ref_lo:3 = inst_start + 1;
-    local ref_hi:3 = ref_lo + 1;  # Do not access.
-    $(REF_EXPORT);
-}
-RefImm16: #$imm16    is imm16  {
-    local ref_lo:3 = inst_start + 1;
-    local ref_hi:3 = ref_lo + 1;
-    $(REF_EXPORT);
-}
-# Select the size based on MF.
-RefImmMF: RefImm8    is ctx_MF=1; RefImm8  {
-    export RefImm8;
-}
-RefImmMF: RefImm16    is ctx_MF=0; RefImm16  {
-    export RefImm16;
-}
-# Select the size based on XF.
-RefImmXF: RefImm8    is ctx_XF=1; RefImm8  {
-    export RefImm8;
-}
-RefImmXF: RefImm16    is ctx_XF=0; RefImm16  {
-    export RefImm16;
-}
-
 # Stack relative.
 RefSR: $imm8,"S"    is imm8  {
     local imm:1 = imm8;

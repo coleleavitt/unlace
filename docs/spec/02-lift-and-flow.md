@@ -1729,9 +1729,10 @@ negative, the output starting below the stack pointer at the call), and the stor
 return label before the call has no reader left. A call spec already input-locked is
 left alone. A callee that never returns gets its arguments and no result. A terminal
 tail (a block from which every explored path ends in `RETURN`, `REVERT`, `STOP` or
-`INVALID` without a return jump) that two or more constant `JUMP`s or call return
-labels share is called rather than entered: the jump becomes a CALL to it followed by an
-artificial noreturn halt, and a call whose return label is such a tail is followed by a
+`INVALID` without a return jump) that two or more constant `JUMP`s or `JUMPI`s, call return
+labels or the fall-through from the instruction before it share is called rather than
+entered: the jump becomes a CALL to it followed by an artificial noreturn halt (for a
+`JUMPI`, the BRANCHIND of its taken edge does; the CBRANCH to the next instruction stays), and a call whose return label is such a tail is followed by a
 second CALL to the tail and the halt. Its arguments are the deepest stack word below its
 entry any of its instructions reads. solc's optimizer shares the ABI-encoding and `RETURN`
 tails between external functions, reaching them with different junk below the stack

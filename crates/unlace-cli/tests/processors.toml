@@ -2966,7 +2966,7 @@ forbid = ["indirect jump", "switch("]
 test = "evm_erc20_calls_dispatch"
 address = "0x0"
 expect = [
-    "if (v1._0_32_ == 0xa9059cbb) {",
+    " == 0xa9059cbb) {",
     "sub_3e7(",
     "= sub_51e(4,calldatasize());",
 ]

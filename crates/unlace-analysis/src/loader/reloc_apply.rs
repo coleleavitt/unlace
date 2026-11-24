@@ -7,7 +7,8 @@
 //! opcode bits outside the relocation field.
 //!
 //! Supported instruction families are ARM `CALL`/`JUMP24`, Thumb call/jump,
-//! `REL32`, `PREL31`, and the A32/Thumb-2 `MOVW`/`MOVT` pairs; C-SKY `bsr32`; AArch64 branch, ADRP page, ADD low-12, and scaled load/
+//! `REL32`, `PREL31`, and the A32/Thumb-2 `MOVW`/`MOVT` pairs; C-SKY `bsr32`;
+//! OpenRISC jumps, address halves and split store immediates; AArch64 branch, ADRP page, ADD low-12, and scaled load/
 //! store low-12 forms; PowerPC (32- and 64-bit) `REL24`/`PLTREL24`/`LOCAL24PC`
 //! and `ADDR24` branches, the 14-bit conditional-branch forms, the absolute,
 //! PC-relative (`REL16`) and TOC-relative 16-bit halves, TOC64, and the
@@ -66,6 +67,9 @@ enum Specific {
     ArmBranch24,
     ArmThumbBranch24,
     ArmPrel31,
+    Or1kRel26,
+    Or1kHalf { adjust: bool, high: bool },
+    Or1kSplit16,
     CskyBsr26,
     ArmMovw { thumb: bool, top: bool, pc: bool },
     PcRelativeData,
@@ -263,6 +267,7 @@ impl RelocationSpec {
                     | Specific::LarchCall36
                     | Specific::LarchBranch { .. }
                     | Specific::LanaiBranch25
+                    | Specific::Or1kRel26
                     | Specific::CskyBsr26
                     | Specific::AvrPcrel { bits: 12 }
                     | Specific::AvrCall
@@ -298,10 +303,72 @@ pub fn classify_elf(
 ) -> Result<Option<RelocationSpec>, RelocationFailure> {
     match (arch, machine) {
         (Architecture::Unknown, Some(EM_LANAI)) => classify_lanai(RelocationInfo::from(reloc)),
+        (Architecture::Unknown, Some(EM_OPENRISC)) => classify_or1k(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_CUDA)) => classify_cuda(RelocationInfo::from(reloc)),
         (Architecture::Unknown, Some(EM_AMDGPU)) => classify_amdgpu(RelocationInfo::from(reloc)),
         _ => classify(arch, reloc),
     }
+}
+
+/// `EM_OPENRISC`, which the `object` crate maps to no architecture.
+pub const EM_OPENRISC: u16 = 92;
+const R_OR1K_32: u32 = 1;
+const R_OR1K_LO_16_IN_INSN: u32 = 4;
+const R_OR1K_HI_16_IN_INSN: u32 = 5;
+const R_OR1K_INSN_REL_26: u32 = 6;
+const R_OR1K_32_PCREL: u32 = 9;
+const R_OR1K_PLT26: u32 = 15;
+const R_OR1K_AHI16: u32 = 35;
+const R_OR1K_SLO16: u32 = 39;
+
+/// OpenRISC 1000 (big-endian, RELA): `INSN_REL_26` (and `PLT26`, taken to the
+/// symbol itself) is the word displacement of `l.j`/`l.jal`/`l.bf`/`l.bnf`;
+/// `HI_16_IN_INSN`/`AHI16` the high half of `S + A` (`AHI` rounded for the
+/// signed low half) and `LO_16_IN_INSN` the low half, in the imm16 of
+/// `l.movhi`/`l.ori`/`l.addi`/a load; `SLO16` the low half split as a store's
+/// immediate (bits 25..21 and 10..0); `32` and `32_PCREL` data words.
+fn classify_or1k(reloc: RelocationInfo) -> Result<Option<RelocationSpec>, RelocationFailure> {
+    let (specific, call) = match reloc.r_type {
+        Some(0) => return Ok(None),
+        Some(R_OR1K_INSN_REL_26 | R_OR1K_PLT26) => (Specific::Or1kRel26, true),
+        Some(R_OR1K_LO_16_IN_INSN) => (
+            Specific::Or1kHalf {
+                adjust: false,
+                high: false,
+            },
+            false,
+        ),
+        Some(R_OR1K_HI_16_IN_INSN) => (
+            Specific::Or1kHalf {
+                adjust: false,
+                high: true,
+            },
+            false,
+        ),
+        Some(R_OR1K_AHI16) => (
+            Specific::Or1kHalf {
+                adjust: true,
+                high: true,
+            },
+            false,
+        ),
+        Some(R_OR1K_SLO16) => (Specific::Or1kSplit16, false),
+        Some(R_OR1K_32) => (
+            Specific::Data {
+                bytes: 4,
+                pc: false,
+            },
+            false,
+        ),
+        Some(R_OR1K_32_PCREL) => (Specific::Data { bytes: 4, pc: true }, false),
+        _ => return Err(RelocationFailure::Unsupported),
+    };
+    Ok(Some(RelocationSpec {
+        specific,
+        width: 4,
+        call,
+        got: false,
+    }))
 }
 
 /// Lanai (big-endian, RELA): `25` is the absolute word address of a `bcc`
@@ -993,6 +1060,21 @@ fn apply_info(
             target_thumb,
         ),
         Specific::ArmPrel31 => arm_prel31(field, little_endian, reloc, symbol, place),
+        Specific::Or1kRel26 => or1k_patch(field, little_endian, reloc, symbol, Some(place), |v| {
+            require_aligned(v, 4)?;
+            require_signed(v, 28)?;
+            Ok((0x03ff_ffff, (v >> 2) as u32))
+        }),
+        Specific::Or1kHalf { adjust, high } => {
+            or1k_patch(field, little_endian, reloc, symbol, None, |v| {
+                let v = if adjust { v + 0x8000 } else { v };
+                Ok((0xffff, if high { (v >> 16) as u32 } else { v as u32 }))
+            })
+        }
+        Specific::Or1kSplit16 => or1k_patch(field, little_endian, reloc, symbol, None, |v| {
+            let x = (v as u32) & 0xffff;
+            Ok((0x03e0_07ff, ((x >> 11) << 21) | (x & 0x7ff)))
+        }),
         Specific::CskyBsr26 => csky_bsr26(field, little_endian, reloc, symbol, place),
         Specific::ArmMovw { thumb, top, pc } => arm_movw(
             field,
@@ -1572,6 +1654,26 @@ fn csky_bsr26(
     let insn = (insn & !0x03ff_ffff) | (((value >> 1) as u32) & 0x03ff_ffff);
     write_u16(&mut field[..2], le, (insn >> 16) as u16);
     write_u16(&mut field[2..], le, insn as u16);
+    Ok(())
+}
+
+/// An OpenRISC instruction field: `fields(S + A [- P])` gives the field mask and
+/// its bits, which replace the masked bits of the word.
+fn or1k_patch(
+    field: &mut [u8],
+    le: bool,
+    reloc: RelocationInfo,
+    symbol: u64,
+    place: Option<u64>,
+    fields: impl Fn(i128) -> Result<(u32, u32), RelocationFailure>,
+) -> Result<(), RelocationFailure> {
+    if reloc.implicit_addend {
+        return Err(RelocationFailure::InvalidEncoding);
+    }
+    let value = symbol as i128 + reloc.addend as i128 - place.map_or(0, i128::from);
+    let (mask, bits) = fields(value)?;
+    let insn = read_u32(field, le);
+    write_u32(field, le, (insn & !mask) | (bits & mask));
     Ok(())
 }
 
@@ -3991,6 +4093,79 @@ mod csky_tests {
         assert_eq!(
             bsr([0x00, 0xe8, 0x00, 0x00], true, 0x1_0568, 0x1_0310),
             Err(RelocationFailure::InvalidEncoding)
+        );
+    }
+}
+
+#[cfg(test)]
+mod or1k_tests {
+    use super::*;
+
+    fn patch(r_type: u32, insn: u32, symbol: u64, place: u64) -> Result<u32, RelocationFailure> {
+        let info = RelocationInfo {
+            kind: RelocationKind::Unknown,
+            encoding: RelocationEncoding::Unknown,
+            size: 0,
+            addend: 0,
+            implicit_addend: false,
+            r_type: Some(r_type),
+        };
+        let spec = classify_or1k(info)?.expect("not a no-op");
+        let mut field = insn.to_be_bytes();
+        apply_info(spec, info, &mut field, false, symbol, place, None, None)?;
+        Ok(u32::from_be_bytes(field))
+    }
+
+    // Words as GNU ld 2.45 writes them for or1k-elf-gcc 15.3 objects.
+    #[test]
+    fn calls_halves_and_store_split_match_the_linker() {
+        assert_eq!(
+            patch(R_OR1K_INSN_REL_26, 0x0400_0000, 0x1_06a4, 0x1_0430),
+            Ok(0x0400_009d)
+        );
+        assert_eq!(
+            patch(R_OR1K_PLT26, 0x0400_0000, 0x1_06e4, 0x1_0448),
+            Ok(0x0400_00a7)
+        );
+        assert_eq!(
+            patch(R_OR1K_AHI16, 0x1a20_0000, 0x1_0a0c, 0x1_0444),
+            Ok(0x1a20_0001)
+        );
+        assert_eq!(
+            patch(R_OR1K_LO_16_IN_INSN, 0x9c71_0000, 0x1_0a0c, 0x1_0448),
+            Ok(0x9c71_0a0c)
+        );
+        assert_eq!(
+            patch(R_OR1K_SLO16, 0xd411_9800, 0x1_2a58, 0x1_0898),
+            Ok(0xd4b1_9a58)
+        );
+        assert_eq!(
+            patch(R_OR1K_AHI16, 0x1a20_0000, 0x1_8000, 0),
+            Ok(0x1a20_0002)
+        );
+        assert_eq!(
+            patch(R_OR1K_HI_16_IN_INSN, 0x1a20_0000, 0x1_8000, 0),
+            Ok(0x1a20_0001)
+        );
+        assert_eq!(
+            patch(R_OR1K_INSN_REL_26, 0x0400_0000, 0x1_0432, 0x1_0430),
+            Err(RelocationFailure::Misaligned)
+        );
+        assert_eq!(
+            patch(R_OR1K_INSN_REL_26, 0x0400_0000, 0x900_0000, 0),
+            Err(RelocationFailure::OutOfRange)
+        );
+        assert!(
+            classify_or1k(RelocationInfo {
+                kind: RelocationKind::Unknown,
+                encoding: RelocationEncoding::Unknown,
+                size: 0,
+                addend: 0,
+                implicit_addend: false,
+                r_type: Some(14),
+            })
+            .is_err(),
+            "GOT16"
         );
     }
 }

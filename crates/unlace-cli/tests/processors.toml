@@ -3640,6 +3640,28 @@ address = "pick"
 expect = ["0x2c", "scale7("]
 
 # OpenRISC executable (EM_OPENRISC, big-endian) routes to OpenRISC:BE:32:default (#776).
+# OpenRISC ET_REL (EM_OPENRISC): l.jal calls take INSN_REL_26, globals the AHI16/LO_16_IN_INSN pair.
+[[family]]
+name = "elfroute_or1k_o"
+loader = "auto"
+fixture = "crates/unlace-cli/tests/fixtures/elfroute/or1k.o"
+forbid = ["halt_baddata", "halt_missing"]
+
+[[family.function]]
+test = "elfroute_or1k_o_chain"
+address = "chain"
+expect = ["scale7(", "+ 1"]
+
+[[family.function]]
+test = "elfroute_or1k_o_lookup"
+address = "lookup"
+expect = ["g_tab["]
+
+[[family.function]]
+test = "elfroute_or1k_o_pick"
+address = "pick"
+expect = ["0x2c", "scale7("]
+
 [[family]]
 name = "elfroute_or1k_elf"
 loader = "auto"

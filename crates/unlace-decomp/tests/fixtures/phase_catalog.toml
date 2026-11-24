@@ -878,6 +878,25 @@ tier = "core"
 symptoms = ["an AArch64 function that tags a pointer (irg, addg) decompiles to return a0", "stg, st2g or stzg leave no trace in the output of MTE-hardened AArch64 code", "DataMemoryBarrier(2,3) or DataSynchronizationBarrier(3,3,0) where the source called __dmb or __dsb", "WaitForInterrupt() or Yield() where the source called __wfi or __yield"]
 
 [[option]]
+option = "barrierintrinsics"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-barrierintrinsics"
+summary = "On PowerPC, print a sync user op whose L operand is 0, 1 or 2 as the GCC and Clang barrier builtin __sync, __lwsync or __ptesync, and an instructionSynchronize user op as __isync, the names the Hex-Rays PowerPC plugin prints. Only the spelling of the call changes: the SLEIGH user ops keep their operands and their place in the flow."
+use_when = "Off by default, so the output keeps the SLEIGH names sync(L) and instructionSynchronize() and existing consumers see no change. Turn on to read PowerPC barrier code under the names the source called, which separates lwsync and ptesync from a full sync; a sync whose operand is not a constant keeps its SLEIGH name."
+example = "option barrierintrinsics on"
+source_decompiler = "unlace"
+inspiration = "The Hex-Rays PowerPC plugin (hexppc) names the sync family as __sync, __lwsync, __ptesync and __isync; notes/ida-gap/hexrays-lifters.md row 3"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a PowerPC lwsync prints as sync(1) where the source called __lwsync|a PowerPC isync prints as instructionSynchronize() where the source called __isync|a PowerPC ptesync prints as sync(2) where the source called __ptesync"
+
+[[option]]
 option = "tailcalljump"
 values = ["on", "direct", "off"]
 default = "on"

@@ -426,6 +426,7 @@ unlace_options! { self, p1;
     "callbacktype" => registered!(crate::callbacktype::CallbackTypeMode),
     "cortexmpriv" => registered!(crate::cortexmpriv::Cortexmpriv),
     "acleintrinsics" => registered!(crate::memtag::AcleIntrinsics),
+    "barrierintrinsics" => registered!(crate::printc::BarrierIntrinsics),
     "dedupvardecls" => registered!(crate::dedupvardecls::DedupVarDecls),
     "noreturn_known" => registered!(crate::analysisgates::NoreturnKnown),
     "libgccsigs" => registered!(crate::analysisgates::Libgccsigs),

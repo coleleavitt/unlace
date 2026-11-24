@@ -4647,6 +4647,7 @@ impl Funcdata {
     fn protect_switch_path_indirects(&mut self, branchind: OpId) {
         use crate::op::pcodeop_flags as pf;
         let mut last_indirect: Option<OpId> = None;
+        let mut zero_idiom = false;
         let mut cur_vn = match self.obank().get(branchind).and_then(|o| o.get_in(0)) {
             Some(v) => v,
             None => return,
@@ -4677,6 +4678,16 @@ impl Funcdata {
                 }
                 None => return,
             };
+            // (kuna) `x ^ x` and `x - x` are the constant 0 before a rule folds
+            // them; MSVC zeroes a struct through `xor eax,eax` (#871).
+            if matches!(code, OpCode::CPUI_INT_XOR | OpCode::CPUI_INT_SUB)
+                && ninput == 2
+                && in0.is_some()
+                && in0 == in1
+            {
+                zero_idiom = true;
+                break;
+            }
             if (eval_type & (pf::binary | pf::ternary)) != 0 {
                 if ninput > 1 {
                     let i0 = match in0 {
@@ -4766,11 +4777,12 @@ impl Funcdata {
                     .map(|o| o.get_addr().get_offset())
             );
         }
-        if !self
-            .vbank()
-            .get(cur_vn)
-            .map(|v| v.is_constant())
-            .unwrap_or(false)
+        if !zero_idiom
+            && !self
+                .vbank()
+                .get(cur_vn)
+                .map(|v| v.is_constant())
+                .unwrap_or(false)
         {
             return;
         }

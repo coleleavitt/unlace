@@ -6,13 +6,14 @@
 # zeroed through `xor eax,eax`, `fill(a, b, &s, &obj)`, then
 # `switch (s.f4 - 2)` through a byte index table and a jump table.
 #
-# Jump tables are recovered on a partial clone of the function. That clone
-# never got its local window (the Funcdata ctor's resetLocalWindow runs before
-# the default prototype model is attached), so no stack location was in scope,
-# every one was marked unmapped-unaliased, RuleIndirectCollapse dropped the
-# INDIRECT the call puts on the field, and the index folded to the pre-call 0:
-# "Switch with 1 destination removed ... 5 cases all go to same destination",
-# and the cases vanished. Ghidra 12.1.4 recovers the switch.
+# Jump tables are recovered on a partial clone of the function. Two things let
+# the clone fold the index: it never got its local window (#918), and its
+# switch-path protection stopped at the `xor eax,eax` that zeroes the struct,
+# so with the struct's address unseen there (the calls have no inputs yet)
+# RuleIndirectCollapse dropped the INDIRECT the call puts on the field and the
+# index folded to the pre-call 0: "Switch with 1 destination removed ... 5
+# cases all go to same destination", and the cases vanished. Ghidra 12.1.4
+# recovers the switch.
 #
 # Source of the bytes (gcc -m32 -c, ld -Ttext=0x10001000
 # --section-start=.rodata=0x10002000 -Tdata=0x10003000):

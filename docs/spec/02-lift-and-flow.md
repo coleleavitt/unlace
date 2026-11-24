@@ -2664,6 +2664,19 @@ shape is still reachable. Sharing is worth about 16% of the wall time of a
 two-table function, and on the interleaved shape `unrolledguard` was written for
 it recovers the same tables without any tolerance rule, because the shared
 partial's edge collection runs once while every sibling table is still empty.
+The protection upstream's `ActionRestructureVarnode` gives a switch path
+(`funcdata_block.rs (Funcdata::protect_switch_path_indirects)`, C++
+`protectSwitchPathIndirects`) walks back from the BRANCHIND through ops with one
+non-constant input and marks the earliest INDIRECT `noIndirectCollapse` when the
+walk ends at a constant. (kuna) An `INT_XOR` or `INT_SUB` of a varnode with
+itself also ends the walk as a constant: MSVC zeroes a struct through
+`xor eax,eax`, and in the partial the alias pass sees neither the struct's
+address nor its pushed copy (the calls have no inputs yet), so the struct's
+fields are marked unaliased and every call's INDIRECT on them would collapse
+before a rule folds the `xor`. With the earliest INDIRECT kept, a switch index
+read from such a field after a call stays an unknown value instead of folding
+to the value stored before the call (#871; Ghidra reaches the same state by
+folding the `xor` before its second restructure pass).
 (kuna) Under a per-function budget (`00-overview.md`, *The watchdog*) the loop is bounded in
 time as well: `flow.rs (FlowInfo::recover_jump_tables)` asks the drive's
 deadline before each table and after its attempt, and `jumptable.rs

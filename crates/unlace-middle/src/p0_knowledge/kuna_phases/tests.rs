@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_182_transform_111_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (71, 188, 112));
+    assert_eq!((core, transform, analysis), (71, 188, 113));
 }
 
 #[test]

@@ -4696,6 +4696,10 @@ precomputed oracle of simplest forms indexed by I/O fingerprint), products of
 two non-constant terms in a nonlinear tree, and more than three leaves there.
 
 
+### Wide linear MBA (`option mbawide`, default off)
+
+With `mba on`, a linear MBA over more than six leaves is simplified when `mbawide` is also on, up to sixteen leaves (`MAX_WIDE_LEAVES` in `crates/unlace-bandb-base/src/p3_dataflow/mba.rs`). The reading is the one `mba` uses: the tree is evaluated on the `2^n` points where each leaf is 0 or 1, Möbius-inverted into conjunction-basis coefficients, and rebuilt from the groups of leaves that share a term (`simplify_wide`). The coefficient pass costs `2^n` evaluations of the tree, so its cost is bounded by the 48-node tree limit times `2^16`. A group of more than six leaves keeps its conjunction terms, because its truth table no longer fits the six-leaf table code; that form is exact. The same-terms check over bitwise tables is skipped above six leaves, and the strict op-count decrease with the 64 random full-width evaluations bounds the rewrites. The theorem behind the linear reading (two linear MBAs equal on the 0/1 points are equal at every width) does not depend on the leaf count, so no proof is added. Nonlinear and polynomial trees, and the `egraph` option, stay at six leaves.
+
 ## (unlace) Equality saturation over MBA trees — `option egraph`, default off
 
 **`crates/unlace-bandb-base/src/p3_dataflow/egraph.rs (RuleEgraphSimplify)`,

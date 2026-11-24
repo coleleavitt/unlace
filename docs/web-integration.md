@@ -450,7 +450,7 @@ the `specs-small.json` preload bundle. Serve `dist/` with any static file server
                                            live sessions (loads the wasm; §4.2)
 /assets/              css/site.css · fonts/ · img/ · js/highlight-c.js · js/fnfilter.js
 /compare-samples.js   the compare section's data (samples + rival outputs)
-/CNAME                kuna.noelo.org — the custom domain, copied into the bundle
+/CNAME                coleleavitt.github.io/unlace — the custom domain, copied into the bundle
                       (decompile.run gets its own; see *Hosting on GitHub Pages*)
 /unlace-web.js /unlace-worker.js /unlace-worker-client.js /zip.js
 /unlace_wasm.wasm /specs/ /specs-small.json /vendor/
@@ -513,13 +513,13 @@ domain:
 - **`decompile.run`** serves the decompiler at its root. The split moves `decompile/`, the
   glue, the Worker, the shim, the wasm and the specs into `dist-run/`, copies `assets/`,
   and derives `/index.html` from `decompile/index.html` by rewriting its relative
-  references (and pointing its *Unlace home* links at `https://kuna.noelo.org/`); it fails
+  references (and pointing its *Unlace home* links at `https://coleleavitt.github.io/unlace/`); it fails
   if any other `../` reference appears. The modules stay in `/decompile/`, so their own
   `../` imports are unchanged. The workflow force-pushes `dist-run/` as one commit to
   `Noelo-Lab/decompile.run` with the `DECOMPILE_RUN_DEPLOY_KEY` deploy key, and that
   repository's Pages serves its `main` branch. Its `README.md` and `CNAME` come from
   `integrations/web/decompile-run/`.
-- **`kuna.noelo.org`** is what remains of `dist/`, deployed via `actions/deploy-pages`:
+- **`coleleavitt.github.io/unlace`** is what remains of `dist/`, deployed via `actions/deploy-pages`:
   the landing page and `/dev-viz/`, whose decompiler links now name
   `https://decompile.run/`, and a `/decompile/index.html` replaced by
   `decompile-run/redirect.html`, which forwards with `location.search` and `location.hash`

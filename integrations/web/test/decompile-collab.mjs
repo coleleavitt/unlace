@@ -331,7 +331,7 @@ checks.push('2000 random rounds over the full key set (incl. the mode) converge 
   assert.equal((await decodeCode(invite, 'reply')).ok, false, 'an invite is not a reply');
   const reply = await encodeCode('reply', { id: 'abcdefghij', n: 'Ben', d });
   assert.equal((await decodeCode(reply, 'reply')).n, 'Ben');
-  assert.equal(codeFrom(`https://kuna.noelo.org/decompile/#join=${invite}`, 'invite'), invite);
+  assert.equal(codeFrom(`https://coleleavitt.github.io/unlace/decompile/#join=${invite}`, 'invite'), invite);
   assert.equal(codeFrom(`  https://x/decompile/#reply=${reply}\n`, 'reply'), reply);
   assert.equal(codeFrom('hello there', 'reply'), null);
   await assert.rejects(() => encodeCode('invite', { id: 'abcdefghij', n: 'Ana\n', f: 'x', z: 1, d }), 'the page never makes a bad code');

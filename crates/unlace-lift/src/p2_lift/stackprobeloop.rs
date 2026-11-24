@@ -1,8 +1,8 @@
-//! Port of `decompiler/cpp/kuna_stackprobeloop.{cc,hh}` — resolve a gcc
+//! Port of `decompiler/cpp/unlace_stackprobeloop.{cc,hh}` — resolve a gcc
 //! stack-probe loop's stack-pointer `MULTIEQUAL` to a constant offset
 //! (GH-8017/6858, an S2 "stack-pointer normalization" sub-stage).
 //!
-//! # The shape (kuna_stackprobeloop.hh)
+//! # The shape (unlace_stackprobeloop.hh)
 //!
 //! gcc's stack-clash / `-fstack-check` prologue probes a large frame one page at
 //! a time with a loop:
@@ -95,7 +95,7 @@ impl Rule for RuleStackProbeLoop {
         }))
     }
 
-    /// C++ `RuleStackProbeLoop::applyOp` (`kuna_stackprobeloop.cc:63`).
+    /// C++ `RuleStackProbeLoop::applyOp` (`unlace_stackprobeloop.cc:63`).
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // one entry edge, one back edge
         if op_num_input(data, op) != 2 {
@@ -248,7 +248,7 @@ fn find_spacebase_input(
 }
 
 // ---------------------------------------------------------------------------
-// skipCopies / stackRelative (kuna_stackprobeloop.cc static helpers).
+// skipCopies / stackRelative (unlace_stackprobeloop.cc static helpers).
 // ---------------------------------------------------------------------------
 
 /// C++ static `skipCopies` — trace a Varnode back through `CPUI_COPY` ops to its

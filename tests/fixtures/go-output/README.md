@@ -3,14 +3,14 @@
 `output.c` exercises Go emission from a known C ABI, including width conversions,
 short-circuit calls, bottom-tested loops, shared switch cases, pointer indexing,
 bit-preserving float conversions and readonly text. `output-c` was built with
-GCC 11.4.0 on x86-64 Linux:
+GCC 15.3.0 on x86-64 Linux:
 
 ```sh
 gcc -O2 -g -fno-pie -no-pie -fno-inline -fno-stack-protector \
     -o output-c output.c
 ```
 
-SHA256: `2ab52230e3235ef5517798c672c476e136122a11526b0d4a5560f04fb4bfa8d4`.
+SHA256: `3e30bcc53c4f769ce2ad9c5fa5c382875a3ed6971f95335bdd8a437ef631b3d9`.
 
 `check.go` compiles with the untouched recovered function bodies and checks their
 values and side effects. The callback check supplies its prototype through

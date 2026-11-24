@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x32148=main
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid sparc:BE:32:default:default
 languageid sparc:BE:32:default
 slafile SparcV9_32.sla
@@ -19,7 +19,7 @@ space fspec index=5 size=8 wordsize=1 bigendian=0
 space iop index=6 size=8 wordsize=1 bigendian=0
 space join index=7 size=4 wordsize=1 bigendian=1
 space stack index=8 size=4 wordsize=1 bigendian=1
-# golden lift ram:0x32148 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x32148 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn ram:0x32148 4
   INT_ADD (unique,0x2d900,4) (register,0x38,4) (const,0xffffff48,4)
   CBRANCH - (const,0x59,4) (register,0x5020,1)

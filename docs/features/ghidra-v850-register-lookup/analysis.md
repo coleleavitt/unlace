@@ -1,6 +1,6 @@
 # Ghidra-safe V850 register lookup
 
-Issue: [#428](https://github.com/Noelo-Lab/kuna/issues/428)
+Issue: [#428](upstream issue #428)
 
 ## Failure
 

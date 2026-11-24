@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): code:0x0=FUN_0
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid avr8:LE:16:default:default
 languageid avr8:LE:16:default
 slafile avr8.sla
@@ -23,7 +23,7 @@ space join index=9 size=4 wordsize=1 bigendian=0
 space stack index=10 size=2 wordsize=1 bigendian=0
 context phase=0
 context useSkipCond=0
-# golden lift code:0x0 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift code:0x0 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn code:0x0 2
   BRANCH - (code,0x102e,2)
 insn code:0x2 2

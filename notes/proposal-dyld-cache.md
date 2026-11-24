@@ -182,7 +182,7 @@ two-pass stage test.
   `load file`. A caller's `bl` to the island renders `func_0x...` (the bug).
   With `on`, it renders `callee_add(...)` (the fix). A slid data pointer and a
   `.symbols` local name are checked in both passes.
-- **Real caches** (not committed, under `kuna-data/`): iOS 16.4.1 arm64e (v3,
+- **Real caches** (not committed, under `unlace-data/`): iOS 16.4.1 arm64e (v3,
   44 sub-caches) and iOS 14.8 arm64 (v2, single file). List images. Decompile
   functions from `libobjc.A.dylib`, `CoreFoundation`, and `UIKitCore`, and check
   that cross-image calls carry their names. Compare against the per-image

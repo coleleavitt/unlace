@@ -9,8 +9,8 @@
 //!   - V850 indirect-jmp: input in a non-register space ordering vs. PC.
 //!   - inferfuncentry: cross-space rampoint/entry equality (Address total order).
 //!
-//! C++ oracle: decompiler/cpp/kuna_sparcstructret.cc, v850indbranch.cc,
-//! kuna_inferfuncentry.cc (at the recorded cpp blob).
+//! C++ oracle: decompiler/cpp/unlace_sparcstructret.cc, v850indbranch.cc,
+//! unlace_inferfuncentry.cc (at the recorded cpp blob).
 
 use std::rc::Rc;
 

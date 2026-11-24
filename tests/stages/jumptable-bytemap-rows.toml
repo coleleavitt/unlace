@@ -1,5 +1,5 @@
 # A two-stage jump table whose byte map directly follows its table of
-# 4-byte offsets, in memory that is not read-only (Noelo-Lab/kuna#1669).
+# 4-byte offsets, in memory that is not read-only (upstream #1669).
 #
 # Source: crates/unlace-decomp/tests/fixtures/selector_domain.S,
 # `gcc -c -DINPUT_COUNT=300`, `.text` loaded writable at 0x401000. The

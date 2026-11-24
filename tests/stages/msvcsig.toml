@@ -1,6 +1,6 @@
 # MSVC-mangled PE imports get a prototype.
 #
-# Issue: GH Noelo-Lab/kuna#990. A 32-bit MSVC image calls C++ imports through
+# Issue: GH upstream #990. A 32-bit MSVC image calls C++ imports through
 # its IAT. The demangled-signature pass read only defined symbols, so each
 # import was named from its mangled name and had no prototype: a `__thiscall`
 # call lost the `this` MSVC passes in ECX, and a callee with no declared

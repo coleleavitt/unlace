@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_loweredswitch.{cc,hh}` — lowered
+//! Port of `decompiler/cpp/unlace_loweredswitch.{cc,hh}` — lowered
 //! comparison-cascade -> switch recovery (port of angr's
 //! `LoweredSwitchSimplifier`; Basque et al., USENIX Security 2024 "SAILR", S2).
 //!
@@ -155,7 +155,7 @@ pub struct UnlaceLsKey {
     pub offset: uintb,
 }
 
-/// The side-table key for `fd` — C++ `keyForFunc` (`kuna_loweredswitch.cc:73`).
+/// The side-table key for `fd` — C++ `keyForFunc` (`unlace_loweredswitch.cc:73`).
 pub fn key_for_func(fd: &Funcdata) -> UnlaceLsKey {
     let entry = fd.get_address();
     let space_index = match entry.get_space() {

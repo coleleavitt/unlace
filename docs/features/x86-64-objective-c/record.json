@@ -4,7 +4,7 @@
   "track": "quality",
   "scope": "small",
   "branch": "feat/re-x86-64-objective-c-captain",
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/571",
+  "pr": "upstream PR #571",
   "summary": "Objective-C method parsing now treats the low IMP bit as Thumb state only for object::Architecture::Arm. Odd x86-64 method addresses survive both absolute and relative method-list decoding, while 32-bit ARM IMPs remain normalized to their even instruction address.",
   "decisions": [
     {

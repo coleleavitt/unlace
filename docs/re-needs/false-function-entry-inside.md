@@ -17,7 +17,7 @@ covered_by_option: pdatainterior
 touches: [crates/unlace-analysis/src/analyzers/entry/pdatainterior.rs]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/557
+pr: upstream PR #557
 closed_in_round: 12
 closing_pr: "557"
 reject_reason: null

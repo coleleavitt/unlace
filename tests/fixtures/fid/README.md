@@ -9,11 +9,11 @@ The fingerprint fixtures for unlace's FID (Function-ID) port — a tiny, hermeti
 
 | File | What |
 |---|---|
-| `lib.c` | Three distinctive, self-contained functions (`kuna_crc32`, `kuna_strlen`, `kuna_memset`), each ≥ 4 code units, **no external libc call** — so each body is fully self-contained and its FID full hash is stable across link. `kuna_crc32` is the star: a CRC-32 loop with the magic `0xEDB88320` immediate. |
+| `lib.c` | Three distinctive, self-contained functions (`unlace_crc32`, `unlace_strlen`, `unlace_memset`), each ≥ 4 code units, **no external libc call** — so each body is fully self-contained and its FID full hash is stable across link. `unlace_crc32` is the star: a CRC-32 loop with the magic `0xEDB88320` immediate. |
 | `main.c` | Calls each `unlace_*` (so the linker retains them in the stripped `prog`). |
 | `lib.o` | **Vendored.** The compiled `lib.c` (see *Build* below). |
 | `lib.fid` | **Vendored.** The generated fingerprint DB — the committed output of `unlace fid build` over `lib.o`. |
-| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `kuna_crc32` by full-hash match against `lib.fid`. The pinned VMA of `kuna_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `UNLACE_CRC32_VMA`). |
+| `prog` | **Vendored.** The statically-linked, `-no-pie`, **stripped** x86-64 ELF (`lib.o` + `main.o`), the FID PR4 re-identification target. No symbol table; the FID e2e (`unlace-console/tests/verify_fid.rs`) renames its `sub_<addr>` placeholder back to `unlace_crc32` by full-hash match against `lib.fid`. The pinned VMA of `unlace_crc32` in `prog` is **`0x4017c0`** (`-static -no-pie` keeps it stable; recorded by the e2e as `UNLACE_CRC32_VMA`). |
 
 The same `lib.o`/`lib.c`/`lib.fid` are mirrored into
 `crates/unlace-analysis/tests/fixtures/` as `fid_lib_x86_64.{o,c,fid}`
@@ -41,15 +41,15 @@ cp lib.{o,c,fid} ../../../crates/unlace-analysis/tests/fixtures/
 
 # 4. (PR4) build the stripped re-identification target `prog`.
 #    `-static -no-pie` pins the addresses; `strip --strip-all` removes every
-#    symbol, so the FID e2e must recover `kuna_crc32` purely by fingerprint.
+#    symbol, so the FID e2e must recover `unlace_crc32` purely by fingerprint.
 gcc -O2 -c lib.c main.c                       # plain -O2 (the prog/lib build need
                                               # not match — the FULL hash is
                                               # operand-masked / position-independent)
 gcc lib.o main.o -o prog -static -no-pie
-strip --strip-all prog                        # kuna_crc32 lands at VMA 0x4017c0
+strip --strip-all prog                        # unlace_crc32 lands at VMA 0x4017c0
 ```
 
-After `strip --strip-all`, `kuna_crc32` is at **`0x4017c0`** (verify with
+After `strip --strip-all`, `unlace_crc32` is at **`0x4017c0`** (verify with
 `objdump -d prog --start-address=0x4017c0` before the strip, or `nm` the un-stripped
 `prog`). The FID e2e (`unlace-console/tests/verify_fid.rs`) hardcodes that VMA — bump
 `UNLACE_CRC32_VMA` there if a toolchain change moves it. Note step 4 overwrites the
@@ -67,9 +67,9 @@ whenever the FID DB `version` bumps or the hasher/skipper changes.
 
 | function | full_hash | specific_hash | code_unit_size | specific_addl |
 |---|---|---|---|---|
-| `kuna_crc32`  | `0x2603a009d9e0776f` | `0xc05eead857c9304a` | 25 | 30 |
-| `kuna_strlen` | `0x03a308fb37c24cf0` | `0xea7136fa1ab9ce93` | 12 | 22 |
-| `kuna_memset` | `0x67c5bd4207a978b3` | `0xe74cd6a00ca603e6` | 11 | 31 |
+| `unlace_crc32`  | `0x2603a009d9e0776f` | `0xc05eead857c9304a` | 25 | 30 |
+| `unlace_strlen` | `0x03a308fb37c24cf0` | `0xea7136fa1ab9ce93` | 12 | 22 |
+| `unlace_memset` | `0x67c5bd4207a978b3` | `0xe74cd6a00ca603e6` | 11 | 31 |
 
 (`verify_fid_build.rs` asserts a fresh in-process generate reproduces these and
 that they round-trip through the `.fid` format.)

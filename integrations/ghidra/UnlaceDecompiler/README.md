@@ -21,7 +21,7 @@ latest stable release (currently **12.1.2**). The swap relies on the exact shape
 
 Every unlace release ships a ready-to-install extension zip —
 `unlace-v<ver>-UnlaceDecompiler-ghidra_<ghidra-version>.zip` on the
-[releases tab](https://github.com/Noelo-Lab/kuna/releases) — with prebuilt `unlace_ghidra`
+[releases tab](https://github.com/coleleavitt/unlace/releases) — with prebuilt `unlace_ghidra`
 backends for **all platforms** already inside: Linux x86_64 and arm64, macOS x86_64 and
 arm64, Windows x86_64 (`unlace_ghidra.exe`). Ghidra picks the right one at runtime, and
 its built-in arm→x86 fallbacks cover the rest (Windows-on-ARM runs the x86_64 binary

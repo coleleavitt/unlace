@@ -463,7 +463,7 @@ fn auxiliary_collection_without_its_boot_collection_stays_unresolved() {
 
     let mut other = fixture("linked/BootKernelExtensions.kc");
     for at in (0..other.len() - 16)
-        .filter(|&at| other[at..at + 8] == *b"kunaboot")
+        .filter(|&at| other[at..at + 8] == *b"unlacebt")
         .collect::<Vec<_>>()
     {
         other[at] = b'K';

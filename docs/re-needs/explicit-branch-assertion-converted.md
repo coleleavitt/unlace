@@ -17,7 +17,7 @@ covered_by_option: tailcalljump
 touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/623
+pr: upstream PR #623
 closed_in_round: 12
 closing_pr: "623"
 reject_reason: null

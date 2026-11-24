@@ -1,4 +1,4 @@
-# Noelo-Lab/kuna#1629: RH850 (V850E3v5) instructions decoded as bad
+# upstream #1629: RH850 (V850E3v5) instructions decoded as bad
 # instruction data.
 #
 # The V850 SLEIGH spec had the V850E2M instruction set only, so a function

@@ -1,5 +1,5 @@
 # GH-840 (unlace): "A variadic double made from an integer's bits prints as
-# the integer".  https://github.com/Noelo-Lab/kuna/issues/840
+# the integer".  upstream issue #840
 #
 # Source (each call, jump or branch aimed at a `ret` standing in for pr at 0x100f00):
 #   int pr(const char *f, ...);

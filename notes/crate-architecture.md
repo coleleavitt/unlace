@@ -1,9 +1,9 @@
 # unlace-decomp crate architecture: evidence and proposal
 
 Sections 1-7 are the original research (no code changed, no builds run); section 8 records what
-landed. Upstream tree: `kuna-wt-up` at `2b96e74e8`.
+landed. Upstream tree: `unlace-wt-up` at `2b96e74e8`.
 LSP checks ran on the main checkout (branch `all`), which has the same module layout. All unlace line numbers
-below are upstream (`kuna-wt-up`) lines unless marked `[all]`.
+below are upstream (`unlace-wt-up`) lines unless marked `[all]`.
 
 ## 1. What the cycle really is (measured)
 
@@ -318,7 +318,7 @@ results). Each CGU is large because 400k lines are partitioned into a bounded nu
      `make check-spec`, the catalog counts and `docs/options.md` keep their paths.
    - Every PR runs the parity gate plus a runtime A/B.
 10. **Later, only if measurements justify it:** split bandb into unlace-calls (P4), unlace-types (P5) and
-    kuna-dataflow/vars (P3+P6) through hooks. Lift heritage/merge/jumptable algorithms out of middle.
+    unlace-dataflow/vars (P3+P6) through hooks. Lift heritage/merge/jumptable algorithms out of middle.
 
 **Cheap and valuable now:** steps 0, 1, 2, 4. Step 3 if relinks dominate. Step 5 also helps today without any
 split: an option PR no longer edits the three most conflicted files.

@@ -2,7 +2,7 @@
 
 Per-instruction raw p-code lifts emitted by the C++ decompiler's
 `golden lift` / `golden liftctx` console commands
-(`decompiler/cpp/kuna_goldengen.cc`), one fixture per pinned corpus test.
+(`decompiler/cpp/unlace_goldengen.cc`), one fixture per pinned corpus test.
 The Rust SLEIGH runtime must reproduce each fixture body byte-for-byte:
 decode the same bytes under the same context and emit the same ops.
 
@@ -97,7 +97,7 @@ verbatim console captures:
      order.  Varnodes render as `(space,0x<offset>,size)`; a missing output
      renders as `-`.  Opcode names are the canonical enum names
      (`get_opname`, with the `ZPULL`/`SPULL` staleness fix of
-     `kuna_goldengen.cc`).
+     `unlace_goldengen.cc`).
    - Spaceid pointer constants -- input 0 of `LOAD`/`STORE` -- print the
      space NAME instead of a raw offset (`(const,ram,8)`): in C++ that
      offset is the heap address of the `AddrSpace` object, the only

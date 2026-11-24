@@ -7,7 +7,7 @@
     "scope": "Rust emitter correctness found during native validation; no claim that an upstream test specifically asserts this null spelling."
   },
   "parent_commit": "8db141bf41914de30128b3c8a067b912604ab281",
-  "dependency_pr": "https://github.com/Noelo-Lab/kuna/pull/1451",
+  "dependency_pr": "upstream PR #1451",
   "binary_sha256": {
     "parent": "f53f2a062774cfb1158999e0ead7672eb144d79576eae601043140ccff7e25d2",
     "candidate": "d342d857b1b2340c06f278d28b223e89447cceacb09c01738d9e5789ccfe34a2"

@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): RAM:0x0
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid HCS12:BE:24:default:default
 languageid HCS12:BE:24:default
 slafile HCS12X.sla
@@ -23,7 +23,7 @@ context Prefix18=0
 context PrefixHCS12X=0
 context UseGPAGE=0
 context XGATE=0
-# golden lift RAM:0x0 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift RAM:0x0 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn RAM:0x0 2
 insn RAM:0x2 2
 insn RAM:0x4 2

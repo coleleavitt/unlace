@@ -4,7 +4,7 @@
 //! The hunt list flagged these as the most fragile spots for this item:
 //!
 //!   * **Overflow guards / signedness (compareform).** `restoreLessequal`
-//!     (`decompiler/cpp/kuna_compareform.cc:42-52`) is the exact inverse of
+//!     (`decompiler/cpp/unlace_compareform.cc:42-52`) is the exact inverse of
 //!     `Funcdata::replaceLessequal` and mirrors its signed/unsigned overflow
 //!     guards in the *inverse* direction (`calc_int_min`/`calc_int_max`/
 //!     `calc_uint_max`).  A boundary error here silently rewrites a comparison
@@ -17,8 +17,8 @@
 //!     `return_single && newparam.size() > 2`) has its sole boundary at size 2
 //!     vs 3.  Exhaustively pinned.
 //!   * **Comparator totality / exact-token parse.** `OptionReturnPair::apply`
-//!     (`kuna_returnpair.cc:20-25`) and `OptionMemsetRecover::apply`
-//!     (`kuna_memsetsequence.cc:211-217`) compare `p1` by *exact* string
+//!     (`unlace_returnpair.cc:20-25`) and `OptionMemsetRecover::apply`
+//!     (`unlace_memsetsequence.cc:211-217`) compare `p1` by *exact* string
 //!     (`p1 == "single"` / `onOrOff`); no trimming, no case fold.  Adversarial
 //!     near-miss tokens confirm the port did not "helpfully" normalize.
 //!
@@ -190,7 +190,7 @@ fn mk_cmp_with_const(
 // This is the closest-to-the-edge case that must still round trip; an
 // off-by-one in either guard (e.g. comparing against int_max instead of
 // int_min on the restore side) would wrongly decline it.
-// Oracle: kuna_compareform.cc:42-46 ; funcdata_op.cc:1049-1053.
+// Oracle: unlace_compareform.cc:42-46 ; funcdata_op.cc:1049-1053.
 // ===========================================================================
 #[test]
 fn t1_signed_roundtrip_at_intmax_boundary_4_and_8() {
@@ -241,7 +241,7 @@ fn t1_signed_roundtrip_at_intmax_boundary_4_and_8() {
 //   (b) signed   right-constant == INT_MIN(diff=-1, val==int_min)  -> decline
 // Both must leave the op untouched AND keep the provenance mark (C++ only
 // clears on a successful restore).
-// Oracle: kuna_compareform.cc:44 (signed int_min), :49 (unsigned 0).
+// Oracle: unlace_compareform.cc:44 (signed int_min), :49 (unsigned 0).
 // ===========================================================================
 #[test]
 fn t2_restore_guards_decline_and_keep_mark() {
@@ -306,7 +306,7 @@ fn t2_restore_guards_decline_and_keep_mark() {
 // (return_single=false) never truncates regardless of size.
 // Parse: exact-string match; near-miss tokens are errors, not silently
 // accepted (no case fold, no trim).
-// Oracle: unlace_returnpair (gate predicate) ; kuna_returnpair.cc:20-25.
+// Oracle: unlace_returnpair (gate predicate) ; unlace_returnpair.cc:20-25.
 // ===========================================================================
 #[test]
 fn t3_returnpair_gate_boundary_and_exact_token_parse() {
@@ -347,7 +347,7 @@ fn t3_returnpair_gate_boundary_and_exact_token_parse() {
     }
 
     // memsetrecover parse: onOrOff semantics — "" and "on" -> On, "off" -> Off,
-    // anything else -> error (no case fold).  Oracle: kuna_memsetsequence.cc:214.
+    // anything else -> error (no case fold).  Oracle: unlace_memsetsequence.cc:214.
     assert_eq!(
         parse_memset_recover_form("on").unwrap().0,
         MemsetRecoverForm::On
@@ -376,7 +376,7 @@ fn t3_returnpair_gate_boundary_and_exact_token_parse() {
 // ---------------------------------------------------------------------------
 // R2-T1 — compareform option-parse (the F1 fix) through the PUBLIC API.
 //
-// `OptionCompareForm::apply` (kuna_compareform.cc:85-95):
+// `OptionCompareForm::apply` (unlace_compareform.cc:85-95):
 //   if (p1 == "original")       glb->present_lessequal = true;
 //   else if (p1 == "canonical") glb->present_lessequal = false;
 //   else throw ParseError("Must specify compareform as 'canonical' or 'original'");
@@ -483,7 +483,7 @@ fn r2_t2_unsigned_left_const_roundtrip() {
 // (b) An INT_LESS that was NEVER marked (no canonicalization provenance) is left
 //     untouched — the mark is the sole trigger (`if (!op->isCanonicalLessequal())
 //     continue;`), so an organically-`<` comparison is never rewritten.
-// Oracle: kuna_compareform.cc:72-78 (the opcode + mark guards), :57 (clear).
+// Oracle: unlace_compareform.cc:72-78 (the opcode + mark guards), :57 (clear).
 // ===========================================================================
 #[test]
 fn r2_t3_idempotent_and_mark_gated() {

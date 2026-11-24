@@ -1,6 +1,6 @@
 # GH-876 (unlace): "x86-64: a declared int passed to a variadic call in its
 # own register prints as CONCAT44 of an uninitialized upper half"
-# https://github.com/Noelo-Lab/kuna/issues/876
+# upstream issue #876
 #
 # Source:
 #   int pr(const char *f, ...);

@@ -1,4 +1,4 @@
-# golden float vectors (kuna_goldengen.cc; see tests/golden/vectors/README.md)
+# golden float vectors (unlace_goldengen.cc; see tests/golden/vectors/README.md)
 # dec,size,enc,class,decimal | <unop>,size,a,res | <binop>,size,a,b,res
 # trunc,size,sizeout,a,res | int2float,sizein,size,a,res | float2float,sizein,sizeout,a,res
 dec,4,0x0,zero,0

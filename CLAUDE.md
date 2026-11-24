@@ -11,7 +11,7 @@ per-run flippable options — **the LLM control surface is the product**. It beg
 port of Ghidra's decompiler (Apache-2.0; see `LICENSE`/`NOTICE`, origin in `docs/history.md`)
 and has diverged on its own defaults.
 
-unlace (`coleleavitt/unlace`) is a fork of [Noelo-Lab/kuna](https://github.com/Noelo-Lab/kuna).
+unlace (`coleleavitt/unlace`) is a fork of [coleleavitt/unlace](https://github.com/coleleavitt/unlace).
 It adds **Apple support** ported from Cole's earlier research decompiler (the old unlace code,
 archived on branch `master` and tag `unlace-v1-final`; do not touch either) plus fixes from an
 IDA 9.5 comparison. **Preserve** upstream's phase model, option catalog, parity gates, and speed.
@@ -54,8 +54,8 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 ## Current State
 - `main` (the default branch) is the combined build: upstream unlace merged in plus the
   IDA-informed Apple tracks. It continues the unlace fork's `all` branch. Merge `upstream/main`
-  (Noelo-Lab/kuna) into it; never rebase it.
-- Anything sent to Noelo-Lab/kuna comes from an upstream-clean branch cut from `upstream/main`,
+  (coleleavitt/unlace) into it; never rebase it.
+- Anything sent to coleleavitt/unlace comes from an upstream-clean branch cut from `upstream/main`,
   never from `main`.
 - Live branch/PR state, open decisions, and session handoffs live in **`MEMORY.md`**; the
   build recipe and worktree layout live in **`docs/dev-setup.md`**. Read both before deep work.
@@ -90,7 +90,7 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
 - **Edition 2024 and rustfmt**: the workspace is edition 2024; run `cargo fmt --all`
   (2024 style, `rustfmt.toml`) before committing. CI and the `fast` gate check it.
 - **IDA/Hex-Rays material is allowed** (since 2026-11-23): unlace has diverged from upstream unlace
-  and sends nothing to Noelo-Lab/kuna, so IDA-informed features, readers for IDA formats (TIL,
+  and sends nothing to coleleavitt/unlace, so IDA-informed features, readers for IDA formats (TIL,
   `.sig`/FLIRT, Lumina), IDA comparison output and IDA-derived notes may be committed.
 - **Comments are rare**: file header or function header only; inline only for a genuinely
   confusing hack. New functionality → new modules matching surrounding conventions (ported

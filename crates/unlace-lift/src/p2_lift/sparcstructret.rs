@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_sparcstructret.{cc,hh}` — SPARC struct-return
+//! Port of `decompiler/cpp/unlace_sparcstructret.{cc,hh}` — SPARC struct-return
 //! `unimp N` post-call fall-through (unlace GH-6882, S2 flow-classification).
 //!
 //! The SPARC ABI for a struct-returning function plants an `unimp <structsize>`
@@ -26,7 +26,7 @@
 //!
 //!   - the **gate** `glb->sparc_struct_return` (default \b false, shipped
 //!     `option sparcstructret off` — `architecture.cc:1434`,
-//!     `kuna_stages.cc` settableTable): modelled by [`SparcStructRetOption`].
+//!     `unlace_stages.cc` settableTable): modelled by [`SparcStructRetOption`].
 //!   - the **user-op name resolution** `glb->userops.getOp((uint4)id)->getName()`
 //!     (the `UserOpManage` table, W4): supplied as a closure
 //!     `userop_name: Fn(u32) -> Option<&str>` (`None` == the C++ null

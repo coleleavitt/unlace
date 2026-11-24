@@ -109,7 +109,7 @@ pub trait DatabaseArch {
     fn min_funcsymbol_size(&self) -> int4;
     /// C++ (unlace) `glb->name_style_angr` (option `namestyle`) — is angr-style naming active?
     /// STUB(W4-p0pack): namestyle.  Default angr (per the `settableTable`
-    /// registration in `kuna_stages.cc`); the architecture porter wires this to
+    /// registration in `unlace_stages.cc`); the architecture porter wires this to
     /// the `option namestyle` toggle.
     fn name_style_angr(&self) -> bool;
     /// C++ `Datatype::printNameBase` (`type.hh:286`): the (recursive) data-type
@@ -121,7 +121,7 @@ pub trait DatabaseArch {
 }
 
 // ===========================================================================
-// Unlace angr-style naming (DIV-5; port of decompiler/cpp/kuna_naming.cc).
+// Unlace angr-style naming (DIV-5; port of decompiler/cpp/unlace_naming.cc).
 // ===========================================================================
 //
 // This is a unlace-owned policy file in the C++ tree; its address-rendering

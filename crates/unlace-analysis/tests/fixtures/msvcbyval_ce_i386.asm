@@ -1,4 +1,4 @@
-; Counterexamples for `option msvcbyval` (GH Noelo-Lab/kuna#990 review): cleanups and
+; Counterexamples for `option msvcbyval` (GH upstream #990 review): cleanups and
 ; reservations that must NOT be read as the size of an MSVC __cdecl import's by-value
 ; class argument. Built like msvcbyval_i386.exe (arr.dll imports, classes with copy
 ; constructors so they pass in memory). Each function is a shape the sizing must either

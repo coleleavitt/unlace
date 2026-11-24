@@ -63,6 +63,6 @@
     "A hand-driven `decomp_dbg` session still has to say `function bounds <vma>` itself before `map prototype 0xVMA`; only the generated script declares the selection.",
     "docs/re-needs/index.json is deliberately NOT regenerated: `needs reindex` runs over the whole backlog and this worktree holds only the tracked need docs. The captain reindexes."
   ],
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/484",
+  "pr": "upstream PR #484",
   "rebase": "rebase --onto origin/main from the recorded base 9c4c4508 was a no-op (origin/main was still 9c4c4508); scripts.repipe.counters --fix reports 'no drift; nothing to fix' (158 settables, tiers 41/63/54, 249 corpus files, next ElementId 4151) and scripts.repipe.mergecheck reports 0 rejects / merge guards clean against origin/main. This PR adds no option and no stages XML, so it moves none of those counters itself."
 }

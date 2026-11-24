@@ -84,7 +84,7 @@ def _git_worktrees():
     # only THIS pipeline's worktrees (seams so a second pipeline reuses this module)
     wt_match = os.environ.get("UNLACE_PIPELINE_WORKTREE_MATCH", ".unlace-pipeline")
     br_match = os.environ.get("UNLACE_PIPELINE_BRANCH_MATCH", "feat/angr-")
-    return [t for t in trees if wt_match in t["path"] or "/kuna-wt-" in t["path"]
+    return [t for t in trees if wt_match in t["path"] or "/unlace-wt-" in t["path"]
             or (t.get("branch", "").startswith(br_match))]
 
 
@@ -93,7 +93,7 @@ def _open_prs():
     # sunset makes gh's GraphQL PR commands fail/misreport on this repo.
     try:
         out = subprocess.run(
-            ["gh", "api", "repos/Noelo-Lab/kuna/pulls?state=open&per_page=50",
+            ["gh", "api", "repos/coleleavitt/unlace/pulls?state=open&per_page=50",
              "--jq", "[.[] | {number, title, headRefName: .head.ref, url: .html_url}]"],
             capture_output=True, text=True, timeout=30,
         )

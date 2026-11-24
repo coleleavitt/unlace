@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x410024=printf ram:0x410030=populate ram:0x410040=test_gp
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid MIPS:BE:32:default:default
 languageid MIPS:BE:32:default
 slafile mips32be.sla
@@ -82,11 +82,11 @@ context ext_value_sa40=0
 context ext_value_saz=0
 context ext_value_select=0
 context ext_value_xreg=0
-# golden lift ram:0x410024 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x410024 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 lifterror dataunavail ram:0x410024 Bytes at 0x00410024 are not mapped
-# golden lift ram:0x410030 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x410030 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 lifterror dataunavail ram:0x410030 Bytes at 0x00410030 are not mapped
-# golden lift ram:0x410040 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x410040 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn ram:0x410040 4
   INT_LEFT (register,0x70,4) (const,0x41,4) (const,0x10,4)
 insn ram:0x410044 4

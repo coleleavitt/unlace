@@ -1,4 +1,4 @@
-# golden addrsort vectors (kuna_goldengen.cc; see tests/golden/vectors/README.md)
+# golden addrsort vectors (unlace_goldengen.cc; see tests/golden/vectors/README.md)
 # rows: spaceA,offA,spaceB,offB,less,equal,lessequal
 const,0x0,const,0x0,0,1,1
 const,0x0,const,0x1,1,0,1

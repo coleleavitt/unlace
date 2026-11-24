@@ -522,7 +522,7 @@ more than an invented feature.
 The loop above mines unlace's **losses**. The same results tree also answers the mirror
 question — *where does unlace already beat everyone?* — which is what stocks the landing
 page's compare section (`integrations/web/compare-samples.js`, rendered at
-[kuna.noelo.org](https://kuna.noelo.org) → *compare*). Ask an agent to **"find good unlace
+[coleleavitt.github.io/unlace](https://coleleavitt.github.io/unlace) → *compare*). Ask an agent to **"find good unlace
 examples"** and this is the procedure it runs.
 
 ```bash

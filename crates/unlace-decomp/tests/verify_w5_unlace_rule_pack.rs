@@ -8,16 +8,16 @@
 //! exercise:
 //!
 //!   - arraystride: SWAPPED SLOT INDEX on the sibling counter phi
-//!     (`kuna_arraystride.cc:118`  `if (ci != initIdx || cb != backIdx) continue;`)
+//!     (`unlace_arraystride.cc:118`  `if (ci != initIdx || cb != backIdx) continue;`)
 //!     and the COMMUTED back-edge add operand order (`a==out` vs `b==out`,
-//!     `kuna_arraystride.cc:70-71`).
+//!     `unlace_arraystride.cc:70-71`).
 //!   - addcarrychain: COMMUTED `INT_CARRY(b,a)` operands
-//!     (`kuna_addcarrychain.cc:56`) and the const-folded `INT_LESSEQUAL` carry
-//!     form (`kuna_addcarrychain.cc:59-72`).
+//!     (`unlace_addcarrychain.cc:56`) and the const-folded `INT_LESSEQUAL` carry
+//!     form (`unlace_addcarrychain.cc:59-72`).
 //!   - ovlesssimplify: the `mone` operand of the SLESS-hi limb must be exactly
-//!     -1 (`kuna_ovlesssimplify.cc:79  if (mone->getOffset()!=calc_mask(...))`).
+//!     -1 (`unlace_ovlesssimplify.cc:79  if (mone->getOffset()!=calc_mask(...))`).
 //!   - booleanmask: the byte-aligned early-out `if ((sa & 7) == 0) return 0;`
-//!     (`kuna_booleanmask.cc:36`) defers to RuleLeftRight even on an otherwise
+//!     (`unlace_booleanmask.cc:36`) defers to RuleLeftRight even on an otherwise
 //!     perfect match.
 //!
 //! Each assertion cites the C++ line it is derived from.
@@ -181,7 +181,7 @@ fn mk_induction_phi(
 fn w5_arraystride_swapped_sibling_edges_decline() {
     // accumulator phi:  init at slot 0, back at slot 1  (stride 0x10).
     // counter phi:      init at slot 1, back at slot 0  (step 1)  -> MISALIGNED.
-    // C++ kuna_arraystride.cc:118  `if (ci != initIdx || cb != backIdx) continue;`
+    // C++ unlace_arraystride.cc:118  `if (ci != initIdx || cb != backIdx) continue;`
     // -> no matching sibling -> rule declines (returns 0).
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
@@ -198,7 +198,7 @@ fn w5_arraystride_swapped_sibling_edges_decline() {
     assert_eq!(
         rule.apply_op(acc_phi, &mut fd),
         0,
-        "misaligned sibling edges must NOT fold (kuna_arraystride.cc:118)"
+        "misaligned sibling edges must NOT fold (unlace_arraystride.cc:118)"
     );
     // The phi survives unchanged and the reader still reads the accumulator.
     assert_eq!(
@@ -211,7 +211,7 @@ fn w5_arraystride_swapped_sibling_edges_decline() {
 #[test]
 fn w5_arraystride_commuted_back_edge_add_folds() {
     // Both phis use the COMMUTED add order `INT_ADD(step, self)` (self in slot 1).
-    // C++ kuna_arraystride.cc:71  `else if (b == out) { self = b; cst = a; }`
+    // C++ unlace_arraystride.cc:71  `else if (b == out) { self = b; cst = a; }`
     // must still recognize the induction shape and fold acc -> cnt*stride.
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
@@ -229,7 +229,7 @@ fn w5_arraystride_commuted_back_edge_add_folds() {
     assert_eq!(
         rule.apply_op(acc_phi, &mut fd),
         1,
-        "commuted add order INT_ADD(step,self) must still fold (kuna_arraystride.cc:71)"
+        "commuted add order INT_ADD(step,self) must still fold (unlace_arraystride.cc:71)"
     );
     // reader now reads INT_MULT(cnt, 0x10).
     let multout = fd.obank().get(reader).unwrap().get_in(0).unwrap();
@@ -281,7 +281,7 @@ fn build_piece_with_carry(
 #[test]
 fn w5_addcarrychain_commuted_int_carry_operands_fold() {
     // carry = INT_CARRY(b, a)  -- operands SWAPPED relative to lo = a + b.
-    // C++ kuna_addcarrychain.cc:56  `if (unlaceSameValue(c0,b) && unlaceSameValue(c1,a)) return true;`
+    // C++ unlace_addcarrychain.cc:56  `if (unlaceSameValue(c0,b) && unlaceSameValue(c1,a)) return true;`
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
     let a = mk_byte(&mut fd, 0x40);
@@ -298,7 +298,7 @@ fn w5_addcarrychain_commuted_int_carry_operands_fold() {
     assert_eq!(
         rule.apply_op(op, &mut fd),
         1,
-        "commuted INT_CARRY(b,a) must still fuse (kuna_addcarrychain.cc:56)"
+        "commuted INT_CARRY(b,a) must still fuse (unlace_addcarrychain.cc:56)"
     );
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_ADD);
     // index operand is `a` (zext'd): in1 def is INT_ZEXT(a).
@@ -389,7 +389,7 @@ fn w5_addcarrychain_carryelim_const_baselo_dedups_and_completes() {
 #[test]
 fn w5_addcarrychain_carryelim_wrong_negc_declines() {
     // Same INT_LESSEQUAL shape but the constant is NOT (-c)&mask -> decline.
-    // Guards the `cst->getOffset() == negc` test (kuna_addcarrychain.cc:72).
+    // Guards the `cst->getOffset() == negc` test (unlace_addcarrychain.cc:72).
     let mut fd = build_fd();
     let bl = mk_block(&mut fd);
     let a = mk_byte(&mut fd, 0x40);
@@ -409,7 +409,7 @@ fn w5_addcarrychain_carryelim_wrong_negc_declines() {
     assert_eq!(
         rule.apply_op(op, &mut fd),
         0,
-        "wrong (-c) constant must NOT fuse (kuna_addcarrychain.cc:72)"
+        "wrong (-c) constant must NOT fuse (unlace_addcarrychain.cc:72)"
     );
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_PIECE);
 }
@@ -421,7 +421,7 @@ fn w5_addcarrychain_carryelim_wrong_negc_declines() {
 #[test]
 fn w5_ovlesssimplify_mone_not_minus_one_declines() {
     // Build NE( SLESS(V+K,0) , BOOL_AND(signTest, SLESS(C, V+K)) ) where C is a
-    // constant that is NOT -1.  C++ kuna_ovlesssimplify.cc:79
+    // constant that is NOT -1.  C++ unlace_ovlesssimplify.cc:79
     //   `if (mone->getOffset() != calc_mask(mone->getSize())) continue;`
     // -> the AND limb is rejected as the SLESS-hi limb -> slessHi stays null ->
     // rule declines.
@@ -487,7 +487,7 @@ fn w5_ovlesssimplify_mone_not_minus_one_declines() {
     assert_eq!(
         rule.apply_op(op, &mut fd),
         0,
-        "SLESS-hi limb whose first operand is not -1 must NOT collapse (kuna_ovlesssimplify.cc:79)"
+        "SLESS-hi limb whose first operand is not -1 must NOT collapse (unlace_ovlesssimplify.cc:79)"
     );
     assert_eq!(
         fd.obank().get(op).unwrap().code(),
@@ -502,7 +502,7 @@ fn w5_ovlesssimplify_mone_not_minus_one_declines() {
 #[test]
 fn w5_booleanmask_byte_aligned_shift_declines() {
     // sa = 8 (a multiple of 8): everything else matches a perfect mask shape, but
-    // C++ kuna_booleanmask.cc:36  `if ((sa & 7) == 0) return 0;` defers to the
+    // C++ unlace_booleanmask.cc:36  `if ((sa & 7) == 0) return 0;` defers to the
     // generic RuleLeftRight -> rule declines even though the NZMask fits.
     let mut fd = build_fd();
     // boolvn: a 2-byte value whose NZMask is 1 (fits the low (16-8)=8 bits).
@@ -529,7 +529,7 @@ fn w5_booleanmask_byte_aligned_shift_declines() {
     assert_eq!(
         rule.apply_op(op, &mut fd),
         0,
-        "byte-aligned shift must defer to RuleLeftRight (kuna_booleanmask.cc:36)"
+        "byte-aligned shift must defer to RuleLeftRight (unlace_booleanmask.cc:36)"
     );
     assert_eq!(fd.obank().get(op).unwrap().code(), OpCode::CPUI_INT_SRIGHT);
 }

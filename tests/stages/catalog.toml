@@ -3,7 +3,7 @@
 # This is the discovery surface an external operator (human or LLM) reads to choose
 # which sub-phase assertion to flip and how (then flips it via the
 # unlace.decompile option/kassert flags). The catalog is a single C++
-# table (kuna_stages.cc settableTable) emitted as JSON; `python -m unlace.catalog`
+# table (unlace_stages.cc settableTable) emitted as JSON; `python -m unlace.catalog`
 # parses it and `docs/options.md` is generated from the same registry.
 #
 # These assertions pin the JSON contract the Python tooling depends on:

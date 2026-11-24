@@ -6,11 +6,11 @@ stripped, Swift-heavy, chained fixups) plus the 174 `Frameworks/*.framework` (31
 rest are 34 KB stubs). Raw outputs: `/home/cole/Downloads/perplexity-26.46.0/gaps/` (unlace JSON,
 side-by-side `*.sbs.txt`, IDA `ida/*.decomp.json`, `.i64` databases, logs).
 
-unlace: branch `all` at b6168f82f (worktree `~/RustProjects/forks/kuna-wt-perplexity`, dev profile
-opt-level 1, binary `~/RustProjects/forks/kuna-target/perplexity/debug/kuna`), always run with
+unlace: branch `all` at b6168f82f (worktree `~/RustProjects/forks/unlace-wt-perplexity`, dev profile
+opt-level 1, binary `~/RustProjects/forks/unlace-target/perplexity/debug/unlace`), always run with
 `--option objc on --option swiftmetadata on --option cfstrings on --option importdata on --option objcsdk
 iPhoneOS16.5.sdk`. IDA: 9.5 headless (`idat64 -A -S`), Hex-Rays arm64, Swift plugin on.
-Note: the main checkout `~/RustProjects/forks/kuna` was on `main` (upstream mirror, no Apple options), not
+Note: the main checkout `~/RustProjects/active/unlace` was on `main` (upstream mirror, no Apple options), not
 `all`, when this started; nothing was switched, the worktree was used instead.
 
 ## 0. Numbers
@@ -191,8 +191,8 @@ Impact = (how many functions it touches in this app) × (how wrong the output is
 
 ## 1b. A/B against the open PR branches (built here)
 
-Two open-PR heads were built the same way (worktrees `~/RustProjects/forks/kuna-wt-pplx-objc` = `fix/objc-struct-encodings`
-48e3ef5a6, which stacks #1740 theme-objc + #1821; `~/RustProjects/forks/kuna-wt-pplx-swift` = `gap/swiftasync` 83cd37e64, which
+Two open-PR heads were built the same way (worktrees `~/RustProjects/forks/unlace-wt-pplx-objc` = `fix/objc-struct-encodings`
+48e3ef5a6, which stacks #1740 theme-objc + #1821; `~/RustProjects/forks/unlace-wt-pplx-swift` = `gap/swiftasync` 83cd37e64, which
 stacks #1736 theme-swift + #1815) and re-run on the same addresses:
 
 | gap | `all` b6168f82f | #1740+#1821 head | #1736+#1815 head |
@@ -225,7 +225,7 @@ stacks #1736 theme-swift + #1815) and re-run on the same addresses:
 Sources: `unlace-ida95/findings/TRIAGE.md` (118 findings; done 53 / partial 28 / noted 26 / skipped 5 / won't-do 3 / deferred 3),
 `INTEGRATION.md`, `docs/decbench/backlog-ida.md` and `novel.md` (both are generated decbench GED tables from 2026-08-03,
 not IDA-comparison items; still the open readability backlog: 2,687 and 2,301 dedup groups). Fork PR state as of today:
-`gh pr list -R Noelo-Lab/kuna --author coleleavitt --state merged` = 73 merged (the whole `apple/*` wave on 11-09, the
+`gh pr list -R coleleavitt/unlace --author coleleavitt --state merged` = 73 merged (the whole `apple/*` wave on 11-09, the
 `fork/*` singles and `theme-perf`/`theme-gortti` on 11-20/21); `--state open` = 42 (`/home/cole/Downloads/perplexity-26.46.0/gaps/open-prs.tsv`).
 
 ### 3a. TRIAGE items still partial/deferred/skipped, mapped to where they live now
@@ -268,4 +268,4 @@ tables and plain-arm64 re2c tables, G10 (0x102cafa90 async misclassification + 8
 - `gaps/main.tp300.unlace.json` / `gaps/ida/Perplexity.tp300.decomp.json` (300 random functions, timing).
 - `gaps/<framework>.unlace.json`, `gaps/<framework>.sbs.txt`, `gaps/ida/<framework>.decomp.json` for cmark-gfm, AppAuthCore, DeviceKit, nanopb; `gaps/cmark.*.c` single-function timings.
 - `gaps/open-prs.tsv`, `gaps/merged-prs.tsv`.
-- Worktrees created for this run (safe to remove): `~/RustProjects/forks/kuna-wt-perplexity` (`all`), `kuna-wt-pplx-objc`, `kuna-wt-pplx-swift`, with target dirs `~/RustProjects/forks/kuna-target/{perplexity,pplx-objc,pplx-swift}`.
+- Worktrees created for this run (safe to remove): `~/RustProjects/forks/unlace-wt-perplexity` (`all`), `unlace-wt-pplx-objc`, `unlace-wt-pplx-swift`, with target dirs `~/RustProjects/forks/unlace-target/{perplexity,pplx-objc,pplx-swift}`.

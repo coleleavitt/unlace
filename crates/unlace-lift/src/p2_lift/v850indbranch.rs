@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_v850indbranch.{cc,hh}` — V850 "jmp [reg]"
+//! Port of `decompiler/cpp/unlace_v850indbranch.{cc,hh}` — V850 "jmp [reg]"
 //! indirect-branch reclassification (unlace GH-8817, S2 flow-classification).
 //!
 //! The V850 SLEIGH spec lifts `jmp [reg]` (reg != lp) to `call [reg]`, i.e.

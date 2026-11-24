@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_thumbfuncptr.{cc,hh}` — Thumb function-pointer
+//! Port of `decompiler/cpp/unlace_thumbfuncptr.{cc,hh}` — Thumb function-pointer
 //! preservation (unlace GH-8471, S5 const-pointer).
 //!
 //! A pointer to a Thumb function carries the mode bit in its LSB
@@ -73,7 +73,7 @@ pub struct ThumbSubTypeFact {
 /// (unlace) Should `RulePtrsubUndo` preserve this PTRSUB as a mode-bit-encoded
 /// function pointer? (C++ `unlacePreserveThumbFuncPtr`, GH-8471).
 ///
-/// C++ `kuna_thumbfuncptr.cc:12-36`.
+/// C++ `unlace_thumbfuncptr.cc:12-36`.
 ///
 /// `funcptr_align` is `glb->funcptr_align`.  `facts` carries the resolved W6 type-system queries (see [`ThumbPtrTypeFacts`]).
 /// `val`, `extra`, `multiplier` are the PTRSUB constant decomposition exactly

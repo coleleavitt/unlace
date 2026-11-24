@@ -46,7 +46,7 @@ mkdir -p "$DIST/specs"
 # The decompiler glue, Worker, client, zip.js, sha256.js, wasm, and specs stay at the root
 # — /decompile/ reaches them with '../', and the Node tests serve dist/ the same
 # way a browser does.
-# CNAME rides along so the deployed bundle claims kuna.noelo.org.
+# CNAME rides along so the deployed bundle claims coleleavitt.github.io/unlace.
 cp "$HERE/index.html" "$HERE/compare-samples.js" "$HERE/unlace-web.js" \
    "$HERE/unlace-worker.js" "$HERE/unlace-worker-client.js" "$HERE/zip.js" "$HERE/sha256.js" \
    "$HERE/CNAME" "$DIST/"

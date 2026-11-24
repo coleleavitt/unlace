@@ -4,7 +4,7 @@
 # cap: 80 instructions per lift point
 # lift-points (space:byte-offset name): ram:0x0=FUN_0
 # regenerate: python tools/rust-port/gen_lift.py  (see tests/golden/vectors/lift/README.md)
-# golden liftctx (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden liftctx (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 archid RISCV:LE:64:default:default
 languageid RISCV:LE:64:default
 slafile riscv.lp64d.sla
@@ -22,7 +22,7 @@ space join index=8 size=4 wordsize=1 bigendian=0
 space stack index=9 size=8 wordsize=1 bigendian=0
 context MXL=2
 context reserved=0
-# golden lift ram:0x0 80 (kuna_goldengen.cc; see tests/golden/vectors/lift/README.md)
+# golden lift ram:0x0 80 (unlace_goldengen.cc; see tests/golden/vectors/lift/README.md)
 insn ram:0x0 2
   COPY (unique,0x2400,8) (const,0xffffffffffffffc0,8)
   INT_ADD (register,0x2010,8) (register,0x2010,8) (unique,0x2400,8)

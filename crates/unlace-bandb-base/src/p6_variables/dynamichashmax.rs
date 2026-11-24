@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_dynamichashmax.{cc,hh}` — the dynamic-hash
+//! Port of `decompiler/cpp/unlace_dynamichashmax.{cc,hh}` — the dynamic-hash
 //! collision budget (unlace GH-8467, S6 alias-facets / dynamic-symbol
 //! attachment).
 //!

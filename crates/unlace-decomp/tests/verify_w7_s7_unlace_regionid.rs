@@ -1,5 +1,5 @@
 //! Independent adversarial verification tests for `w7-s7-unlace-regionid`
-//! (port of `decompiler/cpp/kuna_regionid.{cc,hh}`).
+//! (port of `decompiler/cpp/unlace_regionid.{cc,hh}`).
 //!
 //! These tests were written by the VERIFIER, not the porter.  They re-derive
 //! expected behavior directly from the C++ algorithm (angr `RegionIdentifier`)

@@ -32,7 +32,7 @@ unset RUSTFLAGS
 # Join the machine-wide jobserver (unlace-jobserver) so concurrent agents share one pool of build slots.
 JS_FIFO="${UNLACE_JOBSERVER_FIFO:-/run/user/$(id -u)/unlace-jobserver.fifo}"
 # A machine that still runs the unlace fork's jobserver shares that pool instead.
-[ -p "$JS_FIFO" ] || JS_FIFO="/run/user/$(id -u)/kuna-jobserver.fifo"
+[ -p "$JS_FIFO" ] || JS_FIFO="/run/user/$(id -u)/unlace-jobserver.fifo"
 # CARGO_BUILD_JOBS (or -j) makes cargo create its own jobserver and ignore the shared one, so drop it.
 [ -p "$JS_FIFO" ] && { export MAKEFLAGS="-j --jobserver-auth=fifo:$JS_FIFO"; unset CARGO_BUILD_JOBS; }
 # Heavy test runs take one of UNLACE_SLOTS machine-wide slots (unlace-slot).

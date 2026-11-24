@@ -1,6 +1,6 @@
 # Unlace #1628: "x86-64: VMREAD/VMWRITE without REX.W are bad instructions;
 # VMX instructions do not set CF/ZF"
-# https://github.com/Noelo-Lab/kuna/issues/1628
+# upstream issue #1628
 #
 # clang -O2 -fno-stack-protector of
 #   unsigned long rd(unsigned long field) {

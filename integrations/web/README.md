@@ -1,6 +1,6 @@
 # The unlace site (and the in-browser decompiler)
 
-**kuna.noelo.org** — the project site and its public development visualization — and
+**coleleavitt.github.io/unlace** — the project site and its public development visualization — and
 **decompile.run**, the decompiler that runs **entirely client-side in a web browser**: no
 server, no backend, no upload. One static bundle, split into the two sites at deploy time
 (paths below are the bundle's; `/decompile/` is the root of decompile.run once deployed):
@@ -73,7 +73,7 @@ tests, then `split-sites.sh`, which divides `dist/` into the two sites:
   serves its `main` branch. The push uses the `DECOMPILE_RUN_DEPLOY_KEY` secret, the
   private half of a write deploy key on that repo. Its `README.md` and `CNAME` come from
   `decompile-run/` here.
-- **`kuna.noelo.org`** — what is left in `dist/`: the landing page and `/dev-viz/`, with
+- **`coleleavitt.github.io/unlace`** — what is left in `dist/`: the landing page and `/dev-viz/`, with
   their decompiler links pointed at decompile.run, and `/decompile/` replaced by
   `decompile-run/redirect.html`, which forwards with the query and fragment intact so old
   invite and student links keep working. This repo's Pages deploys it via
@@ -91,8 +91,8 @@ bundle with the decompiler at `/decompile/`, which is also what the tests serve.
 | `decompile/` | The decompiler: `index.html` + `decompile.css` (Noelo's palette as dark and light tokens, its own type and layout, no `site.css`) + `app.js` and DOM-free modules for the code and assembly panes (including the easy assembly spelling), the function list's groups, the hover card, the Explain panel, the edit session (`--assert` directives), bytes and patching, the stack frame, the Data tab (a global's data, decoded by type, and who uses it), instruction notes and help. `collab/` is *Working together*, loaded only when a session starts or an invite or reply link is opened: the controller and its dialogs, the group protocol, WebRTC and BroadcastChannel links, the shared registers, message checks and codes, pointers and pings. `docs/web-integration.md` §4.2 has the layout, the module table and *Working together*. |
 | `compare-samples.js` | Data for the compare section: `SAMPLES` (unlace's output per function) × `RIVALS` (the right-hand pane), with each sample's measured DecBench GED. Adding a comparison is a data edit; the header documents the schema. Every pane must be **verbatim** tool output — mine and vet new ones with `python3 -m scripts.decbench.showcase` (`docs/decbench-loop.md` → *Finding good unlace examples*). |
 | `assets/` | The shared design system: `css/site.css`, `fonts/` (Jost, Roboto Mono), `img/` (mark + favicon, derived from `assets/unlace.png`), `js/highlight-c.js` — the one C highlighter the landing page and the decompiler use — and `js/fnfilter.js`, the DOM-free matcher behind the /decompile function search. |
-| `CNAME` | The custom domain (`kuna.noelo.org`); `build.sh` copies it into `dist/`. Repo *Settings → Pages → Custom domain* must agree. |
-| `decompile-run/` | What `split-sites.sh` adds to the two sites: decompile.run's `README.md` and `CNAME`, and `redirect.html`, kuna.noelo.org's `/decompile/`. |
+| `CNAME` | The custom domain (`coleleavitt.github.io/unlace`); `build.sh` copies it into `dist/`. Repo *Settings → Pages → Custom domain* must agree. |
+| `decompile-run/` | What `split-sites.sh` adds to the two sites: decompile.run's `README.md` and `CNAME`, and `redirect.html`, coleleavitt.github.io/unlace's `/decompile/`. |
 | `unlace-web.js` | The glue: loads the wasm, preloads the small spec bundle, lazily fetches each binary's `.sla` on demand (driven by the engine's own resolution), and runs the decompiler under the WASI shim with the automatic size-based mode policy; `list`/`decompile` return the `decompile-all --json` shape, `project` the whole-binary export. |
 | `unlace-worker.js` | The module Worker: owns the binary and WASI handle, lists first, decompiles one selected address, and builds whole-project ZIPs off the UI thread. |
 | `unlace-worker-client.js` | The page-side RPC client. Cancellation terminates/recreates its Worker and rehydrates the retained binary on the next request. |
@@ -118,7 +118,7 @@ node integrations/web/test/dev-viz.mjs ../
 python3 -m http.server 8000 --directory integrations/web
 ```
 | `build.sh` | Builds `unlace_wasm.wasm`, copies the full runtime SLEIGH tree + the shim + the pages + `assets/` into `dist/`, and bundles the small spec files into `specs-small.json`. `wasm-opt -Oz` is applied if present. |
-| `split-sites.sh` | Run after `build.sh` at deploy time: moves the decompiler to the root of `dist-run/` (decompile.run) and leaves `dist/` as kuna.noelo.org with a forwarding `/decompile/`. |
+| `split-sites.sh` | Run after `build.sh` at deploy time: moves the decompiler to the root of `dist-run/` (decompile.run) and leaves `dist/` as coleleavitt.github.io/unlace with a forwarding `/decompile/`. |
 | `test/` | Automated gates (below) + committed ELF/Mach-O fixtures. |
 | `dist/`, `dist-run/` | Assembled output (gitignored — regenerate with `build.sh`, then `split-sites.sh`). |
 

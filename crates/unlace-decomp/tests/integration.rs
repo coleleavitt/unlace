@@ -44,7 +44,7 @@ mod testcirclerange;
 #[path = "testfuncproto.rs"]
 mod testfuncproto;
 
-#[path = "testkunaregion.rs"]
+#[path = "testunlaceregion.rs"]
 mod testunlaceregion;
 
 #[path = "testparamstore.rs"]
@@ -416,7 +416,7 @@ mod verify_w6_s5_typeop;
 #[path = "verify_w6_s5_unionresolve.rs"]
 mod verify_w6_s5_unionresolve;
 
-#[path = "verify_w7_harness_kunaregion.rs"]
+#[path = "verify_w7_harness_unlaceregion.rs"]
 mod verify_w7_harness_unlaceregion;
 
 #[path = "verify_w7_m1_closure.rs"]

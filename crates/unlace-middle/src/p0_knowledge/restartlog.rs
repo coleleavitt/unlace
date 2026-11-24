@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_restartlog.{cc,hh}` — restart observability
+//! Port of `decompiler/cpp/unlace_restartlog.{cc,hh}` — restart observability
 //! (unlace roadmap item 5).
 //!
 //! Mechanism (c) of the stage model — global restart with persisted hints — is
@@ -57,7 +57,7 @@ pub enum UnlaceRestartReason {
 
 impl UnlaceRestartReason {
     /// Human-readable reason name — byte-for-byte port of
-    /// `unlaceRestartReasonName` (`kuna_restartlog.cc:46`).
+    /// `unlaceRestartReasonName` (`unlace_restartlog.cc:46`).
     pub fn name(self) -> &'static str {
         match self {
             UnlaceRestartReason::DeadcodeBump => {
@@ -123,7 +123,7 @@ impl RestartLog {
         RestartLog::default()
     }
 
-    /// The side-table key for `fd` — C++ `keyForFunc` (`kuna_restartlog.cc:35`).
+    /// The side-table key for `fd` — C++ `keyForFunc` (`unlace_restartlog.cc:35`).
     ///
     /// `space_index` is the entry address's space index, or -1 if the entry has
     /// no space (the C++ `(entry.getSpace() != 0) ? ->getIndex() : -1`).
@@ -140,7 +140,7 @@ impl RestartLog {
     }
 
     /// Record a restart trigger against `fd`'s entry — byte-for-byte port of
-    /// `unlaceRecordRestart(Funcdata, reason, detail)` (`kuna_restartlog.cc:66`).
+    /// `unlaceRecordRestart(Funcdata, reason, detail)` (`unlace_restartlog.cc:66`).
     ///
     /// Caps at [`MAX_EVENTS_PER_FUNC`] per function (the earliest events are the
     /// diagnostic ones, so a full bucket is left untouched).
@@ -161,7 +161,7 @@ impl RestartLog {
 
     /// Record a restart trigger, formatting the given site address as the
     /// detail — port of the `Address`-overload `unlaceRecordRestart`
-    /// (`kuna_restartlog.cc:79`), which does `site.printRaw(oss)`.
+    /// (`unlace_restartlog.cc:79`), which does `site.printRaw(oss)`.
     pub fn record_at(
         &mut self,
         fd: &Funcdata,
@@ -176,7 +176,7 @@ impl RestartLog {
     }
 
     /// Dump the recorded restart events for `fd` — byte-for-byte port of
-    /// `unlaceDumpRestarts` (`kuna_restartlog.cc:87`). Returns the exact text the
+    /// `unlaceDumpRestarts` (`unlace_restartlog.cc:87`). Returns the exact text the
     /// C++ writes (one trailing newline per line).
     pub fn render(&self, fd: &Funcdata) -> String {
         let mut os = String::new();

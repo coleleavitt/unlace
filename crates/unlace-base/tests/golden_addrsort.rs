@@ -1,6 +1,6 @@
 //! GOLDEN GATE for `w1-base-space-address`: replay the C++ oracle's
 //! `golden addrsort` vectors (`tests/golden/vectors/addrsort.csv`, emitted
-//! by `decompiler/cpp/kuna_goldengen.cc`) against the Rust `Address`
+//! by `decompiler/cpp/unlace_goldengen.cc`) against the Rust `Address`
 //! comparators.
 //!
 //! Per `tests/golden/vectors/README.md`, the space set is a property of the

@@ -17,7 +17,7 @@ covered_by_option: null
 touches: [specs/Ghidra/Processors/x86/data/languages/ia.sinc]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/574
+pr: upstream PR #574
 closed_in_round: 12
 closing_pr: "574"
 reject_reason: null

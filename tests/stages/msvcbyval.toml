@@ -1,7 +1,7 @@
 # An MSVC __cdecl import's by-value class argument is sized at the call site
 # (unlace_msvcbyval.rs, always on).
 #
-# Issue: GH Noelo-Lab/kuna#990. An MSVC name states every parameter's type but
+# Issue: GH upstream #990. An MSVC name states every parameter's type but
 # not the size of a class passed by value, so msvcsig applies such an import's
 # parameters up to the class and leaves the rest open. MSVC copy-constructs the
 # class in its outgoing slot (`push ecx; mov ecx,esp; call ??0`), so the

@@ -1139,7 +1139,7 @@ fn test_set_unknown_option() {
 struct DummyUnlaceOption;
 impl ArchOption for DummyUnlaceOption {
     fn get_name(&self) -> &str {
-        "dummykuna"
+        "dummyunlace"
     }
     fn apply(
         &self,
@@ -1155,7 +1155,7 @@ impl ArchOption for DummyUnlaceOption {
 #[test]
 fn test_register_custom_option() {
     let mut db = OptionDatabase::new();
-    let elem = ElementId::new("dummykuna", 4099);
+    let elem = ElementId::new("dummyunlace", 4099);
     db.register_option(elem, Box::new(DummyUnlaceOption));
     let mut g = RecordingContext::default();
     assert_eq!(

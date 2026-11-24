@@ -17,7 +17,7 @@ covered_by_option: exclusivearguse
 touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/564
+pr: upstream PR #564
 closed_in_round: 12
 closing_pr: "564"
 reject_reason: null

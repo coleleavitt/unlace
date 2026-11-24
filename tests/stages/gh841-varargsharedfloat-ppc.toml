@@ -1,6 +1,6 @@
 # GH-841 (unlace): "PowerPC -O0: a variadic call drops a trailing double whose
 # register also feeds an earlier argument".
-# https://github.com/Noelo-Lab/kuna/issues/841
+# upstream issue #841
 #
 # Source (clang -O0 -fno-pic -target powerpc-linux-gnu -c, the .text bytes
 # verbatim at 0x100000; the same at -O2 at 0x101000, functions suffixed _o2):

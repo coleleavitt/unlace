@@ -1,7 +1,7 @@
 //! Catalog byte-compatibility gate (ADR 0006, item w4-unlace-p0-pack).
 //!
 //! The Rust catalog JSON emitter (`phases::emit_catalog_json`) must
-//! reproduce `kuna_console.cc unlaceEmitSettableJson`'s output **byte for byte**:
+//! reproduce `unlace_console.cc unlaceEmitSettableJson`'s output **byte for byte**:
 //! `tests/stages/unlace-catalog.toml` (a C++ datatest) string-matches the raw
 //! emitter output, and `python -m unlace.catalog` parses it, so any drift in key
 //! order, spacing, separators, pipe-splitting, the conditional `current` field,

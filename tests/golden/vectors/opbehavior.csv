@@ -1,4 +1,4 @@
-# golden opbehavior vectors (kuna_goldengen.cc; see tests/golden/vectors/README.md)
+# golden opbehavior vectors (unlace_goldengen.cc; see tests/golden/vectors/README.md)
 # binary rows: op,sizein,sizeout,in0,in1,result   unary rows: op,sizein,sizeout,in0,result
 # result ERR = evaluation threw (EvaluationError or unimplemented)
 COPY,1,1,0x0,0x0

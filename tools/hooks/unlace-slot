@@ -2,8 +2,8 @@
 # Run a heavy unlace command (decompile-all, datatests, stage tests) in one of UNLACE_SLOTS machine-wide slots.
 #   unlace-slot CMD [ARGS...]     waits for a free slot, then runs CMD; exits with CMD's status
 set -u
-# The slot directory is the one the unlace fork's kuna-slot uses, so both projects share the machine's slots.
-N="${UNLACE_SLOTS:-${UNLACE_SLOTS:-6}}"; D="${UNLACE_SLOTS_DIR:-/run/user/$(id -u)/kuna-slots}"; mkdir -p "$D"
+# The slot directory is the one the unlace fork's unlace-slot uses, so both projects share the machine's slots.
+N="${UNLACE_SLOTS:-${UNLACE_SLOTS:-6}}"; D="${UNLACE_SLOTS_DIR:-/run/user/$(id -u)/unlace-slots}"; mkdir -p "$D"
 while :; do
   for i in $(seq 1 "$N"); do
     exec {fd}>"$D/$i"

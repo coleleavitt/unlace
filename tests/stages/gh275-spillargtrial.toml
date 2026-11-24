@@ -1,6 +1,6 @@
 # GH-275 (unlace): "packed-double producers plus more than one atan2 call drop
 # the call arguments"
-# https://github.com/Noelo-Lab/kuna/issues/275
+# upstream issue #275
 #
 # Source:
 #   double packed_two_atan2(double range, double y, double z) {

@@ -1,7 +1,7 @@
 # Robustness sweep (2026-11-24)
 
 `unlace decompile-all <binary> --json --max-fn-seconds 30` over a mixed corpus, run with the
-pinned `unlace-f0e726f2a4` (`--jobs 4`, through `kuna-slot`). Every failing function was
+pinned `unlace-f0e726f2a4` (`--jobs 4`, through `unlace-slot`). Every failing function was
 re-run on `unlace-cc4eab698b`, and the table below gives that re-run. The scratch driver
 collects each function's `error` field, panics on stderr, and `halt_baddata` /
 "bad instruction" / "unimplemented instruction" in the emitted C (string literals excluded).

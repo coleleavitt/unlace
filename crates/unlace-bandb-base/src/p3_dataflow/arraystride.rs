@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_arraystride.{cc,hh}` — strided-induction
+//! Port of `decompiler/cpp/unlace_arraystride.{cc,hh}` — strided-induction
 //! (array-stride) recovery (unlace GH-8724, S3 simplification-quiescence).
 //!
 //! `RuleArrayStride` recognizes a loop-header stride accumulator phi
@@ -69,7 +69,7 @@ impl Rule for RuleArrayStride {
         }))
     }
 
-    /// C++ `RuleArrayStride::applyOp` (`kuna_arraystride.cc:88`) — transcribed.
+    /// C++ `RuleArrayStride::applyOp` (`unlace_arraystride.cc:88`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // (unlace) gate (ArchContext-carried).
         if !self.enabled
@@ -172,7 +172,7 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 // ---------------------------------------------------------------------------
-// Static helpers (faithful transcriptions of the kuna_arraystride.cc statics)
+// Static helpers (faithful transcriptions of the unlace_arraystride.cc statics)
 // ---------------------------------------------------------------------------
 
 /// Does `vn` carry the constant value 0 (directly, or via a single COPY)?

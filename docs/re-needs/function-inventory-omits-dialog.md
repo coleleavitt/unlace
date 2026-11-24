@@ -17,7 +17,7 @@ covered_by_option: fast_funcdisc
 touches: [crates/unlace-analysis]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/582
+pr: upstream PR #582
 closed_in_round: 12
 closing_pr: 582
 reject_reason: null

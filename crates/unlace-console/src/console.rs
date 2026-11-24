@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_console.{cc,hh}` (W9) — the unlace console
+//! Port of `decompiler/cpp/unlace_console.{cc,hh}` (W9) — the unlace console
 //! capability and the stage-registry console commands.
 //!
 //! This file is **not** part of upstream Ghidra. In C++ it registers all unlace
@@ -24,7 +24,7 @@
 //!   emitter** ([`unlace_decomp::phases::emit_catalog_json`]). With a program
 //!   loaded the live `current` field is joined per option from the
 //!   [`Architecture`] flags ([`unlace_live_value`], the port of
-//!   `kuna_console.cc unlaceLiveValue`). `tests/stages/unlace-catalog.toml`
+//!   `unlace_console.cc unlaceLiveValue`). `tests/stages/unlace-catalog.toml`
 //!   string-matches this output.
 //! - [`IfcUnlaceFunctions`] — `functions`: emit the canonical executable
 //!   function inventory used by whole-binary decompilation.
@@ -54,7 +54,7 @@
 //! - [`IfcUnlaceQuality`] — `quality`.
 //!
 //! The S7 region commands (`region tree`/`blocks`/`walk`, C++ `IfcUnlaceRegion*`
-//! from `kuna_regionid.cc`) register through this capability in C++; their
+//! from `unlace_regionid.cc`) register through this capability in C++; their
 //! `buildFromBlockGraph` block-graph adapter is explicitly `STUB(W7)` in the
 //! ported `unlace_regionid` module, so they are registered with a placeholder that
 //! routes through [`engine_unavailable`] (see [`register_unlace_commands`]).
@@ -107,7 +107,7 @@ const STAGES_IN_ORDER: [UnlacePhase; 10] = [
 
 // ---------------------------------------------------------------------------
 // dcp access — every unlace command shares the "decompile" module data, exactly
-// like the upstream IfaceDecompCommand family (kuna_console.cc reads dcp->...).
+// like the upstream IfaceDecompCommand family (unlace_console.cc reads dcp->...).
 // ---------------------------------------------------------------------------
 
 /// Reach the shared [`IfaceDecompData`] from a unlace command.
@@ -150,7 +150,7 @@ fn engine_unavailable(entry: &str) -> IfaceError {
 }
 
 /// Read the live value of a unlace settable from the loaded [`Architecture`], or
-/// `None` if it cannot be determined — port of `kuna_console.cc unlaceLiveValue`.
+/// `None` if it cannot be determined — port of `unlace_console.cc unlaceLiveValue`.
 ///
 /// The C++ `arraynotation` reader dereferences `conf->print` (the owned
 /// `PrintC`); that accessor is `STUB(W8)` in the merged tree (no `print` field
@@ -1152,12 +1152,12 @@ impl IfaceCommandAction for IfcUnlacePhaseCatalog {
 }
 
 // ---------------------------------------------------------------------------
-// `kassert ...` — IfcUnlaceAssert (class lives in kuna_assert.cc; registered here)
+// `kassert ...` — IfcUnlaceAssert (class lives in unlace_assert.cc; registered here)
 // ---------------------------------------------------------------------------
 
 /// (unlace) `kassert <phase> <subphase> <args...> [hard|hint]` / `kassert list`:
 /// write a typed assertion through an existing store (C++ `IfcUnlaceAssert`,
-/// `kuna_assert.cc`; registered by the unlace capability in `kuna_console.cc`).
+/// `unlace_assert.cc`; registered by the unlace capability in `unlace_console.cc`).
 ///
 /// The **validation + routing decision** core ports in full (the parse-error
 /// precedence, `kassert list`, the LATENT/unroutable error arms) on top of
@@ -1645,12 +1645,12 @@ impl IfaceCommandAction for IfcUnlaceQuality {
 }
 
 // ---------------------------------------------------------------------------
-// Region commands (IfcUnlaceRegionTree/Blocks/Walk, from kuna_regionid.cc)
+// Region commands (IfcUnlaceRegionTree/Blocks/Walk, from unlace_regionid.cc)
 // ---------------------------------------------------------------------------
 
 /// (unlace) `region tree` / `region blocks` / `region walk`: inspect the S7
-/// region hierarchy (C++ `IfcUnlaceRegion*` from `kuna_regionid.cc`; registered by
-/// the unlace capability in `kuna_console.cc`).
+/// region hierarchy (C++ `IfcUnlaceRegion*` from `unlace_regionid.cc`; registered by
+/// the unlace capability in `unlace_console.cc`).
 ///
 /// The region identifier is ported (`unlace_decomp::regionid`); its
 /// `buildFromBlockGraph` block-graph adapter (the W7 boundary) is now closed
@@ -2146,7 +2146,7 @@ fn read_vma(tok: &str) -> Option<u64> {
 // ---------------------------------------------------------------------------
 
 /// C++ `IfaceUnlaceCapability::registerCommands(IfaceStatus *status)`
-/// (`kuna_console.cc:22`): register every unlace stage-model console command.
+/// (`unlace_console.cc:22`): register every unlace stage-model console command.
 ///
 /// In C++ the capability is a static singleton discovered by
 /// `CapabilityPoint::initializeAll`; the unlace Rust console invokes this directly

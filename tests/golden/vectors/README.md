@@ -1,7 +1,7 @@
 # Golden vectors (C++ oracle -> Rust port)
 
 Deterministic low-level semantics vectors emitted by the C++ decompiler's
-`golden <kind>` console commands (`decompiler/cpp/kuna_goldengen.cc`).  The
+`golden <kind>` console commands (`decompiler/cpp/unlace_goldengen.cc`).  The
 Rust port must reproduce these byte-for-byte (same CSV rows from its own
 OpBehavior / FloatFormat / Address implementations).
 

@@ -87,5 +87,5 @@
     "docs/re-needs/byte-overlay-assertion-recovered.md",
     "tests/cli/byte-overlay-assertion-recovered.json"
   ],
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/538"
+  "pr": "upstream PR #538"
 }

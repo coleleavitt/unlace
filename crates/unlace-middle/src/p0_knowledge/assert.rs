@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_assert.{cc,hh}` — the typed assertion API
+//! Port of `decompiler/cpp/unlace_assert.{cc,hh}` — the typed assertion API
 //! (`docs/history/stage-model.md` section 12).
 //!
 //! `kassert` is a thin facade over the existing battle-tested stores (Override,
@@ -91,7 +91,7 @@ pub enum Dispatch {
 
 impl Dispatch {
     /// Route a sub-stage name to its store — verbatim transcription of the C++
-    /// `IfcUnlaceAssert::execute` `if/else` dispatch chain (`kuna_assert.cc:99`),
+    /// `IfcUnlaceAssert::execute` `if/else` dispatch chain (`unlace_assert.cc:99`),
     /// in the same order. The trailing `else` distinguishes LATENT sub-stages
     /// (`sub->latent`) from merely-unroutable ones, exactly as the C++ does.
     pub fn for_substage(sname: &str, latent: bool) -> Dispatch {
@@ -146,7 +146,7 @@ pub struct ValidatedAssertion {
 
 /// Validate a `kassert` request and compute its strength + minimal rewind —
 /// the console-independent core of `IfcUnlaceAssert::execute`
-/// (`kuna_assert.cc:51`), up to (but not including) the live store mutation.
+/// (`unlace_assert.cc:51`), up to (but not including) the live store mutation.
 ///
 /// `stagecode` is the `<phase>` token ("P0".."P9", legacy "S1".."S9" accepted); `subname` is the
 /// `<substage>` token; `strength_override` is the optional trailing `hard|hint`
@@ -228,7 +228,7 @@ impl AssertLog {
     }
 
     /// Render `kassert list` — byte-for-byte port of
-    /// `IfcUnlaceAssert::listAssertions` (`kuna_assert.cc:249`). Returns the exact
+    /// `IfcUnlaceAssert::listAssertions` (`unlace_assert.cc:249`). Returns the exact
     /// text the C++ writes to the bulk stream (one trailing newline per line).
     pub fn render_list(&self) -> String {
         let mut os = String::new();

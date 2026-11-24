@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_returnpair.{cc,hh}` — return-register pairing
+//! Port of `decompiler/cpp/unlace_returnpair.{cc,hh}` — return-register pairing
 //! sub-stage (unlace GH-6990, S4 trial finalization).
 //!
 //! On an ABI with an output `<join>` rule over a register pair (SPARC and
@@ -16,7 +16,7 @@
 //!
 //! # What this port covers (and the two boundaries it cannot)
 //!
-//! The whole upstream `kuna_returnpair.cc` IS the option class
+//! The whole upstream `unlace_returnpair.cc` IS the option class
 //! `OptionReturnPair::apply`: it parses `pair`/`single` and writes the arch flag
 //! `return_single`.  The actual rewrite is a one-line gate inside
 //! `ActionReturnRecovery::buildReturnOutput` (**`coreaction.cc`, not this file**).

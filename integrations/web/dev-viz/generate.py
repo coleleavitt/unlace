@@ -262,7 +262,7 @@ def export(repo: Path) -> dict:
     community["changes"] = [c for c in community["changes"] if c["pr"] in merged_prs]
     return {
         "schemaVersion": 1,
-        "meta": {"sha": sha, "repository": "https://github.com/Noelo-Lab/kuna",
+        "meta": {"sha": sha, "repository": "https://github.com/coleleavitt/unlace",
                  "start": commits[0]["date"], "end": commits[-1]["date"],
                  "portEnd": "2026-06-19", "timezone": "UTC"},
         "phases": [{"id": pid, "name": name, "description": desc, "options": phase_counts[pid]}

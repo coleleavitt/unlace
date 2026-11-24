@@ -17,7 +17,7 @@ covered_by_option: splitstorekeep
 touches: [crates/unlace-decomp]
 scope: small
 regression_of: null
-pr: https://github.com/Noelo-Lab/kuna/pull/554
+pr: upstream PR #554
 closed_in_round: 12
 closing_pr: "554"
 reject_reason: null

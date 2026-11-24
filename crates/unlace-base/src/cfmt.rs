@@ -2,7 +2,7 @@
 //!
 //! The C++ decompiler renders floating-point decimals with `ostringstream`
 //! (see `FloatFormat::printDecimal` in `decompiler/cpp/float.cc` and the
-//! golden generator `decompiler/cpp/kuna_goldengen.cc`).  libstdc++ routes
+//! golden generator `decompiler/cpp/unlace_goldengen.cc`).  libstdc++ routes
 //! `operator<<(double)` through `vsnprintf`, so the observable behavior is
 //! the C `%g` / `%e` conversion family:
 //!
@@ -140,7 +140,7 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::approx_constant)] // literal from kuna_goldengen.cc, not PI
+    #[allow(clippy::approx_constant)] // literal from unlace_goldengen.cc, not PI
     fn test_cfmt_default_basic() {
         // The dec-row forms of tests/golden/vectors/float.csv.
         assert_eq!(ostream_default(0.0), "0");

@@ -58,11 +58,11 @@ $K decompile-all tests/bug-repro/faillog --mode reliable --addr 0x3320          
 
 | issue | severity | binary · address |
 |---|---|---|
-| [#180](https://github.com/Noelo-Lab/kuna/issues/180) | correctness | `grep` · `0x7c90` |
-| [#181](https://github.com/Noelo-Lab/kuna/issues/181) | correctness | `libselinux.so.1` · `0x17370` |
-| [#182](https://github.com/Noelo-Lab/kuna/issues/182) | correctness | `betaflight_STM32F405.elf` · `0x801b4a4` |
-| [#183](https://github.com/Noelo-Lab/kuna/issues/183) | readability | `sort` · `0x6e80`, `faillog` · `0x3320` |
-| [#184](https://github.com/Noelo-Lab/kuna/issues/184) | readability | `faillog` · `0x3320` |
+| [#180](upstream issue #180) | correctness | `grep` · `0x7c90` |
+| [#181](upstream issue #181) | correctness | `libselinux.so.1` · `0x17370` |
+| [#182](upstream issue #182) | correctness | `betaflight_STM32F405.elf` · `0x801b4a4` |
+| [#183](upstream issue #183) | readability | `sort` · `0x6e80`, `faillog` · `0x3320` |
+| [#184](upstream issue #184) | readability | `faillog` · `0x3320` |
 
 `faillog` carries two distinct bugs, which is why it is here once and listed twice.
 

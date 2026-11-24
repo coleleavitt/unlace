@@ -68,7 +68,7 @@ gc_merged_worktrees() {
     [ -d "$wt" ] || continue
     branch="$(git -C "$wt" symbolic-ref --short HEAD 2>/dev/null)"
     [ -n "$branch" ] || continue
-    state="$(gh pr view "$branch" --repo Noelo-Lab/kuna --json state -q .state 2>/dev/null)"
+    state="$(gh pr view "$branch" --repo coleleavitt/unlace --json state -q .state 2>/dev/null)"
     if [ "$state" = "MERGED" ] || [ "$state" = "CLOSED" ]; then
       log "GC worktree $wt (PR $state)"
       git -C "$REPO" worktree remove --force "$wt" 2>/dev/null

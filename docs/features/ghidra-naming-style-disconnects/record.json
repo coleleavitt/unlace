@@ -15,7 +15,7 @@
   "default_on": true,
   "parity": "make test 675/675 and make test-stages 788/788: PARITY OK",
   "rebased_onto": "origin/main 31b2d77f026ecbd736a4c58b05833fdd961cb13d (includes Linux #579)",
-  "pr": "https://github.com/Noelo-Lab/kuna/pull/580",
+  "pr": "upstream PR #580",
   "closed_in_round": 12,
   "decisions": [
     "The filed hypothesis is upheld: prototype recovery and data flow are correct; link_proto_params alone hardcoded aN while both P9 parameter sites selected param_N under standalone Ghidra style.",

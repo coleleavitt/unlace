@@ -1,7 +1,7 @@
 {
   "need_id": "unsigned-byte-vm-selector",
   "pr": 613,
-  "pr_url": "https://github.com/Noelo-Lab/kuna/pull/613",
+  "pr_url": "upstream PR #613",
   "closed_in_round": 12,
   "opportunity": "unsigned-byte-vm-selector::sub_12d0",
   "test_name": "RE-friction unsigned-byte-vm-selector exact fixture, acceptance, and two-pass stage control",

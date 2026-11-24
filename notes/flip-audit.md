@@ -6,7 +6,7 @@ with the shipped defaults, and once with the input's flips switched off (`--opti
 "Identical" compares the two default runs byte for byte. "Flip changes output" says whether
 switching the flips off changed the JSON, which shows whether the input exercises them. Wall
 time is the whole process (load, discovery, decompile, JSON) on this host, run through
-`kuna-slot`.
+`unlace-slot`.
 
 Flips covered: `boolreturn`, `aeabifloat`, `armpairparam`, `evmcalls`, `wideconst`,
 `mfcmsgmap`, `msvcptrentry`, `retindexuse` (default `bpf`), `satconvert` and `fpargboxed`.
@@ -17,8 +17,8 @@ Every run exited 0, and the two default runs were byte-identical for all 16 inpu
 
 | Flip(s) | Input | Functions | Run 1 (s) | Run 2 (s) | Flips off (s) | Identical | Flip changes output | sha256 (first 16) |
 |---|---|---|---|---|---|---|---|---|
-| `boolreturn` | `kuna-data/decbench-data/binaries/O2-noinline/bzip2/bzip2recover` | 38 | 0.28 | 0.28 | 0.27 | yes | no | `f5e1b153cdd93478` |
-| `boolreturn` | `kuna-data/decbench-data/binaries/O2-noinline/bash/mksyntax` | 32 | 0.23 | 0.23 | 0.23 | yes | no | `f6748891a6b38010` |
+| `boolreturn` | `unlace-data/decbench-data/binaries/O2-noinline/bzip2/bzip2recover` | 38 | 0.28 | 0.28 | 0.27 | yes | no | `f5e1b153cdd93478` |
+| `boolreturn` | `unlace-data/decbench-data/binaries/O2-noinline/bash/mksyntax` | 32 | 0.23 | 0.23 | 0.23 | yes | no | `f6748891a6b38010` |
 | `aeabifloat`, `armpairparam` | `crates/unlace-cli/tests/fixtures/arm_aeabi/arm.o` | 18 | 0.09 | 0.08 | 0.08 | yes | yes | `d7ca028554e89194` |
 | `aeabifloat`, `armpairparam` | `crates/unlace-cli/tests/fixtures/arm_aeabi/thumbv7m.o` | 18 | 0.07 | 0.08 | 0.08 | yes | yes | `0a688a7779963a3f` |
 | `aeabifloat`, `armpairparam` | `crates/unlace-cli/tests/fixtures/arm_aeabi/libm-arm.o` | 2 | 0.05 | 0.06 | 0.05 | yes | yes | `fa6e5c4e06bf2cae` |
@@ -30,7 +30,7 @@ Every run exited 0, and the two default runs were byte-identical for all 16 inpu
 | `satconvert`, `fpargboxed` | `crates/unlace-cli/tests/fixtures/riscv_zfa/zfa64.elf` | 6 | 0.10 | 0.10 | 0.10 | yes | yes | `a8e6c05c41c76536` |
 | `satconvert`, `fpargboxed` | `crates/unlace-cli/tests/fixtures/riscv_zfh/zfh64.elf` | 8 | 0.12 | 0.13 | 0.12 | yes | yes | `3bb58c60df00d34c` |
 | `satconvert`, `fpargboxed` | `crates/unlace-cli/tests/fixtures/riscv_zfh/zfh32.elf` | 8 | 0.10 | 0.11 | 0.11 | yes | yes | `0d5bb783d99759dc` |
-| `boolreturn` | `kuna-data/decbench-data/binaries/O2-noinline/betaflight/betaflight_STM32F405.elf` `--functions isBoardAlignmentStandard` | 1 | 0.73 | 0.97 | 1.12 | yes | yes | `11b5b75d6a2ff549` |
+| `boolreturn` | `unlace-data/decbench-data/binaries/O2-noinline/betaflight/betaflight_STM32F405.elf` `--functions isBoardAlignmentStandard` | 1 | 0.73 | 0.97 | 1.12 | yes | yes | `11b5b75d6a2ff549` |
 | `retindexuse` | `bpf_strlen (processors.toml image)` `--raw-image --target eBPF:LE:64:default --base 0 --addr 0x0` | 1 | 0.03 | 0.03 | 0.03 | yes | yes | `3d4b5a77ea2cfe3d` |
 | `mfcmsgmap`, `msvcptrentry` | `msvc-console-i386.exe (local research corpus, 23 KiB)` | 6 | 0.07 | 0.08 | 0.09 | yes | no | `a06cfe9fd942b491` |
 

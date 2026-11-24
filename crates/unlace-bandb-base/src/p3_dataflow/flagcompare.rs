@@ -1,4 +1,4 @@
-//! Port of `decompiler/cpp/kuna_flagcompare.{cc,hh}` — flag-modelled-comparison
+//! Port of `decompiler/cpp/unlace_flagcompare.{cc,hh}` — flag-modelled-comparison
 //! folding (unlace GH-1276 / GH-8777, S3 simplification-quiescence).
 //!
 //! Two rules, both always on:
@@ -64,7 +64,7 @@ impl Rule for RuleBoolSignLess {
         }))
     }
 
-    /// C++ `RuleBoolSignLess::applyOp` (`kuna_flagcompare.cc:23`) — transcribed.
+    /// C++ `RuleBoolSignLess::applyOp` (`unlace_flagcompare.cc:23`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         // op = INT_SLESS(shiftout, 0)
         let zero = match op_in(data, op, 1) {
@@ -173,7 +173,7 @@ impl Rule for RuleSborrowGe {
         }))
     }
 
-    /// C++ `RuleSborrowGe::applyOp` (`kuna_flagcompare.cc:242`) — transcribed.
+    /// C++ `RuleSborrowGe::applyOp` (`unlace_flagcompare.cc:242`) — transcribed.
     fn apply_op(&mut self, op: OpId, data: &mut Funcdata) -> int4 {
         let (nflag, vflag) = if op_code(data, op) == OpCode::CPUI_BOOL_AND {
             match extract_and_of_ors(data, op) {
@@ -224,7 +224,7 @@ pub fn specs() -> Vec<RuleSpec> {
 }
 
 // ---------------------------------------------------------------------------
-// GH-8777 helpers (faithful transcriptions of the kuna_flagcompare.cc statics)
+// GH-8777 helpers (faithful transcriptions of the unlace_flagcompare.cc statics)
 // ---------------------------------------------------------------------------
 
 /// If `vn` is `BOOL_NEGATE(x)`, return x; else None (C++ `stripBoolNeg`).

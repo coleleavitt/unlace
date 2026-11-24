@@ -3,7 +3,7 @@
 #
 # build.sh assembles one tree with the decompiler at /decompile/, which is what the
 # tests serve. This moves the decompiler to the root of dist-run/ (decompile.run) and
-# leaves dist/ as kuna.noelo.org: the landing page, /dev-viz/, and a /decompile/ that
+# leaves dist/ as coleleavitt.github.io/unlace: the landing page, /dev-viz/, and a /decompile/ that
 # forwards to decompile.run with its query and fragment. Run it after build.sh.
 set -euo pipefail
 
@@ -11,7 +11,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST="$HERE/dist"
 RUN="$HERE/dist-run"
 SITE_URL="https://decompile.run/"
-HOME_URL="https://kuna.noelo.org/"
+HOME_URL="https://coleleavitt.github.io/unlace/"
 
 [ -f "$DIST/decompile/index.html" ] && [ -f "$DIST/unlace_wasm.wasm" ] \
   || { echo "error: $DIST is not a fresh build.sh bundle; run build.sh first"; exit 1; }
@@ -46,4 +46,4 @@ if grep -n -E 'href="(\.\.?/)decompile/"' "$DIST/index.html" "$DIST/dev-viz/inde
   echo "error: a site page still links to the local /decompile/"
   exit 1
 fi
-echo ">> done. $RUN -> decompile.run ($(du -sh "$RUN" | cut -f1)), $DIST -> kuna.noelo.org ($(du -sh "$DIST" | cut -f1))"
+echo ">> done. $RUN -> decompile.run ($(du -sh "$RUN" | cut -f1)), $DIST -> coleleavitt.github.io/unlace ($(du -sh "$DIST" | cut -f1))"

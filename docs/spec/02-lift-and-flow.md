@@ -4185,7 +4185,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `A29K` | AMD Am29000 | `a29k:LE:32:default`, `a29k:BE:32:default` | aleph-void/ghidra_a29k (fork of mumbel/ghidra_a29k) @ `f3b6ab7373`, Apache-2.0 |
 | `uPD78xx` | NEC 78K0 / 78K0S / 78K4 (uPD78xx) | `upd78:LE:16:default` | aleph-void/ghidra-upd78xx @ `036419037e`, Apache-2.0 |
 | `R8C` | Renesas M16C/20 and R8C/Tiny | `R8C:LE:16:default` | AlexDev-TH/ghidra-r8c @ `6484b9470a`, Apache-2.0 |
-| `C166` | Infineon C166 / XC166, ST10 | `C166:LE:16:default`, `C166:CS:LE:16:default` | aleph-void/c166-ghidra-module (fork of keyhana/c166-ghidra-module) @ `c544f0ad16`, MIT |
+| `C166` | Infineon C166 / XC166, ST10 | `C166:LE:16:default`, `C166:LE:16:CS` | aleph-void/c166-ghidra-module (fork of keyhana/c166-ghidra-module) @ `c544f0ad16`, MIT |
 | `F2MC16` | Fujitsu F2MC-16L / 16LX | `F2MC:LE:24:default` | aleph-void/F2MC-16LX (fork of mehmooda/F2MC-16LX) @ `0308d3095a`, MIT |
 | `8008` | Intel 8008 | `8008:LE:16:default` | aleph-void/ghidra-8008 @ `71c3e7378c`, Apache-2.0 |
 | `F8` | Fairchild F8 | `F8:BE:16:default`, `F8:BE:16:F3850`, `F8:BE:16:MK3870`, `F8:BE:16:F3870`, `F8:BE:16:MK3873` | aleph-void/ghidra-f8 @ `bad5887f84`, Apache-2.0 |

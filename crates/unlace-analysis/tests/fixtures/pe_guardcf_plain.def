@@ -1,0 +1,3 @@
+LIBRARY plain.dll
+EXPORTS
+  plain_sub

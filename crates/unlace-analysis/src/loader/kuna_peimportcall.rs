@@ -81,6 +81,11 @@ impl AnalysisPass for PeImportCallPass {
             _ => return out,
         }
         out.externref = crate::loader::format::import_slots(ctx.file, ctx.bytes);
+        out.guard_dispatch_slots = crate::loader::kuna_peloadconfig::image_named_slots(ctx.bytes)
+            .into_iter()
+            .filter(|(_, name)| crate::loader::kuna_peloadconfig::DISPATCH_SLOTS.contains(name))
+            .map(|(addr, _)| addr)
+            .collect();
         out
     }
 }

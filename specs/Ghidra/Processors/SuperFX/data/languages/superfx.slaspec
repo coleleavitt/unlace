@@ -1,0 +1,456 @@
+# SLEIGH specification for the Nintendo SuperFX (GSU-1 / GSU-2) co-processor.
+#
+# Original author: ChekeEdd (github.com/ChekeEdd/ghidra-superfx, BSD-3-Clause); the history of the
+# upstream file (versions 0.1 - 0.3.2) is in git and in CHANGELOG.md. Ghidra-Rare rewrote the
+# instruction semantics (version 1.0): see CREDITS.md and GHIDRA-RARE.md.
+#
+# Model
+# -----
+# * Prefixes. ALT1/ALT2/ALT3, TO, FROM and WITH are separate one-byte instructions. Their effect on
+#   the next instruction is tracked at decode time in the context register (noflow fields, set on
+#   the following address with globalset): alt (bit0 = ALT1, bit1 = ALT2), b (WITH was seen),
+#   sreg and dreg (the source / destination register selectors, R0 by default). The next opcode
+#   is decoded with those fields; every non-prefix instruction resets them by not propagating
+#   anything. The branches 05..0F propagate them unchanged ("prefix + Bxx + suffix").
+# * ALT1/ALT2 on an opcode without that form are ignored and ALT3 acts as ALT1 and then as no
+#   prefix, so each opcode lists the alt values that select each of its forms.
+# * Delay slots. Every taken branch / jump (Bxx, JMP, LJMP, LOOP, a write to R15) executes the
+#   following instruction first (delayslot(1)).
+# * R15 as a source operand reads the address of the next instruction. Any instruction whose
+#   destination is R15 is a jump (the DFIN / NFIN sub-tables add the delay slot and the goto).
+# * Addresses: code is PBR:R15 on the SNES bus (24-bit space "ram"); RAM data is $70:0000 plus
+#   RAMBR<<16 plus the 16-bit address; ROM data is ROMBR:R14.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=3 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [
+    R0  R1  R2  R3  R4  R5  R6  R7
+    R8  R9  R10 R11 R12 R13 R14 R15
+];
+
+define register offset=0x40 size=2 [ SFR ];     # not updated by the flag registers below
+define register offset=0x42 size=1 [ PBR ];     # program bank
+define register offset=0x43 size=1 [ ROMBR ];   # ROM bank
+define register offset=0x44 size=1 [ RAMBR ];   # RAM bank (bit 0 only)
+define register offset=0x45 size=2 [ CBR ];     # cache base
+define register offset=0x47 size=1 [ SCBR ];    # screen base
+define register offset=0x48 size=1 [ SCMR ];    # screen mode
+define register offset=0x49 size=1 [ COLR ];    # colour
+define register offset=0x4a size=1 [ POR ];     # plot option
+define register offset=0x4b size=1 [ BRAMR ];   # backup RAM
+define register offset=0x4c size=1 [ CFGR ];    # config
+
+# SFR flag bits, one byte each (cheaper for the decompiler than bit-fields of SFR).
+define register offset=0x50 size=1 [ flagZ flagCY flagS flagOV flagG flagR flagALT1 flagALT2 flagIL flagIH flagB flagIRQ ];
+
+# Last RAM address used by a load/store (for SBK).
+define register offset=0x62 size=2 [ RAMADDR ];
+
+define register offset=0x70 size=4 contextreg;
+define context contextreg
+    alt   = (0,1)  noflow    # 0 none, 1 ALT1, 2 ALT2, 3 ALT3
+    b     = (2,2)  noflow    # WITH seen: 1n is MOVE and Bn is MOVES
+    sreg  = (3,6)  noflow    # source register selector (FROM / WITH)
+    dreg  = (7,10) noflow    # destination register selector (TO / WITH)
+;
+
+define token opbyte (8)
+    op     = (0,7)
+    hi     = (4,7)
+    n      = (0,3)
+    rn     = (0,3)
+    nimm   = (0,3)
+;
+define token tk_imm8 (8)
+    imm8   = (0,7)
+    simm8  = (0,7) signed
+;
+define token tk_lo (8)
+    lo8    = (0,7)
+    lobit  = (0,0)
+;
+define token tk_hi (8)
+    hi8    = (0,7)
+;
+
+attach variables [ rn ] [ R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15 ];
+
+###############################################################################
+# Operand tables
+###############################################################################
+
+# value of Rn (opcode low nibble); R15 reads as the address of the next instruction
+RNs: rn      is rn & n<15 { export rn; }
+RNs: "R15"   is n=15 { local t:3 = inst_next; local u:2 = t:2; export u; }
+
+# value of the selected source register (Sreg); R15 reads as the address of the next instruction
+RS: "R0" is sreg=0 { export R0; }
+RS: "R1" is sreg=1 { export R1; }
+RS: "R2" is sreg=2 { export R2; }
+RS: "R3" is sreg=3 { export R3; }
+RS: "R4" is sreg=4 { export R4; }
+RS: "R5" is sreg=5 { export R5; }
+RS: "R6" is sreg=6 { export R6; }
+RS: "R7" is sreg=7 { export R7; }
+RS: "R8" is sreg=8 { export R8; }
+RS: "R9" is sreg=9 { export R9; }
+RS: "R10" is sreg=10 { export R10; }
+RS: "R11" is sreg=11 { export R11; }
+RS: "R12" is sreg=12 { export R12; }
+RS: "R13" is sreg=13 { export R13; }
+RS: "R14" is sreg=14 { export R14; }
+RS: "R15" is sreg=15 { local t:3 = inst_next; local u:2 = t:2; export u; }
+
+# selected destination register (Dreg): R15 is a plain register here, DFIN adds the jump
+RD: "R0" is dreg=0 { export R0; }
+RD: "R1" is dreg=1 { export R1; }
+RD: "R2" is dreg=2 { export R2; }
+RD: "R3" is dreg=3 { export R3; }
+RD: "R4" is dreg=4 { export R4; }
+RD: "R5" is dreg=5 { export R5; }
+RD: "R6" is dreg=6 { export R6; }
+RD: "R7" is dreg=7 { export R7; }
+RD: "R8" is dreg=8 { export R8; }
+RD: "R9" is dreg=9 { export R9; }
+RD: "R10" is dreg=10 { export R10; }
+RD: "R11" is dreg=11 { export R11; }
+RD: "R12" is dreg=12 { export R12; }
+RD: "R13" is dreg=13 { export R13; }
+RD: "R14" is dreg=14 { export R14; }
+RD: "R15" is dreg=15 { export R15; }
+
+# Rn as a destination
+RNd: rn    is rn { export rn; }
+
+# A write to R15 is a jump: after the instruction, run the delay slot and go to PBR:R15.
+DFIN: is dreg<15 { }
+DFIN: is dreg=15 { local t:3 = (inst_start & 0xff0000) | zext(R15); delayslot(1); goto [t]; }
+NFIN: is n<15 { }
+NFIN: is n=15 { local t:3 = (inst_start & 0xff0000) | zext(R15); delayslot(1); goto [t]; }
+
+# IWT R15, #imm: a direct jump inside the current bank (the bank is PBR, which is the instruction's own bank)
+IMMJ: addr  is lo8 ; hi8 [ addr = (inst_start & 0xff0000) | (hi8 << 8) | lo8; ] { export *:3 addr; }
+
+IMM16: val  is lo8 ; hi8 [ val = (hi8 << 8) | lo8; ] { export *[const]:2 val; }
+# the same, split by address parity (words at odd addresses are accessed as a swapped pair)
+IMM16E: val  is lobit=0 & lo8 ; hi8 [ val = (hi8 << 8) | lo8; ] { export *[const]:2 val; }
+IMM16O: val  is lobit=1 & lo8 ; hi8 [ val = (hi8 << 8) | lo8; ] { export *[const]:2 val; }
+# LMS / SMS: the operand byte is a word index
+WADDR: addr  is imm8 [ addr = imm8 << 1; ] { export *[const]:2 addr; }
+
+REL: reloc  is simm8 [ reloc = inst_next + simm8; ] { export *:3 reloc; }
+
+###############################################################################
+# Macros
+###############################################################################
+macro szflags(r) {
+    flagS = (r s< 0);
+    flagZ = (r == 0);
+}
+
+macro ramea(a, ea) {
+    ea = 0x700000 | (zext(RAMBR & 1) << 16) | zext(a);
+}
+
+# 16-bit load/store: the word at an odd address is the pair (byte[a], byte[a xor 1]).
+macro ldwr(a, d) {
+    local ea:3 = 0;
+    ramea(a, ea);
+    local l:1 = *:1 ea;
+    local h:1 = *:1 (ea ^ 1);
+    d = (zext(h) << 8) | zext(l);
+    RAMADDR = a;
+}
+macro stwr(a, s) {
+    local ea:3 = 0;
+    ramea(a, ea);
+    *:1 ea = s:1;
+    *:1 (ea ^ 1) = s(1);
+    RAMADDR = a;
+}
+
+macro ldw2(a, d) {
+    local ea:3 = 0;
+    ramea(a, ea);
+    d = *:2 ea;
+    RAMADDR = a;
+}
+macro stw2(a, s) {
+    local ea:3 = 0;
+    ramea(a, ea);
+    *:2 ea = s;
+    RAMADDR = a;
+}
+
+# Bitmap address of the 8-pixel row holding (x, y): tile number from SCMR.HT / POR.OBJ, bit-planes
+# per tile from SCMR.MD (4 / 16 / 256 colours); plane pair k is at row + 0x10 * k, +1 for the odd plane.
+macro pixrow(x, y, np, row) {
+    local ht:2 = ((zext(SCMR) >> 2) & 1) | ((zext(SCMR) >> 4) & 2);
+    ht = ht | (((zext(POR) >> 4) & 1) * 3);
+    local tn:2 = (x >> 3) * (0x10 + ht * 4) + (y >> 3);
+    local to:2 = ((y >> 7) * 0x200) + ((x >> 7) * 0x100) + (((y >> 3) & 0xf) * 0x10) + ((x >> 3) & 0xf);
+    local tile:2 = tn + zext(ht == 3) * (to - tn);
+    row = 0x700000 + (zext(SCBR) << 10) + zext(tile * (np * 8)) + zext((y & 7) * 2);
+}
+
+# COLOR / GETC: POR.2 copies the high nibble to the low one, POR.3 keeps COLR's high nibble.
+macro setcolor(v) {
+    local lo:1 = v & 0x0f;
+    if ((POR & 4) == 0) goto <keep>;
+    lo = v >> 4;
+    <keep>
+    local hn:1 = v & 0xf0;
+    if ((POR & 8) == 0) goto <set>;
+    hn = COLR & 0xf0;
+    <set>
+    COLR = hn | lo;
+}
+
+macro addf(x1, x2, r) {
+    r = x1 + x2;
+    flagCY = carry(x1, x2);
+    flagOV = scarry(x1, x2);
+    szflags(r);
+}
+macro subf(x1, x2, r) {
+    r = x1 - x2;
+    flagCY = (x1 >= x2);
+    flagOV = sborrow(x1, x2);
+    szflags(r);
+}
+macro adcf(x1, x2, r) {
+    local c:4 = zext(flagCY);
+    local wu:4 = zext(x1) + zext(x2) + c;
+    local ws:4 = sext(x1) + sext(x2) + c;
+    r = wu:2;
+    flagCY = (wu > 0xffff);
+    flagOV = (ws s> 0x7fff) || (ws s< -0x8000);
+    szflags(r);
+}
+macro sbcf(x1, x2, r) {
+    local c:4 = zext(flagCY ^ 1);
+    local wu:4 = zext(x1) - zext(x2) - c;
+    local ws:4 = sext(x1) - sext(x2) - c;
+    r = wu:2;
+    flagCY = (wu s>= 0);
+    flagOV = (ws s> 0x7fff) || (ws s< -0x8000);
+    szflags(r);
+}
+
+###############################################################################
+# 00..0F
+###############################################################################
+:STOP     is op=0x00 { flagG = 0; flagIRQ = 1; local t:3 = inst_next + 1; return [t]; }
+:NOP      is op=0x01 { }
+:CACHE    is op=0x02 { local t:3 = inst_next; local u:2 = t:2; CBR = u & 0xfff0; }
+
+:LSR      is op=0x03 & RS & RD & DFIN { local a:2 = RS; flagCY = (a & 1) != 0; local r:2 = a >> 1; RD = r; flagS = 0; flagZ = (r == 0); build DFIN; }
+:ROL      is op=0x04 & RS & RD & DFIN { local a:2 = RS; local c:2 = zext(flagCY); flagCY = (a & 0x8000) != 0; local r:2 = (a << 1) | c; RD = r; szflags(r); build DFIN; }
+
+# Branches keep the prefix state for the instruction in the slot ("prefix + Bxx + suffix").
+:BRA REL  is op=0x05; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { delayslot(1); goto REL; }
+:BGE REL  is op=0x06; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagS == flagOV); delayslot(1); if (c) goto REL; }
+:BLT REL  is op=0x07; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagS != flagOV); delayslot(1); if (c) goto REL; }
+:BNE REL  is op=0x08; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagZ == 0); delayslot(1); if (c) goto REL; }
+:BEQ REL  is op=0x09; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagZ != 0); delayslot(1); if (c) goto REL; }
+:BPL REL  is op=0x0a; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagS == 0); delayslot(1); if (c) goto REL; }
+:BMI REL  is op=0x0b; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagS != 0); delayslot(1); if (c) goto REL; }
+:BCC REL  is op=0x0c; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagCY == 0); delayslot(1); if (c) goto REL; }
+:BCS REL  is op=0x0d; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagCY != 0); delayslot(1); if (c) goto REL; }
+:BVC REL  is op=0x0e; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagOV == 0); delayslot(1); if (c) goto REL; }
+:BVS REL  is op=0x0f; REL [ globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { local c:1 = (flagOV != 0); delayslot(1); if (c) goto REL; }
+
+###############################################################################
+# 10..2F, 3C..3F: TO / MOVE, WITH, ALT prefixes
+###############################################################################
+:TO rn    is b=0 & hi=1 & rn & n
+          [ dreg = n; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+:MOVE RNd, RS  is b=1 & hi=1 & RNd & RS & NFIN { RNd = RS; build NFIN; }
+:WITH rn  is hi=2 & rn & n
+          [ b = 1; sreg = n; dreg = n; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+:ALT1     is op=0x3d [ alt = alt | 1; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+:ALT2     is op=0x3e [ alt = alt | 2; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+:ALT3     is op=0x3f [ alt = 3; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+
+:FROM rn  is b=0 & hi=0xb & rn & n
+          [ sreg = n; globalset(inst_next, alt); globalset(inst_next, b); globalset(inst_next, sreg); globalset(inst_next, dreg); ] { }
+:MOVES RD, RNs  is b=1 & hi=0xb & RD & RNs & DFIN { local r:2 = RNs; RD = r; flagOV = (r & 0x80) != 0; szflags(r); build DFIN; }
+
+###############################################################################
+# 30..4F: RAM word/byte load and store, PLOT, SWAP, COLOR, NOT
+###############################################################################
+:STW (rn)  is (alt=0 | alt=2) & hi=3 & rn & n<12 & RS { local a:2 = rn; stwr(a, RS); }
+:STB (rn)  is (alt=1 | alt=3) & hi=3 & rn & n<12 & RS { local a:2 = rn; local ea:3 = 0; ramea(a, ea); *:1 ea = RS:1; RAMADDR = a; }
+
+:LOOP      is op=0x3c { R12 = R12 - 1; szflags(R12); local t:3 = (inst_start & 0xff0000) | zext(R13); local c:1 = (R12 != 0); delayslot(1); if (!c) goto <done>; goto [t]; <done> }
+
+:LDW (rn)  is (alt=0 | alt=2) & hi=4 & rn & n<12 & RD & DFIN { local a:2 = rn; local v:2 = 0; ldwr(a, v); RD = v; build DFIN; }
+:LDB (rn)  is (alt=1 | alt=3) & hi=4 & rn & n<12 & RD & DFIN { local a:2 = rn; local ea:3 = 0; ramea(a, ea); local v:1 = *:1 ea; RD = zext(v); RAMADDR = a; build DFIN; }
+
+:PLOT      is (alt=0 | alt=2) & op=0x4c {
+    local x:2 = R1 & 0xff;
+    local y:2 = R2 & 0xff;
+    local md:1 = SCMR & 3;
+    local np:2 = 2 + (zext(md == 1) * 2) + (zext(md == 3) * 6);
+    local c:1 = COLR;
+    if (md == 3 || (POR & 2) == 0 || (((x ^ y) & 1) == 0)) goto <nodither>;
+    c = c >> 4;
+    <nodither>
+    local mask:1 = 3;
+    if (md != 1) goto <m2>;
+    mask = 0x0f;
+    <m2>
+    if (md != 3) goto <m3>;
+    mask = 0xff;
+    if ((POR & 8) == 0) goto <m3>;
+    mask = 0x0f;
+    <m3>
+    R1 = R1 + 1;
+    if ((POR & 1) != 0 || (c & mask) != 0) goto <draw>;
+    goto <done>;
+    <draw>
+    local row:3 = 0;
+    pixrow(x, y, np, row);
+    local bitm:1 = 0x80 >> (x:1 & 7);
+    local p:2 = 0;
+    <plane>
+    local a:3 = row + zext((p >> 1) << 4) + zext(p & 1);
+    local old:1 = *:1 a;
+    local cb:1 = (c >> p:1) & 1;
+    *:1 a = (old & ~bitm) | (bitm * cb);
+    p = p + 1;
+    if (p < np) goto <plane>;
+    <done>
+}
+:RPIX      is (alt=1 | alt=3) & op=0x4c & RD & DFIN {
+    local x:2 = R1 & 0xff;
+    local y:2 = R2 & 0xff;
+    local md:1 = SCMR & 3;
+    local np:2 = 2 + (zext(md == 1) * 2) + (zext(md == 3) * 6);
+    local row:3 = 0;
+    pixrow(x, y, np, row);
+    local sh:1 = 7 - (x:1 & 7);
+    local v:2 = 0;
+    local p:2 = 0;
+    <plane>
+    local a:3 = row + zext((p >> 1) << 4) + zext(p & 1);
+    local bt:2 = zext((*:1 a >> sh) & 1);
+    v = v | (bt << p);
+    p = p + 1;
+    if (p < np) goto <plane>;
+    RD = v;
+    szflags(v);
+    build DFIN;
+}
+:SWAP      is op=0x4d & RS & RD & DFIN { local a:2 = RS; local r:2 = (a << 8) | (a >> 8); RD = r; szflags(r); build DFIN; }
+:COLOR     is (alt=0 | alt=2) & op=0x4e & RS { local v:1 = RS:1; setcolor(v); }
+:CMODE     is (alt=1 | alt=3) & op=0x4e & RS { POR = RS:1 & 0x1f; }
+:NOT       is op=0x4f & RS & RD & DFIN { local r:2 = ~RS; RD = r; szflags(r); build DFIN; }
+
+###############################################################################
+# 50..8F: ALU
+###############################################################################
+:ADD RNs   is alt=0 & hi=5 & RNs & RS & RD & DFIN { local a:2 = RS; local y:2 = RNs; local r:2 = 0; addf(a, y, r); RD = r; build DFIN; }
+:ADC RNs   is alt=1 & hi=5 & RNs & RS & RD & DFIN { local a:2 = RS; local y:2 = RNs; local r:2 = 0; adcf(a, y, r); RD = r; build DFIN; }
+:ADD "#"^nimm  is alt=2 & hi=5 & nimm & RS & RD & DFIN { local a:2 = RS; local y:2 = nimm; local r:2 = 0; addf(a, y, r); RD = r; build DFIN; }
+:ADC "#"^nimm  is alt=3 & hi=5 & nimm & RS & RD & DFIN { local a:2 = RS; local y:2 = nimm; local r:2 = 0; adcf(a, y, r); RD = r; build DFIN; }
+
+:SUB RNs   is alt=0 & hi=6 & RNs & RS & RD & DFIN { local a:2 = RS; local y:2 = RNs; local r:2 = 0; subf(a, y, r); RD = r; build DFIN; }
+:SBC RNs   is alt=1 & hi=6 & RNs & RS & RD & DFIN { local a:2 = RS; local y:2 = RNs; local r:2 = 0; sbcf(a, y, r); RD = r; build DFIN; }
+:SUB "#"^nimm  is alt=2 & hi=6 & nimm & RS & RD & DFIN { local a:2 = RS; local y:2 = nimm; local r:2 = 0; subf(a, y, r); RD = r; build DFIN; }
+:CMP RNs   is alt=3 & hi=6 & RNs & RS { local a:2 = RS; local y:2 = RNs; local r:2 = 0; subf(a, y, r); }
+
+:MERGE     is op=0x70 & RD & DFIN {
+    local r:2 = (R7 & 0xff00) | (R8 >> 8);
+    RD = r;
+    flagS  = (r & 0x8080) != 0;
+    flagOV = (r & 0xc0c0) != 0;
+    flagCY = (r & 0xe0e0) != 0;
+    flagZ  = (r & 0xf0f0) != 0;
+    build DFIN;
+}
+:AND RNs   is alt=0 & hi=7 & n>0 & RNs & RS & RD & DFIN { local r:2 = RS & RNs; RD = r; szflags(r); build DFIN; }
+:BIC RNs   is alt=1 & hi=7 & n>0 & RNs & RS & RD & DFIN { local r:2 = RS & ~RNs; RD = r; szflags(r); build DFIN; }
+:AND "#"^nimm  is alt=2 & hi=7 & n>0 & nimm & RS & RD & DFIN { local y:2 = nimm; local r:2 = RS & y; RD = r; szflags(r); build DFIN; }
+:BIC "#"^nimm  is alt=3 & hi=7 & n>0 & nimm & RS & RD & DFIN { local y:2 = nimm; local r:2 = RS & ~y; RD = r; szflags(r); build DFIN; }
+
+:MULT RNs  is alt=0 & hi=8 & RNs & RS & RD & DFIN { local x:2 = sext(RS:1); local y:2 = sext(RNs:1); local r:2 = x * y; RD = r; szflags(r); build DFIN; }
+:UMULT RNs is alt=1 & hi=8 & RNs & RS & RD & DFIN { local x:2 = zext(RS:1); local y:2 = zext(RNs:1); local r:2 = x * y; RD = r; szflags(r); build DFIN; }
+:MULT "#"^nimm  is alt=2 & hi=8 & nimm & RS & RD & DFIN { local x:2 = sext(RS:1); local y:2 = nimm; local r:2 = x * y; RD = r; szflags(r); build DFIN; }
+:UMULT "#"^nimm is alt=3 & hi=8 & nimm & RS & RD & DFIN { local x:2 = zext(RS:1); local y:2 = nimm; local r:2 = x * y; RD = r; szflags(r); build DFIN; }
+
+###############################################################################
+# 90..9F
+###############################################################################
+:SBK       is op=0x90 & RS { local a:2 = RAMADDR; stwr(a, RS); }
+:LINK "#"^nimm  is hi=9 & n>=1 & n<=4 & nimm { local t:3 = inst_next; local u:2 = t:2; R11 = u + nimm; }
+:SEX       is op=0x95 & RS & RD & DFIN { local r:2 = sext(RS:1); RD = r; szflags(r); build DFIN; }
+:ASR       is (alt=0 | alt=2) & op=0x96 & RS & RD & DFIN { local a:2 = RS; flagCY = (a & 1) != 0; local r:2 = a s>> 1; RD = r; szflags(r); build DFIN; }
+:DIV2      is (alt=1 | alt=3) & op=0x96 & RS & RD & DFIN { local a:2 = RS; flagCY = (a & 1) != 0; local m:2 = zext(a != 0xffff); local r:2 = (a s>> 1) * m; RD = r; szflags(r); build DFIN; }
+:ROR       is op=0x97 & RS & RD & DFIN { local a:2 = RS; local c:2 = zext(flagCY) << 15; flagCY = (a & 1) != 0; local r:2 = (a >> 1) | c; RD = r; szflags(r); build DFIN; }
+
+:JMP rn    is (alt=0 | alt=2) & hi=9 & rn & n>=8 & n<=13 & n!=11 { local t:3 = (inst_start & 0xff0000) | zext(rn); delayslot(1); goto [t]; }
+:JMP rn    is (alt=0 | alt=2) & hi=9 & rn & n=11 { local t:3 = (inst_start & 0xff0000) | zext(rn); delayslot(1); return [t]; }
+:LJMP rn   is (alt=1 | alt=3) & hi=9 & rn & n>=8 & n<=13 & RS {
+    local t:3 = (zext(rn:1) << 16) | zext(RS);
+    local nb:1 = rn:1;
+    local nc:2 = RS & 0xfff0;
+    delayslot(1);
+    PBR = nb;
+    CBR = nc;
+    goto [t];
+}
+:LOB       is op=0x9e & RS & RD & DFIN { local r:2 = zext(RS:1); RD = r; flagS = (r & 0x80) != 0; flagZ = (r == 0); build DFIN; }
+:FMULT     is (alt=0 | alt=2) & op=0x9f & RS & RD & DFIN {
+    local p:4 = sext(RS) * sext(R6);
+    local r:2 = p(2);
+    flagCY = (p & 0x8000) != 0;
+    RD = r;
+    szflags(r);
+    build DFIN;
+}
+:LMULT     is (alt=1 | alt=3) & op=0x9f & RS & RD & DFIN {
+    local p:4 = sext(RS) * sext(R6);
+    local r:2 = p(2);
+    flagCY = (p & 0x8000) != 0;
+    R4 = p:2;
+    RD = r;
+    szflags(r);
+    build DFIN;
+}
+
+###############################################################################
+# A0..FF
+###############################################################################
+
+:IBT RNd, "#"^imm8  is alt=0 & hi=0xa & RNd & NFIN ; imm8 { local v:1 = imm8; RNd = sext(v); build NFIN; }
+:LMS RNd, "("^WADDR^")"  is (alt=1 | alt=3) & hi=0xa & RNd & NFIN ; WADDR { local a:2 = WADDR; local v:2 = 0; ldw2(a, v); RNd = v; build NFIN; }
+:SMS "("^WADDR^")", RNs  is alt=2 & hi=0xa & RNs ; WADDR { local a:2 = WADDR; local v:2 = RNs; stw2(a, v); }
+
+:HIB       is op=0xc0 & RS & RD & DFIN { local r:2 = RS >> 8; RD = r; flagS = (r & 0x80) != 0; flagZ = (r == 0); build DFIN; }
+:OR RNs    is alt=0 & hi=0xc & n>0 & RNs & RS & RD & DFIN { local r:2 = RS | RNs; RD = r; szflags(r); build DFIN; }
+:XOR RNs   is alt=1 & hi=0xc & n>0 & RNs & RS & RD & DFIN { local r:2 = RS ^ RNs; RD = r; szflags(r); build DFIN; }
+:OR "#"^nimm   is alt=2 & hi=0xc & n>0 & nimm & RS & RD & DFIN { local y:2 = nimm; local r:2 = RS | y; RD = r; szflags(r); build DFIN; }
+:XOR "#"^nimm  is alt=3 & hi=0xc & n>0 & nimm & RS & RD & DFIN { local y:2 = nimm; local r:2 = RS ^ y; RD = r; szflags(r); build DFIN; }
+
+:INC rn    is hi=0xd & rn & n<15 { rn = rn + 1; szflags(rn); }
+:GETC      is (alt=0 | alt=1) & op=0xdf { local ea:3 = (zext(ROMBR) << 16) | zext(R14); local v:1 = *:1 ea; setcolor(v); }
+:RAMB      is alt=2 & op=0xdf & RS { RAMBR = RS:1 & 1; }
+:ROMB      is alt=3 & op=0xdf & RS { ROMBR = RS:1; }
+
+:DEC rn    is hi=0xe & rn & n<15 { rn = rn - 1; szflags(rn); }
+:GETB      is alt=0 & op=0xef & RD & DFIN { local ea:3 = (zext(ROMBR) << 16) | zext(R14); local v:1 = *:1 ea; RD = zext(v); build DFIN; }
+:GETBH     is alt=1 & op=0xef & RD & DFIN { local ea:3 = (zext(ROMBR) << 16) | zext(R14); local v:1 = *:1 ea; local o:2 = RD; RD = (o & 0x00ff) | (zext(v) << 8); build DFIN; }
+:GETBL     is alt=2 & op=0xef & RD & DFIN { local ea:3 = (zext(ROMBR) << 16) | zext(R14); local v:1 = *:1 ea; local o:2 = RD; RD = (o & 0xff00) | zext(v); build DFIN; }
+:GETBS     is alt=3 & op=0xef & RD & DFIN { local ea:3 = (zext(ROMBR) << 16) | zext(R14); local v:1 = *:1 ea; RD = sext(v); build DFIN; }
+
+:IWT "R15", "#"^IMM16  is alt=0 & op=0xff ; IMM16 & IMMJ { delayslot(1); goto IMMJ; }
+:IWT RNd, "#"^IMM16  is alt=0 & hi=0xf & n<15 & RNd & NFIN ; IMM16 { RNd = IMM16; build NFIN; }
+:LM RNd, "("^IMM16E^")"  is (alt=1 | alt=3) & hi=0xf & RNd & NFIN ; IMM16E { local a:2 = IMM16E; local v:2 = 0; ldw2(a, v); RNd = v; build NFIN; }
+:LM RNd, "("^IMM16O^")"  is (alt=1 | alt=3) & hi=0xf & RNd & NFIN ; IMM16O { local a:2 = IMM16O; local v:2 = 0; ldwr(a, v); RNd = v; build NFIN; }
+:SM "("^IMM16E^")", RNs  is alt=2 & hi=0xf & RNs ; IMM16E { local a:2 = IMM16E; local v:2 = RNs; stw2(a, v); }
+:SM "("^IMM16O^")", RNs  is alt=2 & hi=0xf & RNs ; IMM16O { local a:2 = IMM16O; local v:2 = RNs; stwr(a, v); }

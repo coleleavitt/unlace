@@ -185,6 +185,10 @@ specs/Ghidra/Processors/ST7 vendors the STMicro ST7 SLEIGH specification of
 aleph-void/ghidra-st7 (https://github.com/aleph-void/ghidra-st7), released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/SuperFX vendors the SuperFX (GSU) SLEIGH specification of
+aleph-void/ghidra-superfx (https://github.com/aleph-void/ghidra-superfx), a fork of ChekeEdd/ghidra-superfx, released under the
+BSD 3-Clause License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

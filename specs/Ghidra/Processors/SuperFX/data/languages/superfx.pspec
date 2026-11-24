@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="R15"/>
+  <default_memory_blocks>
+    <memory_block name="GSU_REGS"
+                  start_address="ram:3000"
+                  length="0x100"
+                  initialized="false"/>
+    <memory_block name="GSU_CACHE"
+                  start_address="ram:3100"
+                  length="0x200"
+                  initialized="false"/>
+  </default_memory_blocks>
+  <context_data>
+    <context_set space="ram">
+      <set name="alt" val="0"/>
+      <set name="b" val="0"/>
+      <set name="sreg" val="0"/>
+      <set name="dreg" val="0"/>
+    </context_set>
+  </context_data>
+
+</processor_spec>

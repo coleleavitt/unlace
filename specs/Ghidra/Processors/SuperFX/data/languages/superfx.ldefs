@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+
+  <language processor="SuperFX"
+            endian="little"
+            size="24"
+            variant="default"
+            version="1.0"
+            slafile="superfx.sla"
+            processorspec="superfx.pspec"
+            id="SuperFX:LE:24:default">
+    <description>Nintendo SuperFX (GSU-1 / GSU-2) co-processor</description>
+    <compiler name="default" spec="superfx.cspec" id="default"/>
+  </language>
+
+</language_definitions>

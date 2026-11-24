@@ -5624,6 +5624,18 @@ loads it from the first word of its area. `XRSTOR` and `XRSTORS` load it the
 same way when `EAX` bit 0 and the area's `XSTATE_BV` bit 0 are set, reset it
 to `0x037f` when only `EAX` bit 0 is set, and leave it unchanged otherwise.
 
+The stack width of a push, pop, call, return, `ENTER`/`LEAVE` or `PUSHA`/`POPA` is
+the stack segment's, so an `0x67` prefix (which only changes how a memory operand
+is addressed) does not switch such an instruction between `SP` and `ESP`: the
+`prefix_67` context bit records the prefix and `$(STACK16)`/`$(STACK32)` undo it
+(a repeated `0x67` changes nothing). In 16-bit code, a 32-bit address (an `0x67`
+prefix, the `ESI`/`EDI` string forms, `XLAT`) still adds the segment base:
+selector*16 in real mode and selector*0x10000 in 16-bit protected mode, with `SS`
+the default for an `EBP` or `ESP` base. `AAA` adds 0x106 to `AX` and `AAS`
+subtracts 6 from `AX` and 1 from `AH`; `AAD`/`AAM` take their flags from `AL`.
+`PUSHF` stores `EFLAGS` bit 1 as 1, a segment-register push or pop follows the
+operand size, and a far `CALL` with a 32-bit operand pushes `CS` zero-extended.
+
 The x87 condition bits `C0`-`C3` are their own registers; `FSTSW`/`FNSTSW` (to
 `AX` or memory) store `FPUStatusWord` with bits 8-10 and 14 replaced by them,
 so a status word read after an arithmetic instruction, `FPREM` or `FXAM` sees

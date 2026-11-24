@@ -36,6 +36,7 @@ CONFIGS = [
     ("s390x", "qemu"), ("nios2", "qemu"), ("sh4", "qemu"), ("m68k", "qemu"),
     ("arm", "qemu"), ("thumb", "qemu"), ("sparc", "qemu"), ("sparc64", "qemu"),
     ("x86-64-native", "native"), ("x86-64-x87", "native"),
+    ("x86-32-native", "native"), ("x86-16", "unicorn"),
 ]
 FAILING = ("mismatch", "length", "missing-output", "missing-input")
 KNOWN = HERE / "sweep_known.json"

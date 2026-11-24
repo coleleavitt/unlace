@@ -67,7 +67,7 @@ impl AnalysisPass for MsvcVtableTypesPass {
             return AnalysisOutput::default();
         };
         let img = ImageBytes::new(ctx.file);
-        let text = TextRanges::new(ctx.file);
+        let text = TextRanges::with_relocations(ctx.file, ctx.bytes);
         let classes = recover(&img, &rk, &text);
         AnalysisOutput {
             cpp_vtables: facts(&classes, &method_names(ctx.file), rk.ptr_size() as u64),

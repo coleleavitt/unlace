@@ -1,0 +1,62 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'forever' },
+    { space = 'ram', offset = '0x100a', name = 'tick' },
+    { space = 'ram', offset = '0x1100', name = 'countdown' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = 'e805000000ebf9c39090c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+hex = '89f883e80185c07ff9c3'
+
+[script]
+commands = [
+    'option infloopstyle do',
+    'lo fu forever',
+    'decompile',
+    'print C',
+    'lo fu countdown',
+    'decompile',
+    'print C',
+    'option infloopstyle while',
+    'lo fu forever',
+    'decompile',
+    'print C',
+    'lo fu countdown',
+    'decompile',
+    'print C',
+    'phase catalog infloopstyle',
+    'quit',
+]
+
+[[match]]
+name = 'INFLOOPSTYLE #1: legacy bottom-tested infinite spelling'
+count = 1
+literal = '} while( true );'
+
+[[match]]
+name = 'INFLOOPSTYLE #2: default top-tested infinite spelling'
+count = 1
+literal = 'while( true ) {'
+
+[[match]]
+name = 'INFLOOPSTYLE #3: body call preserved in both forms'
+count = 2
+literal = 'tick();'
+
+[[match]]
+name = 'INFLOOPSTYLE #4: conditional do-while preserved in both passes'
+count = 2
+literal = '} while (0 < a0);'
+
+[[match]]
+name = 'INFLOOPSTYLE #5: live style follows the option'
+count = 1
+literal = '"default": "while", "current": "while"'

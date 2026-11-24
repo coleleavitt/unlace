@@ -679,8 +679,12 @@ macro fassignS(dest, src) {
 @if FPSIZE == "32"
 	dest = src;
 @else
-	dest = zext(src);
+	dest = zext(src) | ~zext(0xffffffff:4);
 @endif
+}
+
+macro fassignH(dest, src) {
+	dest = zext(src) | ~zext(0xffff:2);
 }
 
 

@@ -1,0 +1,132 @@
+# P9 Go condition rendering over authored UCOMISD/Jcc byte sequences.
+# A positive float equality proves both of its operands are ordered.
+# Ordered inequality, a third operand, a load and a conditional store
+# keep their existing guards. The final C run pins the machine guard.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'ordered_eq_args' },
+    { space = 'ram', offset = '0x100040', name = 'ordered_eq_constant' },
+    { space = 'ram', offset = '0x100080', name = 'ordered_ne_args' },
+    { space = 'ram', offset = '0x1000c0', name = 'unordered_other' },
+    { space = 'ram', offset = '0x100100', name = 'ordered_eq_load' },
+    { space = 'ram', offset = '0x100140', name = 'ordered_eq_with_store' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '660f2ec175087a06b807000000c3b809000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '660f2e053801000075087a06b811000000c3b813000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = '660f2ec174087a06b81b000000c3b81d000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000c0'
+readonly = true
+hex = '660f2ec1750c660f2ed27a06b825000000c3b827000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '660f2e0775087a06b82f000000c3b831000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100140'
+readonly = true
+hex = '660f2ec1750ec7073d0000007a06b839000000c3b83b000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100180'
+readonly = true
+hex = '000000000000f83f'
+
+[script]
+commands = [
+    'map prototype ordered_eq_args int ordered_eq_args(double a, double b);',
+    'map prototype ordered_eq_constant int ordered_eq_constant(double a);',
+    'map prototype ordered_ne_args int ordered_ne_args(double a, double b);',
+    'map prototype unordered_other int unordered_other(double a, double b, double c);',
+    'map prototype ordered_eq_load int ordered_eq_load(double a, double *p);',
+    'map prototype ordered_eq_with_store int ordered_eq_with_store(double a, double b, int *p);',
+    'option outlang go',
+    'load function ordered_eq_args',
+    'decompile',
+    'print C',
+    'option readonly off',
+    'load function ordered_eq_constant',
+    'decompile',
+    'print C',
+    'option readonly on',
+    'load function ordered_ne_args',
+    'decompile',
+    'print C',
+    'load function unordered_other',
+    'decompile',
+    'print C',
+    'load function ordered_eq_load',
+    'decompile',
+    'print C',
+    'load function ordered_eq_with_store',
+    'decompile',
+    'print C',
+    'option outlang c',
+    'load function ordered_eq_args',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Go equality makes its argument NaN checks redundant'
+count = 1
+regex = '^  if a == b \{$'
+
+[[match]]
+name = 'Go equality makes its constant comparison NaN check redundant'
+count = 1
+regex = '^  if a == dat_100180 \{$'
+
+[[match]]
+name = 'Go ordered inequality still excludes NaN'
+count = 1
+regex = '^  if \(a != b && \(!(?:NAN|math\.IsNaN)\(a\) && !(?:NAN|math\.IsNaN)\(b\)\)\) \{$'
+
+[[match]]
+name = 'Go equality cannot prove an unrelated operand ordered'
+count = 1
+regex = '^  if \(a == b && \(!(?:NAN|math\.IsNaN)\(c\)\)\) \{$'
+
+[[match]]
+name = 'Go equality preserves a separate implied load in its NaN guard'
+count = 1
+regex = '^  if \(a == \*p && \(!(?:NAN|math\.IsNaN)\(a\) && !(?:NAN|math\.IsNaN)\(\*p\)\)\) \{$'
+
+[[match]]
+name = 'Go condition keeps the clause that performs a store'
+count = 1
+regex = '^  if \(a == b && \(func\(\) bool \{$'
+
+[[match]]
+name = 'Go condition retains its conditional store value'
+count = 1
+regex = '^    \*p = (?:0x3d|61)$'
+
+[[match]]
+name = 'C equality still shows both machine NaN checks'
+count = 1
+regex = '^  if \(\(a == b\) && \(!NAN\(a\) && !NAN\(b\)\)\)$'

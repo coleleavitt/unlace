@@ -1,0 +1,837 @@
+# Seiko Epson S1C88 8-bit core (S1C88xxx; the Nintendo Pokemon mini CPU).
+# Written for unlace (#98) from the Epson S1C88 Core CPU Manual (MF658-05); one constructor
+# per row of the manual's instruction list by function (section 4.3.3). One flat 64 KB space (MODEL0/1 addressing): the bank and page
+# registers are loaded and saved but do not extend addresses. Decimal and unpack
+# arithmetic follow the flow context bits dmode/umode, which writes of SC with an
+# immediate commit.
+
+define endian=little;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=1 [ A B L H ];
+define register offset=0x00 size=2 [ BA HL ];
+define register offset=0x04 size=2 [ IX IY SP PC ];
+define register offset=0x10 size=1 [ BR SC NB CB EP XP YP CC ];
+define register offset=0x20 size=1 [ Z C V N D U I0 I1 ];
+define register offset=0x30 size=4 [ contextreg ];
+
+define context contextreg
+  dmode = (0,0)
+  umode = (1,1)
+;
+
+define token op0(8) o0 = (0,7);
+define token op1(8) o1 = (0,7);
+define token ta(8) ua = (0,7) sa = (0,7) signed ua_d = (4,4) ua_u = (5,5);
+define token tb(8) ub = (0,7) sb = (0,7) signed;
+define token tw(16) uw = (0,15) sw = (0,15) signed;
+
+define pcodeop halt;
+define pcodeop sleep;
+
+macro packSC(v) { v = (I1 << 7) | (I0 << 6) | (U << 5) | (D << 4) | (N << 3) | (V << 2) | (C << 1) | Z; SC = v; }
+macro unpackSC(v) { SC = v; I1 = (v >> 7) & 1; I0 = (v >> 6) & 1; U = (v >> 5) & 1; D = (v >> 4) & 1; N = (v >> 3) & 1; V = (v >> 2) & 1; C = (v >> 1) & 1; Z = v & 1; }
+macro resZN(r) { Z = (r == 0); N = (r s< 0); }
+
+# Decimal (D) and unpack (U) forms of the 8-bit add and subtract.
+macro bcdAdd(a, b, cin, r) {
+  lo:1 = (a & 0xf) + (b & 0xf) + cin;
+  lc:1 = lo > 9;
+  lo = (lo + lc * 6) & 0xf;
+  hi:1 = (a >> 4) + (b >> 4) + lc;
+  hc:1 = hi > 9;
+  hi = (hi + hc * 6) & 0xf;
+  r = (hi << 4) | lo;
+  C = hc; Z = (r == 0); N = 0; V = 0;
+}
+macro bcdSub(a, b, cin, r) {
+  bl:1 = (b & 0xf) + cin;
+  lb:1 = (a & 0xf) < bl;
+  lo:1 = ((a & 0xf) - bl - lb * 6) & 0xf;
+  bh:1 = (b >> 4) + lb;
+  hb:1 = (a >> 4) < bh;
+  hi:1 = ((a >> 4) - bh - hb * 6) & 0xf;
+  r = (hi << 4) | lo;
+  C = hb; Z = (r == 0); N = 0; V = 0;
+}
+macro unpAdd(a, b, cin, r, dec) {
+  t:1 = (a & 0xf) + (b & 0xf) + cin;
+  c:1 = (dec & (t > 9)) | (!dec & (t > 15));
+  r = (t + (dec & c) * 6) & 0xf;
+  C = c; Z = (r == 0); N = 0; V = 0;
+}
+macro unpSub(a, b, cin, r, dec) {
+  u:1 = (b & 0xf) + cin;
+  c:1 = (a & 0xf) < u;
+  r = ((a & 0xf) - u - (dec & c) * 6) & 0xf;
+  C = c; Z = (r == 0); N = 0; V = 0;
+}
+
+MHL: "[HL]" is epsilon { export HL; }
+MIX: "[IX]" is epsilon { export IX; }
+MIY: "[IY]" is epsilon { export IY; }
+MHL2: "[HL]" is epsilon { export HL; }
+MIX2: "[IX]" is epsilon { export IX; }
+MIY2: "[IY]" is epsilon { export IY; }
+MIXl: "[IX+L]" is epsilon { a:2 = IX + sext(L); export a; }
+MIYl: "[IY+L]" is epsilon { a:2 = IY + sext(L); export a; }
+MIXd: "[IX+"^sa^"]" is sa { a:2 = IX + sa; export a; }
+MIYd: "[IY+"^sa^"]" is sa { a:2 = IY + sa; export a; }
+MSPd: "[SP+"^sa^"]" is sa { a:2 = SP + sa; export a; }
+MBR: "[BR:"^ua^"]" is ua { a:2 = (zext(BR) << 8) | ua; export a; }
+MAbs: "["^uw^"]" is uw { export *[const]:2 uw; }
+Imm8: "#"^ua is ua { export *[const]:1 ua; }
+Imm8B: "#"^ub is ub { export *[const]:1 ub; }
+Imm16: "#"^uw is uw { export *[const]:2 uw; }
+Vec: "["^ua^"]" is ua { export *[const]:2 ua; }
+Rel8a: dest is sa [ dest = (inst_start + 1 + sa) & 0xffff; ] { export *:1 dest; }
+Rel8b: dest is sa [ dest = (inst_start + 2 + sa) & 0xffff; ] { export *:1 dest; }
+Rel16: dest is sw [ dest = (inst_start + 2 + sw) & 0xffff; ] { export *:1 dest; }
+
+:ADD "A", "A" is dmode=0 & umode=0 & o0=0x00 { a:1 = A; b:1 = A; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", "A" is dmode=1 & umode=0 & o0=0x00 {  a:1 = A; b:1 = A; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", "A" is umode=1 & o0=0x00 {  a:1 = A; b:1 = A; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", "B" is dmode=0 & umode=0 & o0=0x01 { a:1 = A; b:1 = B; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", "B" is dmode=1 & umode=0 & o0=0x01 {  a:1 = A; b:1 = B; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", "B" is umode=1 & o0=0x01 {  a:1 = A; b:1 = B; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", Imm8 is dmode=0 & umode=0 & o0=0x02; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", Imm8 is dmode=1 & umode=0 & o0=0x02; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", Imm8 is umode=1 & o0=0x02; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MHL is dmode=0 & umode=0 & o0=0x03; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MHL is dmode=1 & umode=0 & o0=0x03; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MHL is umode=1 & o0=0x03; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MBR is dmode=0 & umode=0 & o0=0x04; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MBR is dmode=1 & umode=0 & o0=0x04; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MBR is umode=1 & o0=0x04; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MAbs is dmode=0 & umode=0 & o0=0x05; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MAbs is dmode=1 & umode=0 & o0=0x05; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MAbs is umode=1 & o0=0x05; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MIX is dmode=0 & umode=0 & o0=0x06; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIX is dmode=1 & umode=0 & o0=0x06; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIX is umode=1 & o0=0x06; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MIY is dmode=0 & umode=0 & o0=0x07; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIY is dmode=1 & umode=0 & o0=0x07; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIY is umode=1 & o0=0x07; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADC "A", "A" is dmode=0 & umode=0 & o0=0x08 { a:1 = A; b:1 = A; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", "A" is dmode=1 & umode=0 & o0=0x08 {  a:1 = A; b:1 = A; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", "A" is umode=1 & o0=0x08 {  a:1 = A; b:1 = A; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", "B" is dmode=0 & umode=0 & o0=0x09 { a:1 = A; b:1 = B; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", "B" is dmode=1 & umode=0 & o0=0x09 {  a:1 = A; b:1 = B; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", "B" is umode=1 & o0=0x09 {  a:1 = A; b:1 = B; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", Imm8 is dmode=0 & umode=0 & o0=0x0A; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", Imm8 is dmode=1 & umode=0 & o0=0x0A; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", Imm8 is umode=1 & o0=0x0A; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MHL is dmode=0 & umode=0 & o0=0x0B; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MHL is dmode=1 & umode=0 & o0=0x0B; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MHL is umode=1 & o0=0x0B; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MBR is dmode=0 & umode=0 & o0=0x0C; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MBR is dmode=1 & umode=0 & o0=0x0C; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MBR is umode=1 & o0=0x0C; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MAbs is dmode=0 & umode=0 & o0=0x0D; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MAbs is dmode=1 & umode=0 & o0=0x0D; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MAbs is umode=1 & o0=0x0D; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MIX is dmode=0 & umode=0 & o0=0x0E; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIX is dmode=1 & umode=0 & o0=0x0E; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIX is umode=1 & o0=0x0E; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MIY is dmode=0 & umode=0 & o0=0x0F; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIY is dmode=1 & umode=0 & o0=0x0F; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIY is umode=1 & o0=0x0F; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:SUB "A", "A" is dmode=0 & umode=0 & o0=0x10 { a:1 = A; b:1 = A; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", "A" is dmode=1 & umode=0 & o0=0x10 {  a:1 = A; b:1 = A; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", "A" is umode=1 & o0=0x10 {  a:1 = A; b:1 = A; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", "B" is dmode=0 & umode=0 & o0=0x11 { a:1 = A; b:1 = B; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", "B" is dmode=1 & umode=0 & o0=0x11 {  a:1 = A; b:1 = B; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", "B" is umode=1 & o0=0x11 {  a:1 = A; b:1 = B; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", Imm8 is dmode=0 & umode=0 & o0=0x12; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", Imm8 is dmode=1 & umode=0 & o0=0x12; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", Imm8 is umode=1 & o0=0x12; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MHL is dmode=0 & umode=0 & o0=0x13; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MHL is dmode=1 & umode=0 & o0=0x13; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MHL is umode=1 & o0=0x13; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MBR is dmode=0 & umode=0 & o0=0x14; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MBR is dmode=1 & umode=0 & o0=0x14; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MBR is umode=1 & o0=0x14; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MAbs is dmode=0 & umode=0 & o0=0x15; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MAbs is dmode=1 & umode=0 & o0=0x15; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MAbs is umode=1 & o0=0x15; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MIX is dmode=0 & umode=0 & o0=0x16; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIX is dmode=1 & umode=0 & o0=0x16; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIX is umode=1 & o0=0x16; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MIY is dmode=0 & umode=0 & o0=0x17; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIY is dmode=1 & umode=0 & o0=0x17; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIY is umode=1 & o0=0x17; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SBC "A", "A" is dmode=0 & umode=0 & o0=0x18 { a:1 = A; b:1 = A; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", "A" is dmode=1 & umode=0 & o0=0x18 {  a:1 = A; b:1 = A; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", "A" is umode=1 & o0=0x18 {  a:1 = A; b:1 = A; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", "B" is dmode=0 & umode=0 & o0=0x19 { a:1 = A; b:1 = B; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", "B" is dmode=1 & umode=0 & o0=0x19 {  a:1 = A; b:1 = B; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", "B" is umode=1 & o0=0x19 {  a:1 = A; b:1 = B; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", Imm8 is dmode=0 & umode=0 & o0=0x1A; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", Imm8 is dmode=1 & umode=0 & o0=0x1A; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", Imm8 is umode=1 & o0=0x1A; Imm8 {  a:1 = A; b:1 = Imm8; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MHL is dmode=0 & umode=0 & o0=0x1B; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MHL is dmode=1 & umode=0 & o0=0x1B; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MHL is umode=1 & o0=0x1B; MHL {  a:1 = A; b:1 = *:1 MHL; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MBR is dmode=0 & umode=0 & o0=0x1C; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MBR is dmode=1 & umode=0 & o0=0x1C; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MBR is umode=1 & o0=0x1C; MBR {  a:1 = A; b:1 = *:1 MBR; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MAbs is dmode=0 & umode=0 & o0=0x1D; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MAbs is dmode=1 & umode=0 & o0=0x1D; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MAbs is umode=1 & o0=0x1D; MAbs {  a:1 = A; b:1 = *:1 MAbs; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MIX is dmode=0 & umode=0 & o0=0x1E; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIX is dmode=1 & umode=0 & o0=0x1E; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIX is umode=1 & o0=0x1E; MIX {  a:1 = A; b:1 = *:1 MIX; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MIY is dmode=0 & umode=0 & o0=0x1F; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIY is dmode=1 & umode=0 & o0=0x1F; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIY is umode=1 & o0=0x1F; MIY {  a:1 = A; b:1 = *:1 MIY; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:AND "A", "A" is o0=0x20 { a:1 = A; b:1 = A; r:1 = a & b; resZN(r); A = r; }
+:AND "A", "B" is o0=0x21 { a:1 = A; b:1 = B; r:1 = a & b; resZN(r); A = r; }
+:AND "A", Imm8 is o0=0x22; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MHL is o0=0x23; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MBR is o0=0x24; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MAbs is o0=0x25; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MIX is o0=0x26; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MIY is o0=0x27; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a & b; resZN(r); A = r; }
+:OR "A", "A" is o0=0x28 { a:1 = A; b:1 = A; r:1 = a | b; resZN(r); A = r; }
+:OR "A", "B" is o0=0x29 { a:1 = A; b:1 = B; r:1 = a | b; resZN(r); A = r; }
+:OR "A", Imm8 is o0=0x2A; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MHL is o0=0x2B; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MBR is o0=0x2C; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MAbs is o0=0x2D; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MIX is o0=0x2E; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MIY is o0=0x2F; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a | b; resZN(r); A = r; }
+:CP "A", "A" is o0=0x30 { a:1 = A; b:1 = A; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", "B" is o0=0x31 { a:1 = A; b:1 = B; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", Imm8 is o0=0x32; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MHL is o0=0x33; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MBR is o0=0x34; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MAbs is o0=0x35; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MIX is o0=0x36; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MIY is o0=0x37; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:XOR "A", "A" is o0=0x38 { a:1 = A; b:1 = A; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", "B" is o0=0x39 { a:1 = A; b:1 = B; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", Imm8 is o0=0x3A; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MHL is o0=0x3B; MHL { a:1 = A; b:1 = *:1 MHL; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MBR is o0=0x3C; MBR { a:1 = A; b:1 = *:1 MBR; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MAbs is o0=0x3D; MAbs { a:1 = A; b:1 = *:1 MAbs; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MIX is o0=0x3E; MIX { a:1 = A; b:1 = *:1 MIX; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MIY is o0=0x3F; MIY { a:1 = A; b:1 = *:1 MIY; r:1 = a ^ b; resZN(r); A = r; }
+:LD "A", "A" is o0=0x40 { A = A; }
+:LD "A", "B" is o0=0x41 { A = B; }
+:LD "A", "L" is o0=0x42 { A = L; }
+:LD "A", "H" is o0=0x43 { A = H; }
+:LD "A", MBR is o0=0x44; MBR { A = *:1 MBR; }
+:LD "A", MHL is o0=0x45; MHL { A = *:1 MHL; }
+:LD "A", MIX is o0=0x46; MIX { A = *:1 MIX; }
+:LD "A", MIY is o0=0x47; MIY { A = *:1 MIY; }
+:LD "B", "A" is o0=0x48 { B = A; }
+:LD "B", "B" is o0=0x49 { B = B; }
+:LD "B", "L" is o0=0x4A { B = L; }
+:LD "B", "H" is o0=0x4B { B = H; }
+:LD "B", MBR is o0=0x4C; MBR { B = *:1 MBR; }
+:LD "B", MHL is o0=0x4D; MHL { B = *:1 MHL; }
+:LD "B", MIX is o0=0x4E; MIX { B = *:1 MIX; }
+:LD "B", MIY is o0=0x4F; MIY { B = *:1 MIY; }
+:LD "L", "A" is o0=0x50 { L = A; }
+:LD "L", "B" is o0=0x51 { L = B; }
+:LD "L", "L" is o0=0x52 { L = L; }
+:LD "L", "H" is o0=0x53 { L = H; }
+:LD "L", MBR is o0=0x54; MBR { L = *:1 MBR; }
+:LD "L", MHL is o0=0x55; MHL { L = *:1 MHL; }
+:LD "L", MIX is o0=0x56; MIX { L = *:1 MIX; }
+:LD "L", MIY is o0=0x57; MIY { L = *:1 MIY; }
+:LD "H", "A" is o0=0x58 { H = A; }
+:LD "H", "B" is o0=0x59 { H = B; }
+:LD "H", "L" is o0=0x5A { H = L; }
+:LD "H", "H" is o0=0x5B { H = H; }
+:LD "H", MBR is o0=0x5C; MBR { H = *:1 MBR; }
+:LD "H", MHL is o0=0x5D; MHL { H = *:1 MHL; }
+:LD "H", MIX is o0=0x5E; MIX { H = *:1 MIX; }
+:LD "H", MIY is o0=0x5F; MIY { H = *:1 MIY; }
+:LD MIX, "A" is o0=0x60; MIX { *:1 MIX = A; }
+:LD MIX, "B" is o0=0x61; MIX { *:1 MIX = B; }
+:LD MIX, "L" is o0=0x62; MIX { *:1 MIX = L; }
+:LD MIX, "H" is o0=0x63; MIX { *:1 MIX = H; }
+:LD MIX, MBR is o0=0x64; MIX; MBR { *:1 MIX = *:1 MBR; }
+:LD MIX, MHL is o0=0x65; MIX; MHL { *:1 MIX = *:1 MHL; }
+:LD MIX, MIX2 is o0=0x66; MIX; MIX2 { *:1 MIX = *:1 MIX2; }
+:LD MIX, MIY is o0=0x67; MIX; MIY { *:1 MIX = *:1 MIY; }
+:LD MHL, "A" is o0=0x68; MHL { *:1 MHL = A; }
+:LD MHL, "B" is o0=0x69; MHL { *:1 MHL = B; }
+:LD MHL, "L" is o0=0x6A; MHL { *:1 MHL = L; }
+:LD MHL, "H" is o0=0x6B; MHL { *:1 MHL = H; }
+:LD MHL, MBR is o0=0x6C; MHL; MBR { *:1 MHL = *:1 MBR; }
+:LD MHL, MHL2 is o0=0x6D; MHL; MHL2 { *:1 MHL = *:1 MHL2; }
+:LD MHL, MIX is o0=0x6E; MHL; MIX { *:1 MHL = *:1 MIX; }
+:LD MHL, MIY is o0=0x6F; MHL; MIY { *:1 MHL = *:1 MIY; }
+:LD MIY, "A" is o0=0x70; MIY { *:1 MIY = A; }
+:LD MIY, "B" is o0=0x71; MIY { *:1 MIY = B; }
+:LD MIY, "L" is o0=0x72; MIY { *:1 MIY = L; }
+:LD MIY, "H" is o0=0x73; MIY { *:1 MIY = H; }
+:LD MIY, MBR is o0=0x74; MIY; MBR { *:1 MIY = *:1 MBR; }
+:LD MIY, MHL is o0=0x75; MIY; MHL { *:1 MIY = *:1 MHL; }
+:LD MIY, MIX is o0=0x76; MIY; MIX { *:1 MIY = *:1 MIX; }
+:LD MIY, MIY2 is o0=0x77; MIY; MIY2 { *:1 MIY = *:1 MIY2; }
+:LD MBR, "A" is o0=0x78; MBR { *:1 MBR = A; }
+:LD MBR, "B" is o0=0x79; MBR { *:1 MBR = B; }
+:LD MBR, "L" is o0=0x7A; MBR { *:1 MBR = L; }
+:LD MBR, "H" is o0=0x7B; MBR { *:1 MBR = H; }
+:LD MBR, MHL is o0=0x7D; MBR; MHL { *:1 MBR = *:1 MHL; }
+:LD MBR, MIX is o0=0x7E; MBR; MIX { *:1 MBR = *:1 MIX; }
+:LD MBR, MIY is o0=0x7F; MBR; MIY { *:1 MBR = *:1 MIY; }
+:INC "A" is o0=0x80 { r:1 = A + 1; Z = (r == 0); A = r; }
+:INC "B" is o0=0x81 { r:1 = B + 1; Z = (r == 0); B = r; }
+:INC "L" is o0=0x82 { r:1 = L + 1; Z = (r == 0); L = r; }
+:INC "H" is o0=0x83 { r:1 = H + 1; Z = (r == 0); H = r; }
+:INC "BR" is o0=0x84 { r:1 = BR + 1; Z = (r == 0); BR = r; }
+:INC MBR is o0=0x85; MBR { r:1 = *:1 MBR + 1; Z = (r == 0); *:1 MBR = r; }
+:INC MHL is o0=0x86; MHL { r:1 = *:1 MHL + 1; Z = (r == 0); *:1 MHL = r; }
+:INC "SP" is o0=0x87 { r:2 = SP + 1; Z = (r == 0); SP = r; }
+:DEC "A" is o0=0x88 { r:1 = A - 1; Z = (r == 0); A = r; }
+:DEC "B" is o0=0x89 { r:1 = B - 1; Z = (r == 0); B = r; }
+:DEC "L" is o0=0x8A { r:1 = L - 1; Z = (r == 0); L = r; }
+:DEC "H" is o0=0x8B { r:1 = H - 1; Z = (r == 0); H = r; }
+:DEC "BR" is o0=0x8C { r:1 = BR - 1; Z = (r == 0); BR = r; }
+:DEC MBR is o0=0x8D; MBR { r:1 = *:1 MBR - 1; Z = (r == 0); *:1 MBR = r; }
+:DEC MHL is o0=0x8E; MHL { r:1 = *:1 MHL - 1; Z = (r == 0); *:1 MHL = r; }
+:DEC "SP" is o0=0x8F { r:2 = SP - 1; Z = (r == 0); SP = r; }
+:INC "BA" is o0=0x90 { r:2 = BA + 1; Z = (r == 0); BA = r; }
+:INC "HL" is o0=0x91 { r:2 = HL + 1; Z = (r == 0); HL = r; }
+:INC "IX" is o0=0x92 { r:2 = IX + 1; Z = (r == 0); IX = r; }
+:INC "IY" is o0=0x93 { r:2 = IY + 1; Z = (r == 0); IY = r; }
+:BIT "A", "B" is o0=0x94 { a:1 = A; b:1 = B; r:1 = a & b; resZN(r); }
+:BIT MHL, Imm8 is o0=0x95; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a & b; resZN(r); }
+:BIT "A", Imm8 is o0=0x96; Imm8 { a:1 = A; b:1 = Imm8; r:1 = a & b; resZN(r); }
+:BIT "B", Imm8 is o0=0x97; Imm8 { a:1 = B; b:1 = Imm8; r:1 = a & b; resZN(r); }
+:DEC "BA" is o0=0x98 { r:2 = BA - 1; Z = (r == 0); BA = r; }
+:DEC "HL" is o0=0x99 { r:2 = HL - 1; Z = (r == 0); HL = r; }
+:DEC "IX" is o0=0x9A { r:2 = IX - 1; Z = (r == 0); IX = r; }
+:DEC "IY" is o0=0x9B { r:2 = IY - 1; Z = (r == 0); IY = r; }
+:AND "SC", Imm8 is o0=0x9C; Imm8 [ dmode = dmode & ua_d; umode = umode & ua_u; globalset(inst_next, dmode); globalset(inst_next, umode); ] { sc:1 = 0; packSC(sc); sc = sc & Imm8; unpackSC(sc); }
+:OR "SC", Imm8 is o0=0x9D; Imm8 [ dmode = dmode | ua_d; umode = umode | ua_u; globalset(inst_next, dmode); globalset(inst_next, umode); ] { sc:1 = 0; packSC(sc); sc = sc | Imm8; unpackSC(sc); }
+:XOR "SC", Imm8 is o0=0x9E; Imm8 [ dmode = dmode ^ ua_d; umode = umode ^ ua_u; globalset(inst_next, dmode); globalset(inst_next, umode); ] { sc:1 = 0; packSC(sc); sc = sc ^ Imm8; unpackSC(sc); }
+:LD "SC", Imm8 is o0=0x9F; Imm8 [ dmode = ua_d; umode = ua_u; globalset(inst_next, dmode); globalset(inst_next, umode); ] { unpackSC(Imm8); }
+:PUSH "BA" is o0=0xA0 { SP = SP - 2; *:2 SP = BA; }
+:PUSH "HL" is o0=0xA1 { SP = SP - 2; *:2 SP = HL; }
+:PUSH "IX" is o0=0xA2 { SP = SP - 2; *:2 SP = IX; }
+:PUSH "IY" is o0=0xA3 { SP = SP - 2; *:2 SP = IY; }
+:PUSH "BR" is o0=0xA4 { SP = SP - 1; *:1 SP = BR; }
+:PUSH "EP" is o0=0xA5 { SP = SP - 1; *:1 SP = EP; }
+:PUSH "IP" is o0=0xA6 { SP = SP - 1; *:1 SP = XP; SP = SP - 1; *:1 SP = YP; }
+:PUSH "SC" is o0=0xA7 { sc:1 = 0; packSC(sc); SP = SP - 1; *:1 SP = sc; }
+:POP "BA" is o0=0xA8 { BA = *:2 SP; SP = SP + 2; }
+:POP "HL" is o0=0xA9 { HL = *:2 SP; SP = SP + 2; }
+:POP "IX" is o0=0xAA { IX = *:2 SP; SP = SP + 2; }
+:POP "IY" is o0=0xAB { IY = *:2 SP; SP = SP + 2; }
+:POP "BR" is o0=0xAC { BR = *:1 SP; SP = SP + 1; }
+:POP "EP" is o0=0xAD { EP = *:1 SP; SP = SP + 1; }
+:POP "IP" is o0=0xAE { YP = *:1 SP; SP = SP + 1; XP = *:1 SP; SP = SP + 1; }
+:POP "SC" is o0=0xAF { v:1 = *:1 SP; SP = SP + 1; unpackSC(v); }
+:LD "A", Imm8 is o0=0xB0; Imm8 { A = Imm8; }
+:LD "B", Imm8 is o0=0xB1; Imm8 { B = Imm8; }
+:LD "L", Imm8 is o0=0xB2; Imm8 { L = Imm8; }
+:LD "H", Imm8 is o0=0xB3; Imm8 { H = Imm8; }
+:LD "BR", Imm8 is o0=0xB4; Imm8 { BR = Imm8; }
+:LD MHL, Imm8 is o0=0xB5; MHL; Imm8 { *:1 MHL = Imm8; }
+:LD MIX, Imm8 is o0=0xB6; MIX; Imm8 { *:1 MIX = Imm8; }
+:LD MIY, Imm8 is o0=0xB7; MIY; Imm8 { *:1 MIY = Imm8; }
+:LD "BA", MAbs is o0=0xB8; MAbs { BA = *:2 MAbs; }
+:LD "HL", MAbs is o0=0xB9; MAbs { HL = *:2 MAbs; }
+:LD "IX", MAbs is o0=0xBA; MAbs { IX = *:2 MAbs; }
+:LD "IY", MAbs is o0=0xBB; MAbs { IY = *:2 MAbs; }
+:LD MAbs, "BA" is o0=0xBC; MAbs { *:2 MAbs = BA; }
+:LD MAbs, "HL" is o0=0xBD; MAbs { *:2 MAbs = HL; }
+:LD MAbs, "IX" is o0=0xBE; MAbs { *:2 MAbs = IX; }
+:LD MAbs, "IY" is o0=0xBF; MAbs { *:2 MAbs = IY; }
+:ADD "BA", Imm16 is o0=0xC0; Imm16 { a:2 = BA; b:2 = Imm16; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); BA = r; }
+:ADD "HL", Imm16 is o0=0xC1; Imm16 { a:2 = HL; b:2 = Imm16; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); HL = r; }
+:ADD "IX", Imm16 is o0=0xC2; Imm16 { a:2 = IX; b:2 = Imm16; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IX = r; }
+:ADD "IY", Imm16 is o0=0xC3; Imm16 { a:2 = IY; b:2 = Imm16; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IY = r; }
+:LD "BA", Imm16 is o0=0xC4; Imm16 { BA = Imm16; }
+:LD "HL", Imm16 is o0=0xC5; Imm16 { HL = Imm16; }
+:LD "IX", Imm16 is o0=0xC6; Imm16 { IX = Imm16; }
+:LD "IY", Imm16 is o0=0xC7; Imm16 { IY = Imm16; }
+:EX "BA", "HL" is o0=0xC8 { t:2 = BA; BA = HL; HL = t; }
+:EX "BA", "IX" is o0=0xC9 { t:2 = BA; BA = IX; IX = t; }
+:EX "BA", "IY" is o0=0xCA { t:2 = BA; BA = IY; IY = t; }
+:EX "BA", "SP" is o0=0xCB { t:2 = BA; BA = SP; SP = t; }
+:EX "A", "B" is o0=0xCC { t:1 = A; A = B; B = t; }
+:EX "A", MHL is o0=0xCD; MHL { t:1 = A; A = *:1 MHL; *:1 MHL = t; }
+:ADD "A", MIXd is dmode=0 & umode=0 & o0=0xCE; o1=0x00; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIXd is dmode=1 & umode=0 & o0=0xCE; o1=0x00; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIXd is umode=1 & o0=0xCE; o1=0x00; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MIYd is dmode=0 & umode=0 & o0=0xCE; o1=0x01; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIYd is dmode=1 & umode=0 & o0=0xCE; o1=0x01; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIYd is umode=1 & o0=0xCE; o1=0x01; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MIXl is dmode=0 & umode=0 & o0=0xCE; o1=0x02; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIXl is dmode=1 & umode=0 & o0=0xCE; o1=0x02; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIXl is umode=1 & o0=0xCE; o1=0x02; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD "A", MIYl is dmode=0 & umode=0 & o0=0xCE; o1=0x03; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); A = r; }
+:ADD "A", MIYl is dmode=1 & umode=0 & o0=0xCE; o1=0x03; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; bcdAdd(a, b, 0, r); A = r; }
+:ADD "A", MIYl is umode=1 & o0=0xCE; o1=0x03; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; unpAdd(a, b, 0, r, D); A = r; }
+:ADD MHL, "A" is dmode=0 & umode=0 & o0=0xCE; o1=0x04; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); *:1 MHL = r; }
+:ADD MHL, "A" is dmode=1 & umode=0 & o0=0xCE; o1=0x04; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; bcdAdd(a, b, 0, r); *:1 MHL = r; }
+:ADD MHL, "A" is umode=1 & o0=0xCE; o1=0x04; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; unpAdd(a, b, 0, r, D); *:1 MHL = r; }
+:ADD MHL, Imm8 is dmode=0 & umode=0 & o0=0xCE; o1=0x05; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); *:1 MHL = r; }
+:ADD MHL, Imm8 is dmode=1 & umode=0 & o0=0xCE; o1=0x05; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; bcdAdd(a, b, 0, r); *:1 MHL = r; }
+:ADD MHL, Imm8 is umode=1 & o0=0xCE; o1=0x05; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; unpAdd(a, b, 0, r, D); *:1 MHL = r; }
+:ADD MHL, MIX is dmode=0 & umode=0 & o0=0xCE; o1=0x06; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); *:1 MHL = r; }
+:ADD MHL, MIX is dmode=1 & umode=0 & o0=0xCE; o1=0x06; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; bcdAdd(a, b, 0, r); *:1 MHL = r; }
+:ADD MHL, MIX is umode=1 & o0=0xCE; o1=0x06; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; unpAdd(a, b, 0, r, D); *:1 MHL = r; }
+:ADD MHL, MIY is dmode=0 & umode=0 & o0=0xCE; o1=0x07; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); *:1 MHL = r; }
+:ADD MHL, MIY is dmode=1 & umode=0 & o0=0xCE; o1=0x07; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; bcdAdd(a, b, 0, r); *:1 MHL = r; }
+:ADD MHL, MIY is umode=1 & o0=0xCE; o1=0x07; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; unpAdd(a, b, 0, r, D); *:1 MHL = r; }
+:ADC "A", MIXd is dmode=0 & umode=0 & o0=0xCE; o1=0x08; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIXd is dmode=1 & umode=0 & o0=0xCE; o1=0x08; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIXd is umode=1 & o0=0xCE; o1=0x08; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MIYd is dmode=0 & umode=0 & o0=0xCE; o1=0x09; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIYd is dmode=1 & umode=0 & o0=0xCE; o1=0x09; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIYd is umode=1 & o0=0xCE; o1=0x09; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MIXl is dmode=0 & umode=0 & o0=0xCE; o1=0x0A; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIXl is dmode=1 & umode=0 & o0=0xCE; o1=0x0A; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIXl is umode=1 & o0=0xCE; o1=0x0A; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC "A", MIYl is dmode=0 & umode=0 & o0=0xCE; o1=0x0B; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); A = r; }
+:ADC "A", MIYl is dmode=1 & umode=0 & o0=0xCE; o1=0x0B; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; bcdAdd(a, b, C, r); A = r; }
+:ADC "A", MIYl is umode=1 & o0=0xCE; o1=0x0B; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; unpAdd(a, b, C, r, D); A = r; }
+:ADC MHL, "A" is dmode=0 & umode=0 & o0=0xCE; o1=0x0C; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); *:1 MHL = r; }
+:ADC MHL, "A" is dmode=1 & umode=0 & o0=0xCE; o1=0x0C; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; bcdAdd(a, b, C, r); *:1 MHL = r; }
+:ADC MHL, "A" is umode=1 & o0=0xCE; o1=0x0C; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; unpAdd(a, b, C, r, D); *:1 MHL = r; }
+:ADC MHL, Imm8 is dmode=0 & umode=0 & o0=0xCE; o1=0x0D; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); *:1 MHL = r; }
+:ADC MHL, Imm8 is dmode=1 & umode=0 & o0=0xCE; o1=0x0D; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; bcdAdd(a, b, C, r); *:1 MHL = r; }
+:ADC MHL, Imm8 is umode=1 & o0=0xCE; o1=0x0D; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; unpAdd(a, b, C, r, D); *:1 MHL = r; }
+:ADC MHL, MIX is dmode=0 & umode=0 & o0=0xCE; o1=0x0E; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); *:1 MHL = r; }
+:ADC MHL, MIX is dmode=1 & umode=0 & o0=0xCE; o1=0x0E; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; bcdAdd(a, b, C, r); *:1 MHL = r; }
+:ADC MHL, MIX is umode=1 & o0=0xCE; o1=0x0E; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; unpAdd(a, b, C, r, D); *:1 MHL = r; }
+:ADC MHL, MIY is dmode=0 & umode=0 & o0=0xCE; o1=0x0F; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a + b + zext(C); t:1 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); *:1 MHL = r; }
+:ADC MHL, MIY is dmode=1 & umode=0 & o0=0xCE; o1=0x0F; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; bcdAdd(a, b, C, r); *:1 MHL = r; }
+:ADC MHL, MIY is umode=1 & o0=0xCE; o1=0x0F; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; unpAdd(a, b, C, r, D); *:1 MHL = r; }
+:SUB "A", MIXd is dmode=0 & umode=0 & o0=0xCE; o1=0x10; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIXd is dmode=1 & umode=0 & o0=0xCE; o1=0x10; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIXd is umode=1 & o0=0xCE; o1=0x10; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MIYd is dmode=0 & umode=0 & o0=0xCE; o1=0x11; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIYd is dmode=1 & umode=0 & o0=0xCE; o1=0x11; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIYd is umode=1 & o0=0xCE; o1=0x11; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MIXl is dmode=0 & umode=0 & o0=0xCE; o1=0x12; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIXl is dmode=1 & umode=0 & o0=0xCE; o1=0x12; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIXl is umode=1 & o0=0xCE; o1=0x12; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB "A", MIYl is dmode=0 & umode=0 & o0=0xCE; o1=0x13; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); A = r; }
+:SUB "A", MIYl is dmode=1 & umode=0 & o0=0xCE; o1=0x13; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; bcdSub(a, b, 0, r); A = r; }
+:SUB "A", MIYl is umode=1 & o0=0xCE; o1=0x13; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; unpSub(a, b, 0, r, D); A = r; }
+:SUB MHL, "A" is dmode=0 & umode=0 & o0=0xCE; o1=0x14; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); *:1 MHL = r; }
+:SUB MHL, "A" is dmode=1 & umode=0 & o0=0xCE; o1=0x14; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; bcdSub(a, b, 0, r); *:1 MHL = r; }
+:SUB MHL, "A" is umode=1 & o0=0xCE; o1=0x14; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; unpSub(a, b, 0, r, D); *:1 MHL = r; }
+:SUB MHL, Imm8 is dmode=0 & umode=0 & o0=0xCE; o1=0x15; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); *:1 MHL = r; }
+:SUB MHL, Imm8 is dmode=1 & umode=0 & o0=0xCE; o1=0x15; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; bcdSub(a, b, 0, r); *:1 MHL = r; }
+:SUB MHL, Imm8 is umode=1 & o0=0xCE; o1=0x15; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; unpSub(a, b, 0, r, D); *:1 MHL = r; }
+:SUB MHL, MIX is dmode=0 & umode=0 & o0=0xCE; o1=0x16; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); *:1 MHL = r; }
+:SUB MHL, MIX is dmode=1 & umode=0 & o0=0xCE; o1=0x16; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; bcdSub(a, b, 0, r); *:1 MHL = r; }
+:SUB MHL, MIX is umode=1 & o0=0xCE; o1=0x16; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; unpSub(a, b, 0, r, D); *:1 MHL = r; }
+:SUB MHL, MIY is dmode=0 & umode=0 & o0=0xCE; o1=0x17; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); *:1 MHL = r; }
+:SUB MHL, MIY is dmode=1 & umode=0 & o0=0xCE; o1=0x17; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; bcdSub(a, b, 0, r); *:1 MHL = r; }
+:SUB MHL, MIY is umode=1 & o0=0xCE; o1=0x17; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; unpSub(a, b, 0, r, D); *:1 MHL = r; }
+:SBC "A", MIXd is dmode=0 & umode=0 & o0=0xCE; o1=0x18; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIXd is dmode=1 & umode=0 & o0=0xCE; o1=0x18; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIXd is umode=1 & o0=0xCE; o1=0x18; MIXd {  a:1 = A; b:1 = *:1 MIXd; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MIYd is dmode=0 & umode=0 & o0=0xCE; o1=0x19; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIYd is dmode=1 & umode=0 & o0=0xCE; o1=0x19; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIYd is umode=1 & o0=0xCE; o1=0x19; MIYd {  a:1 = A; b:1 = *:1 MIYd; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MIXl is dmode=0 & umode=0 & o0=0xCE; o1=0x1A; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIXl is dmode=1 & umode=0 & o0=0xCE; o1=0x1A; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIXl is umode=1 & o0=0xCE; o1=0x1A; MIXl {  a:1 = A; b:1 = *:1 MIXl; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC "A", MIYl is dmode=0 & umode=0 & o0=0xCE; o1=0x1B; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); A = r; }
+:SBC "A", MIYl is dmode=1 & umode=0 & o0=0xCE; o1=0x1B; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; bcdSub(a, b, C, r); A = r; }
+:SBC "A", MIYl is umode=1 & o0=0xCE; o1=0x1B; MIYl {  a:1 = A; b:1 = *:1 MIYl; r:1 = 0; unpSub(a, b, C, r, D); A = r; }
+:SBC MHL, "A" is dmode=0 & umode=0 & o0=0xCE; o1=0x1C; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); *:1 MHL = r; }
+:SBC MHL, "A" is dmode=1 & umode=0 & o0=0xCE; o1=0x1C; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; bcdSub(a, b, C, r); *:1 MHL = r; }
+:SBC MHL, "A" is umode=1 & o0=0xCE; o1=0x1C; MHL {  a:1 = *:1 MHL; b:1 = A; r:1 = 0; unpSub(a, b, C, r, D); *:1 MHL = r; }
+:SBC MHL, Imm8 is dmode=0 & umode=0 & o0=0xCE; o1=0x1D; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); *:1 MHL = r; }
+:SBC MHL, Imm8 is dmode=1 & umode=0 & o0=0xCE; o1=0x1D; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; bcdSub(a, b, C, r); *:1 MHL = r; }
+:SBC MHL, Imm8 is umode=1 & o0=0xCE; o1=0x1D; MHL; Imm8 {  a:1 = *:1 MHL; b:1 = Imm8; r:1 = 0; unpSub(a, b, C, r, D); *:1 MHL = r; }
+:SBC MHL, MIX is dmode=0 & umode=0 & o0=0xCE; o1=0x1E; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); *:1 MHL = r; }
+:SBC MHL, MIX is dmode=1 & umode=0 & o0=0xCE; o1=0x1E; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; bcdSub(a, b, C, r); *:1 MHL = r; }
+:SBC MHL, MIX is umode=1 & o0=0xCE; o1=0x1E; MHL; MIX {  a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = 0; unpSub(a, b, C, r, D); *:1 MHL = r; }
+:SBC MHL, MIY is dmode=0 & umode=0 & o0=0xCE; o1=0x1F; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a - b - zext(C); t:1 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); *:1 MHL = r; }
+:SBC MHL, MIY is dmode=1 & umode=0 & o0=0xCE; o1=0x1F; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; bcdSub(a, b, C, r); *:1 MHL = r; }
+:SBC MHL, MIY is umode=1 & o0=0xCE; o1=0x1F; MHL; MIY {  a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = 0; unpSub(a, b, C, r, D); *:1 MHL = r; }
+:AND "A", MIXd is o0=0xCE; o1=0x20; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MIYd is o0=0xCE; o1=0x21; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MIXl is o0=0xCE; o1=0x22; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a & b; resZN(r); A = r; }
+:AND "A", MIYl is o0=0xCE; o1=0x23; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a & b; resZN(r); A = r; }
+:AND MHL, "A" is o0=0xCE; o1=0x24; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a & b; resZN(r); *:1 MHL = r; }
+:AND MHL, Imm8 is o0=0xCE; o1=0x25; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a & b; resZN(r); *:1 MHL = r; }
+:AND MHL, MIX is o0=0xCE; o1=0x26; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a & b; resZN(r); *:1 MHL = r; }
+:AND MHL, MIY is o0=0xCE; o1=0x27; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a & b; resZN(r); *:1 MHL = r; }
+:OR "A", MIXd is o0=0xCE; o1=0x28; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MIYd is o0=0xCE; o1=0x29; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MIXl is o0=0xCE; o1=0x2A; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a | b; resZN(r); A = r; }
+:OR "A", MIYl is o0=0xCE; o1=0x2B; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a | b; resZN(r); A = r; }
+:OR MHL, "A" is o0=0xCE; o1=0x2C; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a | b; resZN(r); *:1 MHL = r; }
+:OR MHL, Imm8 is o0=0xCE; o1=0x2D; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a | b; resZN(r); *:1 MHL = r; }
+:OR MHL, MIX is o0=0xCE; o1=0x2E; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a | b; resZN(r); *:1 MHL = r; }
+:OR MHL, MIY is o0=0xCE; o1=0x2F; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a | b; resZN(r); *:1 MHL = r; }
+:CP "A", MIXd is o0=0xCE; o1=0x30; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MIYd is o0=0xCE; o1=0x31; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MIXl is o0=0xCE; o1=0x32; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "A", MIYl is o0=0xCE; o1=0x33; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP MHL, "A" is o0=0xCE; o1=0x34; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP MHL, Imm8 is o0=0xCE; o1=0x35; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP MHL, MIX is o0=0xCE; o1=0x36; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP MHL, MIY is o0=0xCE; o1=0x37; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:XOR "A", MIXd is o0=0xCE; o1=0x38; MIXd { a:1 = A; b:1 = *:1 MIXd; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MIYd is o0=0xCE; o1=0x39; MIYd { a:1 = A; b:1 = *:1 MIYd; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MIXl is o0=0xCE; o1=0x3A; MIXl { a:1 = A; b:1 = *:1 MIXl; r:1 = a ^ b; resZN(r); A = r; }
+:XOR "A", MIYl is o0=0xCE; o1=0x3B; MIYl { a:1 = A; b:1 = *:1 MIYl; r:1 = a ^ b; resZN(r); A = r; }
+:XOR MHL, "A" is o0=0xCE; o1=0x3C; MHL { a:1 = *:1 MHL; b:1 = A; r:1 = a ^ b; resZN(r); *:1 MHL = r; }
+:XOR MHL, Imm8 is o0=0xCE; o1=0x3D; MHL; Imm8 { a:1 = *:1 MHL; b:1 = Imm8; r:1 = a ^ b; resZN(r); *:1 MHL = r; }
+:XOR MHL, MIX is o0=0xCE; o1=0x3E; MHL; MIX { a:1 = *:1 MHL; b:1 = *:1 MIX; r:1 = a ^ b; resZN(r); *:1 MHL = r; }
+:XOR MHL, MIY is o0=0xCE; o1=0x3F; MHL; MIY { a:1 = *:1 MHL; b:1 = *:1 MIY; r:1 = a ^ b; resZN(r); *:1 MHL = r; }
+:LD "A", MIXd is o0=0xCE; o1=0x40; MIXd { A = *:1 MIXd; }
+:LD "A", MIYd is o0=0xCE; o1=0x41; MIYd { A = *:1 MIYd; }
+:LD "A", MIXl is o0=0xCE; o1=0x42; MIXl { A = *:1 MIXl; }
+:LD "A", MIYl is o0=0xCE; o1=0x43; MIYl { A = *:1 MIYl; }
+:LD MIXd, "A" is o0=0xCE; o1=0x44; MIXd { *:1 MIXd = A; }
+:LD MIYd, "A" is o0=0xCE; o1=0x45; MIYd { *:1 MIYd = A; }
+:LD MIXl, "A" is o0=0xCE; o1=0x46; MIXl { *:1 MIXl = A; }
+:LD MIYl, "A" is o0=0xCE; o1=0x47; MIYl { *:1 MIYl = A; }
+:LD "B", MIXd is o0=0xCE; o1=0x48; MIXd { B = *:1 MIXd; }
+:LD "B", MIYd is o0=0xCE; o1=0x49; MIYd { B = *:1 MIYd; }
+:LD "B", MIXl is o0=0xCE; o1=0x4A; MIXl { B = *:1 MIXl; }
+:LD "B", MIYl is o0=0xCE; o1=0x4B; MIYl { B = *:1 MIYl; }
+:LD MIXd, "B" is o0=0xCE; o1=0x4C; MIXd { *:1 MIXd = B; }
+:LD MIYd, "B" is o0=0xCE; o1=0x4D; MIYd { *:1 MIYd = B; }
+:LD MIXl, "B" is o0=0xCE; o1=0x4E; MIXl { *:1 MIXl = B; }
+:LD MIYl, "B" is o0=0xCE; o1=0x4F; MIYl { *:1 MIYl = B; }
+:LD "L", MIXd is o0=0xCE; o1=0x50; MIXd { L = *:1 MIXd; }
+:LD "L", MIYd is o0=0xCE; o1=0x51; MIYd { L = *:1 MIYd; }
+:LD "L", MIXl is o0=0xCE; o1=0x52; MIXl { L = *:1 MIXl; }
+:LD "L", MIYl is o0=0xCE; o1=0x53; MIYl { L = *:1 MIYl; }
+:LD MIXd, "L" is o0=0xCE; o1=0x54; MIXd { *:1 MIXd = L; }
+:LD MIYd, "L" is o0=0xCE; o1=0x55; MIYd { *:1 MIYd = L; }
+:LD MIXl, "L" is o0=0xCE; o1=0x56; MIXl { *:1 MIXl = L; }
+:LD MIYl, "L" is o0=0xCE; o1=0x57; MIYl { *:1 MIYl = L; }
+:LD "H", MIXd is o0=0xCE; o1=0x58; MIXd { H = *:1 MIXd; }
+:LD "H", MIYd is o0=0xCE; o1=0x59; MIYd { H = *:1 MIYd; }
+:LD "H", MIXl is o0=0xCE; o1=0x5A; MIXl { H = *:1 MIXl; }
+:LD "H", MIYl is o0=0xCE; o1=0x5B; MIYl { H = *:1 MIYl; }
+:LD MIXd, "H" is o0=0xCE; o1=0x5C; MIXd { *:1 MIXd = H; }
+:LD MIYd, "H" is o0=0xCE; o1=0x5D; MIYd { *:1 MIYd = H; }
+:LD MIXl, "H" is o0=0xCE; o1=0x5E; MIXl { *:1 MIXl = H; }
+:LD MIYl, "H" is o0=0xCE; o1=0x5F; MIYl { *:1 MIYl = H; }
+:LD MHL, MIXd is o0=0xCE; o1=0x60; MHL; MIXd { *:1 MHL = *:1 MIXd; }
+:LD MHL, MIYd is o0=0xCE; o1=0x61; MHL; MIYd { *:1 MHL = *:1 MIYd; }
+:LD MHL, MIXl is o0=0xCE; o1=0x62; MHL; MIXl { *:1 MHL = *:1 MIXl; }
+:LD MHL, MIYl is o0=0xCE; o1=0x63; MHL; MIYl { *:1 MHL = *:1 MIYl; }
+:LD MIX, MIXd is o0=0xCE; o1=0x68; MIX; MIXd { *:1 MIX = *:1 MIXd; }
+:LD MIX, MIYd is o0=0xCE; o1=0x69; MIX; MIYd { *:1 MIX = *:1 MIYd; }
+:LD MIX, MIXl is o0=0xCE; o1=0x6A; MIX; MIXl { *:1 MIX = *:1 MIXl; }
+:LD MIX, MIYl is o0=0xCE; o1=0x6B; MIX; MIYl { *:1 MIX = *:1 MIYl; }
+:LD MIY, MIXd is o0=0xCE; o1=0x78; MIY; MIXd { *:1 MIY = *:1 MIXd; }
+:LD MIY, MIYd is o0=0xCE; o1=0x79; MIY; MIYd { *:1 MIY = *:1 MIYd; }
+:LD MIY, MIXl is o0=0xCE; o1=0x7A; MIY; MIXl { *:1 MIY = *:1 MIXl; }
+:LD MIY, MIYl is o0=0xCE; o1=0x7B; MIY; MIYl { *:1 MIY = *:1 MIYl; }
+:SLA "A" is o0=0xCE; o1=0x80 { a:1 = A; C = (a >> 7) != 0; r:1 = a << 1; V = ((a ^ r) & 0x80) != 0; resZN(r); A = r; }
+:SLA "B" is o0=0xCE; o1=0x81 { a:1 = B; C = (a >> 7) != 0; r:1 = a << 1; V = ((a ^ r) & 0x80) != 0; resZN(r); B = r; }
+:SLA MBR is o0=0xCE; o1=0x82; MBR { a:1 = *:1 MBR; C = (a >> 7) != 0; r:1 = a << 1; V = ((a ^ r) & 0x80) != 0; resZN(r); *:1 MBR = r; }
+:SLA MHL is o0=0xCE; o1=0x83; MHL { a:1 = *:1 MHL; C = (a >> 7) != 0; r:1 = a << 1; V = ((a ^ r) & 0x80) != 0; resZN(r); *:1 MHL = r; }
+:SLL "A" is o0=0xCE; o1=0x84 { a:1 = A; C = (a >> 7) != 0; r:1 = a << 1; resZN(r); A = r; }
+:SLL "B" is o0=0xCE; o1=0x85 { a:1 = B; C = (a >> 7) != 0; r:1 = a << 1; resZN(r); B = r; }
+:SLL MBR is o0=0xCE; o1=0x86; MBR { a:1 = *:1 MBR; C = (a >> 7) != 0; r:1 = a << 1; resZN(r); *:1 MBR = r; }
+:SLL MHL is o0=0xCE; o1=0x87; MHL { a:1 = *:1 MHL; C = (a >> 7) != 0; r:1 = a << 1; resZN(r); *:1 MHL = r; }
+:SRA "A" is o0=0xCE; o1=0x88 { a:1 = A; C = (a & 1) != 0; r:1 = a s>> 1; V = 0; resZN(r); A = r; }
+:SRA "B" is o0=0xCE; o1=0x89 { a:1 = B; C = (a & 1) != 0; r:1 = a s>> 1; V = 0; resZN(r); B = r; }
+:SRA MBR is o0=0xCE; o1=0x8A; MBR { a:1 = *:1 MBR; C = (a & 1) != 0; r:1 = a s>> 1; V = 0; resZN(r); *:1 MBR = r; }
+:SRA MHL is o0=0xCE; o1=0x8B; MHL { a:1 = *:1 MHL; C = (a & 1) != 0; r:1 = a s>> 1; V = 0; resZN(r); *:1 MHL = r; }
+:SRL "A" is o0=0xCE; o1=0x8C { a:1 = A; C = (a & 1) != 0; r:1 = a >> 1; resZN(r); A = r; }
+:SRL "B" is o0=0xCE; o1=0x8D { a:1 = B; C = (a & 1) != 0; r:1 = a >> 1; resZN(r); B = r; }
+:SRL MBR is o0=0xCE; o1=0x8E; MBR { a:1 = *:1 MBR; C = (a & 1) != 0; r:1 = a >> 1; resZN(r); *:1 MBR = r; }
+:SRL MHL is o0=0xCE; o1=0x8F; MHL { a:1 = *:1 MHL; C = (a & 1) != 0; r:1 = a >> 1; resZN(r); *:1 MHL = r; }
+:RL "A" is o0=0xCE; o1=0x90 { a:1 = A; c0:1 = C; C = (a >> 7) != 0; r:1 = (a << 1) | c0; resZN(r); A = r; }
+:RL "B" is o0=0xCE; o1=0x91 { a:1 = B; c0:1 = C; C = (a >> 7) != 0; r:1 = (a << 1) | c0; resZN(r); B = r; }
+:RL MBR is o0=0xCE; o1=0x92; MBR { a:1 = *:1 MBR; c0:1 = C; C = (a >> 7) != 0; r:1 = (a << 1) | c0; resZN(r); *:1 MBR = r; }
+:RL MHL is o0=0xCE; o1=0x93; MHL { a:1 = *:1 MHL; c0:1 = C; C = (a >> 7) != 0; r:1 = (a << 1) | c0; resZN(r); *:1 MHL = r; }
+:RLC "A" is o0=0xCE; o1=0x94 { a:1 = A; C = (a >> 7) != 0; r:1 = (a << 1) | (a >> 7); resZN(r); A = r; }
+:RLC "B" is o0=0xCE; o1=0x95 { a:1 = B; C = (a >> 7) != 0; r:1 = (a << 1) | (a >> 7); resZN(r); B = r; }
+:RLC MBR is o0=0xCE; o1=0x96; MBR { a:1 = *:1 MBR; C = (a >> 7) != 0; r:1 = (a << 1) | (a >> 7); resZN(r); *:1 MBR = r; }
+:RLC MHL is o0=0xCE; o1=0x97; MHL { a:1 = *:1 MHL; C = (a >> 7) != 0; r:1 = (a << 1) | (a >> 7); resZN(r); *:1 MHL = r; }
+:RR "A" is o0=0xCE; o1=0x98 { a:1 = A; c0:1 = C; C = (a & 1) != 0; r:1 = (a >> 1) | (c0 << 7); resZN(r); A = r; }
+:RR "B" is o0=0xCE; o1=0x99 { a:1 = B; c0:1 = C; C = (a & 1) != 0; r:1 = (a >> 1) | (c0 << 7); resZN(r); B = r; }
+:RR MBR is o0=0xCE; o1=0x9A; MBR { a:1 = *:1 MBR; c0:1 = C; C = (a & 1) != 0; r:1 = (a >> 1) | (c0 << 7); resZN(r); *:1 MBR = r; }
+:RR MHL is o0=0xCE; o1=0x9B; MHL { a:1 = *:1 MHL; c0:1 = C; C = (a & 1) != 0; r:1 = (a >> 1) | (c0 << 7); resZN(r); *:1 MHL = r; }
+:RRC "A" is o0=0xCE; o1=0x9C { a:1 = A; C = (a & 1) != 0; r:1 = (a >> 1) | (a << 7); resZN(r); A = r; }
+:RRC "B" is o0=0xCE; o1=0x9D { a:1 = B; C = (a & 1) != 0; r:1 = (a >> 1) | (a << 7); resZN(r); B = r; }
+:RRC MBR is o0=0xCE; o1=0x9E; MBR { a:1 = *:1 MBR; C = (a & 1) != 0; r:1 = (a >> 1) | (a << 7); resZN(r); *:1 MBR = r; }
+:RRC MHL is o0=0xCE; o1=0x9F; MHL { a:1 = *:1 MHL; C = (a & 1) != 0; r:1 = (a >> 1) | (a << 7); resZN(r); *:1 MHL = r; }
+:CPL "A" is o0=0xCE; o1=0xA0 { a:1 = A; r:1 = ~a; resZN(r); A = r; }
+:CPL "B" is o0=0xCE; o1=0xA1 { a:1 = B; r:1 = ~a; resZN(r); B = r; }
+:CPL MBR is o0=0xCE; o1=0xA2; MBR { a:1 = *:1 MBR; r:1 = ~a; resZN(r); *:1 MBR = r; }
+:CPL MHL is o0=0xCE; o1=0xA3; MHL { a:1 = *:1 MHL; r:1 = ~a; resZN(r); *:1 MHL = r; }
+:NEG "A" is dmode=0 & umode=0 & o0=0xCE; o1=0xA4 {  a:1 = A; r:1 = 0 - a; C = a != 0; V = sborrow(0:1, a); resZN(r); A = r; }
+:NEG "A" is dmode=1 & umode=0 & o0=0xCE; o1=0xA4 {  a:1 = A; r:1 = 0; bcdSub(0:1, a, 0, r); A = r; }
+:NEG "A" is umode=1 & o0=0xCE; o1=0xA4 {  a:1 = A; r:1 = 0; unpSub(0:1, a, 0, r, D); A = r; }
+:NEG "B" is dmode=0 & umode=0 & o0=0xCE; o1=0xA5 {  a:1 = B; r:1 = 0 - a; C = a != 0; V = sborrow(0:1, a); resZN(r); B = r; }
+:NEG "B" is dmode=1 & umode=0 & o0=0xCE; o1=0xA5 {  a:1 = B; r:1 = 0; bcdSub(0:1, a, 0, r); B = r; }
+:NEG "B" is umode=1 & o0=0xCE; o1=0xA5 {  a:1 = B; r:1 = 0; unpSub(0:1, a, 0, r, D); B = r; }
+:NEG MBR is dmode=0 & umode=0 & o0=0xCE; o1=0xA6; MBR {  a:1 = *:1 MBR; r:1 = 0 - a; C = a != 0; V = sborrow(0:1, a); resZN(r); *:1 MBR = r; }
+:NEG MBR is dmode=1 & umode=0 & o0=0xCE; o1=0xA6; MBR {  a:1 = *:1 MBR; r:1 = 0; bcdSub(0:1, a, 0, r); *:1 MBR = r; }
+:NEG MBR is umode=1 & o0=0xCE; o1=0xA6; MBR {  a:1 = *:1 MBR; r:1 = 0; unpSub(0:1, a, 0, r, D); *:1 MBR = r; }
+:NEG MHL is dmode=0 & umode=0 & o0=0xCE; o1=0xA7; MHL {  a:1 = *:1 MHL; r:1 = 0 - a; C = a != 0; V = sborrow(0:1, a); resZN(r); *:1 MHL = r; }
+:NEG MHL is dmode=1 & umode=0 & o0=0xCE; o1=0xA7; MHL {  a:1 = *:1 MHL; r:1 = 0; bcdSub(0:1, a, 0, r); *:1 MHL = r; }
+:NEG MHL is umode=1 & o0=0xCE; o1=0xA7; MHL {  a:1 = *:1 MHL; r:1 = 0; unpSub(0:1, a, 0, r, D); *:1 MHL = r; }
+:SEP is o0=0xCE; o1=0xA8 { BA = sext(A); }
+:HALT is o0=0xCE; o1=0xAE { halt(); }
+:SLP is o0=0xCE; o1=0xAF { sleep(); }
+:AND "B", Imm8 is o0=0xCE; o1=0xB0; Imm8 { a:1 = B; b:1 = Imm8; r:1 = a & b; resZN(r); B = r; }
+:AND "L", Imm8 is o0=0xCE; o1=0xB1; Imm8 { a:1 = L; b:1 = Imm8; r:1 = a & b; resZN(r); L = r; }
+:AND "H", Imm8 is o0=0xCE; o1=0xB2; Imm8 { a:1 = H; b:1 = Imm8; r:1 = a & b; resZN(r); H = r; }
+:OR "B", Imm8 is o0=0xCE; o1=0xB4; Imm8 { a:1 = B; b:1 = Imm8; r:1 = a | b; resZN(r); B = r; }
+:OR "L", Imm8 is o0=0xCE; o1=0xB5; Imm8 { a:1 = L; b:1 = Imm8; r:1 = a | b; resZN(r); L = r; }
+:OR "H", Imm8 is o0=0xCE; o1=0xB6; Imm8 { a:1 = H; b:1 = Imm8; r:1 = a | b; resZN(r); H = r; }
+:XOR "B", Imm8 is o0=0xCE; o1=0xB8; Imm8 { a:1 = B; b:1 = Imm8; r:1 = a ^ b; resZN(r); B = r; }
+:XOR "L", Imm8 is o0=0xCE; o1=0xB9; Imm8 { a:1 = L; b:1 = Imm8; r:1 = a ^ b; resZN(r); L = r; }
+:XOR "H", Imm8 is o0=0xCE; o1=0xBA; Imm8 { a:1 = H; b:1 = Imm8; r:1 = a ^ b; resZN(r); H = r; }
+:CP "B", Imm8 is o0=0xCE; o1=0xBC; Imm8 { a:1 = B; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "L", Imm8 is o0=0xCE; o1=0xBD; Imm8 { a:1 = L; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "H", Imm8 is o0=0xCE; o1=0xBE; Imm8 { a:1 = H; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "BR", Imm8 is o0=0xCE; o1=0xBF; Imm8 { a:1 = BR; b:1 = Imm8; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:LD "A", "BR" is o0=0xCE; o1=0xC0 { A = BR; }
+:LD "A", "SC" is o0=0xCE; o1=0xC1 { sc:1 = 0; packSC(sc); A = sc; }
+:LD "BR", "A" is o0=0xCE; o1=0xC2 { BR = A; }
+:LD "SC", "A" is o0=0xCE; o1=0xC3 { unpackSC(A); }
+:LD "NB", Imm8 is o0=0xCE; o1=0xC4; Imm8 { NB = Imm8; }
+:LD "EP", Imm8 is o0=0xCE; o1=0xC5; Imm8 { EP = Imm8; }
+:LD "XP", Imm8 is o0=0xCE; o1=0xC6; Imm8 { XP = Imm8; }
+:LD "YP", Imm8 is o0=0xCE; o1=0xC7; Imm8 { YP = Imm8; }
+:LD "A", "NB" is o0=0xCE; o1=0xC8 { A = NB; }
+:LD "A", "EP" is o0=0xCE; o1=0xC9 { A = EP; }
+:LD "A", "XP" is o0=0xCE; o1=0xCA { A = XP; }
+:LD "A", "YP" is o0=0xCE; o1=0xCB { A = YP; }
+:LD "NB", "A" is o0=0xCE; o1=0xCC { NB = A; }
+:LD "EP", "A" is o0=0xCE; o1=0xCD { EP = A; }
+:LD "XP", "A" is o0=0xCE; o1=0xCE { XP = A; }
+:LD "YP", "A" is o0=0xCE; o1=0xCF { YP = A; }
+:LD "A", MAbs is o0=0xCE; o1=0xD0; MAbs { A = *:1 MAbs; }
+:LD "B", MAbs is o0=0xCE; o1=0xD1; MAbs { B = *:1 MAbs; }
+:LD "L", MAbs is o0=0xCE; o1=0xD2; MAbs { L = *:1 MAbs; }
+:LD "H", MAbs is o0=0xCE; o1=0xD3; MAbs { H = *:1 MAbs; }
+:LD MAbs, "A" is o0=0xCE; o1=0xD4; MAbs { *:1 MAbs = A; }
+:LD MAbs, "B" is o0=0xCE; o1=0xD5; MAbs { *:1 MAbs = B; }
+:LD MAbs, "L" is o0=0xCE; o1=0xD6; MAbs { *:1 MAbs = L; }
+:LD MAbs, "H" is o0=0xCE; o1=0xD7; MAbs { *:1 MAbs = H; }
+:MLT is o0=0xCE; o1=0xD8 { HL = zext(L) * zext(A); Z = (HL == 0); N = (HL s< 0); V = 0; C = 0; }
+:DIV is o0=0xCE; o1=0xD9 { d:2 = zext(A); q:2 = HL / d; m:2 = HL % d; V = q > 0xff; C = 0; L = q:1; H = m:1; Z = (L == 0); N = (L s< 0); }
+:JRS "LT", Rel8b is o0=0xCE; o1=0xE0; Rel8b { if ((N != V)) goto Rel8b; }
+:JRS "LE", Rel8b is o0=0xCE; o1=0xE1; Rel8b { if ((Z || (N != V))) goto Rel8b; }
+:JRS "GT", Rel8b is o0=0xCE; o1=0xE2; Rel8b { if ((!Z && (N == V))) goto Rel8b; }
+:JRS "GE", Rel8b is o0=0xCE; o1=0xE3; Rel8b { if ((N == V)) goto Rel8b; }
+:JRS "V", Rel8b is o0=0xCE; o1=0xE4; Rel8b { if (V) goto Rel8b; }
+:JRS "NV", Rel8b is o0=0xCE; o1=0xE5; Rel8b { if (!V) goto Rel8b; }
+:JRS "P", Rel8b is o0=0xCE; o1=0xE6; Rel8b { if (!N) goto Rel8b; }
+:JRS "M", Rel8b is o0=0xCE; o1=0xE7; Rel8b { if (N) goto Rel8b; }
+:JRS "F0", Rel8b is o0=0xCE; o1=0xE8; Rel8b { if ((CC & 1) != 0) goto Rel8b; }
+:JRS "F1", Rel8b is o0=0xCE; o1=0xE9; Rel8b { if ((CC & 2) != 0) goto Rel8b; }
+:JRS "F2", Rel8b is o0=0xCE; o1=0xEA; Rel8b { if ((CC & 4) != 0) goto Rel8b; }
+:JRS "F3", Rel8b is o0=0xCE; o1=0xEB; Rel8b { if ((CC & 8) != 0) goto Rel8b; }
+:JRS "NF0", Rel8b is o0=0xCE; o1=0xEC; Rel8b { if ((CC & 1) == 0) goto Rel8b; }
+:JRS "NF1", Rel8b is o0=0xCE; o1=0xED; Rel8b { if ((CC & 2) == 0) goto Rel8b; }
+:JRS "NF2", Rel8b is o0=0xCE; o1=0xEE; Rel8b { if ((CC & 4) == 0) goto Rel8b; }
+:JRS "NF3", Rel8b is o0=0xCE; o1=0xEF; Rel8b { if ((CC & 8) == 0) goto Rel8b; }
+:CARS "LT", Rel8b is o0=0xCE; o1=0xF0; Rel8b { if (!((N != V))) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "LE", Rel8b is o0=0xCE; o1=0xF1; Rel8b { if (!((Z || (N != V)))) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "GT", Rel8b is o0=0xCE; o1=0xF2; Rel8b { if (!((!Z && (N == V)))) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "GE", Rel8b is o0=0xCE; o1=0xF3; Rel8b { if (!((N == V))) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "V", Rel8b is o0=0xCE; o1=0xF4; Rel8b { if (!(V)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "NV", Rel8b is o0=0xCE; o1=0xF5; Rel8b { if (!(!V)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "P", Rel8b is o0=0xCE; o1=0xF6; Rel8b { if (!(!N)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "M", Rel8b is o0=0xCE; o1=0xF7; Rel8b { if (!(N)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "F0", Rel8b is o0=0xCE; o1=0xF8; Rel8b { if (!((CC & 1) != 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "F1", Rel8b is o0=0xCE; o1=0xF9; Rel8b { if (!((CC & 2) != 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "F2", Rel8b is o0=0xCE; o1=0xFA; Rel8b { if (!((CC & 4) != 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "F3", Rel8b is o0=0xCE; o1=0xFB; Rel8b { if (!((CC & 8) != 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "NF0", Rel8b is o0=0xCE; o1=0xFC; Rel8b { if (!((CC & 1) == 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "NF1", Rel8b is o0=0xCE; o1=0xFD; Rel8b { if (!((CC & 2) == 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "NF2", Rel8b is o0=0xCE; o1=0xFE; Rel8b { if (!((CC & 4) == 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:CARS "NF3", Rel8b is o0=0xCE; o1=0xFF; Rel8b { if (!((CC & 8) == 0)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8b; }
+:ADD "BA", "BA" is o0=0xCF; o1=0x00 { a:2 = BA; b:2 = BA; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); BA = r; }
+:ADD "BA", "HL" is o0=0xCF; o1=0x01 { a:2 = BA; b:2 = HL; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); BA = r; }
+:ADD "BA", "IX" is o0=0xCF; o1=0x02 { a:2 = BA; b:2 = IX; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); BA = r; }
+:ADD "BA", "IY" is o0=0xCF; o1=0x03 { a:2 = BA; b:2 = IY; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); BA = r; }
+:ADC "BA", "BA" is o0=0xCF; o1=0x04 { a:2 = BA; b:2 = BA; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); BA = r; }
+:ADC "BA", "HL" is o0=0xCF; o1=0x05 { a:2 = BA; b:2 = HL; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); BA = r; }
+:ADC "BA", "IX" is o0=0xCF; o1=0x06 { a:2 = BA; b:2 = IX; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); BA = r; }
+:ADC "BA", "IY" is o0=0xCF; o1=0x07 { a:2 = BA; b:2 = IY; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); BA = r; }
+:SUB "BA", "BA" is o0=0xCF; o1=0x08 { a:2 = BA; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); BA = r; }
+:SUB "BA", "HL" is o0=0xCF; o1=0x09 { a:2 = BA; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); BA = r; }
+:SUB "BA", "IX" is o0=0xCF; o1=0x0A { a:2 = BA; b:2 = IX; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); BA = r; }
+:SUB "BA", "IY" is o0=0xCF; o1=0x0B { a:2 = BA; b:2 = IY; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); BA = r; }
+:SBC "BA", "BA" is o0=0xCF; o1=0x0C { a:2 = BA; b:2 = BA; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); BA = r; }
+:SBC "BA", "HL" is o0=0xCF; o1=0x0D { a:2 = BA; b:2 = HL; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); BA = r; }
+:SBC "BA", "IX" is o0=0xCF; o1=0x0E { a:2 = BA; b:2 = IX; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); BA = r; }
+:SBC "BA", "IY" is o0=0xCF; o1=0x0F { a:2 = BA; b:2 = IY; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); BA = r; }
+:CP "BA", "BA" is o0=0xCF; o1=0x18 { a:2 = BA; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "BA", "HL" is o0=0xCF; o1=0x19 { a:2 = BA; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "BA", "IX" is o0=0xCF; o1=0x1A { a:2 = BA; b:2 = IX; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "BA", "IY" is o0=0xCF; o1=0x1B { a:2 = BA; b:2 = IY; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:ADD "HL", "BA" is o0=0xCF; o1=0x20 { a:2 = HL; b:2 = BA; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); HL = r; }
+:ADD "HL", "HL" is o0=0xCF; o1=0x21 { a:2 = HL; b:2 = HL; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); HL = r; }
+:ADD "HL", "IX" is o0=0xCF; o1=0x22 { a:2 = HL; b:2 = IX; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); HL = r; }
+:ADD "HL", "IY" is o0=0xCF; o1=0x23 { a:2 = HL; b:2 = IY; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); HL = r; }
+:ADC "HL", "BA" is o0=0xCF; o1=0x24 { a:2 = HL; b:2 = BA; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); HL = r; }
+:ADC "HL", "HL" is o0=0xCF; o1=0x25 { a:2 = HL; b:2 = HL; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); HL = r; }
+:ADC "HL", "IX" is o0=0xCF; o1=0x26 { a:2 = HL; b:2 = IX; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); HL = r; }
+:ADC "HL", "IY" is o0=0xCF; o1=0x27 { a:2 = HL; b:2 = IY; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); HL = r; }
+:SUB "HL", "BA" is o0=0xCF; o1=0x28 { a:2 = HL; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); HL = r; }
+:SUB "HL", "HL" is o0=0xCF; o1=0x29 { a:2 = HL; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); HL = r; }
+:SUB "HL", "IX" is o0=0xCF; o1=0x2A { a:2 = HL; b:2 = IX; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); HL = r; }
+:SUB "HL", "IY" is o0=0xCF; o1=0x2B { a:2 = HL; b:2 = IY; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); HL = r; }
+:SBC "HL", "BA" is o0=0xCF; o1=0x2C { a:2 = HL; b:2 = BA; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); HL = r; }
+:SBC "HL", "HL" is o0=0xCF; o1=0x2D { a:2 = HL; b:2 = HL; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); HL = r; }
+:SBC "HL", "IX" is o0=0xCF; o1=0x2E { a:2 = HL; b:2 = IX; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); HL = r; }
+:SBC "HL", "IY" is o0=0xCF; o1=0x2F { a:2 = HL; b:2 = IY; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); HL = r; }
+:CP "HL", "BA" is o0=0xCF; o1=0x38 { a:2 = HL; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "HL", "HL" is o0=0xCF; o1=0x39 { a:2 = HL; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "HL", "IX" is o0=0xCF; o1=0x3A { a:2 = HL; b:2 = IX; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "HL", "IY" is o0=0xCF; o1=0x3B { a:2 = HL; b:2 = IY; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:ADD "IX", "BA" is o0=0xCF; o1=0x40 { a:2 = IX; b:2 = BA; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IX = r; }
+:ADD "IX", "HL" is o0=0xCF; o1=0x41 { a:2 = IX; b:2 = HL; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IX = r; }
+:ADD "IY", "BA" is o0=0xCF; o1=0x42 { a:2 = IY; b:2 = BA; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IY = r; }
+:ADD "IY", "HL" is o0=0xCF; o1=0x43 { a:2 = IY; b:2 = HL; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); IY = r; }
+:ADD "SP", "BA" is o0=0xCF; o1=0x44 { a:2 = SP; b:2 = BA; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); SP = r; }
+:ADD "SP", "HL" is o0=0xCF; o1=0x45 { a:2 = SP; b:2 = HL; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); SP = r; }
+:SUB "IX", "BA" is o0=0xCF; o1=0x48 { a:2 = IX; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IX = r; }
+:SUB "IX", "HL" is o0=0xCF; o1=0x49 { a:2 = IX; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IX = r; }
+:SUB "IY", "BA" is o0=0xCF; o1=0x4A { a:2 = IY; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IY = r; }
+:SUB "IY", "HL" is o0=0xCF; o1=0x4B { a:2 = IY; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IY = r; }
+:SUB "SP", "BA" is o0=0xCF; o1=0x4C { a:2 = SP; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); SP = r; }
+:SUB "SP", "HL" is o0=0xCF; o1=0x4D { a:2 = SP; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); SP = r; }
+:CP "SP", "BA" is o0=0xCF; o1=0x5C { a:2 = SP; b:2 = BA; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "SP", "HL" is o0=0xCF; o1=0x5D { a:2 = SP; b:2 = HL; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:ADC "BA", Imm16 is o0=0xCF; o1=0x60; Imm16 { a:2 = BA; b:2 = Imm16; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); BA = r; }
+:ADC "HL", Imm16 is o0=0xCF; o1=0x61; Imm16 { a:2 = HL; b:2 = Imm16; r:2 = a + b + zext(C); t:2 = a + b; C = carry(a, b) || carry(t, zext(C)); V = scarry(a, b) ^^ scarry(t, zext(C)); resZN(r); HL = r; }
+:SBC "BA", Imm16 is o0=0xCF; o1=0x62; Imm16 { a:2 = BA; b:2 = Imm16; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); BA = r; }
+:SBC "HL", Imm16 is o0=0xCF; o1=0x63; Imm16 { a:2 = HL; b:2 = Imm16; r:2 = a - b - zext(C); t:2 = a - b; C = (a < b) || (t < zext(C)); V = sborrow(a, b) ^^ sborrow(t, zext(C)); resZN(r); HL = r; }
+:ADD "SP", Imm16 is o0=0xCF; o1=0x68; Imm16 { a:2 = SP; b:2 = Imm16; r:2 = a + b; C = carry(a, b); V = scarry(a, b); resZN(r); SP = r; }
+:SUB "SP", Imm16 is o0=0xCF; o1=0x6A; Imm16 { a:2 = SP; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); SP = r; }
+:CP "SP", Imm16 is o0=0xCF; o1=0x6C; Imm16 { a:2 = SP; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:LD "SP", Imm16 is o0=0xCF; o1=0x6E; Imm16 { SP = Imm16; }
+:LD "BA", MSPd is o0=0xCF; o1=0x70; MSPd { BA = *:2 MSPd; }
+:LD "HL", MSPd is o0=0xCF; o1=0x71; MSPd { HL = *:2 MSPd; }
+:LD "IX", MSPd is o0=0xCF; o1=0x72; MSPd { IX = *:2 MSPd; }
+:LD "IY", MSPd is o0=0xCF; o1=0x73; MSPd { IY = *:2 MSPd; }
+:LD MSPd, "BA" is o0=0xCF; o1=0x74; MSPd { *:2 MSPd = BA; }
+:LD MSPd, "HL" is o0=0xCF; o1=0x75; MSPd { *:2 MSPd = HL; }
+:LD MSPd, "IX" is o0=0xCF; o1=0x76; MSPd { *:2 MSPd = IX; }
+:LD MSPd, "IY" is o0=0xCF; o1=0x77; MSPd { *:2 MSPd = IY; }
+:LD "SP", MAbs is o0=0xCF; o1=0x78; MAbs { SP = *:2 MAbs; }
+:LD MAbs, "SP" is o0=0xCF; o1=0x7C; MAbs { *:2 MAbs = SP; }
+:PUSH "A" is o0=0xCF; o1=0xB0 { SP = SP - 1; *:1 SP = A; }
+:PUSH "B" is o0=0xCF; o1=0xB1 { SP = SP - 1; *:1 SP = B; }
+:PUSH "L" is o0=0xCF; o1=0xB2 { SP = SP - 1; *:1 SP = L; }
+:PUSH "H" is o0=0xCF; o1=0xB3 { SP = SP - 1; *:1 SP = H; }
+:POP "A" is o0=0xCF; o1=0xB4 { A = *:1 SP; SP = SP + 1; }
+:POP "B" is o0=0xCF; o1=0xB5 { B = *:1 SP; SP = SP + 1; }
+:POP "L" is o0=0xCF; o1=0xB6 { L = *:1 SP; SP = SP + 1; }
+:POP "H" is o0=0xCF; o1=0xB7 { H = *:1 SP; SP = SP + 1; }
+:PUSH "ALL" is o0=0xCF; o1=0xB8 { SP = SP - 2; *:2 SP = BA; SP = SP - 2; *:2 SP = HL; SP = SP - 2; *:2 SP = IX; SP = SP - 2; *:2 SP = IY; SP = SP - 1; *:1 SP = BR; }
+:PUSH "ALE" is o0=0xCF; o1=0xB9 { SP = SP - 2; *:2 SP = BA; SP = SP - 2; *:2 SP = HL; SP = SP - 2; *:2 SP = IX; SP = SP - 2; *:2 SP = IY; SP = SP - 1; *:1 SP = BR; SP = SP - 1; *:1 SP = EP; SP = SP - 1; *:1 SP = XP; SP = SP - 1; *:1 SP = YP; }
+:POP "ALL" is o0=0xCF; o1=0xBC { BR = *:1 SP; SP = SP + 1; IY = *:2 SP; SP = SP + 2; IX = *:2 SP; SP = SP + 2; HL = *:2 SP; SP = SP + 2; BA = *:2 SP; SP = SP + 2; }
+:POP "ALE" is o0=0xCF; o1=0xBD { YP = *:1 SP; SP = SP + 1; XP = *:1 SP; SP = SP + 1; EP = *:1 SP; SP = SP + 1; BR = *:1 SP; SP = SP + 1; IY = *:2 SP; SP = SP + 2; IX = *:2 SP; SP = SP + 2; HL = *:2 SP; SP = SP + 2; BA = *:2 SP; SP = SP + 2; }
+:LD "BA", MHL is o0=0xCF; o1=0xC0; MHL { BA = *:2 MHL; }
+:LD "HL", MHL is o0=0xCF; o1=0xC1; MHL { HL = *:2 MHL; }
+:LD "IX", MHL is o0=0xCF; o1=0xC2; MHL { IX = *:2 MHL; }
+:LD "IY", MHL is o0=0xCF; o1=0xC3; MHL { IY = *:2 MHL; }
+:LD MHL, "BA" is o0=0xCF; o1=0xC4; MHL { *:2 MHL = BA; }
+:LD MHL, "HL" is o0=0xCF; o1=0xC5; MHL { *:2 MHL = HL; }
+:LD MHL, "IX" is o0=0xCF; o1=0xC6; MHL { *:2 MHL = IX; }
+:LD MHL, "IY" is o0=0xCF; o1=0xC7; MHL { *:2 MHL = IY; }
+:LD "BA", MIX is o0=0xCF; o1=0xD0; MIX { BA = *:2 MIX; }
+:LD "HL", MIX is o0=0xCF; o1=0xD1; MIX { HL = *:2 MIX; }
+:LD "IX", MIX is o0=0xCF; o1=0xD2; MIX { IX = *:2 MIX; }
+:LD "IY", MIX is o0=0xCF; o1=0xD3; MIX { IY = *:2 MIX; }
+:LD MIX, "BA" is o0=0xCF; o1=0xD4; MIX { *:2 MIX = BA; }
+:LD MIX, "HL" is o0=0xCF; o1=0xD5; MIX { *:2 MIX = HL; }
+:LD MIX, "IX" is o0=0xCF; o1=0xD6; MIX { *:2 MIX = IX; }
+:LD MIX, "IY" is o0=0xCF; o1=0xD7; MIX { *:2 MIX = IY; }
+:LD "BA", MIY is o0=0xCF; o1=0xD8; MIY { BA = *:2 MIY; }
+:LD "HL", MIY is o0=0xCF; o1=0xD9; MIY { HL = *:2 MIY; }
+:LD "IX", MIY is o0=0xCF; o1=0xDA; MIY { IX = *:2 MIY; }
+:LD "IY", MIY is o0=0xCF; o1=0xDB; MIY { IY = *:2 MIY; }
+:LD MIY, "BA" is o0=0xCF; o1=0xDC; MIY { *:2 MIY = BA; }
+:LD MIY, "HL" is o0=0xCF; o1=0xDD; MIY { *:2 MIY = HL; }
+:LD MIY, "IX" is o0=0xCF; o1=0xDE; MIY { *:2 MIY = IX; }
+:LD MIY, "IY" is o0=0xCF; o1=0xDF; MIY { *:2 MIY = IY; }
+:LD "BA", "BA" is o0=0xCF; o1=0xE0 { BA = BA; }
+:LD "BA", "HL" is o0=0xCF; o1=0xE1 { BA = HL; }
+:LD "BA", "IX" is o0=0xCF; o1=0xE2 { BA = IX; }
+:LD "BA", "IY" is o0=0xCF; o1=0xE3 { BA = IY; }
+:LD "HL", "BA" is o0=0xCF; o1=0xE4 { HL = BA; }
+:LD "HL", "HL" is o0=0xCF; o1=0xE5 { HL = HL; }
+:LD "HL", "IX" is o0=0xCF; o1=0xE6 { HL = IX; }
+:LD "HL", "IY" is o0=0xCF; o1=0xE7 { HL = IY; }
+:LD "IX", "BA" is o0=0xCF; o1=0xE8 { IX = BA; }
+:LD "IX", "HL" is o0=0xCF; o1=0xE9 { IX = HL; }
+:LD "IX", "IX" is o0=0xCF; o1=0xEA { IX = IX; }
+:LD "IX", "IY" is o0=0xCF; o1=0xEB { IX = IY; }
+:LD "IY", "BA" is o0=0xCF; o1=0xEC { IY = BA; }
+:LD "IY", "HL" is o0=0xCF; o1=0xED { IY = HL; }
+:LD "IY", "IX" is o0=0xCF; o1=0xEE { IY = IX; }
+:LD "IY", "IY" is o0=0xCF; o1=0xEF { IY = IY; }
+:LD "SP", "BA" is o0=0xCF; o1=0xF0 { SP = BA; }
+:LD "SP", "HL" is o0=0xCF; o1=0xF1 { SP = HL; }
+:LD "SP", "IX" is o0=0xCF; o1=0xF2 { SP = IX; }
+:LD "SP", "IY" is o0=0xCF; o1=0xF3 { SP = IY; }
+:LD "HL", "SP" is o0=0xCF; o1=0xF4 { HL = SP; }
+:LD "HL", "PC" is o0=0xCF; o1=0xF5 { pcv:2 = inst_next; HL = pcv; }
+:LD "BA", "SP" is o0=0xCF; o1=0xF8 { BA = SP; }
+:LD "BA", "PC" is o0=0xCF; o1=0xF9 { pcv:2 = inst_next; BA = pcv; }
+:LD "IX", "SP" is o0=0xCF; o1=0xFA { IX = SP; }
+:LD "IY", "SP" is o0=0xCF; o1=0xFE { IY = SP; }
+:SUB "BA", Imm16 is o0=0xD0; Imm16 { a:2 = BA; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); BA = r; }
+:SUB "HL", Imm16 is o0=0xD1; Imm16 { a:2 = HL; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); HL = r; }
+:SUB "IX", Imm16 is o0=0xD2; Imm16 { a:2 = IX; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IX = r; }
+:SUB "IY", Imm16 is o0=0xD3; Imm16 { a:2 = IY; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); IY = r; }
+:CP "BA", Imm16 is o0=0xD4; Imm16 { a:2 = BA; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "HL", Imm16 is o0=0xD5; Imm16 { a:2 = HL; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "IX", Imm16 is o0=0xD6; Imm16 { a:2 = IX; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:CP "IY", Imm16 is o0=0xD7; Imm16 { a:2 = IY; b:2 = Imm16; r:2 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:AND MBR, Imm8B is o0=0xD8; MBR; Imm8B { a:1 = *:1 MBR; b:1 = Imm8B; r:1 = a & b; resZN(r); *:1 MBR = r; }
+:OR MBR, Imm8B is o0=0xD9; MBR; Imm8B { a:1 = *:1 MBR; b:1 = Imm8B; r:1 = a | b; resZN(r); *:1 MBR = r; }
+:XOR MBR, Imm8B is o0=0xDA; MBR; Imm8B { a:1 = *:1 MBR; b:1 = Imm8B; r:1 = a ^ b; resZN(r); *:1 MBR = r; }
+:CP MBR, Imm8B is o0=0xDB; MBR; Imm8B { a:1 = *:1 MBR; b:1 = Imm8B; r:1 = a - b; C = a < b; V = sborrow(a, b); resZN(r); }
+:BIT MBR, Imm8B is o0=0xDC; MBR; Imm8B { a:1 = *:1 MBR; b:1 = Imm8B; r:1 = a & b; resZN(r); }
+:LD MBR, Imm8B is o0=0xDD; MBR; Imm8B { *:1 MBR = Imm8B; }
+:PACK is o0=0xDE { A = ((B & 0xf) << 4) | (A & 0xf); }
+:UPCK is o0=0xDF { B = A >> 4; A = A & 0xf; }
+:CARS "C", Rel8a is o0=0xE0; Rel8a { if (!(C)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8a; }
+:CARS "NC", Rel8a is o0=0xE1; Rel8a { if (!(!C)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8a; }
+:CARS "Z", Rel8a is o0=0xE2; Rel8a { if (!(Z)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8a; }
+:CARS "NZ", Rel8a is o0=0xE3; Rel8a { if (!(!Z)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8a; }
+:JRS "C", Rel8a is o0=0xE4; Rel8a { if (C) goto Rel8a; }
+:JRS "NC", Rel8a is o0=0xE5; Rel8a { if (!C) goto Rel8a; }
+:JRS "Z", Rel8a is o0=0xE6; Rel8a { if (Z) goto Rel8a; }
+:JRS "NZ", Rel8a is o0=0xE7; Rel8a { if (!Z) goto Rel8a; }
+:CARL "C", Rel16 is o0=0xE8; Rel16 { if (!(C)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel16; }
+:CARL "NC", Rel16 is o0=0xE9; Rel16 { if (!(!C)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel16; }
+:CARL "Z", Rel16 is o0=0xEA; Rel16 { if (!(Z)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel16; }
+:CARL "NZ", Rel16 is o0=0xEB; Rel16 { if (!(!Z)) goto inst_next; ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel16; }
+:JRL "C", Rel16 is o0=0xEC; Rel16 { if (C) goto Rel16; }
+:JRL "NC", Rel16 is o0=0xED; Rel16 { if (!C) goto Rel16; }
+:JRL "Z", Rel16 is o0=0xEE; Rel16 { if (Z) goto Rel16; }
+:JRL "NZ", Rel16 is o0=0xEF; Rel16 { if (!Z) goto Rel16; }
+:CARS Rel8a is o0=0xF0; Rel8a { ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel8a; }
+:JRS Rel8a is o0=0xF1; Rel8a { goto Rel8a; }
+:CARL Rel16 is o0=0xF2; Rel16 { ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; call Rel16; }
+:JRL Rel16 is o0=0xF3; Rel16 { goto Rel16; }
+:JP "HL" is o0=0xF4 { goto [HL]; }
+:DJR "NZ", Rel8a is o0=0xF5; Rel8a { B = B - 1; Z = (B == 0); if (B != 0) goto Rel8a; }
+:SWAP "A" is o0=0xF6 { a:1 = A; r:1 = (a << 4) | (a >> 4); A = r; }
+:SWAP MHL is o0=0xF7; MHL { a:1 = *:1 MHL; r:1 = (a << 4) | (a >> 4); *:1 MHL = r; }
+:RET is o0=0xF8 { t:2 = *:2 SP; SP = SP + 2; return [t]; }
+:RETE is o0=0xF9 { v:1 = *:1 SP; SP = SP + 1; unpackSC(v); t:2 = *:2 SP; SP = SP + 2; return [t]; }
+:RETS is o0=0xFA { t:2 = *:2 SP; SP = SP + 2; t = t + 2; return [t]; }
+:CALL MAbs is o0=0xFB; MAbs { ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; t:2 = *:2 MAbs; call [t]; }
+:INT Vec is o0=0xFC; Vec { ra:2 = inst_next; SP = SP - 2; *:2 SP = ra; sc:1 = 0; packSC(sc); SP = SP - 1; *:1 SP = sc; t:2 = *:2 Vec; call [t]; }
+:JP Vec is o0=0xFD; Vec { t:2 = *:2 Vec; goto [t]; }
+:NOP is o0=0xFF {  }

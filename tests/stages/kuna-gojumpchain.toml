@@ -1,0 +1,77 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'forwarded' },
+    { space = 'ram', offset = '0x100040', name = 'write_forwarder' },
+    { space = 'ram', offset = '0x100080', name = 'cycle' },
+    { space = 'ram', offset = '0x101000', name = 'runtime.gcWriteBarrier2' },
+    { space = 'ram', offset = '0x101001', name = 'runtime.helper' },
+    { space = 'ram', offset = '0x300000', name = 'marker' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '4885ff7402eb02eb0ae8f20f0000498933eb00488937c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '4885ff740dc70425000030002a000000eb02eb0ae8a70f0000498933eb00488937c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100080'
+readonly = true
+hex = 'e87c0f0000eb00ebfc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x300000'
+readonly = false
+hex = '00000000'
+
+[script]
+commands = [
+    'option sourcelang go',
+    'option gowritebarrier auto',
+    'lo fu forwarded',
+    'decompile',
+    'print C',
+    'option sourcelang c',
+    'option gowritebarrier always',
+    'decompile',
+    'print C',
+    'option sourcelang go',
+    'option gowritebarrier auto',
+    'lo fu write_forwarder',
+    'decompile',
+    'print C',
+    'lo fu cycle',
+    'decompile',
+    'print C',
+    'option sourcelang auto',
+    'quit',
+]
+
+[[match]]
+name = 'gojumpchain: forwarded barriers fold only with Go and the barrier fold enabled'
+count = 2
+regex = 'runtime.gcWriteBarrier2\('
+
+[[match]]
+name = 'gojumpchain: real stores survive every pass'
+count = 3
+literal = '*a0 = a1;'
+
+[[match]]
+name = 'gojumpchain: a forwarding block with a store is retained'
+count = 1
+literal = 'dat_300000 = 0x2a;'
+
+[[match]]
+name = 'gojumpchain: a jump cycle stays an infinite loop'
+count = 1
+literal = 'while( true )'

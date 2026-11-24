@@ -3,7 +3,7 @@
 // Covered here: the action is inert (returns 0) with the gate off, on a
 // function with no calls, and under `always` with no matching shape. The
 // matcher's refusal ladder and the fold itself are pinned end-to-end by
-// `tests/stages/kuna-gowbphi.xml` (hand-assembled multi-op shared-arm
+// `tests/stages/kuna-gowbphi.toml` (hand-assembled multi-op shared-arm
 // diamond) and by the store-preservation oracle in the unlace-console
 // `verify_go_writebarrier` family over real Go builds.
 

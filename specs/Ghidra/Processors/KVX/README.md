@@ -68,14 +68,13 @@ committed afterwards, so the bundle reads every source before it writes
   convention was not checked against hardware.
 - Floating-point rounding, `.s` silent and the speculative/cached load
   variants (`.s`, `.u`, `.us`) only affect the listing.
-- The decoder's instruction buffer (`MAX_INSTRUCTION_LEN` in
-  `crates/unlace-sleigh/src/sleigh.rs`) holds 16 bytes, so bundles of five to
-  eight syllables do not decode until that buffer grows.
 
 ## Decode check
 
-Against `kvx-elf-objdump` (binutils 2.45) on randomly built bundles of up to
-four syllables (each syllable a random table entry with its free bits filled
-randomly, extension words placed as the hardware expects): kv3-1 6,905 of 6,905
+Against `kvx-elf-objdump` (binutils 2.45) on randomly built bundles (each
+syllable a random table entry with its free bits filled randomly, extension words
+placed as the hardware expects): with up to four syllables, kv3-1 6,905 of 6,905
 and kv3-2 6,851 of 6,851 objdump-decoded bundles print the same instructions,
-operands and targets.
+operands and targets; with up to eight syllables (32 bytes, the decoder's
+`MAX_INSTRUCTION_LEN`; 1,273 of 5,000 bundles longer than 16 bytes), kv3-1
+4,927 of 4,927 and kv3-2 4,861 of 4,861.

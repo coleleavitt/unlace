@@ -219,10 +219,14 @@ remains in the IR for reaching definitions and alias effects; the printer neithe
 restores the preceding value nor copies bytes out of a constant's fictitious
 fields. Register effects and creation markers keep their existing handling.
 
-A `SUBPIECE` that extracts a four-byte float from an eight-byte scalar preserves
-the selected bits (`kuna_floatslice.rs`). C shifts an unsigned representation,
-narrows it to four bytes, and reinterprets it through an anonymous union; Rust
-uses the corresponding unsigned shift and `f32::from_bits`. A floating source
+A `SUBPIECE` that extracts a four-byte float from an eight-byte scalar, or a
+two-byte binary16 float from an eight- or four-byte scalar (an AArch64 FP16
+vector load read lane by lane), preserves the selected bits
+(`kuna_floatslice.rs`). C shifts an unsigned representation, narrows it to the
+lane width, and reinterprets it through an anonymous union (`unsigned int`/`float`,
+or `unsigned short`/`_Float16`); Rust uses the corresponding unsigned shift and
+`f32::from_bits` or `f16::from_bits`. Before, a half lane printed as the numeric
+conversion `(_Float16)(v >> 0x10)`. A floating source
 first contributes its bit representation, without a numeric conversion. The
 byte offset is a significance offset in either byte order. Partial-structure
 intermediates use the stripped scalar type that their declarations expose.
@@ -410,7 +414,7 @@ branch flip or `BOOL_NEGATE`, therefore prints `!(a < b)` or `!(a <= b)`.
 The printer must not absorb the negation into `>=` or `>`: those ordered
 comparisons are false on NaN, whereas the negated expressions are true.
 Integer comparisons and floating equality/inequality still use their
-complementary tokens. `tests/stages/kuna-minss-nan.xml` pins MINSS selection
+complementary tokens. `tests/stages/kuna-minss-nan.toml` pins MINSS selection
 with defaults and `nanignore none`; the CLI regression compiles the printed C
 and checks its NaN payloads, signed zeros, finite values and infinities against
 the authored instructions.
@@ -449,7 +453,7 @@ constant zero, directly or through one implied CAST, that is not
 float-typed, enum-typed, or equate-named). The surviving operand keeps the
 context bit, so stacked boolean comparisons collapse fully. `option
 truthycond off` restores upstream Ghidra's explicit comparisons, exercised
-by `tests/stages/kuna-cnorm-truthycond.xml`.
+by `tests/stages/kuna-cnorm-truthycond.toml`.
 
 **Brace form (P9/`brace-form`, `option braceelide`).** A single-statement if
 body renders braceless with the statement indented on the next line (kuna
@@ -461,7 +465,7 @@ rules out a nested `if` body so eliding can never capture a dangling else.
 Multi-statement bodies, else arms, and loop/switch bodies always keep their
 braces; the pre-existing `if (cond) goto L;` one-liner and the `else if`
 collapse are unaffected. `option braceelide off` restores upstream Ghidra's
-braced form, exercised by `tests/stages/kuna-cnorm-braceelide.xml`.
+braced form, exercised by `tests/stages/kuna-cnorm-braceelide.toml`.
 
 **(kuna) Decode-failure halt statements (`kuna_decodehalt.rs`, always on).**
 A `CPUI_RETURN` the flow follower planted because the bytes would not decode
@@ -528,7 +532,7 @@ their banner-line form, and a body whose only pending comments are
 inline-rendered warnings still qualifies for `braceelide`. `option
 warnstyle banner` restores upstream Ghidra's full
 `/* WARNING: ... */` lines, exercised by
-`tests/stages/kuna-cnorm-warnstyle.xml`.
+`tests/stages/kuna-cnorm-warnstyle.toml`.
 
 ## 9.1 Casts
 
@@ -989,7 +993,7 @@ COPY prints as its operand and is looked through (`kuna_castimplied.rs
 `(bool)(unsigned char)` are never candidates, and nothing is dropped for an
 output language without implicit integer conversions (Rust). The ported
 `CastStrategyC` and its pinned decision matrix are unchanged. Pinned by
-`tests/stages/kuna-castimplied.xml`, and by a compiled round trip
+`tests/stages/kuna-castimplied.toml`, and by a compiled round trip
 (`unlace-cli/tests/decompile_all_cli.rs`, `an_implied_cast_round_trips_through_the_printed_c`)
 whose functions print the same values with the option off and on, under gcc and
 clang.
@@ -1036,7 +1040,7 @@ has the target type, else one of them (`kuna_castternary.rs (choose)`):
 `c ? (unsigned long)a0 : (unsigned long)a1` over `int a0` and `unsigned int a1`
 keeps the sign-changing first cast and prints `c ? (unsigned long)a0 : a1`. Only
 where `int` is 4 bytes, and only for C output. Pinned by
-`tests/stages/kuna-castternary.xml` and by a compiled round trip
+`tests/stages/kuna-castternary.toml` and by a compiled round trip
 (`unlace-cli/tests/decompile_all_cli.rs`,
 `a_conditional_arm_cast_round_trips_through_the_printed_c`) over a textbook
 base64 decoder and arms of `char`, `unsigned char`, `short` and `int` against
@@ -1118,7 +1122,7 @@ cast's type and the operation keeps its type (`kuna_castwiden.rs
 (literal_suffix)`): `a0 * 0xcL + 7`, `a0 / 3UL`. A negated literal C types as
 unsigned (`-0x80000000`, whose C value is 2^31) keeps the cast, because the
 suffix would change its value. Only where `int` is 4 bytes, and only for C
-output. Pinned by `tests/stages/kuna-castwiden.xml` (three passes) and by a
+output. Pinned by `tests/stages/kuna-castwiden.toml` (three passes) and by a
 compiled round trip (`unlace-cli/tests/decompile_all_cli.rs`,
 `an_implied_widening_round_trips_through_the_printed_c`) over gcc and clang
 builds at -O0 and -O2, printed with each value and compiled with gcc and clang
@@ -1337,7 +1341,7 @@ converted like any other: a read past the record's extent
 (`((unsigned int *)teb)[0x410]`, `0x1040` bytes into a TEB32 that ends before
 it) or inside a field (`((int *)&a0->field_0x10)[1]`, the upper half of an
 8-byte field). Upstream Ghidra prints the integer round trip. Pinned by
-`tests/stages/kuna-castarith.xml` and by the compiled round trip
+`tests/stages/kuna-castarith.toml` and by the compiled round trip
 `a_pointer_plus_whole_elements_round_trips_through_the_printed_c` in
 `crates/unlace-cli/tests/decompile_all_cli.rs`.
 
@@ -1419,7 +1423,7 @@ pass already cast is counted as `castInput` would have spent it
 form unless the two operands together save a cast. Every printed value is
 unchanged: the index is the element count the integer form scaled, C scales it
 by the same `sizeof`, and the difference and its type are C's own. Upstream
-Ghidra prints the integer round trips. Pinned by `tests/stages/kuna-castindex.xml`
+Ghidra prints the integer round trips. Pinned by `tests/stages/kuna-castindex.toml`
 and by the compiled round trip
 `a_variable_index_and_a_byte_pointer_difference_round_trip_through_the_printed_c`
 in `crates/unlace-cli/tests/decompile_all_cli.rs`; `castindex off`
@@ -2007,14 +2011,14 @@ called from `decompile_step.rs`). The names are the ones already printed, and
 storage some Symbol now holds is skipped. The next `build_arch_handle` snapshots
 the new Symbols like any other. After `store64` writes an unnamed 8-byte global,
 a `load_high` decompiled next reads its upper half as `dat_105000._4_4_` rather
-than a separate `dat_105004` (`tests/stages/kuna-mapglobalsyms.xml`). The option
+than a separate `dat_105004` (`tests/stages/kuna-mapglobalsyms.toml`). The option
 is off by default because it makes a function's output depend on which
 functions were decompiled before it in the same session. A read that starts at a global data
 Symbol but is wider than it prints the Symbol's name with a leading `_`
 (`_small`, upstream `pushMismatchSymbol`); one that starts inside the Symbol
 prints as unnamed storage. Function Symbols take no part: an import slot named
 after its function keeps its plain rendering
-(`tests/stages/kuna-mapglobals.xml`).
+(`tests/stages/kuna-mapglobals.toml`).
 
 One unnamed high-variable case is deliberately canonicalized before that
 choice. If any member is the unaffected input stack pointer, every member uses
@@ -2135,7 +2139,7 @@ tree it came from, and only a right operand needs the parentheses to survive the
 round trip. So the two orderings a compiler can emit stay distinguishable in the
 output -- `a * b * c` for the left-grouped one and `a * (b * c)` for the
 right-grouped one -- where before they printed identically
-(`tests/stages/kuna-floatgrouping.xml`). Float subtraction and division already
+(`tests/stages/kuna-floatgrouping.toml`). Float subtraction and division already
 reached the right answer through the non-associative integer tokens they share.
 
 `printc.rs (PrintC::push_atom)` emits a leaf and then unwinds every operator whose
@@ -2166,7 +2170,7 @@ line fires a pending `else` brace before the label, as it does without the
 pretty-printer (`prettyprint.rs (EmitPrettyPrint::try_tag_line_indent)`). The
 line size also bounds `option commentindent`: an indent of N or more is refused
 (`printc.rs (PrintC::set_line_comment_indent)`), as upstream does
-(`tests/stages/kuna-maxlinewidth.xml`). The datatest corpus passes unchanged
+(`tests/stages/kuna-maxlinewidth.toml`). The datatest corpus passes unchanged
 with `maxlinewidth` set to 100 or 200. When selected, line breaks
 are chosen by `prettyprint.rs (EmitPrettyPrint)`, an Oppen-style streaming
 formatter transcribed verbatim because its breaks are part of the byte-exact
@@ -2186,7 +2190,7 @@ fields of `printc.rs (PrintCOptions)`: if/loop/switch braces sit on the same
 line as their construct, and a function's brace sits directly under its
 prototype (kuna DIV-34 — upstream's `skip_line` default leaves a blank line
 between the prototype and `{`; `option braceformat function skip` restores
-it, exercised by `tests/stages/kuna-cnorm-protogap.xml`).
+it, exercised by `tests/stages/kuna-cnorm-protogap.toml`).
 
 **Position maps.** Every token can carry a resolved back-reference,
 `prettyprint.rs (MarkupRef)`: an op reference (the op's `getTime`, the same id
@@ -2257,7 +2261,7 @@ most natural, `printlanguage.rs (most_natural_base)`), `option nullprinting`
 (the `NULL` token for pointer zeros — kuna DIV-35 flips it default-ON, so a
 null pointer renders `NULL` where upstream renders `(type *)0x0`; `option
 nullprinting off` restores the casted form, exercised by
-`tests/stages/kuna-cnorm-nullprint.xml`), `option inplaceops` (kuna DIV-36
+`tests/stages/kuna-cnorm-nullprint.toml`), `option inplaceops` (kuna DIV-36
 default-ON with the `emitInplaceOp` consumer ported: a standalone statement
 `out = out OP y` whose first input is the same HighVariable as the output
 renders as the compound assignment `out OP= y` for the ten integer
@@ -2269,7 +2273,7 @@ form a plain assignment uses (`*(int *)&origin += 1`,
 `printc.rs (inplace_target)`); comma contexts — for-loop headers and condition-block side effects — keep
 the spelled-out upstream form, so `for (...; i = i + 1)` is unchanged;
 `option inplaceops off` restores everything, exercised by
-`tests/stages/kuna-cnorm-compoundassign.xml`), and
+`tests/stages/kuna-cnorm-compoundassign.toml`), and
 the (kuna, DIV-6) `realtypes` relabel: residual `TYPE_UNKNOWN` values render
 as size-correct real C types (`char`/`unsigned short`/`unsigned
 int`/`unsigned long`) at the declarator/cast chokepoints, without touching
@@ -2345,7 +2349,10 @@ a width above `double` with no exact match spells `long double`, which is how th
 x87 `float10` is reached. No target has a 10-byte `sizeof` — the x86 cspecs
 record 10 as the *value* width and annotate the storage in a comment — so that
 spelling is an approximation of storage, deliberately the same one the recompile
-prelude already makes, since the emitted `.c` and `.h` must not disagree.
+prelude already makes, since the emitted `.c` and `.h` must not disagree. Below
+`float`, the 2-byte binary16 `float2` spells `_Float16` (ISO TS 18661-3, C23;
+GCC and Clang); the recompile prelude does not typedef `float2`, since compilers
+without `_Float16` would reject the whole prelude.
 
 Integer widths with no C type at all (3, 5, 6, 7, and 16-byte integers) keep
 their `undefined<N>` form. They are **not** widened: `(undefined3)x` is a 24-bit
@@ -2366,7 +2373,7 @@ the rendering every real-binary surface gets, whatever the input size. Before
 that, a binary of 500 KiB or more fell back to the interned names, and an
 8-byte element cast such as `((int8 *)a0)[4]` read like a byte offset of 4 at
 an element offset of 0x20 (GH-1063). Exercised by
-`tests/stages/kuna-ctypes.xml` and the per-architecture CLI gate
+`tests/stages/kuna-ctypes.toml` and the per-architecture CLI gate
 `ctypes_per_arch`, which also runs `--mode fast` and `auto` at each size tier.
 
 ## 9.3 Naming
@@ -2847,7 +2854,7 @@ not accept the `u64` that `strlen` returns (`printc.rs (emit_function_document)`
 passes it only when the language's `integer_promotion` capability is set, the gate
 `castimplied` uses). With the option off the output is byte-identical to
 `signedness` alone. Pinned by
-`tests/stages/kuna-castsign.xml` (pass 1 off, pass 2 on: a stack value
+`tests/stages/kuna-castsign.toml` (pass 1 off, pass 2 on: a stack value
 compared signed and used as `a0[v1]` is declared `int8`; an index the body
 decrements, a logically shifted value and an address-taken stack value stay
 unsigned in both passes; pass 3 maps the first value's slot `uint8`, and the

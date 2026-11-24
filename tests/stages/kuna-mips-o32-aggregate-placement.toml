@@ -1,0 +1,39 @@
+# Synthetic srl v0,a0,24; jr ra; nop reads a left-justified O32 byte aggregate.
+
+[image]
+arch = 'MIPS:BE:64:64-32addr-fp32:o32'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'first' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '0004160203e0000800000000'
+
+[script]
+commands = [
+    'option ctypes on',
+    'parse line typedef struct T { unsigned char a; } T;',
+    'parse line extern int first(T x);',
+    'lo fu first',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'O32 aggregate: declared value argument'
+count = 1
+literal = 'int first(T x)'
+
+[[match]]
+name = 'O32 aggregate: byte member retains its value'
+count = 1
+regex = 'return \(unsigned int\)x.a;'
+
+[[match]]
+name = 'O32 aggregate: no residual placement shift'
+count = 0
+regex = '>>|unaff_|halt_baddata'

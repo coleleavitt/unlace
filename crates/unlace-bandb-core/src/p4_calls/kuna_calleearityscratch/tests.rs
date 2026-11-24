@@ -1,7 +1,7 @@
 //! Unit tests for the caller-scratch boundary test.  Every case runs through
 //! [`plan_from_body`](crate::kuna_calleearitybody::plan_from_body).  The end-to-end behaviour is
 //! `tests/cli/hint-printing-call-loses.json` and
-//! `tests/stages/kuna-calleearityscratch.xml`.
+//! `tests/stages/kuna-calleearityscratch.toml`.
 
 use super::*;
 

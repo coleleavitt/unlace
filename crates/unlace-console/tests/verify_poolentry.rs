@@ -6,7 +6,7 @@
 //! The pass keys on the **Listing tier** and on AIF's gap walk over it, and both
 //! are built only from a real `ObjectLoadImage`. The datatest/stages harness embeds
 //! raw `<bytechunk>`s with explicit `<symbol>` definitions and never constructs a
-//! load image (`tests/stages/kuna-listing-flag.xml` says so in its own comment), so
+//! load image (`tests/stages/kuna-listing-flag.toml` says so in its own comment), so
 //! the option is structurally unobservable there — `fdeinterior`/DIV-61 shipped an
 //! entry-*removing* default-ON flip at 675/675 PARITY OK with no per-test opt-out
 //! for the same reason. Every sibling analysis-tier discovery flag

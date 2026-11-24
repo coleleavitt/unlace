@@ -1,0 +1,61 @@
+# DWARF global types (`option dwarfglobaltypes on|off`), ida95-59.
+#
+# Stage P1 external-refinement. The fixture is dwarfglobaltypes_x86_64.c built
+# with gcc -O1 -g: `struct config cfg` and `const char *modes[]` are CU-level
+# globals.
+#
+# Pass 1 (`off`, the default): the globals are named but untyped, so a field read
+# is a cast off a byte offset.
+# Pass 2 (`on`): the declared types are locked, so the reads are
+# fields and elements.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64',
+    'option dwarfglobaltypes off',
+    'read symbols',
+    'load function get_port',
+    'decompile',
+    'print C',
+    'load function mode_name',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dwarfglobaltypes_gcc_O1_x86_64',
+    'option dwarfglobaltypes on',
+    'read symbols',
+    'load function get_port',
+    'decompile',
+    'print C',
+    'load function mode_name',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = "DWARFGLOBALTYPES #1: off, a struct global's fields are raw byte offsets"
+count = 1
+literal = 'return *(int4 *)&cfg[0xc] + *(int4 *)&cfg[8];'
+
+[[match]]
+name = 'DWARFGLOBALTYPES #2: on, the fields are named'
+count = 1
+literal = 'return cfg.flags + cfg.port;'
+
+[[match]]
+name = 'DWARFGLOBALTYPES #3: on, the pointer table is indexed by element'
+count = 1
+literal = 'return modes[i];'

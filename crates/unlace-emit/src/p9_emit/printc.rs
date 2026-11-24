@@ -10403,17 +10403,26 @@ impl PrintC {
         static C_BITS: OpToken =
             op_token("", " }).to", 2, 66, false, TokenType::Postsurround, 0, 0);
         let rust = self.out_lang == crate::kuna_lang::OutLang::Rust;
+        let half = slice.width == 2;
         if rust {
             self.push_op(&tokens::FUNCTION_CALL, Some(op_key(op)));
             self.push_atom(&Atom::syntax(
-                "f32::from_bits",
+                if half {
+                    "f16::from_bits"
+                } else {
+                    "f32::from_bits"
+                },
                 TagType::FuncToken,
                 SyntaxHighlight::funcname_color,
             ));
         } else {
             self.push_op(&C_BITS, Some(op_key(op)));
             self.push_atom(&Atom::syntax(
-                "((union { unsigned int from; float to; }){ .from = ",
+                if half {
+                    "((union { unsigned short from; _Float16 to; }){ .from = "
+                } else {
+                    "((union { unsigned int from; float to; }){ .from = "
+                },
                 TagType::TypeToken,
                 SyntaxHighlight::type_color,
             ));
@@ -15662,7 +15671,8 @@ impl PrintC {
     /// the `INFINITY`/`NAN`/decimal token via [`format_float_token`].  When there
     /// is no `FloatFormat` for the size, the token is `FLOAT_UNKNOWN`.  (kuna) A
     /// finite 4-byte constant in C output takes an `f` suffix where `float` is
-    /// 4 bytes, since an unsuffixed literal is a `double`.
+    /// 4 bytes, since an unsuffixed literal is a `double`, and a 2-byte
+    /// (binary16) constant takes `f16`.
     fn push_float_ir(&mut self, arch: &Architecture, val: uintb, sz: int4, op: OpId) {
         use unlace_num::float::floatclass;
         let force_scinote = self.context.is_set(modifiers::FORCE_SCINOTE);
@@ -15703,6 +15713,8 @@ impl PrintC {
                             && arch.types().get_size_of_float() == 4
                         {
                             token.push('f');
+                        } else if self.out_lang == crate::kuna_lang::OutLang::C && sz == 2 {
+                            token.push_str("f16");
                         }
                         token
                     }

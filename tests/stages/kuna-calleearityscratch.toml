@@ -1,0 +1,124 @@
+# RE-friction round 9, need `hint-printing-call-loses` (challenge
+# 5e51836e33c5d4439bb2dc24, ELF x86-64 `cr4ckm3_0x`): the function at 0x400f30
+# decodes a 23-byte string with an unrolled XOR loop and hands the buffer to
+# its hint printer, and `unlace decompile` renders that call with no arguments,
+#
+#     sub_417f80();                         0x401007
+#
+# although 0x400f58 `lea rdi,[rbp-0x30]` sets rdi to the buffer and nothing
+# redefines rdi before the CALL.  Asserting a prototype for the callee restores
+# `sub_417f80((char *)v2)`, so the caller-side dataflow is intact and the loss
+# is entirely in unlocked call-site recovery.
+#
+# Root cause (P4, trial finalization).  `calleearitybody` picks the run {rdi} -
+# the callee reads rdi at 0x417f84 - and its decode is cut three instructions
+# later at 0x417f8d, so nothing proves rsi dead and `calleearitycut` is asked
+# to bound the run by the register it stops at.  `calleearitycut` requires that
+# register to be QUIET, meaning the caller put no value in it, and the caller
+# did: 0x400fc9 `movzx esi,byte ptr [rbp-0x1a]` puts the XOR key in rsi and
+# 0x400fcd `xor byte ptr [r8+0x6],sil` consumes it.  The boundary is not quiet,
+# the run is refused, and the whole one-argument list is dropped.
+#
+# But "the caller wrote it" and "the caller is passing it" are different
+# claims, and a register allocator will spend an argument register on a
+# throwaway.  Argument setup is a value used for NOTHING but the call, which is
+# `Funcdata::onlyOpUse` (funcdata_varnode.cc:1851) - and upstream has already
+# asked it: `FuncCallSpecs::checkInputTrialUse` runs `ancestorOpUse` over every
+# trial and marks it ACTIVE only when the answer is yes.  The XOR is the other
+# use, so rsi's trial scores INACTIVE, and an inactive boundary is scratch.
+#
+# Stage / sub-stage: P4 "trial-finalization".  An inactive boundary ends
+# the run (kuna_calleearityscratch.rs, always on).
+#
+# The fixture is the same construct on SysV x86-64.  Every callee reads rdi and
+# then calls `sink`, so the callee-body walk is cut there and the run {rdi} has
+# no proven boundary; every caller passes its own incoming rdi straight through
+# (`AncestorRealistic::execute` refuses an input Varnode, so the site recovers
+# nothing) and differs only in what it puts in rsi:
+#
+#     sink:  ret
+#     calN:  mov %rdi,%rax; call sink; ret
+#
+#     scratch_wide:   push %rbx; mov %rdi,%rbx
+#                     mov (%rdi),%rsi ; add %rsi,%rbx   # caller consumes rsi
+#                     call cal1 ; add %ebx,%eax ; pop %rbx ; ret
+#     scratch_byte:   ... movzbl (%rdi),%esi ; xor %sil,0x4(%rdi) ...
+#     boundary_live:  ... mov (%rdi),%rsi ...            # nothing else uses it
+#     boundary_const: ... mov $2,%esi ; add %rsi,%rbx ...
+#
+# `scratch_wide` and `scratch_byte` are the fix.  The other two are the
+# discriminators: `boundary_live` uses rsi for
+# nothing but the call, so its trial scores active and the site recovers rsi on
+# its own, and `boundary_const` materializes a constant, which is argument
+# setup in its most literal form and is never scratch however the trial scored.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'sink' },
+    { space = 'ram', offset = '0x100010', name = 'cal1' },
+    { space = 'ram', offset = '0x100020', name = 'cal2' },
+    { space = 'ram', offset = '0x100030', name = 'cal3' },
+    { space = 'ram', offset = '0x100040', name = 'cal4' },
+    { space = 'ram', offset = '0x100050', name = 'scratch_wide' },
+    { space = 'ram', offset = '0x100080', name = 'scratch_byte' },
+    { space = 'ram', offset = '0x1000b0', name = 'boundary_live' },
+    { space = 'ram', offset = '0x1000e0', name = 'boundary_const' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+c30000000000000000000000000000004889f8e8e8ffffffc300000000000000
+4889f8e8d8ffffffc3000000000000004889f8e8c8ffffffc300000000000000
+4889f8e8b8ffffffc300000000000000534889fb488b374801f3e8b1ffffff01
+d85bc30000000000000000000000000000000000000000000000000000000000
+534889fb0fb63740307704e890ffffff01d85bc3000000000000000000000000
+00000000000000000000000000000000534889fb488b37e874ffffff01d85bc3
+0000000000000000000000000000000000000000000000000000000000000000
+534889fbbe020000004801f3e84fffffff01d85bc30000000000000000000000
+00000000000000000000000000000000
+'''
+
+[script]
+commands = [
+    'lo fu scratch_wide',
+    'decompile',
+    'print C',
+    'lo fu scratch_byte',
+    'decompile',
+    'print C',
+    'lo fu boundary_live',
+    'decompile',
+    'print C',
+    'lo fu boundary_const',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'calleearityscratch #1: neither scratch site renders an empty argument list'
+count = 0
+regex = 'cal[12]\(\)'
+
+[[match]]
+name = 'calleearityscratch #2: the run is bounded at the 64-bit scratch register and the one argument the callee reads is recovered'
+count = 1
+regex = 'cal1\(a[0-9]+\)'
+
+[[match]]
+name = "calleearityscratch #3: the witness's own byte-scratch shape recovers the same way"
+count = 1
+regex = 'cal2\(a[0-9]+\)'
+
+[[match]]
+name = 'calleearityscratch #4: a boundary the caller uses for nothing but the call scores active and the site recovers it on its own'
+count = 1
+regex = 'cal3\(a[0-9]+,[^)]+\)'
+
+[[match]]
+name = 'calleearityscratch #5: a constant boundary is never scratch, so that site is untouched'
+count = 1
+literal = 'cal4()'

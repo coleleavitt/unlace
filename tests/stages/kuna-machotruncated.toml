@@ -1,0 +1,60 @@
+# A Mach-O whose load commands name bytes past the end of the file.
+#
+# Issue: a truncated or hand-edited Mach-O - a partial download, a memory
+# dump cut short, a carved file - failed the whole load with "Invalid Mach-O
+# symbol table offset or size" (or "unreadable segment data"), although every
+# byte of code that is present can be read.
+#
+# Stage / sub-stage: P1 container parse, the Mach-O range tolerance
+# (`unlace-analysis/src/loader/kuna_machotolerance.rs
+# (clamp_out_of_file_ranges)`), applied at `load file` beside the ELF and PE
+# header repairs. Each segment, section, symbol table and string table that
+# runs past the end of the file is clamped, in a copy of the image, to the
+# bytes present.
+#
+# The XML wrapper only supplies the harness architecture. The fixture
+# `macho_truncated_arm64` is the first 0x600 bytes of
+# `macho_unwind_only_arm64`: __TEXT is cut short and __LINKEDIT, with the
+# symbol and string tables, is gone.
+#
+# The image loads, `main` (from LC_MAIN) and the `__unwind_info` starts are
+# listed, and `main` decompiles.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_truncated_arm64',
+    'read symbols',
+    'functions',
+    'load function main',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MACHOTRUNCATED #1: the truncated image loads and lists its entry'
+count = 1
+literal = '0x10000040c main'
+
+[[match]]
+name = 'MACHOTRUNCATED #2: the unwind starts inside the bytes present are listed'
+count = 1
+literal = '0x1000003bc sub_1000003bc'
+
+[[match]]
+name = 'MACHOTRUNCATED #3: the entry decompiles'
+count = 1
+literal = 'main('

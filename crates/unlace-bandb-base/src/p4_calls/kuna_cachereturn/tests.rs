@@ -1,5 +1,5 @@
 //! Unit tests for the `cachereturn` option surface; the recovery itself is
-//! covered by `tests/stages/kuna-cachereturn.xml`.
+//! covered by `tests/stages/kuna-cachereturn.toml`.
 
 use super::*;
 

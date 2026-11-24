@@ -1,0 +1,121 @@
+# Cast campaign, lever `globalref`: a constant address used as a pointer
+# prints as the global it names.
+#
+# A pointer-typed constant that ActionConstantPtr cannot link to an existing
+# global Symbol reaches PrintC::pushConstant's pointer arm, which has one
+# spelling for it: the forced-hex integer behind a cast. A stripped image
+# carries no symbol for most of its data, so every address a declared or
+# recovered pointer type reaches prints as `(void *)0x300040c0`, where IDA
+# prints `&unk_300040C0` and no cast. kuna already names an unnamed global
+# it reads directly `dat_<addr>`; `option globalref on|off` (P9,
+# constant-address-global) decides whether the taken address uses that name
+# too, with the global declared at the type the function uses it at.
+#
+# The fixture is a non-PIE x86-64 ELF whose file-scope data has no symbol
+# (linked with -x). Every witness calls a libc function with a declared
+# signature, so the constant's pointer type does not depend on which callee
+# was decompiled first:
+#
+#     w_buffer: memset(scratch, 'x', 8)  - a void * argument (.bss)
+#     w_glyph:  strlen(glyph)            - a char * that is not a string
+#                                          (GB18030 bytes, so no literal)
+#     w_width:  strlen(namebuf) + *(long *)namebuf
+#               a control - the function also reads the storage directly
+#               as a long, so a declared `char` would contradict it
+#     w_count:  memset(scratch, 0, 4); n / (unsigned long)scratch
+#               a control - the function also divides by the value, the
+#               same number-or-address question as inferfuncentry's BUFSIZ
+#
+# Pass 1 (`option globalref off`) reproduces the casts and pass 2 is the
+# default. The option is a printer flag, so it can be set anywhere before
+# `print C`; after `clear architecture` it is back at its default.
+#
+# Source: crates/unlace-analysis/tests/fixtures/globalref_x86_64.c
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalref_x86_64',
+    'option globalref off',
+    'read symbols',
+    'lo fu w_buffer',
+    'decompile',
+    'print C',
+    'lo fu w_glyph',
+    'decompile',
+    'print C',
+    'lo fu w_width',
+    'decompile',
+    'print C',
+    'lo fu w_count',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/globalref_x86_64',
+    'read symbols',
+    'lo fu w_buffer',
+    'decompile',
+    'print C',
+    'lo fu w_glyph',
+    'decompile',
+    'print C',
+    'lo fu w_width',
+    'decompile',
+    'print C',
+    'lo fu w_count',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "KUNA-GLOBALREF #1: off, memset's buffer is a cast integer"
+count = 1
+literal = 'memset((void *)0x300040c0,0x78,8);'
+
+[[match]]
+name = 'KUNA-GLOBALREF #2: on, it is the address of the global'
+count = 1
+literal = 'memset(&dat_300040c0,0x78,8);'
+
+[[match]]
+name = 'KUNA-GLOBALREF #3: off, the non-string char pointer is a cast integer'
+count = 1
+literal = 'strlen((char *)0x30002034)'
+
+[[match]]
+name = 'KUNA-GLOBALREF #4: on, it is the address of the global'
+count = 1
+literal = 'strlen(&dat_30002034)'
+
+[[match]]
+name = 'KUNA-GLOBALREF #5: storage also read directly as a long keeps the cast in both passes'
+count = 2
+literal = 'dat_300040a0 + strlen((char *)0x300040a0)'
+
+[[match]]
+name = 'KUNA-GLOBALREF #6: a value the function also divides by keeps the cast in both passes'
+count = 2
+literal = 'memset((void *)0x300040c0,0,4);'
+
+[[match]]
+name = 'KUNA-GLOBALREF #7: the direct read beside the named buffer is unchanged'
+count = 2
+literal = 'return dat_300040c3 + 1;'
+
+[[match]]
+name = 'KUNA-GLOBALREF #8: the buffer the function also reads as a long is never named by address'
+count = 0
+literal = '&dat_300040a0'

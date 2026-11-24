@@ -21,7 +21,7 @@
 //! Every test runs with `--option listing on --option noreturn_disc on`, because
 //! the whole no-return-discovery family is a Listing consumer and the Listing is
 //! only built on the real-object bootstrap path — never on the XML datatest path.
-//! That is why the `tests/stages/kuna-noreturn-discstrict.xml` datatest can only
+//! That is why the `tests/stages/kuna-noreturn-discstrict.toml` datatest can only
 //! prove the parent option is wired, and the behavior lives here (the same split
 //! `verify_noreturn_error.rs` / `ghangr-noreturn-error.xml` use).
 

@@ -527,7 +527,7 @@ the re-analysed functions. At `2`, eight functions change and gotos rise by
 four, but the affected functions are large enough that the second analysis
 costs +8% (grep) and +26% (libselinux) of whole-binary time. `off` makes
 `record_hits`, the seed and the budget clamp inert, so the output is
-byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.xml`.
+byte-identical to the uncapped form. Witness: `tests/stages/kuna-condstmts.toml`.
 
 **Goto selection (the pathological case).** When the cascade stalls with more
 than one component live, `blockaction.rs (CollapseStructure::select_goto)`
@@ -1575,8 +1575,9 @@ also leaves it alone.
 The one call may also be a CALLIND, in either form of the block. Its target is
 an input like any other, so a block whose paths set different function
 pointers qualifies through the target as well as through the arguments. Each
-clone gets its own copy of the call spec, and after the split each path calls
-through its own pointer, which `ActionDeindirect` can then turn into a direct
+clone gets its own copy of the call spec (a CALLIND clone registers no fspec
+handle, as a CALLIND's spec has no entry address to name and its target is the
+pointer itself), and after the split each path calls through its own pointer, which `ActionDeindirect` can then turn into a direct
 call when that pointer is a known function.
 
 ### orchain — the split that must not happen (decbench)

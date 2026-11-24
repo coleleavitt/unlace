@@ -1,0 +1,54 @@
+# The entry-reachable Thumb context walk (DIV-154).
+#
+# The XML wrapper only provides the harness architecture. The pass clears
+# it and loads the synthetic UEFI TE fixture through the same bounded TE
+# bootstrap the CLI uses: machine ARM (0x1c0), which makes no whole-image
+# mode claim, and an AddressOfEntryPoint carrying the Thumb bit. Its .text
+# is a Thumb `movs r0,#7; bx lr` at 0x401000 followed by an A32 `bx lr`.
+#
+# Without the walk the entry decoded with the language default (A32), so
+# `07 20 70 47` was read as a store and a return with no value,
+# `void sub_401000(void) { return; }`. The walk follows the flow from the
+# entry as Thumb and paints exactly the two instructions it decoded, so the
+# function returns 7 while the A32 `bx lr` behind it keeps its own mode.
+# The image's Subsystem is an EFI application (10), so the `uefi` markup
+# gives the entry `EFI_STATUS sub_401000(EFI_HANDLE ImageHandle,
+# EFI_SYSTEM_TABLE *SystemTable)`.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/te_entrythumbflow_arm.te',
+    'read symbols',
+    'load function sub_401000',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ENTRYTHUMBFLOW #1: the Thumb entry never decodes as A32 returning nothing'
+count = 0
+literal = 'void sub_401000(void)'
+
+[[match]]
+name = 'ENTRYTHUMBFLOW #2: the entry is walked as Thumb and returns its constant'
+count = 1
+literal = 'EFI_STATUS sub_401000(EFI_HANDLE ImageHandle,EFI_SYSTEM_TABLE *SystemTable)'
+
+[[match]]
+name = 'ENTRYTHUMBFLOW #3: the constant the Thumb body returns appears exactly once'
+count = 1
+literal = 'return 7;'

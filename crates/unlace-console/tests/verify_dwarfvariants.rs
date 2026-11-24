@@ -28,7 +28,7 @@
 //!
 //! `tests/datatests/` and most of `tests/stages/` are `<bytechunk>`s: no symbol
 //! table, no DWARF, no relocations. A DWARF-gated change is structurally
-//! unreachable from them. `tests/stages/kuna-dwarfvariants.xml` is the stage-tier
+//! unreachable from them. `tests/stages/kuna-dwarfvariants.toml` is the stage-tier
 //! companion and gets at the fixture through `load file`; this file is the
 //! cross-crate one.
 

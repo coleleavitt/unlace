@@ -2934,7 +2934,7 @@ across blocks from an input at the entry, and its lanes, being unique storage,
 become temporaries read by four MULTIEQUALs. The function used to fail with
 `laned register split failed part way: Free varnode has multiple descendants`;
 it now decompiles without that split
-(`tests/stages/kuna-lanedivide-freefanout.xml`). This is a correctness repair
+(`tests/stages/kuna-lanedivide-freefanout.toml`). This is a correctness repair
 with no option.
 
 When `SplitDatatype` divides a constant, `kuna_constantbytes.rs` extracts
@@ -3166,7 +3166,7 @@ may simply not be linked yet. `condexe.rs (ConditionalExecution::build_heritage_
 records that per space from `Funcdata::num_heritage_passes`, as upstream. Most
 such ops fall to dead-code removal first. They still reach the test when the
 space's dead-code delay outlasts its heritage delay (the console
-`deadcode delay` command, `tests/stages/kuna-condexe-heritage.xml`), and on
+`deadcode delay` command, `tests/stages/kuna-condexe-heritage.toml`), and on
 ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (u-boot `env_attr_lookup`) now collapses into the guarded block.
 `condexe.rs (RuleOrPredicate)` (oppool1, group
@@ -3179,7 +3179,10 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 runs right after `ActionConditionalExe` in the same group. A join block J
 qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
 integer and boolean ops it can evaluate, and every value it defines is read
-only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+only inside J. No MULTIEQUAL of J may read a value J defines: such a value is
+carried around a loop back into J (a loop counter tested at the loop head), and
+a moved edge would skip the step that computes it, leaving the counter defined
+only in terms of itself. For each in edge whose MULTIEQUAL inputs are constants (looking
 through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
 the branch (honouring the boolean flip). When the branch is decided, the edge
 is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's
@@ -3656,10 +3659,10 @@ Floats, saturating and sign-extended lanes are not matched, and neither is a
 vector loop the compiler also unrolled (two vector iterations per trip with an
 odd-trip epilogue, clang 14's x86-64 `-O2`/`-O3` default) nor any gcc 11 shape
 measured.
-`tests/stages/kuna-devectorize.xml` runs the byte-sum witness in both passes
+`tests/stages/kuna-devectorize.toml` runs the byte-sum witness in both passes
 (off: the guard, eight accumulators, fold and remainder loop; on: one
 `do { v1 += bytes[v2]; ... } while (length != v2)`);
-`tests/stages/kuna-devectorize-effects.xml` keeps the vector arm of two
+`tests/stages/kuna-devectorize-effects.toml` keeps the vector arm of two
 hand-written sums whose exits disagree on a global store.
 
 **Inline string lengths** (`option strlenscan`, default **on**) —
@@ -4595,9 +4598,14 @@ multiplier too wide means no proof and no rewrite.
 The replacement is applied only when it has fewer ops than the tree and 64
 pseudo-random full-width evaluations agree with it. The new ops go before the
 root, and the root becomes a `COPY` of the result; dead-code elimination removes
-the old tree. Pinned by `tests/stages/kuna-mba.xml` (two leaves) and
-`tests/stages/kuna-mba-groups.xml` (a four-leaf group, six leaves in three
-groups, and the polynomial) and `tests/stages/kuna-mba-solve.xml` (constant
+the old tree. A tree with a leaf (or a reused subtree) that is still a free
+varnode, one heritage has not reached, is left alone: a free varnode keeps its
+single reader, so no new op can read it, and a rewrite to a bare leaf would
+leave the root a `COPY` with no input
+(`crates/unlace-bandb-base/src/p3_dataflow/kuna_mba.rs (replace)`; CoreADI32.dll
+under `mba on` panicked in `RuleTermOrder` this way). Pinned by `tests/stages/kuna-mba.toml` (two leaves) and
+`tests/stages/kuna-mba-groups.toml` (a four-leaf group, six leaves in three
+groups, and the polynomial) and `tests/stages/kuna-mba-solve.toml` (constant
 operands, a shared complement, a complemented sum, a leaf plus a boolean term,
 bit logic alone). A subtree of the replacement that the old tree already
 computes reuses that varnode. Not done: a narrower op under a zero extension
@@ -4729,7 +4737,12 @@ corpus hung against `collect_terms`. On `libCoreADI.so` (19 functions found)
 `egraph` changes 3 functions, one of them beyond `mba`:
 `(-((~a0 | 0x4cee331d) + (a0 | 0xb311cce2)) - 2 ^ 0x53a5c4e9) * K` becomes
 `(a0 ^ 0x1f4bf7f4) * K`. `/usr/bin/patchelf` (332 functions) and
-`/usr/bin/bzip2` (84) are unchanged, at the same CPU time within noise.
+`/usr/bin/bzip2` (84) are unchanged, but on 00d4db1c62 the patchelf run executes
+26.9% more instructions with the option on (144.6G vs 114.0G, pinned to one
+core, two runs each), all of it saturations that find nothing. Since then the
+rule remembers, per function, each tree it saturated without a replacement
+(its fingerprint, op count and budget) and does not saturate it again when
+the pool revisits the op.
 
 Example: `(((x & ~y) + y) ^ z) + 2*(((x & ~y) + y) & z)`, one substitution
 applied to the result of another, becomes `(x | y) + z`: the seed folds the

@@ -1,0 +1,85 @@
+# Mach-O export tries, re-exports followed (`option exporttrie on|off`,
+# default on).
+#
+# unlace read a Mach-O's exports from the symbol table only, and named a call
+# into another dyld shared cache image after the target's own symbol. The
+# export trie carries the names a stripped dylib keeps, and resolving an
+# image's imports through the tries of the dylibs its two-level ordinals
+# name, following EXPORT_SYMBOL_FLAGS_REEXPORT and LC_REEXPORT_DYLIB, gives
+# each cross-image call the name the source used.
+#
+# Stage / sub-stage: P1 environment-binding: the Mach-O import walk
+# (`macho_stubs.rs (trie_exports)`) and the dyld cache rebuild
+# (`kuna_dyldcache/xrefs.rs (Names::adopt_imports_of)`), both inside
+# `load file`, so the option is set before `load file`.
+#
+# Fixtures: the synthetic cache `dyld_cache_arm64e` (libcaller imports
+# `_callee_entry` from libumbrella, which re-exports libcallee, whose trie
+# lists `_callee_entry` as an alias of `_callee_add`), and
+# `macho_trieonly_arm64`, whose symbol table was emptied so only its
+# trie names `trie_scale` and `trie_entry`.
+#
+# Pass 1 (exporttrie off, the BUG): the island call is `callee_add()`.
+# Pass 2 (on, the FIX): `callee_entry()`. The stripped dylib lists
+# `_trie_scale` in both passes: the Mach-O loader reads every export-trie
+# name the symbol table lacks on its own (`macho_stubs::named_exports`).
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'option dyldimage /usr/lib/libcaller.dylib',
+    'option exporttrie off',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e',
+    'read symbols',
+    'load function caller_entry',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_trieonly_arm64',
+    'read symbols',
+    'functions',
+    'option exporttrie on',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/dyld_cache_arm64e/dyld_shared_cache_arm64e',
+    'read symbols',
+    'load function caller_entry',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_trieonly_arm64',
+    'read symbols',
+    'functions',
+    'quit',
+]
+
+[[match]]
+name = "exporttrie #1: off names the island after the target's own symbol"
+count = 1
+literal = 'v1 = callee_add();'
+
+[[match]]
+name = "exporttrie #2: the loader names the stripped dylib's export from its trie in both passes"
+count = 2
+literal = '0x298 _trie_scale'
+
+[[match]]
+name = 'exporttrie #3: on names the island after the import, through the re-export'
+count = 1
+literal = 'v1 = callee_entry();'
+
+[[match]]
+name = 'exporttrie #4: no pass leaves the export unnamed'
+count = 0
+literal = 'sub_298'

@@ -1,6 +1,6 @@
 # Zfh / Zfhmin half-precision floating point (RISC-V Zfh 1.0). A half value
-# lives in the low 16 bits of an f register; like the single-precision forms
-# (fassignS) a write zero-extends it to the register. Encodings checked against
+# lives in the low 16 bits of an f register; a write NaN-boxes it (fassignH sets
+# the bits above 15 to one), as fassignS does for single precision. Encodings checked against
 # LLVM's RISC-V assembler and disassembler. Zfhmin is the subset flh, fsh,
 # fmv.x.h, fmv.h.x and the conversions to and from single and double precision.
 
@@ -13,7 +13,7 @@ define pcodeop fclass_h;
 :flh frd,immI(rs1) is immI & frd & rs1 & op0006=0x07 & funct3=0x1
 {
 	local ea:$(XLEN) = immI + rs1;
-	frd = zext(*[ram]:$(HFLEN) ea);
+	fassignH(frd, *[ram]:$(HFLEN) ea);
 }
 
 :fsh frs2H,immS(rs1) is frs2H & immS & rs1 & op0006=0x27 & funct3=0x1
@@ -25,76 +25,76 @@ define pcodeop fclass_h;
 :fadd.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x02
 {
 	local tmp:$(HFLEN) = frs1H f+ frs2H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fsub.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x06
 {
 	local tmp:$(HFLEN) = frs1H f- frs2H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fmul.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x0a
 {
 	local tmp:$(HFLEN) = frs1H f* frs2H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fdiv.h frd,frs1H,frs2H,FRM is frs1H & frd & frs2H & FRM & op0006=0x53 & funct7=0x0e
 {
 	local tmp:$(HFLEN) = frs1H f/ frs2H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fsqrt.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x2e & op2024=0x0
 {
 	local tmp:$(HFLEN) = sqrt(frs1H);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fsgnj.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x0 & funct7=0x12
 {
 	local tmp:$(HFLEN) = frs1H;
 	tmp[15,1] = frs2H[15,1];
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fsgnjn.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x1 & funct7=0x12
 {
 	local tmp:$(HFLEN) = frs1H;
 	tmp[15,1] = !frs2H[15,1];
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fsgnjx.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x2 & funct7=0x12
 {
 	local tmp:$(HFLEN) = frs1H;
 	tmp[15,1] = tmp[15,1] ^ frs2H[15,1];
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fmin.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x0 & funct7=0x16
 {
 	local a:$(HFLEN) = frs1H;
 	local b:$(HFLEN) = frs2H;
-	frd = zext(a);
+	fassignH(frd, a);
 	if (nan(b)) goto inst_next;
-	frd = zext(b);
+	fassignH(frd, b);
 	if (nan(a)) goto inst_next;
 	if (b f<= a) goto inst_next;
-	frd = zext(a);
+	fassignH(frd, a);
 }
 
 :fmax.h frd,frs1H,frs2H is frs1H & frd & frs2H & op0006=0x53 & funct3=0x1 & funct7=0x16
 {
 	local a:$(HFLEN) = frs1H;
 	local b:$(HFLEN) = frs2H;
-	frd = zext(a);
+	fassignH(frd, a);
 	if (nan(b)) goto inst_next;
-	frd = zext(b);
+	fassignH(frd, b);
 	if (nan(a)) goto inst_next;
 	if (b f>= a) goto inst_next;
-	frd = zext(a);
+	fassignH(frd, a);
 }
 
 :fcvt.s.h frd,frs1H,FRM is frs1H & frd & FRM & op0006=0x53 & funct7=0x20 & op2024=0x2
@@ -106,7 +106,7 @@ define pcodeop fclass_h;
 :fcvt.h.s frd,frs1S,FRM is frs1S & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x0
 {
 	local tmp:$(HFLEN) = float2float(frs1S);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 @if FPSIZE == "64" || FPSIZE == "128"
@@ -119,7 +119,7 @@ define pcodeop fclass_h;
 :fcvt.h.d frd,frs1D,FRM is frs1D & frd & FRM & op0006=0x53 & funct7=0x22 & op2024=0x1
 {
 	local tmp:$(HFLEN) = float2float(frs1D);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 @endif
 
@@ -139,14 +139,14 @@ define pcodeop fclass_h;
 :fcvt.h.w frd,rs1W,FRM is frd & rs1W & FRM & op0006=0x53 & funct7=0x6a & op2024=0x0
 {
 	local tmp:$(HFLEN) = int2float(rs1W);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fcvt.h.wu frd,rs1W,FRM is frd & rs1W & FRM & op0006=0x53 & funct7=0x6a & op2024=0x1
 {
 	local u32:$(XLEN2) = zext(rs1W);
 	local tmp:$(HFLEN) = int2float(u32);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 @if ADDRSIZE == "64"
@@ -163,14 +163,14 @@ define pcodeop fclass_h;
 :fcvt.h.l frd,rs1L,FRM is frd & rs1L & FRM & op0006=0x53 & funct7=0x6a & op2024=0x2
 {
 	local tmp:$(HFLEN) = int2float(rs1L);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fcvt.h.lu frd,rs1L,FRM is frd & rs1L & FRM & op0006=0x53 & funct7=0x6a & op2024=0x3
 {
 	local u64:$(XLEN2) = zext(rs1L);
 	local tmp:$(HFLEN) = int2float(u64);
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 @endif
 
@@ -201,29 +201,29 @@ define pcodeop fclass_h;
 
 :fmv.h.x frd,rs1 is frd & rs1 & op0006=0x53 & funct3=0x0 & funct7=0x7a & op2024=0x0
 {
-	frd = zext(rs1:$(HFLEN));
+	fassignH(frd, rs1:$(HFLEN));
 }
 
 :fmadd.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x43 & op2526=0x2
 {
 	local tmp:$(HFLEN) = (frs1H f* frs2H) f+ frs3H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fmsub.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x47 & op2526=0x2
 {
 	local tmp:$(HFLEN) = (frs1H f* frs2H) f- frs3H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fnmsub.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x4b & op2526=0x2
 {
 	local tmp:$(HFLEN) = (f- (frs1H f* frs2H)) f+ frs3H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }
 
 :fnmadd.h frd,frs1H,frs2H,frs3H,FRM is frs1H & frd & frs2H & frs3H & FRM & op0006=0x4f & op2526=0x2
 {
 	local tmp:$(HFLEN) = (f- (frs1H f* frs2H)) f- frs3H;
-	frd = zext(tmp);
+	fassignH(frd, tmp);
 }

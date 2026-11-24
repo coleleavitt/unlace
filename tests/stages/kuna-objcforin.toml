@@ -1,0 +1,94 @@
+# A struct passed by address to an SDK-declared method parameter
+# (`option objcsdk <dir>`): the fast-enumeration state of a for-in loop.
+#
+# Issue: `for (id x in c)` sends `countByEnumeratingWithState:objects:count:`
+# with the address of a stack `NSFastEnumerationState` and reads its
+# `itemsPtr` and `mutationsPtr` members afterwards. The header reader turned
+# the `NSFastEnumerationState *` parameter into a class pointer, the array
+# parameter `(id [])` and a generic class's `(K [])` spelling into nothing it
+# could encode, so the selector had no prototype; and a `^{Name=...}` pointer
+# encoding decoded to `void *`. With no type on the call, the eight words of
+# the state printed as eight unrelated locals and the loop read
+# `*(unsigned long *)(v6 + v5 * 8)` for `state.itemsPtr[i]`.
+#
+# Stage / sub-stage: P1 external-refinement. `analyzers/objc/kuna_objcsdk.rs`
+# records the body of each `typedef struct { ... } Name;` and encodes a
+# pointer to it with its layout and member names
+# (`^{NSFastEnumerationState="state"Q"itemsPtr"^@"mutationsPtr"^Q"extra"[5Q]}`),
+# an array parameter as a pointer to its element, and a lightweight generic
+# parameter as `id`; `analyzers/objc/encoding.rs` decodes a pointer to a named
+# struct layout as a pointer to that struct. The typelocked pointer parameter
+# then types the stack object whose address is passed (P6 `gatherOpen`), so
+# the eight words are one `NSFastEnumerationState` variable.
+#
+# P0 assertion: `option objcsdk <directory>|off` (an env-bridged load-time
+# setting, so it is set BEFORE the `load file` it applies to and cleared at
+# the end so the harness process carries nothing into the next test).
+#
+# The fixture is `macho_objc_forin.m`: `Bag` declared and never implemented,
+# every send a linker stub; `tests/fixtures/objc_sdk/Enumeration.h` is a
+# hand-written header (no Apple text) declaring the state and the selector.
+#
+# Pass 1 (`objc on`, no headers) reproduces the BUG: the state is loose words
+# and the element is read through a bare word.
+# Pass 2 (`objc on`, `objcsdk` pointed at the header directory) is the FIX:
+# one `NSFastEnumerationState` local, `v1.itemsPtr[i]`, `*v1.mutationsPtr`,
+# and the buffer is an array of object pointers.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_forin_arm64',
+    'option objc on',
+    'read symbols',
+    'load function _visit_all',
+    'decompile',
+    'print C',
+    'option objcsdk crates/unlace-analysis/tests/fixtures/objc_sdk',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/macho_objc_forin_arm64',
+    'option objc on',
+    'read symbols',
+    'load function _visit_all',
+    'decompile',
+    'print C',
+    'option objcsdk off',
+    'quit',
+]
+
+[[match]]
+name = 'OBJCFORIN #1: without headers the element is read through a bare word'
+count = 1
+regex = 'objc_msgSend\$visit:\(a1,\*\(unsigned long \*\)\(v\d+ \+ v\d+ \* 8\)\);'
+
+[[match]]
+name = 'OBJCFORIN #2: with headers the state is one struct local'
+count = 1
+literal = 'NSFastEnumerationState v1; // stack - 0x130'
+
+[[match]]
+name = 'OBJCFORIN #3: the element is itemsPtr[i]'
+count = 1
+regex = 'objc_msgSend\$visit:\(a1,v1\.itemsPtr\[v\d+\]\);'
+
+[[match]]
+name = 'OBJCFORIN #4: the mutation check reads mutationsPtr'
+count = 1
+regex = 'if \(\*v1\.mutationsPtr != v\d+\)'
+
+[[match]]
+name = 'OBJCFORIN #5: the buffer is an array of object pointers'
+count = 1
+literal = 'objc_object *v2 [16];'

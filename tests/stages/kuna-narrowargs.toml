@@ -1,0 +1,76 @@
+# narrowargs: a register parameter declared at the width its body reads.
+#
+# An AAPCS caller passes a uint16_t in a whole register, and a callee that
+# splits it into two byte stores reads that register at full width:
+#     put16:    lsrs r3, r1, #8; strb r3, [r0, #1]; strb r1, [r0]; bx lr
+# Only bits 0-15 of r1 reach a store, so the parameter is `unsigned short`;
+# without the option it is recovered as `unsigned int`.
+# Two controls keep their register-wide parameter either way:
+#     put_hi:   lsls r1, r1, #24; str r1, [r0]; bx lr
+#               (a left shift drops high bits of any width of value)
+#     put_flag: and.w r1, r1, #16; str r1, [r0]; bx lr
+#               (a flag mask below the byte's top bit is no narrow value)
+#
+# Stage: P4 own-input prototype recovery (ActionDeadCode in fullloop
+# replaces the input by its low part, zero-extended at the entry).
+# P0 assertion: option narrowargs on|off.  Pass 1 (default on) proves the
+# fix (#1 narrow, #3 and #4 controls unchanged); pass 2 (off) restores the
+# register-wide parameter (#2).
+
+[image]
+arch = 'ARM:LE:32:v8:default'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10000'
+readonly = true
+hex = '0b0a43700170704700000000000000000906016070470000000000000000000001f01001016070470000000000000000'
+
+[script]
+commands = [
+    'option typevote off',
+    'set context TMode 1 [ram,0x10000] [ram,0x1002f]',
+    'map function r0x10000 put16',
+    'map function r0x10010 put_hi',
+    'map function r0x10020 put_flag',
+    'lo fu put16',
+    'decompile',
+    'print C',
+    'lo fu put_hi',
+    'decompile',
+    'print C',
+    'lo fu put_flag',
+    'decompile',
+    'print C',
+    'option narrowargs off',
+    'lo fu put16',
+    'decompile',
+    'print C',
+    'lo fu put_hi',
+    'decompile',
+    'print C',
+    'lo fu put_flag',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'NARROWARGS #1: default declares the uint16_t parameter unsigned short'
+count = 1
+literal = 'void put16(char *a0,unsigned short a1)'
+
+[[match]]
+name = 'NARROWARGS #2: off keeps the register-wide parameter'
+count = 1
+literal = 'void put16(char *a0,unsigned int a1)'
+
+[[match]]
+name = 'NARROWARGS #3: a left shift is not narrow evidence'
+count = 2
+literal = 'void put_hi(int4 *a0,int4 a1)'
+
+[[match]]
+name = 'NARROWARGS #4: a flag mask is not narrow evidence'
+count = 2
+literal = 'void put_flag(uint4 *a0,uint4 a1)'

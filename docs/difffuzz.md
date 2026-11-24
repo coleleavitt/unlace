@@ -23,6 +23,47 @@ files under `DIR` instead of the built-in ones, so a spec edit can be checked ri
 findings by mnemonic; `--out` writes every finding with its bytes, both disassemblies, the
 input registers and the differing values.
 
+## QEMU user mode as the reference
+
+`--oracle qemu` replaces Unicorn with the installed QEMU user-mode binaries
+(`tools/difffuzz/qemu_backend.py`) for `aarch64` (`qemu-aarch64 -cpu max`), `riscv64`
+(`qemu-riscv64 -cpu max`) and `mips` (`qemu-mips64 -cpu MIPS64R2-generic`). QEMU 10 implements
+what Unicorn's older QEMU core lacks or gets wrong: BF16, I8MM (`usdot`/`sudot`), MOPS,
+`fcmla`/`fcadd`, and RISC-V NaN-boxing.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch aarch64 --oracle qemu \
+    --bytes 0af8424f,05fb930f --unlace target/debug/unlace
+```
+
+Each case is a static ELF. A prologue page loads every compared register (and NZCV) from a table.
+The instruction sits at the address it was lifted at, in a page that is otherwise the
+deterministic filler. Two epilogues store the registers back and `write(2)` them, with every
+data page, to stdout: one at the fall-through address and one at the address the p-code
+branches to. Which epilogue ran gives the reference's next pc. The p-code runs first, and
+every page it reads or writes is mapped with the same filler and compared byte for byte
+afterwards. The register file is unchanged.
+
+- The reference cannot touch a page the p-code did not: such an access, a trap, or a branch
+  anywhere but the two exits ends the run with a signal, counted as `ref-exception`.
+- QEMU maps guest pages one-to-one, so a page below `vm.mmap_min_addr` (64 KiB), the harness's
+  own pages, or one QEMU cannot reserve is `bad-address`. These are mostly loads through a
+  small register value, which Unicorn still covers.
+- RISC-V and MIPS have no user scratch register. The harness keeps the table address in the
+  highest general register the instruction's p-code does not write, and reads that register
+  back as its input.
+- MIPS: the installed QEMU has no 32-bit MIPS user binary, so MIPS32 code runs on a MIPS64 core
+  with every register sign-extended from its 32-bit value (the state in which MIPS64 runs a
+  MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared.
+- PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
+  where record forms set CR0 from the 64-bit result, so it is not an exact reference for
+  32-bit PowerPC.
+
+On the #546 encodings, `--oracle qemu` runs `bfdot` and `usdot` (Unicorn raises
+`UC_ERR_EXCEPTION`) and agrees with Unicorn on the rest. In 300 random RISC-V instructions it
+finds `fle.s` reading an unboxed single (`d38c9fa1`): QEMU compares the canonical NaN and
+writes 0, SLEIGH writes 1. Unicorn misses this because it does not unbox either.
+
 ## How a case runs
 
 - **Registers.** The register file of the language comes from its `.slaspec`

@@ -1233,6 +1233,7 @@ Three tiers:
 | `long double v1; // st0  | [`x87depth`](#x87depth----on--off-default-on) |
 |  st1` is returned but never assigned | [`x87depth`](#x87depth----on--off-default-on) |
 | a caller's x87 push makes a void callee return a float | [`x87depth`](#x87depth----on--off-default-on) |
+| a value from recv or getenv reaches system or popen with no warning | [`taintcheck`](#taintcheck----on--off-default-off) |
 | a variadic function has fourteen parameters a0..a13 | [`varargsave`](#varargsave----on--off-default-off) |
 | if (al) guards stores of xmm registers in a printf wrapper | [`varargsave`](#varargsave----on--off-default-off) |
 | va_list fields are assigned 8 and 0x30 by hand | [`varargsave`](#varargsave----on--off-default-off) |
@@ -4219,6 +4220,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: 0/675 datatest assertions move. The OFF symptom is an i386 function that only calls a double-returning helper for its side effect and is printed as `long double f(...)` returning an uninitialised `v1; // st0 | st1`. Flip off for hand-written x87 code that keeps values on the stack across calls, which the System V assumptions do not describe.
 - **Where / provenance:** P4/output-prototype · unlace · correctness-fix · ida95-51
 - **Example:** `option x87depth off`
+
+### `taintcheck` -- on | off, default `off`
+
+- **Symptoms:** a value from recv or getenv reaches system or popen with no warning; an input-controlled argument to execl or execve is not flagged; a command sink fed by a network read needs a manual trace.
+- **What it does:** Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option.
+- **When to flip:** Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled.
+- **Where / provenance:** P4/output-prototype · unlace · opt-in-tool · unlace#1309
+- **Example:** `option taintcheck on`
 
 ### `varargsave` -- on | off, default `off`
 

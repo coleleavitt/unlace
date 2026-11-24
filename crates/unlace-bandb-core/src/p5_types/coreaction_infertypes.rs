@@ -1563,6 +1563,12 @@ fn propagate_load_store(
             return None;
         }
         let spc = space_from_const(data, op, 0)?;
+        // (kuna `vtabletypes`) A `C_vtbl *` value's pointer is a `C *`.
+        if let Some(class) =
+            crate::kuna_vtblbase::class_pointer(data, tlst, &alttype, out_size, spc.get_word_size())
+        {
+            return Some(class);
+        }
         propagate_to_pointer(tlst, alttype, out_size, spc.get_word_size() as int4)
     } else {
         // (kuna) `code` is size 1 only so that `code *` arithmetic steps one

@@ -1,7 +1,7 @@
 {
   "data_footer": [
-    5959,
-    5959
+    5961,
+    5961
   ],
   "passing": [
     "data:64-bit logical shift retains unsigned destination",
@@ -3529,6 +3529,8 @@
     "data:armshiftguard #2: a count masked by 0x1f prints the plain shift",
     "data:armshiftguard #3: a count from a 5-bit field prints the plain shift",
     "data:armshiftguard #4: off prints the unproven count as a plain shift",
+    "data:atomics msvc: lock cmpxchg as _InterlockedCompareExchange",
+    "data:atomics msvc: lock xadd as _InterlockedExchangeAdd",
     "data:avxintrinsics #1: off prints the SLEIGH add user-op",
     "data:avxintrinsics #2: off prints the SLEIGH FMA user-op",
     "data:avxintrinsics #3: on prints _mm256_add_epi32",

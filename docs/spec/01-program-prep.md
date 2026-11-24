@@ -6906,6 +6906,35 @@ every other binary's pass list is byte-identical to before the pass existed):
   exactly what a search per class would. A search per class is
   `O(classes × image)`: `torch_cpu.dll` (31,623 type descriptors in 309 MB) did
   not finish loading in 30 minutes that way.
+
+  With `vtabletypes` on (the default), a second pass
+  (`crates/unlace-analysis/src/analyzers/rtti/kuna_msvcvtabletypes.rs (facts)`)
+  runs the same recovery on its own, whatever `rtti` says, and reports the classes
+  in the shape the typed Itanium vtables use (chapter 05). Each
+  CompleteObjectLocator gives its class, the `offset` of the subobject its vftable
+  serves, and the class's whole hierarchy: every BaseClassDescriptor's class, its
+  displacement `mdisp`, and whether it is, or lies in, a virtual base (`pdisp` is
+  not -1). A vftable at offset 0 is the class's own; one at a nonzero offset serves
+  the non-virtual bases at that displacement, the most derived of them first; one
+  serving a virtual base (no non-virtual base sits at its offset) serves none. A
+  class is typed with the slots of its own vftable, and for each slot the function
+  there and every function the vftables serving it in derived classes hold at the
+  same slot; a class the image never instantiates (an abstract base) has no vftable
+  of its own and takes the slots every serving vftable shares. A slot is named
+  after the method a symbol names (`?area@Square@@...` is `area`; `??1` is
+  `dtor`; `??_G` and `??_E`, the scalar and vector deleting destructors, are
+  `deleting_dtor`), else `vfn_<i>`. A class whose structure name two classes
+  share is not typed. Each non-virtual base at a nonzero displacement is reported
+  for embedding. The pass also reports, for every function a vftable holds, the
+  class its `this` points to: MSVC calls a virtual method with `this` pointing at
+  the subobject the vftable serves (an override reached through a secondary base's
+  vftable takes the base's subobject), so it is the first class that vftable
+  serves; a function several vftables hold takes the nearest class that is, in
+  every one of them, that class or one of its bases at offset 0, and a function
+  that also sits in a vftable serving a virtual base, or whose holders share no
+  such class (identical-code folding, `_purecall`), is left untyped. Finally it
+  reports each vftable whose first class was typed, with the `rtti` label of
+  that address, and every vftable's slot words.
 - **(kuna) Itanium RTTI** (`itaniumrtti`, ELF and Mach-O, on by default and inert elsewhere;
   `crates/unlace-analysis/src/analyzers/rtti/kuna_itaniumrtti.rs`): the
   GCC/Clang counterpart of the pass above, and a capability with **no Ghidra
@@ -9747,8 +9776,38 @@ commented `rethrow`; otherwise the nearest `lea rdx, [rip+d]` of a labelled
 belongs to the function whose `.pdata` record covers the call, followed through
 `UNW_FLAG_CHAININFO` to the primary record, so a split-off chunk comments its
 owner. An x86 image has no `.pdata` to name the owner, so its throw sites are not
-commented; its records are labelled. Catch-side metadata (`FuncInfo`, FH4, catch
-funclets) and x86 SEH scope tables are not read.
+commented; its records are labelled.
+
+**(kuna) MSVC try blocks are listed** (`msvceh`, the same pass;
+`crates/unlace-analysis/src/analyzers/entry/kuna_msvcfuncinfo.rs (decode_fh4)`).
+An x64 function with a C++ `try` names a language-specific handler in its
+`UNWIND_INFO` (flags `EHANDLER`/`UHANDLER`, not `CHAININFO`; the handler RVA
+follows the even-padded unwind codes and the handler data follows it). For
+`__CxxFrameHandler3` and `__GSHandlerCheck_EH` the data starts with the RVA of a
+40-byte `FuncInfo` (magic `0x19930520`-`0x19930522`, `maxState`, unwind map,
+try-block map, IP-to-state map); a handler with no name (a statically linked
+runtime) is read the same way when that RVA leads to the magic. For
+`__CxxFrameHandler4` and `__GSHandlerCheck_EH4` it is the RVA of the compressed
+`FuncInfo4`: a header byte (`isCatch`, `isSeparated`, `BBT`, `UnwindMap`,
+`TryBlockMap`, `EHs`, `NoExcept`) and then only the fields the header announces,
+with every count and offset in FH4's variable-length unsigned encoding (the low
+bits of the first byte give the length: `0` one byte, `01` two, `011` three,
+`0111` four, `1111` a four-byte value after the tag byte) and every RVA a plain
+four-byte integer. A `FuncInfo4` with `isCatch` set belongs to a catch funclet
+and is skipped; an FH3 catch funclet shares its parent's `FuncInfo`, and the
+parent is the lowest function naming that `FuncInfo` that is not itself one of
+its funclets. From the try-block map each try block yields its state range and,
+per handler, the caught type (the `TypeDescriptor` named as above, or
+`catch (...)` when there is none), its `const`/`volatile`/reference adjectives
+and its funclet; from the unwind map each action that is a funclet (every FH3
+action, an FH4 entry of type RVA) yields a cleanup funclet. The parent gets one
+header comment per try block,
+`eh: try (states 0-0): catch (std::runtime_error &) -> 0x140001230; the handlers are separate funclets`,
+and a count of its cleanup funclets; each catch funclet gets
+`eh: catch (std::runtime_error &) handler of 0x140001000 (try states 0-0)` and each
+cleanup funclet `eh: unwind funclet of 0x140001000 (state 2)`. Every funclet is
+also a discovered entry. The handler bodies are not spliced into the parent's
+flow, and x86 `FuncInfo` and SEH scope tables are not read.
 
 **(kuna) `.pdata` interiors are not function starts either** (`pdatainterior`,
 always on, DIV-155;

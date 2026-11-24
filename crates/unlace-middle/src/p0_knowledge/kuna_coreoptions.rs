@@ -159,10 +159,11 @@ crate::kuna_flag!(
 );
 
 crate::kuna_flag!(
-    /// (kuna `vtabletypes`) Type each recovered Itanium vtable as a `C_vtbl`
-    /// structure of named method pointers, give the class structure a `vptr`
-    /// field of that type, and fold a load of a vtable slot to the method it
-    /// holds; see [`crate::kuna_vtabletypes`]. Default **on**.
+    /// (kuna `vtabletypes`) Type each recovered Itanium or MSVC vtable as a
+    /// `C_vtbl` structure of named method pointers, give the class structure a
+    /// `vptr` (`__vftable` for MSVC) field of that type, and fold a load of a
+    /// vtable slot to the method it holds; see [`crate::kuna_vtabletypes`].
+    /// Default **on**.
     Vtabletypes,
     "vtabletypes",
     "typed C++ vtables and vtable slot folding",

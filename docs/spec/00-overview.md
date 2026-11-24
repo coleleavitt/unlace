@@ -993,7 +993,7 @@ decompiler console and the SLEIGH compiler are library entry points
 and `slacomp` binaries and `unlace`'s own hidden `decomp_dbg` and `slacomp`
 subcommands all call, so `unlace decompile`, `unlace catalog` and `unlace specs` launch
 the running `unlace` again rather than look for siblings — a separate binary is used
-only when `KUNA_DECOMP_DBG` or `KUNA_SLACOMP` names one. The child is still a
+only when `UNLACE_DECOMP_DBG` or `UNLACE_SLACOMP` names one. The child is still a
 separate process, which keeps the per-run memory limit and crash isolation the
 console had as its own binary. A release `unlace` also carries the compiled SLEIGH
 tree (cargo feature `embed-specs`, an `include_bytes!` table that
@@ -1016,15 +1016,15 @@ seconds for the lock, then moves on to the next cache location, so a stopped or
 hung holder cannot hang every later run. A release whose specs did not change
 reuses the finished tree without acquiring the lock.
 
-The spec root resolves in this order: `KUNA_SPECS`, then `KUNA_ROOT`'s `specs/`,
+The spec root resolves in this order: `UNLACE_SPECS`, then `UNLACE_ROOT`'s `specs/`,
 then the built-in tree, then the first directory that holds a
 `Ghidra/Processors` tree among the checkout's `specs/`, a `specs/` inside or next
 to the directory holding `unlace`, and the current directory's. A checkout build is
 recognised by its path, `<root>/target/[<triple>/]<profile>/kuna`; any
 other directory has no repo root, and popping three parents off it lands on a path
 that exists nowhere, so the pop is refused rather than reported. The
-environment overrides (`KUNA_ROOT`, `KUNA_SPECS`, `KUNA_DECOMP_DBG`,
-`KUNA_SLACOMP`, all documented in
+environment overrides (`UNLACE_ROOT`, `UNLACE_SPECS`, `UNLACE_DECOMP_DBG`,
+`UNLACE_SLACOMP`, all documented in
 `docs/cli.md`) win over everything else. A probe that finds nothing names the
 directories it looked in and why a built-in tree could not be unpacked: a missing
 SLEIGH tree is reported where it is resolved rather than as the engine's
@@ -1364,7 +1364,7 @@ expansion.
 build than `unlace` itself (an override naming another install, or a sibling left
 behind when only `unlace` was rebuilt), and nothing in the output shows it. So every
 spawn of `decomp_dbg` or `decomp_test_dbg` exports the parent's identity as
-`KUNA_PARENT_BUILD`
+`UNLACE_PARENT_BUILD`
 (`crates/unlace-console/src/kuna_buildstamp.rs (identity, answer_parent, report)`).
 The child compares it with its own before reading its arguments and, only when the
 two differ, writes one `kuna-build-mismatch: <identity>` line to stderr. `unlace`
@@ -3274,15 +3274,15 @@ runtime `on_or_off` parser.
 
 | env var | option | read at |
 |---|---|---|
-| `KUNA_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `crates/unlace-middle/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
-| `KUNA_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `crates/unlace-middle/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
-| `KUNA_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
-| `KUNA_CODESTRINGS` | `codestrings` | the code-section string rule of the string-literal pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (CODESTRINGS_ENV)` |
-| `KUNA_NAMELADDER` | `nameladder` | the undecorated-name retries of the prototype and no-return passes, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (NAMELADDER_ENV)` |
-| `KUNA_SWIFTTYPES` | `swifttypes` | whether the Objective-C pass leaves a Swift class's layout to the Swift pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (SWIFTTYPES_ENV)` |
-| `KUNA_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
-| `KUNA_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-middle/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
-| `KUNA_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
+| `UNLACE_IFUNCFPRET` | `ifuncfpret` | x86-64 IFUNC (`R_X86_64_IRELATIVE`) stub naming, `crates/unlace-middle/src/p0_knowledge/kuna_ifuncfpret.rs (IFUNCFPRET_ENV)` |
+| `UNLACE_PPCAPU` | `ppcapu` | PowerPC32 e500 selection from an SPE APU note, `crates/unlace-middle/src/p0_knowledge/kuna_ppcapu.rs (PPCAPU_ENV)` |
+| `UNLACE_CALLTARGETTYPE` | `calltargettype` | DWARF `DW_TAG_subroutine_type` import as a function prototype (on unless the option is set off, and never for Rust output), `crates/unlace-bandb/src/p5_types/kuna_calltargettype.rs (CALLTARGETTYPE_ENV)` |
+| `UNLACE_CODESTRINGS` | `codestrings` | the code-section string rule of the string-literal pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (CODESTRINGS_ENV)` |
+| `UNLACE_NAMELADDER` | `nameladder` | the undecorated-name retries of the prototype and no-return passes, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (NAMELADDER_ENV)` |
+| `UNLACE_SWIFTTYPES` | `swifttypes` | whether the Objective-C pass leaves a Swift class's layout to the Swift pass, `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (SWIFTTYPES_ENV)` |
+| `UNLACE_MACHO_SLICE` | `--slice` | Mach-O fat-binary slice peel, `crates/unlace-console/src/engine.rs (select_macho_slice)` |
+| `UNLACE_MACHO_ARM64E` | `macho-arm64e` | arm64e spec selection (on by default), `crates/unlace-middle/src/p0_knowledge/kuna_macho_arm64e.rs (MACHO_ARM64E_ENV)` |
+| `UNLACE_ARM_ISA` | `--isa` | explicit ARM/Thumb `TMode` selection over the mapped code ranges, `crates/unlace-console/src/engine.rs (ARM_ISA_ENV)` |
 
 The matching `option` is still applied afterwards so the run's configuration
 record is honest.
@@ -3291,15 +3291,15 @@ record is honest.
 the only one.
 `crates/unlace-middle/src/p0_knowledge/kuna_loadoptions.rs (LoadOptions)`
 holds every load-time setting: the load-time catalog options, the fat slice,
-the `.pdb`, `.fid` and FLIRT paths, the Go release, and the `KUNA_LOAD_OBJC`,
-`KUNA_LOAD_STRINGS` and `KUNA_LOAD_MMAP` switches. A library caller passes it
+the `.pdb`, `.fid` and FLIRT paths, the Go release, and the `UNLACE_LOAD_OBJC`,
+`UNLACE_LOAD_STRINGS` and `UNLACE_LOAD_MMAP` switches. A library caller passes it
 through `crates/unlace-console/src/kuna_bootstrap.rs (Bootstrap)`.
 Each gate first reads the options in force on its thread (`scoped`) and falls
 back to its environment variable only when no options are in force.
 Precedence is per load and never a merge. A load with explicit options reads
 and writes no load-time environment variable: a field left at its default
 means the shipped default, not the environment's value, and an unset ARM ISA
-leaves the image's own evidence to decide instead of reading `KUNA_ARM_ISA`. A load
+leaves the image's own evidence to decide instead of reading `UNLACE_ARM_ISA`. A load
 without options puts the environment in force on its thread for the whole
 load, whatever another program has in force there, so the CLI and the
 `bootstrap_*` entry points read exactly the variables they read before. The
@@ -3312,7 +3312,7 @@ the variables live. A load-time `option` line updates both the program's copy
 and the environment variable, so a later `load file` in the session still sees
 it. `calltargettype` is the exception: its line sets only the decompile-time
 switch, so its load-time half, the DWARF function-pointer mapping, follows the
-load's options or `KUNA_CALLTARGETTYPE`, never the console line. Scopes belong
+load's options or `UNLACE_CALLTARGETTYPE`, never the console line. Scopes belong
 to one thread and nest: the most recently entered live scope is in force, and
 releasing a scope out of order removes only its own options.
 Kuna enters and leaves its scopes inside each synchronous call; a caller that
@@ -3784,7 +3784,7 @@ and an agent writes:
   [docs/options.md](../options.md) and this spec never duplicates its metadata.
   Default CLI catalog discovery calls the static emitter in-process: no console
   subprocess, binary input or SLEIGH tree is needed. An explicit `--decomp-dbg`
-  override, or a non-empty `KUNA_DECOMP_DBG` when the flag is absent, selects the
+  override, or a non-empty `UNLACE_DECOMP_DBG` when the flag is absent, selects the
   external console's catalog instead; a missing selected binary remains an error.
   Text and JSON retain the same rendering and tier filters on both routes.
   `--check` compares the selected catalog with this CLI build's registered handlers;
@@ -3977,7 +3977,7 @@ maintained by hand at the call sites that matter: a unit test re-reads the
 database source and fails if any `&mut self` method does not open with the bump,
 if an `impl Database` block is written in a form that scan cannot enter, or if
 interior mutability appears in the database's own types (which would let a
-mutation past a `&mut self` scan unseen). `KUNA_NO_SYMBOL_SNAPSHOT_CACHE`
+mutation past a `&mut self` scan unseen). `UNLACE_NO_SYMBOL_SNAPSHOT_CACHE`
 re-derives both snapshots on every handle, so the memoized and re-derived paths
 can be compared on any binary.
 
@@ -4105,7 +4105,7 @@ Flow-follow itself runs *before* the tree (the upstream `followFlow` →
 `crates/unlace-decomp/src/infra/decompile_drive.rs (follow_flow_on_fd)`.
 
 **Where a run's time went** (kuna). The schedule can be asked to account for
-itself: with `KUNA_ACTION_PROF` set to a path, every `apply` call is timed and
+itself: with `UNLACE_ACTION_PROF` set to a path, every `apply` call is timed and
 the engine writes an exclusive-time table there
 (`crates/unlace-middle/src/substrate/actionprof.rs`), rewritten each time
 the outermost timing frame closes. A scope guard closes frames on both normal

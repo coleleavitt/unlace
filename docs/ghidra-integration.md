@@ -335,7 +335,7 @@ inside the pre-spawn window. Ghidra's flat classpath (all classes in the unnamed
 The extension (`integrations/ghidra/KunaDecompiler/`) resolves the binary in two steps:
 first the `-Dkuna.decompiler.exe=<path>` dev override (a JVM system property, for
 pointing at a fresh `cargo build` without reinstalling the extension), then — the normal
-path — the kuna binary shipped in the extension's **own** module `os/` dir under the
+path — the unlace binary shipped in the extension's **own** module `os/` dir under the
 **distinct name `unlace_ghidra`**, resolved with the two-arg
 `Application.getOSFile(moduleName, filename)` (`Application.java:1000-1003`). Naming it
 `decompile` could never work, because the single-arg lookup searches the *calling*

@@ -2733,7 +2733,7 @@ Demoting on a panic too printed the panic but left the function with C, its
 table dropped and no error, so a `decompile-all` record could not tell a
 function whose recovery crashed from one with an ordinary unrecoverable table.
 For tests,
-`KUNA_JUMPTABLE_FAULT=<entry>` (`kuna_jumptablefault.rs (check)`) panics the
+`UNLACE_JUMPTABLE_FAULT=<entry>` (`kuna_jumptablefault.rs (check)`) panics the
 recovery of the function at that entry.
 
 ### The JumpBasic model

@@ -19,7 +19,7 @@ on a stale catalog exits `1`, with or without a reader. Other stdout write failu
 
 Thin Mach-O loads and CLI metadata probes use a private read-only file mapping.
 Keep the input file unchanged for the duration of analysis: private mapping does
-not isolate reads from external writes or truncation. Set `KUNA_LOAD_MMAP=off`
+not isolate reads from external writes or truncation. Set `UNLACE_LOAD_MMAP=off`
 to use the owned input path instead; mapping failures also fall back to that path.
 Fat Mach-O and other formats retain their existing reads. In-process byte overlays
 modify owned regions without writing to the input file.
@@ -102,16 +102,16 @@ differential is described in `docs/history.md`.
 
 `unlace` runs two programs besides itself — the decompiler console `decomp_dbg`
 (behind `decompile`) and the SLEIGH compiler `slacomp` (behind `unlace specs`) —
-and both are built into it: `kuna decomp_dbg` and `kuna slacomp` are those
+and both are built into it: `unlace decomp_dbg` and `unlace slacomp` are those
 programs, and `unlace` launches itself that way. `catalog` reads the option table
 in-process and needs neither the console nor specs, unless `--decomp-dbg` or
-`KUNA_DECOMP_DBG` selects a separate console. The engine also needs a SLEIGH tree, found in
+`UNLACE_DECOMP_DBG` selects a separate console. The engine also needs a SLEIGH tree, found in
 this order when nothing pins it:
 
 - **built in**: a release `unlace` (cargo feature `embed-specs`) carries the tree and
   unpacks it once, under a name derived from its contents, into the per-user cache
-  directory — `%LOCALAPPDATA%\kuna`, `~/Library/Caches/kuna`, or
-  `$XDG_CACHE_HOME/kuna` (default `~/.cache/kuna`) — falling back to the system
+  directory — `%LOCALAPPDATA%\unlace`, `~/Library/Caches/unlace`, or
+  `$XDG_CACHE_HOME/unlace` (default `~/.cache/unlace`) — falling back to the system
   temp directory;
 - **a repo checkout**: the repo's `specs/`, above `target/<profile>/`, or the `specs/` of the
   checkout the binary was built from when its target dir lives elsewhere (`CARGO_TARGET_DIR`);
@@ -126,22 +126,25 @@ A tree of SLEIGH sources is enough: the engine compiles each language's `.slaspe
 below). A `.sla` that sits beside its `.slaspec` as a regular file at least as new as its
 sources, or with no `.slaspec` at all (a release tree), is used as is.
 
+Each `UNLACE_*` variable is also read under its old `KUNA_*` name (a deprecated alias;
+`UNLACE_*` wins when both are set).
+
 | Variable | What it pins |
 |---|---|
-| `KUNA_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
-| `KUNA_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
+| `UNLACE_SPECS` | The SLEIGH tree passed as `-sleighpath` (`SLEIGHHOME` is the engine's own name for the same thing). Wins over a built-in tree. |
+| `UNLACE_DECOMP_DBG` | A separate `decomp_dbg` binary to run instead of the built-in console; a non-empty value also makes `catalog` query that build. `--decomp-dbg PATH` does the same for one `decompile` or `catalog` run, and wins over the variable. |
 | `UNLACE_SLA_CACHE` | Where compiled `.sla` images are cached (default `$XDG_CACHE_HOME/unlace/sla`, else `~/.cache/unlace/sla`). Content-addressed by the sources and the compiler; safe to delete. |
 | `UNLACE_SLA_LAZY` | `0` decodes every constructor's p-code template when the `.sla` loads, instead of on its first use. For A/B timing; the output is the same either way. |
-| `KUNA_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
-| `KUNA_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
-| `KUNA_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
-| `KUNA_DECODE_MIN_BYTES` | Lowers the 8 MiB executable-bytes floor under which the lanes decline. The only way to get lanes on a small image; the equivalence tests set `0`. |
-| `KUNA_DECODE_INTERVALS` | Intervals per lane (default 32, clamped to 4096). A measurement knob. |
-| `KUNA_DECODE_SELFCHECK` | `1` runs both walks, compares them field by field and returns the serial result; `abort` panics on a difference. Keeps the runtime's panic report, as `KUNA_DECODE_STATS` does. |
-| `KUNA_DECODE_STATS` | `1` prints one line of lane/interval/round/crossing/decode counts and the walk, merge and lane-memory figures. It also keeps the runtime's panic report for a lane fault, which the fallback otherwise silences. |
-| `KUNA_DECODE_FAULT` | Test-only: `<n>` panics lane `n` once, `spawn:<n>` makes lane `n`'s spawn fail — the two fallback paths. |
-| `KUNA_CGROUP_ROOT` | Test-only: the directory read in place of `/sys/fs/cgroup` by the `--max-fn-memory` cgroup default and when `--jobs auto` reads a cgroup's headroom. |
-| `KUNA_JOBS_FAULT` | Test-only, comma-separated: `panic:<addr>` / `panic-once:<addr>` / `stall:<addr>` make a `--jobs` worker panic (the first time only) or wedge as it starts the target at that byte address (`*` for every target), `stall-again:<addr>` wedges it only the second time that target starts in a run, `spawn:<n>` refuses every worker spawn after the first `n`, and `load-abort:<n>` makes the first `n` worker loads of the run abort as a refused allocation does (`*` for every one) — the pool's re-run paths. A stall only ends when `--max-fn-seconds` is non-zero. |
+| `UNLACE_SLACOMP` | A separate `slacomp` binary for `unlace specs` to run instead of the built-in compiler. |
+| `UNLACE_ROOT` | The repo root, when the binaries are not in-tree: `specs/` is read from it. |
+| `UNLACE_DECODE_JOBS` | Decode lanes for the discovery walk, without `--jobs` — what `--jobs N` exports for the duration of the load (capped at 32, forced to `1` in pool workers). |
+| `UNLACE_DECODE_MIN_BYTES` | Lowers the 8 MiB executable-bytes floor under which the lanes decline. The only way to get lanes on a small image; the equivalence tests set `0`. |
+| `UNLACE_DECODE_INTERVALS` | Intervals per lane (default 32, clamped to 4096). A measurement knob. |
+| `UNLACE_DECODE_SELFCHECK` | `1` runs both walks, compares them field by field and returns the serial result; `abort` panics on a difference. Keeps the runtime's panic report, as `UNLACE_DECODE_STATS` does. |
+| `UNLACE_DECODE_STATS` | `1` prints one line of lane/interval/round/crossing/decode counts and the walk, merge and lane-memory figures. It also keeps the runtime's panic report for a lane fault, which the fallback otherwise silences. |
+| `UNLACE_DECODE_FAULT` | Test-only: `<n>` panics lane `n` once, `spawn:<n>` makes lane `n`'s spawn fail — the two fallback paths. |
+| `UNLACE_CGROUP_ROOT` | Test-only: the directory read in place of `/sys/fs/cgroup` by the `--max-fn-memory` cgroup default and when `--jobs auto` reads a cgroup's headroom. |
+| `UNLACE_JOBS_FAULT` | Test-only, comma-separated: `panic:<addr>` / `panic-once:<addr>` / `stall:<addr>` make a `--jobs` worker panic (the first time only) or wedge as it starts the target at that byte address (`*` for every target), `stall-again:<addr>` wedges it only the second time that target starts in a run, `spawn:<n>` refuses every worker spawn after the first `n`, and `load-abort:<n>` makes the first `n` worker loads of the run abort as a refused allocation does (`*` for every one) — the pool's re-run paths. A stall only ends when `--max-fn-seconds` is non-zero. |
 
 An override wins over all of these, and one pointing at nothing is reported as
 such rather than silently re-probed.
@@ -149,14 +152,14 @@ such rather than silently re-probed.
 A separate engine binary can come from a different build than `unlace`: an
 override pointing at another install. (The built-in console is `unlace` itself, so it always
 matches.) `unlace` passes its build identity to every `decomp_dbg` it runs (as
-`KUNA_PARENT_BUILD`). A child from another build
+`UNLACE_PARENT_BUILD`). A child from another build
 answers, and `unlace` prints one warning on stderr naming both, then carries on:
 
 ```
-$ KUNA_DECOMP_DBG=/opt/kuna-v1.329/decomp_dbg unlace decompile ./a.out main
+$ UNLACE_DECOMP_DBG=/opt/kuna-v1.329/decomp_dbg unlace decompile ./a.out main
 warning: decomp_dbg is a different build from this unlace
   unlace:     0.1.0 (source 6cbd2f1a5e1f83af) /home/me/unlace/target/release/unlace
-  decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/kuna-v1.329/decomp_dbg, chosen by KUNA_DECOMP_DBG
+  decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/kuna-v1.329/decomp_dbg, chosen by UNLACE_DECOMP_DBG
 ```
 
 An identity is the version `unlace --version` prints plus a fingerprint of the
@@ -1467,11 +1470,11 @@ of its own, so kuna lays it out as one flat 32-bit image and lowers each
 function body from stack form to register form at load:
 
 ```bash
-kuna functions module.wasm                # defined functions, then imports
-kuna decompile module.wasm mul_add
-kuna decompile-all module.wasm
-kuna disassemble module.wasm mul_add      # the lowered records
-kuna read module.wasm 0x10000 --bytes 64  # linear memory, data segments placed
+unlace functions module.wasm                # defined functions, then imports
+unlace decompile module.wasm mul_add
+unlace decompile-all module.wasm
+unlace disassemble module.wasm mul_add      # the lowered records
+unlace read module.wasm 0x10000 --bytes 64  # linear memory, data segments placed
 ```
 
 | Address | Contents |
@@ -1740,14 +1743,14 @@ S2, S3, ESP8266) or RISC-V (C2, C3, C5, C6, C61, H2, P4).
 The `esprom` option (default `auto`) names the calls into the chip's mask ROM
 and marks its peripheral registers volatile, for esp32, esp32s2, esp32s3,
 esp32c2, esp32c3, esp32c6, esp32h2 and esp8266. A ROM function names its call
-sites only; it has no bytes, so `kuna functions` does not list it.
+sites only; it has no bytes, so `unlace functions` does not list it.
 `--option esprom <chip>` applies a chip's ROM names to another input of the
 same firmware: its ELF, or a `--raw-image` dump of one segment whose code is
 also asserted `readonly` (an Xtensa call reaches the ROM through a literal,
 which folds only from read-only bytes). `--option esprom off` applies nothing.
 
 ```sh
-$ kuna decompile hello_world.bin 0x400d6f04 --addr
+$ unlace decompile hello_world.bin 0x400d6f04 --addr
 [kuna esp] hello_world.bin: ESP application image (esp32, 6 segments, entry 0x40081220)
   ...
   memcpy(&v2,a1,0x10);
@@ -1910,7 +1913,7 @@ function address would print as `&sub_8130[1]`), or what the caller loads and
 stores through a pointer disagrees with the pointee the vote would give it. `--option protoorder lock` also states the callee's recovered ARITY,
 which collapses a caller that over-recovered but fabricates parameters where the
 callee's own recovery over-counted; it is opt-in for that reason.
-`KUNA_PROTOORDER_TRACE=1` prints what each function stated, or why it declined.
+`UNLACE_PROTOORDER_TRACE=1` prints what each function stated, or why it declined.
 
 It is a whole-binary surface only: `unlace decompile` forks one `decomp_dbg` per
 function and cannot see what another function's decompile stated, so the two
@@ -1975,7 +1978,7 @@ unlace decompile-all ./calleevote_x86_64 | grep peek_used                       
 `protoorder` it needs the callee-first pass, so it is inert on `unlace decompile`,
 a narrowed or `--jobs` run, `decompile-project --stream` and under
 `--option protoorder off`.
-`KUNA_CALLEEVOTE_TRACE=1` prints each decision and its reason.
+`UNLACE_CALLEEVOTE_TRACE=1` prints each decision and its reason.
 
 ### `--option callbacktype` — the prototype of the slot a callback is passed to (on by default)
 
@@ -2026,14 +2029,14 @@ Only an x86-64 image qualifies, for the reason `calleevote` gives. Like
 `protoorder` it needs the callee-first pass, so it is inert on `unlace decompile`,
 a narrowed run, `decompile-project --stream`, under `--option protoorder off`,
 and on a `--jobs N` run that does not name it; naming it alongside `--jobs N` is
-refused. `KUNA_CALLBACKTYPE_TRACE=1` prints each park or refusal and its reason.
+refused. `UNLACE_CALLBACKTYPE_TRACE=1` prints each park or refusal and its reason.
 
-`KUNA_ENTRY_TRACE=1` prints on stderr every function entry and function symbol a
+`UNLACE_ENTRY_TRACE=1` prints on stderr every function entry and function symbol a
 load-time or Listing-consumer analysis pass commits, with the pass id
-(`entry-source: <pass> entry 0x...`); `KUNA_ENTRY_TRACE=0x4024d0` prints only that
+(`entry-source: <pass> entry 0x...`); `UNLACE_ENTRY_TRACE=0x4024d0` prints only that
 address. It says which source put a function in the inventory.
 
-On x86-32 Windows, `KUNA_CALLEEPURGE_DEBUG=1` traces the callee walk behind
+On x86-32 Windows, `UNLACE_CALLEEPURGE_DEBUG=1` traces the callee walk behind
 `calleeargs` and the proven callee pops on stderr. Each walk prints the address
 where it first gives up on a property (a budget, an undecodable or computed
 jump, an unplaced stack access, a stack address live at a call, an unbalanced
@@ -2875,7 +2878,7 @@ apply to `unlace functions` — which never spawns a pool — exactly as they do
 
   A gate refusal prints one line. A refusal *after* the lanes start prints two —
   the plan line, then `decode: serial (<reason>)` — because the plan line is
-  printed before the walk and is not withdrawn. `KUNA_DECODE_STATS=1` adds a
+  printed before the walk and is not withdrawn. `UNLACE_DECODE_STATS=1` adds a
   third.
 
   The gate group, decided before any thread is spawned, so nothing is wasted:
@@ -2897,7 +2900,7 @@ apply to `unlace functions` — which never spawns a pool — exactly as they do
   result and re-walk serially. `unlace functions --raw-image` reports
   `a raw image's discovery walk has no lanes`: `rawdiscover` is a serial sweep
   and descent, so the flag has nothing to size. Nothing is printed when `--jobs` is
-  absent and `KUNA_DECODE_JOBS` is unset.
+  absent and `UNLACE_DECODE_JOBS` is unset.
 - **The two caps are different numbers.** `--jobs auto` gives the pool this
   machine's parallelism capped at 16 (a worker pays a whole program load) and
   the decode lanes the same parallelism capped at 32 (a lane pays one SLEIGH
@@ -5048,7 +5051,7 @@ every other subcommand's `--json` is an object (`{binary,...}`, `{modes:[...]}`)
 cross-checks the selected catalog against this `unlace` build's
 `unlace_decomp::options::KUNA_OPTION_NAMES` in-process.
 
-`--decomp-dbg PATH`, or a non-empty `KUNA_DECOMP_DBG` when that flag is absent, opts
+`--decomp-dbg PATH`, or a non-empty `UNLACE_DECOMP_DBG` when that flag is absent, opts
 text, JSON and check modes into the existing external console query. The flag takes
 precedence over the environment; a missing explicitly selected binary is an error,
 not a fallback to the local catalog. Build-identity warnings stay on stderr.
@@ -5115,7 +5118,7 @@ stub island, or to another image's stub, renders as the callee
 (`os_unfair_lock_lock_with_options(...)`), and so does a load through a `__got`
 slot the cache builder coalesced. `--option dyldcrossrefs off` shows the raw
 island addresses instead. `--image` is global: it applies to every subcommand
-and is passed to the `decomp_dbg` subprocess through `KUNA_DYLD_IMAGE`. The
+and is passed to the `decomp_dbg` subprocess through `UNLACE_DYLD_IMAGE`. The
 console spells it `option dyldimage NAME`, given before `load file`; it is
 accepted before any image is loaded.
 
@@ -5172,7 +5175,7 @@ applies to the whole invocation: `functions`, `decompile`, `disassemble`,
 `xrefs`, `strings`, `crypto`, `blobs`, `decompile-all`, `decompile-graph` and
 `decompile-project` all read the same entry. So does `--option dyldimage NAME`,
 the option spelling of `--image`. Given more than once, the last one wins. The
-option overrides `KUNA_KERNELCACHE` (or `KUNA_DYLD_IMAGE`) set in the
+option overrides `UNLACE_KERNELCACHE` (or `UNLACE_DYLD_IMAGE`) set in the
 environment, and `--option dyldimage` overrides `--image`.
 
 ```
@@ -5226,7 +5229,7 @@ other file. A file with a different UUID is not used. When no file matches,
 the pointers stay unresolved and the note says how many and which UUID is
 missing. Like
 `kernelcache`, the option applies to the whole invocation and overrides
-`KUNA_KERNELCACHE_BOOT`.
+`UNLACE_KERNELCACHE_BOOT`.
 
 ## `--member NAME` — one member of an archive
 
@@ -5510,7 +5513,7 @@ unlace flirt make: libthree.a: 8 pattern(s)
 unlace flirt make: wrote three.pat (8 pattern(s))
 unlace flirt make: collision: twin_one, twin_two are not told apart; left out of three.sig
 unlace flirt make: wrote three.sig (6 module(s), 1 unresolved collision(s))
-$ KUNA_FLIRT_SIGS=$PWD/three.sig unlace functions prog --option flirt on
+$ UNLACE_FLIRT_SIGS=$PWD/three.sig unlace functions prog --option flirt on
 0x401060	sum_bytes	(sub_401060)
 0x4010d0	wrap_mix	(sub_4010d0)
 ```
@@ -5530,7 +5533,7 @@ with fewer than four fixed bytes in their first 32 are left out; the last are
 counted on stderr.
 
 `--sig` also writes the binary signature file (format version 10, uncompressed)
-that `--option flirt on` reads through `KUNA_FLIRT_SIGS`. `--libname` sets the
+that `--option flirt on` reads through `UNLACE_FLIRT_SIGS`. `--libname` sets the
 library name in its header; the default is the first input's file stem. All
 inputs must be objects of one architecture, format and byte order, and the header
 admits the executable format they link into (ELF objects make a signature for ELF

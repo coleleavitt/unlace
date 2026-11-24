@@ -783,7 +783,7 @@ nothing else. The walk runs once per Varnode and the vote is folded per Varnode,
 while the type a reader sees belongs to the *merged variable*, so a slot walked
 with byte evidence in one flow and refused in another prints the commitment:
 grep -O0 `sub_6fdd`'s stack slot at `-0x20` is walked eight times with byte
-evidence and four times refused, which `KUNA_CHARPTR_CENSUS=1` reports line by
+evidence and four times refused, which `UNLACE_CHARPTR_CENSUS=1` reports line by
 line. What the refusals bound is what one Varnode's evidence may claim, not what
 the merged variable may become — and they are about element *width* and
 contradicting declarations, not about arithmetic shape. A constant-stride walk is
@@ -2554,7 +2554,7 @@ perfect functions. With the sweep disabled (`--option protoorder lock`) not one
 variable on that binary changes type, which is where the class lives. A
 union the factory declines to complete is not part of it: the lookup falls
 through to the reader's own claims, exactly as `off` mints them
-(`ledger.rs (lookup_or_mint)`, traced by `KUNA_STRUCTMERGE_TRACE=1`).
+(`ledger.rs (lookup_or_mint)`, traced by `UNLACE_STRUCTMERGE_TRACE=1`).
 
 `tests/stages/structmerge-siblings.toml` is the
 two-arm witness. Like the rest of the ledger the merge needs one process holding

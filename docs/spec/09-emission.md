@@ -1527,7 +1527,7 @@ render panic as that one function's error record
 inside a `--jobs` worker) therefore renders every later function with the
 printer settings the run configured (`indentincrement`, `arraynotation`,
 `truthycond`, ...), not a default printer's. The test-only
-`KUNA_RENDER_FAULT=<addr>` (`crates/unlace-emit/src/p9_emit/kuna_renderfault.rs`)
+`UNLACE_RENDER_FAULT=<addr>` (`crates/unlace-emit/src/p9_emit/kuna_renderfault.rs`)
 panics the render of the function at that entry just after its opening brace.
 
 A HighVariable linked to a local Symbol is classified for declaration emission

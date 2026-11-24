@@ -24,7 +24,7 @@ they run on dev binaries, which is faster to build and gives the same results.
   compile takes a fraction of a second to a few seconds per language. It lives in
   `$UNLACE_SLA_CACHE`, else `$XDG_CACHE_HOME/unlace/sla` (default `~/.cache/unlace/sla`), and
   deleting it is always safe. Builds before 2026-11-23 also left uncompressed `.slr` copies there;
-  they are ignored now, and `rm ~/.cache/unlace/sla/*.slr` removes them. A `SLEIGHHOME`/`KUNA_SPECS`/`--sleighpath` directory of prebuilt
+  they are ignored now, and `rm ~/.cache/unlace/sla/*.slr` removes them. A `SLEIGHHOME`/`UNLACE_SPECS`/`--sleighpath` directory of prebuilt
   `.sla` still wins: a `.sla` that is a regular file at least as new as its sources is used as is
   (a symlinked `.sla` never is).
 - Older checkouts may still have `.sla` files or per-file `.sla` symlinks under `specs/` from
@@ -50,12 +50,16 @@ export CARGO_PROFILE_DEV_OPT_LEVEL=1 CARGO_PROFILE_DEV_DEBUG=line-tables-only CA
 # Never export RUSTFLAGS: it replaces the linker and -Z flags set in ~/.cargo/config.toml.
 # Never set CARGO_INCREMENTAL=0.
 export CARGO_TARGET_DIR=$(readlink -f target)
-export KUNA_SPECS=$PWD/specs SLEIGHHOME=$PWD/specs
+export UNLACE_SPECS=$PWD/specs SLEIGHHOME=$PWD/specs
 
 cargo check -p <crate>                        # while editing
 cargo test -p <crate> --lib <filter>           # focused
 cargo build -p unlace-console -p unlace-harness -p unlace-slacomp -p unlace-cli   # dev profile
 ```
+
+Every `UNLACE_*` environment variable the Rust code reads is also read under its old `KUNA_*`
+name, as a deprecated alias: `UNLACE_<NAME>` wins when both are set (`unlace_base::env`). The
+Python tools under `scripts/` and `tools/` still read only their `KUNA_*` names.
 
 Heavy runs (decompile-all over a corpus, `cargo test -p unlace-harness --test parity`) go through
 `tools/hooks/unlace-slot <cmd>`, which holds one of `UNLACE_SLOTS` (default 6)
@@ -220,7 +224,7 @@ because instrumented binaries run the suite several times slower.
 
 Locally the same suite runs with `cargo nextest run --workspace
 --exclude unlace-wasm --profile ci` (or `--profile full`). A test binary outside the
-checkout (a target dir elsewhere, or an archive) finds the repository through `KUNA_ROOT`.
+checkout (a target dir elsewhere, or an archive) finds the repository through `UNLACE_ROOT`.
 
 Many tests build their input with a cross toolchain. The PE tests run
 `clang --target=x86_64-w64-windows-gnu` (and `i686-…`), which links with `ld` unless a
@@ -239,7 +243,7 @@ know yet. Run `actionlint` from the repository root before pushing a workflow ch
 `crates/unlace-bench` holds a divan benchmark suite over committed fixtures:
 `.sla` decode (x86-64, AArch64), image load (an x86-64 ELF and an arm64 Mach-O), the raw
 p-code lift of one function, and full decompiles of a jump-table switch, an arm64 Mach-O
-caller and an irreducible loop. It reads the compiled specs (`$KUNA_SPECS`, else `specs/`).
+caller and an irreducible loop. It reads the compiled specs (`$UNLACE_SPECS`, else `specs/`).
 `.github/workflows/codspeed.yml` runs it under CodSpeed's CPU simulation on every push to
 main and every PR (with the same `.sla` cache and `CARGO_INCREMENTAL=0` as `tests.yml`);
 results are at <https://codspeed.io/coleleavitt/unlace>.

@@ -162,7 +162,7 @@ analysis views (`crates/unlace-analysis/src/image_bytes.rs`). The console
 recognizes that mapped input before reading a complete format-probe buffer.
 The input must remain unchanged for the duration of analysis; private mapping
 does not provide a snapshot of external writes. In-process writes use owned
-segment overlays. `KUNA_LOAD_MMAP=off` selects the owned path for every loader
+segment overlays. `UNLACE_LOAD_MMAP=off` selects the owned path for every loader
 and CLI probe. Non-regular files, failed mappings, other formats and fat-slice
 normalization retain the owned input path.
 CLI architecture, language and runtime-hint probes inspect the mapped view too,
@@ -171,10 +171,10 @@ avoiding file-sized temporary buffers before the engine starts.
 Two timing consequences shape the tier. First, anything that must influence the
 **loader itself** runs before any `option` line exists, so load-time gates are
 bridged across the process by environment variables the CLI exports:
-`KUNA_DEBUGLINK` (`debuglink`),
-`KUNA_MACHO_ARM64E` (`macho-arm64e`),
-`KUNA_MACHO_SLICE` (`--slice`), `KUNA_ARM_ISA` (`--isa`),
-`KUNA_DYLD_IMAGE` (`dyldimage`, `--image`), `KUNA_DYLDCROSSREFS` (`dyldcrossrefs`). For those,
+`UNLACE_DEBUGLINK` (`debuglink`),
+`UNLACE_MACHO_ARM64E` (`macho-arm64e`),
+`UNLACE_MACHO_SLICE` (`--slice`), `UNLACE_ARM_ISA` (`--isa`),
+`UNLACE_DYLD_IMAGE` (`dyldimage`, `--image`), `UNLACE_DYLDCROSSREFS` (`dyldcrossrefs`). For those,
 the option rows exist for discoverability while the live gate is the env var. The
 external-artifact paths `kuna_fid_db` and `kuna_pdb_path` are different: they only
 *locate* the artifact, and only as one tier among others (`pdb` also searches
@@ -500,7 +500,7 @@ functions of a static musl ppc64le image halted on them (10 with A2ALT, all on
 
 (kuna) **A Go image composes the `:golang` compiler field instead**
 (`crates/unlace-analysis/src/loadimage_object.rs (language_id_for)`,
-option `goabi auto|off`, default auto, carried as the `KUNA_GOABI` loadtime
+option `goabi auto|off`, default auto, carried as the `UNLACE_GOABI` loadtime
 environment gate — the `sourcelang` pattern, because the id is composed inside
 `load file`). Go's register ABI is not the platform C ABI: under the `gcc`
 model a Go function's RAX/RBX/… arguments are scratch, so its parameters are
@@ -510,7 +510,7 @@ it are deleted (`func pair(a,b int) (int,int)` rendered
 (`abi-internal` default, `abi0`, the write-barrier/duff helper models) exist
 for x86-64, x86-32 and AArch64, so the override fires only on those three
 little-endian architectures when the effective source language is Go (the
-`KUNA_SOURCELANG` force included); everywhere else the composed id is
+`UNLACE_SOURCELANG` force included); everywhere else the composed id is
 byte-identical to before, and `elf_language_ids` enumerates the golang ids so
 the resolves-in-the-DB gate proves them vendored. Measured on a stripped
 go1.22 hello-world (1,544 functions): functions with recovered parameters
@@ -519,7 +519,7 @@ failures either way.
 
 (kuna) **A 32-bit Delphi PE composes the `:borlanddelphi` compiler field**
 (`crates/unlace-analysis/src/loadimage_object.rs (language_id_for)`, option
-`delphiabi on|off`, default on, carried as the `KUNA_DELPHIABI` loadtime
+`delphiabi on|off`, default on, carried as the `UNLACE_DELPHIABI` loadtime
 environment gate, the `goabi` pattern). The vendored `x86delphi.cspec` makes
 Delphi's `register` convention the default model: the first three arguments
 in EAX, EDX and ECX, the rest on the stack, the callee popping them, EAX the
@@ -643,7 +643,7 @@ stripped go1.16.15 build: `main.main` went from `main.add3(); os.Exit();` to
 `main.add3(dat_4e7748,2,7); os.Exit(v1);`. The same version decides `goreg`:
 before the register ABI `g` lived in thread-local storage and R14/x28 were
 ordinary registers, so `kuna_goreg::goroutine_register` returns `None` for an
-image the bootstrap's `KUNA_GOVERSION` places before go1.17 (amd64) or go1.18
+image the bootstrap's `UNLACE_GOVERSION` places before go1.17 (amd64) or go1.18
 (arm64); that variable is now set from either build-info form
 (`go_version_any`). In the same go1.16 build, a function at 0x404140 used R14
 as scratch and printed `g = a4;`; it now prints a plain local.
@@ -690,7 +690,7 @@ toolchain**: the build-info blob's version string
 loader parses them and the sleigh build runs, because the shells are interned
 inside the cspec decode, upstream of every per-image fact write. The image's
 own version wins over a release the caller stated; a load without explicit
-options publishes it as `KUNA_GOVERSION`, and clears that variable for an image
+options publishes it as `UNLACE_GOVERSION`, and clears that variable for an image
 with no version, so a stale value from an earlier load cannot leak in. It selects the release's layout
 (`crates/unlace-lift/src/p1_partition/kuna_goreg.rs (GoLayout)`):
 go1.23 inserted `g.syscallbp`, go1.25 dropped `gobuf.ret`, and with both
@@ -1676,7 +1676,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   (`SystemKernelExtensions.kc`, `AuxiliaryKernelExtensions.kc`) uses for every
   pointer into the kernel: a kext's call slots, the vtables and metaclass
   pointers its classes inherit. `kernelcache-boot` (kuna, default `auto`,
-  env-bridged through `KUNA_KERNELCACHE_BOOT`) resolves them from the other
+  env-bridged through `UNLACE_KERNELCACHE_BOOT`) resolves them from the other
   file. The plist names each linked collection by UUID, `_BootKCID` for level 0
   and `_PageableKCID` for level 1, as a 16-byte base64 `<data>` value. `auto`
   takes the first 4096 entries the directory of the input lists, in name
@@ -1810,7 +1810,7 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   kernelcache (21 MB IMG4, 72 MB decoded, 233 entries, 445,860 fixups), the
   peel costs about 0.15 s per read and `unlace functions` on the kernel takes
   3.7 s and 429 MB.
-  The choice is read live from `KUNA_KERNELCACHE`, and the `unlace` CLI exports
+  The choice is read live from `UNLACE_KERNELCACHE`, and the `unlace` CLI exports
   it from `--option kernelcache` for the whole invocation, with `dyldimage`,
   the other option that chooses which image of a file is read
   (`crates/unlace-cli/src/loadtime.rs (export_image_selection)`).
@@ -1856,7 +1856,7 @@ which call
 `crates/unlace-analysis/src/loader/kuna_dyldcache.rs (read_selected_image)`
 when the file opens with the cache magic (`bootstrap_from_file` routes a cache
 to the object path before reading it whole). The image is chosen by
-`dyldimage` (the `KUNA_DYLD_IMAGE` bridge, which the CLI's global `--image`
+`dyldimage` (the `UNLACE_DYLD_IMAGE` bridge, which the CLI's global `--image`
 sets, and which the console accepts before any image is loaded, since choosing
 the first one is its job). It matches a full install name, then a unique
 basename, then a unique basename minus its last extension (`libobjc.A`), and a
@@ -2069,7 +2069,7 @@ synthesized from `tests/stages/fixtures/dex/hello.dex` and `tries.dex` by
 `tests/stages/fixtures/dex/containers.py`.
 
 (kuna) **A stripped ELF's separate debug information** (`debuglink`,
-default on, a load-time gate read through `KUNA_DEBUGLINK`). Distributions
+default on, a load-time gate read through `UNLACE_DEBUGLINK`). Distributions
 strip their binaries and ship the symbol table and DWARF in a separate file.
 When the image has no `.symtab`,
 `crates/unlace-analysis/src/loader/elf_debuglink.rs (companion_symbols)`
@@ -2077,7 +2077,7 @@ looks for that file the way gdb does: the GNU build-id note names
 `<dir>/.build-id/<xx>/<rest>.debug`, accepted only if its own build-id matches,
 and `.gnu_debuglink` names a file next to the image, in its `.debug/`
 directory, or under `<dir>/<image's directory>/`, accepted only if its CRC32
-matches. `<dir>` is each entry of `KUNA_DEBUG_DIRS`, then `/usr/lib/debug`.
+matches. `<dir>` is each entry of `UNLACE_DEBUG_DIRS`, then `/usr/lib/debug`.
 Failing a companion, the XZ-compressed ELF in `.gnu_debugdata` (Fedora's
 MiniDebugInfo, decompressed with `lzma-rs`) supplies a function-only symbol
 table. The companion's defined function symbols join the loader's function
@@ -2090,7 +2090,7 @@ compressed (Fedora/RHEL `-debuginfo`, Debian/Ubuntu `-dbgsym`) keeps the
 strings and partial units several packages share in a supplementary file its
 `.gnu_debugaltlink` names with that file's build-id;
 `elf_debuglink.rs (find_altlink)` looks for it at the named path (absolute,
-with `/usr/lib/debug` also tried under each `KUNA_DEBUG_DIRS` root, or
+with `/usr/lib/debug` also tried under each `UNLACE_DEBUG_DIRS` root, or
 relative to the debug file), then by build-id under the debug directories,
 and accepts it only if its build-id matches. The DWARF analyzer then sets it as
 gimli's supplementary `Dwarf` (`Dwarf::set_sup`), so names in
@@ -4520,7 +4520,7 @@ moves.
   Lua's AArch64 `.text`, 214 of 215 in a static-pie `ldconfig`, 78 of 78 in
   `lldb-dap` and 4 of 4 in `ld.so` are dropped, every dropped one instruction
   bytes. The pass runs at `load file`, before any `option` line, so the rule
-  reads the option as `KUNA_CODESTRINGS`: the CLI exports it, and the console's
+  reads the option as `UNLACE_CODESTRINGS`: the CLI exports it, and the console's
   `option codestrings` sets it for the next `load file`. Read from the
   architecture, as it was, `off` never reached the pass.
 
@@ -5947,7 +5947,7 @@ moves.
   the CFA; any other register base (an `-fomit-frame-pointer` RSP) moves with
   the body, so that function gets no DWARF stack locals. Every clang -O0 local
   used to be placed 16 bytes off and named the wrong slot. (kuna `dwarfscopes`,
-  default on, a load-time env bridge `KUNA_DWARFSCOPES`) Locals nested in
+  default on, a load-time env bridge `UNLACE_DWARFSCOPES`) Locals nested in
   `DW_TAG_lexical_block` scopes at any depth are collected in document order
   like direct children, and a variable whose location is a location list takes
   the stack slot when every frame-relative entry of the list names the same one;
@@ -6016,7 +6016,7 @@ moves.
   libraries and DWARF definitions keep precedence. Calls to the import then take its
   types: an enum parameter prints a constant argument as its member
   (`gnutls_bye(s,GNUTLS_SHUT_WR)`). (kuna `dwarfenumtypedef`, default on; a load-time
-  env bridge, `KUNA_DWARFENUMTYPEDEF`) An anonymous `DW_TAG_enumeration_type` reached
+  env bridge, `UNLACE_DWARFENUMTYPEDEF`) An anonymous `DW_TAG_enumeration_type` reached
   through a typedef is interned as an enum under the typedef's name, the alias
   `strip_qualifiers` already gives an anonymous aggregate
   (`dwarf/kuna_dwarfenumtypedef.rs`); off, it is the plain underlying integer. (kuna) When neither `.comment`
@@ -6311,7 +6311,7 @@ moves.
   A name the table holds as spelled is never retried, so the ladder only adds
   facts. This is IDA's type-library lookup ladder (`guess_tinfo`,
   `cleanup_name`). The passes that climb it run at `load file`, so they read
-  the option as `KUNA_NAMELADDER` (exported by the CLI, set for the next
+  the option as `UNLACE_NAMELADDER` (exported by the CLI, set for the next
   `load file` by the console's `option nameladder`).
 
 - **Discriminant-value naming**
@@ -6407,7 +6407,7 @@ moves.
   it) states no parameters, a `...` with nothing before it has no C spelling,
   and a parameter type the switch cannot build leaves nothing to state, so each
   keeps the `void` pointee. The mapping happens inside `load file`, before any
-  option is applied, so the gate is the `KUNA_CALLTARGETTYPE` environment
+  option is applied, so the gate is the `UNLACE_CALLTARGETTYPE` environment
   variable (chapter 00) the CLI exports ahead of the load from the run's options,
   the mode's preset included, and leaves off when the output language is Rust;
   the browser front-end does not export it.
@@ -6844,7 +6844,7 @@ moves.
 
   Every consumer acts on the **effective** verdict
   (`crates/unlace-analysis/src/analyzers/sourcelang/mod.rs
-  (effective_compiler, effective_compiler_bytes)`): the `KUNA_SOURCELANG`
+  (effective_compiler, effective_compiler_bytes)`): the `UNLACE_SOURCELANG`
   environment override when set, else detection. The override is the
   `sourcelang` option (`auto|c|rust|go|swift`, default `auto`), and it travels
   as an environment variable because pass
@@ -7985,7 +7985,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     mapping the method labels use, while the lookups between the ObjC tables
     keep the runtime spelling. On a Swift image (one with `__swift5_fieldmd`
     that the Swift pass runs on) under `swifttypes` (read at load as
-    `KUNA_SWIFTTYPES`, since this pass runs before any `option` line), a
+    `UNLACE_SWIFTTYPES`, since this pass runs before any `option` line), a
     Swift class's layout is left to the field descriptors:
     the ivar list encodes Swift-typed stored properties as nothing, so the ObjC
     pass only declares the record and `swifttypes` completes it with the Swift
@@ -8000,7 +8000,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     `tests/stages/kuna-swiftclassnames.toml` proves both spellings on
     `macho_swift_classnames_arm64`, and both owners of the layout on
     `macho_swift_classnames_fieldmd_arm64`. Off (the option is read
-    at load as `KUNA_OBJCIVARS` for the structs and at the commit for `self`
+    at load as `UNLACE_OBJCIVARS` for the structs and at the commit for `self`
     and the fold, so it is set before the `load file` it applies to), no class
     struct is interned, `self` stays `id`, the offset variable keeps its name
     and the load stays a load — the shape to read when a superclass from
@@ -8072,7 +8072,7 @@ every other binary's pass list is byte-identical to before the pass existed):
     a framework setter never is, so on kcm 2,897 of 25,084 stub calls rendered
     with no argument at all. The declarations exist in the SDK the app was built
     against, and Apple's headers may not be shipped with kuna, so the option
-    names a directory to read **at load** (`KUNA_OBJCSDK`; nothing derived from
+    names a directory to read **at load** (`UNLACE_OBJCSDK`; nothing derived from
     it is written anywhere): an SDK root contributes the `Headers/` of every
     framework the image links (`LC_LOAD_DYLIB`, 73 on Toyota; ~0.1 s), any
     other directory every `.h` up to eight directories below it. The reader takes the declaration
@@ -9545,12 +9545,12 @@ both
   the text `decompile` surface relays from its `decomp_dbg` session. A configured database that is not matched does not change the exit
   status: it only ever adds names, and a database set for a batch of
   mixed-architecture images is expected not to apply to some of them.
-- **FLIRT** (`flirt`, default-off, Listing-gated, signatures via `KUNA_FLIRT_SIGS`;
+- **FLIRT** (`flirt`, default-off, Listing-gated, signatures via `UNLACE_FLIRT_SIGS`;
   `crates/unlace-analysis/src/analyzers/flirt/mod.rs (FlirtPass)`): names
   library functions from IDA FLIRT `.sig` files (versions 5 to 11; raw, deflate,
   zlib or zstd bodies). Reading the files and the byte-level match (trie, CRC,
   tail bytes, instruction bits) is the `flirt-sig` crate; the pass adds the
-  reference names, the rounds and the arbitration below. `KUNA_FLIRT_SIGS` is a `:`-separated list of files or
+  reference names, the rounds and the arbitration below. `UNLACE_FLIRT_SIGS` is a `:`-separated list of files or
   directories whose `*.sig` files are all taken. A startup signature (its module
   names are IDA scripts, not functions) and one whose header file-type mask
   excludes the binary's format are never loaded, so pointing the variable at all
@@ -9620,7 +9620,7 @@ both
   overflow the stack and takes memory only in proportion to its size (up to about
   1.6 KB per byte, since the reader's stack of open tree nodes is not counted). It
   can still make the pass slow, because every module of a crafted file can match
-  at every entry, so `KUNA_FLIRT_SIGS` should name signature files from a trusted
+  at every entry, so `UNLACE_FLIRT_SIGS` should name signature files from a trusted
   source.
   The opt-in report API in
   `crates/unlace-analysis/src/analyzers/flirt/kuna_rustprofiles.rs`
@@ -9646,7 +9646,7 @@ both
   `unlace functions --summary --json --rust-signature-manifest PATH` requests this
   report for one loaded image. The CLI validates the explicit corpus/candidate
   manifest and hashes each signature's bytes before constructing the request.
-  The request is distinct from `KUNA_FLIRT_SIGS` and does not turn on `flirt`,
+  The request is distinct from `UNLACE_FLIRT_SIGS` and does not turn on `flirt`,
   `listing`, or another analysis consumer. The console consumes it once during
   the deferred image-analysis commit; the observer in
   `crates/unlace-analysis/src/passes.rs` receives the final accepted
@@ -9721,7 +9721,7 @@ both
   `unlace/ruststdsigs/<version>-<target>.sig`). Only an x86-64 or AArch64 Linux ELF
   with a `rustc version` record is considered, and the matching is the FLIRT pass's
   own, so it needs `flirt on` and the Listing. The choice travels as
-  `KUNA_RUSTSTDSIGS`, since the pass reads its signatures while the image loads.
+  `UNLACE_RUSTSTDSIGS`, since the pass reads its signatures while the image loads.
   Measured on stripped release binaries against their symbol tables (names, right,
   `j_` jump stubs named for their target, wrong): a probe built by 1.95.0 with the
   1.95.0 toolchain 140/135/3/2, one built by 1.100.0 with 1.100.0 150/145/3/2; with
@@ -10483,7 +10483,7 @@ pairs exist, they carry the confident shapes already. On an ELF a weak hit is
 taken only outside every FDE body, because the unwind table already describes
 the functions it covers. A Mach-O or PE
 image's own function tables list everything such a hint could add, so the weak
-tier is not used there. A directory named by `KUNA_PATTERN_DIR` (IDA's
+tier is not used there. A directory named by `UNLACE_PATTERN_DIR` (IDA's
 `PATTERN_SEARCH_DIR`) can replace any vendored pattern file with a file of the
 same name (`patterns/mod.rs (user_file)`).
 
@@ -11482,9 +11482,9 @@ that moved all discard the shards and re-walk serially. A lane thread the OS
 refuses is the one failure a lane cannot report for itself — the lanes already
 parked at the first barrier are joined before the failure propagates — so the
 spawner poisons the barrier, declines lane 0's own body and refuses with `thread
-spawn failed`. `KUNA_DECODE_SELFCHECK=1` runs both walks and compares them field
+spawn failed`. `UNLACE_DECODE_SELFCHECK=1` runs both walks and compares them field
 by field, returning the serial result; the size floor is a parameter of the plan,
-which `KUNA_DECODE_MIN_BYTES` sets on the CLI path and the equivalence tests pass
+which `UNLACE_DECODE_MIN_BYTES` sets on the CLI path and the equivalence tests pass
 directly, so they are not vacuous on small fixtures. This is a driver-tier resource setting with no output
 effect, so it is a CLI flag and an environment bridge rather than a settable
 option (DIV-169).

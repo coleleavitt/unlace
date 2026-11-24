@@ -4157,6 +4157,18 @@ used. Before, the C2000 family had no language. Exercised by
 `unlace-cli/tests/c28x_raw.rs` (a word-addressed `ADDB ACC,#5; LRET` image
 decompiles with no bad or unimplemented instruction).
 
+### WDC 65816 (#98)
+
+`specs/Ghidra/Processors/65816` vendors the SLEIGH specification of
+ghidra-65816 (MIT, pinned commit in its README) unchanged:
+`65816:LE:16:default` for the WDC 65816/65C816 (SNES, Apple IIgs). The program
+counter is the 24-bit `PBR:PC`, and the M, X and E status bits are decode
+context, so `REP`/`SEP`/`XCE` change the operand width of the instructions
+after them; the default context is native mode with 16-bit accumulator and
+index registers. Before, only the 6502 and 65C02 had languages. Exercised by
+`unlace-cli/tests/w65816_raw.rs` (a 16-bit load/add/store routine decompiles
+with no bad or unimplemented instruction).
+
 ### STM8 (#98)
 
 `specs/Ghidra/Processors/STM8` vendors the SLEIGH specification of ghidra_STM8

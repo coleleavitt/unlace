@@ -1986,7 +1986,7 @@ The control surface: each of these can make output worse on the wrong source sha
 ### `pairparam` -- on | off, default `on`
 
 - **Symptoms:** a long long parameter on i386 or 32-bit ARM prints as two int parameters; a long long equality on i386 prints as an OR of two XORs compared with 0, over four int parameters.
-- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them.
+- **What it does:** Join two adjacent input words into one 8-byte parameter when a borrow, a carry or a two-word equality links them, or when the function only ever reads them concatenated (every reader of either word is a PIECE of the two, high word first).
 - **When to flip:** On by default.
 - **Where / provenance:** P4/prototype-source · kuna · new-analysis · pairparam
 - **Example:** `option pairparam off`

@@ -71,6 +71,8 @@ mod aarch64_sve2;
 mod cdp1802_raw;
 #[path = "i4004_raw.rs"]
 mod i4004_raw;
+#[path = "nova_raw.rs"]
+mod nova_raw;
 #[path = "ppc_spe2.rs"]
 mod ppc_spe2;
 #[path = "return_branch_cli.rs"]

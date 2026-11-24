@@ -4415,7 +4415,21 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
 | `ROMP` | IBM ROMP (RT PC) | `ROMP:BE:32:default` | written for unlace from the RT PC Hardware Technical Reference, Apache-2.0 |
 | `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
+| `Nova` | Data General Nova (Nova 1200/800/2, Nova 3, Nova 4) | `Nova:BE:16:default` | written for unlace from the DG Nova programmer's references, Apache-2.0 |
 <!-- vendor-rows -->
+
+### Data General Nova (#98)
+
+`specs/Ghidra/Processors/Nova` is a SLEIGH module written for unlace from Data
+General's Nova programmer's references (no prior SLEIGH existed):
+`Nova:BE:16:default`. Memory is word addressed. An operate instruction is one
+constructor per ALU function and shift: the carry out is a comparison, the
+17-bit rotate goes through carry, and the no-load flag and the skip condition
+are tested on the shifted result, so a `SUBZ#` with a carry skip folds to a C
+comparison. `JSR` links in AC3 and `JMP 0,3` returns; the Nova 3 `SAV`/`RET`
+frame lives on an upward-growing stack. Device I/O is a user op. Exercised by
+`unlace-cli/tests/nova_raw.rs` (hand-assembled add, unsigned max, page-zero
+load/store, rotate and Nova 3 frame-call routines decompile to the expected C).
 
 ### IBM ROMP (#98)
 

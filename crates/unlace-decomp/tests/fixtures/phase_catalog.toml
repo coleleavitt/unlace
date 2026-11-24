@@ -232,6 +232,25 @@ tier = "core"
 symptoms = ["a short string literal argument prints as a hex integer like 0x28abe", "a void * chosen between two string literals prints as &dat_<addr>", "an argument of a call through an untyped function pointer is an address into __cstring", "a call argument prints as the integer value of a string's address in a dylib"]
 
 [[option]]
+option = "stringglobalnames"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "global-string-name"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-1282-string-global-names"
+summary = "Name an unnamed global whose bytes are a C string after the string, as IDA does: a global holding `\"hello world\"` prints as `&aHelloWorld` where unlace prints `&dat_<addr>`, and the `decompile-project` header declares it under the same name. The label capitalises the words of the text, drops every non-alphanumeric byte, and reads `aEmpty` when nothing is left. The text is the printable run from the global's address up to a NUL, at least two bytes long and holding a letter or digit, read from the loaded image. Two globals holding the same text share one name; the printer does not uniquify them, which is why the option is off by default. Inert unless the option is on, so 0/675 datatest assertions move."
+use_when = "Off by default: the label is IDA's naming, not the program's, and two globals with the same text collide. Flip on when reading output next to IDA, or when a string's use site is easier to follow by its text than by its address."
+example = "option stringglobalnames on"
+source_decompiler = "ida"
+inspiration = "IDA names a string global after its text (aHelloWorld, aS, aEmpty) and prints the name at every use; an LLM reading the output gets the string's meaning from the name."
+change_kind = "presentation-default"
+tier = "core"
+symptoms = ["a global used by address prints as dat_2b080 where the string it holds says what the use is", "a format string or message is only reachable as &dat_<addr> and the reader must look the bytes up", "the same string global appears as dat_<addr> in one function and under its text in IDA"]
+
+[[option]]
 option = "charnum"
 values = ["on", "off"]
 default = "off"
@@ -249,6 +268,25 @@ inspiration = "Hex-Rays prints character constants only where the value is print
 change_kind = "presentation-default"
 tier = "transform"
 symptoms = ["'\\0' <= c where the source tests c >= 0", "c + '\\x01' where the source adds 1", "a non-printable character literal in a comparison"]
+
+[[option]]
+option = "partmacro"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "part-macro"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-partmacro"
+summary = "Print a part of an integer value as the part macro that names it: LOBYTE(x), BYTE1(x) to BYTE7(x), LOWORD(x), HIWORD(x), WORD1(x) to WORD3(x), LODWORD(x) and HIDWORD(x). A truncation of a 2-, 4- or 8-byte integer to 1, 2 or 4 bytes at an aligned byte offset, and the truncation of a right shift by a whole number of bytes, print as the macro: the truncation of x >> 8 to one byte prints BYTE1(x). A nested part folds into the most direct one, so LOBYTE(HIWORD(x)) prints BYTE2(x). A part that reads past the value after folding, such as a byte of an arithmetic shift past the top, keeps its cast. Printing only; C output only, and the recompile prelude defines the macros when the option is on."
+use_when = "Turn on to read byte and half-word unpacking the way IDA prints it (LOBYTE, BYTE1, HIWORD, LODWORD). Leave off to keep the plain casts and shifts, which every existing output and expected text uses."
+example = "option partmacro on"
+source_decompiler = "unlace"
+inspiration = "IDA's part macros (LOBYTE, BYTE1 to BYTE7, LOWORD, HIWORD, LODWORD, HIDWORD) and their direct-part folding; notes/orig-unlace/output-cprinter-a.md row 2 (PR #1348)"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = ["(uint1)(x >> 8) where the source reads BYTE1(x)", "a 16-bit part of a 32-bit value printed as a cast of a shift", "LOBYTE(HIWORD(x)) where the source reads BYTE2(x)"]
 
 [[option]]
 option = "constright"
@@ -344,6 +382,25 @@ inspiration = "unlace idiom_recognition try_min_idiom and try_max_idiom (the arc
 change_kind = "new-analysis"
 tier = "transform"
 symptoms = ["a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31))", "a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31))", "a cmov-style min or max of two ints prints as a shift, a mask and an add"]
+
+[[option]]
+option = "bitfieldarith"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-bitfieldarith"
+summary = "Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks."
+use_when = "Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic."
+example = "option bitfieldarith on"
+source_decompiler = "unlace"
+inspiration = "archived unlace idiom_recognition try_bitfield_read / try_bitfield_write (issue 1253)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = ["a register field is extracted with a shift and an AND", "a flag field is set with a clear-mask OR and a shifted insert", "packed descriptor or hardware register fields print as shift and mask arithmetic"]
 
 [[option]]
 option = "satmul"
@@ -496,6 +553,25 @@ inspiration = "With exact NaN-unboxing, float add(float a, float b) on RV64 prin
 change_kind = "presentation-default"
 tier = "transform"
 symptoms = ["v = NAN; if ((int)(x >> 0x20) == -1) v = x; around a float parameter on RISC-V", "a RISC-V float function starts with one NAN test per float argument", "an unused int variable named after fa0 or fa1 beside a float parameter", "v = NAN; if ((int)(r >> 0x20) == -1) v = r; after a RISC-V call that returns a float"]
+
+[[option]]
+option = "sfofxor"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-1271"
+summary = "Fold the x86 SF != OF signed-less idiom. When a one-byte XOR (INT_XOR or BOOL_XOR) reads the direct definitions INT_SLESS(a, b) and INT_SBORROW(a, b) with the same a and b in the same order, the XOR becomes INT_SLESS(a, b). For the sign flag as the ISA defines it (the sign of a - b) and the signed overflow of a - b, SF xor OF is exactly the signed a < b, which is what the x86 jl and jge conditions test. Strictly structural: an XOR whose operands are not that pair of definitions is never touched, and only direct definitions match (no COPY or SUBPIECE peeling). Off by default because the identity depends on the lifter's flag definitions, which must be checked before the option is trusted; the rule has not been measured against the 675 datatest assertions, the stage corpus or the speed budget."
+use_when = "Turn on for x86 code where a jl or jge after a cmp prints as an XOR of a sign test and an overflow test, after checking on a sample function that the lifted SF is the sign of the subtraction. Default off: it is an identity over the flag model rather than a structural cleanup, and the flag model has not been verified against the lifter."
+example = "option sfofxor on"
+source_decompiler = "unlace"
+inspiration = "x86 signed condition codes: SF xor OF is the signed less-than of the subtraction (Intel SDM, Jcc conditions L and GE)"
+change_kind = "transform"
+tier = "transform"
+symptoms = ["a jl or jge after cmp prints as an XOR of a sign test and an overflow test", "SF != OF in a signed comparison of two registers", "(a < b) ^ __OFSUB__(a, b) in a signed branch condition"]
 
 [[option]]
 option = "satconvert"
@@ -1258,6 +1334,25 @@ tier = "transform"
 symptoms = ["an int3 pad renders as (*(void *)swi(3))() - a call through a pointer nothing assigns", "a function returns the result of a call through swi(3)", "nothing in the C says control ran into a run of 0xcc padding bytes", "an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains"]
 
 [[option]]
+option = "antidebug"
+values = ["off", "warn"]
+default = "off"
+destructive_as_default = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HINT"
+rewind = "P2"
+issue = "unlace-1214"
+summary = "Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called."
+use_when = "Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default."
+example = "option antidebug warn"
+source_decompiler = "unlace"
+inspiration = "archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called"
+change_kind = "new-analysis"
+tier = "analysis"
+symptoms = ["a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe", "a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C", "OutputDebugStringA used as a debugger test prints nothing that marks it"]
+
+[[option]]
 option = "x64syscall"
 values = ["off", "on", "abi"]
 default = "on"
@@ -1826,6 +1921,25 @@ inspiration = "IDA 9.5 hexx64.so x87 stack-depth solver (model 0x9db80, relax 0x
 change_kind = "correctness-fix"
 tier = "core"
 symptoms = ["a void i386 function returns an uninitialised long double", "a function that discards a float call result returns st0", "`long double v1; // st0 ", " st1` is returned but never assigned", "a caller's x87 push makes a void callee return a float"]
+
+[[option]]
+option = "taintcheck"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace#1309"
+summary = "Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option."
+use_when = "Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled."
+example = "option taintcheck on"
+source_decompiler = "unlace"
+inspiration = "archived unlace origin/master taint_engine.rs (propagate_taint) and its source/sink registry"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = ["a value from recv or getenv reaches system or popen with no warning", "an input-controlled argument to execl or execve is not flagged", "a command sink fed by a network read needs a manual trace"]
 
 [[option]]
 option = "varargsave"
@@ -3101,6 +3215,25 @@ tier = "transform"
 symptoms = ["wide switch where every case assigns a constant and breaks to one shared return", "switch (x) { case A: v = K; break; ... } return v; instead of per-case return K", "17-plus-case const dispatch keeps a merged return variable"]
 
 [[option]]
+option = "irreduciblesplit"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "original-unlace-irreducible-split"
+summary = "Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has."
+use_when = "A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before."
+example = "option irreduciblesplit on"
+source_decompiler = "ghidra"
+inspiration = "original unlace origin/master unlace-struct irreducible.rs + node_split.rs; Ghidra ActionNodeSplit"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = ["goto into the middle of a loop that has two entrances", "a loop with two entry points rendered with goto labels", "irreducible region left as goto-shaped control flow"]
+
+[[option]]
 option = "foldcallret"
 values = ["on", "off"]
 default = "on"
@@ -3519,6 +3652,25 @@ tier = "core"
 symptoms = ["v10 and v11 declared between v1 and v2", "local declarations in string order v1, v10, v11, v2", "a numbered local hard to find among ten or more declarations"]
 
 [[option]]
+option = "cppclassargs"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P1"
+subphase = "external-refinement"
+strength = "HARD"
+rewind = "P1"
+issue = "unlace-analysis-cppsig"
+summary = "Keep the template arguments of a demangled C++ class name when the `this` of its member functions is typed. The demangled scope `std::vector<int, std::allocator<int> >` is stripped to the bare class `vector`, so `this` prints as `vector *`. With the option on, a template class's `this` is the whole scope as the demangler spells it (`std::vector<int, std::allocator<int> >`), a record of its own, and the printer (with `cppshortnames` on) shows `std::vector<int> *this`. A non-template class, a parameter type and the function name are unchanged. Applies to the proven and inferred tiers of `cppsig`."
+use_when = "Turn on with `cppshortnames` for a C++ binary whose member functions take a std container or other class template as `this`: `std::vector<int> *this` where the default prints `vector *this`. Off by default: the template-named record is new, so a DWARF or demangled type that names the same class bare is not merged with it. Not yet measured on a corpus."
+example = "option cppclassargs on"
+source_decompiler = "unlace"
+inspiration = "Ghidra's demangled this for a template class names the class with its template arguments; the standard-library container names are the issue #1343 port from the archived unlace cpp_stl recogniser."
+change_kind = "analysis-enablement"
+tier = "analysis"
+symptoms = ["a this of a std container prints as a bare vector","a template class's this prints without its template arguments","vector *this where std::vector<int> *this is meant"]
+
+[[option]]
 option = "cppshortnames"
 values = ["on", "off"]
 default = "off"
@@ -3566,7 +3718,7 @@ subphase = "naming-policy"
 strength = "HARD"
 rewind = "P6"
 issue = "contextnames"
-summary = "Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), and the local the function returns `result`. `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), and `result` is the weakest evidence; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither."
+summary = "Name a numbered local from its shape when no declaration names it: a loop counter after its loop's nesting depth (`i`, `j`, `k`, `m`, `n`), the local the function returns `result`, the local a counter is compared with (`len`), and a pointer a load or store indexes by a counter (`buf`). `unlace_contextnames` finds the loops on the basic-block graph -- a back edge enters a block that dominates its source, and a loop's body is every block that reaches that source without passing the head -- and takes as a counter an integer local that the head's phi joins from outside the loop with an initial value and, on every back edge, with itself plus or minus one (through copies and casts); a pointer that walks a buffer, and a value that steps by anything else (`len -= 12`, `v += a2 * a3`), are not counters. The result is the one local that every `return` of a non-constant value returns. Both are evidence for the `libcnames` alias walk, which numbers every local exactly as with the option off and only then prints the name, so `v4` stays the same variable in every mode, a directive may name the local by either spelling, a clash takes `_2`, `_3`, ... in evidence order (a second loop at the same depth prints `i_2`), and no spelling repeats a name another variable, the scope or a callee holds. A loop counter outranks a library argument name (a counter passed as `read`'s `nbytes` stays `i`), the result of a library call outranks a loop counter (`len = strlen(s)` counted down stays `len`), `result` is weaker than a loop counter, a loop bound and an array base are weaker than `result`, and a local's type is the weakest evidence of all; evidence an option prints is preferred to library evidence only a directive may use. Naming a local after the parameter it is passed to is upstream's `lookForFuncParamNames` for a locked callee prototype (DWARF, `--assert prototype`) and `libcnames` for the built-in library tables; this option adds neither."
 use_when = "Turn on for readable loops in stripped code: `for (v5 = 0; ...; v5 += 1)` prints `for (i = 0; ...; i += 1)` and the accumulated return value prints `result`. Off by default because it renames locals that other features' stage assertions and CLI tests spell as `vN`."
 example = "option contextnames on"
 source_decompiler = "unlace"
@@ -3935,6 +4087,25 @@ inspiration = "test_decompiling_x8664_cvs; angr variable recovery (one variable 
 change_kind = "presentation-default"
 tier = "core"
 symptoms = ["the same local declared once although many HighVariables share the stack slot", "flip off to see one declaration line per high (e.g. int4 option_index repeated hundreds of times)"]
+
+[[option]]
+option = "renumberlocals"
+values = ["on", "off"]
+default = "off"
+destructive_as_default = false
+phase = "P9"
+subphase = "naming-policy"
+strength = "HARD"
+rewind = "P9"
+issue = "hexrays-renumber-locals"
+summary = "Renumber the synthetic locals the naming pass spells v<N> from v1 in the order the printer collects them, so a function's default-named locals read v1, v2, ... with no gaps, the way Hex-Rays numbers them. Names that are not v<N> (parameters, recovered names, stack names) are unchanged, and a spelling another identifier of the function already holds is skipped. The renamed spelling is applied to every declaration and body reference of the local."
+use_when = "Off by default: renumbering is a readability choice, not a fix, so the default keeps the naming pass's numbering, which records the order the decompiler met each local. Turn it on to read a function whose synthetic locals have gaps (v3, v7, v12) as a compact v1..vK list. The order is the collection order of the declarations, which tracks first appearance but is not a body walk, and a synthetic name the declaration list drops keeps its spelling. The Hex-Rays sole-returned-local rule (result) and the argument-register carrier rule are not implemented yet."
+example = "option renumberlocals on"
+source_decompiler = "unlace"
+inspiration = "archived unlace printer lvar_names.rs (number_synthetic_locals): Hex-Rays numbers synthetic locals v1, v2, ... in first-appearance order"
+change_kind = "readability"
+tier = "core"
+symptoms = ["synthetic locals print as v7, v12 with gaps where Hex-Rays would print v1, v2", "a function's default-named locals are numbered by the naming pass rather than read as a compact list"]
 
 [[option]]
 option = "noreturn_known"
@@ -6837,7 +7008,7 @@ strength = "HARD"
 rewind = "P1"
 issue = "unlace-1164"
 summary = "Name a firmware module's entry point by its FFS file type, as IDA's uefi_fv loader does, when the module sits in an unpacked volume beside its unlace-uefi.index (`unlace unpack <firmware> --protocols`). A PEIM and a combined PEIM driver enter as `PeimEntryPoint(EFI_PEI_FILE_HANDLE, EFI_PEI_SERVICES **)`, the PEI core as `PeiCore(VOID *SecCoreData, VOID *PpList)`, the DXE core as `DxeMain(VOID *HobStart)`, a standalone MM module as `StandaloneMmEntryPoint(EFI_HANDLE, EFI_MM_SYSTEM_TABLE *)`, and every other module (driver, application, MM, combined MM_DXE) as `ModuleEntryPoint(EFI_HANDLE, EFI_SYSTEM_TABLE *)`. A combined file's entry gets a comment naming its FFS type (COMBINED_PEIM_DRIVER, COMBINED_MM_DXE). Without this option, a PEIM and a standalone MM module keep the names the index gives them; every other entry keeps `_ModuleEntryPoint`. Needs `uefi` on."
-use_when = "Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. The walk still seeds a PEI or DXE core's parameters from the phase its file type gives, so the second parameter of DxeMain or PeiCore may print with that phase's table type."
+use_when = "Off by default. Turn it on after `unlace unpack FIRMWARE --protocols`, when you decompile the modules from the directory it wrote, to see each entry named for its phase. A module loaded alone has no FFS type, so nothing changes for it. With the option on, the walk seeds a core's parameters from its file type: DxeMain's HobStart and PeiCore's SecCoreData and PpList are `VOID *`, not the phase's table types. Other modules keep the phase's table types."
 example = "option uefientry on"
 source_decompiler = "ida"
 inspiration = "IDA 9.5 uefi_fv loader entry prototypes (PeimEntryPoint, DxeMain, PeiCore, StandaloneMmEntryPoint, ModuleEntryPoint) and its COMBINED_* labels"

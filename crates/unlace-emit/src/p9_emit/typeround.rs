@@ -285,7 +285,7 @@ impl OptionSignedness {
 
 /// What the accumulated operation set says about one value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Evidence {
+pub enum Evidence {
     /// No signedness-sensitive operation was observed.
     None,
     /// Every signedness-sensitive operation is signed.
@@ -616,6 +616,12 @@ fn evidence_for(fd: &Funcdata, high: HighVariableId, castsign: bool) -> (Evidenc
     let mut cs = CastsignWalk::default();
     let verdict = evidence_walk(fd, high, castsign, &mut cs);
     (verdict, cs)
+}
+
+/// The signedness vote for `high` as [`plan`] reads it without `castsign`; the shadow
+/// solve in [`crate::typeshadow`] is compared against it.
+pub fn vote_for(fd: &Funcdata, high: HighVariableId) -> Evidence {
+    evidence_for(fd, high, false).0
 }
 
 fn evidence_walk(

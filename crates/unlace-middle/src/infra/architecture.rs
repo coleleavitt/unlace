@@ -3449,6 +3449,9 @@ impl Architecture {
             // (unlace minmax) the branch-free min and max, printed as min(a, b) and max(a, b).
             userops.register_builtin(crate::userop::BUILTIN_MIN, &adapter)?;
             userops.register_builtin(crate::userop::BUILTIN_MAX, &adapter)?;
+            // (unlace bitfieldarith) the pure-arithmetic bitfield get and set.
+            userops.register_builtin(crate::userop::BUILTIN_BITFIELD_GET, &adapter)?;
+            userops.register_builtin(crate::userop::BUILTIN_BITFIELD_SET, &adapter)?;
             // (unlace kernelbug) the Linux `__bug_table` trap statements.
             userops.register_builtin(BUILTIN_KERNEL_BUG, &adapter)?;
             userops.register_builtin(BUILTIN_KERNEL_WARN, &adapter)?;

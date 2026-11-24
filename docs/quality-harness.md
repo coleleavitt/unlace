@@ -184,6 +184,7 @@ parameter, no source body) is absent from that card, never 0.
 | `loop_count_err`, `if_count_err`, `switch_count_err` | lower | statement-count differences against the source |
 | `gotos`, `gotos_excess` | lower | gotos in the C; gotos beyond those in the source |
 | `unstructured_gotos`, `warnings`, `casts`, `undefined_vars`, `lines` | | source-free signals, straight from the record |
+| `txt_flag_vars`, `txt_empty_blocks`, `txt_dead_stores`, `txt_leaked_temps`, `txt_register_carriers`, `txt_raw_stack_accesses` | lower | text counters on the printed C (`scripts/quality/textmetrics.py`), ported from the archived master's `OutputMetrics`. They read only the printed text, so they score any binary and survive a pipeline redesign. |
 | `recompiles` | higher | `--project` only: the function's definition in `decompile-project`'s `.c` has no `clang -fsyntax-only` error |
 | `global_type_trex` | higher | `--project` only: TRex of the `.h`'s `extern` declarations against DWARF globals, matched by name or `dat_<addr>`. It is a binary-level row, function `<binary>`. |
 
@@ -250,6 +251,17 @@ WHERE a.label = 'protoorder=off' AND b.label = 'protoorder=cycles' AND a.metric 
 SELECT opt, compiler, avg(value), count(*) FROM scores
 WHERE label = 'baseline' AND metric = 'proto_exact' GROUP BY opt, compiler;
 ```
+
+## Output-shape sanity counters
+
+Five source-free counters (`null_deref_sites`, `impossible_lvalue_sites`,
+`lost_frame_offset_sites`, `leaked_temp_decls`, `stale_return_result`) count text
+shapes in the emitted C: a `*(T *)(0LL)` literal, a load or store at an address under
+0x1000, a frame-relative `rsp`/`rbp`/`sp`/`fp`/`bp` address left as pointer arithmetic,
+a `vN` temporary declared with `// temp`, and a `return result;` whose `result` is never
+declared or assigned. They need no DWARF, so binaries without debug info still get a
+signal. Lower is better. They are regex matches: a function that really does stack-pointer
+arithmetic (rare, usually inline asm) counts too.
 
 ## Adding a metric
 

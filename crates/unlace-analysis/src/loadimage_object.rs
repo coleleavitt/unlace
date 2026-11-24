@@ -558,6 +558,8 @@ pub struct ObjectLoadImage {
     datasyms: Vec<DataSym>,
     /// A PE or Mach-O image's data exports as `(vma, name)`; see [`ObjectLoadImage::data_exports`].
     data_exports: Vec<(u64, String)>,
+    /// (unlace) A thin Mach-O's dependency list and run paths; see [`crate::loader::macho_dylibs`]. Empty for any other format.
+    macho_dependencies: crate::loader::macho_dylibs::MachODependencies,
     /// (unlace `globalref`) Sorted, merged `[start, stop]` ranges of the sections
     /// the program's own data objects live in; see
     /// [`crate::loader::globalref`].
@@ -1364,6 +1366,11 @@ impl ObjectLoadImage {
                 .chain(crate::loader::macho_stubs::data_exports(&file))
                 .map(|(addr, name)| (addr, String::from_utf8_lossy(&name).into_owned()))
                 .collect(),
+            macho_dependencies: if file.format() == object::BinaryFormat::MachO {
+                crate::loader::macho_dylibs::dependencies(bytes)
+            } else {
+                Default::default()
+            },
             data_objects: crate::loader::globalref::merged_ranges(data_object_rows),
             const_ranges,
             dynreloc_const,
@@ -1557,6 +1564,8 @@ impl ObjectLoadImage {
             reloc_symbols,
             datasyms,
             data_exports: Vec::new(),
+            // A pre-link object names no dylib; it is linked against them later.
+            macho_dependencies: Default::default(),
             data_objects,
             const_ranges: Vec::new(),
             // (unlace) The foldable-range exception list. `dynrelocs` itself is
@@ -1802,6 +1811,11 @@ impl ObjectLoadImage {
     /// lookup only and never become globals.
     pub fn data_exports(&self) -> &[(u64, String)] {
         &self.data_exports
+    }
+
+    /// The Mach-O dependency list and `LC_RPATH` run paths; see [`crate::loader::macho_dylibs`].
+    pub fn macho_dependencies(&self) -> &crate::loader::macho_dylibs::MachODependencies {
+        &self.macho_dependencies
     }
 
     /// Write `data` over the mapped bytes at `vma` (the write twin of

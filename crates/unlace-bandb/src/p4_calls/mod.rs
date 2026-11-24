@@ -22,6 +22,7 @@ pub mod hiddenretarg; // (unlace) a value left in the hidden-return register is 
 pub mod importvote; // (unlace) an undeclared import takes what its other call sites pass
 pub mod reloadarg; // (unlace) a register reloaded from the caller's frame is re-scored once the frame is heritaged
 pub mod retsysreg; // (unlace) a register set for a system register is not the high word of the return
+pub mod taintcheck; // (unlace) report input-source data that reaches a command sink (option taintcheck)
 pub mod vaarg; // (unlace) the x86-64 va_arg expansion as va_arg(ap, T)
 pub mod varargformat;
 pub mod varargforward; // (unlace) a declared parameter forwarded unchanged to a variadic call

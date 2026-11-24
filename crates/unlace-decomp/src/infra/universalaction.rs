@@ -733,6 +733,11 @@ pub fn universal_sched_hooked(
             crate::satmul::RuleSaturatedMul::new("analysis")
         ),
         rrow!(
+            "bitfieldarith",
+            "analysis",
+            crate::bitfieldarith::RuleBitFieldArith::new("analysis")
+        ),
+        rrow!(
             "strcpychain",
             "analysis",
             crate::helperrole::RuleStrcpyChain::new("analysis")
@@ -756,6 +761,11 @@ pub fn universal_sched_hooked(
             "sborrowge",
             "analysis",
             crate::flagcompare::RuleSborrowGe::with_group("analysis")
+        ),
+        rrow!(
+            "sfofxor",
+            "analysis",
+            crate::sfofxor::RuleSfOfXor::new("analysis")
         ),
         rrow!(
             "shiftcompare",
@@ -1650,6 +1660,12 @@ pub fn universal_sched_hooked(
             // reached too, hoisting each case to its own `return K`.  Registered right after
             // earlyreturn so the narrower pass consumes the ≤16-edge diamonds first.
             act!(crate::switchreturn::ActionSwitchReturn::boxed(
+                "returnsplit"
+            )),
+            // (unlace, original unlace node_split) controlled node splitting of irreducible loop
+            // entries (option `irreduciblesplit`, default-OFF): duplicates one entry block per
+            // external predecessor so the region becomes a natural loop before structuring.
+            act!(crate::irreducible_split::ActionIrreducibleSplit::boxed(
                 "returnsplit"
             )),
             act!(ActionUnjustifiedParams::boxed("protorecovery")),

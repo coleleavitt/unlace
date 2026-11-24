@@ -39,7 +39,7 @@ pub(super) fn export(
         readme_gate: Mutex::new(()),
         feed: Mutex::new(Feed::default()),
     };
-    let completion = watch.with_clock(|| decompile_project(args, output, Some(&watch)))?;
+    let completion = watch.with_clock(|| decompile_project(args, output, Some(&watch), false))?;
     let status = run.dir.join(STATUS_FILE);
     std::fs::remove_file(&status)
         .map_err(|e| format!("cannot remove {}: {e}", status.display()))?;

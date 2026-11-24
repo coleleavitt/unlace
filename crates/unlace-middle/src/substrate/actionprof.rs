@@ -92,10 +92,17 @@ impl Drop for ActionFrame {
 /// The env var that names the output path.
 pub const ENV_VAR: &str = "UNLACE_ACTION_PROF";
 
+/// The env var that asks the CLI to print the table to stderr when a command
+/// finishes ([`timing_report`]). It turns profiling on without a path.
+pub const TIMING_ENV_VAR: &str = "UNLACE_TIMING";
+
 /// Is profiling on? Read once per process.
 pub fn enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| unlace_base::env::var_os(ENV_VAR).is_some())
+    *ON.get_or_init(|| {
+        unlace_base::env::var_os(ENV_VAR).is_some()
+            || unlace_base::env::var_os(TIMING_ENV_VAR).is_some()
+    })
 }
 
 /// Name the root schedule that follows, so its rows can be told apart from
@@ -160,6 +167,19 @@ pub fn dump() {
 /// The table, as text.
 pub fn render() -> String {
     PROFILE.with(|p| p.borrow().render())
+}
+
+/// The table under a `unlace::timing` heading, when [`TIMING_ENV_VAR`] is set and
+/// the current thread recorded at least one action. The CLI calls this once
+/// after the command finishes, so the table covers the whole run rather than
+/// one schedule. Totals belong to the calling thread only.
+pub fn timing_report() -> Option<String> {
+    unlace_base::env::var_os(TIMING_ENV_VAR)?;
+    let table = render();
+    table
+        .lines()
+        .nth(1)
+        .map(|_| format!("unlace::timing per-action wall-clock\n{table}"))
 }
 
 #[cfg(test)]

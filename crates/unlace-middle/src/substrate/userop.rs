@@ -198,6 +198,10 @@ pub const BUILTIN_MAX: uint4 = 0x10000022;
 /// (unlace) Built-in id for `saturated_mul`, a multiply that yields all-ones on
 /// overflow (`satmul`).
 pub const BUILTIN_SATURATED_MUL: uint4 = 0x10000038;
+/// (unlace) Built-in id for `bitfield_get(x, s, w)`, the `w` bits of `x` from bit `s` (`bitfieldarith`).
+pub const BUILTIN_BITFIELD_GET: uint4 = 0x10000039;
+/// (unlace) Built-in id for `bitfield_set(x, y, s, w)`, `x` with the `w` bits from bit `s` replaced by `y`'s low `w` bits (`bitfieldarith`).
+pub const BUILTIN_BITFIELD_SET: uint4 = 0x1000003a;
 /// (unlace) Built-in ids for the atomic read-modify-write builtins one locked x86
 /// instruction, AArch64 LSE atomic or RISC-V AMO lifts to (`unlace_atomics`), in
 /// [`ATOMIC_BUILTINS`] order.
@@ -1528,6 +1532,12 @@ impl UserOpManage {
             BUILTIN_VAARG => UserPcodeOp::new_unspecialized(b"va_arg", BUILTIN_VAARG as int4),
             BUILTIN_SATURATED_MUL => {
                 UserPcodeOp::new_unspecialized(b"saturated_mul", BUILTIN_SATURATED_MUL as int4)
+            }
+            BUILTIN_BITFIELD_GET => {
+                UserPcodeOp::new_unspecialized(b"bitfield_get", BUILTIN_BITFIELD_GET as int4)
+            }
+            BUILTIN_BITFIELD_SET => {
+                UserPcodeOp::new_unspecialized(b"bitfield_set", BUILTIN_BITFIELD_SET as int4)
             }
             BUILTIN_STRCPY => {
                 let ptr_size = types.get_size_of_pointer();

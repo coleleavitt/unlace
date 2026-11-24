@@ -1731,7 +1731,9 @@ gaps as reserved bytes; a `derivedFrom` peripheral reuses its base's type),
 declared at its base address as a typed global with a volatile range over its
 registers, and each `<interrupt>` names the Cortex-M handler of that IRQ
 `<NAME>_IRQHandler`. The access then reads `USART1.DR = 0x78;` instead of
-`dat_40011004 = 0x78;`.
+`dat_40011004 = 0x78;`. The peripherals are declared for an ELF or other
+object file (an ESP image, the ELF a container wraps) as well; only the handler
+names need a raw dump's vector table.
 
 ### Espressif (ESP32 / ESP8266) application images
 

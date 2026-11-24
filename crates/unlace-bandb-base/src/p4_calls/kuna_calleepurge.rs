@@ -996,15 +996,29 @@ fn msvc_saved_sp(
 }
 
 /// (`calleeargsmsvc`) Record the slot a push of a callee-saved register that
-/// still holds its entry value (`push esi` in the prologue) writes it to.
+/// still holds its entry value (`push esi` in the prologue) writes it to;
+/// SLEIGH's `push44` stores a temporary copy of the register (`reg_copies`).
 fn note_saved_register(
     state: &mut State,
     regs: &Regs,
     ins: &[VarnodeData],
     at: Option<Val>,
     size: u32,
+    reg_copies: &[(u64, usize)],
 ) {
-    let Some(r) = ins.get(2).and_then(|v| regs.exact(v)) else {
+    let Some(r) = ins.get(2).and_then(|v| {
+        regs.exact(v).or_else(|| {
+            (kind(v) == Some(spacetype::IPTR_INTERNAL))
+                .then(|| {
+                    reg_copies
+                        .iter()
+                        .rev()
+                        .find(|&&(t, _)| t == v.offset)
+                        .map(|&(_, r)| r)
+                })
+                .flatten()
+        })
+    }) else {
         return;
     };
     let Some(i) = CALLEE_SAVED.iter().position(|&c| c == r) else {
@@ -1093,6 +1107,7 @@ pub fn step_with(
     let mut trapped: Vec<u64> = Vec::new();
     let mut lost_temps: Vec<u64> = Vec::new();
     let mut fs_temps: Vec<u64> = Vec::new();
+    let mut reg_copies: Vec<(u64, usize)> = Vec::new();
     let mut sp_adds: i64 = 0;
     let unique = |v: &VarnodeData| kind(v) == Some(spacetype::IPTR_INTERNAL);
     for (opc, out, ins) in ops {
@@ -1196,7 +1211,7 @@ pub fn step_with(
                 escape(value, &mut s.unplaced);
                 if regs.fs.is_some() {
                     msvc_saved_sp(&mut s.state, regs, ins, at, value, size, &fs_temps);
-                    note_saved_register(&mut s.state, regs, ins, at, size);
+                    note_saved_register(&mut s.state, regs, ins, at, size, &reg_copies);
                 }
                 if track {
                     s.unplaced |= lost_at(1);
@@ -1312,6 +1327,10 @@ pub fn step_with(
             }
             temps.push((o.offset, result));
             fs_temps.retain(|&t| t != o.offset);
+            reg_copies.retain(|&(t, _)| t != o.offset);
+            if let (OpCode::CPUI_COPY, Some(r)) = (opc, ins.first().and_then(|v| regs.exact(v))) {
+                reg_copies.push((o.offset, r));
+            }
             if fs_in && matches!(opc, OpCode::CPUI_INT_ADD | OpCode::CPUI_COPY) {
                 fs_temps.push(o.offset);
             }

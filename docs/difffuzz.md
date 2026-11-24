@@ -153,6 +153,17 @@ afterwards. The register file is unchanged.
   instructions, and `l.extws`/`l.extwz` (QEMU lacks them). QEMU 8.2 takes `l.mulu`'s carry from
   a signed multiply, so CY is not compared there. Seed 6, 3000 encodings: 8803 matches, no
   mismatches; the SLEIGH lifts needed no fix.
+- MicroBlaze (`--arch microblaze` / `microblazeel`, `MicroBlaze:BE:32:default` /
+  `MicroBlaze:LE:32:default`, `--oracle qemu` with `qemu-microblaze` / `qemu-microblazeel` from QEMU
+  8.2), decoded by the binutils `objdump` (`ObjdumpArch`). The carry goes in with `addi -1` and
+  back with `addc`; `imm` + `braid` reaches the instruction and its delay slot restores the table
+  register. The generator draws the register (type A) forms with their reserved bits clear, and
+  encodings with reserved bits set are not generated (binutils decodes them anyway). Not
+  generated: branches, returns, traps, special-register moves, stream (FSL), cache,
+  exclusive-access, `imm` prefixes, FP and `pcmpbc` (QEMU lacks it). Fixed in `microblaze.sinc`
+  after the first run: the reversed byte and halfword accesses (`lbur`, `lhur`, `sbr`, `shr`)
+  also flip the low address bits (address ^ 3, ^ 2), as QEMU reads them. Seeds 4 and 5, 3000 encodings each (big and
+  little endian): 8497 and 8449 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

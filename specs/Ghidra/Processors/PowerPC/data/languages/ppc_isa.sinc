@@ -501,8 +501,11 @@ define pcodeop DivideWordExtended4;
 # binutils: cell.d:  44:        7c 01 14 28     ldbrx   r0,r1,r2
 # binutils: power7.d:  e4:      7e 95 b4 28     ldbrx   r20,r21,r22
 # name	 ldbrx	 code	 7c000428	 mask	 ff0700fc00000000	 flags	 @POWER7 @CELL @A2 	 operands	 3b	32	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-define pcodeop LoadDoublewordByteReverseIndexed;
-:ldbrx D,A,B is $(NOTVLE) & OP=31 & D & A & B & XOP_1_10=532 & Rc { D = LoadDoublewordByteReverseIndexed(D,A,B); }
+:ldbrx D,RA_OR_ZERO,B is $(NOTVLE) & OP=31 & D & RA_OR_ZERO & B & XOP_1_10=532 & BIT_0=0 {
+	EA:$(REGISTER_SIZE) = RA_OR_ZERO + B;
+	val:8 = *[ram]:8 EA;
+	D = (val << 56) | ((val << 40) & 0xff000000000000) | ((val << 24) & 0xff0000000000) | ((val << 8) & 0xff00000000) | ((val >> 8) & 0xff000000) | ((val >> 24) & 0xff0000) | ((val >> 40) & 0xff00) | (val >> 56);
+}
 
 # ======================================================================
 
@@ -650,10 +653,10 @@ define pcodeop StoreWordByExternalProcessIDIndexed;
 # binutils: cell.d:  4c:        7c 01 15 28     stdbrx  r0,r1,r2
 # binutils: power7.d:  e8:      7e 95 b5 28     stdbrx  r20,r21,r22
 # name	 stdbrx	 code	 7c000528	 mask	 ff0700fc00000000	 flags	 @POWER7 @CELL @A2 	 operands	 3b	32	38	0	0	0	0	0	 																																																																																																																																																																																																																																														
-define pcodeop StoreDoublewordByteReverseIndexed;
-:stdbrx S,RA_OR_ZERO,B is OP=31 & S & RA_OR_ZERO & B & XOP_1_10=660 & BIT_0=0 {  # 
+:stdbrx S,RA_OR_ZERO,B is OP=31 & S & RA_OR_ZERO & B & XOP_1_10=660 & BIT_0=0 {
 	EA:$(REGISTER_SIZE) = RA_OR_ZERO + B;
-	*[ram]:8 EA = StoreDoublewordByteReverseIndexed(S,RA_OR_ZERO,B);
+	val:8 = S;
+	*[ram]:8 EA = (val << 56) | ((val << 40) & 0xff000000000000) | ((val << 24) & 0xff0000000000) | ((val << 8) & 0xff00000000) | ((val >> 8) & 0xff000000) | ((val >> 24) & 0xff0000) | ((val >> 40) & 0xff00) | (val >> 56);
 }
 
 # PowerISA II: 5.4.3 External Process ID Instructions [Category: Embedded.External PID]

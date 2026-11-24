@@ -259,7 +259,7 @@
 #0x001b0000	0xffff8000	r0:5,r5:5,r10:5	['reg0_5_s0', 'reg5_5_s0', 'reg10_5_s0']
 :rotr.w  RD, RJ32src, RK32src  is op15_31=0x36 & RD & RJ32src & RK32src {
 	local shift:1 = RK32src(0) & 0x1f;
-	local tmp1:4 = RJ32src s>> shift;
+	local tmp1:4 = RJ32src >> shift;
 	local tmp2:4 = RJ32src << (32 - shift);
 	local result = tmp1 + tmp2;
 
@@ -271,7 +271,7 @@
 #0x004c8000	0xffff8000	r0:5,r5:5,u10:5	['reg0_5_s0', 'reg5_5_s0', 'imm10_5_s0']
 :rotri.w  RD, RJ32src, imm10_5 is op15_31=0x99 & RD & RJ32src & imm10_5 {
 	local shift:1 = imm10_5;
-	local tmp1:4 = RJ32src s>> shift;
+	local tmp1:4 = RJ32src >> shift;
 	local tmp2:4 = RJ32src << (32 - shift);
 	local result = tmp1 + tmp2;
 
@@ -901,11 +901,10 @@
 #la-bitops-32.txt catpick.w mask=0x00080000	[@orig_name=bytepick.w, @la32]
 #0x00080000	0xfffe0000	r0:5,r5:5,r10:5,u15:2	['reg0_5_s0', 'reg5_5_s0', 'reg10_5_s0', 'imm15_2_s0']
 :bytepick.w RD, RJ32src, RK32src, imm15_2  is op17_31=0x4 & RD & RJ32src & RK32src & imm15_2 {
-	local bitstop:1 = 8 * (4 - imm15_2);
-	local mask:4 = (1 <<  bitstop) - 1;
-	local tmp_hi:4 = RK32src & ~mask;
-	local tmp_lo:4 = (RJ32src & (mask << (32-bitstop)) >> (32-bitstop));
-	RD = sext(tmp_hi + tmp_lo);
+	# {rk[31-8*sa:0], rj[31:32-8*sa]}; a shift by 32 is 0 when sa is 0
+	local sh:1 = 8 * imm15_2;
+	local res:4 = (RK32src << sh) | (RJ32src >> (32 - sh));
+	RD = sext(res);
 }
 
 define pcodeop crc.w.b.w;
@@ -968,8 +967,8 @@ define pcodeop bstrins.w;
 	local msb:1 = imm16_5;
 	local lsb:1 = imm10_5;
 	local len:1 = msb + 1 - lsb;
-	local mask:4 = (1 << len) - 1;
-	local repl:4 = (RJ32src & (mask << lsb)) >> lsb;
+	local mask:4 = ((1 << len) - 1) << lsb;
+	local repl:4 = (RJ32src << lsb) & mask;
 	RD = sext((RD32 & (~mask)) | repl);
 }
 

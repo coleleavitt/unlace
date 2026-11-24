@@ -1,0 +1,57 @@
+# GH-1243: 8051 16-bit ADD not identified. The 8051 ADDC SLEIGH semantics
+# computed the carry-in add in a 1-byte temp (tmp:1 = $(CY) + op), which
+# truncates the carry-out when (op + carry_in) overflows a byte
+# (e.g. 0xff + 1 = 0x100 -> 0x00). The CY flag is then set wrong and
+# ADD+ADDC multi-byte (16/32-bit) add chains are not recognised.
+#
+# Fix (kuna GH-1243): a do_addc(op) macro performs the add in a 2-byte temp
+# so the carry-out survives, then sets CY from the full result and stores the
+# low byte into ACC.
+#
+# Behavioural discriminator (bytes below):
+#   0x0000 SETB CY        CY = 1
+#   0x000e MOV  A,#0x0    A  = 0
+#   0x0010 ADDC A,#0xff   FIXED: 0 + 0xff + 1 = 0x100 -> A=0, CY=1
+#                         BUGGY: tmp:1 = 1 + 0xff = 0x00 -> A=0, CY=0
+#   0x0012 MOV  A,#0x0
+#   0x0014 JNC  0x18      FIXED: CY=1, no jump  BUGGY: CY=0, jumps
+#   0x0016 MOV  A,#0x2
+#   0x0018 MOV  P1,A      FIXED: P1 = 2         BUGGY: P1 = 0
+#
+# The earlier ADDC at 0x0003 (0xff + 0 + 1) overflows ACC directly and is
+# correct in both forms, so P0 = 1 either way; it guards against the fix
+# breaking the already-correct case. Stage: pcode lift (SLEIGH spec-fix).
+
+[image]
+arch = '8051:BE:16:default'
+symbols = [
+    { space = 'CODE', offset = '0x0', name = 'func0' },
+]
+
+[[image.bytes]]
+space = 'CODE'
+offset = '0x0'
+hex = 'D374FF3400740050027401F580D3740034FF740050027402F59080FE'
+
+[script]
+commands = [
+    'lo fu func0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH1243 #1: ADDC carry-out preserved, P1 = 2'
+count = 1
+literal = 'P1 = 2;'
+
+[[match]]
+name = 'GH1243 #2: buggy truncated-carry result P1 = 0 absent'
+count = 0
+literal = 'P1 = 0;'
+
+[[match]]
+name = 'GH1243 #3: already-correct case still holds, P0 = 1'
+count = 1
+literal = 'P0 = 1;'

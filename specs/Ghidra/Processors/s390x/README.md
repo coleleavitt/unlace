@@ -7,9 +7,16 @@ SLEIGH processor module for 64-bit Linux on IBM Z. Language id
 
 - The general instructions of the z/Architecture through the z15 facilities:
   RR, RRE, RRF, RX, RXY, RS, RSY, RI, RIL, RIE, RIS, RRS, SI, SIY, SIL and SS
-  formats.
+  formats, including the high-word facility, the z14 multiply-with-CC and z15
+  logical-with-complement instructions, compare double and swap and the
+  quadword pair loads and stores.
 - Binary floating point on `f0`-`f15`: short and long, and extended values in
-  the register pairs `fN`:`fN+2`.
+  the register pairs `fN`:`fN+2`, including `TEST DATA CLASS`.
+
+The encodings of the high-word, z14/z15, pair and test-data-class rows were
+taken from the binutils `s390-opc.txt` table (opcode and format only), and
+`tools/difffuzz --arch s390x --oracle qemu` checks the p-code against
+`qemu-s390x -cpu max`.
 - The s390x ELF ABI in `s390x.cspec`.
 
 Not yet modelled: the vector facility (every `E7` opcode), hexadecimal and

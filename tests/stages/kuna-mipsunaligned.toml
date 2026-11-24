@@ -1,0 +1,98 @@
+# kuna mipsunaligned, GH-904: a MIPS unaligned word load or store pair
+# lifts as the one whole access it makes.
+#
+# MIPS reads an unaligned word with two instructions (lwl $3,1($16);
+# lwr $3,4($16) on a big-endian target).  Lifted one at a time each half
+# merges memory into the register by a shift its address's low bits
+# pick, so the pair read the register it overwrites and printed as a
+# tangle of shifts and masks around that value.  After a call that value
+# is the call's dead second return word, which made c_unal read add_hi's
+# result as a 64-bit pair (and made SQLite's callers of
+# sqlite3PagerWrite read it as one, so it printed void):
+#     v4 = add_hi();
+#     return ((*(int4 *)((v3 + 1U) - v1) << v1 * 8 | (uint4)((uint8)v4 >> 0x20) & ...   (bug)
+# The processor spec's PAIR_INSTRUCTION_FLAG forms make one half do the
+# whole access and the other nothing; the flag is now set on both halves
+# of every pair before the first decode, as Ghidra's MipsPreAnalyzer
+# does.
+#
+# Stage: P2 lift and flow (decode-context), kuna_mipsunaligned.
+#
+# Images: crates/unlace-analysis/tests/fixtures/bejoin_mipsunal
+# (bejoin_mipsunal.S; see bejoin_mipspic.provenance) and mipsunaligned_eb.o
+# and mipsunaligned_el.o (mipsunaligned.c; see mipsunaligned.provenance).
+#
+# Assert #1: c_unal adds the unaligned word to add_hi's int and never reads
+#   add_hi's dead high half.
+# Assert #2: get_word returns the word it loads on both byte orders and
+#   never reads the uninitialized result register.
+# Assert #3: copy_word copies the word on both byte orders.
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/bejoin_mipsunal',
+    'option typevote off',
+    'read symbols',
+    'lo fu c_unal',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/mipsunaligned_eb.o',
+    'option typevote off',
+    'read symbols',
+    'lo fu get_word',
+    'decompile',
+    'print C',
+    'lo fu copy_word',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/mipsunaligned_el.o',
+    'option typevote off',
+    'read symbols',
+    'lo fu get_word',
+    'decompile',
+    'print C',
+    'lo fu copy_word',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "mipsunaligned #1: c_unal adds the unaligned word to add_hi's int"
+count = 1
+literal = 'return *(int4 *)((int4)v1 + 1) + v2;'
+
+[[match]]
+name = "mipsunaligned #1b: c_unal never reads add_hi's dead high half"
+count = 0
+literal = '(uint4)((uint8)v4 >> 0x20)'
+
+[[match]]
+name = 'mipsunaligned #2: get_word returns the word it loads on both byte orders'
+count = 2
+literal = 'return *(unsigned int *)((int4)a0 + 1);'
+
+[[match]]
+name = 'mipsunaligned #2b: get_word never reads the uninitialized result register'
+count = 0
+literal = 'uint4 v3; // v0'
+
+[[match]]
+name = 'mipsunaligned #3: copy_word copies the word on both byte orders'
+count = 2
+literal = '*(unsigned int *)((int4)a0 + 1) = *(unsigned int *)((int4)a1 + 1);'

@@ -22,7 +22,7 @@
 //! Neither parity corpus can cover the *discovery* half of this: both are
 //! symbol-less bytechunks that never construct an `ObjectLoadImage`, so nothing
 //! there has a function map for `query_call` to miss.
-//! `tests/stages/tailcallframe.xml` covers the decision on hand-built bytes.
+//! `tests/stages/tailcallframe.toml` covers the decision on hand-built bytes.
 
 use std::path::PathBuf;
 use std::rc::Rc;

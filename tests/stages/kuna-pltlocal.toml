@@ -1,0 +1,64 @@
+# GH-1342: a call through a PLT stub that the image's own relocation binds to
+# a function it defines takes that definition's prototype.
+#
+# Stage: P4 calls and prototypes, prototype source (kuna_pltlocal.rs, always
+# on).
+#
+# The XML wrapper only provides the harness architecture. The script clears it
+# and loads the committed AArch64 shared object `pltlocal_aarch64.so` (the
+# issue's assembly, `pltlocal_aarch64.s`, clang + ld.lld). `timer_wrapper`
+# calls `timer_helper@plt` (0x10380) with its own x0, x1, w2 and w3, and the
+# stub's GOT slot is bound by an R_AARCH64_JUMP_SLOT to the defined
+# `timer_helper` (0x10344). The prototype is declared at the DEFINITION, the
+# way DWARF or a callee-first recovery states it.
+#
+# Built at the stub, which declares nothing, the four forwarded registers
+# would be inputs nobody wrote and the call would render `timer_helper();`.
+# Built at the definition, the declared four parameters arrive: the call
+# passes the wrapper's own inputs and the wrapper gains them as parameters.
+# The stub's name is printed and the tail call through `send_helper@plt` is
+# kept.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/pltlocal_aarch64.so',
+    'read symbols',
+    'map prototype 0x10344 void timer_helper(void *timer,unsigned long cookie,unsigned int lo,unsigned int hi)',
+    'load addr 0x10308',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'PLTLOCAL #1: the forwarded registers are never lost to the stub'
+count = 0
+literal = 'timer_helper();'
+
+[[match]]
+name = 'PLTLOCAL #2: built at the definition, its declared parameters arrive'
+count = 1
+literal = 'timer_helper(a0,a1,a2,a3);'
+
+[[match]]
+name = 'PLTLOCAL #3: the wrapper gains the parameters it forwards'
+count = 1
+regex = 'timer_wrapper\(void \*a0,[a-z0-9 ]+ a1,[a-z0-9 ]+ a2,[a-z0-9 ]+ a3\)'
+
+[[match]]
+name = 'PLTLOCAL #4: the tail call keeps its arguments'
+count = 1
+literal = 'send_helper(a0,a1); // tail-call'

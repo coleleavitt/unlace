@@ -1,0 +1,60 @@
+# GH-8471: "Pointers to Thumb function are spuriously decompiled to hex"
+# https://github.com/NationalSecurityAgency/ghidra/issues/8471
+#
+# A pointer to a Thumb function 'fn' carries the mode bit in its LSB
+# (value = fn_entry|1 = 0x10189).  ActionConstantPtr correctly recovers the
+# symbolic form PTRSUB(fn) + 1, but RulePtrsubUndo destroys it: the +1 does
+# not match the bounds of fn's code type (isPtrsubMatching fails), so the
+# constant collapses back to raw hex (upstream regression from the GP-4782
+# RulePtrsubUndo refactor; cf. upstream PR #8990).
+#
+# Stage model: S5 "const-pointer" sub-stage.  The symptom surfaces at S9 but
+# the symbolic data is already destroyed in Band B; kuna_thumbfuncptr.rs
+# (always on) guards the S5 rule.
+#
+# Layout (reduced from the reporter's short_reproducer.so):
+#    0x10174  call_function:  bx lr
+#    0x10188  fn:             bx lr        (Thumb entry; LSB-encoded 0x10189)
+#    0x1018c  call_fn_through_reference:
+#               ldr r0,[0x10194]; add r0,pc; b call_function (tail call)
+#    0x10194  literal = 0xfffffff7 (so r0 = pc-9 = 0x10189)
+#
+# Assertion #2 proves the symbolic form; #1 proves the raw hex never appears.
+
+[image]
+arch = 'ARM:LE:32:v8:default'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x10174'
+readonly = true
+hex = '''
+70470000000000000000000000000000
+000000007047000001487844f0e70000
+f7ffffff
+'''
+
+[script]
+commands = [
+    'option readonly on',
+    'set context TMode 1 [ram,0x10174] [ram,0x10197]',
+    'map function r0x10174 call_function',
+    'map function r0x10188 fn',
+    'map function r0x1018c call_fn_through_reference',
+    'parse line extern void call_function(void *param_1);',
+    'override flow r0x10190 callreturn',
+    'lo fu call_fn_through_reference',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'GH8471 #1: the raw-hex form never appears'
+count = 0
+literal = 'call_function((void *)0x10189)'
+
+[[match]]
+name = 'GH8471 #2: the symbolic form is preserved, &fn[1] via DIV-2 arraynotation'
+count = 1
+literal = 'call_function(&fn[1])'

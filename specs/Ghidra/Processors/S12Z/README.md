@@ -55,6 +55,17 @@ binutils-gdb, opcodes/s12z-opc.c, read only for the encodings; no text taken).
   and [ext24].
 - STOP, WAI, SYS, TRAP, BGND, SWI and RTI's side effects are named pcodeops.
 
+## Layout
+
+A register operand is a table per encoding field and register set (`Wreg_op` for D2-D5 in
+the opcode, `D6D7_pblo` for D6/D7 in a postbyte nibble, ...), so one constructor covers the
+registers of one size; a table's exports share a size, so D0-D1, D2-D5, D6-D7 and X/Y/SP get
+separate constructors. 1780 constructors, 350 KB (it was 4395 constructors, 858 KB, one per
+register). Decode is unchanged: the disassembly of a 261,632-encoding sweep (every first
+byte and postbyte, every page-2 opcode and postbyte, two random tails each) is identical,
+and the p-code of a 50,204-instruction sample is identical up to the truncation idiom (a
+`SUBPIECE` where the old constructor copied the register to a temporary first).
+
 ## Gaps
 
 - QMULS/QMULU (fractional multiply) are the named pcodeop `fractional_multiply`.

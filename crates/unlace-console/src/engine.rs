@@ -3076,8 +3076,22 @@ impl ConsoleProgram {
             unlace_analysis::protos::declared_libc_prototype(name, types, word_size, layout)
         };
         let whole = unlace_decomp::kuna_typedcallabi::returns_doubles_whole(self.arch());
-        let pieces =
-            pieces.filter(|p| whole || !unlace_decomp::kuna_typedcallabi::declares_a_float(p));
+        let (pieces, withheld) = match pieces {
+            Some(p) if !whole && unlace_decomp::kuna_typedcallabi::declares_a_float(&p) => {
+                (None, true)
+            }
+            other => (other, false),
+        };
+        if withheld {
+            self.arch_mut()
+                .kuna_tables
+                .get_mut::<unlace_decomp::kuna_honestgaps::WithheldPrototypes>()
+                .record(
+                    Some(addr.get_offset()),
+                    name,
+                    unlace_decomp::kuna_honestgaps::WithheldCause::FloatConvention,
+                );
+        }
         if let Some(pieces) = pieces {
             self.arch_mut()
                 .set_function_prototype_pieces_at(addr, pieces);
@@ -4243,6 +4257,11 @@ fn analysis_pass_enabled(arch: &Architecture, pass_id: &str) -> bool {
         "rtti" => {
             arch.kuna_options
                 .get::<unlace_decomp::kuna_analysisgates::Rtti>()
+                .0
+        }
+        "msvceh" => {
+            arch.kuna_options
+                .get::<unlace_decomp::kuna_analysisgates::Msvceh>()
                 .0
         }
         // (kuna, NOVEL) Itanium (GCC/Clang) RTTI + vtable recovery — the class
@@ -8474,6 +8493,16 @@ fn commit_analysis_output(
         .map(|(at, pieces)| (at.map(|a| Address::new(Rc::clone(code_space), a)), pieces))
         .collect();
     prog.arch_mut().arm_float_library_prototypes.extend(held);
+    // (kuna `honestgaps`) What the load withheld, for the decompile to name.
+    {
+        let withheld = prog
+            .arch_mut()
+            .kuna_tables
+            .get_mut::<unlace_decomp::kuna_honestgaps::WithheldPrototypes>();
+        for (at, name, cause) in out.withheld_prototypes {
+            withheld.record(at, &name, cause);
+        }
+    }
 
     // 5d. A C runtime import is `__cdecl` even where the image's default
     //     convention leaves the cleanup to each callee (`x86win.cspec`'s
@@ -8592,6 +8621,7 @@ fn commit_analysis_output(
             &out.cpp_vtables.classes,
         )?;
         crate::kuna_iokittypes::commit(prog, code_space, &iokit)?;
+        crate::kuna_msvcclasses::commit(prog, code_space, &out.cpp_vtables)?;
     }
 
     // 5e. (kuna `importvote`) The call sites of every PLT import, read by the

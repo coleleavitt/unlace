@@ -645,3 +645,110 @@ fn stripped_go_itab_renders_named() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// An interface formal called through twice (`describe`), the `goitabcalls`
+/// fixture. Built WITH DWARF: the DWARF signature is what types the formal.
+const IFACE_GO: &str = r#"package main
+
+import (
+	"fmt"
+	"os"
+)
+
+type Shape interface {
+	Area() int
+	Name() string
+}
+
+type Rect struct{ W, H int }
+
+func (r *Rect) Area() int    { return r.W * r.H }
+func (r *Rect) Name() string { return "rect" }
+
+//go:noinline
+func describe(s Shape) int { return s.Area() + len(s.Name()) }
+
+func main() {
+	fmt.Println(describe(&Rect{W: len(os.Args), H: 3}))
+}
+"#;
+
+/// Build [`IFACE_GO`] for linux/amd64, keeping its DWARF.
+fn build_go_dwarf(dir: &std::path::Path, out_bin: &std::path::Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err()
+        || std::fs::write(dir.join("main.go"), IFACE_GO).is_err()
+    {
+        return false;
+    }
+    Command::new("go")
+        .args(["build", "-o"])
+        .arg(out_bin)
+        .arg("main.go")
+        .current_dir(dir)
+        .env("GOOS", "linux")
+        .env("GOARCH", "amd64")
+        .env("GOCACHE", dir.join(".gocache"))
+        .env("GOPATH", dir.join(".gopath"))
+        .env("CGO_ENABLED", "0")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// `goitabcalls`: the harvest interns `go.itab.main.Shape` with one named slot
+/// per method in the interface's order; with the option on, `describe`'s
+/// interface formal keeps a table word typed by that record and its calls
+/// print `main.Shape.Area(...)`; off (the default) no interface call is named.
+#[test]
+fn go_interface_calls_print_by_method_name() {
+    if !go_available() {
+        eprintln!("verify_gotypes: skipping (`go` not on PATH)");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("kuna_goitabcalls_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let out_bin = dir.join("go_dwarf");
+    if !build_go_dwarf(&dir, &out_bin) {
+        let _ = std::fs::remove_dir_all(&dir);
+        panic!("installed Go compiler failed to build the interface fixture");
+    }
+    let bin = out_bin.to_str().expect("utf8 path");
+
+    let prog = load(bin);
+    let record = prog
+        .arch()
+        .types()
+        .find_by_name("go.itab.main.Shape")
+        .expect("factory lookup succeeds")
+        .expect("the interface's itab record is interned");
+    let slots: Vec<(String, i32)> = (3..record.num_depend())
+        .filter_map(|i| record.get_field(i))
+        .map(|f| (f.name.clone(), f.offset))
+        .collect();
+    assert_eq!(
+        slots,
+        [("Area".to_string(), 24), ("Name".to_string(), 32)],
+        "one slot per method, in the interface's order"
+    );
+    assert_eq!(
+        prog.arch().types().kuna_lang_facet("go.itab.main.Shape"),
+        Some(LangFacet::GoItab {
+            interface: "main.Shape".to_string()
+        })
+    );
+
+    let named = decompile_one_opt(bin, Some(("goitabcalls", "on")), "main.describe");
+    assert!(
+        named.contains("main.Shape.Area("),
+        "with goitabcalls on the interface call is named; transcript:\n{named}"
+    );
+    let plain = decompile_one_opt(bin, None, "main.describe");
+    assert!(
+        !plain.contains("main.Shape.Area("),
+        "off by default; transcript:\n{plain}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

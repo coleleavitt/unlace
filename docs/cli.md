@@ -2313,7 +2313,10 @@ two losses that are otherwise silent are listed too: `notmodelled` for an
 instruction SLEIGH has no p-code for, stepped over as a no-op under the
 `ignoreunimplemented` policy (its `message` names the instruction), and
 `debuginfo` for a DWARF register local the decompile could not bind (a header
-warning naming the local). The document's top-level `warning_kinds` totals the
+warning naming the local), and `withheldproto` for a prototype the load withheld
+(a library signature declaring a `float` or `double` on a target that does not
+return a `double` whole, or a DWARF signature naming a type that could not be
+built), in the header of its own function and at each call to it. The document's top-level `warning_kinds` totals the
 records' warnings by `kind`, keys in byte order, so a harness can rank a run's
 gaps without walking every record; it is always present, `{}` for a run with
 no warnings. Like `unstructured_gotos`, a

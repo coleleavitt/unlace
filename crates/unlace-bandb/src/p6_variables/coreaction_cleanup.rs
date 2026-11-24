@@ -685,7 +685,13 @@ impl Action for ActionMergeRequired {
         // later `ActionDominantCopy` (`processCopyTrims`).  StackAffectingOps is
         // the W7 stack-alias cross-call test source; the merged-tree default is
         // empty (no stack-affecting ops on the boolless/condconst slices).
+        let phi_arm = data
+            .get_arch()
+            .kuna_options
+            .get::<crate::kuna_phiarm::PhiArmSplit>()
+            .0;
         data.with_covermerge(|merge, data| {
+            merge.set_phi_arm_split(phi_arm);
             if merge.merge_addr_tied(data).is_err() {
                 return;
             }

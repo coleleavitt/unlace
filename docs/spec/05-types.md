@@ -3658,6 +3658,53 @@ Not typed: a non-virtual member that is not a constructor or destructor (its
 name cannot tell a static member from one taking `this`), and a class whose
 name two classes of the image share.
 
+### An MSVC class is typed from its RTTI (`kuna_vtabletypes.rs`)
+
+(kuna `vtabletypes`, default on; PE only.) A Windows C++ image built with RTTI
+(MSVC, or clang-cl) carries no method names, so before this a virtual member
+read its object as pointer arithmetic on an untyped first parameter and a
+virtual call as `(**(code **)(*a0 + 8))(a0)`. The MSVC recovery of chapter 01
+reports the classes in the record the typed Itanium vtables use, marked MSVC.
+`install` builds `C_vtbl` and `C` as above with two differences: the vptr
+field is named `__vftable`, the name MSVC's own debug information gives it,
+and a slot no symbol named at analysis time takes the method name of the first
+function it holds that the symbol table now names (a PDB or a demangled export
+gives `Square::area`; a placeholder `sub_`, `FUN_`, `thunk_` or the `rtti`
+pass's `vfunc_<i>` does not count) (`kuna_vtabletypes.rs (symbol_method_name)`).
+A function a vtable holds is a virtual member here too, so its inferred-tier
+`cppsig` declaration with `this` is applied as if proven.
+
+The commit (`crates/unlace-console/src/kuna_msvcclasses.rs (commit)`) then
+gives every function the analysis typed an unlocked input hint `this` of type
+`C *` in the first of RCX, ECX, x0 and r0 the language defines, the way the
+IOKit classes are hinted: the member's other parameters are still recovered from
+its body, and one that never reads the register declares no `this`. On x86 the
+hint applies where the method reads ECX and its recovery took ECX as a
+parameter (the `__thiscall` resolution of chapter 04); a COM method, `__stdcall`
+with `this` on the stack, reads no ECX and takes no hint. Each reported vftable
+whose slot count is its class's becomes a data object of type `C_vtbl`: the
+`rtti` label at its address (`Square::vftable`) is retyped and type-locked,
+else an object `C_vftable` is added.
+
+A vptr store or load types the object it goes through
+(`crates/unlace-bandb-core/src/p5_types/kuna_vtblbase.rs (class_pointer)`).
+`TypeOp::propagateToPointer` turns the type of a value stored through, or
+loaded from, a pointer into a pointer to that type, but a pointer value
+becomes a pointer to an undefined word. When the value is a `C_vtbl *` and
+`C` is a record whose first field, at offset 0, is a pointer to that same
+`C_vtbl` (which only the typed vtables build), the pointer becomes a `C *`
+instead. So a constructor's `*(undefined8 *)param_1 = &Square::vftable`
+reads `param_1->__vftable = &Square::vftable`, `param_1` is a `Square *`, and
+a virtual call on the object reads through the named slot. The rule fires on
+Itanium classes too, wherever a value is typed `C_vtbl *` (a load of a typed
+`vptr` field).
+
+Not typed: a vftable serving a virtual base, and the functions it holds (the
+virtual base has no fixed displacement); a class whose structure name two
+classes share; and `this` of a function whose holders share no class at the
+subobject's offset 0, which is what identical-code folding and `_purecall`
+leave.
+
 ## 5.3 Ranges & consume bits
 
 The rest of the S5 fact fabric (the framing derives from the study in

@@ -28,6 +28,7 @@ pub mod kuna_castsign; // (kuna) signed declarations for frame locals and the re
 pub mod kuna_castternary; // (kuna) a conditional arm keeps no cast the conditional performs
 pub mod kuna_castwiden; // (kuna) a 64-bit widening C performs by itself keeps no cast
 pub mod kuna_cfstr; // (kuna) CFSTR("...") for a Mach-O __cfstring entry
+pub mod kuna_cppshortnames; // (kuna) short spellings of standard C++ names
 pub mod kuna_cstringconst;
 pub mod kuna_ctypes; // (kuna) valid per-architecture C spelling of the core types
 pub mod kuna_declorder; // (kuna) the order local declarations print in
@@ -42,6 +43,7 @@ pub mod kuna_globalref; // (kuna) a constant address used as a pointer prints as
 pub mod kuna_goatomicreturn;
 pub mod kuna_gobyteextract;
 pub mod kuna_gobyteview;
+mod kuna_goitabcall;
 mod kuna_gomethod;
 pub mod kuna_goorderedcompare;
 pub mod kuna_gopackage;

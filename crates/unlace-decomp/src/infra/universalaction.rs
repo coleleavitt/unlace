@@ -1652,6 +1652,12 @@ pub fn universal_sched_hooked(
             act!(crate::switchreturn::ActionSwitchReturn::boxed(
                 "returnsplit"
             )),
+            // (unlace, original unlace node_split) controlled node splitting of irreducible loop
+            // entries (option `irreduciblesplit`, default-OFF): duplicates one entry block per
+            // external predecessor so the region becomes a natural loop before structuring.
+            act!(crate::irreducible_split::ActionIrreducibleSplit::boxed(
+                "returnsplit"
+            )),
             act!(ActionUnjustifiedParams::boxed("protorecovery")),
             act!(ActionStartTypes::boxed("typerecovery")),
             act!(ActionActiveReturn::boxed("protorecovery")),

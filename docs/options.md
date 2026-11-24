@@ -2446,6 +2446,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P8/goto-quality · angr · structure-recovery · angr-ReturnDuplicatorHigh-peredge
 - **Example:** `option earlyreturn on`
 
+### `irreduciblesplit` -- on | off, default `off`
+
+- **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
+- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
+- **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
+- **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · irreduciblesplit
+- **Example:** `option irreduciblesplit on`
+
 ### `switchreturn` -- on | off, default `on`
 
 - **Symptoms:** wide switch where every case assigns a constant and breaks to one shared return; switch (x) { case A: v = K; break; ... } return v; instead of per-case return K; 17-plus-case const dispatch keeps a merged return variable.

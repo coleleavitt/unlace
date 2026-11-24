@@ -116,6 +116,7 @@ unlace_options! { self, p1;
     "retpairpaths" => registered!(crate::returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::bitidioms::BitIdioms),
     "satmul" => registered!(crate::satmul::SatMul),
+    "bitfieldarith" => registered!(crate::bitfieldarith::BitFieldArith),
     "helperroles" => registered!(crate::helperrole::HelperRoles),
     "dynalloca" => registered!(crate::dynalloca::DynAlloca),
     "vaarg" => registered!(crate::vaarg::VaArg),
@@ -142,6 +143,7 @@ unlace_options! { self, p1;
     "stackexitanchor" => registered!(crate::stackexitanchor::StackExitAnchor),
     "fdeflowbound" => registered!(crate::flow::FdeFlowBound),
     "int3pad" => registered!(crate::int3pad::Int3PadMode),
+    "antidebug" => registered!(crate::antidebug::AntiDebugMode),
     "x64syscall" => registered!(crate::x64syscall::X64SyscallMode),
     "fpuemu" => {
         let msg = registered!(crate::fpuemu::FpuEmuMode);
@@ -313,6 +315,7 @@ unlace_options! { self, p1;
     "rettriangle" => registered!(crate::coreoptions::RetTriangle),
     "earlyreturn" => registered!(crate::earlyreturn::EarlyReturn),
     "switchreturn" => registered!(crate::switchreturn::SwitchReturn),
+    "irreduciblesplit" => registered!(crate::irreducible_split::IrreducibleSplit),
     "foldcallret" => registered!(crate::callretfold::FoldCallReturns),
     "indirectonly" => registered!(crate::indirectonly::MarkIndirectOnly),
     "typemerge" => registered!(crate::typemerge::TypeMergeMode),
@@ -404,6 +407,7 @@ unlace_options! { self, p1;
     "trapaftercall" => registered!(crate::coreoptions::TrapAfterCall),
     "retpolinethunk" => registered!(crate::retpolinethunk::RetpolineThunk),
     "varargsave" => registered!(crate::varargsave::VarargSave),
+    "taintcheck" => registered!(crate::taintcheck::TaintCheck),
     "alloca" => registered!(crate::alloca::AllocaCalls),
     "boolbyte" => registered!(crate::boolbyte::BoolByte),
     "charbyte" => registered!(crate::charbyte::CharByte),

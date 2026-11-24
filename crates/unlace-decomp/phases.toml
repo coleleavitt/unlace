@@ -1714,6 +1714,25 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "bitfieldarith"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-bitfieldarith"
+summary = "Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks."
+use_when = "Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic."
+example = "option bitfieldarith on"
+source_decompiler = "unlace"
+inspiration = "archived unlace idiom_recognition try_bitfield_read / try_bitfield_write (issue 1253)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a register field is extracted with a shift and an AND|a flag field is set with a clear-mask OR and a shifted insert|packed descriptor or hardware register fields print as shift and mask arithmetic"
+
+[[settable]]
 option = "satmul"
 values = "on|off"
 default = "off"
@@ -2740,6 +2759,25 @@ tier = "transform"
 symptoms = "an int3 pad renders as (*(void *)swi(3))() - a call through a pointer nothing assigns|a function returns the result of a call through swi(3)|nothing in the C says control ran into a run of 0xcc padding bytes|an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains"
 
 [[settable]]
+option = "antidebug"
+values = "off|warn"
+default = "off"
+destructive = false
+phase = "P2"
+subphase = "flow-classification"
+strength = "HINT"
+rewind = "P2"
+issue = "unlace-1214"
+summary = "Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called."
+use_when = "Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default."
+example = "option antidebug warn"
+source_decompiler = "unlace"
+inspiration = "archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called"
+change_kind = "new-analysis"
+tier = "analysis"
+symptoms = "a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe|a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C|OutputDebugStringA used as a debugger test prints nothing that marks it"
+
+[[settable]]
 option = "x64syscall"
 values = "off|on|abi"
 default = "on"
@@ -3371,6 +3409,25 @@ symptoms = "a void i386 function returns an uninitialised long double|a function
 live_field = "x87_depth"
 live_true = "on"
 live_false = "off"
+
+[[settable]]
+option = "taintcheck"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P4"
+subphase = "output-prototype"
+strength = "HARD"
+rewind = "P4"
+issue = "unlace#1309"
+summary = "Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option."
+use_when = "Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled."
+example = "option taintcheck on"
+source_decompiler = "unlace"
+inspiration = "archived unlace origin/master taint_engine.rs (propagate_taint) and its source/sink registry"
+change_kind = "opt-in-tool"
+tier = "core"
+symptoms = "a value from recv or getenv reaches system or popen with no warning|an input-controlled argument to execl or execve is not flagged|a command sink fed by a network read needs a manual trace"
 
 [[settable]]
 option = "varargsave"
@@ -4728,6 +4785,25 @@ inspiration = "decbench:O0-libedit-tty__getcharindex; O0-iproute2-ip-accept_msg;
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "wide switch where every case assigns a constant and breaks to one shared return|switch (x) { case A: v = K; break; ... } return v; instead of per-case return K|17-plus-case const dispatch keeps a merged return variable"
+
+[[settable]]
+option = "irreduciblesplit"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P8"
+subphase = "goto-quality"
+strength = "HARD"
+rewind = "P8"
+issue = "original-unlace-irreducible-split"
+summary = "Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has."
+use_when = "A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before."
+example = "option irreduciblesplit on"
+source_decompiler = "ghidra"
+inspiration = "original unlace origin/master unlace-struct irreducible.rs + node_split.rs; Ghidra ActionNodeSplit"
+change_kind = "structure-recovery"
+tier = "transform"
+symptoms = "goto into the middle of a loop that has two entrances|a loop with two entry points rendered with goto labels|irreducible region left as goto-shaped control flow"
 
 [[settable]]
 option = "foldcallret"

@@ -3,7 +3,7 @@
 //! ```text
 //!   unlace decompile-project <binary> [-o|--output DIR] [--functions a,b,..]
 //!                          [--addr 0xVMA].. [--max-fn-seconds N]
-//!                          [--stream | --progress]
+//!                          [--stream | --progress | --per-file]
 //!                          [--mode auto|reliable|aggressive|fast] [--option N V]..
 //!                          [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load]
 //!                          [--isa auto|arm|thumb] [--slice ARCH] [--target T]
@@ -65,6 +65,7 @@ use crate::decompile_all::{
     synth_base,
 };
 use crate::jobs::PoolWatch;
+use crate::project_perfile::{ManifestEntry, PerFileExport, file_name as function_file_name};
 use crate::project_stream::StreamMode;
 use unlace_decomp::printc::ArchPrintExt;
 
@@ -75,12 +76,14 @@ pub fn run(argv: &[String]) -> i32 {
     let mut output: Option<String> = None;
     let mut stream = false;
     let mut progress = false;
+    let mut per_file = false;
     let mut rest: Vec<String> = Vec::new();
     let mut i = 0;
     while i < argv.len() {
         match argv[i].as_str() {
             "--stream" => stream = true,
             "--progress" => progress = true,
+            "--per-file" => per_file = true,
             "-o" | "--output" => {
                 if i + 1 >= argv.len() {
                     eprintln!("error: {} requires a value", argv[i]);
@@ -111,6 +114,18 @@ pub fn run(argv: &[String]) -> i32 {
             return 2;
         }
     };
+    if per_file && (stream || progress) {
+        eprintln!(
+            "error: --per-file is not combined with --stream or --progress: a per-function export has no streamed order to keep"
+        );
+        return 2;
+    }
+    if per_file && !args.assertions.is_empty() {
+        eprintln!(
+            "error: --assert and --per-file are exclusive: a per-function export writes no assertion report"
+        );
+        return 2;
+    }
     // `--stream` already reports progress, so it wins when both are given.
     let mode = if stream {
         Some(StreamMode::Stream)
@@ -140,7 +155,7 @@ pub fn run(argv: &[String]) -> i32 {
             }
             crate::project_stream::run(&args, output.as_deref(), mode)
         }
-        None => decompile_project(&args, output.as_deref(), None),
+        None => decompile_project(&args, output.as_deref(), None, per_file),
     };
     match run {
         Ok(completion) => emit_completion(completion),
@@ -171,7 +186,7 @@ fn usage() {
          \x20                   [--addr 0xVMA].. [--max-fn-seconds N] [--max-fn-memory MiB] \\\n\
          \x20                   [--mode auto|reliable|aggressive|fast] \\\n\
          \x20                   [--jobs N|auto] [--jobs-chunk N] [--jobs-full-load] \\\n\
-         \x20                   [--stream | --progress] \\\n\
+         \x20                   [--stream | --progress | --per-file] \\\n\
          \x20                   [--define-function S[-E][=N]|@FILE].. \\\n\
          \x20                   [--option N V].. [--isa auto|arm|thumb] [--slice ARCH] [--target T] [--sleighpath D]\n\
          \x20                   [--raw-image --target T --base VMA (--entry|--addr VMA)..]\n\
@@ -200,6 +215,8 @@ fn usage() {
          (with --stream, workers run with structsynth off).\n\
          Progress goes to\n\
          stderr, and peak memory is roughly N times one worker's RSS.\n\
+         --per-file writes one file per function into functions/ and manifest.json; a rerun\n\
+         decompiles only the functions not complete on disk. Not with --stream, --progress or --assert.\n\
          --stream writes the folder as the run goes instead of at the end: the entry\n\
          point and what it calls are written first, index.jsonl announces each\n\
          finished function and .streaming reports progress until the export\n\
@@ -240,6 +257,7 @@ pub(crate) fn decompile_project(
     args: &Args,
     output: Option<&str>,
     watch: Option<&dyn ExportWatch>,
+    per_file: bool,
 ) -> Result<ProjectCompletion, String> {
     let binary_path = std::fs::canonicalize(&args.binary)
         .map_err(|_| format!("binary not found: {}", args.binary))?;
@@ -279,7 +297,7 @@ pub(crate) fn decompile_project(
             prog.arch().print().get_name()
         ));
     }
-    let targets = resolve_targets(&prog, args)?;
+    let mut targets = resolve_targets(&prog, args)?;
     if targets.is_empty() {
         return Err(format!(
             "no functions selected/discovered in {}",
@@ -287,12 +305,53 @@ pub(crate) fn decompile_project(
         ));
     }
     crate::interior::selections(&prog, args, &targets);
+    // `--per-file`: a function a previous run left complete on disk is not decompiled again.
+    let export = if per_file {
+        Some(PerFileExport::open(&out_dir)?)
+    } else {
+        None
+    };
+    let mut carried: Vec<ManifestEntry> = Vec::new();
+    if let Some(export) = &export {
+        targets.retain(|target| {
+            let addr = prog.output_code_offset(target.addr.get_offset());
+            if export.is_done(addr, &target.name) {
+                carried.push(ManifestEntry {
+                    addr,
+                    name: target.name.clone(),
+                    file: function_file_name(addr, &target.name),
+                    status: "ok".to_string(),
+                });
+                false
+            } else {
+                true
+            }
+        });
+    }
+    if let (Some(export), true) = (&export, targets.is_empty()) {
+        let up_to_date = carried.len();
+        export.finish(carried)?;
+        return Ok(ProjectCompletion {
+            summary: format!(
+                "wrote {}: 0 functions decompiled, {up_to_date} up to date\n",
+                out_dir.display()
+            ),
+            error: None,
+        });
+    }
     if let Some(watch) = watch {
         watch.decompiling(&prog, targets.len())?;
     }
+    // `--per-file` writes each function as it lands, so an interrupted run keeps the ones it finished.
+    let mut write_error: Option<String> = None;
     let mut landed = |r: &FuncResult| {
         if let Some(watch) = watch {
             watch.landed(std::slice::from_ref(r));
+        }
+        if let Some(export) = &export
+            && let Err(e) = export.write(r)
+        {
+            write_error.get_or_insert(e);
         }
     };
 
@@ -363,6 +422,27 @@ pub(crate) fn decompile_project(
     // Every artifact is address-ordered (resolve_targets only guarantees that
     // for the no-filter default; --addr/--functions arrive in user order).
     results.sort_by(|a, b| a.address.cmp(&b.address).then_with(|| a.name.cmp(&b.name)));
+    if let Some(error) = write_error {
+        return Err(error);
+    }
+    if let Some(export) = &export {
+        let up_to_date = carried.len();
+        let mut written = carried;
+        for result in &results {
+            written.push(export.write(result)?);
+        }
+        export.finish(written)?;
+        let ok = results.iter().filter(|r| r.code.is_some()).count();
+        return Ok(ProjectCompletion {
+            summary: format!(
+                "wrote {}: {} function files written, {up_to_date} up to date; functions: {ok} ok, {} failed\n",
+                out_dir.display(),
+                results.len(),
+                results.len() - ok
+            ),
+            error: BatchOutcome::of(&results).all_failed_error(&args.binary),
+        });
+    }
 
     // `print_c_types` AFTER the decompile loop: user-defined types are interned
     // into the factory as functions decompile.

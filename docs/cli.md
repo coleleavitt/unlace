@@ -247,6 +247,11 @@ selection: `--no-vars` and `--omit aliases,line_mappings,variables,types` behave
 do there. Without `--json` both are refused, since the C text carries none of
 those collections.
 
+`--cfg-dot` replaces the C on stdout with the function's basic-block graph as Graphviz DOT
+(`digraph`, one node per basic block labelled with its index and address range, one edge
+per CFG out-edge), so `unlace decompile BIN FUNC --cfg-dot | dot -Tsvg` renders it. The same
+dump is the `cfg dot` console command. It is refused with `--json`.
+
 `--trace` adds, on stderr after the C, the `phase status` dump for the decompiled
 function: the pipeline variant, and the maturity its last pass reached with the facts
 settled there (`maturity: complete (settled: ssa, high-variables, flow, ...)`, see
@@ -1989,6 +1994,18 @@ schedule. A streamed export (`--stream`) writes its `.c` in decompile order as
 each function finishes and `decompile-graph` decompiles one function per row, so
 neither takes the order; both produce the option-off output and say so on stderr
 when it is asked for explicitly, rather than accepting it silently.
+
+`decompile-project --per-file` writes one file per function instead of the four
+whole-program artifacts: `functions/<addr:08x>_<name>.c` (the `decompile-all`
+rendering, or a `/* FAILED: ... */` stub) and `manifest.json`, which lists `addr`,
+`name`, `file` and `status` (`ok` or `failed`) for each function. Each file is written
+as its function lands, so an interrupted export keeps the functions it finished. A
+rerun reads the manifest and decompiles only the functions that are not complete on
+disk: a missing or empty file, a failed stub and a function recorded as `failed` are
+decompiled again. Because struct synthesis and callee-first typing see only the
+functions a run decompiles, a resumed run can name a `struct_N` or type a call
+differently from a single full run; the `.h`, `.asm` and README are not written in
+this mode. `--stream`, `--progress` and `--assert` are rejected with it.
 
 ### `--option calleevote` — what every caller passes (on by default)
 
@@ -5607,6 +5624,19 @@ nothing tells apart are reported as a `collision:` line and left out of the
 `.sig`; they stay in the `.pat`. Names that share a pattern and CRC in the `.pat` are also listed as a `collision in` line before the `.sig` is built; the `.pat` itself is written unchanged. Functions with the same bytes and the same name
 are written once. The exit status is 0 when the files were written, 1 when an
 input cannot be read or no function is left to write, and 2 on a usage error.
+
+## `unlace flirt inspect` — read an IDA `.sig` or `.til` file
+
+`unlace flirt inspect <file.sig|file.til> [--limit N] [--json]` prints the header
+of an IDA FLIRT signature or type library and a sample of its names, without
+matching or writing anything. The file is told apart by its magic: `IDASGN` for a
+signature, the TIL header for a type library; any other file exits 1.
+
+For a type library the view gives the title, compiler, the sizes of `int`, `bool`,
+`enum` and `long double`, the pointer size, and the counts and first names of its
+symbols and types. `--limit 0` lists every name; `--json` prints the same fields
+as one document, with `names_total` (or `symbols_total`/`types_total`) giving the
+full counts.
 
 ## `unlace lumina` — IDA's Lumina function-metadata service
 

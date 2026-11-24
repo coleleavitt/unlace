@@ -57,6 +57,7 @@ mod gostringindex;
 mod gozerorecord;
 pub mod halfstore;
 pub mod infloopstyle;
+pub mod itaniumthrow; // (unlace `itaniumeh`) an Itanium `__cxa_throw` prints as `throw`
 pub mod javanew; // (unlace) `new T(args)` from an allocation and its <init> call
 pub mod labelstmt; // (unlace) every printed C label labels a statement
 mod lanetrace;

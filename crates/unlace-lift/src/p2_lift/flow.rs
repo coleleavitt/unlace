@@ -4001,6 +4001,7 @@ truncating the fall-through here"
             return self.setup_callind_specs(op);
         }
         self.build_call_specs(op, entry.clone(), false)?;
+        crate::antidebug::warn_probe(&mut self.data, op);
         self.qlst_count += 1;
         // While weaving a call-fixup body, a nested direct CALL to the SAME
         // fixup entry must NOT re-inject (cycle break; C++ cancelInjectId).

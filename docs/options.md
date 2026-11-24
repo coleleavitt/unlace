@@ -36,6 +36,9 @@ Three tiers:
 | new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
 | operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
 | a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
+| a register field is extracted with a shift and an AND | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| a flag field is set with a clear-mask OR and a shifted insert | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| packed descriptor or hardware register fields print as shift and mask arithmetic | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | memcpy(d, s, strlen(s) + 1) is printed instead of strcpy(d, s) | [`helperroles`](#helperroles----on--off-default-on) |
 | an inlined strcpy shows as a strlen call followed by a memcpy | [`helperroles`](#helperroles----on--off-default-on) |
 | a variable-length array prints as &(&Stack[-8])[-n] | [`dynalloca`](#dynalloca----on--off-default-off) |
@@ -184,6 +187,9 @@ Three tiers:
 | a function returns the result of a call through swi(3) | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | nothing in the C says control ran into a run of 0xcc padding bytes | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
 | an anti-debug binary's clean-run path ends in an indirect call that only the disassembly explains | [`int3pad`](#int3pad----off--warn--halt-default-warn) |
+| a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe | [`antidebug`](#antidebug----off--warn-default-off) |
+| a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C | [`antidebug`](#antidebug----off--warn-default-off) |
+| OutputDebugStringA used as a debugger test prints nothing that marks it | [`antidebug`](#antidebug----off--warn-default-off) |
 | an x86-64 syscall renders as syscall() with empty parens, with the number and every argument erased | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | a syscall wrapper returns its own first parameter, the syscall number, instead of the syscall's result | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
 | the register writes feeding a SYSCALL are all missing from the C while unlace disassemble shows them | [`x64syscall`](#x64syscall----off--on--abi-default-on) |
@@ -1227,6 +1233,7 @@ Three tiers:
 | `long double v1; // st0  | [`x87depth`](#x87depth----on--off-default-on) |
 |  st1` is returned but never assigned | [`x87depth`](#x87depth----on--off-default-on) |
 | a caller's x87 push makes a void callee return a float | [`x87depth`](#x87depth----on--off-default-on) |
+| a value from recv or getenv reaches system or popen with no warning | [`taintcheck`](#taintcheck----on--off-default-off) |
 | a variadic function has fourteen parameters a0..a13 | [`varargsave`](#varargsave----on--off-default-off) |
 | if (al) guards stores of xmm registers in a printf wrapper | [`varargsave`](#varargsave----on--off-default-off) |
 | va_list fields are assigned 8 and 0x30 by hand | [`varargsave`](#varargsave----on--off-default-off) |
@@ -1514,6 +1521,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-satmul
 - **Example:** `option satmul on`
+
+### `bitfieldarith` -- on | off, default `off`
+
+- **Symptoms:** a register field is extracted with a shift and an AND; a flag field is set with a clear-mask OR and a shifted insert; packed descriptor or hardware register fields print as shift and mask arithmetic.
+- **What it does:** Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks.
+- **When to flip:** Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-bitfieldarith
+- **Example:** `option bitfieldarith on`
 
 ### `helperroles` -- on | off, default `on`
 
@@ -1842,6 +1857,15 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** On (`warn`) by default: it adds a comment and changes nothing else, so a decoded `int3` is named wherever one is reached. Set `halt` when reading anti-debug code whose clean-run path falls into a pad and the fabricated `return (*(void *)swi(3))();` is in the way - it is not the default because a debugger attached to the process can step past an `int3`, so ending the flow is a judgement about the pad rather than a fact about the encoding. Set `off` to restore the unannotated upstream rendering. Shape-gated on the `swi` vector 3, so `int 0x29` (Windows __fastfail, see `fastfailnoreturn`), `int 0x80` (Linux, see `linuxsyscall`) and every non-x86 language are untouched; structurally inert wherever no `int3` is decoded, and byte-identical (0/675) on the datatest corpus. The pad length is a loader read: when it fails, or when the encoding is the two-byte `INT 0x03` rather than `0xcc`, the warning is emitted without a count rather than with a guessed one.
 - **Where / provenance:** P2/flow-classification · unlace · presentation-default · GH-468
 - **Example:** `option int3pad halt`
+
+### `antidebug` -- off | warn, default `off`
+
+- **Symptoms:** a call to IsDebuggerPresent or ptrace prints as an ordinary call with nothing to say it is a debugger probe; a timing probe such as rdtsc or QueryPerformanceCounter is indistinguishable from any other call in the C; OutputDebugStringA used as a debugger test prints nothing that marks it.
+- **What it does:** Name a call to a well-known anti-debugging API, instead of letting it pass unremarked through the C. The callee is recognised by the name the flow pass recorded for a direct call: `IsDebuggerPresent`, `CheckRemoteDebuggerPresent`, `NtQueryInformationProcess`, `NtSetInformationThread` (debugger checks), `ptrace` (a self-trace), `rdtsc`, `GetTickCount`, `GetTickCount64` and `QueryPerformanceCounter` (timing probes), and `OutputDebugStringA`/`W` (a debugger-channel side effect). `warn` buffers one warning per such call site and changes nothing else: no statement, type or control-flow edge moves. The roster is the one the archived master's `anti_debug_detect` pass carried, which was declared there and never called.
+- **Use when:** Off by default: the call is a fact about the binary, but reading it as evasion is a judgement about intent, and a licence check or a cheat detector calls the same APIs. Set `warn` when triaging code you suspect of resisting a debugger, to see where the probes are before reading the logic around them. The warning is a reviewable signal that evasion logic is present, not proof that the binary is malicious. It is structurally inert on every call whose callee name is off the roster, so it has no effect on the datatest corpus, which carries no such calls under the default.
+- **Example:** `option antidebug warn`
+- **Source:** unlace; inspiration: archived master's crates/unlace-passes/src/anti_debug_detect.rs (ROADMAP Phase E.4.3), declared there but never called
+- **Change kind:** new-analysis; tier analysis; phase P2 (flow-classification); strength HINT.
 
 ### `x64syscall` -- off | on | abi, default `on`
 
@@ -2434,6 +2458,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** A function whose first action is an argument-validity check (`if (!p) return 0;`) renders as the inverted diamond `if (p != 0) { whole body } else { v = 0 } return v;`. On by default (DIV-23: the decbench ablation measured it NET-POSITIVE, +47 perfect / -576 summed GED / 158:54 improved:regressed); flip OFF to restore the upstream merged-diamond rendering. It is MORE permissive than the whole-block `returndup` gate (it fires on mixed const/variable diamonds returndup skips), but by construction it cannot cause the variable-return over-firing that reverted returndup (it splits only constant arms).
 - **Where / provenance:** P8/goto-quality · angr · structure-recovery · angr-ReturnDuplicatorHigh-peredge
 - **Example:** `option earlyreturn on`
+
+### `irreduciblesplit` -- on | off, default `off`
+
+- **Symptoms:** goto into the middle of a loop that has two entrances; a loop with two entry points rendered with goto labels; irreducible region left as goto-shaped control flow.
+- **What it does:** Make an irreducible loop region reducible before structuring, so it prints as a `while`/`do` loop instead of a `goto`. A strongly connected region of the block graph with two or more entry blocks has no natural loop header; the pass duplicates one entry block for an external predecessor (`Funcdata::node_split_through`, the primitive `returndupcalls` drives), so that predecessor enters a private copy that flows into the same successor. The region loses one entry per split and becomes a natural loop once one entry is left. The pass only takes an entry with exactly one out-edge that stays in the region, no conditional branch, no call, and no output read outside the block except through the successor's MULTIEQUALs or a merge it inserts; an entry that fails a check is skipped and the next one is tried. At most 16 splits per function, each logged (`irreduciblesplit:`). Ported from original unlace (origin/master `unlace-struct` `irreducible.rs` and `node_split.rs`), which duplicates every multi-predecessor entry block; this port is narrower on purpose because `node_split_through` is the only entry-duplication primitive main has.
+- **When to flip:** A loop with two entrances, such as a branch that jumps into the middle of a loop body from two places, renders with a `goto` into the loop where the source has one `while`. Off by default: duplicating a block copies code, so it is a judgement call. Flip on to test whether the copies recover a loop the structurer would otherwise leave goto-shaped. The effect has not been measured yet: before a default flip, measure goto count and GED on decbench cases with irreducible loops (the `irreducible` fixture and `tests/datatests` cases that print a goto into a loop). When off the pass returns at once and output is byte-identical to before.
+- **Where / provenance:** P8/goto-quality · ghidra · structure-recovery · irreduciblesplit
+- **Example:** `option irreduciblesplit on`
 
 ### `switchreturn` -- on | off, default `on`
 
@@ -4188,6 +4220,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: 0/675 datatest assertions move. The OFF symptom is an i386 function that only calls a double-returning helper for its side effect and is printed as `long double f(...)` returning an uninitialised `v1; // st0 | st1`. Flip off for hand-written x87 code that keeps values on the stack across calls, which the System V assumptions do not describe.
 - **Where / provenance:** P4/output-prototype · unlace · correctness-fix · ida95-51
 - **Example:** `option x87depth off`
+
+### `taintcheck` -- on | off, default `off`
+
+- **Symptoms:** a value from recv or getenv reaches system or popen with no warning; an input-controlled argument to execl or execve is not flagged; a command sink fed by a network read needs a manual trace.
+- **What it does:** Report data from an input source that reaches a command-execution sink. A call to `recv`, `recvfrom`, `read`, `fread`, `fgets`, `getenv` or `gets` taints its return value. Taint flows forward over the live ops, flow-insensitively: an op with a tainted input taints its output, and each tainted value keeps the first source it traces to. A call to `system`, `popen`, `execl`, `execle`, `execlp`, `execv`, `execve` or `execvp` that takes a tainted argument gets a warning comment at the call: `taintcheck: data from recv() reaches system() as an argument (report only)`. Argument slot 0 of a CALL is the target address, so it is never counted. Memory is not tracked: a buffer an input call fills is not tainted, only the return value is a seed. The check changes no code or types, only adds warnings, and runs at the P4 prototype warnings step. Ported from the archived research decompiler's `propagate_taint` (`taint_engine.rs`) and its source/sink lists; the constant-time violation check is a separate option.
+- **When to flip:** Off by default: the check is report-only and landed without a corpus sweep, so it is not in the aggressive preset. Turn ON to list the command-execution calls in a binary that take network, environment or file input, as a first triage of an input-to-command path. A hit is a candidate for review, not a proven flow, because memory and the callee's own checks are not modelled.
+- **Where / provenance:** P4/output-prototype · unlace · opt-in-tool · unlace#1309
+- **Example:** `option taintcheck on`
 
 ### `varargsave` -- on | off, default `off`
 

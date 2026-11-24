@@ -957,10 +957,16 @@ pub fn run_test_files_with_specs(
     spec_roots: &[String],
     out: &mut String,
 ) -> int4 {
+    write_file_runs(run_test_files_each(test_files, spec_roots), out)
+}
+
+/// The `runTestFiles` stream of finished runs, in their order: each file's results, the totals and
+/// the capped `Failures:` summary. Returns the number of failed assertions.
+pub fn write_file_runs(runs: Vec<FileRun>, out: &mut String) -> int4 {
     let mut total_tests_applied = 0i32;
     let mut total_tests_succeeded = 0i32;
     let mut failures: Vec<String> = Vec::new();
-    for run in run_test_files_each(test_files, spec_roots) {
+    for run in runs {
         out.push_str(&run.output);
         total_tests_applied += run.applied;
         total_tests_succeeded += run.succeeded;

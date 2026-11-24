@@ -139,7 +139,7 @@ macro tzcntflags(input, output) {
 @endif
 
 # not as documented in manual; requires PRE_66 prefix to get 16-bit operation
-:TZCNT Reg16, rm16	is vexMode=0 & opsize=0 & $(PRE_66) & $(PRE_F3) & byte=0x0F; byte=0xBC; Reg16 ... & rm16 {
+:TZCNT Reg16, rm16	is vexMode=0 & opsize=0 & $(PRE_F3) & byte=0x0F; byte=0xBC; Reg16 ... & rm16 {
 
   countTmp:2 = 0;
   inputTmp:2 = rm16;

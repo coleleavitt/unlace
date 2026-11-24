@@ -1188,8 +1188,11 @@ hR172: "aed15" is h5t0_31_34=15 { export aed15; }
 :ae_sa64pos.fp hR16, hR0 is h3t0_0_3=0 & h3t0_10_23=796 & hR16 & hR0 { hR16 = hifi_ae_sa64pos_fp(hR16, hR0); }
 :ae_sa64neg.fp hR16, hR0 is h3t0_0_3=0 & h3t0_10_23=3531 & hR16 & hR0 { hR16 = hifi_ae_sa64neg_fp(hR16, hR0); }
 :ae_sa8x8.ip hR7, hR16, hR0 is h3t0_0_3=3 & h3t0_10_11=0 & h3t0_16_23=67 & hR7 & hR16 & hR0 { hR16 = hifi_ae_sa8x8_ip_0(hR7, hR16, hR0); hR0 = hifi_ae_sa8x8_ip_1(hR7, hR16, hR0); }
+:wfr hR7, hR0 is h3t0_0_3=4 & h3t0_8_11=3 & h3t0_16_23=100 & hR7 & hR0 { hR7 = hifi_wfr(hR0); }
+:movt.s hR18, hR19, hR21 is h3t0_0_3=3 & h3t0_15_23=165 & hR18 & hR19 & hR21 { hR18 = hifi_movt_s(hR18, hR19, hR21); }
 :const.s hR18, hI24 is h3t0_0_3=0 & h3t0_12_23=609 & hR18 & hI24 { hR18 = hifi_const_s(hI24); }
 :max.s hR18, hR19, hR7 is h3t0_0_3=4 & h3t0_16_23=143 & hR18 & hR19 & hR7 { hR18 = hifi_max_s(hR19, hR7); }
+:olt.s hR25, hR19, hR7 is h3t0_0_3=3 & h3t0_7_7=0 & h3t0_16_23=97 & hR25 & hR19 & hR7 { hR25 = hifi_olt_s(hR19, hR7); }
 :trunc.sx2 hR18, hR19, hI33 is h3t0_0_3=3 & h3t0_16_19=5 & h3t0_21_23=1 & hR18 & hR19 & hI33 { hR18 = hifi_trunc_sx2(hR19, hI33); }
 :ficeil.s hR18, hR19 is h3t0_0_3=0 & h3t0_12_23=610 & hR18 & hR19 { hR18 = hifi_ficeil_s(hR19); }
 :firound.s hR18, hR19 is h3t0_0_3=0 & h3t0_12_23=866 & hR18 & hR19 { hR18 = hifi_firound_s(hR19); }

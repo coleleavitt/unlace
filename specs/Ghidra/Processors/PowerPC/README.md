@@ -139,3 +139,68 @@ integer conversions (`xscv{s,u}xd{dp,sp}`, `xscvdp{s,u}x{ds,ws}`), `xscvspdp[n]`
 in double format. The other scalar operations (compare, min/max, estimates, round to integer,
 test) stay user ops. Found by the real-code sweep (`notes/real-code-sweep.md`): clang -O2 for
 ppc64le turned `v * n + 0.5f` into `xscvsxdsp` + `xsmaddasp`.
+
+## Power ISA 3.0/3.1 (POWER9/POWER10) (#98)
+
+`gen_isa31.py` writes `data/languages/ppc_isa31.sinc` from `isa31_insts.json`: the 267 LLVM
+PowerPC TableGen records (LLVM release/22.x) whose predicates are `IsISA3_1`, `PrefixInstrs`,
+`MMA`, `HasP10Vector` or `PairedVectorMemops`, plus four ISA 3.0 records the vendored spec
+lacked (`addex`, `paste.`, `scv`, `vmsumudm`). Bit 0 of an LLVM PowerPC encoding is the
+most significant bit. `ppc_isa.sinc` includes the file after `vsx.sinc` in every Power ISA
+language except `PowerPC:BE:32:e200-SPE2` (`@ifndef SPE2`), whose SPE2 encodings overlap.
+
+- Tokens: `p31w` (a 4-byte instruction, or the suffix word of a prefixed one) and `p31p`
+  (the prefix word). A prefixed instruction is one constructor over `p31p ; p31w`; an
+  immediate split across the two words (the 34-bit `D`/`SI`, `xxsplti32dx`'s `IMM32`)
+  is assembled in a disassembly action. `R=1` addresses are `inst_start + D`.
+- Registers: `acc0`-`acc7` (64 bytes at 0x4000, each overlaying four VSRs) for MMA. VSR
+  operands are subtables over a five-bit field and its extension bit; the VSR pairs of
+  `lxvp`/`stxvp`/`plxvp`/`pstxvp` and the `f64ger` operands export the even and odd
+  register, and in little-endian mode the even register takes the quadword at EA+16.
+- Exact p-code (142 constructors): the prefixed loads, stores, `paddi`/`pli`; `brd`,
+  `brw`, `brh`; `setbc`, `setbcr`, `setnbc`, `setnbcr`; `lxvr[bhwd]x`/`stxvr[bhwd]x`;
+  `lxvp`/`stxvp`/`lxvpx`/`stxvpx`; `mtvsr[bhwdq]m`/`mtvsrbmi`; `vextract*m`,
+  `vexpand*m`, `vcntmb*`; the 128-bit compares, shifts and rotate (`vcmp{equ,gts,gtu}q`,
+  `vcmp{s,u}q`, `vslq`, `vsrq`, `vsraq`, `vrlq`, `vextsd2q`); `vdiv[su][wdq]`,
+  `vmod[su][wdq]`; `vmulld`, `vmulh[su][wd]`, `vmul[eo][su]d`; `vsldbi`/`vsrdbi`;
+  `vclrlb`/`vclrrb`; the vector string isolates `vstrib[lr][.]`/`vstrih[lr][.]` (CR6 EQ
+  says a null was found); `xxblendv[bhwd]`; `xxspltiw`, `xxspltidp`, `xxsplti32dx`;
+  `xxsetaccz`, `xxmtacc`, `xxmfacc`.
+- User operations `p31_<mnemonic>` (plus `p31_<mnemonic>_cr6`/`_cr0` for record forms) for
+  the rest: the MMA rank-k updates (`xv*ger*`, `pmxv*ger*`), `xxperm[x]`, `xxeval`,
+  `xxgenpcv*`, the element inserts and extracts (`vins*`, `vextdu*`), `vdive*`,
+  `vpdepd`/`vpextd`, `pdepd`/`pextd`/`cfuged`, `cntlzdm`/`cnttzdm`, the
+  quad-precision and BF16 conversions, `dcffixqq`/`dctfixqq`, `lxvkq`, `vgnb`,
+  `xvtlsbb`, `addex`, `scv`, `wait`, `sync` with `SC`.
+
+### VSX fixes in `vsx.sinc`
+
+- Every VSX user operation that took its target as an argument (`xxpermdiOp(XA,XB,XT)`)
+  now assigns it (`XT = xxpermdiOp(XA,XB)`; the multiply-add forms keep `XT` as an input),
+  and the scalar compares that took `CRFD` assign `CRFD`. Before, 83 instructions never
+  wrote their target.
+- Exact p-code for `xxsel`, `xxpermdi`, `xxmrghw`, `xxmrglw`, `xv{add,sub,mul,div}{dp,sp}`,
+  `xvcmp{eq,gt,ge}{dp,sp}[.]`, `xscmp{eq,gt,ge}dp`, `xscmp{u,o}dp`, `xscmpexpdp`,
+  `xststdcdp`, `xsmaxcdp`, `xsmincdp`, `xxextractuw`, `xxinsertw`, `xxbr[hwdq]`,
+  `xsxexpdp`, `xsxsigdp`, `xsiexpdp`, `mfvsrld`, `mtvsrdd` (`RA|0`), `mtvsrws`,
+  `lxsibzx`, `lxsihzx`, `stxsibx`, `stxsihx`, `lxssp`, `stxsd`, `stxssp`, `lxvwsx`.
+
+### Checks
+
+- Decode: two random encodings of every ISA 3.0 and 3.1 record (`IsISA3_0`, `IsISA3_1`,
+  `PrefixInstrs`, `MMA`, `HasP9Vector`, `HasP9Altivec`, `HasP10Vector`,
+  `PairedVectorMemops`) against `llvm-objdump --mcpu=pwr10`: 480 of 939 did not decode on
+  `PowerPC:LE:64:A2ALT` before, none after (the two mnemonic differences are aliases).
+- `tools/difffuzz --arch ppc64le-p10` and `--arch ppc64-p10` against `qemu-ppc64le`/`qemu-ppc64
+  -cpu power10`: no mismatch on the exact constructors.
+- A Lua 5.2 relocatable built by `zig cc -mcpu=pwr10 -O2` (545 functions): 352 functions
+  halted on undecoded instructions before, 91 after, the same 91 as a `-mcpu=pwr8` build
+  (all after a call that does not return).
+
+### Gaps
+
+- `lmw`/`stmw` with `rD` 0 or 1 hit the parser's depth limit (`lsmul` recursion), and an
+  AltiVec `OP=4` word as the last 4 bytes of an image reads past it ("out of state space");
+  both predate this work.
+- The `xs*qp` quad-precision arithmetic and the other VSX floating-point operations not
+  listed above remain user operations; FPSCR is not modelled.

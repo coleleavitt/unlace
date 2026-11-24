@@ -1,7 +1,8 @@
 //! Calls to the Arm run-time ABI helpers carry their RTABI32 prototypes, laid out
 //! under the base standard whatever the image's own convention: a soft-float
 //! object (with or without an FPU, either byte order) and a hard-float object on
-//! a single-precision FPU, whose `double` operations call the helpers. By
+//! a single-precision FPU, whose `double` operations call the helpers, and a
+//! Thumb-1 (ARMv6-M) object. By
 //! default (`aeabifloat`) the floating-point helpers print as the C operators
 //! and casts they implement; `option aeabifloat off` keeps the typed calls.
 use crate::common;
@@ -26,7 +27,7 @@ fn decompile_with(object: &str, function: &str, options: &[&str]) -> String {
 
 #[test]
 fn soft_float_helpers_take_typed_arguments() {
-    for object in ["arm.o", "armeb.o", "thumbv7m.o"] {
+    for object in ["arm.o", "armeb.o", "thumbv7m.o", "thumbv6m.o"] {
         for (function, line) in [
             ("fadd", "return __aeabi_fadd(a,b);"),
             ("dadd", "return __aeabi_dadd(a,b);"),
@@ -69,7 +70,7 @@ const FOLD: [&str; 3] = ["--option", "aeabifloat", "on"];
 
 #[test]
 fn folded_soft_float_helpers_print_as_operators_and_casts() {
-    for object in ["arm.o", "armeb.o", "thumbv7m.o"] {
+    for object in ["arm.o", "armeb.o", "thumbv7m.o", "thumbv6m.o"] {
         for (function, line) in [
             ("fadd", "return a + b;"),
             ("fmul", "return a * b;"),
@@ -127,7 +128,7 @@ fn a_double_moved_back_to_d0_prints_whole() {
 /// the RETURN is the return value.
 #[test]
 fn a_pure_helper_result_handed_back_is_returned_without_debug_info() {
-    for object in ["arm-nodebug.o", "armeb-nodebug.o", "thumbv7m-nodebug.o"] {
+    for object in ["arm-nodebug.o", "armeb-nodebug.o", "thumbv7m-nodebug.o", "thumbv6m-nodebug.o"] {
         for (function, line) in [
             ("fadd", "return __aeabi_fadd(a0,a1);"),
             ("fmul", "return __aeabi_fmul(a0,a1);"),
@@ -137,6 +138,28 @@ fn a_pure_helper_result_handed_back_is_returned_without_debug_info() {
             let out = decompile(object, function);
             assert!(out.contains(line), "{object} {function}: {out}");
             assert!(!out.starts_with("void"), "{object} {function}: {out}");
+        }
+    }
+}
+
+/// Without debug information a `double` parameter arrives as two register
+/// words; under `armpairparam` a pair the function only ever reads
+/// concatenated is one parameter (`pairparam`'s PIECE trigger).
+#[test]
+fn a_register_pair_read_only_whole_is_one_parameter() {
+    let options = [
+        "--option",
+        "aeabifloat",
+        "off",
+        "--option",
+        "armpairparam",
+        "on",
+    ];
+    for object in ["arm-nodebug.o", "thumbv7m-nodebug.o", "thumbv6m-nodebug.o"] {
+        for function in ["dadd", "ddiv"] {
+            let out = decompile_with(object, function, &options);
+            assert!(!out.contains("CONCAT44"), "{object} {function}: {out}");
+            assert!(!out.contains(" a3"), "{object} {function}: {out}");
         }
     }
 }

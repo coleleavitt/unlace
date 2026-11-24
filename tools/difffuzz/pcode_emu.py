@@ -136,7 +136,10 @@ def step(state, ops, addr, size, max_steps=20000):
                 state.skipped_callother = True
                 continue
             if out is not None and state.callother is not None:
-                state.write(*_vn(out), state.callother(op))
+                v = state.callother(op)
+                if v is None:
+                    raise Unmodeled("CALLOTHER")
+                state.write(*_vn(out), v)
                 continue
             raise Unmodeled("CALLOTHER")
         if opc == "STORE":

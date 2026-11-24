@@ -2205,7 +2205,7 @@ class SlotDis(BinutilsDis):
             f.write(b"".join(self.pack(r) for r in todo))
             name = f.name
         try:
-            cmd = [self.path(), "-D", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
+            cmd = [self.path(), "-D", "-z", "-b", "binary", "-m", self.machine, "-EB" if self.big else "-EL", name]
             out = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
         finally:
             os.unlink(name)
@@ -2378,4 +2378,69 @@ class Iq2000(ObjdumpArch):
         raise NotImplementedError("iq2000 runs with --oracle gdbsim")
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000())}
+V850_GDB = {"sp": "r3", "gp": "r4", "tp": "r5", "ep": "r30", "lp": "r31", "PSW": "psw"}
+V850_DENY = re.compile(
+    r"^(b[a-z]*|jmp|jr|jarl|ctret|eiret|feret|reti|trap|halt|di|ei|ldsr|stsr|switch|callt|dispose|syscall|"
+    r"fetrap|rie|snooze|caxi|ldl\.w|stc\.w|sync[a-z]*|cache|pref|nop|loop|pushsp|popsp|ldvc\.sr|stvc\.sr|"
+    r"[a-z0-9]*\.[sd]|cvtf.*|trf.*|cmovf.*|ceilf.*|floorf.*|roundf.*|trncf.*|maddf.*|msubf.*|nmaddf.*|"
+    r"nmsubf.*|absf.*|addf.*|subf.*|mulf.*|divf.*|maxf.*|minf.*|negf.*|sqrtf.*|recipf.*|rsqrtf.*|cmpf.*|"
+    r"hsh|dbtrap|dbret|dbhvtrap|hvtrap|hvcall|ldtc.*|sttc.*|cll|stm\.gsr|ldm\.gsr|stm\.mp|ldm\.mp|tlb.*|"
+    r"jmp32|jarl32|.*\.x)$"
+)
+
+
+class V850(ObjdumpArch):
+    """V850E2 (little endian) against gdb's v850 simulator, machine v850e2v3 (--oracle gdbsim).
+    The flags live in PSW (Z, S, OV, CY, SAT in bits 0..4), compared as that register. The
+    simulator has memory below 2 MiB, so the instruction sits at 0x100000 and pointers are
+    drawn there. Branches, jumps, system, cache, FP and atomic instructions are not generated."""
+    name = "v850"
+    lang = "V850:LE:32:default"
+    elf_machine = 87
+    elf_flags = 0x60000000                     # E_V850E2V3_ARCH
+    base = 0x100000
+    big = False
+    pc = "PC"
+    gprs = [(n, None) for n in ["r1", "r2", "sp", "gp", "tp"] + [f"r{i}" for i in range(6, 30)] + ["ep", "lp", "PSW"]]
+    pc_const = None
+    deny = V850_DENY
+    gdbsim = "v850"
+    gdb_arch = "v850e2v3"
+    gdb_pc = "pc"
+    misaligned_undefined = True                 # sim/v850 aligns a halfword/word access down
+
+    def unicorn(self):
+        raise NotImplementedError("v850 runs with --oracle gdbsim")
+
+    def capstone(self):
+        if self._dis is None:
+            self._dis = SlotDis("v850e2v3", False, 16, b"\x00\x00", 2)
+        return self._dis
+
+    def draw(self, rng):
+        return rng.getrandbits(64).to_bytes(8, "little")
+
+    def gdb_reg(self, n):
+        return V850_GDB.get(n, n)
+
+    def rand_reg(self, rng, bits):
+        if rng.random() < 0.35:
+            return rng.randrange(0x110000, 0x1F0000) & ~3
+        return Arch.rand_reg(self, rng, bits)
+
+    def fix_inputs(self, init, rng):
+        init["PSW"] &= 0x1F
+
+    def addr_ok(self, a):
+        return a < 0x200000
+
+    def partial(self, mnemonic, operands):
+        # sim/v850's ADF and SBF leave PSW alone; the manual sets CY, OV, S and Z
+        return {"PSW": 0 if mnemonic.startswith(("adf", "sbf")) else 0x1F}
+
+    def skip(self, cand):
+        # sim/v850 builds MAC/MACU from 16x16 partial products and drops a carry into the high word
+        return cand["mnemonic"] in ("mac", "macu")
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850())}

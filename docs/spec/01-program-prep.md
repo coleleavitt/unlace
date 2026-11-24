@@ -14911,7 +14911,7 @@ vendored ELF list (`crates/unlace-analysis/data/ElfFunctionsThatDoNotReturn`
 terminate family, and two unlace divergence blocks appended in place, each fenced by
 its own `# (unlace divergence, DIV-nn)` comment: (DIV-21) the genuinely-unconditional
 libc additions upstream omits — the BSD `err`/`errx`/`verr`/`verrx`/`errc`/`verrc`
-family, `quick_exit`, `__assert_perror_fail`, `__chk_fail`, `__libc_fatal`;
+family, `quick_exit`, `__assert_perror_fail`, `__chk_fail`, `__libc_fatal`, `__fortify_fail_abort`;
 `warn`/`warnx` return and stay out — and (DIV-78) the libstdc++ `std::__throw_*`
 family, below — plus a GNU Fortran block: the four libgfortran fatal diagnostics
 `_gfortran_runtime_error`, `_gfortran_runtime_error_at`, `_gfortran_os_error` and

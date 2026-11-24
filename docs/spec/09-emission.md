@@ -5853,7 +5853,12 @@ condition must pass `cond_is_boolean`. The first `if` of the run becomes
 and the tail become empty sequences. `emit_block_if` prints the first through the
 same `return_form` path, so its condition block's statements print above the
 `return`; `emit_return_value` parenthesizes a `||` operand of `&&` and a `?:`
-operand (`emit_return_operand`). The run is contiguous and every folded body is a
+operand (`emit_return_operand`). A `Not` of a condition leaf ending in a `CBRANCH` prints by
+flipping that `CBRANCH` for the one render instead of printing `!` (`return_not_flip`), so
+the comparison prints its complement (`!(v1 <= v2)` prints `v2 < v1`, `!(!x)` prints
+`x`); when the `Not` is the whole returned value, only a flippable comparison that
+still prints as a comparison (not a `truthycond` bare operand, not a `BOOL_NEGATE`)
+flips, so the value stays `0` or `1`. The run is contiguous and every folded body is a
 bare `return`, so C's own short-circuit evaluation runs the same tests in the
 same order and evaluates nothing the binary skips.
 

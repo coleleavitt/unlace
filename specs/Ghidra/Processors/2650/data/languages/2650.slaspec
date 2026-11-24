@@ -1,0 +1,311 @@
+# SLEIGH specification for the Signetics 2650 / 2650A / 2650B
+#
+# Written from the Signetics 2650 Microprocessor manual (1975) and the 2650
+# data sheet. The address space is 15 bits in four 8 KiB pages: a relative or
+# non-branch absolute address stays in the page of the instruction, a branch
+# absolute address is a full 15-bit address. The register-select (RS),
+# with-carry (WC) and logical-compare (COM) bits of PSL are decode context, set
+# by PPSL/CPSL immediates, so bank 1 registers and carry chains decode where the
+# program selected them. The 8-level return address stack is modelled as a
+# downward stack above the 15-bit space (SP), so the decompiler sees ordinary
+# calls and returns. Ports: extended I/O (REDE/WRTE) at io:0x00-0xFF, the
+# control port at io:0x100, the data port at io:0x101.
+
+define endian=big;
+define alignment=1;
+
+define space ram      type=ram_space      size=2 default;
+define space io       type=ram_space      size=2;
+define space register type=register_space size=1;
+
+define register offset=0x00 size=1 [ R0 R1 R2 R3 R1p R2p R3p ];
+define register offset=0x10 size=1 [ CC IDC OVF C PSU ];
+define register offset=0x20 size=2 [ PC SP ];
+define register offset=0x30 size=4 [ contextreg ];
+
+define context contextreg
+	rs  = (0,0)
+	wc  = (1,1)
+	com = (2,2)
+;
+
+define token op8 (8)
+	op   = (0,7)
+	opg  = (2,7)
+	rr   = (0,1)
+	rrp  = (0,1)
+	cc   = (0,1)
+;
+
+define token b2tok (8)
+	ind   = (7,7)
+	d7    = (0,6) signed
+	idx   = (5,6)
+	ahi5  = (0,4)
+	ahi7  = (0,6)
+	imm8  = (0,7)
+	m_cc  = (6,7)
+	m_idc = (5,5)
+	m_rs  = (4,4)
+	m_wc  = (3,3)
+	m_ovf = (2,2)
+	m_com = (1,1)
+	m_c   = (0,0)
+;
+
+define token b3tok (8)
+	alo = (0,7)
+;
+
+attach variables [ rr ] [ R0 R1 R2 R3 ];
+attach variables [ rrp ] [ R0 R1p R2p R3p ];
+attach names [ cc ] [ "eq" "gt" "lt" "un" ];
+
+define pcodeop halt;
+
+macro pushRet(v) {
+	SP = SP - 2;
+	*:2 SP = v;
+}
+
+macro popRet(v) {
+	v = *:2 SP;
+	SP = SP + 2;
+}
+
+macro setCC(v) {
+	CC = zext(v s> 0) + (zext(v s< 0) * 2);
+}
+
+macro doAdd(d, v, ci) {
+	local a:1 = d;
+	local b:1 = v;
+	local s:2 = zext(a) + zext(b) + zext(ci);
+	local r:1 = s:1;
+	C = (s >> 8) != 0;
+	IDC = (((a & 0xF) + (b & 0xF) + ci) >> 4) != 0;
+	OVF = ((a ^ r) & (b ^ r) & 0x80) != 0;
+	d = r;
+	setCC(r);
+}
+
+macro doSub(d, v, bi) {
+	local a:1 = d;
+	local b:1 = v;
+	local s:2 = zext(a) - zext(b) - zext(bi);
+	local r:1 = s:1;
+	C = (s >> 8) == 0;
+	local n:1 = (a & 0xF) - (b & 0xF) - bi;
+	IDC = (n & 0xF0) == 0;
+	OVF = ((a ^ b) & (a ^ r) & 0x80) != 0;
+	d = r;
+	setCC(r);
+}
+
+reg: rr  is rs=0 & rr  { export rr; }
+regnz: "R1" is rs=0 & rr=1 { export R1; }
+regnz: "R2" is rs=0 & rr=2 { export R2; }
+regnz: "R3" is rs=0 & rr=3 { export R3; }
+regnz: "R1" is rs=1 & rr=1 { export R1p; }
+regnz: "R2" is rs=1 & rr=2 { export R2p; }
+regnz: "R3" is rs=1 & rr=3 { export R3p; }
+reg: rrp is rs=1 & rrp { export rrp; }
+
+r3x: "R3" is rs=0 { export R3; }
+r3x: "R3" is rs=1 { export R3p; }
+
+cin: is wc=0 { local z:1 = 0; export z; }
+cin: is wc=1 { export C; }
+bin: is wc=0 { local z:1 = 0; export z; }
+bin: is wc=1 { local b:1 = C ^ 1; export b; }
+
+ct: is cc=0 { local f:1 = (CC == 0); export f; }
+ct: is cc=1 { local f:1 = (CC == 1); export f; }
+ct: is cc=2 { local f:1 = (CC == 2); export f; }
+cf: is cc=0 { local f:1 = (CC != 0); export f; }
+cf: is cc=1 { local f:1 = (CC != 1); export f; }
+cf: is cc=2 { local f:1 = (CC != 2); export f; }
+
+psl: is rs & wc & com { local v:1 = (CC << 6) | (IDC << 5) | (rs << 4) | (wc << 3) | (OVF << 2) | (com << 1) | C; export v; }
+
+# relative operand: page of the instruction, 13-bit wrap
+relD: a is ind=0 & d7 [ a = (inst_start & 0x6000) | ((inst_next + d7) & 0x1FFF); ] { export *:1 a; }
+relP: "*"^a is ind=1 & d7 [ a = (inst_start & 0x6000) | ((inst_next + d7) & 0x1FFF); ] { local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; export p; }
+relM: a is ind=0 & d7 [ a = (inst_start & 0x6000) | ((inst_next + d7) & 0x1FFF); ] { export *:1 a; }
+relM: "*"^a is ind=1 & d7 [ a = (inst_start & 0x6000) | ((inst_next + d7) & 0x1FFF); ] { local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; export *:1 p; }
+
+# zero-page relative (ZBRR, ZBSR)
+zrelD: a is ind=0 & d7 [ a = d7 & 0x1FFF; ] { export *:1 a; }
+zrelP: "*"^a is ind=1 & d7 [ a = d7 & 0x1FFF; ] { local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; export p; }
+
+# branch absolute: full 15-bit address
+absD: a is ind=0 & ahi7 ; alo [ a = (ahi7 << 8) | alo; ] { export *:1 a; }
+absP: "*"^a is ind=1 & ahi7 ; alo [ a = (ahi7 << 8) | alo; ] { local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; export p; }
+
+# BXA / BSXA: absolute plus R3
+absX: a, r3x is op & r3x ; ind=0 & ahi7 ; alo [ a = (ahi7 << 8) | alo; ] { local t:2 = (a + zext(r3x)) & 0x7FFF; export t; }
+absX: "*"^a, r3x is op & r3x ; ind=1 & ahi7 ; alo [ a = (ahi7 << 8) | alo; ] { local ap:2 = a; local p:2 = *:2 ap; local t:2 = (p + zext(r3x)) & 0x7FFF; export t; }
+
+# non-branch absolute without index: page of the instruction
+memA0: a is ind=0 & idx=0 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { export *:1 a; }
+memA0: "*"^a is ind=1 & idx=0 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; export *:1 p; }
+
+memAX: a, reg, "+" is reg ; ind=0 & idx=1 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { reg = reg + 1; local e:2 = (a & 0x6000) | ((a + zext(reg)) & 0x1FFF); export *:1 e; }
+memAX: "*"^a, reg, "+" is reg ; ind=1 & idx=1 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { reg = reg + 1; local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; local e:2 = (p & 0x6000) | ((p + zext(reg)) & 0x1FFF); export *:1 e; }
+memAX: a, reg, "-" is reg ; ind=0 & idx=2 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { reg = reg - 1; local e:2 = (a & 0x6000) | ((a + zext(reg)) & 0x1FFF); export *:1 e; }
+memAX: "*"^a, reg, "-" is reg ; ind=1 & idx=2 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] { reg = reg - 1; local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; local e:2 = (p & 0x6000) | ((p + zext(reg)) & 0x1FFF); export *:1 e; }
+memAX: a, reg is reg ; ind=0 & idx=3 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] {  local e:2 = (a & 0x6000) | ((a + zext(reg)) & 0x1FFF); export *:1 e; }
+memAX: "*"^a, reg is reg ; ind=1 & idx=3 & ahi5 ; alo [ a = (inst_start & 0x6000) | (ahi5 << 8) | alo; ] {  local ap:2 = a; local p:2 = *:2 ap; p = p & 0x7FFF; local e:2 = (p & 0x6000) | ((p + zext(reg)) & 0x1FFF); export *:1 e; }
+
+:LODZ reg is opg=0 & reg { R0 = reg; setCC(R0); }
+:LODI reg, "#"^imm8 is opg=1 & reg ; imm8 { reg = imm8:1; setCC(reg); }
+:LODR reg, relM is opg=2 & reg ; relM { reg = relM; setCC(reg); }
+:LODA reg, memA0 is opg=3 & reg ; memA0 { reg = memA0; setCC(reg); }
+:LODA "R0", memAX is (opg=3) ... & memAX { R0 = memAX; setCC(R0); }
+:EORZ reg is opg=8 & reg { R0 = R0 ^ reg; setCC(R0); }
+:EORI reg, "#"^imm8 is opg=9 & reg ; imm8 { reg = reg ^ imm8:1; setCC(reg); }
+:EORR reg, relM is opg=10 & reg ; relM { reg = reg ^ relM; setCC(reg); }
+:EORA reg, memA0 is opg=11 & reg ; memA0 { reg = reg ^ memA0; setCC(reg); }
+:EORA "R0", memAX is (opg=11) ... & memAX { R0 = R0 ^ memAX; setCC(R0); }
+:ANDZ regnz is opg=16 & regnz { R0 = R0 & regnz; setCC(R0); }
+:ANDI reg, "#"^imm8 is opg=17 & reg ; imm8 { reg = reg & imm8:1; setCC(reg); }
+:ANDR reg, relM is opg=18 & reg ; relM { reg = reg & relM; setCC(reg); }
+:ANDA reg, memA0 is opg=19 & reg ; memA0 { reg = reg & memA0; setCC(reg); }
+:ANDA "R0", memAX is (opg=19) ... & memAX { R0 = R0 & memAX; setCC(R0); }
+:IORZ reg is opg=24 & reg { R0 = R0 | reg; setCC(R0); }
+:IORI reg, "#"^imm8 is opg=25 & reg ; imm8 { reg = reg | imm8:1; setCC(reg); }
+:IORR reg, relM is opg=26 & reg ; relM { reg = reg | relM; setCC(reg); }
+:IORA reg, memA0 is opg=27 & reg ; memA0 { reg = reg | memA0; setCC(reg); }
+:IORA "R0", memAX is (opg=27) ... & memAX { R0 = R0 | memAX; setCC(R0); }
+:ADDZ reg is opg=32 & reg & cin { doAdd(R0, reg, cin); }
+:ADDI reg, "#"^imm8 is opg=33 & reg & cin ; imm8 { doAdd(reg, imm8:1, cin); }
+:ADDR reg, relM is opg=34 & reg & cin ; relM { doAdd(reg, relM, cin); }
+:ADDA reg, memA0 is opg=35 & reg & cin ; memA0 { doAdd(reg, memA0, cin); }
+:ADDA "R0", memAX is (opg=35 & cin) ... & memAX { doAdd(R0, memAX, cin); }
+:SUBZ reg is opg=40 & reg & bin { doSub(R0, reg, bin); }
+:SUBI reg, "#"^imm8 is opg=41 & reg & bin ; imm8 { doSub(reg, imm8:1, bin); }
+:SUBR reg, relM is opg=42 & reg & bin ; relM { doSub(reg, relM, bin); }
+:SUBA reg, memA0 is opg=43 & reg & bin ; memA0 { doSub(reg, memA0, bin); }
+:SUBA "R0", memAX is (opg=43 & bin) ... & memAX { doSub(R0, memAX, bin); }
+:STRZ regnz is opg=48 & regnz { regnz = R0; }
+:STRR reg, relM is opg=50 & reg ; relM { relM = reg; }
+:STRA reg, memA0 is opg=51 & reg ; memA0 { memA0 = reg; }
+:STRA "R0", memAX is (opg=51) ... & memAX { memAX = R0; }
+:COMZ reg is opg=56 & reg & com=0 { local x:1 = R0; local y:1 = reg; CC = zext(x s> y) + (zext(x s< y) * 2); }
+:COMI reg, "#"^imm8 is opg=57 & reg & com=0 ; imm8 { local x:1 = reg; local y:1 = imm8:1; CC = zext(x s> y) + (zext(x s< y) * 2); }
+:COMR reg, relM is opg=58 & reg & com=0 ; relM { local x:1 = reg; local y:1 = relM; CC = zext(x s> y) + (zext(x s< y) * 2); }
+:COMA reg, memA0 is opg=59 & reg & com=0 ; memA0 { local x:1 = reg; local y:1 = memA0; CC = zext(x s> y) + (zext(x s< y) * 2); }
+:COMA "R0", memAX is (opg=59 & com=0) ... & memAX { local x:1 = R0; local y:1 = memAX; CC = zext(x s> y) + (zext(x s< y) * 2); }
+:COMZ reg is opg=56 & reg & com=1 { local x:1 = R0; local y:1 = reg; CC = zext(x > y) + (zext(x < y) * 2); }
+:COMI reg, "#"^imm8 is opg=57 & reg & com=1 ; imm8 { local x:1 = reg; local y:1 = imm8:1; CC = zext(x > y) + (zext(x < y) * 2); }
+:COMR reg, relM is opg=58 & reg & com=1 ; relM { local x:1 = reg; local y:1 = relM; CC = zext(x > y) + (zext(x < y) * 2); }
+:COMA reg, memA0 is opg=59 & reg & com=1 ; memA0 { local x:1 = reg; local y:1 = memA0; CC = zext(x > y) + (zext(x < y) * 2); }
+:COMA "R0", memAX is (opg=59 & com=1) ... & memAX { local x:1 = R0; local y:1 = memAX; CC = zext(x > y) + (zext(x < y) * 2); }
+
+:BCTR cc, relD is opg=6 & cc & ct ; relD { if (!ct) goto inst_next; goto relD; }
+:BCTR "un", relD is opg=6 & cc=3 ; relD { goto relD; }
+:BCTR cc, relP is opg=6 & cc & ct ; relP { if (!ct) goto inst_next; goto [relP]; }
+:BCTR "un", relP is opg=6 & cc=3 ; relP { goto [relP]; }
+:BCTA cc, absD is opg=7 & cc & ct ; absD { if (!ct) goto inst_next; goto absD; }
+:BCTA "un", absD is opg=7 & cc=3 ; absD { goto absD; }
+:BCTA cc, absP is opg=7 & cc & ct ; absP { if (!ct) goto inst_next; goto [absP]; }
+:BCTA "un", absP is opg=7 & cc=3 ; absP { goto [absP]; }
+:BSTR cc, relD is opg=14 & cc & ct ; relD { if (!ct) goto inst_next; local ret:2 = inst_next; pushRet(ret); call relD; }
+:BSTR "un", relD is opg=14 & cc=3 ; relD { local ret:2 = inst_next; pushRet(ret); call relD; }
+:BSTR cc, relP is opg=14 & cc & ct ; relP { if (!ct) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [relP]; }
+:BSTR "un", relP is opg=14 & cc=3 ; relP { local ret:2 = inst_next; pushRet(ret); call [relP]; }
+:BSTA cc, absD is opg=15 & cc & ct ; absD { if (!ct) goto inst_next; local ret:2 = inst_next; pushRet(ret); call absD; }
+:BSTA "un", absD is opg=15 & cc=3 ; absD { local ret:2 = inst_next; pushRet(ret); call absD; }
+:BSTA cc, absP is opg=15 & cc & ct ; absP { if (!ct) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [absP]; }
+:BSTA "un", absP is opg=15 & cc=3 ; absP { local ret:2 = inst_next; pushRet(ret); call [absP]; }
+:BRNR reg, relD is opg=22 & reg ; relD { if (reg == 0) goto inst_next; goto relD; }
+:BRNR reg, relP is opg=22 & reg ; relP { if (reg == 0) goto inst_next; goto [relP]; }
+:BRNA reg, absD is opg=23 & reg ; absD { if (reg == 0) goto inst_next; goto absD; }
+:BRNA reg, absP is opg=23 & reg ; absP { if (reg == 0) goto inst_next; goto [absP]; }
+:BSNR reg, relD is opg=30 & reg ; relD { if (reg == 0) goto inst_next; local ret:2 = inst_next; pushRet(ret); call relD; }
+:BSNR reg, relP is opg=30 & reg ; relP { if (reg == 0) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [relP]; }
+:BSNA reg, absD is opg=31 & reg ; absD { if (reg == 0) goto inst_next; local ret:2 = inst_next; pushRet(ret); call absD; }
+:BSNA reg, absP is opg=31 & reg ; absP { if (reg == 0) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [absP]; }
+:BCFR cc, relD is opg=38 & cc & cf ; relD { if (!cf) goto inst_next; goto relD; }
+:BCFR cc, relP is opg=38 & cc & cf ; relP { if (!cf) goto inst_next; goto [relP]; }
+:BCFA cc, absD is opg=39 & cc & cf ; absD { if (!cf) goto inst_next; goto absD; }
+:BCFA cc, absP is opg=39 & cc & cf ; absP { if (!cf) goto inst_next; goto [absP]; }
+:BSFR cc, relD is opg=46 & cc & cf ; relD { if (!cf) goto inst_next; local ret:2 = inst_next; pushRet(ret); call relD; }
+:BSFR cc, relP is opg=46 & cc & cf ; relP { if (!cf) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [relP]; }
+:BSFA cc, absD is opg=47 & cc & cf ; absD { if (!cf) goto inst_next; local ret:2 = inst_next; pushRet(ret); call absD; }
+:BSFA cc, absP is opg=47 & cc & cf ; absP { if (!cf) goto inst_next; local ret:2 = inst_next; pushRet(ret); call [absP]; }
+:BIRR reg, relD is opg=54 & reg ; relD { reg = reg + 1; if (reg == 0) goto inst_next; goto relD; }
+:BIRR reg, relP is opg=54 & reg ; relP { reg = reg + 1; if (reg == 0) goto inst_next; goto [relP]; }
+:BIRA reg, absD is opg=55 & reg ; absD { reg = reg + 1; if (reg == 0) goto inst_next; goto absD; }
+:BIRA reg, absP is opg=55 & reg ; absP { reg = reg + 1; if (reg == 0) goto inst_next; goto [absP]; }
+:BDRR reg, relD is opg=62 & reg ; relD { reg = reg - 1; if (reg == 0) goto inst_next; goto relD; }
+:BDRR reg, relP is opg=62 & reg ; relP { reg = reg - 1; if (reg == 0) goto inst_next; goto [relP]; }
+:BDRA reg, absD is opg=63 & reg ; absD { reg = reg - 1; if (reg == 0) goto inst_next; goto absD; }
+:BDRA reg, absP is opg=63 & reg ; absP { reg = reg - 1; if (reg == 0) goto inst_next; goto [absP]; }
+:ZBRR zrelD is op=0x9B ; zrelD { goto zrelD; }
+:ZBRR zrelP is op=0x9B ; zrelP { goto [zrelP]; }
+:ZBSR zrelD is op=0xBB ; zrelD { local ret:2 = inst_next; pushRet(ret); call zrelD; }
+:ZBSR zrelP is op=0xBB ; zrelP { local ret:2 = inst_next; pushRet(ret); call [zrelP]; }
+:BXA absX is op=0x9F ... & absX { goto [absX]; }
+:BSXA absX is op=0xBF ... & absX { local ret:2 = inst_next; pushRet(ret); call [absX]; }
+:RETC cc is opg=0x05 & cc & ct { if (!ct) goto inst_next; local r:2; popRet(r); return [r]; }
+:RETC "un" is opg=0x05 & cc=3 { local r:2; popRet(r); return [r]; }
+:RETE cc is opg=0x0D & cc & ct { if (!ct) goto inst_next; PSU = PSU & 0xDF; local r:2; popRet(r); return [r]; }
+:RETE "un" is opg=0x0D & cc=3 { PSU = PSU & 0xDF; local r:2; popRet(r); return [r]; }
+
+:HALT is op=0x40 { halt(); }
+:NOP is op=0xC0 { }
+
+:SPSU is op=0x12 { R0 = PSU; setCC(R0); }
+:SPSL is op=0x13 & psl { R0 = psl; setCC(R0); }
+:LPSU is op=0x92 { PSU = R0 & 0x67; }
+:LPSL is op=0x93 { CC = R0 >> 6; IDC = (R0 >> 5) & 1; OVF = (R0 >> 2) & 1; C = R0 & 1; }
+
+:CPSU "#"^imm8 is op=0x74 ; imm8 { PSU = PSU & ~imm8:1; }
+:PPSU "#"^imm8 is op=0x76 ; imm8 { PSU = PSU | (imm8:1 & 0x67); }
+:CPSL "#"^imm8 is op=0x75 ; imm8 & m_cc & m_idc & m_rs & m_wc & m_ovf & m_com & m_c
+	[ rs = rs & (m_rs ^ 1); wc = wc & (m_wc ^ 1); com = com & (m_com ^ 1);
+	  globalset(inst_next, rs); globalset(inst_next, wc); globalset(inst_next, com); ]
+{
+	CC = CC & (~m_cc:1 & 3);
+	IDC = IDC & (m_idc:1 ^ 1);
+	OVF = OVF & (m_ovf:1 ^ 1);
+	C = C & (m_c:1 ^ 1);
+}
+:PPSL "#"^imm8 is op=0x77 ; imm8 & m_cc & m_idc & m_rs & m_wc & m_ovf & m_com & m_c
+	[ rs = rs | m_rs; wc = wc | m_wc; com = com | m_com;
+	  globalset(inst_next, rs); globalset(inst_next, wc); globalset(inst_next, com); ]
+{
+	CC = CC | m_cc:1;
+	IDC = IDC | m_idc:1;
+	OVF = OVF | m_ovf:1;
+	C = C | m_c:1;
+}
+
+:TPSU "#"^imm8 is op=0xB4 ; imm8 { local m:1 = imm8; CC = 2 * zext((PSU & m) != m); }
+:TPSL "#"^imm8 is op=0xB5 & psl ; imm8 { local m:1 = imm8; CC = 2 * zext((psl & m) != m); }
+:TMI reg, "#"^imm8 is opg=0x3D & reg ; imm8 { local m:1 = imm8; CC = 2 * zext((reg & m) != m); }
+
+:REDC reg is opg=0x0C & reg { reg = *[io]:1 0x100:2; setCC(reg); }
+:REDD reg is opg=0x1C & reg { reg = *[io]:1 0x101:2; setCC(reg); }
+:REDE reg, "#"^imm8 is opg=0x15 & reg ; imm8 { local p:2 = imm8; reg = *[io]:1 p; setCC(reg); }
+:WRTC reg is opg=0x2C & reg { *[io]:1 0x100:2 = reg; }
+:WRTD reg is opg=0x3C & reg { *[io]:1 0x101:2 = reg; }
+:WRTE reg, "#"^imm8 is opg=0x35 & reg ; imm8 { local p:2 = imm8; *[io]:1 p = reg; }
+
+:RRR reg is opg=0x14 & reg & wc=0 { reg = (reg >> 1) | (reg << 7); setCC(reg); }
+:RRR reg is opg=0x14 & reg & wc=1 { local v:1 = reg; reg = (v >> 1) | (C << 7); C = v & 1; IDC = (reg >> 5) & 1; setCC(reg); }
+:RRL reg is opg=0x34 & reg & wc=0 { reg = (reg << 1) | (reg >> 7); setCC(reg); }
+:RRL reg is opg=0x34 & reg & wc=1 { local v:1 = reg; reg = (v << 1) | C; C = v >> 7; IDC = (reg >> 5) & 1; OVF = ((v ^ reg) & 0x80) != 0; setCC(reg); }
+
+:DAR reg is opg=0x25 & reg {
+	local v:1 = reg;
+	if (IDC != 0) goto <hi>;
+	v = (v & 0xF0) | ((v + 0x0A) & 0x0F);
+<hi>
+	if (C != 0) goto <done>;
+	v = v + 0xA0;
+<done>
+	reg = v;
+	setCC(reg);
+}

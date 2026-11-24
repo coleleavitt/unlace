@@ -1,0 +1,214 @@
+# Visium (Controls and Data Services GR5/GR6): big-endian, 32 32-bit general registers
+# (r0 reads as zero), fixed 32-bit instructions with an even-parity bit in bit 31, one
+# branch delay slot, byte/word/long ALU sizes, an extension arithmetic module (EAM) for
+# multiply/divide and an optional FPU. Written from the binutils Visium opcode table and
+# disassembler (field layout) and GCC config/visium (semantics and conventions).
+
+define endian=big;
+define alignment=4;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=4;
+
+define register offset=0 size=4 [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 fp sp r24 r25 r26 r27 r28 r29 r30 r31 ];
+define register offset=0x80 size=4 [ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 ];
+define register offset=0x100 size=8 [ md ];
+define register offset=0x100 size=4 [ mdb mda ];
+define register offset=0x108 size=4 [ mdc pc ];
+define register offset=0x110 size=1 [ fN fZ fC fV ];
+
+define token instr(32)
+  parity = (31,31)
+  cond   = (27,30)
+  fpop   = (27,30)
+  cls    = (25,26)
+  opc    = (21,24)
+  ra     = (16,20)
+  rav    = (16,20)
+  fa     = (16,19)
+  eam    = (15,15)
+  rd     = (10,14)
+  rdv    = (10,14)
+  fd     = (10,13)
+  idx    = (10,14)
+  bimm   = (9,9)
+  rb     = (4,8)
+  rbv    = (4,8)
+  fb     = (4,7)
+  imm5b  = (4,8)
+  fpsel  = (3,3)
+  dsz    = (0,2)
+  imm16  = (0,15)
+  disp16 = (0,15) signed
+  low25  = (0,24)
+;
+
+attach variables [ ra rd rb ] [ r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 fp sp r24 r25 r26 r27 r28 r29 r30 r31 ];
+attach variables [ fa fd fb ] [ f0 f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 f13 f14 f15 ];
+
+define pcodeop stop;
+define pcodeop trace;
+define pcodeop block_move_indirect;
+define pcodeop block_move_direct;
+define pcodeop disable_interrupts;
+define pcodeop enable_interrupts;
+define pcodeop return_from_interrupt;
+define pcodeop eam_write;
+define pcodeop eam_read;
+define pcodeop fpu_instruction;
+define pcodeop fpu_read;
+define pcodeop write_trace_low;
+define pcodeop write_trace_high;
+
+A: ra is ra & rav=0 { export 0:4; }
+A: ra is ra { export ra; }
+B: rb is rb & rbv=0 { export 0:4; }
+B: rb is rb { export rb; }
+
+CC: "fa" is cond=0 { local c:1 = 0; export c; }
+CC: "eq" is cond=1 { local c:1 = fZ; export c; }
+CC: "cs" is cond=2 { local c:1 = fC; export c; }
+CC: "os" is cond=3 { local c:1 = fV; export c; }
+CC: "ns" is cond=4 { local c:1 = fN; export c; }
+CC: "ne" is cond=5 { local c:1 = !fZ; export c; }
+CC: "cc" is cond=6 { local c:1 = !fC; export c; }
+CC: "oc" is cond=7 { local c:1 = !fV; export c; }
+CC: "nc" is cond=8 { local c:1 = !fN; export c; }
+CC: "ge" is cond=9 { local c:1 = fN == fV; export c; }
+CC: "gt" is cond=10 { local c:1 = !fZ && (fN == fV); export c; }
+CC: "hi" is cond=11 { local c:1 = !fC && !fZ; export c; }
+CC: "le" is cond=12 { local c:1 = fZ || (fN != fV); export c; }
+CC: "ls" is cond=13 { local c:1 = fC || fZ; export c; }
+CC: "lt" is cond=14 { local c:1 = fN != fV; export c; }
+CC: "tr" is cond=15 { local c:1 = 1; export c; }
+
+REL: dest is disp16 [ dest = inst_start + disp16 * 4; ] { export *:4 dest; }
+
+:nop is low25=0 & cls=0 & cond=0 { }
+:brr CC, REL is cls=0 & opc=0 & CC & REL { local c = CC; delayslot(1); if (c) goto REL; }
+:brr "tr", REL is cls=0 & opc=0 & cond=15 & REL { delayslot(1); goto REL; }
+
+# bra: register-indirect branch with link into rd (call when unconditional and linked)
+:bra CC, A, rd is cls=3 & opc=12 & dsz=4 & CC & A & rd { local t = A; local c = CC; if (!c) goto <skip>; rd = inst_next; <skip> delayslot(1); if (!c) goto inst_next; goto [t]; }
+:bra "tr", A, rd is cls=3 & opc=12 & dsz=4 & cond=15 & A & rd { local t = A; rd = inst_next; delayslot(1); call [t]; }
+:bra "tr", A, rd is cls=3 & opc=12 & dsz=4 & cond=15 & A & rd & rdv=0 { local t = A; delayslot(1); goto [t]; }
+:bra "tr", A, rd is cls=3 & opc=12 & dsz=4 & cond=15 & A & rav=21 & rd & rdv=0 { delayslot(1); return [r21]; }
+
+# class 2: 16-bit immediate on rA
+:addi ra, imm16 is cls=2 & opc=0 & ra & imm16 { local a = ra; local b:4 = imm16; ra = a + b; fC = carry(a, b); fV = scarry(a, b); fN = ra s< 0; fZ = ra == 0; }
+:subi ra, imm16 is cls=2 & opc=2 & ra & imm16 { local a = ra; local b:4 = imm16; ra = a - b; fC = a < b; fV = sborrow(a, b); fN = ra s< 0; fZ = ra == 0; }
+:movil ra, imm16 is cls=2 & opc=4 & ra & imm16 { ra = (ra & 0xffff0000) | imm16; }
+:moviu ra, imm16 is cls=2 & opc=5 & ra & imm16 { ra = (ra & 0xffff) | (imm16 << 16); }
+:moviq ra, imm16 is cls=2 & opc=6 & ra & imm16 { ra = imm16; }
+:wrtl imm16 is cls=2 & opc=8 & rav=0 & imm16 { write_trace_low(imm16:2); }
+:wrtu imm16 is cls=2 & opc=9 & rav=0 & imm16 { write_trace_high(imm16:2); }
+
+# class 1: control, memory write, EAM and FPU writes
+:stop idx, A is cls=1 & opc=0 & dsz=4 & idx & A { stop(idx:1, A); }
+:bmi "r1,r2,r3" is cls=1 & opc=1 & dsz=4 { block_move_indirect(r1, r2, r3); }
+:bmd "r1,r2,r3" is cls=1 & opc=3 & dsz=4 { block_move_direct(r1, r2, r3); }
+:dsi is cls=1 & opc=4 & dsz=4 { disable_interrupts(); }
+:eni is cls=1 & opc=5 & dsz=4 { enable_interrupts(); }
+:rfi is cls=1 & opc=7 & dsz=4 { return_from_interrupt(); return [r29]; }
+:trace idx, A is cls=1 & opc=13 & idx & A { trace(idx:1, A); }
+
+:write.b idx(A), B is cls=1 & opc=15 & eam=0 & dsz=1 & idx & A & B { *:1 (A + idx) = B:1; }
+:write.w idx(A), B is cls=1 & opc=15 & eam=0 & dsz=2 & idx & A & B { *:2 (A + idx * 2) = B:2; }
+:write.l idx(A), B is cls=1 & opc=15 & eam=0 & dsz=4 & idx & A & B { *:4 (A + idx * 4) = B; }
+
+:mults A, B is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=0 & A & B { md = sext(A) * sext(B); }
+:multu A, B is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=1 & A & B { md = zext(A) * zext(B); }
+:divs A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=2 & A { local n = mda; mda = n s/ A; mdc = n s% A; }
+:divu A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=3 & A { local n = mda; mda = n / A; mdc = n % A; }
+:writemd A, B is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=4 & A & B { mda = A; mdb = B; }
+:writemdc A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=5 & A { mdc = A; }
+:divds A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=6 & A { local n = md; local d:8 = sext(A); md = n s/ d; local r = n s% d; mdc = r:4; }
+:divdu A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=7 & A { local n = md; local d:8 = zext(A); md = n / d; local r = n % d; mdc = r:4; }
+:asrd A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=9 & A { md = md s>> (A & 63); }
+:lsrd A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=10 & A { md = md >> (A & 63); }
+:asld A is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx=11 & A { md = md << (A & 63); }
+:eamwrite idx, A, B is cls=1 & opc=15 & eam=1 & fpsel=0 & dsz=4 & idx & A & B { eam_write(idx:1, A, B); }
+
+:fload fd, A is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=0 & fd & A { fd = A; }
+:fadd fd, fa, fb is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=1 & fd & fa & fb { fd = fa f+ fb; }
+:fsub fd, fa, fb is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=2 & fd & fa & fb { fd = fa f- fb; }
+:fmult fd, fa, fb is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=3 & fd & fa & fb { fd = fa f* fb; }
+:fdiv fd, fa, fb is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=4 & fd & fa & fb { fd = fa f/ fb; }
+:fsqrt fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=5 & fd & fa { fd = sqrt(fa); }
+:fneg fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=6 & fd & fa { fd = f- fa; }
+:fabs fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=7 & fd & fa { fd = abs(fa); }
+:ftoi fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=8 & fd & fa { fd = trunc(fa); }
+:itof fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=9 & fd & fa { fd = int2float(fa); }
+:fmove fd, fa is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop=12 & fd & fa { fd = fa; }
+:fpinst fpop, fd, fa, fb is cls=1 & opc=15 & eam=1 & fpsel=1 & dsz=4 & fpop & fd & fa & fb { fd = fpu_instruction(fpop:1, fa, fb); }
+
+# class 3 reads, EAM/FPU reads
+:read.b rd, imm5b(A) is cls=3 & opc=15 & bimm=1 & eam=0 & fpsel=0 & dsz=1 & rd & imm5b & A { rd = (rd & 0xffffff00) | zext(*:1 (A + imm5b)); }
+:read.w rd, imm5b(A) is cls=3 & opc=15 & bimm=1 & eam=0 & fpsel=0 & dsz=2 & rd & imm5b & A { rd = (rd & 0xffff0000) | zext(*:2 (A + imm5b * 2)); }
+:read.l rd, imm5b(A) is cls=3 & opc=15 & bimm=1 & eam=0 & fpsel=0 & dsz=4 & rd & imm5b & A { rd = *:4 (A + imm5b * 4); }
+:readmda rd is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=0 & dsz=4 & rav=0 & rbv=0 & rd { rd = mda; }
+:readmdb rd is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=0 & dsz=4 & rav=0 & rbv=1 & rd { rd = mdb; }
+:readmdc rd is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=0 & dsz=4 & rav=0 & rbv=2 & rd { rd = mdc; }
+:eamread rd, imm5b is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=0 & dsz=4 & rav=0 & rd & imm5b { rd = eam_read(imm5b:1); }
+:fstore rd, fa is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=1 & dsz=4 & fpop=0 & rd & fa { rd = fa; }
+:fcmp rd, fa, fb is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=1 & dsz=4 & fpop=10 & rd & fa & fb { fZ = fa f== fb; fN = fa f< fb; fC = nan(fa) || nan(fb); fV = 0; }
+:fcmpe rd, fa, fb is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=1 & dsz=4 & fpop=11 & rd & fa & fb { fZ = fa f== fb; fN = fa f< fb; fC = nan(fa) || nan(fb); fV = 0; }
+:fpuread fpop, rd, fa, fb is cls=3 & opc=15 & bimm=1 & eam=1 & fpsel=1 & dsz=4 & fpop & rd & fa & fb { rd = fpu_read(fpop:1, fa, fb); }
+:rflag rd is cls=3 & opc=13 & dsz=4 & rav=0 & rd { rd = zext(fC); }
+
+:add.b rd, A, B is cls=3 & opc=0 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local b = B:1; local r = a + b; fC = carry(a, b); fV = scarry(a, b); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:adc.b rd, A, B is cls=3 & opc=1 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local b = B:1; local ci = zext(fC); local r = a + b + ci; fC = carry(a, b) || carry(a + b, ci); fV = scarry(a, b) ^^ scarry(a + b, ci); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:sub.b rd, A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local b = B:1; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:subc.b rd, A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local b = B:1; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:xor.b rd, A, B is cls=3 & opc=8 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local r = A:1 ^ B:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:or.b rd, A, B is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local r = A:1 | B:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:and.b rd, A, B is cls=3 & opc=10 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local r = A:1 & B:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:cmp.b A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rdv=0 & A & B { local a = A:1; local b = B:1; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; }
+:cmpc.b A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rdv=0 & A & B { local a = A:1; local b = B:1; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; }
+:move.b rd, A is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rbv=0 & rd & A { local r = A:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:not.b rd, A is cls=3 & opc=11 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rbv=0 & rd & A { local r = ~A:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:extb.b rd, A is cls=3 & opc=14 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rbv=0 & rd & A { local r:1 = A:1; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:asr.b rd, A, B is cls=3 & opc=5 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local n = B:1 & 7; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:asr.b rd, A, imm5b is cls=3 & opc=5 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & imm5b { local a = A:1; local n:1 = imm5b; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:lsr.b rd, A, B is cls=3 & opc=6 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local n = B:1 & 7; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:lsr.b rd, A, imm5b is cls=3 & opc=6 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & imm5b { local a = A:1; local n:1 = imm5b; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:asl.b rd, A, B is cls=3 & opc=7 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & B { local a = A:1; local n = B:1 & 7; local r = a << n; fC = (n != 0) && (((a >> (8 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:asl.b rd, A, imm5b is cls=3 & opc=7 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=1 & rd & A & imm5b { local a = A:1; local n:1 = imm5b; local r = a << n; fC = (n != 0) && (((a >> (8 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffffff00) | zext(r); }
+:add.w rd, A, B is cls=3 & opc=0 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local b = B:2; local r = a + b; fC = carry(a, b); fV = scarry(a, b); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:adc.w rd, A, B is cls=3 & opc=1 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local b = B:2; local ci = zext(fC); local r = a + b + ci; fC = carry(a, b) || carry(a + b, ci); fV = scarry(a, b) ^^ scarry(a + b, ci); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:sub.w rd, A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local b = B:2; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:subc.w rd, A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local b = B:2; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:xor.w rd, A, B is cls=3 & opc=8 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local r = A:2 ^ B:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:or.w rd, A, B is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local r = A:2 | B:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:and.w rd, A, B is cls=3 & opc=10 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local r = A:2 & B:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:cmp.w A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rdv=0 & A & B { local a = A:2; local b = B:2; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; }
+:cmpc.w A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rdv=0 & A & B { local a = A:2; local b = B:2; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; }
+:move.w rd, A is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rbv=0 & rd & A { local r = A:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:not.w rd, A is cls=3 & opc=11 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rbv=0 & rd & A { local r = ~A:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:extb.w rd, A is cls=3 & opc=14 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rbv=0 & rd & A { local r:2 = sext(A:1); fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:extw.w rd, A is cls=3 & opc=4 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rbv=0 & rd & A { local r:2 = A:2; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:asr.w rd, A, B is cls=3 & opc=5 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local n = B:2 & 15; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:asr.w rd, A, imm5b is cls=3 & opc=5 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & imm5b { local a = A:2; local n:2 = imm5b; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:lsr.w rd, A, B is cls=3 & opc=6 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local n = B:2 & 15; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:lsr.w rd, A, imm5b is cls=3 & opc=6 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & imm5b { local a = A:2; local n:2 = imm5b; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:asl.w rd, A, B is cls=3 & opc=7 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & B { local a = A:2; local n = B:2 & 15; local r = a << n; fC = (n != 0) && (((a >> (16 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:asl.w rd, A, imm5b is cls=3 & opc=7 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=2 & rd & A & imm5b { local a = A:2; local n:2 = imm5b; local r = a << n; fC = (n != 0) && (((a >> (16 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = (rd & 0xffff0000) | zext(r); }
+:add.l rd, A, B is cls=3 & opc=0 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local b = B; local r = a + b; fC = carry(a, b); fV = scarry(a, b); fN = r s< 0; fZ = r == 0; rd = r; }
+:adc.l rd, A, B is cls=3 & opc=1 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local b = B; local ci = zext(fC); local r = a + b + ci; fC = carry(a, b) || carry(a + b, ci); fV = scarry(a, b) ^^ scarry(a + b, ci); fN = r s< 0; fZ = r == 0; rd = r; }
+:sub.l rd, A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local b = B; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; rd = r; }
+:subc.l rd, A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local b = B; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; rd = r; }
+:xor.l rd, A, B is cls=3 & opc=8 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local r = A ^ B; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:or.l rd, A, B is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local r = A | B; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:and.l rd, A, B is cls=3 & opc=10 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local r = A & B; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:cmp.l A, B is cls=3 & opc=2 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rdv=0 & A & B { local a = A; local b = B; local r = a - b; fC = a < b; fV = sborrow(a, b); fN = r s< 0; fZ = r == 0; }
+:cmpc.l A, B is cls=3 & opc=3 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rdv=0 & A & B { local a = A; local b = B; local ci = zext(fC); local r = a - b - ci; fC = (a < b) || ((a - b) < ci); fV = sborrow(a, b) ^^ sborrow(a - b, ci); fN = r s< 0; fZ = r == 0; }
+:move.l rd, A is cls=3 & opc=9 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rbv=0 & rd & A { local r = A; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:not.l rd, A is cls=3 & opc=11 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rbv=0 & rd & A { local r = ~A; fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:extb.l rd, A is cls=3 & opc=14 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rbv=0 & rd & A { local r:4 = sext(A:1); fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:extw.l rd, A is cls=3 & opc=4 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rbv=0 & rd & A { local r:4 = sext(A:2); fC = 0; fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:asr.l rd, A, B is cls=3 & opc=5 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local n = B & 31; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:asr.l rd, A, imm5b is cls=3 & opc=5 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & imm5b { local a = A; local n:4 = imm5b; local r = a s>> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:lsr.l rd, A, B is cls=3 & opc=6 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local n = B & 31; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:lsr.l rd, A, imm5b is cls=3 & opc=6 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & imm5b { local a = A; local n:4 = imm5b; local r = a >> n; fC = (n != 0) && (((a >> (n - 1)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:asl.l rd, A, B is cls=3 & opc=7 & bimm=0 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & B { local a = A; local n = B & 31; local r = a << n; fC = (n != 0) && (((a >> (32 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }
+:asl.l rd, A, imm5b is cls=3 & opc=7 & bimm=1 & eam=0 & fpsel=0 & cond=0 & dsz=4 & rd & A & imm5b { local a = A; local n:4 = imm5b; local r = a << n; fC = (n != 0) && (((a >> (32 - n)) & 1) != 0); fV = 0; fN = r s< 0; fZ = r == 0; rd = r; }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="PDP-11"
+            endian="little"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="pdp11.sla"
+            processorspec="pdp11.pspec"
+            id="PDP-11:LE:16:default">
+    <description>DEC PDP-11 (base set, EIS, MFPS/MTPS; FP11 as a user op)</description>
+    <compiler name="default" spec="pdp11.cspec" id="default"/>
+  </language>
+</language_definitions>

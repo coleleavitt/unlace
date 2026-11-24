@@ -1,0 +1,103 @@
+th.addsl a0,a1,a2,0x3
+th.srri a0,a1,0x3f
+th.srriw a0,a1,0x1f
+th.ext a0,a1,0xf,0x0
+th.extu a0,a1,0x2f,0x8
+th.ff0 a0,a1
+th.ff1 a0,a1
+th.rev a0,a1
+th.revw a0,a1
+th.tstnbz a0,a1
+th.tst a0,a1,0x28
+th.mveqz a0,a1,a2
+th.mvnez a0,a1,a2
+th.mula a0,a1,a2
+th.muls a0,a1,a2
+th.mulah a0,a1,a2
+th.mulsh a0,a1,a2
+th.mulaw a0,a1,a2
+th.mulsw a0,a1,a2
+th.lwd a0,a1,(a2),0x1,3
+th.lwud a0,a1,(a2),0x2,3
+th.swd a0,a1,(a2),0x3,3
+th.ldd a0,a1,(a2),0x1,4
+th.sdd a0,a1,(a2),0x0,4
+th.lbia a0,(a1),-0x3,0x2
+th.lbib a0,(a1),-0x3,0x2
+th.lbuia a0,(a1),-0x3,0x2
+th.lbuib a0,(a1),-0x3,0x2
+th.lhia a0,(a1),-0x3,0x2
+th.lhib a0,(a1),-0x3,0x2
+th.lhuia a0,(a1),-0x3,0x2
+th.lhuib a0,(a1),-0x3,0x2
+th.lwia a0,(a1),-0x3,0x2
+th.lwib a0,(a1),-0x3,0x2
+th.lwuia a0,(a1),-0x3,0x2
+th.lwuib a0,(a1),-0x3,0x2
+th.ldia a0,(a1),-0x3,0x2
+th.ldib a0,(a1),-0x3,0x2
+th.sbia a0,(a1),0xf,0x1
+th.sbib a0,(a1),0xf,0x1
+th.shia a0,(a1),0xf,0x1
+th.shib a0,(a1),0xf,0x1
+th.swia a0,(a1),0xf,0x1
+th.swib a0,(a1),0xf,0x1
+th.sdia a0,(a1),0xf,0x1
+th.sdib a0,(a1),0xf,0x1
+th.lrb a0,a1,a2,0x3
+th.lrbu a0,a1,a2,0x3
+th.lurb a0,a1,a2,0x3
+th.lurbu a0,a1,a2,0x3
+th.lrh a0,a1,a2,0x3
+th.lrhu a0,a1,a2,0x3
+th.lurh a0,a1,a2,0x3
+th.lurhu a0,a1,a2,0x3
+th.lrw a0,a1,a2,0x3
+th.lurw a0,a1,a2,0x3
+th.lrwu a0,a1,a2,0x3
+th.lurwu a0,a1,a2,0x3
+th.lrd a0,a1,a2,0x3
+th.lurd a0,a1,a2,0x3
+th.srb a0,a1,a2,0x1
+th.surb a0,a1,a2,0x1
+th.srh a0,a1,a2,0x1
+th.surh a0,a1,a2,0x1
+th.srw a0,a1,a2,0x1
+th.surw a0,a1,a2,0x1
+th.srd a0,a1,a2,0x1
+th.surd a0,a1,a2,0x1
+th.flrw fa0,a1,a2,0x2
+th.fsrw fa0,a1,a2,0x2
+th.flrd fa0,a1,a2,0x2
+th.fsrd fa0,a1,a2,0x2
+th.flurw fa0,a1,a2,0x2
+th.fsurw fa0,a1,a2,0x2
+th.flurd fa0,a1,a2,0x2
+th.fsurd fa0,a1,a2,0x2
+th.dcache.csw a0
+th.dcache.isw a0
+th.dcache.cisw a0
+th.dcache.cval1 a0
+th.dcache.cva a0
+th.dcache.iva a0
+th.dcache.civa a0
+th.dcache.cpal1 a0
+th.dcache.cpa a0
+th.dcache.ipa a0
+th.dcache.cipa a0
+th.icache.iva a0
+th.icache.ipa a0
+th.dcache.call
+th.dcache.iall
+th.dcache.ciall
+th.icache.iall
+th.icache.ialls
+th.l2cache.call
+th.l2cache.iall
+th.l2cache.ciall
+th.sync
+th.sync.s
+th.sync.i
+th.sync.is
+th.sfence.vmas a0,a1
+ret

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="CDP1802"
+            endian="big"
+            size="16"
+            variant="default"
+            version="1.0"
+            slafile="1802.sla"
+            processorspec="1802.pspec"
+            id="CDP1802:BE:16:default">
+    <description>RCA CDP1802 COSMAC (SEP as an indirect call)</description>
+    <compiler name="default" spec="1802.cspec" id="default"/>
+  </language>
+  <language processor="CDP1802"
+            endian="big"
+            size="16"
+            variant="SCRT"
+            version="1.0"
+            slafile="1802.sla"
+            processorspec="1802_scrt.pspec"
+            id="CDP1802:BE:16:SCRT">
+    <description>RCA CDP1802 COSMAC with the Standard Call and Return Technique (SEP R4 call, SEP R5 return)</description>
+    <compiler name="default" spec="1802.cspec" id="default"/>
+  </language>
+</language_definitions>

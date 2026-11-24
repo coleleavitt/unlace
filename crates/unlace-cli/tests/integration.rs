@@ -1,17 +1,45 @@
 // Shared integration-test executable. Process-sensitive tests stay separate.
 #[path = "arcv2_loops.rs"]
 mod arcv2_loops;
+#[path = "blackfin_raw.rs"]
+mod blackfin_raw;
 #[path = "c28x_raw.rs"]
 mod c28x_raw;
 #[path = "chip8.rs"]
 mod chip8;
 mod common;
+#[path = "clipper_raw.rs"]
+mod clipper_raw;
+#[path = "fr_raw.rs"]
+mod fr_raw;
+#[path = "hexagon_hmx.rs"]
+mod hexagon_hmx;
+#[path = "iq2000_raw.rs"]
+mod iq2000_raw;
+#[path = "konami.rs"]
+mod konami;
+#[path = "m32r_raw.rs"]
+mod m32r_raw;
+#[path = "ft32_raw.rs"]
+mod ft32_raw;
 #[path = "huc6280.rs"]
 mod huc6280;
+#[path = "kr1878_raw.rs"]
+mod kr1878_raw;
+#[path = "lua54.rs"]
+mod lua54;
 #[path = "m6800_family.rs"]
 mod m6800_family;
+#[path = "m88k_raw.rs"]
+mod m88k_raw;
+#[path = "mep.rs"]
+mod mep;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "nios2_raw.rs"]
+mod nios2_raw;
+#[path = "pdp11_raw.rs"]
+mod pdp11_raw;
 #[path = "moxie_raw.rs"]
 mod moxie_raw;
 #[path = "return_branch_cli.rs"]
@@ -24,6 +52,8 @@ mod riscv_crypto;
 mod riscv_hints;
 #[path = "riscv_vector.rs"]
 mod riscv_vector;
+#[path = "riscv_xthead.rs"]
+mod riscv_xthead;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
 #[path = "riscv_zacas.rs"]
@@ -44,12 +74,32 @@ mod sparc_prologue_start;
 mod stm8_raw;
 #[path = "tricore_tc18.rs"]
 mod tricore_tc18;
+#[path = "upd7725.rs"]
+mod upd7725;
+#[path = "uxn.rs"]
+mod uxn;
+#[path = "v810.rs"]
+mod v810;
+#[path = "visium_raw.rs"]
+mod visium_raw;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]
 mod x86_amx;
 #[path = "aarch64_rme.rs"]
 mod aarch64_rme;
+#[path = "aarch64_sve2.rs"]
+mod aarch64_sve2;
+#[path = "i4004_raw.rs"]
+mod i4004_raw;
+#[path = "s2650_raw.rs"]
+mod s2650_raw;
+#[path = "cdp1802_raw.rs"]
+mod cdp1802_raw;
+#[path = "scmp_raw.rs"]
+mod scmp_raw;
+#[path = "tms9900_raw.rs"]
+mod tms9900_raw;
 
 #[path = "firmware_raw.rs"]
 mod firmware_raw;

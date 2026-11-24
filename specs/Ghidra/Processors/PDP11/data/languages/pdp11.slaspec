@@ -1,0 +1,332 @@
+# SLEIGH specification for the DEC PDP-11 (base instruction set, EIS, MFPS/MTPS,
+# MFPx/MTPx, SXT/XOR/SOB/MARK). Written for unlace from the PDP-11 Processor
+# Handbook (DEC, 1979) and the PDP-11 Architecture Handbook (DEC, 1983).
+
+define endian=little;
+define alignment=2;
+
+define space ram      type=ram_space      size=2 default;
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ R0 R1 R2 R3 R4 R5 SP PC ];
+define register offset=0x00 size=1 [ R0B _ R1B _ R2B _ R3B _ R4B _ R5B _ SPB _ PCB _ ];
+define register offset=0x10 size=1 [ N Z V C PS ];
+define register offset=0x20 size=4 contextreg;
+
+define context contextreg
+  cdmode=(0,2) noflow
+  cdreg=(3,5) noflow
+  cdregb=(3,5) noflow
+  cdr=(3,5) noflow
+;
+
+define token instr(16)
+  op15_12=(12,15) op15_9=(9,15) op15_8=(8,15) op15_6=(6,15) op15_5=(5,15)
+  op15_3=(3,15) op15_0=(0,15)
+  smode=(9,11) sreg=(6,8) sregb=(6,8) dmode=(3,5) dreg=(0,2) dregb=(0,2)
+  rfield=(6,8) rnext=(6,8) rodd=(6,6) rlow=(0,2)
+  disp8=(0,7) signed sob6=(0,5) tcode=(0,7) sc=(4,4) ccbits=(0,3)
+  splev=(0,2) marknn=(0,5)
+;
+define token extw(16) ext16=(0,15) sext16=(0,15) signed extlo=(0,7);
+
+attach variables [ sreg dreg rfield rlow ] [ R0 R1 R2 R3 R4 R5 SP PC ];
+attach variables [ rnext ] [ R1 R2 R3 R4 R5 SP PC R0 ];
+attach variables [ sregb dregb ] [ R0B R1B R2B R3B R4B R5B SPB PCB ];
+attach variables [ cdreg ] [ R0 R1 R2 R3 R4 R5 SP PC ];
+attach variables [ cdregb ] [ R0B R1B R2B R3B R4B R5B SPB PCB ];
+
+define pcodeop halt;
+define pcodeop wait;
+define pcodeop reset;
+define pcodeop emt;
+define pcodeop trap;
+define pcodeop bpt;
+define pcodeop iot;
+define pcodeop mfpt;
+define pcodeop fpp;
+
+macro nz(r) { N = r s< 0; Z = r == 0; }
+macro push2(v) { SP = SP - 2; *:2 SP = v; }
+macro pack_psw(r) { r = (PS & 0xf0) | (N << 3) | (Z << 2) | (V << 1) | C; }
+
+# Source operand: mode/register in bits 11-6, extension word right after the opcode.
+srcw: sreg is smode=0 & sreg { export sreg; }
+srcw: "("^sreg^")" is smode=1 & sreg { export *:2 sreg; }
+srcw: "("^sreg^")+" is smode=2 & sreg { local a:2 = sreg; sreg = sreg + 2; export *:2 a; }
+srcw: "#"^ext16 is smode=2 & sreg=7 ; ext16 { export *[const]:2 ext16; }
+srcw: "@("^sreg^")+" is smode=3 & sreg { local a:2 = sreg; sreg = sreg + 2; local p:2 = *:2 a; export *:2 p; }
+srcw: "@#"^ext16 is smode=3 & sreg=7 ; ext16 { export *:2 ext16; }
+srcw: "-("^sreg^")" is smode=4 & sreg { sreg = sreg - 2; local a:2 = sreg; export *:2 a; }
+srcw: "@-("^sreg^")" is smode=5 & sreg { sreg = sreg - 2; local p:2 = *:2 sreg; export *:2 p; }
+srcw: sext16^"("^sreg^")" is smode=6 & sreg ; sext16 { local a:2 = sreg + sext16; export *:2 a; }
+srcw: "@"^sext16^"("^sreg^")" is smode=7 & sreg ; sext16 { local a:2 = sreg + sext16; local p:2 = *:2 a; export *:2 p; }
+srcw: addr is smode=6 & sreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { export *:2 addr; }
+srcw: "@"^addr is smode=7 & sreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { local ad:2 = addr; local p:2 = *:2 ad; export *:2 p; }
+srcb: sregb is smode=0 & sregb { export sregb; }
+srcb: "("^sreg^")" is smode=1 & sreg { export *:1 sreg; }
+srcb: "("^sreg^")+" is smode=2 & sreg { local a:2 = sreg; sreg = sreg + 1; export *:1 a; }
+srcb: "("^sreg^")+" is smode=2 & sreg & sreg=6 { local a:2 = sreg; sreg = sreg + 2; export *:1 a; }
+srcb: "#"^extlo is smode=2 & sreg=7 ; ext16 & extlo { export *[const]:1 extlo; }
+srcb: "@("^sreg^")+" is smode=3 & sreg { local a:2 = sreg; sreg = sreg + 2; local p:2 = *:2 a; export *:1 p; }
+srcb: "@#"^ext16 is smode=3 & sreg=7 ; ext16 { export *:1 ext16; }
+srcb: "-("^sreg^")" is smode=4 & sreg { sreg = sreg - 1; local a:2 = sreg; export *:1 a; }
+srcb: "-("^sreg^")" is smode=4 & sreg & sreg=6 { sreg = sreg - 2; local a:2 = sreg; export *:1 a; }
+srcb: "@-("^sreg^")" is smode=5 & sreg { sreg = sreg - 2; local p:2 = *:2 sreg; export *:1 p; }
+srcb: sext16^"("^sreg^")" is smode=6 & sreg ; sext16 { local a:2 = sreg + sext16; export *:1 a; }
+srcb: "@"^sext16^"("^sreg^")" is smode=7 & sreg ; sext16 { local a:2 = sreg + sext16; local p:2 = *:2 a; export *:1 p; }
+srcb: addr is smode=6 & sreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { export *:1 addr; }
+srcb: "@"^addr is smode=7 & sreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { local ad:2 = addr; local p:2 = *:2 ad; export *:1 p; }
+# Destination operand: mode/register copied into the context by the instruction,
+# extension word after the source's (always the last word of the instruction).
+dstw: cdreg is cdmode=0 & cdreg { export cdreg; }
+dstw: "("^cdreg^")" is cdmode=1 & cdreg { export *:2 cdreg; }
+dstw: "("^cdreg^")+" is cdmode=2 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; export *:2 a; }
+dstw: "#"^ext16 is cdmode=2 & cdreg=7 & ext16 { local a:2 = inst_next - 2; export *:2 a; }
+dstw: "@("^cdreg^")+" is cdmode=3 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; local p:2 = *:2 a; export *:2 p; }
+dstw: "@#"^ext16 is cdmode=3 & cdreg=7 & ext16 { export *:2 ext16; }
+dstw: "-("^cdreg^")" is cdmode=4 & cdreg { cdreg = cdreg - 2; local a:2 = cdreg; export *:2 a; }
+dstw: "@-("^cdreg^")" is cdmode=5 & cdreg { cdreg = cdreg - 2; local p:2 = *:2 cdreg; export *:2 p; }
+dstw: sext16^"("^cdreg^")" is cdmode=6 & cdreg & sext16 { local a:2 = cdreg + sext16; export *:2 a; }
+dstw: "@"^sext16^"("^cdreg^")" is cdmode=7 & cdreg & sext16 { local a:2 = cdreg + sext16; local p:2 = *:2 a; export *:2 p; }
+dstw: sext16^"(PC)" is cdmode=6 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; export *:2 a; }
+dstw: "@"^sext16^"(PC)" is cdmode=7 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; local p:2 = *:2 a; export *:2 p; }
+dstb: cdregb is cdmode=0 & cdregb { export cdregb; }
+dstb: "("^cdreg^")" is cdmode=1 & cdreg { export *:1 cdreg; }
+dstb: "("^cdreg^")+" is cdmode=2 & cdreg { local a:2 = cdreg; cdreg = cdreg + 1; export *:1 a; }
+dstb: "("^cdreg^")+" is cdmode=2 & cdreg & cdreg=6 { local a:2 = cdreg; cdreg = cdreg + 2; export *:1 a; }
+dstb: "#"^ext16 is cdmode=2 & cdreg=7 & ext16 { local a:2 = inst_next - 2; export *:1 a; }
+dstb: "@("^cdreg^")+" is cdmode=3 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; local p:2 = *:2 a; export *:1 p; }
+dstb: "@#"^ext16 is cdmode=3 & cdreg=7 & ext16 { export *:1 ext16; }
+dstb: "-("^cdreg^")" is cdmode=4 & cdreg { cdreg = cdreg - 1; local a:2 = cdreg; export *:1 a; }
+dstb: "-("^cdreg^")" is cdmode=4 & cdreg & cdreg=6 { cdreg = cdreg - 2; local a:2 = cdreg; export *:1 a; }
+dstb: "@-("^cdreg^")" is cdmode=5 & cdreg { cdreg = cdreg - 2; local p:2 = *:2 cdreg; export *:1 p; }
+dstb: sext16^"("^cdreg^")" is cdmode=6 & cdreg & sext16 { local a:2 = cdreg + sext16; export *:1 a; }
+dstb: "@"^sext16^"("^cdreg^")" is cdmode=7 & cdreg & sext16 { local a:2 = cdreg + sext16; local p:2 = *:2 a; export *:1 p; }
+dstb: sext16^"(PC)" is cdmode=6 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; export *:1 a; }
+dstb: "@"^sext16^"(PC)" is cdmode=7 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; local p:2 = *:2 a; export *:1 p; }
+# Read-only operand in bits 5-0 (CMP/BIT/TST destinations, EIS sources): #n is a constant.
+rdw: cdreg is cdmode=0 & cdreg { export cdreg; }
+rdw: "("^cdreg^")" is cdmode=1 & cdreg { export *:2 cdreg; }
+rdw: "("^cdreg^")+" is cdmode=2 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; export *:2 a; }
+rdw: "#"^ext16 is cdmode=2 & cdreg=7 & ext16 { export *[const]:2 ext16; }
+rdw: "@("^cdreg^")+" is cdmode=3 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; local p:2 = *:2 a; export *:2 p; }
+rdw: "@#"^ext16 is cdmode=3 & cdreg=7 & ext16 { export *:2 ext16; }
+rdw: "-("^cdreg^")" is cdmode=4 & cdreg { cdreg = cdreg - 2; local a:2 = cdreg; export *:2 a; }
+rdw: "@-("^cdreg^")" is cdmode=5 & cdreg { cdreg = cdreg - 2; local p:2 = *:2 cdreg; export *:2 p; }
+rdw: sext16^"("^cdreg^")" is cdmode=6 & cdreg & sext16 { local a:2 = cdreg + sext16; export *:2 a; }
+rdw: "@"^sext16^"("^cdreg^")" is cdmode=7 & cdreg & sext16 { local a:2 = cdreg + sext16; local p:2 = *:2 a; export *:2 p; }
+rdw: sext16^"(PC)" is cdmode=6 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; export *:2 a; }
+rdw: "@"^sext16^"(PC)" is cdmode=7 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; local p:2 = *:2 a; export *:2 p; }
+rdb: cdregb is cdmode=0 & cdregb { export cdregb; }
+rdb: "("^cdreg^")" is cdmode=1 & cdreg { export *:1 cdreg; }
+rdb: "("^cdreg^")+" is cdmode=2 & cdreg { local a:2 = cdreg; cdreg = cdreg + 1; export *:1 a; }
+rdb: "("^cdreg^")+" is cdmode=2 & cdreg & cdreg=6 { local a:2 = cdreg; cdreg = cdreg + 2; export *:1 a; }
+rdb: "#"^extlo is cdmode=2 & cdreg=7 & ext16 & extlo { export *[const]:1 extlo; }
+rdb: "@("^cdreg^")+" is cdmode=3 & cdreg { local a:2 = cdreg; cdreg = cdreg + 2; local p:2 = *:2 a; export *:1 p; }
+rdb: "@#"^ext16 is cdmode=3 & cdreg=7 & ext16 { export *:1 ext16; }
+rdb: "-("^cdreg^")" is cdmode=4 & cdreg { cdreg = cdreg - 1; local a:2 = cdreg; export *:1 a; }
+rdb: "-("^cdreg^")" is cdmode=4 & cdreg & cdreg=6 { cdreg = cdreg - 2; local a:2 = cdreg; export *:1 a; }
+rdb: "@-("^cdreg^")" is cdmode=5 & cdreg { cdreg = cdreg - 2; local p:2 = *:2 cdreg; export *:1 p; }
+rdb: sext16^"("^cdreg^")" is cdmode=6 & cdreg & sext16 { local a:2 = cdreg + sext16; export *:1 a; }
+rdb: "@"^sext16^"("^cdreg^")" is cdmode=7 & cdreg & sext16 { local a:2 = cdreg + sext16; local p:2 = *:2 a; export *:1 p; }
+rdb: sext16^"(PC)" is cdmode=6 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; export *:1 a; }
+rdb: "@"^sext16^"(PC)" is cdmode=7 & cdreg=7 & sext16 { local a:2 = inst_next + sext16; local p:2 = *:2 a; export *:1 p; }
+
+# Jump targets (JMP/JSR), mode/register in bits 5-0: the operand's address.
+jind: "("^dreg^")" is dmode=1 & dreg { export dreg; }
+jind: "("^dreg^")+" is dmode=2 & dreg { local a:2 = dreg; dreg = dreg + 2; export a; }
+jind: "@("^dreg^")+" is dmode=3 & dreg { local a:2 = dreg; dreg = dreg + 2; local p:2 = *:2 a; export p; }
+jind: "-("^dreg^")" is dmode=4 & dreg { dreg = dreg - 2; local a:2 = dreg; export a; }
+jind: "@-("^dreg^")" is dmode=5 & dreg { dreg = dreg - 2; local p:2 = *:2 dreg; export p; }
+jind: sext16^"("^dreg^")" is dmode=6 & dreg ; sext16 { local a:2 = dreg + sext16; export a; }
+jind: "@"^sext16^"("^dreg^")" is dmode=7 & dreg ; sext16 { local a:2 = dreg + sext16; local p:2 = *:2 a; export p; }
+jind: "@"^addr is dmode=7 & dreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { local ad:2 = addr; local p:2 = *:2 ad; export p; }
+jdir: addr is dmode=6 & dreg=7 ; sext16 [ addr = (inst_start + 4 + sext16) & 0xffff; ] { export *:2 addr; }
+jdir: "@#"^ext16 is dmode=3 & dreg=7 ; ext16 { export *:2 ext16; }
+
+rel8: addr is disp8 [ addr = (inst_start + 2 + disp8 * 2) & 0xffff; ] { export *:2 addr; }
+sobt: addr is sob6 [ addr = (inst_start + 2 - sob6 * 2) & 0xffff; ] { export *:2 addr; }
+
+# Double-operand instructions
+:MOV srcw, dstw is (op15_12=1 & dmode & dreg) ... & srcw ; dstw [ cdmode = dmode; cdr = dreg; ] { local s = srcw; dstw = s; nz(s); V = 0; }
+:MOVB srcb, dstb is (op15_12=9 & dmode & dreg) ... & srcb ; dstb [ cdmode = dmode; cdr = dreg; ] { local s = srcb; dstb = s; nz(s); V = 0; }
+:CMP srcw, rdw is (op15_12=2 & dmode & dreg) ... & srcw ; rdw [ cdmode = dmode; cdr = dreg; ] { local s = srcw; local d = rdw; local r = s - d; nz(r); V = sborrow(s, d); C = s < d; }
+:CMPB srcb, rdb is (op15_12=10 & dmode & dreg) ... & srcb ; rdb [ cdmode = dmode; cdr = dreg; ] { local s = srcb; local d = rdb; local r = s - d; nz(r); V = sborrow(s, d); C = s < d; }
+:BIT srcw, rdw is (op15_12=3 & dmode & dreg) ... & srcw ; rdw [ cdmode = dmode; cdr = dreg; ] { local r = srcw & rdw; nz(r); V = 0; }
+:BITB srcb, rdb is (op15_12=11 & dmode & dreg) ... & srcb ; rdb [ cdmode = dmode; cdr = dreg; ] { local r = srcb & rdb; nz(r); V = 0; }
+:BIC srcw, dstw is (op15_12=4 & dmode & dreg) ... & srcw ; dstw [ cdmode = dmode; cdr = dreg; ] { local r = dstw & ~srcw; dstw = r; nz(r); V = 0; }
+:BICB srcb, dstb is (op15_12=12 & dmode & dreg) ... & srcb ; dstb [ cdmode = dmode; cdr = dreg; ] { local r = dstb & ~srcb; dstb = r; nz(r); V = 0; }
+:BIS srcw, dstw is (op15_12=5 & dmode & dreg) ... & srcw ; dstw [ cdmode = dmode; cdr = dreg; ] { local r = dstw | srcw; dstw = r; nz(r); V = 0; }
+:BISB srcb, dstb is (op15_12=13 & dmode & dreg) ... & srcb ; dstb [ cdmode = dmode; cdr = dreg; ] { local r = dstb | srcb; dstb = r; nz(r); V = 0; }
+:ADD srcw, dstw is (op15_12=6 & dmode & dreg) ... & srcw ; dstw [ cdmode = dmode; cdr = dreg; ] { local s = srcw; local d = dstw; local r = d + s; V = scarry(d, s); C = carry(d, s); dstw = r; nz(r); }
+:SUB srcw, dstw is (op15_12=14 & dmode & dreg) ... & srcw ; dstw [ cdmode = dmode; cdr = dreg; ] { local s = srcw; local d = dstw; local r = d - s; V = sborrow(d, s); C = d < s; dstw = r; nz(r); }
+:MOVB srcb, dreg is (op15_12=9 & dmode=0 & dreg) ... & srcb { local s = srcb; dreg = sext(s); nz(s); V = 0; }
+
+# Single-operand instructions
+:CLR dstw is op15_6=40 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { dstw = 0; N = 0; Z = 1; V = 0; C = 0; }
+:CLRB dstb is op15_6=552 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { dstb = 0; N = 0; Z = 1; V = 0; C = 0; }
+:COM dstw is op15_6=41 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local r = ~dstw; dstw = r; nz(r); V = 0; C = 1; }
+:COMB dstb is op15_6=553 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local r = ~dstb; dstb = r; nz(r); V = 0; C = 1; }
+:INC dstw is op15_6=42 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d + 1; dstw = r; nz(r); V = d == 0x7fff; }
+:INCB dstb is op15_6=554 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d + 1; dstb = r; nz(r); V = d == 0x7f; }
+:DEC dstw is op15_6=43 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d - 1; dstw = r; nz(r); V = d == 0x8000; }
+:DECB dstb is op15_6=555 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d - 1; dstb = r; nz(r); V = d == 0x80; }
+:NEG dstw is op15_6=44 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local r = -dstw; dstw = r; nz(r); V = r == 0x8000; C = r != 0; }
+:NEGB dstb is op15_6=556 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local r = -dstb; dstb = r; nz(r); V = r == 0x80; C = r != 0; }
+:ADC dstw is op15_6=45 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d + zext(C); dstw = r; nz(r); V = (d == 0x7fff) && (C != 0); C = (d == 0xffff) && (C != 0); }
+:ADCB dstb is op15_6=557 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d + C; dstb = r; nz(r); V = (d == 0x7f) && (C != 0); C = (d == 0xff) && (C != 0); }
+:SBC dstw is op15_6=46 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d - zext(C); dstw = r; nz(r); V = (d == 0x8000) && (C != 0); C = (d == 0) && (C != 0); }
+:SBCB dstb is op15_6=558 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d - C; dstb = r; nz(r); V = (d == 0x80) && (C != 0); C = (d == 0) && (C != 0); }
+:TST rdw is op15_6=47 & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] { local r = rdw; nz(r); V = 0; C = 0; }
+:TSTB rdb is op15_6=559 & dmode & dreg ; rdb [ cdmode = dmode; cdr = dreg; ] { local r = rdb; nz(r); V = 0; C = 0; }
+:ROR dstw is op15_6=48 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = (d >> 1) | (zext(C) << 15); C = (d & 1) != 0; dstw = r; nz(r); V = N ^ C; }
+:RORB dstb is op15_6=560 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = (d >> 1) | (C << 7); C = (d & 1) != 0; dstb = r; nz(r); V = N ^ C; }
+:ROL dstw is op15_6=49 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = (d << 1) | zext(C); C = (d & 0x8000) != 0; dstw = r; nz(r); V = N ^ C; }
+:ROLB dstb is op15_6=561 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = (d << 1) | C; C = (d & 0x80) != 0; dstb = r; nz(r); V = N ^ C; }
+:ASR dstw is op15_6=50 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d s>> 1; C = (d & 1) != 0; dstw = r; nz(r); V = N ^ C; }
+:ASRB dstb is op15_6=562 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d s>> 1; C = (d & 1) != 0; dstb = r; nz(r); V = N ^ C; }
+:ASL dstw is op15_6=51 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = d << 1; C = (d & 0x8000) != 0; dstw = r; nz(r); V = N ^ C; }
+:ASLB dstb is op15_6=563 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local d = dstb; local r = d << 1; C = (d & 0x80) != 0; dstb = r; nz(r); V = N ^ C; }
+:SWAB dstw is op15_6=3 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local d = dstw; local r = (d << 8) | (d >> 8); dstw = r; local lo:1 = r:1; nz(lo); V = 0; C = 0; }
+:SXT dstw is op15_6=55 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { dstw = zext(N) * 0xffff; Z = N == 0; V = 0; }
+:MTPS rdb is op15_6=564 & dmode & dreg ; rdb [ cdmode = dmode; cdr = dreg; ] { local s = rdb; PS = s & 0xf0; N = (s >> 3) & 1; Z = (s >> 2) & 1; V = (s >> 1) & 1; C = s & 1; }
+:MFPS dstb is op15_6=567 & dmode & dreg ; dstb [ cdmode = dmode; cdr = dreg; ] { local r:1 = 0; pack_psw(r); dstb = r; nz(r); V = 0; }
+:MFPI rdw is op15_6=53 & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] { local s = rdw; push2(s); nz(s); V = 0; }
+:MFPD rdw is op15_6=565 & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] { local s = rdw; push2(s); nz(s); V = 0; }
+:MTPI dstw is op15_6=54 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local s:2 = *:2 SP; SP = SP + 2; dstw = s; nz(s); V = 0; }
+:MTPD dstw is op15_6=566 & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local s:2 = *:2 SP; SP = SP + 2; dstw = s; nz(s); V = 0; }
+
+# EIS: MUL, DIV, ASH, ASHC (register pair R:R+1, R high), XOR
+:MUL rfield, rdw is op15_9=56 & rfield & rodd=0 & rnext & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local p:4 = sext(rfield) * sext(rdw); rfield = p(2); rnext = p:2;
+  N = p s< 0; Z = p == 0; V = 0; C = (p s< -32768) || (p s> 32767);
+}
+:MUL rfield, rdw is op15_9=56 & rfield & rodd=1 & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local p:4 = sext(rfield) * sext(rdw); rfield = p:2;
+  N = p s< 0; Z = p == 0; V = 0; C = (p s< -32768) || (p s> 32767);
+}
+:DIV rfield, rdw is op15_9=57 & rfield & rnext & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local dd:4 = (zext(rfield) << 16) | zext(rnext);
+  local dv:4 = sext(rdw);
+  C = dv == 0;
+  local q:4 = dd s/ dv;
+  local r:4 = dd s% dv;
+  V = C || (q s< -32768) || (q s> 32767);
+  if (V) goto <done>;
+  rfield = q:2; rnext = r:2; N = q s< 0; Z = q == 0;
+<done>
+}
+:ASH rfield, rdw is op15_9=58 & rfield & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local cnt:2 = ((rdw & 0x3f) ^ 0x20) - 0x20;
+  local d = rfield;
+  local l:2 = d << cnt;
+  local rcnt:2 = -cnt;
+  local rr:2 = d s>> rcnt;
+  local left:1 = cnt s> 0;
+  local right:1 = cnt s< 0;
+  local res:2 = (l * zext(cnt s>= 0)) + (rr * zext(right));
+  C = (left && (((d >> (16 - cnt)) & 1) != 0)) || (right && (((d s>> (rcnt - 1)) & 1) != 0));
+  V = left && ((res s< 0) != (d s< 0));
+  rfield = res; nz(res);
+}
+:ASHC rfield, rdw is op15_9=59 & rfield & rodd=0 & rnext & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local cnt:4 = sext(((rdw & 0x3f) ^ 0x20) - 0x20);
+  local d:4 = (zext(rfield) << 16) | zext(rnext);
+  local rcnt:4 = -cnt;
+  local left:1 = cnt s> 0;
+  local right:1 = cnt s< 0;
+  local res:4 = ((d << cnt) * zext(cnt s>= 0)) + ((d s>> rcnt) * zext(right));
+  C = (left && (((d >> (32 - cnt)) & 1) != 0)) || (right && (((d s>> (rcnt - 1)) & 1) != 0));
+  V = left && ((res s< 0) != (d s< 0));
+  rfield = res(2); rnext = res:2; nz(res);
+}
+:ASHC rfield, rdw is op15_9=59 & rfield & rodd=1 & dmode & dreg ; rdw [ cdmode = dmode; cdr = dreg; ] {
+  local cnt:4 = sext(((rdw & 0x3f) ^ 0x20) - 0x20);
+  local d:4 = (zext(rfield) << 16) | zext(rfield);
+  local rcnt:4 = -cnt;
+  local right:1 = cnt s< 0;
+  local res:4 = ((d << cnt) * zext(cnt s>= 0)) + ((d s>> rcnt) * zext(right));
+  rfield = res:2; nz(res); V = 0;
+}
+:XOR rfield, dstw is op15_9=60 & rfield & dmode & dreg ; dstw [ cdmode = dmode; cdr = dreg; ] { local r = dstw ^ rfield; dstw = r; nz(r); V = 0; }
+:SOB rfield, sobt is op15_9=63 & rfield & sobt { rfield = rfield - 1; if (rfield != 0) goto sobt; }
+
+# Branches
+:BR rel8 is op15_8=1 & rel8 { goto rel8; }
+:BNE rel8 is op15_8=2 & rel8 { if (Z == 0) goto rel8; }
+:BEQ rel8 is op15_8=3 & rel8 { if (Z != 0) goto rel8; }
+:BGE rel8 is op15_8=4 & rel8 { if (N == V) goto rel8; }
+:BLT rel8 is op15_8=5 & rel8 { if (N != V) goto rel8; }
+:BGT rel8 is op15_8=6 & rel8 { if ((Z == 0) && (N == V)) goto rel8; }
+:BLE rel8 is op15_8=7 & rel8 { if ((Z != 0) || (N != V)) goto rel8; }
+:BPL rel8 is op15_8=128 & rel8 { if (N == 0) goto rel8; }
+:BMI rel8 is op15_8=129 & rel8 { if (N != 0) goto rel8; }
+:BHI rel8 is op15_8=130 & rel8 { if ((C == 0) && (Z == 0)) goto rel8; }
+:BLOS rel8 is op15_8=131 & rel8 { if ((C != 0) || (Z != 0)) goto rel8; }
+:BVC rel8 is op15_8=132 & rel8 { if (V == 0) goto rel8; }
+:BVS rel8 is op15_8=133 & rel8 { if (V != 0) goto rel8; }
+:BCC rel8 is op15_8=134 & rel8 { if (C == 0) goto rel8; }
+:BCS rel8 is op15_8=135 & rel8 { if (C != 0) goto rel8; }
+
+# Jumps, subroutines, traps
+:JMP jdir is (op15_6=1 & dmode=6 & dreg=7) ... & jdir { goto jdir; }
+:JMP jdir is (op15_6=1 & dmode=3 & dreg=7) ... & jdir { goto jdir; }
+:JMP jind is (op15_6=1) ... & jind { goto [jind]; }
+:JSR rfield, jdir is (op15_9=4 & rfield & rfield=7 & dmode=6 & dreg=7) ... & jdir { local ra:2 = inst_next; push2(ra); call jdir; }
+:JSR rfield, jdir is (op15_9=4 & rfield & rfield=7 & dmode=3 & dreg=7) ... & jdir { local ra:2 = inst_next; push2(ra); call jdir; }
+:JSR rfield, jind is (op15_9=4 & rfield & rfield=7) ... & jind { local t:2 = jind; local ra:2 = inst_next; push2(ra); call [t]; }
+:JSR rfield, jdir is (op15_9=4 & rfield & dmode=6 & dreg=7) ... & jdir { push2(rfield); rfield = inst_next; call jdir; }
+:JSR rfield, jdir is (op15_9=4 & rfield & dmode=3 & dreg=7) ... & jdir { push2(rfield); rfield = inst_next; call jdir; }
+:JSR rfield, jind is (op15_9=4 & rfield) ... & jind { local t:2 = jind; push2(rfield); rfield = inst_next; call [t]; }
+:RTS rlow is op15_3=16 & rlow & rlow=7 { local t:2 = *:2 SP; SP = SP + 2; return [t]; }
+:RTS rlow is op15_3=16 & rlow { local t:2 = rlow; rlow = *:2 SP; SP = SP + 2; return [t]; }
+:MARK marknn is op15_6=52 & marknn { SP = inst_next + marknn * 2; local t:2 = R5; R5 = *:2 SP; SP = SP + 2; return [t]; }
+:EMT tcode is op15_8=0x88 & tcode { emt(tcode:1); }
+:TRAP tcode is op15_8=0x89 & tcode { trap(tcode:1); }
+:HALT is op15_0=0 { halt(); goto inst_start; }
+:WAIT is op15_0=1 { wait(); }
+:RTI is op15_0=2 { local t:2 = *:2 SP; SP = SP + 2; local p:2 = *:2 SP; SP = SP + 2; PS = p:1 & 0xf0; N = (p:1 >> 3) & 1; Z = (p:1 >> 2) & 1; V = (p:1 >> 1) & 1; C = p:1 & 1; return [t]; }
+:BPT is op15_0=3 { bpt(); }
+:IOT is op15_0=4 { iot(); }
+:RESET is op15_0=5 { reset(); }
+:RTT is op15_0=6 { local t:2 = *:2 SP; SP = SP + 2; local p:2 = *:2 SP; SP = SP + 2; PS = p:1 & 0xf0; N = (p:1 >> 3) & 1; Z = (p:1 >> 2) & 1; V = (p:1 >> 1) & 1; C = p:1 & 1; return [t]; }
+:MFPT is op15_0=7 { R0 = mfpt(); }
+:SPL splev is op15_3=19 & splev { PS = (PS & 0x1f) | (splev << 5); }
+
+# Condition-code operators (00024x clear, 00026x set; mask NZVC in bits 3-0)
+:NOP is op15_5=5 & sc=0 & ccbits=0 {  }
+:CLC is op15_5=5 & sc=0 & ccbits=1 { C = 0; }
+:CLV is op15_5=5 & sc=0 & ccbits=2 { V = 0; }
+:CLVC is op15_5=5 & sc=0 & ccbits=3 { V = 0; C = 0; }
+:CLZ is op15_5=5 & sc=0 & ccbits=4 { Z = 0; }
+:CLZC is op15_5=5 & sc=0 & ccbits=5 { Z = 0; C = 0; }
+:CLZV is op15_5=5 & sc=0 & ccbits=6 { Z = 0; V = 0; }
+:CLZVC is op15_5=5 & sc=0 & ccbits=7 { Z = 0; V = 0; C = 0; }
+:CLN is op15_5=5 & sc=0 & ccbits=8 { N = 0; }
+:CLNC is op15_5=5 & sc=0 & ccbits=9 { N = 0; C = 0; }
+:CLNV is op15_5=5 & sc=0 & ccbits=10 { N = 0; V = 0; }
+:CLNVC is op15_5=5 & sc=0 & ccbits=11 { N = 0; V = 0; C = 0; }
+:CLNZ is op15_5=5 & sc=0 & ccbits=12 { N = 0; Z = 0; }
+:CLNZC is op15_5=5 & sc=0 & ccbits=13 { N = 0; Z = 0; C = 0; }
+:CLNZV is op15_5=5 & sc=0 & ccbits=14 { N = 0; Z = 0; V = 0; }
+:CCC is op15_5=5 & sc=0 & ccbits=15 { N = 0; Z = 0; V = 0; C = 0; }
+:NOP is op15_5=5 & sc=1 & ccbits=0 {  }
+:SEC is op15_5=5 & sc=1 & ccbits=1 { C = 1; }
+:SEV is op15_5=5 & sc=1 & ccbits=2 { V = 1; }
+:SEVC is op15_5=5 & sc=1 & ccbits=3 { V = 1; C = 1; }
+:SEZ is op15_5=5 & sc=1 & ccbits=4 { Z = 1; }
+:SEZC is op15_5=5 & sc=1 & ccbits=5 { Z = 1; C = 1; }
+:SEZV is op15_5=5 & sc=1 & ccbits=6 { Z = 1; V = 1; }
+:SEZVC is op15_5=5 & sc=1 & ccbits=7 { Z = 1; V = 1; C = 1; }
+:SEN is op15_5=5 & sc=1 & ccbits=8 { N = 1; }
+:SENC is op15_5=5 & sc=1 & ccbits=9 { N = 1; C = 1; }
+:SENV is op15_5=5 & sc=1 & ccbits=10 { N = 1; V = 1; }
+:SENVC is op15_5=5 & sc=1 & ccbits=11 { N = 1; V = 1; C = 1; }
+:SENZ is op15_5=5 & sc=1 & ccbits=12 { N = 1; Z = 1; }
+:SENZC is op15_5=5 & sc=1 & ccbits=13 { N = 1; Z = 1; C = 1; }
+:SENZV is op15_5=5 & sc=1 & ccbits=14 { N = 1; Z = 1; V = 1; }
+:SCC is op15_5=5 & sc=1 & ccbits=15 { N = 1; Z = 1; V = 1; C = 1; }
+
+# FP11 floating point (17xxxx) is decoded as one user op over the whole opcode word.
+:FPP op15_0 is op15_12=15 & op15_0 { fpp(op15_0:2); }

@@ -24,6 +24,11 @@
 //!
 //! A 64-bit `a == b` is branchless too: `(alo ^ blo) | (ahi ^ bhi)` tested
 //! against 0. [`apply_equal_rule`] folds that into one equality of the wholes.
+//!
+//! [`RuleDoubleInputPair`] joins two adjacent input words that one of these
+//! compares links into one parameter (option `pairparam`), and with option
+//! `pairbranch` also words a compare split across branches links, which
+//! upstream's `LessThreeWay` and `Equal1Form` then fold.
 
 use std::collections::BTreeMap;
 
@@ -31,7 +36,7 @@ use unlace_base::address::calc_mask;
 use unlace_base::types::{int4, uintb};
 use unlace_num::opcodes::OpCode;
 
-use crate::context::{OpId, VarnodeId};
+use crate::context::{BlockId, OpId, VarnodeId};
 use crate::double::{SplitVarnode, prepare_bool_op, replace_bool_op};
 use crate::funcdata::Funcdata;
 
@@ -764,8 +769,9 @@ impl RuleDoubleInputPair {
 /// The unlocked input word directly above `lo` in the same space, if `lo` is
 /// itself an unlocked input, the function never writes either word (a compiler
 /// that spills into an argument slot writes one half, which a joined parameter
-/// can only print as a partial store), and the prototype model accepts the two
-/// words as one parameter (a stack slot; not two separate argument registers).
+/// can only print as a partial store; the possible effect of a call on the
+/// words, an INDIRECT no other op reads, is not a write), and the prototype
+/// model accepts the two words as one parameter (a stack slot; not two separate argument registers).
 /// With option `armpairparam` an aligned argument register pair is accepted
 /// as well, written or not: a later write of a register is a new value, not a
 /// store into the parameter.
@@ -785,14 +791,51 @@ fn input_above(data: &Funcdata, lo: VarnodeId) -> Option<VarnodeId> {
     let h = data.vbank().get(hi)?;
     let base = if addr.is_big_endian() { hiaddr } else { addr };
     let end = &base + 2 * size as i64;
-    let written = data
-        .vbank()
-        .iter_loc_addr_range(&base, &end)
-        .any(|id| data.vbank().get(id).is_some_and(|v| v.is_written()));
+    let written = data.vbank().iter_loc_addr_range(&base, &end).any(|id| {
+        data.vbank().get(id).is_some_and(|v| v.is_written()) && !call_effect_only(data, id)
+    });
     let pair = crate::kuna_armpairparam::joined_pair(data, &base, 2 * size);
     (!h.is_type_lock()
         && (pair || (!written && data.get_func_proto().possible_input_param(&base, 2 * size))))
     .then_some(hi)
+}
+
+/// Whether `vn` is the output of an INDIRECT (a call's possible effect on the
+/// word) whose value reaches only further INDIRECTs and MULTIEQUALs, never an
+/// op that reads it.
+fn call_effect_only(data: &Funcdata, vn: VarnodeId) -> bool {
+    if !matches!(def_of(data, vn), Some((_, OpCode::CPUI_INDIRECT))) {
+        return false;
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    let mut work = vec![vn];
+    while let Some(v) = work.pop() {
+        if !seen.insert(v) {
+            continue;
+        }
+        if seen.len() > MAX_REACH {
+            return false;
+        }
+        let Some(var) = data.vbank().get(v) else {
+            return false;
+        };
+        for op in var.descend_iter() {
+            let Some(o) = data.obank().get(op) else {
+                return false;
+            };
+            if !matches!(o.code(), OpCode::CPUI_INDIRECT | OpCode::CPUI_MULTIEQUAL) {
+                return false;
+            }
+            if o.code() == OpCode::CPUI_INDIRECT && o.get_in(0) != Some(v) {
+                return false;
+            }
+            match o.get_out() {
+                Some(out) => work.push(out),
+                None => return false,
+            }
+        }
+    }
+    true
 }
 
 /// The input word directly above `lo` in its space, if `lo` is an input.
@@ -934,6 +977,8 @@ impl crate::action::Rule for RuleDoubleInputPair {
             OpCode::CPUI_INT_LESSEQUAL,
             OpCode::CPUI_INT_CARRY,
             OpCode::CPUI_INT_XOR,
+            OpCode::CPUI_INT_EQUAL,
+            OpCode::CPUI_INT_NOTEQUAL,
         ]
     }
 
@@ -953,6 +998,17 @@ impl crate::action::Rule for RuleDoubleInputPair {
             .is_some_and(|o| o.code() == OpCode::CPUI_INT_XOR)
         {
             return xor_input_pair(data, op);
+        }
+        if data
+            .obank()
+            .get(op)
+            .is_some_and(|o| matches!(o.code(), OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL))
+        {
+            return if pair_branch(data) {
+                branch_input_pair(data, op)
+            } else {
+                0
+            };
         }
         let Some(o) = data.obank().get(op) else {
             return 0;
@@ -1017,7 +1073,171 @@ impl crate::action::Rule for RuleDoubleInputPair {
                 joined |= join(data, lo, hi);
             }
         }
+        if !joined && opc != OpCode::CPUI_INT_CARRY && pair_branch(data) {
+            return branch_input_pair(data, op);
+        }
         joined as int4
+    }
+}
+
+crate::kuna_flag!(
+    /// (kuna) Join two adjacent input words that a chain of branching compares
+    /// links (option `pairbranch`); see `branch_input_pair`.
+    PairBranch,
+    "pairbranch",
+    "branch-linked double-precision input pairing",
+    unset: false,
+    shipped: false
+);
+
+fn pair_branch(data: &Funcdata) -> bool {
+    data.get_arch().kuna_options.get::<PairBranch>().0
+}
+
+/// (kuna) The branch trigger of [`RuleDoubleInputPair`] (option
+/// `pairbranch`): join an input word compared by `op` with the word above it
+/// when a branch next to the one `op` decides compares that word with the
+/// matching word of the other operand.
+///
+/// A 64-bit compare that a compiler splits across branches (MSVC's
+/// `cmp hi; jl; jg; cmp lo; jb`, Hex-Rays CMP64-JMP2 and JNZ64) tests the high
+/// words in one block and the low words in the block it falls into, and
+/// upstream's `LessThreeWay` and `Equal1Form` fold exactly that shape once
+/// the words are pieces of one value. An unsigned low-word `<` pairs with an
+/// ordered high-word compare up to two single-entry blocks above it; a
+/// low-word `==`/`!=` pairs with a high-word `==`/`!=` in the block
+/// directly above or below. The other operand's words must be a pair too (two
+/// adjacent input words or the SUBPIECEs of one whole), or two constants for
+/// an ordered compare; a pair of zero tests is not enough, since two separate
+/// `int` parameters compiled from `!a && !b` give the same code.
+fn branch_input_pair(data: &mut Funcdata, op: OpId) -> int4 {
+    let (Some(a), Some(b)) = (input(data, op, 0), input(data, op, 1)) else {
+        return 0;
+    };
+    let size = size_of(data, a);
+    if size <= 0 || size > 4 || size_of(data, b) != size {
+        return 0;
+    }
+    let mut joined = false;
+    for (lo, other) in [(a, b), (b, a)] {
+        let Some(hi) = input_above(data, lo) else {
+            continue;
+        };
+        if branch_linked(data, op, hi, other) {
+            joined |= join(data, lo, hi);
+        }
+    }
+    joined as int4
+}
+
+/// The block whose CBRANCH reads `vn`, directly or through a BOOL_NEGATE.
+fn branch_block(data: &Funcdata, vn: VarnodeId, depth: u32) -> Option<BlockId> {
+    let v = data.vbank().get(vn)?;
+    for op in v.descend_iter() {
+        let Some(o) = data.obank().get(op) else {
+            continue;
+        };
+        match o.code() {
+            OpCode::CPUI_CBRANCH => return o.get_parent(),
+            OpCode::CPUI_BOOL_NEGATE if depth < 2 => {
+                if let Some(bl) = o.get_out().and_then(|n| branch_block(data, n, depth + 1)) {
+                    return Some(bl);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether a branch next to the one the low-word compare `op` decides
+/// compares `hi` with the high word that goes with `olo`.
+fn branch_linked(data: &Funcdata, op: OpId, hi: VarnodeId, olo: VarnodeId) -> bool {
+    let Some(o) = data.obank().get(op) else {
+        return false;
+    };
+    let ordered = matches!(o.code(), OpCode::CPUI_INT_LESS | OpCode::CPUI_INT_LESSEQUAL);
+    if olo == hi || (!ordered && vn_const(data, olo).is_some()) {
+        return false;
+    }
+    let Some(lobl) = o.get_out().and_then(|out| branch_block(data, out, 0)) else {
+        return false;
+    };
+    let graph = data.bblocks_ref();
+    let mut near: Vec<BlockId> = Vec::new();
+    let mut b = lobl;
+    for _ in 0..2 {
+        let blk = graph.block(b);
+        if blk.size_in() != 1 {
+            break;
+        }
+        b = blk.get_in(0);
+        if b == lobl {
+            break;
+        }
+        near.push(b);
+    }
+    if !ordered {
+        let blk = graph.block(lobl);
+        for i in 0..blk.size_out() {
+            let s = blk.get_out(i);
+            if s != lobl && graph.block(s).size_in() == 1 {
+                near.push(s);
+            }
+        }
+    }
+    near.into_iter().any(|bl| {
+        let Some(&cb) = data.bb_ops(bl).last() else {
+            return false;
+        };
+        data.obank().get(cb).is_some_and(|c| {
+            c.code() == OpCode::CPUI_CBRANCH
+                && c.get_in(1)
+                    .is_some_and(|cond| hi_compare(data, cond, hi, olo, ordered, 0))
+        })
+    })
+}
+
+/// Whether the branch condition `cond` compares `hi` with the high word of
+/// the value whose low word is `olo`: an ordered compare for an ordered low
+/// compare, an equality for an equality.
+fn hi_compare(
+    data: &Funcdata,
+    cond: VarnodeId,
+    hi: VarnodeId,
+    olo: VarnodeId,
+    ordered: bool,
+    depth: u32,
+) -> bool {
+    let Some((op, opc)) = def_of(data, cond) else {
+        return false;
+    };
+    if opc == OpCode::CPUI_BOOL_NEGATE {
+        return depth < 2
+            && input(data, op, 0)
+                .is_some_and(|c| hi_compare(data, c, hi, olo, ordered, depth + 1));
+    }
+    let fits = match opc {
+        OpCode::CPUI_INT_EQUAL | OpCode::CPUI_INT_NOTEQUAL => !ordered,
+        OpCode::CPUI_INT_LESS
+        | OpCode::CPUI_INT_LESSEQUAL
+        | OpCode::CPUI_INT_SLESS
+        | OpCode::CPUI_INT_SLESSEQUAL => ordered,
+        _ => false,
+    };
+    let (Some(p), Some(q)) = (input(data, op, 0), input(data, op, 1)) else {
+        return false;
+    };
+    let h = if p == hi {
+        q
+    } else if q == hi {
+        p
+    } else {
+        return false;
+    };
+    fits && match vn_const(data, olo) {
+        Some(_) => vn_const(data, h).is_some(),
+        None => h != olo && is_pair(data, olo, h),
     }
 }
 

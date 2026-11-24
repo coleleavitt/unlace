@@ -1,0 +1,358 @@
+# Sanyo LC8670 ("Potato"), the CPU of the Sega Dreamcast VMU / VMS.
+#
+# Original SLEIGH by Ross Meikleham (MIT); rewritten for Ghidra-Rare (see CREDITS.md).  Sources for
+# the semantics: Marcus Comstedt's "Dreamcast Programming - VMS CPU" page, Dmitry Grinberg's
+# "VMU Hackery 2017", and the MAME unidasm lc8670 disassembler used as a black box.
+#
+# Data space ("ram", 9-bit addresses):
+#   0x000-0x0FF  internal RAM, the bank chosen by PSW.RAMBK0 (bank 1 is shown at 0x200-0x2FF)
+#   0x100-0x17F  special function registers
+#   0x180-0x1FF  graphics RAM (bank chosen by XBNK)
+# The stack always lives in RAM bank 0.  The two language variants differ in how the bank bits are
+# modelled: "default" tracks PSW.RAMBK0/IRBK1:0 as Sleigh context (set by SET1/CLR1/MOV on PSW),
+# "dynamic" reads them from PSW at run time (needed to emulate code that switches banks).
+
+define endian=little;
+define alignment=1;
+
+define space ram       type=ram_space      size=2 wordsize=1;
+define space rom       type=ram_space      size=2 wordsize=1 default;
+define space flash     type=ram_space      size=3 wordsize=1;
+define space register  type=register_space size=1;
+
+define register offset=0x00 size=2 [ pc ];
+define register offset=0x10 size=4 contextreg;
+
+define context contextreg
+	rambk = (0,0)
+	irbk  = (1,2)
+;
+
+# Special function registers (memory mapped, so they are real variables in the data space).
+define ram offset=0x100 size=1 [ acc psw b c trl trh sp pcon ie ip ];
+define ram offset=0x10d size=1 [ ext ocr ];
+define ram offset=0x110 size=1 [ t0con t0prr t0l t0lr t0h t0hr ];
+define ram offset=0x118 size=1 [ t1cnt ];
+define ram offset=0x11a size=1 [ t1lc t1l t1hc t1h ];
+define ram offset=0x120 size=1 [ mcr ];
+define ram offset=0x122 size=1 [ stad cnr tdr xbnk ];
+define ram offset=0x127 size=1 [ vccr ];
+define ram offset=0x130 size=1 [ scon0 sbuf0 sbr ];
+define ram offset=0x134 size=1 [ scon1 sbuf1 ];
+define ram offset=0x144 size=1 [ p1 p1ddr p1fcr ];
+define ram offset=0x14c size=1 [ p3 p3ddr p3int ];
+define ram offset=0x154 size=1 [ fpr ];
+define ram offset=0x15c size=1 [ p7 i01cr i23cr isl ];
+define ram offset=0x163 size=1 [ vsel vrmad1 vrmad2 vtrbf vlreg ];
+define ram offset=0x17f size=1 [ btcr ];
+
+define token op (8)
+	opc  = (0,7)
+	hi4  = (4,7)
+	hi3  = (5,7)
+	lo4  = (0,3)
+	l31  = (1,3)
+	d8   = (0,0)
+	bd8  = (4,4)
+	bm   = (3,3)
+	b3   = (0,2)
+	b3n  = (0,2)
+	ri   = (0,1)
+	rin  = (0,1)
+	rsel = (2,3)
+	a11  = (4,4)
+	a108 = (0,2)
+;
+
+attach names [ rin ] [ "0" "1" "2" "3" ];
+attach names [ b3n ] [ "0" "1" "2" "3" "4" "5" "6" "7" ];
+
+define token data8 (8)
+	imm8  = (0,7)
+	simm8 = (0,7) signed
+;
+define token data8b (8)
+	imm8b = (0,7)
+;
+define token data8c (8)
+	simm8c = (0,7) signed
+;
+define token data16 (16)
+	imm16 = (0,15)
+;
+
+
+# ---- helpers ------------------------------------------------------------------------------------
+
+# PSW.P is the parity of ACC (1 = odd number of ones); the hardware keeps it current.
+macro parity(v) {
+	local x:1 = v;
+	x = x ^ (x >> 4);
+	x = x ^ (x >> 2);
+	x = x ^ (x >> 1);
+	psw = (psw & 0xfe) | (x & 1);
+}
+
+macro setacc(v) {
+	acc = v;
+	parity(acc);
+}
+
+# store to the data space; a store to ACC's address also refreshes P
+macro wr(a, v) {
+	*[ram]:1 a = v;
+	if (a != 0x100) goto <wr_done>;
+	parity(v);
+	<wr_done>
+}
+
+# PSW flag bits: CY=7 AC=6 OV=2
+macro setflags(cy, ac, ov) {
+	psw = (psw & 0x3b) | (cy << 7) | (ac << 6) | (ov << 2);
+}
+
+macro addop(v) {
+	local a:1 = acc;
+	local s:1 = v;
+	local t:2 = zext(a) + zext(s);
+	local r:1 = t:1;
+	local cy:1 = t > 0xff;
+	local ac:1 = ((a & 0xf) + (s & 0xf)) > 0xf;
+	local ov:1 = (((a ^ r) & (s ^ r)) >> 7) & 1;
+	setflags(cy, ac, ov);
+	setacc(r);
+}
+
+macro addcop(v) {
+	local a:1 = acc;
+	local s:1 = v;
+	local ci:1 = psw >> 7;
+	local t:2 = zext(a) + zext(s) + zext(ci);
+	local r:1 = t:1;
+	local cy:1 = t > 0xff;
+	local ac:1 = ((a & 0xf) + (s & 0xf) + ci) > 0xf;
+	local ov:1 = (((a ^ r) & (s ^ r)) >> 7) & 1;
+	setflags(cy, ac, ov);
+	setacc(r);
+}
+
+macro subop(v) {
+	local a:1 = acc;
+	local s:1 = v;
+	local r:1 = a - s;
+	local cy:1 = a < s;
+	local ac:1 = (a & 0xf) < (s & 0xf);
+	local ov:1 = (((a ^ s) & (a ^ r)) >> 7) & 1;
+	setflags(cy, ac, ov);
+	setacc(r);
+}
+
+macro subcop(v) {
+	local a:1 = acc;
+	local s:1 = v;
+	local ci:1 = psw >> 7;
+	local t:2 = zext(a) - zext(s) - zext(ci);
+	local r:1 = t:1;
+	local aw:2 = zext(a);
+	local sw:2 = zext(s) + zext(ci);
+	local cy:1 = aw < sw;
+	local al:2 = zext(a & 0xf);
+	local sl:2 = zext(s & 0xf) + zext(ci);
+	local ac:1 = al < sl;
+	local ov:1 = (((a ^ s) & (a ^ r)) >> 7) & 1;
+	setflags(cy, ac, ov);
+	setacc(r);
+}
+
+macro push8(v) {
+	local s:1 = sp + 1;
+	local a:2 = zext(s);
+	*[ram]:1 a = v;
+	sp = s;
+}
+
+macro pop8(v) {
+	local a:2 = zext(sp);
+	v = *[ram]:1 a;
+	sp = sp - 1;
+}
+
+# CALL pushes the low byte, then the high byte of the return address
+macro callto(dest, ret) {
+	local s1:1 = sp + 1;
+	local s2:1 = sp + 2;
+	local a1:2 = zext(s1);
+	local a2:2 = zext(s2);
+	local r:2 = ret;
+	*[ram]:1 a1 = r:1;
+	*[ram]:1 a2 = r(1);
+	sp = s2;
+	call dest;
+}
+
+macro retfrom() {
+	local a2:2 = zext(sp);
+	local s1:1 = sp - 1;
+	local a1:2 = zext(s1);
+	local ra:2 = (zext(*[ram]:1 a2) << 8) | zext(*[ram]:1 a1);
+	sp = sp - 2;
+	return [ra];
+}
+
+# ---- operands -----------------------------------------------------------------------------------
+
+REL:  reloc is simm8c [ reloc = inst_next + simm8c; ] { export *:2 reloc; }
+
+# 16-bit relative (BRF/CALLR): target = address after the instruction - 1 + offset, modulo 64K
+R16:  r16 is imm16 [ r16 = inst_next - 1 + imm16; ] { export *:2 r16; }
+
+# 16-bit absolute, big endian (JMPF/CALLF)
+ABS16: abs16 is imm8 ; imm8b [ abs16 = (imm8 << 8) | imm8b; ] { export *:2 abs16; }
+
+# 12-bit absolute (JMP/CALL): bit 11 and bits 10-8 are in the opcode; the top nibble comes from the
+# address of the next instruction
+JA12: a12 is hi3=1 & bm=1 & a11 & a108 ; imm8
+	[ a12 = (inst_next & 0xf000) | (a11 << 11) | (a108 << 8) | imm8; ] { export *:2 a12; }
+CA12: a12 is hi3=0 & bm=1 & a11 & a108 ; imm8
+	[ a12 = (inst_next & 0xf000) | (a11 << 11) | (a108 << 8) | imm8; ] { export *:2 a12; }
+
+@ifdef DYNAMIC_BANKS
+
+# 9-bit direct addresses: bit 8 is in the opcode.  RAM half: bank taken from PSW.RAMBK0 at run time.
+macro d9addr(ea, loc, rb) {
+	local bk:2 = zext(psw & 2);
+	local l:2 = loc;
+	local hi:2 = l >> 8;
+	ea = l + (((hi ^ 1) * bk) << 8);
+}
+
+# @R0/@R1 point into the RAM half, @R2/@R3 into the SFR half; the pointer cell is
+# 4*IRBK + i in the current RAM bank.
+IND: "@R"^rin is rsel=1 & ri & rin {
+	local bk:2 = zext(psw & 2);
+	local ib:2 = zext(psw & 0x18);
+	local rr:2 = ri;
+	local cell:2 = (ib >> 1) + rr + (bk << 8);
+	local p:1 = *[ram]:1 cell;
+	local ea:2 = zext(p);
+	if (rr >= 2) goto <sfr>;
+	ea = ea + (bk << 8);
+	goto <done>;
+	<sfr>
+	ea = ea + 0x100;
+	<done>
+	export ea;
+}
+
+@else
+
+# Default variant: RAMBK0 and IRBK are Sleigh context values (rambk, irbk), so addresses are constants.
+# Bank 1 of the RAM half is shown at 0x200-0x2FF.
+macro d9addr(ea, loc, rb) {
+	local l:2 = loc;
+	local r:2 = rb;
+	ea = l + ((((l >> 8) ^ 1) & r) << 9);
+}
+
+IND: "@R"^rin is rsel=1 & ri & rin & rambk & irbk {
+	local rr:2 = ri;
+	local cell:2 = (irbk:2 << 2) + rr + (rambk:2 << 9);
+	local hi:2 = rr >> 1;
+	local p:1 = *[ram]:1 cell;
+	local ea:2 = zext(p) + (hi << 8) + (((hi ^ 1) & rambk:2) << 9);
+	export ea;
+}
+
+@endif
+
+# ---- control flow -------------------------------------------------------------------------------
+
+:nop is opc=0x00 { }
+
+:br REL is opc=0x01 ; REL { goto REL; }
+:brf R16 is opc=0x11 ; R16 { goto R16; }
+:jmpf ABS16 is opc=0x21 ; ABS16 { goto ABS16; }
+:jmp JA12 is JA12 { goto JA12; }
+
+:call CA12 is CA12 { callto(CA12, inst_next); }
+:callf ABS16 is opc=0x20 ; ABS16 { callto(ABS16, inst_next); }
+:callr R16 is opc=0x10 ; R16 { callto(R16, inst_next); }
+
+:ret is opc=0xa0 { retfrom(); }
+:reti is opc=0xb0 { retfrom(); }
+
+:bz REL is opc=0x80 ; REL { if (acc == 0) goto REL; }
+:bnz REL is opc=0x90 ; REL { if (acc != 0) goto REL; }
+
+# ---- ALU, memory and bit instructions with a direct address operand are in vmu_ops.sinc ---------
+# (generated by ../../tools/gen_ops.py: the 9-bit direct address needs the opcode's bit 0/4, so each
+# form is spelled out)
+
+@include "vmu_ops.sinc"
+
+# SET1/CLR1 of PSW.RAMBK0 (bit 1) and PSW.IRBK0/1 (bits 3, 4) update the tracked bank context
+:set1 "0x101, 1" is hi3=7 & bm=1 & bd8=1 & b3=1 ; imm8=0x01 [ rambk = 1; globalset(inst_next, rambk); ] { psw = psw | 2; }
+:set1 "0x101, 3" is hi3=7 & bm=1 & bd8=1 & b3=3 ; imm8=0x01 [ irbk = irbk | 1; globalset(inst_next, irbk); ] { psw = psw | 8; }
+:set1 "0x101, 4" is hi3=7 & bm=1 & bd8=1 & b3=4 ; imm8=0x01 [ irbk = irbk | 2; globalset(inst_next, irbk); ] { psw = psw | 16; }
+:clr1 "0x101, 1" is hi3=6 & bm=1 & bd8=1 & b3=1 ; imm8=0x01 [ rambk = 0; globalset(inst_next, rambk); ] { psw = psw & ~2; }
+:clr1 "0x101, 3" is hi3=6 & bm=1 & bd8=1 & b3=3 ; imm8=0x01 [ irbk = irbk & 2; globalset(inst_next, irbk); ] { psw = psw & 0xf7; }
+:clr1 "0x101, 4" is hi3=6 & bm=1 & bd8=1 & b3=4 ; imm8=0x01 [ irbk = irbk & 1; globalset(inst_next, irbk); ] { psw = psw & 0xef; }
+
+# ACC:C is the 16-bit multiplicand/dividend, B the 8-bit multiplier/divisor
+:mul is opc=0x30 {
+	local p:4 = ((zext(acc) << 8) | zext(c)) * zext(b);
+	local hi:1 = p(2);
+	c = p:1;
+	setacc(p(1));
+	b = hi;
+	local ov:1 = hi != 0;
+	psw = (psw & 0x7b) | (ov << 2);
+}
+
+# Divisor zero: ACC = 0xFF, OV set, CY cleared, B and C unchanged (as in the DreamPotato emulator).
+:div is opc=0x40 {
+	local n:2 = (zext(acc) << 8) | zext(c);
+	local d:2 = zext(b);
+	if (d == 0) goto <dz>;
+	local q:2 = n / d;
+	local r:2 = n % d;
+	c = q:1;
+	setacc(q(1));
+	b = r:1;
+	psw = psw & 0x7b;
+	goto <done>;
+	<dz>
+	setacc(0xff);
+	psw = (psw & 0x7b) | 4;
+	<done>
+}
+
+:ror  is opc=0xc0 { acc = (acc >> 1) | (acc << 7); }
+:rol  is opc=0xe0 { acc = (acc << 1) | (acc >> 7); }
+:rorc is opc=0xd0 {
+	local ci:1 = psw >> 7;
+	local co:1 = acc & 1;
+	psw = (psw & 0x7f) | (co << 7);
+	setacc((acc >> 1) | (ci << 7));
+}
+:rolc is opc=0xf0 {
+	local ci:1 = psw >> 7;
+	local co:1 = acc >> 7;
+	psw = (psw & 0x7f) | (co << 7);
+	setacc((acc << 1) | ci);
+}
+
+# LDC reads program memory at TRH:TRL + ACC; LDF reads the flash (bit 16 from FPR.0) at TRH:TRL
+:ldc is opc=0xc1 {
+	local a:2 = ((zext(trh) << 8) | zext(trl)) + zext(acc);
+	setacc(*[rom]:1 a);
+}
+:ldf is opc=0x50 {
+	local fa:3 = (zext(fpr & 1) << 16) | (zext(trh) << 8) | zext(trl);
+	setacc(*[flash]:1 fa);
+}
+# STF programs the flash byte addressed like LDF (the unlock sequence is hardware state)
+:stf is opc=0x51 {
+	local fa:3 = (zext(fpr & 1) << 16) | (zext(trh) << 8) | zext(trl);
+	*[flash]:1 fa = acc;
+}

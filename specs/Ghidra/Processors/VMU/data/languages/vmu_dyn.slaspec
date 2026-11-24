@@ -1,0 +1,3 @@
+# Sanyo LC8670 (Sega Dreamcast VMU), PSW bank bits read at run time.
+@define DYNAMIC_BANKS "1"
+@include "vmu.sinc"

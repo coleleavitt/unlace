@@ -1,0 +1,29 @@
+<processor_spec>
+
+ <programcounter register="pc"/>
+
+<default_memory_blocks>
+        <memory_block name="ram" start_address="ram:0x0000" length="0x100" mode="rw" initialized="false"/>
+        <memory_block name="sfr" start_address="ram:0x0100" length="0x80" mode="rw" initialized="false"/>
+        <memory_block name="gfxram" start_address="ram:0x0180" length="0x80" mode="rw" initialized="false"/>
+        <memory_block name="ram_bank1" start_address="ram:0x0200" length="0x100" mode="rw" initialized="false"/>
+</default_memory_blocks>
+
+ <default_symbols>
+    
+    <symbol name="entry" address="rom:0" entry="true"/>
+    <symbol name="int0_vec" address="rom:0x03" entry="true"/>
+    <symbol name="int1_vec" address="rom:0x0B" entry="true"/>
+    <symbol name="int2_vec" address="rom:0x13" entry="true"/>
+    <symbol name="int3_vec" address="rom:0x1B" entry="true"/>
+    <symbol name="int_t0h_vec" address="rom:0x23" entry="true"/>
+    <symbol name="int_t1_vec" address="rom:0x2B" entry="true"/>
+    <symbol name="int_sio0_vec" address="rom:0x33" entry="true"/>
+    <symbol name="int_sio1_vec" address="rom:0x3B" entry="true"/>
+    <symbol name="int_vms_vec" address="rom:0x43" entry="true"/>
+    <symbol name="int_p3_vec" address="rom:0x4B" entry="true"/>
+    
+
+ </default_symbols>
+
+</processor_spec> 

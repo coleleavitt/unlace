@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="8051"
+            endian="big"
+            size="16"
+            variant="Si4440"
+            version="1.0"
+            slafile="si4440.sla"
+            processorspec="si4440.pspec"
+            id="8051:BE:24:si4440">
+    <description>SiLabs EZRadioPRO family</description>
+    <compiler name="default" spec="si4440.cspec" id="default"/>
+    <external_name tool="IDA-PRO" name="8051"/>
+  </language>  
+</language_definitions>

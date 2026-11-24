@@ -3960,3 +3960,35 @@ forbid = ["halt_baddata", "hifi_nop"]
 test = "xtensa_hifi5_mt8196_loads_feed_the_store"
 address = "0x0"
 expect = ["*a1 = hifi_ae_s64_i(hifi_ae_l64_ip(a0->field_0x8));"]
+
+[[family]]
+name = "amdgpu_permlane_gfx1030"
+language = "AMDGPU:LE:64:GFX10"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1030.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1030: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1030_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]
+
+[[family]]
+name = "amdgpu_permlane_gfx1100"
+language = "AMDGPU:LE:64:GFX11"
+base = "0"
+fixture = "crates/unlace-cli/tests/fixtures/amdgpu/permlane_gfx1100.bin"
+
+# `fixtures/amdgpu/permlane.s` assembled for gfx1100: the VOP3-only v_*_co_u32 forms and
+# v_permlane16_b32/v_permlanex16_b32 decode.
+[[family.function]]
+test = "amdgpu_permlane_gfx1100_decode"
+address = "0x0"
+expect = [
+    "permlane16(permlanex16(permlane16(",
+    "v1 = a7 < a6;",
+]

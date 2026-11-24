@@ -219,6 +219,11 @@ afterwards. The register file is unchanged.
     its M32RX/M32R2 mode does not keep C in PSW or CBR, so the M32RX/M32R2-only instructions and
     the accumulator (DSP) ones are not generated. Seed 2, 1500 encodings: 4048 matches; no fix
     needed.
+  - FR-V (`--arch frv`, `FRV:BE:32:default`): one-instruction VLIW packets (pack bit set);
+    ICC0..ICC3 go through CCR bits 16..31, which sim/frv numbers as SPR 256 (register 129 + SPR,
+    `include/sim/sim-frv.h`, so `sim_regnums`). Fixed in `frv.slaspec`: SLLcc/SLLIcc set V to the
+    OR of the bits shifted out and SRLcc/SRAcc (and the immediate forms) set C to it, as
+    `cpu/frv.cpu` defines them; SLEIGH kept both. Seed 3, 1500 encodings: 2216 matches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

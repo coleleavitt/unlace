@@ -2629,6 +2629,12 @@ class Lm32(ObjdumpArch):
     def addr_ok(self, a):
         return a < 0x1000000
 
+    def ignored(self, mnemonic, operands, state):
+        # a 64-bit multiply into the gr0/gr1 pair: gr0 is hardwired, the simulator's gr1 differs
+        if re.match(r"[us]muli?(cc)?$", mnemonic) and operands.replace(" ", "").split(",")[2:3] == ["gr0"]:
+            return {"*"}
+        return set()
+
     def fix_inputs(self, init, rng):
         init["r0"] = 0                         # r0 reads as zero by convention; sim/lm32 keeps a real register
 
@@ -2704,4 +2710,46 @@ class M32r(ObjdumpArch):
         return a < 0x1000000
 
 
-ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r())}
+FRV_DENY = re.compile(
+    r"^(b[a-z]*|call[a-z]*|j[a-z]*|ret[a-z]*|rett|t[a-z]*|ti[a-z]*|movgs|movsg|movfg.*|movgf.*|dcf|dci|icpl|icul|"
+    r"dcpl|dcul|ici|icei|dcei|witlb|wdtlb|itlbi|dtlbi|tlbpr|lrai|lrad|membar|nop|fnop|mnop|break|rei|mtrap|"
+    r"f[a-z0-9]*|cf[a-z0-9]*|nf[a-z0-9]*|m(?!ul|ov)[a-z0-9]*|cm[a-z0-9]*|ld[a-z]*f[a-z]*|st[a-z]*f[a-z]*|"
+    r"ldc[a-z]*|stc[a-z]*|cldc.*|cstc.*|ldbf.*|.*\.p|swap.*|cswap.*|scan.*|cscan.*|slass|nsdiv.*|nudiv.*|"
+    r"umulcc|smulcc|.*qi.*|.*ld[a-z]*q.*|.*st[a-z]*q.*|.*ldd.*|.*std.*)$"
+)
+
+
+class Frv(ObjdumpArch):
+    """Fujitsu FR-V (big endian) against gdb's frv simulator (--oracle gdbsim). Every candidate is
+    a one-instruction VLIW packet (pack bit set). ICC0..ICC3 (N Z V C) are compared through CCR
+    bits 16..31. Branches, calls, traps, SPR moves, cache/TLB, floating-point and media
+    instructions are not generated."""
+    name = "frv"
+    lang = "FRV:BE:32:default"
+    elf_machine = 0x5441
+    big = True
+    pc = "pc"
+    gprs = [(f"gr{i}", None) for i in range(1, 64)]
+    pc_const = None
+    deny = FRV_DENY
+    objdump_machine = "frv"
+    gdbsim = "frv"
+    gdb_pc = "pc"
+    misaligned_undefined = True
+    # sim/frv numbers SPRs from 129 (include/sim/sim-frv.h); CCR is SPR 256
+    sim_regnums = dict([(f"gr{i}", (i, 4)) for i in range(64)] + [("pc", (128, 4)), ("ccr", (129 + 256, 4))])
+
+    def unicorn(self):
+        raise NotImplementedError("frv runs with --oracle gdbsim")
+
+    def draw(self, rng):
+        return (rng.getrandbits(32) | 0x80000000).to_bytes(4, "big")
+
+    def flag_words(self):
+        return [("ccr", {"icc0": (16, 4), "icc1": (20, 4), "icc2": (24, 4), "icc3": (28, 4)}, lambda w: w)]
+
+    def addr_ok(self, a):
+        return a < 0x1000000
+
+
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), X86_64X87(), X86_32Native(), X86_16(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), Ppc64P10(), Ppc64leP10(), S390x(), S390xVec(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k(), Sparc64(), Sparc32(), Hppa(), Alpha(), Or1k(), MicroBlaze(), MicroBlazeEl(), Xtensa(), Moxie(), Ft32(), Iq2000(), V850(), Mn10300(), Lm32(), M32r(), Frv())}

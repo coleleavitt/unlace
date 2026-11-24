@@ -661,29 +661,3 @@ fn expected_command_error_rejects_a_successful_command() {
     assert!(out.contains("Expected command to fail"), "{out}");
     assert!(out.contains("Total tests applied = 0"), "{out}");
 }
-
-// ---------------------------------------------------------------------------
-// The option environment is restored between test files.
-// ---------------------------------------------------------------------------
-
-#[test]
-fn restore_option_env_drops_and_resets_option_variables() {
-    const ADDED: &str = "UNLACE_TESTFUNCTION_ENV_ADDED";
-    const CHANGED: &str = "UNLACE_TESTFUNCTION_ENV_CHANGED";
-    // SAFETY: names no other test reads or writes.
-    unsafe {
-        std::env::remove_var(ADDED);
-        std::env::set_var(CHANGED, "before");
-    }
-    let snapshot = option_env_snapshot();
-    unsafe {
-        std::env::set_var(ADDED, "leak");
-        std::env::set_var(CHANGED, "after");
-    }
-    restore_option_env(&snapshot);
-    assert_eq!(std::env::var_os(ADDED), None);
-    assert_eq!(std::env::var(CHANGED).as_deref(), Ok("before"));
-    unsafe { std::env::remove_var(CHANGED) };
-    assert!(is_option_env(std::ffi::OsStr::new("unlace_pdb_path")));
-    assert!(!is_option_env(std::ffi::OsStr::new("PATH")));
-}

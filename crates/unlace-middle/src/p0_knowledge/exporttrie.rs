@@ -12,8 +12,3 @@ pub const EXPORTTRIE_ENV: &str = "UNLACE_EXPORTTRIE";
 pub fn exporttrie_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.exporttrie).unwrap_or_else(crate::loadoptions::env::exporttrie)
 }
-
-pub fn set_exporttrie_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(EXPORTTRIE_ENV, if on { "on" } else { "off" }) };
-}

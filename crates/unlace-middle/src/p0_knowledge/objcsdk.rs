@@ -42,17 +42,6 @@ pub fn sdk_path_from_value(v: &str) -> Option<PathBuf> {
     }
 }
 
-/// Bridge a `set_unlace_option("objcsdk", val)` choice to [`OBJCSDK_ENV`] so a
-/// later `load file` in the same process sees it (`off` clears it).
-pub fn set_objcsdk_env(path: Option<&str>) {
-    match path {
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        Some(p) => unsafe { std::env::set_var(OBJCSDK_ENV, p) },
-        // FIXME: Audit that the environment access only happens in single-threaded code.
-        None => unsafe { std::env::remove_var(OBJCSDK_ENV) },
-    }
-}
-
 /// Parse an `objcsdk` option value: `off` (and empty) clear the path, anything
 /// else is the path itself. A path that does not exist is refused.
 pub fn parse_option_value(value: &str) -> Result<Option<PathBuf>, String> {

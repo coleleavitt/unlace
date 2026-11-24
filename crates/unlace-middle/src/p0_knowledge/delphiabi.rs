@@ -18,13 +18,6 @@ pub fn delphiabi_enabled() -> bool {
     crate::loadoptions::scoped(|o| o.delphiabi).unwrap_or_else(crate::loadoptions::env::delphiabi)
 }
 
-/// Bridge a `set_unlace_option("delphiabi", val)` toggle to [`DELPHIABI_ENV`]
-/// so a later `load file` in the same process sees the choice.
-pub fn set_delphiabi_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(DELPHIABI_ENV, if on { "on" } else { "off" }) };
-}
-
 crate::unlace_flag!(
     /// (unlace `delphiabi`) The requested state of the load-time Delphi
     /// compiler-spec selection; the catalog's live `current` field reads it.

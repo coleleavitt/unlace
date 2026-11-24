@@ -26,11 +26,6 @@ pub fn dyldcrossrefs_enabled() -> bool {
         .unwrap_or_else(crate::loadoptions::env::dyldcrossrefs)
 }
 
-pub fn set_dyldcrossrefs_env(on: bool) {
-    // FIXME: Audit that the environment access only happens in single-threaded code.
-    unsafe { std::env::set_var(DYLDCROSSREFS_ENV, if on { "on" } else { "off" }) };
-}
-
 pub fn set_dyldimage_env(name: &str) {
     // FIXME: Audit that the environment access only happens in single-threaded code.
     unsafe { std::env::set_var(DYLDIMAGE_ENV, name) };

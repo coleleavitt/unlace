@@ -4864,6 +4864,9 @@ impl PrintC {
         } else {
             None
         };
+        if let Some(tree) = self.ctree.as_mut() {
+            crate::kuna_ctreebuild::split_statements(fd, tree);
+        }
         if !self.emit_ctree_body(fd, arch, sroot) {
             self.emit_block_graph(fd, arch, sroot);
         }
@@ -5044,6 +5047,18 @@ impl PrintC {
     /// C++ `PrintC::emitBlockCopy` (printc.cc:2908): emit the underlying basic
     /// block (the `BlockCopy.copy` points back into `bblocks`).
     fn emit_block_copy(&mut self, fd: &Funcdata, arch: &Architecture, blk: BlockId) {
+        self.emit_block_copy_in(fd, arch, blk, None);
+    }
+
+    /// [`emit_block_copy`](Self::emit_block_copy) printing `ops` when given (a leaf of the C
+    /// syntax tree at `statements`).
+    fn emit_block_copy_in(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        blk: BlockId,
+        ops: Option<&[OpId]>,
+    ) {
         // emitBlockCopy -> emitAnyLabelStatement(bl) (printc.cc:2894): a label line
         // for an unstructured-goto target.  Its `tag_line(0)` fires any pending
         // `else if` brace, forcing `else { label: if ... }` (the `else if`
@@ -5053,7 +5068,7 @@ impl PrintC {
         self.emit_any_label_statement(fd, blk);
         if let Some(under) = fd.sblocks_ref().block(blk).get_copy() {
             // The copy's `copy` field is a *bblocks* BlockId.
-            self.emit_basic_block_ops(fd, arch, under, true);
+            self.emit_basic_block_ops_in(fd, arch, under, true, ops);
         }
     }
 
@@ -7296,6 +7311,19 @@ impl PrintC {
         bb: BlockId,
         bblocks: bool,
     ) {
+        self.emit_basic_block_ops_in(fd, arch, bb, bblocks, None);
+    }
+
+    /// [`emit_basic_block_ops`](Self::emit_basic_block_ops) over `ops` when given (a leaf of
+    /// the C syntax tree at `statements`), else over the block's own op list.
+    fn emit_basic_block_ops_in(
+        &mut self,
+        fd: &Funcdata,
+        arch: &Architecture,
+        bb: BlockId,
+        bblocks: bool,
+        ops: Option<&[OpId]>,
+    ) {
         // commsorter.setupBlockList(bb) (printc.cc:2833): the comment walk window
         // for this basic block.  The index is the *bblocks* BlockBasic's index
         // (the sblocks node is a BlockCopy mirror, so resolve through `copy`).
@@ -7320,16 +7348,23 @@ impl PrintC {
             return;
         }
         let mut separator = false;
-        let mut cur = if bblocks {
-            fd.bb_op_head(bb)
-        } else {
-            sblocks_basic_head(fd, bb)
+        let mut at = 0usize;
+        let mut cur = match ops {
+            Some(list) => list.first().copied(),
+            None if bblocks => fd.bb_op_head(bb),
+            None => sblocks_basic_head(fd, bb),
         };
         while let Some(inst) = cur {
             if crate::kuna_budget::deadline_passed_in("rendering C") {
                 break;
             }
-            cur = fd.bb_op_next(inst);
+            cur = match ops {
+                Some(list) => {
+                    at += 1;
+                    list.get(at).copied()
+                }
+                None => fd.bb_op_next(inst),
+            };
             let o = match fd.obank().get(inst) {
                 Some(o) => o,
                 None => continue,
@@ -7380,7 +7415,13 @@ impl PrintC {
                 self.emit.tag_line();
             }
             if let Some(last) = self.emit_rust_array_init(fd, arch, inst) {
-                cur = fd.bb_op_next(last);
+                cur = match ops {
+                    Some(list) => list.iter().position(|&op| op == last).and_then(|p| {
+                        at = p + 1;
+                        list.get(at).copied()
+                    }),
+                    None => fd.bb_op_next(last),
+                };
             } else {
                 self.emit_statement(fd, arch, inst);
             }

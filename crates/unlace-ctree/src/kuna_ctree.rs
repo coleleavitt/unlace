@@ -89,6 +89,9 @@ pub enum StmtKind {
     Seq(Vec<StmtId>),
     /// A basic-block leaf whose statements the printer still selects from its ops.
     Ops { leaf: BlockId },
+    /// A leaf split into its ops in order (`CMaturity::Statements`); the printer prints the
+    /// ones that make statements, in this order.
+    Stmts { leaf: BlockId, ops: Vec<OpId> },
     /// One expression statement.
     Expr(ExprId),
     /// `if`. `pre` holds the statements printed above the test (the condition block's
@@ -215,6 +218,13 @@ impl CTree {
         &mut self.exprs[id.index()]
     }
 
+    /// Every statement, in the order they were added.
+    pub fn stmt_ids(&self) -> Vec<StmtId> {
+        (0..self.stmts.len())
+            .map(|i| StmtId(u32::try_from(i).expect("ctree statement count")))
+            .collect()
+    }
+
     /// The number of statements.
     pub fn stmt_count(&self) -> usize {
         self.stmts.len()
@@ -294,6 +304,7 @@ impl CTree {
             | StmtKind::For { body, .. }
             | StmtKind::Loop { body } => vec![*body],
             StmtKind::Ops { .. }
+            | StmtKind::Stmts { .. }
             | StmtKind::Expr(_)
             | StmtKind::Goto { .. }
             | StmtKind::Return(_)
@@ -305,6 +316,7 @@ impl CTree {
         let head = match &stmt.kind {
             StmtKind::Seq(list) => format!("seq[{}]", list.len()),
             StmtKind::Ops { .. } => "ops".to_string(),
+            StmtKind::Stmts { ops, .. } => format!("stmts[{}]", ops.len()),
             StmtKind::Expr(e) => format!("expr {}", self.expr_text(*e)),
             StmtKind::If { cond, els, .. } => format!(
                 "if {}{}",

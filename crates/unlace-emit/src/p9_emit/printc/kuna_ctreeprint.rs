@@ -101,6 +101,17 @@ impl PrintC {
                 }
                 true
             }
+            StmtKind::Stmts { leaf, ops } => match ty {
+                BlockType::Copy => {
+                    self.emit_block_copy_in(fd, arch, leaf, Some(ops.as_slice()));
+                    true
+                }
+                BlockType::Basic => {
+                    self.emit_basic_block_ops_in(fd, arch, leaf, false, Some(ops.as_slice()));
+                    true
+                }
+                _ => false,
+            },
             StmtKind::Ops { leaf } => match ty {
                 BlockType::Copy => {
                     self.emit_block_copy(fd, arch, leaf);

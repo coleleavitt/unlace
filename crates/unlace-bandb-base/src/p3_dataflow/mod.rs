@@ -10,6 +10,7 @@ pub mod kuna_alloca; // (kuna) a dynamic stack allocation becomes alloca(size)
 pub mod kuna_arraystride;
 pub mod kuna_bitidioms;
 pub mod kuna_booleanmask;
+pub mod kuna_boxedcompare;
 pub mod kuna_cancelbytearithmetic;
 pub mod kuna_cmpmerge;
 pub mod kuna_compareform;

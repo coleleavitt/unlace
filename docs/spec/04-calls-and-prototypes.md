@@ -5693,7 +5693,7 @@ target with no carry flag adds a 64-bit value as two 32-bit adds and moves the c
 with an unsigned compare of the low sum against one of its addends, on Xtensa as a
 branch (`add a2,a10,a8; bgeu a2,a8,1f; addi a3,a3,1`), so the low word of a returned
 64-bit sum is refused and `long long f(...) { return a * b + (a >> 3); }` prints
-`void`. With option `carryuse` (default `off`),
+`void`. With option `carryuse` (default `on`),
 `crates/unlace-middle/src/p4_calls/kuna_carryuse.rs (carry_test)` skips, for a
 RETURN trial only, an `INT_LESS` or `INT_LESSEQUAL` that compares the walked value,
 when an `INT_ADD` defines it, with one of that add's inputs (the same Varnode, or a

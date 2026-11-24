@@ -9,7 +9,7 @@
 //! `if (c) return f(a); return f(b);`.
 //!
 //! A block qualifies when it has no successors, two to four distinct
-//! predecessors, at most [`MAX_OPS`] ops, exactly one direct CALL, an argument
+//! predecessors, at most [`MAX_OPS`] ops, exactly one CALL or CALLIND, an input
 //! of that call computed from a MULTIEQUAL in the block, and no INDIRECT that
 //! still creates the call's output (prototype recovery has not settled it yet;
 //! a later pass of the loop retries).  Each predecessor runs exactly one copy,
@@ -21,6 +21,12 @@
 //! successor has no other predecessor, each value the block defines that is read
 //! beyond it (the call's result) is merged back in a MULTIEQUAL there; otherwise
 //! the block's values may be read only by the successor's MULTIEQUALs.
+//!
+//! The one call may also be a CALLIND (Hex-Rays splits computed calls the same
+//! way): when the paths set different targets, the target is one of the
+//! MULTIEQUAL-fed inputs, and each clone calls through its own path's pointer,
+//! which later passes can resolve to a direct call.  Each clone gets its own
+//! call spec, as for a direct call.
 
 use unlace_base::types::int4;
 use unlace_num::opcodes::OpCode;
@@ -114,7 +120,7 @@ fn is_candidate(data: &Funcdata, b: BlockId) -> bool {
             return false;
         }
         if o.is_call() {
-            if call.is_some() || o.code() != OpCode::CPUI_CALL {
+            if call.is_some() || !matches!(o.code(), OpCode::CPUI_CALL | OpCode::CPUI_CALLIND) {
                 return false;
             }
             call = Some(op);

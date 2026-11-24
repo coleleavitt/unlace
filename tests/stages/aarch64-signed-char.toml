@@ -1,0 +1,36 @@
+# A sign-extended byte on AArch64 Linux prints as signed char: plain char is unsigned
+# there (AAPCS64), so an emitted 'char' parameter would be zero-extended when the C is
+# recompiled for the target. Found by tools/semantic (conversions.sx8). The spelling is
+# the ctypes one (option ctypes on, what every real-binary preset runs).
+#   sx8:  sxtb x0, w0 ; ret        (long sx8(signed char c) { return c; })
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'sx8' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '001c4093c0035fd6'
+
+[script]
+commands = [
+    'option ctypes on',
+    'lo fu sx8',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'AArch64 signed byte #1: the parameter is a signed char'
+count = 1
+regex = 'sx8\(signed char '
+
+[[match]]
+name = 'AArch64 signed byte #2: no plain char parameter'
+count = 0
+regex = 'sx8\(char '

@@ -19,6 +19,7 @@ const ILP32: CDataModel = CDataModel {
     float_size: 4,
     double_size: 8,
     long_double_size: 10,
+    char_signed: true,
 };
 
 /// x86-64 Windows: LLP64. 8-byte pointers but a 4-byte `long`, and `long double`
@@ -33,6 +34,7 @@ const LLP64: CDataModel = CDataModel {
     float_size: 4,
     double_size: 8,
     long_double_size: 8,
+    char_signed: true,
 };
 
 /// The whole point of the feature: the same size spells differently per target.
@@ -188,4 +190,19 @@ fn no_spelling_is_ever_a_ghidra_name() {
             }
         }
     }
+}
+
+/// Plain `char` is unsigned only for AAPCS64 AArch64: not on Apple, not under
+/// another compiler spec, and never on x86.
+#[test]
+fn plain_char_is_unsigned_only_on_aapcs64() {
+    assert!(!plain_char_signed("AARCH64:LE:64:v8A:default", false));
+    assert!(!plain_char_signed("AARCH64:BE:64:v8A:default", false));
+    assert!(plain_char_signed("AARCH64:LE:64:v8A:default", true));
+    assert!(plain_char_signed(
+        "AARCH64:LE:64:AppleSilicon:default",
+        false
+    ));
+    assert!(plain_char_signed("AARCH64:LE:64:v8A:windows", false));
+    assert!(plain_char_signed("x86:LE:64:default:gcc", false));
 }

@@ -2366,7 +2366,13 @@ x86-64 System V and `unsigned long long` on i386, from one table.
 Three cases resist an exact answer, and each is decided rather than left to fall
 out of the table. A 1-byte integer is `signed char`/`unsigned char`, never bare
 `char` — its signedness is implementation-defined, and unlace reserves the `char`
-core type for text. `code` is Ghidra's pseudo-type for a function body and only
+core type for text. That `char` core type is itself signed, so where the target's
+plain `char` is unsigned it cannot be spelled `char` either: on AArch64 under the
+`default` compiler spec (AAPCS64; not Apple, whose ABI keeps `char` signed, nor
+`windows`), `ctypes.rs (plain_char_signed)` marks the model unsigned and a
+`char`-typed scalar, cast or array element prints `signed char`, so the emitted C
+sign-extends when it is compiled for the target (`tests/stages/aarch64-signed-char.toml`).
+A `char` reached through a pointer keeps `char`: that is how text is declared. `code` is Ghidra's pseudo-type for a function body and only
 ever reaches the output as `code *`, which becomes `void *`. And floating point
 is the one place an approximation is unavoidable: an exact width match wins, but
 a width above `double` with no exact match spells `long double`, which is how the

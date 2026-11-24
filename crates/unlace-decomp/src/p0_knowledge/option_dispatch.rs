@@ -418,6 +418,7 @@ unlace_options! { self, p1;
     "ptrfromlocal" => registered!(crate::ptrfromuse::PtrFromLocal),
     "charptr" => registered!(crate::charptr::CharPtr),
     "cstringconst" => registered!(crate::cstringconst::CstringConst),
+    "stringglobalnames" => registered!(crate::stringglobalnames::StringGlobalNames),
     "charnum" => registered!(crate::charnum::CharNum),
     "partmacro" => registered!(crate::partmacro::PartMacro),
     "constright" => registered!(crate::constright::ConstRight),

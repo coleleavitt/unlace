@@ -14216,7 +14216,7 @@ impl PrintC {
         let name = if !regname.is_empty() {
             regname
         } else if unlace_global_naming(spc) {
-            unlace_global_data_name(arch.unlace_name_style(), vaddr.get_offset())
+            crate::stringglobalnames::global_name(arch, vaddr.get_offset())
         } else {
             let mut s = String::new();
             let sn = spc.get_name();
@@ -14995,7 +14995,7 @@ impl PrintC {
             self.push_op(tok, Some(op_key(op)));
         }
         self.push_atom(&Atom::with_op_vn(
-            unlace_global_data_name(arch.unlace_name_style(), addr),
+            crate::stringglobalnames::global_name(arch, addr),
             TagType::VarToken,
             crate::printlanguage::SyntaxHighlight::special_color,
             op_key(op),
@@ -16947,7 +16947,7 @@ pub fn declaration_text(
 
 /// (unlace `globalref`) The name the printer gives the unnamed global at `addr`.
 pub fn global_data_name(arch: &Architecture, addr: u64) -> String {
-    unlace_global_data_name(arch.unlace_name_style(), addr)
+    crate::stringglobalnames::global_name(arch, addr)
 }
 
 /// (unlace) One member declaration `<front><name><back>` via the C-declarator
@@ -17536,8 +17536,8 @@ fn unlace_unnamed_location_name(
         return Some(regname);
     }
     if unlace_global_naming(spc) {
-        return Some(unlace_global_data_name(
-            arch.unlace_name_style(),
+        return Some(crate::stringglobalnames::global_name(
+            arch,
             loc.get_offset(),
         ));
     }

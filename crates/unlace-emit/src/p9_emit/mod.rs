@@ -118,6 +118,7 @@ pub mod stackassign;
 pub mod stackbytes;
 pub mod stacklayout;
 pub mod stackmem;
+pub mod stringglobalnames; // (unlace `stringglobalnames`) string-derived names for unnamed globals
 pub mod structassign; // (unlace) a memcpy of exactly one struct between pointers to that struct prints as *d = *s
 pub mod structdefs;
 pub mod swiftstrobj; // (unlace) a Swift string object is not a pointer to the bytes it lands on

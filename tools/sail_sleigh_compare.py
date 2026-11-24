@@ -208,6 +208,18 @@ def bits(f, size):
     except OverflowError:
         return int.from_bytes(struct.pack('<' + FMT[size], math.copysign(math.inf, f)), 'little')
 
+def fdiv(a, b):
+    if b == 0:
+        if a == 0 or math.isnan(a):
+            return math.nan
+        return math.copysign(math.inf, a) * math.copysign(1.0, b)
+    return a / b
+
+def fsqrt(a):
+    if math.isnan(a) or a < 0:
+        return math.nan
+    return math.sqrt(a) if a != 0 else a
+
 def ffloor(f):
     if math.isnan(f) or math.isinf(f) or f == 0:
         return f
@@ -339,6 +351,9 @@ class Pcode:
                 'FLOAT_ADD': lambda: bits(fl(x[0], s0) + fl(x[1], s0), s0),
                 'FLOAT_SUB': lambda: bits(fl(x[0], s0) - fl(x[1], s0), s0),
                 'FLOAT_MULT': lambda: bits(fl(x[0], s0) * fl(x[1], s0), s0),
+                'FLOAT_DIV': lambda: bits(fdiv(fl(x[0], s0), fl(x[1], s0)), s0),
+                'FLOAT_SQRT': lambda: bits(fsqrt(fl(x[0], s0)), s0),
+                'FLOAT_INT2FLOAT': lambda: bits(float(sx(x[0], s0)), sz),
                 'FLOAT_FLOAT2FLOAT': lambda: bits(fl(x[0], s0), sz),
                 'FLOAT_TRUNC': lambda: ftrunc_int(fl(x[0], s0)),
                 'FLOOR': lambda: bits(ffloor(fl(x[0], s0)), s0),
@@ -458,7 +473,7 @@ def fp_value(rng):
 def semantics(a):
     rng = random.Random(a.seed)
     ref = opcodes(a.opcodes, a.exts.split(','))
-    words = [(n, w) for n, k, w in samples(ref, a.samples, rng, near=False, regs=True)]
+    words = [(n, w) for n, k, w in samples(ref, a.samples, rng, near=False, regs=True) if not (a.skip and re.search(a.skip, n))]
     seen, uniq = set(), []
     for n, w in words:
         if w not in seen:
@@ -600,6 +615,7 @@ def main():
             p.add_argument('--vectors', type=int, default=16)
             p.add_argument('--qemu')
             p.add_argument('--keep', help='write the test ELFs into this directory')
+            p.add_argument('--skip', help='leave out instructions whose riscv-opcodes name matches this regular expression')
             p.add_argument('--mem', action='store_true', help='memory instructions: rd=a0 starts as the vector, rs1=a1 points at a doubleword holding a second value, rs2=a2; compare a0 and that doubleword')
             p.add_argument('--fp', action='store_true', help='also load fa1/fa2 with the vectors (FP-flavoured values), and compare fa0 when the p-code writes it')
             p.add_argument('--cpu', default='rv64,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zbkx=true,zicond=true')

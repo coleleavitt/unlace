@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<processor_spec>
+  <programcounter register="PC"/>
+  <volatile outputop="write_volatile" inputop="read_volatile">
+    <range space="register" first="0x7e8" last="0x7ff"/>
+  </volatile>
+</processor_spec>

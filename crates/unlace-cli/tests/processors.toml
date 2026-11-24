@@ -94,6 +94,10 @@ x86_64_avx512_base = """
 x86_32_avx10 = """
 c5fb1044240431c062f1ff082f84240c0000000f97c0c3
 """
+x86_64_issue548 = """
+b8ffffffff0fbdc7c3cccccccccccccc486601f8c3cccccccccccccccccc
+cccc406663c7c3
+"""
 
 ppc_xenon_vmx128 = """
 100018cb102020cb14400c1a1462049a106029cb4e800020
@@ -1707,6 +1711,29 @@ test = "x86_32_vcomxsd_is_an_ordered_compare"
 address = "0x0"
 expect = ["return a1 < a0;"]
 
+# #548: BSR with a zero source leaves its destination, a REX before another prefix is ignored,
+# and MOVSXD r16, r/m32 (mov eax,-1; bsr eax,edi; ret | 48 66 add ax,di; ret | 40 66 movsxd ax,edi; ret).
+[[family]]
+name = "x86_64_issue548"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_issue548"
+
+[[family.function]]
+test = "x86_bsr_zero_source_keeps_the_destination"
+address = "0x0"
+expect = ["return 0xffffffff;"]
+
+[[family.function]]
+test = "x86_rex_before_a_prefix_is_ignored"
+address = "0x10"
+expect = ["return v1 + a0;"]
+
+[[family.function]]
+test = "x86_movsxd_r16_decodes"
+address = "0x20"
+expect = ["return a0;"]
+
 # The native StarCore SC140 language decompiles raw images assembled by hand from
 # the manual's encoding tables: an add, a compare and conditional branch, a
 # two-word-prefix execution set with a high-bank register and a post-increment
@@ -1804,3 +1831,38 @@ expect = ["sub_0(3,4)"]
 test = "s1c6200_decimal_mode_add_is_adjusted"
 address = "0x10"
 expect = ["9 < v1"]
+
+# The Propeller 2 language decompiles flexspin (-2 -O1 --fcache=0) hub-execution output of
+# fixtures/propeller2/flexspin_hub.c: conditional (if_b/if_ae) arithmetic after a cmps, a
+# loop with rdlong, and a caller passing arguments through cog registers.
+[[family]]
+name = "propeller2"
+language = "propeller2:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/propeller2/flexspin_hub.bin"
+
+[[family.function]]
+test = "propeller2_conditional_arithmetic_decompiles"
+address = "0x4f4"
+expect = [
+    "if (dat_fc <= dat_f8)",
+    "dat_ec = dat_f8 * 3;",
+    "dat_ec = dat_fc + dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_hub_loop_decompiles"
+address = "0x514"
+expect = [
+    "for (dat_f4 = 0; dat_f4 < dat_fc; dat_f4 = dat_f4 + 1) {",
+    "dat_f0 += *dat_ec;",
+]
+
+[[family.function]]
+test = "propeller2_calls_decompile"
+address = "0x548"
+expect = [
+    "dat_f8 = 1;",
+    "sub_4f4();",
+    "sub_514();",
+]

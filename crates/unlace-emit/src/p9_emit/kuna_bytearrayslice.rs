@@ -67,6 +67,7 @@ pub fn recognize(fd: &Funcdata, op: OpId) -> Option<(Slice, bool)> {
             source_word: types.get_base(from_size, type_metatype::TYPE_UINT).ok()?,
             target_word: types.get_base(to_size, type_metatype::TYPE_UINT).ok()?,
             shift: offset.get_offset() * 8,
+            width: to_size,
         },
         pointer,
     ))

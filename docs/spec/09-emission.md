@@ -219,10 +219,14 @@ remains in the IR for reaching definitions and alias effects; the printer neithe
 restores the preceding value nor copies bytes out of a constant's fictitious
 fields. Register effects and creation markers keep their existing handling.
 
-A `SUBPIECE` that extracts a four-byte float from an eight-byte scalar preserves
-the selected bits (`kuna_floatslice.rs`). C shifts an unsigned representation,
-narrows it to four bytes, and reinterprets it through an anonymous union; Rust
-uses the corresponding unsigned shift and `f32::from_bits`. A floating source
+A `SUBPIECE` that extracts a four-byte float from an eight-byte scalar, or a
+two-byte binary16 float from an eight- or four-byte scalar (an AArch64 FP16
+vector load read lane by lane), preserves the selected bits
+(`kuna_floatslice.rs`). C shifts an unsigned representation, narrows it to the
+lane width, and reinterprets it through an anonymous union (`unsigned int`/`float`,
+or `unsigned short`/`_Float16`); Rust uses the corresponding unsigned shift and
+`f32::from_bits` or `f16::from_bits`. Before, a half lane printed as the numeric
+conversion `(_Float16)(v >> 0x10)`. A floating source
 first contributes its bit representation, without a numeric conversion. The
 byte offset is a significance offset in either byte order. Partial-structure
 intermediates use the stripped scalar type that their declarations expose.

@@ -107,6 +107,18 @@ writes it. Two NaNs of the same format count as equal, since p-code has no NaN
 payloads. On RV64 the generated file agrees with QEMU on all 34 non-opaque words
 over 128 vectors each; the hand-written file disagreed on 8.
 
+`riscv.zabha.sinc` comes from `extensions/A/zaamo_insts.sail` with
+`--exts rv_zabha,rv_zabha_zacas --only '^amo[a-z]+\.[bh](\.|$)'`. The compiler's
+abstract memory model takes address translation, PMP/PMA checks, triggers and alignment
+as never faulting. `mem_read` is a RAM load and `mem_write_value` a RAM store of the
+access width, and the privilege and access-type records are opaque values the model
+never reads. With that, the width-generic `AMO` clause compiles as written, including
+`amocas`'s compare-then-store branch. The assembly clause builds the mnemonic from
+`amo_mnemonic`, the width and `maybe_aqrl`, so each ordering suffix is its own
+constructor. The compare tool's `--mem` points `rs1` at a doubleword in the test's
+slot and compares `rd` and that doubleword after the word runs. On RV64 all 74
+sampled Zabha/Zacas words agree with QEMU over 64 vectors each.
+
 To compare another variant, copy `specs/Ghidra/Processors/RISCV/data/languages` into
 `<dir>/Ghidra/Processors/RISCV/data/languages`, replace `riscv.zb.sinc`, compile with
 `slacomp`, and pass `--sleighpath <dir>` to `unlace`.
@@ -194,10 +206,8 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
-- **Atomics and vectors.** `zaamo_insts.sail` (which holds Zabha) is one width-generic
-  `AMO` clause over memory, exceptions and reservation state. The V files also need
-  register groups and `vtype`. `riscv.zabha.sinc` and `riscv.rvv.sinc` therefore stay
-  hand-written until the compiler gains memory reads and writes.
+- **Vectors.** The V files need register groups, `vtype`/`vl` state and element
+  loops over runtime lengths, so `riscv.rvv.sinc` stays hand-written.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.

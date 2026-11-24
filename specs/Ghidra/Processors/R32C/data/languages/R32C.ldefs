@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<language_definitions>
+  <language processor="R32C"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.0"
+            slafile="r32c.sla"
+            processorspec="r32c.pspec"
+            id="R32C:LE:32:default">
+    <description>Renesas R32C/100 Series (32-bit CISC, 4 GB linear address space, R32C/111 to R32C/161 groups)</description>
+    <compiler name="default" spec="r32c.cspec" id="default"/>
+    <external_name tool="gnu" name="r32c"/>
+  </language>
+</language_definitions>

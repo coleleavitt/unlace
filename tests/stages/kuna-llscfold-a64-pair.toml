@@ -1,0 +1,60 @@
+# kuna_atomics (option llscfold, docs/spec/02-lift-and-flow.md) on AArch64:
+# the ldaxp/stlxp doubleword retry loops of a 128-bit fetch_add (adds/adc) and
+# exchange fold into one 16-byte __sync builtin; with llscfold off the monitor
+# calls stay. Needs stlxp's second store at +8 (AARCH64base.sinc).
+#
+# Source (C), clang 22 --target=aarch64-linux-gnu -march=armv8-a
+# -mno-outline-atomics -O2 -c; the bytes of each function verbatim:
+#   __int128 add128(__int128 *p, __int128 x) { return __sync_fetch_and_add(p, x); }
+#   __int128 xchg128(__int128 *p, __int128 x) { return __atomic_exchange_n(p, x, 5); }
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'add128' },
+    { space = 'ram', offset = '0x100100', name = 'xchg128' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'e80300aa00857fc8090002ab2a00039a09a92bc88bffff35c0035fd6'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100100'
+readonly = true
+hex = '08847fc8028c29c8c9ffff35e00308aac0035fd6'
+
+[script]
+commands = [
+    'option atomics gcc',
+    'option llscfold on',
+    'load function add128',
+    'decompile',
+    'print C',
+    'load function xchg128',
+    'decompile',
+    'print C',
+    'option llscfold off',
+    'load function add128',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'the 128-bit fetch_add loop folds'
+count = 1
+regex = '__sync_fetch_and_add\('
+
+[[match]]
+name = 'the 128-bit exchange loop folds'
+count = 1
+regex = '__sync_lock_test_and_set\('
+
+[[match]]
+name = 'llscfold off keeps the monitor test'
+min = 1
+max = 4
+regex = 'ExclusiveMonitorPass'

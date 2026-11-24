@@ -2341,7 +2341,9 @@ mod tests {
         // and kuna-atomics-x86 + kuna-atomics-a64 + kuna-atomics-riscv / locked x86, AArch64 LSE and
         // RISC-V AMO read-modify-writes print as __sync builtins (options atomics, llscfold)
         // and kuna-dex-javasync / DEX synchronized blocks and finally clauses (option javasync)
-        assert_eq!(count, 1007, "corpus file count drifted");
+        // and kuna-llscfold-arm + kuna-llscfold-a64-pair / ARM rotated compare-exchange and
+        // ldrexd/strexd, ldaxp/stlxp doubleword retry loops fold (option llscfold)
+        assert_eq!(count, 1009, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

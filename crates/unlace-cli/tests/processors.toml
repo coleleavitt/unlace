@@ -13,6 +13,10 @@
 # (docs/processor-tests.md).
 
 [images]
+r32c = """
+f260df9f9f9f9f9f9f9f9f9f9f9f9f9ffa40bbedfff220df9f9f9f9f9f9f9f9f
+a108640304b10864df9f9f9f9f9f9f9fb4ac40007fdf9f9f9f9f9f9f9f9f9f9f
+"""
 m7900 = """
 466400900316640084747474747474741634129d000026010084747474747474314a0025167fde400045847474747474
 """
@@ -2724,3 +2728,36 @@ expect = [
     "if (a5 <= a6)",
     "if (a7 < v1)",
 ]
+
+# The R32C/100 language decompiles routines hand-assembled from the software manual's chapter 4
+# instruction codes: ADD.L:Q, a JSR.W caller, a CMP.L and JLTU clamp, and an absolute byte store.
+[[family]]
+name = "r32c"
+language = "R32C:LE:32:default"
+base = "0x0"
+image = "r32c"
+args = ["--addr"]
+forbid = ["halt_baddata"]
+
+[[family.function]]
+test = "r32c_quick_add_returns"
+address = "0x0"
+expect = ["return a0 + 3;"]
+
+[[family.function]]
+test = "r32c_jsr_call_decompiles"
+address = "0x10"
+expect = ["return sub_0(2) + 1;"]
+
+[[family.function]]
+test = "r32c_compare_and_branch_clamps"
+address = "0x20"
+expect = [
+    "if (a0 <= 99)",  # CMP.L #100,R2R0 then JLTU skips MOV.L #100,R2R0
+    "return 100;",
+]
+
+[[family.function]]
+test = "r32c_byte_store_is_one_byte"
+address = "0x30"
+expect = ["dat_40 = 0x7f;"]

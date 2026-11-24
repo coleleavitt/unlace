@@ -1555,7 +1555,12 @@ iop input names the cloned call. Each path then prints its own call:
 A block qualifies when it has no successors, two to four distinct
 predecessors, at most 16 ops, exactly one CALL (or CALLIND, below), an input of
 that call computed (within the block) from a MULTIEQUAL, and no INDIRECT that still
-creates the call's output (prototype recovery has not settled the output yet;
+creates the call's output. A MULTIEQUAL does not count when every value it merges
+is a LOAD through one pointer, looking through MULTIEQUALs of such loads
+(`kuna_returndupcalls.rs (one_reloaded_value)`): `free(s->buf)` after a loop that
+reads `s->buf` again on each iteration merges one source expression, so splitting
+it only copies the call onto the loop's break and exit paths and adds a goto
+(openssh `freerrset`, GED 4 to 20 before this check) (prototype recovery has not settled the output yet;
 a later fullloop pass retries). Each predecessor runs exactly one copy, so the
 split preserves behaviour. It is a value of `returndup` rather than its
 default because the source often wrote the merged form as a ternary argument

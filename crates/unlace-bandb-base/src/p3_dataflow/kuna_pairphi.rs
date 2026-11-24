@@ -38,6 +38,11 @@ enum Whole {
     Own,
 }
 
+/// Is the decline trace on (`KUNA_PAIRLOCAL_TRACE=1`)?
+fn trace() -> bool {
+    std::env::var("KUNA_PAIRLOCAL_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+}
+
 fn def(data: &Funcdata, vn: VarnodeId) -> Option<OpId> {
     data.vbank()
         .get(vn)
@@ -83,6 +88,18 @@ fn whole(
             && o.get_in(1).and_then(|c| constant(data, c)) == Some(31)
         {
             return Some(Whole::Sext(lo));
+        }
+    }
+    // x86 `cdq` lifts as `EDX = SUBPIECE(SEXT(EAX), 4)`.
+    if let Some((w, 4)) = subpiece(data, hi) {
+        if let Some(o) = def(data, w).and_then(|d| data.obank().get(d)) {
+            if o.get_in(0) == Some(lo) {
+                match o.code() {
+                    OpCode::CPUI_INT_SEXT => return Some(Whole::Sext(lo)),
+                    OpCode::CPUI_INT_ZEXT => return Some(Whole::Zext(lo)),
+                    _ => {}
+                }
+            }
         }
     }
     match (subpiece(data, hi), subpiece(data, lo)) {
@@ -145,6 +162,20 @@ impl Rule for RulePairPhi {
             return 0;
         }
         let Some((hp, lp, bl)) = half_phis(data, op) else {
+            if trace() {
+                let o = data.obank().get(op);
+                let code = |v: Option<VarnodeId>| {
+                    v.and_then(|v| def(data, v))
+                        .and_then(|d| data.obank().get(d))
+                        .map(|o| o.code())
+                };
+                eprintln!(
+                    "pairlocal: PIECE at {:?}: halves not same-block phis (hi {:?}, lo {:?})",
+                    o.map(|o| o.get_addr().get_offset()),
+                    code(o.and_then(|o| o.get_in(0))),
+                    code(o.and_then(|o| o.get_in(1)))
+                );
+            }
             return 0;
         };
         let (Some(hout), Some(lout)) = (
@@ -163,6 +194,20 @@ impl Rule for RulePairPhi {
                 return 0;
             };
             let Some(w) = whole(data, h, l, (hout, lout)) else {
+                if trace() {
+                    let code = |v: VarnodeId| {
+                        def(data, v)
+                            .and_then(|d| data.obank().get(d))
+                            .map(|o| o.code())
+                    };
+                    eprintln!(
+                        "pairlocal: edge {i}: no whole for hi {:?} {:?} lo {:?} {:?}",
+                        code(h),
+                        constant(data, h),
+                        code(l),
+                        constant(data, l)
+                    );
+                }
                 return 0;
             };
             wholes.push(w);

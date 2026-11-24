@@ -4356,6 +4356,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `FT32` | FTDI FT32 (FT900/FT930) | `ft32:LE:32:default` | written for unlace from the FT32 documentation and the binutils opcode table |
 | `M88000` | Motorola 88000 (MC88100) | `88000:BE:32:default` | written for unlace from the MC88100 User's Manual, Apache-2.0 |
 | `Clipper` | Fairchild/Intergraph CLIPPER C100/C300 | `clipper:LE:32:default` | written for unlace from the CLIPPER C300 data book, Apache-2.0 |
+| `FRV` | Fujitsu FR-V (FR400, FR450, FR500, FR550) | `FRV:BE:32:default` | written for unlace from the FR-V ISA manuals; decode table generated from binutils CGEN `frv-opc.c` (field layout and mask/value only); decode checked against `frv-elf-objdump` 2.43.1 on all 743 instructions, Apache-2.0 |
 <!-- vendor-rows -->
 
 ### CLIPPER (#98)

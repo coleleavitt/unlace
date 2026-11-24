@@ -26,6 +26,8 @@
     filled is the one queried and closed, and `folder` is forwarded. memset
     keeps its argument; read as __stdcall it would pop 12 bytes and move the
     key slot as well.
+    Every PE pass sets `option typelib off`: the test pins what call-site
+    recovery finds, not the prototypes the Windows type library declares.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -35,6 +37,7 @@ c3
 <script>
   <com>clear architecture</com>
   <com>load file crates/unlace-analysis/tests/fixtures/calleepopframe_pe_i386.exe</com>
+  <com>option typelib off</com>
   <com>read symbols</com>
   <com>load addr 0x401000</com>
   <com>decompile</com>

@@ -22,6 +22,8 @@
     ECX and takes p on the stack, declared (as from a mangled name) with `this`
     as a stack parameter: one register read leaves one stack argument, so the
     call through the register still takes p (4-5).
+    Every PE pass sets `option typelib off`: the test pins what call-site
+    recovery finds, not the prototypes the Windows type library declares.
 -->
 <bytechunk space="ram" offset="0x100000" readonly="true">
 c3
@@ -31,6 +33,7 @@ c3
 <script>
   <com>clear architecture</com>
   <com>load file crates/unlace-analysis/tests/fixtures/sharedpush_regparm_pe_i386.exe</com>
+  <com>option typelib off</com>
   <com>read symbols</com>
   <com>map function r0x401000 local_unwind</com>
   <com>map function r0x401030 stack_free</com>

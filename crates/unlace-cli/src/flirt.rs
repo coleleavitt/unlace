@@ -1,8 +1,10 @@
 //! `unlace flirt make`: write FLIRT `.pat` and `.sig` files from the functions
 //! of object files or static libraries.
+//! `unlace flirt inspect`: read-only summary of a `.sig` or `.til` file.
 //!
 //! ```text
 //!   unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]
+//!   unlace flirt inspect <file.sig|file.til> [--limit N] [--json]
 //! ```
 //!
 //! The patterns come from `unlace_analysis::flirt::flirtpat` and the `.sig`
@@ -17,6 +19,8 @@ use unlace_analysis::flirt::flirtpat::{
     FuncPattern, Target, pattern_collisions, patterns_from_object, write_pat,
 };
 use unlace_analysis::flirt::flirtsig::build_sig;
+use unlace_analysis::flirt::inspect::{SigSummary, summarize_sig};
+use unlace_analysis::protos::til::{Til, is_til};
 
 use crate::args::take_value;
 
@@ -42,6 +46,16 @@ pub fn run(argv: &[String]) -> i32 {
                 status
             }
         },
+        Some("inspect") => match inspect(&argv[1..]) {
+            Ok(()) => 0,
+            Err((status, e)) => {
+                eprintln!("unlace flirt inspect: {e}");
+                if status == 2 {
+                    usage();
+                }
+                status
+            }
+        },
         Some("-h" | "--help" | "help") => {
             usage();
             0
@@ -60,6 +74,7 @@ pub fn run(argv: &[String]) -> i32 {
 fn usage() {
     eprintln!(
         "usage: unlace flirt make <lib.a|*.o ...> -o <out.pat> [--sig <out.sig>] [--libname NAME]\n\
+         unlace flirt inspect <file.sig|file.til> [--limit N] [--json]\n\
          \n\
          Write FLIRT patterns for the functions of object files or static libraries.\n\
          -o is the `.pat` text: one line per function with a global name, bytes a\n\
@@ -159,6 +174,153 @@ fn make(argv: &[String]) -> Result<(), (i32, String)> {
         built.collisions.len()
     );
     Ok(())
+}
+
+/// `unlace flirt inspect <file> [--limit N] [--json]`: the header and a sample
+/// of the names of an IDA `.sig` or `.til` file. `--limit 0` shows every name.
+fn inspect(argv: &[String]) -> Result<(), (i32, String)> {
+    let usage = |e: String| (2, e);
+    let (mut path, mut limit, mut json) = (None, 20usize, false);
+    let mut i = 0;
+    while i < argv.len() {
+        let tok = argv[i].as_str();
+        match tok {
+            "--limit" => {
+                let value = take_value(argv, &mut i, tok).map_err(usage)?;
+                limit = value
+                    .parse()
+                    .map_err(|_| usage(format!("--limit needs a count, got {value:?}")))?;
+            }
+            "--json" => json = true,
+            flag if flag.starts_with('-') => return Err(usage(format!("unknown flag {flag:?}"))),
+            input => {
+                if path.replace(input.to_string()).is_some() {
+                    return Err(usage("one file at a time".into()));
+                }
+            }
+        }
+        i += 1;
+    }
+    let path = path.ok_or_else(|| usage("a .sig or .til file is required".into()))?;
+    let bytes = std::fs::read(&path).map_err(|e| (1, format!("cannot read {path}: {e}")))?;
+    let shown = if bytes.starts_with(b"IDASGN") {
+        let summary = summarize_sig(&bytes).map_err(|e| (1, format!("{path}: {e}")))?;
+        sig_report(&path, &summary, limit)
+    } else if is_til(&bytes) {
+        let til = Til::parse(&bytes).map_err(|e| (1, format!("{path}: {e}")))?;
+        til_report(&path, &til, limit)
+    } else {
+        return Err((
+            1,
+            format!("{path}: neither an IDA signature (IDASGN) nor a type library (.til)"),
+        ));
+    };
+    if json {
+        let text = serde_json::to_string_pretty(&shown.json).map_err(|e| (1, e.to_string()))?;
+        println!("{text}");
+    } else {
+        print!("{}", shown.text);
+    }
+    Ok(())
+}
+
+/// The text and JSON views of one inspected file.
+struct Shown {
+    text: String,
+    json: serde_json::Value,
+}
+
+/// The first `limit` items of `names` (all of them for `limit` 0).
+fn sample(names: &[String], limit: usize) -> &[String] {
+    if limit == 0 {
+        names
+    } else {
+        &names[..limit.min(names.len())]
+    }
+}
+
+fn sig_report(path: &str, s: &SigSummary, limit: usize) -> Shown {
+    let shown = sample(&s.names, limit);
+    let startup = if s.startup { " (startup)" } else { "" };
+    let mut text = format!(
+        "{path}: IDA signature, version {}\n  library: {}\n  processor: {}, file formats: {:#x}, flags: {:#x}{startup}\n  pattern length: {} bytes\n  modules: {}, public names: {}\n",
+        s.version,
+        s.library_name,
+        s.processor,
+        s.file_formats,
+        s.flags,
+        s.pattern_len,
+        s.modules,
+        s.names.len(),
+    );
+    if !shown.is_empty() {
+        text.push_str(&format!("  first {} name(s):\n", shown.len()));
+        for name in shown {
+            text.push_str(&format!("    {name}\n"));
+        }
+    }
+    let json = serde_json::json!({
+        "format": "sig",
+        "path": path,
+        "library": s.library_name,
+        "version": s.version,
+        "processor": s.processor,
+        "file_formats": s.file_formats,
+        "flags": s.flags,
+        "startup": s.startup,
+        "pattern_length": s.pattern_len,
+        "modules": s.modules,
+        "names_total": s.names.len(),
+        "names": shown,
+    });
+    Shown { text, json }
+}
+
+fn til_report(path: &str, til: &Til, limit: usize) -> Shown {
+    let h = &til.header;
+    let symbols: Vec<String> = til.symbols.iter().map(|e| e.name.clone()).collect();
+    let types: Vec<String> = til.types.iter().map(|e| e.name.clone()).collect();
+    let (sym_shown, type_shown) = (sample(&symbols, limit), sample(&types, limit));
+    let mut text = format!(
+        "{path}: IDA type library (.til)\n  title: {}\n  compiler: {:#x}, int: {}, bool: {}, enum: {}, long double: {}, pointer: {}\n  symbols: {}, types: {}\n",
+        h.title,
+        h.compiler,
+        h.size_int,
+        h.size_bool,
+        h.size_enum,
+        h.size_long_double,
+        h.ptr_size,
+        symbols.len(),
+        types.len(),
+    );
+    if !sym_shown.is_empty() {
+        text.push_str(&format!("  first {} symbol(s):\n", sym_shown.len()));
+        for name in sym_shown {
+            text.push_str(&format!("    {name}\n"));
+        }
+    }
+    if !type_shown.is_empty() {
+        text.push_str(&format!("  first {} type(s):\n", type_shown.len()));
+        for name in type_shown {
+            text.push_str(&format!("    {name}\n"));
+        }
+    }
+    let json = serde_json::json!({
+        "format": "til",
+        "path": path,
+        "title": h.title,
+        "compiler": h.compiler,
+        "size_int": h.size_int,
+        "size_bool": h.size_bool,
+        "size_enum": h.size_enum,
+        "size_long_double": h.size_long_double,
+        "pointer_size": h.ptr_size,
+        "symbols_total": symbols.len(),
+        "types_total": types.len(),
+        "symbols": sym_shown,
+        "types": type_shown,
+    });
+    Shown { text, json }
 }
 
 /// Add the patterns of one input: an object, or every object member of an

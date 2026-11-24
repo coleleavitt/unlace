@@ -4,8 +4,8 @@
 //! [`MAX_PROTOCOL_VERSION`] or a refused login gets `RPC_FAIL` and the connection closes; an accepted
 //! one gets `HELO_RESULT` (protocol 5 and later) or an empty `RPC_OK`. Each command in 14..=48 is gated
 //! by its [`auth_mask`]: the admin bit needs an admin session, and the decompile and telemetry feature
-//! bits need the session to hold them. `PULL_MD`, `PUSH_MD`, `GET_LUMINA_INFO` and `GET_LUMINA_STATS`
-//! are served; every other packet gets `RPC_FAIL`.
+//! bits need the session to hold them. `PULL_MD`, `PUSH_MD`, `GET_POP`, `SHOW_HISTORY`, `DUMP_MD`,
+//! `GET_LUMINA_INFO` and `GET_LUMINA_STATS` are served; every other packet gets `RPC_FAIL`.
 
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
@@ -21,8 +21,8 @@ use crate::messages::{
 use crate::protocol::{ADMIN_BIT, Packet, auth_mask, features};
 use crate::tls::Acceptor;
 use crate::wire::{
-    DEFAULT_MAX_PAYLOAD, Frame, max_payload_for, read_frame_limited, write_cstring, write_frame,
-    write_u64_split,
+    DEFAULT_MAX_PAYLOAD, Frame, max_payload_for, read_frame_limited, read_vuint32, write_cstring,
+    write_frame, write_raw_bytes, write_u64_split, write_vuint32,
 };
 
 /// What the server reports for `GET_LUMINA_INFO`.
@@ -30,6 +30,12 @@ pub const SERVER_BANNER: &str = "unlace Lumina server (protocol 6)";
 
 /// Concurrent connections served at once; further ones are closed on accept.
 pub const MAX_CONNECTIONS: usize = 64;
+
+/// Rows a read-only listing (`GET_POP`, `SHOW_HISTORY`, `DUMP_MD`) returns at most.
+pub const MAX_QUERY_ITEMS: u32 = 4096;
+
+/// Rows a filtered listing returns when the request names no count.
+pub const DEFAULT_QUERY_ITEMS: u32 = 100;
 
 /// A connection idle this long is dropped.
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -65,6 +71,23 @@ pub struct LuminaStats {
     pub users: u64,
 }
 
+/// A stored function as the listings return it: its key, its metadata and its push count.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FuncRecord {
+    pub key: Vec<u8>,
+    pub info: FuncInfo,
+    pub popularity: u32,
+}
+
+/// One `history` row: a version of a function that a user pushed.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HistoryRecord {
+    pub id: u64,
+    pub username: String,
+    pub timestamp: u64,
+    pub func: FuncRecord,
+}
+
 /// The store behind a server.
 pub trait Handler: Send + Sync {
     /// Accept or refuse a login. The default accepts everyone as a non-admin with every feature.
@@ -92,6 +115,25 @@ pub trait Handler: Send + Sync {
 
     fn lumina_stats(&self, _session: &Session) -> io::Result<LuminaStats> {
         Ok(LuminaStats::default())
+    }
+
+    /// The most pushed stored functions, most popular first (`GET_POP`).
+    fn get_pop(&self, _session: &Session, _limit: u32) -> io::Result<Vec<FuncRecord>> {
+        unsupported("GET_POP")
+    }
+
+    /// The newest history rows, newest first (`SHOW_HISTORY`).
+    fn show_history(
+        &self,
+        _session: &Session,
+        _max_entries: u32,
+    ) -> io::Result<Vec<HistoryRecord>> {
+        unsupported("SHOW_HISTORY")
+    }
+
+    /// The stored functions in insertion order (`DUMP_MD`).
+    fn dump_md(&self, _session: &Session, _max_entries: u32) -> io::Result<Vec<FuncRecord>> {
+        unsupported("DUMP_MD")
     }
 }
 
@@ -171,6 +213,13 @@ impl Handler for InMemoryHandler {
             users: 0,
         })
     }
+}
+
+fn unsupported<T>(what: &str) -> io::Result<T> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        format!("{what} is not supported by this store"),
+    ))
 }
 
 /// Bind `addr` and serve until the listener fails.
@@ -318,6 +367,40 @@ pub fn refusal(id: u8, session: &Session) -> Option<&'static str> {
     None
 }
 
+/// A listing's row count from its request: one `dd`, an empty payload means `default`.
+fn read_count_arg(payload: &[u8], default: u32) -> io::Result<u32> {
+    if payload.is_empty() {
+        return Ok(default);
+    }
+    let mut pos = 0;
+    read_vuint32(payload, &mut pos)
+}
+
+/// A filtered listing's row limit: an empty or zero count means `DEFAULT_QUERY_ITEMS`.
+fn read_query_limit(payload: &[u8]) -> io::Result<u32> {
+    let n = read_count_arg(payload, 0)?;
+    let n = if n == 0 { DEFAULT_QUERY_ITEMS } else { n };
+    Ok(n.min(MAX_QUERY_ITEMS))
+}
+
+fn write_record(out: &mut Vec<u8>, row: &FuncRecord) -> io::Result<()> {
+    write_raw_bytes(out, &row.key);
+    write_cstring(out, &row.info.name)?;
+    write_u64_split(out, u64::from(row.info.size));
+    write_raw_bytes(out, &row.info.metadata);
+    write_vuint32(out, row.popularity);
+    Ok(())
+}
+
+fn records_frame(packet: Packet, rows: &[FuncRecord]) -> io::Result<Frame> {
+    let mut out = Vec::new();
+    write_vuint32(&mut out, rows.len() as u32);
+    for row in rows {
+        write_record(&mut out, row)?;
+    }
+    Ok(Frame::new(packet.as_u8(), out))
+}
+
 fn dispatch<H: Handler + ?Sized>(
     frame: &Frame,
     session: &Session,
@@ -355,6 +438,29 @@ fn dispatch<H: Handler + ?Sized>(
                 write_u64_split(&mut out, v);
             }
             Ok(Frame::new(Packet::GetLuminaStatsResult.as_u8(), out))
+        }
+        Some(Packet::GetPop) => {
+            let limit = read_count_arg(&frame.payload, 10)?.min(MAX_QUERY_ITEMS);
+            let rows = handler.get_pop(session, limit)?;
+            records_frame(Packet::GetPopResult, &rows)
+        }
+        Some(Packet::ShowHistory) => {
+            let max = read_query_limit(&frame.payload)?;
+            let rows = handler.show_history(session, max)?;
+            let mut out = Vec::new();
+            write_vuint32(&mut out, rows.len() as u32);
+            for row in &rows {
+                write_u64_split(&mut out, row.id);
+                write_u64_split(&mut out, row.timestamp);
+                write_cstring(&mut out, &row.username)?;
+                write_record(&mut out, &row.func)?;
+            }
+            Ok(Frame::new(Packet::ShowHistoryResult.as_u8(), out))
+        }
+        Some(Packet::DumpMd) => {
+            let max = read_query_limit(&frame.payload)?;
+            let rows = handler.dump_md(session, max)?;
+            records_frame(Packet::DumpMdResult, &rows)
         }
         Some(p) => {
             Ok(RpcFail::new(format!("{} is not implemented by this server", p.name())).to_frame())
@@ -404,6 +510,9 @@ mod tests {
         assert!(refusal(Packet::GetLuminaStats.as_u8(), &user).is_some());
         assert!(refusal(Packet::PullMd.as_u8(), &user).is_none());
         assert!(refusal(Packet::GetLuminaStats.as_u8(), &session(true, 0)).is_none());
+        assert!(refusal(Packet::ShowHistory.as_u8(), &user).is_some());
+        assert!(refusal(Packet::DumpMd.as_u8(), &user).is_some());
+        assert!(refusal(Packet::GetPop.as_u8(), &user).is_none());
     }
 
     #[test]
@@ -418,7 +527,7 @@ mod tests {
     fn dispatch_answers_unknown_and_unimplemented_packets_with_fail() {
         let h = InMemoryHandler::new();
         let s = session(true, u32::MAX);
-        for id in [Packet::GetPop.as_u8(), 99] {
+        for id in [Packet::ShowPushes.as_u8(), 99] {
             let reply = dispatch(&Frame::new(id, Vec::new()), &s, &h).unwrap();
             assert_eq!(reply.id, Packet::RpcFail.as_u8());
         }
@@ -440,6 +549,22 @@ mod tests {
         let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1);
         assert!(serve_connection(&mut conn, peer, &InMemoryHandler::new()).is_err());
         assert_eq!(conn.output[4], Packet::RpcFail.as_u8());
+    }
+
+    #[test]
+    fn records_frame_layout() {
+        let row = FuncRecord {
+            key: vec![7; 2],
+            info: FuncInfo {
+                name: "f".into(),
+                size: 0x20,
+                metadata: vec![9],
+            },
+            popularity: 3,
+        };
+        let frame = records_frame(Packet::GetPopResult, &[row]).unwrap();
+        assert_eq!(frame.id, Packet::GetPopResult.as_u8());
+        assert_eq!(frame.payload, vec![1, 2, 7, 7, b'f', 0, 0x20, 0, 1, 9, 3]);
     }
 
     struct Duplex {

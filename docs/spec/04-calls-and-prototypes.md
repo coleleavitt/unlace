@@ -11071,3 +11071,7 @@ never resume their caller, including their ABI wrappers. Disabling `gobounds`
 leaves the no-return decision to the existing `gonoreturn` analysis facts, so
 turning off both options preserves the original flow for auditing. Similar
 application names and explicit type-assertion panics are outside this list.
+
+### SysV AMD64 eightbyte classes (leaf)
+
+`sysveightbyte.rs (classify_aggregate)` is the psABI section 3.2.3 classifier for a struct or union passed or returned by value on x86-64 System V: each 8-byte eightbyte gets INTEGER, SSE, SSEUP, X87, X87UP, COMPLEX_X87, NO_CLASS or MEMORY, and the post-merger rules (a) to (d) apply. An aggregate over 64 bytes, an unaligned field, a field past the end, or nesting deeper than 32 is MEMORY. It is a pure function with no caller yet and changes no output; a later change wires it into the x86-64 prototype model behind an option, default off until the datatest corpus shows no changed assertion.

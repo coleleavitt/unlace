@@ -31,6 +31,7 @@ pub mod marshal;
 pub mod notes;
 pub mod partmap;
 pub mod rangemap;
+pub mod remarks;
 pub mod space;
 pub mod types;
 pub mod xml;

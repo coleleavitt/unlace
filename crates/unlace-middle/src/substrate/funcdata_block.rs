@@ -3022,6 +3022,12 @@ impl Funcdata {
                 partial.get_func_proto_mut().set_model(Some(defaultfp));
             }
         }
+        // The ctor's `localmap->resetLocalWindow()` follows `setScope`, so the
+        // partial's local scope covers the model's stack window. Without it no
+        // stack location is in scope, every one is marked unmapped-unaliased, and
+        // RuleIndirectCollapse drops the guard a call puts on an escaped struct's
+        // fields (#871).
+        partial.reset_local_window();
         partial.truncated_flow_clone(self)?;
         *partial.kuna_extent_tables_mut() = self.kuna_extent_tables().clone();
         partial.kuna_later_tables = self.kuna_later_tables.clone();

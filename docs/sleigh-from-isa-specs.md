@@ -206,8 +206,13 @@ generation time, not something the model can settle.
   clauses use record fields and tuple-valued mappings the parser does not read. Loads, stores, branches, F/D/Q, V
   and the privileged instructions are therefore out of reach until the
   compiler learns Sail's memory and control-flow primitives.
-- **Vectors.** The V files need register groups, `vtype`/`vl` state and element
-  loops over runtime lengths, so `riscv.rvv.sinc` stays hand-written.
+- **Vectors (decided: stays hand-written).** Sail's V execute clauses loop over
+  `num_elem = VLEN*LMUL/SEW`, which comes from the runtime `vtype`/`vl` CSRs, and index
+  register groups at run time. Even the encdec guards read `get_sew()`. Nothing can be
+  unrolled into p-code, and `riscv.rvv.sinc` already lifts every instruction to a user
+  operation (`vd = vadd_vv(vs2, vs1)`). A generated file could only move the decoding's
+  provenance to Sail while churning the 672 user-operation names and arguments, so V
+  stays hand-written. Its decoding is checked against LLVM by `riscv_vector.rs`.
 - **Readability is not in the model.** Sail states what an instruction does,
   not how a decompiler should show it. The `--budget` and `--opaque` knobs
   stand in for the choices a spec author makes by hand.
@@ -226,6 +231,19 @@ generation time, not something the model can settle.
   BSD-licensed AARCHMRS JSON and LLVM TableGen are usable for decoding only,
   which `tools/gen_aarch64_ext.py` already does. XED gives x86 decoding but no
   semantics.
+
+## AArch64 reference semantics
+
+The Sail Arm-A model ([rems-project/sail-arm](https://github.com/rems-project/sail-arm),
+BSD-3-Clause-Clear) is an exact reference for AArch64, but running it means building the
+Sail toolchain (OCaml/opam) and its C emulator, then driving a full-system model. For
+the difffuzz cases in #546 (rounding, saturation, unsigned FP converts,
+`BFDOT`/`USDOT`/`SUDOT`, FEAT_MOPS) a cheaper exact oracle exists. QEMU 10.2 user mode
+(`qemu-aarch64 -cpu max`) executes every one of them, including the BF16, I8MM and MOPS
+encodings that Unicorn's older QEMU core rejects. A static ELF with the word between
+register loads and stores is enough, as the RISC-V harness in `tools/sail_sleigh_compare.py`
+does. Sail-arm is therefore not used as an oracle. It remains the source to try if
+AArch64 SLEIGH is ever generated, the way the RISC-V files are.
 
 ## Files
 

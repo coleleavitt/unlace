@@ -2740,6 +2740,21 @@ Re_VPR128Lo.H.sel: Re_VPR128Lo, val is Re_VPR128Lo & b_2223=0 & b_2121 & b_1111 
 @endif
 Re_VPR128Lo.H.vIndexHLM: Re_VPR128Lo.H^"["^vIndexHLM^"]" is Re_VPR128Lo.H & vIndexHLM & Re_VPR128Lo.H.sel { export Re_VPR128Lo.H.sel; }
 
+# The by-element forms of SUDOT, USDOT and BFDOT index a 32-bit group of Vm by H:L whatever
+# the size field holds, and BFMLALB/BFMLALT index a halfword of V0-V15 by H:L:M.
+vIndexHLM3: val is b_2121 & b_1111 & b_2020 [ val = b_1111 << 2 | b_2121 << 1 | b_2020; ] { export *[const]:8 val; }
+dotIndexHL: val is b_2121 & b_1111 [ val = b_1111 << 1 | b_2121; ] { export *[const]:8 val; }
+@if DATA_ENDIAN == "little"
+Re_VPR128Lo.H.selHLM3: Re_VPR128Lo, val is Re_VPR128Lo & b_2121 & b_1111 & b_2020 [ val = 0x5000 + 32*Re_VPR128Lo + (b_1111*4 + b_2121*2 + b_2020)*2; ] { export *[register]:2 val; }
+Re_VPR128.dotsel: Re_VPR128, val is Re_VPR128 & b_2121 & b_1111 [ val = 0x5000 + 32*Re_VPR128 + (b_1111*2 + b_2121)*4; ] { export *[register]:4 val; }
+@else
+Re_VPR128Lo.H.selHLM3: Re_VPR128Lo, val is Re_VPR128Lo & b_2121 & b_1111 & b_2020 [ val = 0x501e + 32*Re_VPR128Lo - (b_1111*4 + b_2121*2 + b_2020)*2; ] { export *[register]:2 val; }
+Re_VPR128.dotsel: Re_VPR128, val is Re_VPR128 & b_2121 & b_1111 [ val = 0x501c + 32*Re_VPR128 - (b_1111*2 + b_2121)*4; ] { export *[register]:4 val; }
+@endif
+Re_VPR128Lo.H.vIndexHLM3: Re_VPR128Lo.H^"["^vIndexHLM3^"]" is Re_VPR128Lo.H & vIndexHLM3 & Re_VPR128Lo.H.selHLM3 { export Re_VPR128Lo.H.selHLM3; }
+Re_VPR128.4B.dotIndex: vRe_VPR128^".4B["^dotIndexHL^"]" is Re_VPR128 & vRe_VPR128 & dotIndexHL & Re_VPR128.dotsel { export Re_VPR128.dotsel; }
+Re_VPR128.2H.dotIndex: vRe_VPR128^".2H["^dotIndexHL^"]" is Re_VPR128 & vRe_VPR128 & dotIndexHL & Re_VPR128.dotsel { export Re_VPR128.dotsel; }
+
 FBitsOp: "#"^fbits is Scale [ fbits = 64 - Scale; ] { export *[const]:2 fbits; }
 
 FBits64: factor is FBitsOp & Scale [ factor = 1 << (64 - Scale); ] { fval:8 = int2float(factor:8); export fval; }

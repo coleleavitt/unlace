@@ -112,7 +112,12 @@ conversions (`vcvt[t]ph2ibs`, `vcvttpd2dqs`, `vcvttsd2sis`, ...), `vminmax*`,
 VNNI-INT8/INT16 dot products, `vmovd`/`vmovw` zero-extending moves, MOVRS
 (`vmovrs*`), the EVEX SM4 forms and the AMX-AVX512 row moves (`tcvtrow*`,
 `tilemovrow`), plus the VEX AVX-VNNI-INT8/INT16 forms compilers emit for the
-unmasked 128/256-bit dot products. Only `x86-64.slaspec` includes it.
+unmasked 128/256-bit dot products, and the VEX SM4 forms. `x86.slaspec` includes it, so
+the 32- and 16-bit languages decode AVX10.2 too: forms with a 64-bit GPR sit
+under `@ifdef IA64`, the 256-bit {sae} forms (EVEX.U=0) need the U bit, which the
+32-bit EVEX prefix now records in `rexX4` and the 16-bit language (whose high
+context bits hold the real-mode CS) does not, and the AMX-AVX512 row moves are in
+`avx10_2_amx.sinc`, included after `amx.sinc` by `x86-64.slaspec`.
 
 - Encodings: map, prefix, W, L and opcode of each record; the plain, masked,
   zero-masked and broadcast records fold into one register-form and one

@@ -10,6 +10,8 @@ mod chip8;
 mod common;
 #[path = "epiphany_raw.rs"]
 mod epiphany_raw;
+#[path = "evm.rs"]
+mod evm;
 #[path = "frv_raw.rs"]
 mod frv_raw;
 #[path = "clipper_raw.rs"]

@@ -10,6 +10,8 @@ mod common;
 mod m6800_family;
 #[path = "mips_elf_selection.rs"]
 mod mips_elf_selection;
+#[path = "moxie_raw.rs"]
+mod moxie_raw;
 #[path = "return_branch_cli.rs"]
 mod return_branch_cli;
 #[path = "riscv_bitmanip.rs"]
@@ -22,6 +24,8 @@ mod riscv_hints;
 mod riscv_vector;
 #[path = "riscv_zabha.rs"]
 mod riscv_zabha;
+#[path = "riscv_zacas.rs"]
+mod riscv_zacas;
 #[path = "riscv_zcb.rs"]
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]

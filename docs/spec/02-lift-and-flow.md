@@ -4248,6 +4248,7 @@ the Ghidra-vendored ones and is covered by the vendored-language count in
 | `ESRL` | Sharp ESR-L | `ESR-L:LE:20:default` | benryves/GhidraESRL @ `baa1b81512`, MIT |
 | `TopSM` | TI TopSM RF core | `topsm:LE:16:default` | antoniovazquezblanco/GhidraTopSM @ `3f45fd9d28`, MIT |
 | `SH` | Renesas SuperH SH-2E/SH-3/SH-3E/SH-4A | `sh3:BE:32:default`, `sh3:LE:32:default`, `sh3e:BE:32:default`, `sh3e:LE:32:default`, `sh2e:BE:32:default` | aleph-void/ghidra-sh (fork of will07c5/ghidra-sh) @ `31c6ca03e9`, MIT |
+| `Moxie` | Moxie (moxielogic) | `moxie:BE:32:default`, `moxie:LE:32:default` | written for unlace from the Moxie architecture page and the binutils opcode table |
 <!-- vendor-rows -->
 
 ### Processor modules written for unlace (#98)
@@ -4260,6 +4261,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | Directory | Processors | Languages | Sources | Test |
 |---|---|---|---|---|
 | `CHIP8` | CHIP-8 (COSMAC VIP) and SUPER-CHIP 1.1 | `CHIP8:BE:16:VIP`, `CHIP8:BE:16:SCHIP` | COSMAC VIP manual, SUPER-CHIP 1.1 notes | `unlace-cli/tests/chip8.rs` |
+| `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
 | `4004` | Intel 4004 / 4040 | `4004:LE:16:default` | Intel MCS-4 and MCS-40 Users Manuals | `unlace-cli/tests/i4004_raw.rs` |
 <!-- native-rows -->
 
@@ -4408,12 +4410,28 @@ AMOs: `amocas.w` (`riscv.rv32a.sinc`, RV32 and RV64) reads the word at
 `(rs1)` into `rd` (sign-extended on RV64) and stores `rs2` there only when
 the word equals the old `rd`; `amocas.d` (`riscv.rv64a.sinc`) does the same
 on RV64 doublewords. The register-pair forms (RV32 `amocas.d`, RV64
-`amocas.q`) are not decoded. Exercised by `unlace-cli/tests/riscv_zcb.rs`:
+`amocas.q`) are in `riscv.zacas.sinc` (below). Exercised by `unlace-cli/tests/riscv_zcb.rs`:
 one probe row per encoding against LLVM's names, RV32 and RV64, and
 LLVM-selected `c.lbu`, `c.lh`, `c.sb`, `c.mul`/`c.not` and
 `cmpxchg`-lowered `amocas` functions that decompile with no bad or
 unimplemented instruction.
 
+
+### RISC-V Zacas register pairs (#98)
+
+`riscv.zacas.sinc` decodes the Zacas 1.0 forms whose operands are 2*XLEN
+wide: RV32 `amocas.d` (funct3 011) and RV64 `amocas.q` (funct3 100), with
+the `.aq`/`.rl`/`.aqrl` suffixes. `rd` and `rs2` name an even/odd register
+pair (even = low half); the `x0` pair reads as zero and is never written, and
+an odd register number is reserved and stays a bad instruction. The lift reads
+the 2*XLEN value at `(rs1)` into the `rd` pair and stores the `rs2` pair
+(read before `rd` is written) only when memory equalled the old `rd` pair, so
+a raw `amocas.d a0,a2,(a4)` decompiles to `if (v == CONCAT44(a1,a0)) *a4 =
+CONCAT44(a3,a2);`. No language variant is needed: on RV32 funct3 011 and on
+RV64 funct3 100 decode nothing else. Before, both forms were bad
+instructions. Exercised by `unlace-cli/tests/riscv_zacas.rs`: probe rows
+against LLVM's names (plain, `.aqrl`, `x0` pair) and raw RV32/RV64 images.
+Notes in `specs/Ghidra/Processors/RISCV/README.md`.
 
 ### RISC-V Zabha (#98)
 

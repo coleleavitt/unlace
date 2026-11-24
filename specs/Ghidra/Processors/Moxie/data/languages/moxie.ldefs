@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="moxie"
+    endian="big"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="moxie_be.sla"
+    processorspec="moxie.pspec"
+    id="moxie:BE:32:default">
+    <description>Moxie big endian</description>
+    <compiler name="default" spec="moxie.cspec" id="default"/>
+    <external_name tool="gnu" name="moxie"/>
+  </language>
+  <language processor="moxie"
+    endian="little"
+    size="32"
+    variant="default"
+    version="1.0"
+    slafile="moxie_le.sla"
+    processorspec="moxie.pspec"
+    id="moxie:LE:32:default">
+    <description>Moxie little endian</description>
+    <compiler name="default" spec="moxie.cspec" id="default"/>
+    <external_name tool="gnu" name="moxie"/>
+  </language>
+</language_definitions>

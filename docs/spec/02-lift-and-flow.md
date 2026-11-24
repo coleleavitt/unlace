@@ -4452,6 +4452,38 @@ text (`fixtures/aarch64_sme/probe.txt`) and clang-compiled ACLE streaming
 functions (`svmopa`, `svread_hor`, `svzero_za`, `svst1_hor`,
 `svadd_za32_vg1x2`) that decompile with no bad or unimplemented instruction.
 
+### Zero-overhead loops (#98)
+
+A hardware loop instruction (`LSETUP`, `lp`, `DO`, `RPTB`, `loop`, `loopdo`) names its loop end,
+and the core branches back when the program counter reaches it; no branch instruction sits at
+the end of the body. Every language that lifts these as loops does it the same way. The loop
+instruction marks one address with `noflow` context through `globalset`: a flag plus the
+loop start, or the distance back to it. A root constructor that sees the flag adds the
+hardware's test there: count down and, while the count holds, branch directly to the loop
+start. The decompiler then sees an ordinary back edge and structures a `do`/`while` over
+the count. There are two placements:
+
+- At the last body instruction, when the loop operand names it (ADSP-218x, Blackfin, DSP56000,
+  DSP56300, PRU, SHARC `DO ... UNTIL`, TMS320C3x `RPTB`, TMS320C5x `RPTB`). The test runs
+  after that instruction.
+- At the address after the body, when the operand names that, or names the last word of a
+  block whose last instruction may be several words long (ARC `lp`, KVX `loopdo`, TMS320C54x
+  `RPTB` at `REA + 1`, Xtensa `LEND`). The test runs before that instruction, as the core
+  compares the next program counter with the loop end however it is reached.
+
+Single-instruction repeats (TMS320C3x `RPTS`, TMS320C5x `RPT`, DSP56300 `REP`) mark the next
+instruction and wrap it in a counted loop. The root constructor either builds a subtable that
+holds the ordinary instructions (Blackfin's `:^ins`), or builds `instruction` itself under
+`phase=0`, with the ordinary constructors in a `with : phase=1` block (Xtensa, TMS320C3x,
+TMS320C5x, TMS320C54x). Without that block, the self-referencing root never takes precedence
+over the ordinary constructors and the loop-back is silently dropped.
+
+C-SKY `bloop` needs none of this: it sits after the body it closes and is lifted as a
+decrement-and-branch. Not modelled: Epiphany (its loop registers are written with `movts`,
+not named by one instruction), StarCore `DOEN`/`DOSETUP` (not decoded), and Hexagon `endloop`
+(a branch through `SA0`/`SA1`, which resolves only where the decompiler propagates the
+`loop0`/`loop1` constants).
+
 ### Vendored community processor modules (#98)
 
 These processor directories vendor a community SLEIGH module unchanged (its

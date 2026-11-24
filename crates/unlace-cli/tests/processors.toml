@@ -415,6 +415,90 @@ expect = [
     "* 0x28))();",  # svbr + rx * 40
 ]
 
+# Zero-overhead loops (docs/spec/02-lift-and-flow.md): the hardware loop-back becomes a real
+# back edge. TMS320C3x RPTB/RPTS built with tic4x-coff-as (RPTB names word 0x104 with the
+# image at word 0x100).
+[[family]]
+name = "tms320c3x_repeat"
+language = "TMS320C3x:LE:32:default"
+base = "0x100"
+fixture = "crates/unlace-cli/tests/fixtures/tms320c3x/repeat.bin"
+forbid = ["repeat_block", "repeat_single"]
+
+[[family.function]]
+test = "tms320c3x_block_and_single_repeats_decompile_as_loops"
+address = "0x100"
+expect = [
+    "v1 += *v2;",  # the RPTB block body
+    "} while (0 <= v5);",  # RC counts down; the block runs RC + 1 times
+    "*v4 = v1;",
+]
+
+# TMS320C54x RPTB built with tic54x-coff-as (words byte-swapped to the big-endian language).
+[[family]]
+name = "tms320c54x_rptb"
+language = "TMS320C54x:BE:16:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/tms320c54x/rptb.bin"
+
+[[family.function]]
+test = "tms320c54x_block_repeat_decompiles_as_loop"
+address = "0x0"
+expect = [
+    "while( true ) {",
+    "if (!v5) break;",  # BRC reaches zero
+    "v5 -= 1;",
+]
+
+# Xtensa LOOP built with xtensa-elf-as.
+[[family]]
+name = "xtensa_loop"
+language = "Xtensa:LE:32:default"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/xtensa/loop.bin"
+
+[[family.function]]
+test = "xtensa_loop_decompiles_as_loop"
+address = "0x0"
+expect = [
+    "do {",
+    "v1 += *a3++;",
+    "} while (a0);",  # LCOUNT, set from a2
+]
+
+# KVX loopdo built with kvx-elf-as (-march=kv3-1, and -march=kv3-2 for the second image).
+[[family]]
+name = "kvx_loopdo"
+language = "KVX:LE:64:kv3-1"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/kvx/loopdo.bin"
+forbid = ["kvx_loopdo"]
+
+[[family.function]]
+test = "kvx_loopdo_decompiles_as_loop"
+address = "0x0"
+expect = [
+    "do {",
+    "v1 += *a0++;",
+    "} while (a1);",  # lc, set from r1
+]
+
+[[family]]
+name = "kvx_loopdo_kv3_2"
+language = "KVX:LE:64:kv3-2"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/kvx/loopdo_kv3_2.bin"
+forbid = ["kvx_loopdo"]
+
+[[family.function]]
+test = "kvx_loopdo_kv3_2_decompiles_as_loop"
+address = "0x0"
+expect = [
+    "do {",
+    "v1 += *a0++;",
+    "} while (a1);",
+]
+
 # The native RCA CDP1802 language (SCRT variant) decompiles a raw image: a
 # store-increment loop through R1 closed by BNZ, returning with SEP R5.
 [[family]]

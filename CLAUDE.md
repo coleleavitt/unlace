@@ -71,7 +71,9 @@ Each tier only builds on the ones below it; new behavior ships behind a named op
   a `kuna_<slug>.rs` module in its owning phase folder (template:
   `p2_lift/kuna_loweredswitch.rs`). Adding or dropping an option also changes hard-coded
   catalog counts (`kuna_phases/tests.rs`, `tests/catalog_bytecompat.rs`,
-  `tests/stages/kuna-catalog.xml`).
+  `tests/fixtures/phase_catalog.json`, and in `tests/stages/kuna-catalog.xml` #15 = settables + 8
+  always, #7 when `change_kind = "structure-recovery"` (also add the name to its list), #8 when
+  `"opt-in-tool"`). Recount them from `phases.toml` after merging main, never add +1 to each side.
 - **The spec is live**: describe every feature/behavior change in prose in the owning
   `docs/spec/` chapter in the same change; run `python3 tools/check_spec.py`.
 - **Speed is a core principle**: a new default-ON must change 0/675 datatest assertions and

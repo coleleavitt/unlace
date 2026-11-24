@@ -21,5 +21,6 @@ pub mod kuna_structheadless; // (kuna) a closed function's parameter read only p
 pub mod kuna_structmerge; // (kuna) merge a synthesized record with the claims of a sibling reader
 pub mod kuna_structsynth; // (kuna) synthesize a struct type from a pointer parameter's constant-offset dereferences
 pub mod kuna_valuewitness; // (kuna) a Swift value witness table load through metadata is typed
+pub mod kuna_vtblbase; // (kuna) a pointer a C_vtbl * is stored through is a C *
 pub mod kuna_zextreturn; // (kuna) a return the convention zero-extends only when unsigned is unsigned
 pub mod unionresolve_run; // (kuna) structured values kept whole until their fields can be named

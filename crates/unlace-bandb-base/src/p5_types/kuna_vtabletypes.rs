@@ -27,6 +27,11 @@
 //! field is a plain `code *` and the call's arguments are recovered at the
 //! call site as before.
 //!
+//! An MSVC class (`VtableClass::msvc`) names its vptr `__vftable`, as MSVC's
+//! own debug information does, and a slot no symbol named at analysis time
+//! takes the method name of the function it holds when another source (a PDB)
+//! has named that function since.
+//!
 //! A class whose structure is already complete (DWARF laid it out) or whose
 //! `C_vtbl` name is taken is left alone.
 
@@ -58,6 +63,9 @@ pub struct VtableClass {
     /// `OSMetaClass` size), else 0. A sized class is laid out to that size
     /// with its first field named `vtable`.
     pub size: u64,
+    /// An MSVC class: the vptr is `__vftable`, and a `vfn_<i>` slot is named
+    /// after the function it holds when the symbol table names one.
+    pub msvc: bool,
 }
 
 /// One slot of a [`VtableClass`].
@@ -147,18 +155,26 @@ fn install_class(
     let vtbl = types.kuna_declare_record(&vtbl_name, false)?;
     let this = types.get_type_pointer(ptr, Rc::clone(&class), ws)?;
     let mut fields = Vec::with_capacity(c.slots.len());
+    let mut used: std::collections::HashSet<String> =
+        c.slots.iter().map(|s| s.name.clone()).collect();
     for (i, slot) in c.slots.iter().enumerate() {
+        let name = if c.msvc && slot.name.starts_with("vfn_") {
+            match symbol_method_name(arch, space, &slot.targets).filter(|n| !used.contains(n)) {
+                Some(n) => {
+                    used.insert(n.clone());
+                    n
+                }
+                None => slot.name.clone(),
+            }
+        } else {
+            slot.name.clone()
+        };
         let code = match agreed_prototype(arch, space, &slot.targets, &this) {
             Some(pieces) => types.get_type_code_proto(&pieces)?,
             None => types.get_type_code()?,
         };
         let field = types.get_type_pointer(ptr, code, ws)?;
-        fields.push(TypeField::new(
-            i as int4,
-            i as int4 * ptr,
-            slot.name.clone(),
-            field,
-        ));
+        fields.push(TypeField::new(i as int4, i as int4 * ptr, name, field));
     }
     let size = c.slots.len() as int4 * ptr;
     let vtbl = types.set_fields_struct_raw(
@@ -192,7 +208,8 @@ fn install_class(
         types.set_fields_struct_raw(&class, fields, Vec::new(), size, ptr, 0)?;
         return Ok(true);
     }
-    let mut fields = vec![TypeField::new(0, 0, "vptr", vptr)];
+    let vptr_name = if c.msvc { "__vftable" } else { "vptr" };
+    let mut fields = vec![TypeField::new(0, 0, vptr_name, vptr)];
     let mut size = ptr;
     for (name, off) in &c.bases {
         let Some(base) = types.find_by_name(name)?.filter(|b| !b.is_incomplete()) else {
@@ -221,6 +238,31 @@ fn install_class(
         flags::variable_length,
     )?;
     Ok(true)
+}
+
+/// The method name the symbol table gives the first of `targets` it names:
+/// the last component of its name, unless that is a placeholder (`sub_`,
+/// `FUN_`, the `rtti` pass's `vfunc_<i>`) or not an identifier.
+fn symbol_method_name(
+    arch: &Architecture,
+    space: &Rc<AddrSpace>,
+    targets: &[u64],
+) -> Option<String> {
+    targets.iter().find_map(|&t| {
+        let name = arch
+            .symboltab
+            .function_display_name_across_scopes(&Address::new(Rc::clone(space), t))?;
+        let leaf = name.rsplit("::").next()?.to_string();
+        let placeholder = ["sub_", "FUN_", "vfunc_", "thunk_"]
+            .iter()
+            .any(|p| leaf.starts_with(p));
+        let identifier = leaf
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && leaf.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        (identifier && !placeholder).then_some(leaf)
+    })
 }
 
 /// The prototype every target with a known one shares, with `this` retyped to

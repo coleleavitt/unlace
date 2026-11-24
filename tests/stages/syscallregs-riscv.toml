@@ -141,7 +141,7 @@ literal = 'fence.i();'
 [[match]]
 name = 'SYSCALLREGS-RISCV #8: retry tests the ecall result, which reads a7 and a0 only'
 count = 1
-literal = '} while (ecall(0x3f,a0) == -4);'
+literal = 'while (ecall(0x3f,a0) == -4) {'
 
 [[match]]
 name = 'SYSCALLREGS-RISCV #9: with option syscallregs off retry tests its own fd'

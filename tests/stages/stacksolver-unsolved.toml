@@ -34,7 +34,8 @@
 # and each variable is solved and pushed at most once.
 #
 # Assert 1 is the fix: the decompile finishes and prints the loop around
-# the call. Before it, this test never finished. Assert 2 is `h`: no raw
+# the call (a while loop, since guardedloop prints a do-while with an empty
+# body as one). Before it, this test never finished. Assert 2 is `h`: no raw
 # stack-pointer local is left (it failed before the fix, with `h`
 # decompiled on its own). Both run at the shipped defaults, where the
 # callee's pop is read off the caller's push run and the real-mode
@@ -71,7 +72,7 @@ commands = [
 [[match]]
 name = 'stacksolver-unsolved #1: the solve terminates and the loop around the call is emitted'
 count = 1
-regex = '^  \} while \(g\(\)\);$'
+regex = '^  while \(g\(\)\) \{$'
 
 [[match]]
 name = 'stacksolver-unsolved #2: no raw stack-pointer local is left'

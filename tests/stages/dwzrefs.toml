@@ -48,7 +48,7 @@ commands = [
 [[match]]
 name = 'DWZREFS #1: a type in a partial unit (ref_addr) or in the supplementary file (ref_alt) types the parameter'
 count = 2
-literal = 'long area(point *p,int k)'
+literal = 'int8 area(point *p,int4 k)'
 
 [[match]]
 name = 'DWZREFS #2: the body is the one the source has, in both images'
@@ -58,7 +58,7 @@ literal = 'return p->x * p->y + k + p->tag;'
 [[match]]
 name = 'DWZREFS #3: a struct nested in another partial-unit struct keeps its fields'
 count = 2
-literal = 'long boxw(box *b)'
+literal = 'int8 boxw(box *b)'
 
 [[match]]
 name = 'DWZREFS #4: no prototype falls back to void with untyped words'

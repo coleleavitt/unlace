@@ -389,7 +389,7 @@ literal = 'sub_4027b1(a0,0,4)'
 [[match]]
 name = 'CALLEEARGS #16: the SEH-framed callee keeps both arguments'
 count = 2
-regex = 'sub_4010b0\("unlace.txt",0x80000000\);'
+regex = 'sub_4010b0\("kuna.txt",0x80000000\);'
 
 [[match]]
 name = 'CALLEEARGS #17: the caller of the alloca helper keeps four'

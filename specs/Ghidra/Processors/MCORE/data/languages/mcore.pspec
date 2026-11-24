@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <!-- The exception vector table (reset, misaligned access, ..., trap0-3, autovectors) is an
+       array of code addresses at VBR (0 after reset); it is data, so no entry points are
+       defined here. -->
+</processor_spec>

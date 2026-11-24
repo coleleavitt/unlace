@@ -421,7 +421,7 @@
 	RD = tmpS[64,64];
 }
 
-:dlsa RD, RSsrc, RTsrc, SAV		is $(AMODE) & REL6=1 & prime=0x00 & fct=0x15 & spec3=0 & SAV & RD & RSsrc & RTsrc {
+:dlsa RD, RSsrc, RTsrc, SAV		is $(AMODE) & prime=0x00 & fct=0x15 & spec3=0 & SAV & RD & RSsrc & RTsrc {
 	RD = (RSsrc << SAV) + RTsrc;
 }
 

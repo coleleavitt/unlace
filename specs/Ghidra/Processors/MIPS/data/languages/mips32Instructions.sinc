@@ -1699,7 +1699,7 @@ define pcodeop SYNC;
     RT = sext(*[ram]:4 OFF_BASER6);
 }
 
-:lsa RD, RS32src, RT32src, SAV		is $(AMODE) & REL6=1 & prime=0x00 & fct=0x05 & spec3=0 & SAV & RD & RS32src & RT32src {
+:lsa RD, RS32src, RT32src, SAV		is $(AMODE) & prime=0x00 & fct=0x05 & spec3=0 & SAV & RD & RS32src & RT32src {
 	tmp:4 = (RS32src << SAV) + RT32src;
 	RD = sext(tmp);
 }

@@ -72,12 +72,28 @@ pub fn pair_slots(proto: &FuncProto, addr: &Address, size: int4) -> bool {
             .is_some_and(|e| e.get_size() == word && Some(e.get_base()) == next)
 }
 
-/// Whether the option is on, `data`'s inputs are not locked, and `size`
-/// bytes at `addr` are an aligned register pair ([`pair_slots`]).
+/// Whether the option is on, `data` is a 32-bit ARM function whose inputs are
+/// not locked, and `size` bytes at `addr` are an aligned register pair
+/// ([`pair_slots`]). Only ARM: on MIPS o32, PowerPC and SPARC a pair's word
+/// order is `bejoin`'s evidence to decide, which a joined input would
+/// preempt.
 pub fn joined_pair(data: &Funcdata, addr: &Address, size: int4) -> bool {
     data.get_arch().kuna_options.get::<ArmPairParams>().0
+        && size == 8
+        && arm32(data)
         && !data.get_func_proto().is_input_locked()
         && pair_slots(data.get_func_proto(), addr, size)
+}
+
+/// Whether `data`'s language is 32-bit ARM: it names `r0`..`r3`, `lr` and
+/// `cpsr`, as `arithhelpers` tells the ARM helper convention apart.
+fn arm32(data: &Funcdata) -> bool {
+    let Some(lookup) = data.get_arch().manage().register_lookup() else {
+        return false;
+    };
+    ["r0", "r1", "r2", "r3", "lr", "cpsr"]
+        .iter()
+        .all(|r| lookup.probe_register(r).is_some_and(|v| v.size == 4))
 }
 
 /// The storage of the parameter recovered from a trial at `trial` whose

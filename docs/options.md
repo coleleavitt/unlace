@@ -1336,6 +1336,11 @@ Three tiers:
 | avx code reads SUB6432(zmm0,0) instead of ymm0 | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | a ymm or xmm argument shows as a 64-byte zmm local | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
 | vector values are widened to char[64] | [`vexzeroupper`](#vexzeroupper----on--off-default-on) |
+| aarch64 neon code calls NEON_smax(a,b,4) instead of vmaxq_s32 | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| a vector table lookup prints as a64_TBL | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| neon vector arguments print as char[16] or undefined16 | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| a lane extract prints as SUB164(v,4) | [`neonintrin`](#neonintrin----on--all--off-default-on) |
+| an aarch64 vector add prints as four lane statements | [`neonintrin`](#neonintrin----on--all--off-default-on) |
 | eight float additions on slices of one register instead of a vector add | [`lanefuse`](#lanefuse----on--all--off-default-on) |
 | avx-512 mask applied as sixteen per-lane multiply-or statements | [`lanefuse`](#lanefuse----on--all--off-default-on) |
 | a vector function body is one statement per lane | [`lanefuse`](#lanefuse----on--all--off-default-on) |
@@ -4314,6 +4319,14 @@ Part of the decompiler; not the control surface. Flip only to reproduce upstream
 - **When to flip:** On by default: AVX code keeps xmm/ymm values at their width, which the vector calling convention (`vectorabi`) needs. Turn it off to see the SLEIGH spec's whole-ZMM writes.
 - **Where / provenance:** P2/flow-follow · kuna · correctness-fix · ida95-46
 - **Example:** `--option vexzeroupper off`
+
+### `neonintrin` -- on | all | off, default `on`
+
+- **Symptoms:** aarch64 neon code calls NEON_smax(a,b,4) instead of vmaxq_s32; a vector table lookup prints as a64_TBL; neon vector arguments print as char[16] or undefined16; a lane extract prints as SUB164(v,4); an aarch64 vector add prints as four lane statements.
+- **What it does:** Print AArch64 Advanced SIMD as the ACLE NEON intrinsics of `<arm_neon.h>` on the ACLE vector types. The AArch64 SLEIGH spec lifts most NEON instructions to `NEON_<mnemonic>` user ops whose last input is the element size in bytes (`NEON_smax(a, b, 4:1)`), plus `a64_TBL(tbx, tables..., index)`, and the lane-wise arithmetic (`add v0.4s, v1.4s, v2.4s`) as one p-code op per lane on register slices. At `on` (default) `kuna_neonintrin.rs` renames each user op to the intrinsic (`vmaxq_s32`, `vqaddq_s16`, `vrshrq_n_s32`, `vmaxvq_u32`, `vqtbl1q_u8` / `vqtbx1q_u8`, `vaeseq_u8`, `vsha256hq_u32`, the narrowing and widening forms by their source type, `vrshrn_high_n_s16`, `vmull_u32`, `vqmovun_s16`) with the element-size immediate dropped from the arguments, gives the operands and result of each user op the vector type its element type and size name (`int32x4_t`, `uint8x16_t`, `float64x2_t`, `poly64x2_t`), and prints a `SUBPIECE` that reads exactly one lane of such a vector as `vgetq_lane_s32(v, 1)`. At `all`, `lanefuse` also re-fuses lane-wise ADD/SUB/MULT and FLOAT_ADD/SUB/MULT/DIV runs over 8- and 16-byte registers into one built-in (`vaddq_s32`, `vmulq_f32`), and a run of lane copies of one scalar into `vdupq_n_s32`. AArch64 only.
+- **When to flip:** On by default: renaming only, 0/675 datatest and 0 stage assertions move. Measured on 259 NEON-dense functions (a quarter or more of their instructions on vector registers) of Debian arm64 libjpeg-turbo 3.1.3, OpenSSL 3.6.5 libcrypto, libwebp 1.6.0 and libpng 1.6.59: raw `NEON_*`/`a64_TBL` calls go from 17,041 to 26 (16,348 ACLE calls), lane pieces (`SUBnn`/`CONCAT`/`ZEXTnn16`) from 61,507 to 60,130, line count unchanged, 0 functions fail either way. Use `all` for hand-written NEON: on libcrypto's assembly it takes 78,881 lines to 63,334 (18,235 ACLE calls); on auto-vectorised C (libjpeg's `jpeg_idct_*`, libwebp's lossless encoder) it fuses the arithmetic while the widening and narrowing lane moves stay per lane, which costs more lines than it saves (libjpeg 37,380 to 56,869, libwebp 22,449 to 30,095). Flip off to see the SLEIGH user-op names.
+- **Where / provenance:** P9/naming-policy · kuna · presentation-default · unlace-neon-acle
+- **Example:** `option neonintrin all`
 
 ### `lanefuse` -- on | all | off, default `on`
 

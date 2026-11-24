@@ -2684,6 +2684,21 @@ truncating the fall-through here"
                 .data
                 .get_arch()
                 .kuna_options
+                .get::<crate::kuna_neonintrin::NeonIntrin>()
+                .fuse
+            {
+                let mut ops = Vec::new();
+                let mut cursor = Some(firstop);
+                while let Some(op) = cursor {
+                    ops.push(op);
+                    cursor = self.dead_next(op);
+                }
+                crate::kuna_lanefuse::fuse_neon(&mut self.data, &ops)?;
+            }
+            if self
+                .data
+                .get_arch()
+                .kuna_options
                 .get::<crate::kuna_coreoptions::VexZeroUpper>()
                 .0
             {

@@ -4677,7 +4677,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `META` | Imagination Technologies META (Meta 1.1, 1.2, 2.1), GP instructions | `META:LE:32:default` | binutils `include/opcode/metag.h` and `opcodes/metag-dis.c` field layouts, Linux `arch/metag` ABI; checked against `metag-linux-gnu-objdump` | `unlace-cli/tests/meta_raw.rs` |
 | `S1C` | Epson S1C17 and S1C33000 cores | `S1C17:LE:24:default`, `S1C33:LE:32:default` | Epson S1C17 Core Manual Rev. 1.2, S1C33000 Core CPU Manual, S1C17 Startup Manual, S1C33 Application Note | `unlace-cli/tests/s1c_raw.rs` |
 | `ST20` | Inmos/ST ST20-C2 and ST20-C4 integer cores | `ST20:LE:32:default` | ST20C2/C4 Core Instruction Set Reference Manual (72-TRN-273-01), transputer compiler writer's guide | `unlace-cli/tests/processors.toml` (`st20`) |
-| `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/tilegx_raw.rs` |
+| `TILEGX` | Tilera TILE-Gx (TILE-Gx8000 family), parallel X/Y-mode bundles | `TILEGX:LE:64:default` | TILE-Gx ISA reference (UG401); encodings generated from the binutils `tilegx` opcode table by `tools/gen_tilegx_sleigh.py`; checked against `tilegx-linux-gnu-objdump` | `unlace-cli/tests/processors.toml` (`tilegx`) |
 | `V60` | NEC V60 (uPD70616), V70 (uPD70632) | `V60:LE:32:default` | NEC V60/V70 user's manuals (instruction formats, addressing modes); MAME `v60` disassembler as length oracle | `unlace-cli/tests/processors.toml` (`v60*`) |
 | `PowerPC` (Gekko) | IBM Gekko / Broadway (PowerPC 750CL) paired singles | `PowerPC:BE:32:Gekko` | IBM PowerPC 750CL User's Manual (paired-single chapter); checked against `powerpc-elf-objdump -M gekko` 2.43.1 | `unlace-cli/tests/ppc_gekko.rs` |
 | `PowerPC` (SPE2) | NXP e200z4/e200z7 with SPE2 and EFS2 | `PowerPC:BE:32:e200-SPE2` | binutils PowerPC opcode table (SPE2/EFS2 rows), SPE2 intrinsic names; checked against `powerpc-elf-objdump` 2.43.1 | `unlace-cli/tests/ppc_spe2.rs` |
@@ -4694,13 +4694,13 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/processors.toml` (`ez80`) |
 | `eZ80` | Zilog eZ80 (eZ80Acclaim! eZ80F91/F92/F93/L92, eZ80190), ADL and Z80 modes | `eZ80:LE:24:ADL`, `eZ80:LE:24:Z80` | Zilog UM0077/UM0080; MAME z80 (BSD-3); libasm (Apache-2.0); binutils z80-dis.c read to cross-check encodings only | `unlace-cli/tests/ez80_raw.rs` |
 | `AMDGPU` | AMD GCN5 (Vega, gfx900-gfx90a) shader ISA, one-lane lift | `AMDGPU:LE:64:GFX9` | LLVM AMDGPU encodings (`llvm-mc -show-encoding`), AMD Vega ISA reference; checked on clang-built OpenCL kernels | `unlace-cli/tests/amdgpu_raw.rs` |
-| `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/kvx_raw.rs` |
+| `KVX` | Kalray KVX kv3-1 (Coolidge v1) and kv3-2 (Coolidge v2), 64-bit mode; bundles of up to eight syllables with tail immediate extensions | `KVX:LE:64:kv3-1`, `KVX:LE:64:kv3-2` | encodings generated from the binutils `kvx` opcode table and disassembler register classes by `tools/gen_kvx_sleigh.py`; checked against `kvx-elf-objdump` | `unlace-cli/tests/processors.toml` (`kvx`, `kvx_wide`) |
 | `CPython` | CPython 3.12 bytecode (one code object's co_code) | `CPython:LE:32:3.12` | CPython 3.12 `dis`/`opcode` tables, `Python/bytecodes.c` semantics; oracle `dis` | `unlace-cli/tests/cpython_raw.rs` |
 | `H8500` | Hitachi H8/500 (H8/510, H8/520, H8/532, H8/534, H8/536, H8/570) | `H8500:BE:16:minimum`, `H8500:BE:24:maximum` | H8/500 Programming Manual; MAME h8500dasm.cpp (BSD-3) | `unlace-cli/tests/processors.toml` (`h8500`) |
 | `S12Z` | NXP S12Z (MC9S12ZVL, MC9S12ZVC, MC9S12ZVM, S12ZVH) | `S12Z:BE:24:default` | NXP S12Z CPU RM; encodings checked against binutils s12z-opc.c (read only) | `unlace-cli/tests/processors.toml` (`s12z`) |
 | `V8Ignition` | V8 Ignition bytecode (V8 13.6, Node.js 24) | `V8Ignition:LE:32:13.6` | V8 `src/interpreter/bytecodes.h`, `bytecode-operands.h` (BSD-3-Clause); oracle `node --print-bytecode` | `unlace-cli/tests/v8ignition_raw.rs` |
 | `JavaCard` | Java Card virtual machine bytecode (Java Card Platform 3.1) | `JavaCard:BE:16:3.1` | Java Card Platform VM Specification v3.1, chapters 7 and 8 | `unlace-cli/tests/javacard_raw.rs` |
-| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/starcore_raw.rs` |
+| `StarCore` | NXP (Freescale) StarCore SC140 DSP core, variable-length execution sets with prefix and serial grouping | `StarCore:LE:32:SC140` | SC140 DSP Core Reference Manual rev 4.1 (encoding and field tables read by `tools/gen_sc140_sleigh.py`); no public toolchain, checked for decode self-consistency and on hand-assembled sets | `unlace-cli/tests/processors.toml` (`starcore`, `starcore_max`) |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)
@@ -5368,6 +5368,11 @@ write goes through it: the F arithmetic, `flw`, `fmv.w.x`, the conversions to `.
 in their own p-code). `fassignH` boxes a Zfh half result the same way (bits 63:16). A single-precision read still
 takes the low 32 bits without checking that the register is boxed (the ISA reads an
 unboxed value as the canonical NaN). Found by `tools/difffuzz`.
+
+The float argument and return entries of `riscv32-fp.cspec` and `riscv64-fp.cspec` take
+2-byte values (`minsize="2"`), since the LP64D/ILP32D ABIs pass a `_Float16` NaN-boxed in
+`fa0`..`fa7`. With `minsize="4"` a half argument was not recognised and `fadd.h fa0,fa0,fa1;
+ret` decompiled to `return a;`.
 
 ### RISC-V compressed indirect jumps clear bit 0
 

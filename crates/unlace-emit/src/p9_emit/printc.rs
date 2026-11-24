@@ -15662,7 +15662,8 @@ impl PrintC {
     /// the `INFINITY`/`NAN`/decimal token via [`format_float_token`].  When there
     /// is no `FloatFormat` for the size, the token is `FLOAT_UNKNOWN`.  (kuna) A
     /// finite 4-byte constant in C output takes an `f` suffix where `float` is
-    /// 4 bytes, since an unsuffixed literal is a `double`.
+    /// 4 bytes, since an unsuffixed literal is a `double`, and a 2-byte
+    /// (binary16) constant takes `f16`.
     fn push_float_ir(&mut self, arch: &Architecture, val: uintb, sz: int4, op: OpId) {
         use unlace_num::float::floatclass;
         let force_scinote = self.context.is_set(modifiers::FORCE_SCINOTE);
@@ -15703,6 +15704,8 @@ impl PrintC {
                             && arch.types().get_size_of_float() == 4
                         {
                             token.push('f');
+                        } else if self.out_lang == crate::kuna_lang::OutLang::C && sz == 2 {
+                            token.push_str("f16");
                         }
                         token
                     }

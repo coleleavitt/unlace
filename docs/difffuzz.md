@@ -155,13 +155,13 @@ Fixed in the specs (`docs/spec/02-lift-and-flow.md` describes each change):
 - **ARM.** A conditional `STRHT` wrote its base back even when the condition failed, and stored 4
   bytes. The T32 `ANDS`, `BICS`, `MOVS.W` (immediate), `MVNS` and `ANDS.W`/`MVNS.W` with a
   shifted register did not set C from the shifter.
+- **TriCore (#563).** PSW.V was the sign bit of the 32-bit result instead of signed overflow
+  (`overflowflags`, about 110 constructors), and `SHA` never set PSW.C.
 
-Open (issues #548, #563):
+Open (issue #548):
 
 - AArch64: `FCVT*U` of a negative value wraps instead of giving 0 (kept: clamping makes every
   `(unsigned)f` unreadable); the SVE `USDOT`/`BFMLALB` and F64MM `LD1RO*` do not decode.
-- TriCore: PSW.V is the sign bit of the 32-bit result instead of signed overflow (`overflowflags`,
-  about 110 constructors), and `SHA` never sets PSW.C.
 - x86-64: an encoding whose REX prefix is followed by another prefix (REX is then ignored) does
   not decode; `BSF`/`BSR` with a zero source write the destination, which hardware leaves
   unchanged; `MOVSXD r16` and several 3DNow! instructions do not decode.

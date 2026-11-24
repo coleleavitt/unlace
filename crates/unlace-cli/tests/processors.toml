@@ -13,6 +13,9 @@
 # (docs/processor-tests.md).
 
 [images]
+kvx_wide = """
+0000d08f40f300e100e208e06ae259811a0900809d5915899a118908
+"""
 v60_long = """
 2d80fe2000000008000000fe2400000004000000cacdcdcdcdcdcdcdcdcdcdcd
 0010000000200000
@@ -1569,6 +1572,23 @@ expect = [
     "a1 + a0 * 8",  # ld.xs scales the index
 ]
 
+# A seven-syllable (28-byte) KVX bundle: ret, addd with a 64-bit immediate and
+# make with a 64-bit immediate, each taking two extension syllables at the tail.
+[[family]]
+name = "kvx_wide"
+language = "KVX:LE:64:kv3-1"
+base = "0x0"
+image = "kvx_wide"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_syllable"]
+
+[[family.function]]
+test = "kvx_bundle_longer_than_16_bytes_decompiles"
+address = "0x0"
+expect = [
+    "return a0 + 0x123456789abcd;",  # the triple-syllable addd in a 28-byte bundle
+]
+
 # AVX10.2 in 32-bit x86: vcomxsd sets OF SF ZF PF CF so that seta is an ordered greater-than
 # (vmovsd xmm0,[esp+4]; xor eax,eax; vcomxsd xmm0,[esp+12]; seta al; ret).
 [[family]]
@@ -1581,3 +1601,57 @@ image = "x86_32_avx10"
 test = "x86_32_vcomxsd_is_an_ordered_compare"
 address = "0x0"
 expect = ["return a1 < a0;"]
+
+# The native StarCore SC140 language decompiles raw images assembled by hand from
+# the manual's encoding tables: an add, a compare and conditional branch, a
+# two-word-prefix execution set with a high-bank register and a post-increment
+# load, an indexed load and a call.
+[[family]]
+name = "starcore"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/sets.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word"]
+
+[[family.function]]
+test = "starcore_add_returns_the_sum"
+address = "0x0"
+expect = ["return a0 + a1;"]
+
+[[family.function]]
+test = "starcore_prefixed_set_loads_through_r0"
+address = "0xc"
+expect = [
+    "*a2",  # MOVE.W (R0)+ reads the third argument
+]
+
+[[family.function]]
+test = "starcore_indexed_load_decompiles"
+address = "0x18"
+expect = [
+    "[4]",  # (R0+8) is the fifth word
+]
+
+[[family.function]]
+test = "starcore_call_decompiles"
+address = "0x1e"
+expect = [
+    "sub_6() + 1",  # BSR and the D0 result
+]
+
+[[family]]
+name = "starcore_max"
+language = "StarCore:LE:32:SC140"
+base = "0x0"
+fixture = "crates/unlace-cli/tests/fixtures/starcore/max.bin"
+args = ["--addr"]
+forbid = ["halt_baddata", "invalid_word"]
+
+[[family.function]]
+test = "starcore_compare_and_branch_select_the_maximum"
+address = "0x0"
+expect = [
+    "a0 = a1;",  # BT skips the TFR when D0 > D1
+    "return a0;",
+]

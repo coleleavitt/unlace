@@ -1315,7 +1315,7 @@ pub fn decompile_pulled(
 /// to judge what the option actually stated about a binary, and it is not worth
 /// a JSON field on every function that does not use it.
 fn protoorder_trace() -> bool {
-    std::env::var("KUNA_PROTOORDER_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
+    unlace_base::env::var("UNLACE_PROTOORDER_TRACE").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
 /// The per-batch facts [`FuncResult::callee_hints`] is filtered against: which

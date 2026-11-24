@@ -410,7 +410,7 @@ fn decompile_one_prefollowed_once(
                     discovered.push((callpoint, pieces));
                 }
             }
-            if std::env::var_os("KUNA_FMTSTATIC_DEBUG").is_some() {
+            if unlace_base::env::var_os("UNLACE_FMTSTATIC_DEBUG").is_some() {
                 for (at, _) in &discovered {
                     eprintln!("fmtloop: site only the loop found {:#x}", at.get_offset());
                 }
@@ -584,7 +584,7 @@ fn audit_parked_format_sites(
             format_is(arch, fd, vn, site.format_vma, &mut seen)
         });
         if !(arity && format) {
-            if std::env::var_os("KUNA_FMTSTATIC_DEBUG").is_some() {
+            if unlace_base::env::var_os("UNLACE_FMTSTATIC_DEBUG").is_some() {
                 eprintln!(
                     "fmtaudit: withdrew {at:#x} (args {} vs declared {declared}, format {})",
                     op.num_input() - 1,

@@ -74,16 +74,20 @@ class Gen:
         self.ops = set()
         self.cons = []
         self.keys = set()
+        self.signed = set()
 
     def fld(self, lo, hi, signed=False):
         """A field of the 32-bit instruction: lives in the first (high) or second halfword."""
         assert (lo < 16) == (hi < 16)
+        sfx = 's' if signed else ''
         if lo >= 16:
-            nm = '%sa_%d_%d' % (self.g, lo, hi)
+            nm = '%sa_%d_%d%s' % (self.g, lo, hi, sfx)
             self.fields.add(('a', nm, lo - 16, hi - 16))
         else:
-            nm = '%sb_%d_%d' % (self.g, lo, hi)
+            nm = '%sb_%d_%d%s' % (self.g, lo, hi, sfx)
             self.fields.add(('b', nm, lo, hi))
+        if signed:
+            self.signed.add(nm)
         return nm
 
     def regfield(self, lo, hi, kind):
@@ -188,12 +192,14 @@ def operand(G, spec, typ, shift, mnem):
         G.sub(nm, ['%s: %s is %s { export *[const]:4 %s; }' % (nm, f, f, f)])
         return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='a' if b[0][0] >= 16 else 'b')
     if typ == 'BLOOP_OFF12b' and b and len(b) == 1:
-        f = G.fld(*b[0])
+        # loop start, backwards from the bloop that closes the loop
+        f = G.fld(*b[0], signed=True)
         nm = '%s_bloop12' % G.g
-        G.sub(nm, ['%s: dest is %s [ dest = inst_start + (%s << 1); ] { export *[const]:4 dest; }' % (nm, f, f)])
+        G.sub(nm, ['%s: dest is %s [ dest = inst_start + (%s << 1); ] { export *:4 dest; }' % (nm, f, f)])
         return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='b')
     if typ == 'BLOOP_OFF4b' and b and len(b) == 1:
-        f = G.fld(*b[0])
+        # last instruction of the loop body (or the bloop itself)
+        f = G.fld(*b[0], signed=True)
         nm = '%s_bloop4' % G.g
         G.sub(nm, ['%s: dest is %s [ dest = inst_start + (%s << 1); ] { export *[const]:4 dest; }' % (nm, f, f)])
         return dict(disp=nm, pat=[nm], kind='imm', val=nm, half='b')
@@ -367,6 +373,10 @@ def dsp_sem(n, names, kinds):
         m = re.fullmatch(r'mulsh([as])', n)
         if m:
             return 'local p:4 = sext(%s:2) * sext(%s:2); ' % (x, y) + acc + 'acc = acc %s sext(p);' % ('+' if m.group(1) == 'a' else '-') + put
+    if n == 'bloop':
+        # bloop closes the loop: the body runs again while the decremented count is nonzero
+        rx, start = names[0], names[1]
+        return '%s = %s - 1; if (%s != 0) goto %s;' % (rx, rx, rx, start)
     if n in ('mfhi', 'mflo'):
         return '%s = %s;' % (names[0], n[2:])
     if n in ('mthi', 'mtlo'):
@@ -532,7 +542,7 @@ def emit(G, outdir):
         fs = sorted(f for f in G.fields if f[0] == half)
         lines.append('define token %s%s(16)' % (g, half))
         for _, nm, lo, hi in fs:
-            lines.append('\t%s = (%d,%d)' % (nm, lo, hi))
+            lines.append('\t%s = (%d,%d)%s' % (nm, lo, hi, ' signed' if nm in G.signed else ''))
         lines.append(';')
     att = getattr(G, 'attach', {})
     for kind in ('r', 'fr', 'vr'):

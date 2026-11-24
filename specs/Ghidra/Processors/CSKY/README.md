@@ -68,6 +68,18 @@ return address is r15 (lr), r4-r11, r16, r17 and r28 (gb) are callee-saved.
   (32-bit), and the post-increment loads and stores (`ldbi`/`stbi` by the access
   size, `ldbir`/`stbir` by a register).
 
+- `bloop rx, start[, last]` (DSP-enhance) closes a zero-overhead loop: it sits after
+  the body, its signed offsets point back to the first body instruction and to the
+  last one (gas fills the second in when it is omitted). It is modelled as
+  `rx = rx - 1; if (rx != 0) goto start;`, a real back edge, so the loop decompiles
+  as a `do`/`while`. The hardware skips the `bloop` itself on later iterations; the
+  p-code is the same loop.
+- Java acceleration (CK802j): `jmpix rx, 16|24|32|40` is an indirect jump to
+  `svbr + (rx & 0xff) * size` (`svbr` is a register; that the index is the low byte
+  of rx is our reading of the Java bytecode dispatch it serves).
+  `bpop.h`/`bpop.w`/`bpush.h`/`bpush.w` (the bytecode operand stack) and
+  `bmset`/`bmclr` are named user operations.
+
 ## ABIv1 (CK510, CK610)
 
 A separate 16-bit ISA in `csky_v1.sinc`, hand-written from the binutils
@@ -103,13 +115,11 @@ r2-r7 and returns in r2 (r3:r2 for 64-bit values).
   SIMD byte/halfword lanes (`padd.8`, `pcmphs.u16`, ...), saturating and halving
   arithmetic, clipping, packing, the fractional and complex multiplies, `mulsw`/
   `vmul*`, `mfhis`/`mflos`. Results that the manual writes to a register pair
-  are modelled as a single-register result. `bloop` (the zero-overhead loop)
-  decodes with its two labels but does not create the loop back edge, so a
-  `bloop` body decompiles as straight-line code.
+  are modelled as a single-register result.
 - `ldm`/`stm` of 17 or more registers use a register-space loop instead of
   unrolled moves (an instruction can name only about 20 operands).
 - Not decoded: VDSP2 (CK805, CK860v: binutils has no table for it, so there is no
-  oracle), Java acceleration and `jmpix`.
+  oracle).
 - The compiler spec is the soft-float ABI (floating-point arguments in r0-r3);
   hard-float code that passes arguments in fr0-fr3 shows them as `fmtvr` moves.
 
@@ -123,7 +133,8 @@ listing prints as data:
 - FPUv3: `ck860f`, about 13,000 valid words;
 - VDSP: `ck810v`;
 - DSP: `ck810`, `ck860`, `ck810v` (the `0xc4` group);
-- DSP-enhance: `ck804` (the `0xd0`, `0xd4`, `0xe8` and `0xf8` groups), both byte orders.
+- DSP-enhance: `ck804e` (the `0xd0`, `0xd4`, `0xe8` and `0xf8` groups), both byte orders;
+- Java: `ck802j`.
 `fmovi`, `fmovis`/`fmovid` and `flrw` are compared by mnemonic, because objdump
 prints the decoded float.
 

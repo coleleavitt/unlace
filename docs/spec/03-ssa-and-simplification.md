@@ -3179,7 +3179,10 @@ ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 runs right after `ActionConditionalExe` in the same group. A join block J
 qualifies when it ends in a CBRANCH, holds only MULTIEQUALs followed by
 integer and boolean ops it can evaluate, and every value it defines is read
-only inside J. For each in edge whose MULTIEQUAL inputs are constants (looking
+only inside J. No MULTIEQUAL of J may read a value J defines: such a value is
+carried around a loop back into J (a loop counter tested at the loop head), and
+a moved edge would skip the step that computes it, leaving the counter defined
+only in terms of itself. For each in edge whose MULTIEQUAL inputs are constants (looking
 through COPYs), `kuna_phithread.rs (decided_target)` evaluates J's ops and
 the branch (honouring the boolean flip). When the branch is decided, the edge
 is moved past J onto the taken successor T (`Funcdata::switch_edge`): J's

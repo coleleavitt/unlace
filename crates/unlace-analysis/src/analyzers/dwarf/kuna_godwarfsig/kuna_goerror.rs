@@ -11,7 +11,7 @@ impl Facts {
             && self.error_words(error).is_some()
     }
 
-    fn checked_type(&self, offset: usize, size: u64) -> Option<(&DieSnap, &Extra)> {
+    pub(super) fn checked_type(&self, offset: usize, size: u64) -> Option<(&DieSnap, &Extra)> {
         let die = self.dies.get(&offset)?;
         let extra = self.extras.get(&offset)?;
         (!extra.invalid
@@ -93,7 +93,12 @@ impl Facts {
         None
     }
 
-    fn interface_member(&self, offset: usize, name: &str, displacement: i64) -> Option<usize> {
+    pub(super) fn interface_member(
+        &self,
+        offset: usize,
+        name: &str,
+        displacement: i64,
+    ) -> Option<usize> {
         let (die, extra) = self.checked_type(offset, 8)?;
         (die.tag == gimli::DW_TAG_member
             && die.name == name
@@ -104,7 +109,7 @@ impl Facts {
         .then_some(die.type_ref?)
     }
 
-    fn error_table(&self, offset: usize) -> Option<()> {
+    pub(super) fn error_table(&self, offset: usize) -> Option<()> {
         let (pointer, extra) = self.checked_type(offset, 8)?;
         if pointer.tag != gimli::DW_TAG_pointer_type
             || extra.kind != Some(22)
@@ -145,7 +150,7 @@ impl Facts {
         None
     }
 
-    fn error_data(&self, offset: usize) -> Option<()> {
+    pub(super) fn error_data(&self, offset: usize) -> Option<()> {
         let (die, extra) = self.checked_type(offset, 8)?;
         (die.tag == gimli::DW_TAG_pointer_type
             && die.name == "unsafe.Pointer"

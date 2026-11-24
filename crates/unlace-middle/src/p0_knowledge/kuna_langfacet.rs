@@ -52,6 +52,13 @@ pub enum LangFacet {
     GoPairResults { signed: [bool; 2] },
     /// An amd64 Go int result followed by an error's separate table and data words.
     GoIntErrorResults,
+    /// A per-interface Go itab layout (`go.itab.<interface>`): the
+    /// `internal/abi.ITab` header, then one function-pointer slot per method
+    /// of `interface`, named after the method (`crate::kuna_goitabcalls`).
+    GoItab {
+        /// The interface, spelled as the linker spells it (`io.Writer`).
+        interface: String,
+    },
 }
 
 impl LangFacet {

@@ -1,0 +1,3 @@
+define endian=big;
+define alignment=2;
+@include "moxie.sinc"

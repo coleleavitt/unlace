@@ -1,0 +1,51 @@
+# GH-1034, P8 return splitting, option retsplitlimit.
+# cached returns -1 from inside two nested ifs through a goto into the
+# shared RETURN block, whose 3 ops ActionReturnSplit would clone once for
+# that one edge. Pass 1 sets the limit to 2 ops: the split is declined, the
+# goto stays, and the error value is assigned to the returned variable
+# before a duplicated return. Pass 2 sets it to 3, exactly the clone's cost,
+# and pass 3 turns it off: the block splits as upstream and the inner path
+# returns the constant. The default limit (2^20 cloned ops) only declines
+# a split in a huge function.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callrettype_clang_O0_x86_64',
+    'read symbols',
+    'option retsplitlimit 2',
+    'load function cached',
+    'decompile',
+    'print C',
+    'option retsplitlimit 3',
+    'load function cached',
+    'decompile',
+    'print C',
+    'option retsplitlimit off',
+    'load function cached',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'retsplitlimit #1: all three passes print cached'
+count = 3
+regex = '^uint8 cached\(int8 \*a0,uint8 a1\)$'
+
+[[match]]
+name = "retsplitlimit #2: under the block's cost the split is declined and the error value goes through the variable"
+count = 1
+regex = '^ +v[0-9]+ = 0xffffffffffffffff;$'
+
+[[match]]
+name = "retsplitlimit #3: at the block's cost and with no limit the inner path returns the constant"
+count = 2
+regex = '^ +return 0xffffffffffffffff;$'
+
+[[match]]
+name = 'retsplitlimit #4: every pass keeps both calls'
+count = 3
+regex = '= lookup\(v[0-9]+,a1\);$'

@@ -2538,7 +2538,7 @@ image is still followed. Only a jump whose target, or the table read feeding
 it, is computed by a SEGMENTOP is judged (a bounded walk up the target's
 definitions): the Z80 spec declares a segment op that its unsegmented build
 never emits, and a Z80 `jp (hl)` table with a row in RAM or the BIOS is
-followed as upstream follows it (`tests/stages/kuna-segmentize-z80.xml`).
+followed as upstream follows it (`tests/stages/kuna-segmentize-z80.toml`).
 Ghidra mode has no local `.sla` to compile the snippet, so there the segment
 ops are not decoded and the CALLOTHER stays.
 
@@ -3713,7 +3713,7 @@ different paths are never merged at a join. The printed `strlen` is therefore
 taken where the scan was. A scan for any other byte (a `memchr`-like loop), one
 whose count starts elsewhere, one whose raw count is read, and one stepping
 backward keep their loops.
-`tests/stages/kuna-strlenscan.xml` runs gcc 9 -O1 functions in both passes. The
+`tests/stages/kuna-strlenscan.toml` runs gcc 9 -O1 functions in both passes. The
 default pass shows `return strlen(a0);`, a length read twice as one variable,
 two lengths in one expression in order, a length taken before the store and
 before the call that follow the scan, an inlined `strcat` taking its length once
@@ -3804,7 +3804,7 @@ read it through, so a fill of `buf` prints `builtin_memset(buf,0,0x1118)` rather
 than `builtin_memset((void *)0x4042c0,0,0x1118)`, and `globalref` (09-emission
 §9.9) names an unnamed one `&dat_<addr>`, since passing that address as a
 `void *` operand converts exactly as the cast did.
-`tests/stages/kuna-repstring.xml` and `kuna-repstring-i386.xml` run gcc 15
+`tests/stages/kuna-repstring.toml` and `kuna-repstring-i386.xml` run gcc 15
 `-Os -minline-all-stringops` builds of
 `unlace-analysis/tests/fixtures/repstring.c` in both passes: fills of a mixed
 word, of zero words and of a byte, a copy, a copy whose final pointer is

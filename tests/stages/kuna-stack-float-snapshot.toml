@@ -1,0 +1,85 @@
+# Two independent cached float snapshots cover both members of a generated Point backing.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'flip_first_and_add' },
+    { space = 'ram', offset = '0x401058', name = 'flip_second_and_add' },
+    { space = 'ram', offset = '0x4010b0', name = 'copy_point' },
+    { space = 'ram', offset = '0x4010c3', name = 'observe_word' },
+    { space = 'ram', offset = '0x4010c6', name = 'integer_to_float' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '554889e54883ec20f30f1145f48975f04889fe488d7df8e894000000488d7df8e89e000000f30f1005d30f0000f30f104df8837df00074080f57c8f30f114df8f30f1005c80f0000f30f1145f8f30f584df4f30f10c1c9c3554889e54883ec20f30f1145f48975f04889fe488d7df8e83c000000488d7dfce846000000f30f10057b0f0000f30f104dfc837df00074080f57c8f30f114dfcf30f1005700f0000f30f1145fcf30f584df4f30f10c1c9c3f30f100ef30f110ff30f104e04f30f114f04c38b07c3f30f2ac7c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '000000800000000000000000000000000000e040'
+
+[script]
+commands = [
+    'parse line struct FloatPair { float x; float y; };',
+    'parse line extern void copy_point(FloatPair *destination,const FloatPair *source);',
+    'parse line extern uint4 observe_word(const uint4 *source);',
+    'parse line extern float4 flip_first_and_add(const FloatPair *source,float4 bias,int4 flip);',
+    'parse line extern float4 flip_second_and_add(const FloatPair *source,float4 bias,int4 flip);',
+    'parse line extern float4 integer_to_float(int4 value);',
+    'option stackalias off',
+    'option stackviews off',
+    'lo fu flip_first_and_add',
+    'decompile',
+    'print C',
+    'lo fu flip_second_and_add',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'lo fu flip_first_and_add',
+    'decompile',
+    'print C',
+    'lo fu flip_second_and_add',
+    'decompile',
+    'print C',
+    'lo fu integer_to_float',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'off reads the first Point lane as float'
+count = 1
+literal = 'return v1.x + bias;'
+
+[[match]]
+name = 'off reads the second Point lane as float'
+count = 1
+literal = 'return v1.y + bias;'
+
+[[match]]
+name = 'on keeps both cached lane snapshots as integers'
+count = 2
+regex = '^  uint4 v2;'
+
+[[match]]
+name = "on preserves the first lane's integer XOR"
+count = 1
+literal = 'v2 = v1.view_uint4 ^ dat_402000;'
+
+[[match]]
+name = 'on reinterprets each snapshot at its float use'
+count = 2
+literal = 'return ((union { unsigned int from; float to; }){ .from = v2 }).to + bias;'
+
+[[match]]
+name = "on preserves the second lane's integer XOR"
+count = 1
+literal = 'v2 = v1.view_uint4_at4.value ^ dat_402000;'
+
+[[match]]
+name = 'integer to float remains a numeric conversion'
+count = 1
+literal = 'return (float4)value;'

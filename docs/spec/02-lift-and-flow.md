@@ -1945,7 +1945,7 @@ int3pad off` restores the unannotated rendering. Exercised by
 
 **(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
-**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.xml`.
+**(kuna) A retpoline thunk is an indirect call — `option retpolinethunk`, default on, `crates/unlace-lift/src/p2_lift/kuna_retpolinethunk.rs (thunk_register)`.** `-mretpoline` (clang) and `-mindirect-branch=thunk` (gcc) compile each indirect call into a direct call to a per-register thunk, `call 1f; 2: pause; lfence; jmp 2b; 1: mov %reg,(%rsp); ret`, which returns into the target the register holds. The cspecs model it as the `x86_indirect_thunk_<reg>` call-fixups, which the call-fixup installer tags onto functions by gcc's thunk name only; clang names its thunks `__llvm_retpoline_<reg>`, and a stripped image names neither. When the flow builder asks for a direct callee's inject id and the callee has none, the decompile driver (`decompile_drive.rs (query_call_inject_id)`) reads the callee's first bytes: an `E8` call over the `F3 90 0F AE E8 EB F9` spin to a `[REX] 89 /r 24` store of a register over the return address followed by `C3`. The register picks the `x86_indirect_thunk_<reg>` fixup, which is then injected like any other call-fixup. x86 language ids only; a register the cspec has no fixup for keeps the plain call. Exercised by `tests/stages/kuna-retpolinethunk.toml`.
 
 **(kuna) A compiler's AArch64 `brk` trap ends the flow — always on,
 `crates/unlace-lift/src/p2_lift/kuna_brktrap.rs
@@ -3661,7 +3661,7 @@ unbounded `MULTIEQUAL` first would read past the table into the code after
 it, fail its sanity check, and leave the switch a
 `(*(code *)(*(int *)&table[i * 4] + base))()` computed call; model 2 recovers
 it as `switch(a0 >> 0x3e)` with every case
-(`tests/stages/kuna-relswitch-a64.xml`).
+(`tests/stages/kuna-relswitch-a64.toml`).
 
 **`fdeflowbound`, default on** (`flow.rs (leaves_own_fde)`). An unwind-table
 extent (an `.eh_frame` FDE or a Go `functab` entry: the extents the analysis tier
@@ -4812,7 +4812,7 @@ copies `a0`, `a1` into two `s0..s7` registers, `cm.mva01s` copies them back.
 `cm.push {ra,s0-s1},-0x10`. Before this the issue's `-Os` prologue decoded as
 `c.fsdsp fs8,0x30(sp)` and its epilogue as a float store followed by a jump
 through whatever `ra` held, so the saves, the stack adjustment and the return
-were lost. Exercised by `tests/stages/kuna-riscv-zcmp.xml` (the issue's
+were lost. Exercised by `tests/stages/kuna-riscv-zcmp.toml` (the issue's
 `keep`, hand-written `swapcall`/`zret`/`popsep`, the raw push/popret p-code)
 and `unlace-cli/tests/riscv_zcmp.rs` (one decode per encoding shape against
 LLVM's names, RV32 and RV64). Zcb and the T-Head vendor extensions the

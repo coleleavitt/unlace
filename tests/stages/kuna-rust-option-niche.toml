@@ -1,0 +1,85 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '90'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/fixtures/rust-option-niche/option-amd64',
+    'read symbols',
+    'option setlanguage rust-language',
+    'load function named_some',
+    'decompile',
+    'print C',
+    'load function named_none',
+    'decompile',
+    'print C',
+    'load function named_payload',
+    'decompile',
+    'print C',
+    'load function returned_some',
+    'decompile',
+    'print C',
+    'load function raw_null',
+    'decompile',
+    'print C',
+    'option setlanguage c-language',
+    'load function named_some',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'Rust named niche Option tests the whole declared owner'
+count = 2
+literal = 'if let ::core::option::Option::Some(_) = value'
+
+[[match]]
+name = 'Rust named niche Option retains its exact nominal parameter type'
+count = 3
+regex = 'unsafe fn named_(?:some|none|payload)\(mut value: core::option::Option<&u64>\)'
+
+[[match]]
+name = 'Rust named niche Option preserves both branch pairs and the C replay'
+count = 6
+regex = '^ +on_(?:some\(0x(?:11|1f)\)|none\(0x(?:1d|2b)\));$'
+
+[[match]]
+name = 'Rust niche Option does not hide a consumed payload'
+count = 1
+literal = 'x = *(value.Some as *mut u64);'
+
+[[match]]
+name = 'Rust niche Option leaves the single-word returned owner separate'
+count = 1
+literal = 'if make_niche(present,payload).Some != core::ptr::null_mut()'
+
+[[match]]
+name = 'Rust niche Option does not pattern-match its returned control'
+count = 0
+regex = 'if let .* = make_niche\('
+
+[[match]]
+name = 'Rust niche Option retains one returned control call'
+count = 1
+literal = 'make_niche(present,payload)'
+
+[[match]]
+name = 'Rust niche Option leaves ordinary pointer null tests unchanged'
+count = 1
+literal = 'if value != core::ptr::null_mut()'
+
+[[match]]
+name = 'C niche Option retains its existing field condition'
+count = 1
+literal = 'if (value.Some)'
+
+[[match]]
+name = 'C niche Option retains its existing declaration'
+count = 1
+literal = 'uint8 named_some(core::option::Option<&u64> value)'

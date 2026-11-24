@@ -1,0 +1,159 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x401000', name = 'all_paths_overwrite' },
+    { space = 'ram', offset = '0x401030', name = 'one_path_overwrites' },
+    { space = 'ram', offset = '0x401057', name = 'loop_overwrites' },
+    { space = 'ram', offset = '0x40107f', name = 'loop_may_skip' },
+    { space = 'ram', offset = '0x4010ab', name = 'read_escaped' },
+    { space = 'ram', offset = '0x405000', name = 'xor_view' },
+    { space = 'ram', offset = '0x40504d', name = 'constant_bits' },
+    { space = 'ram', offset = '0x405082', name = 'effect_bits' },
+    { space = 'ram', offset = '0x4050bb', name = 'double_bits' },
+    { space = 'ram', offset = '0x405033', name = 'read_float' },
+    { space = 'ram', offset = '0x4050f5', name = 'read_double' },
+    { space = 'ram', offset = '0x405044', name = 'observe_word' },
+    { space = 'ram', offset = '0x405106', name = 'observe_quad' },
+    { space = 'ram', offset = '0x4050b4', name = 'write_word' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x401000'
+hex = '4883ec18488925f50f0000c704240100000085ff7409c7042405000000eb07c7042407000000e8800000004883c418c34883ec18488925c50f0000c704240100000085ff7407c7042405000000e8590000004883c418c34883ec184889259e0f0000c7042401000000c704240700000083ef017ff4e8310000004883c418c34883ec18488925760f0000c7042401000000eb0ac704240700000083ef0185ff7ff2e8050000004883c418c3488b054e0f00008b00c331ffe844ffffff83f8077555bf01000000e835ffffff83f805754631ffe859ffffff83f801753abf01000000e84affffff83f805752b31ffe865ffffff83f807751f31ffe881ffffff83f8017513bf02000000e872ffffff83f807750431ffeb05bf01000000b83c0000000f05'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x402000'
+hex = '0000000000000000'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x405000'
+hex = '534883ec10f30f1104244889e7e82100000089c3813424000040004889e7e8210000004889e7e80800000001d84883c4105bc3f30f1007f30f5905c10f0000f30f2cc0c38b078905b80f0000c3534883ec10c704240000803f4889e7e8d2ffffff89c3813424000040004889e7e8d2ffffff4889e7e8b9ffffff01d84883c4105bc3534889fb4883ec10c704240000803f4889e7e8abffffff4889e7ffd34889e7e89effffff4889e7e885ffffff4883c4105bc3c70700004040c3534883ec10f20f1104244889e7e82800000089c348b80000000000000800483104244889e7e8210000004889e7e80800000001d84883c4105bc3f20f1007f20f59050f0f0000f20f2cc0c3488b07488905080f0000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x406000'
+hex = '00000040000000000000803f0000000000000000000000400000000000000000'
+
+[script]
+commands = [
+    'map addr r0x402000 int4 *escaped_pointer',
+    'parse line extern int4 all_paths_overwrite(int4 value);',
+    'parse line extern int4 one_path_overwrites(int4 value);',
+    'parse line extern int4 loop_overwrites(int4 value);',
+    'parse line extern int4 loop_may_skip(int4 value);',
+    'parse line extern int4 read_escaped(void);',
+    'option stackalias off',
+    'lo fu one_path_overwrites',
+    'decompile',
+    'print C',
+    'option stackalias on',
+    'lo fu all_paths_overwrite',
+    'decompile',
+    'print C',
+    'lo fu one_path_overwrites',
+    'decompile',
+    'print C',
+    'lo fu loop_overwrites',
+    'decompile',
+    'print C',
+    'lo fu loop_may_skip',
+    'decompile',
+    'print C',
+    'parse line struct FloatStorage { float4 value; };',
+    'parse line struct DoubleStorage { float8 value; };',
+    'parse line extern int4 xor_view(float4 initial);',
+    'parse line extern int4 double_bits(float8 initial);',
+    'parse line extern int4 constant_bits(void);',
+    'parse line extern int4 effect_bits(void (*writer)(uint4 *value));',
+    'parse line extern int4 read_float(const float4 *value);',
+    'parse line extern int4 read_double(const float8 *value);',
+    'parse line extern void observe_word(const uint4 *value);',
+    'parse line extern void observe_quad(const uint8 *value);',
+    'map addr r0x406000 float4 two',
+    'map addr r0x406004 uint4 observed_word',
+    'map addr r0x406010 float8 two_double',
+    'map addr r0x406018 uint8 observed_quad',
+    'option stackalias off',
+    'option stackviews off',
+    'lo fu xor_view',
+    'map addr s0xffffffffffffffe8 FloatStorage protected_float',
+    'decompile',
+    'print C',
+    'option stackviews on',
+    'decompile',
+    'print C',
+    'lo fu double_bits',
+    'map addr s0xffffffffffffffe8 DoubleStorage protected_double',
+    'decompile',
+    'print C',
+    'lo fu constant_bits',
+    'decompile',
+    'print C',
+    'lo fu effect_bits',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'stack lifetimes: the off control and observable paths retain initialization'
+count = 3
+regex = '^  .* = 1;$'
+
+[[match]]
+name = 'stack lifetimes: the fully overwritten branch values stay observable'
+count = 1
+literal = '= (value) ? 5 : 7;'
+
+[[match]]
+name = 'stack lifetimes: both loops preserve their physical write'
+count = 2
+regex = '^    .* = 7;$'
+
+[[match]]
+name = 'stack lifetimes: unknown memory observers remain in both modes'
+count = 5
+literal = '= read_escaped();'
+
+[[match]]
+name = 'stack lifetimes: the off control uses a numeric float conversion'
+count = 1
+regex = 'protected_float.value = \(float4\)\(\(uint4\)protected_float.value \^ 0x400000\);'
+
+[[match]]
+name = 'stack lifetimes: a declared float member receives the integer bits'
+count = 1
+regex = 'protected_float.value = \(\(union \{ unsigned int from; float to;'
+
+[[match]]
+name = 'stack lifetimes: a declared double member receives the integer bits'
+count = 1
+regex = 'protected_double.value = \(\(union \{ unsigned long long from; double to;'
+
+[[match]]
+name = 'stack lifetimes: call versions do not copy fields out of constants'
+count = 0
+literal = '.bytes._'
+
+[[match]]
+name = 'stack lifetimes: the real constant replacement stays written'
+count = 1
+regex = 'v2.view_uint4 = 0x3fc00000;'
+
+[[match]]
+name = 'stack lifetimes: an unknown writer still executes'
+count = 1
+regex = '\(\*writer\)\(&v1.view_uint4\);'
+
+[[match]]
+name = 'stack lifetimes: observations surround the unknown writer'
+count = 2
+regex = 'observe_word\(&v1.view_uint4\);'
+
+[[match]]
+name = 'stack lifetimes: a read uses bytes after the unknown writer'
+count = 1
+regex = 'return read_float\(&v1.view_float4\);'

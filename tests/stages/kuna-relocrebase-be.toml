@@ -1,0 +1,67 @@
+# kuna analysis (relocrebase, always on), GH-904: a big-endian
+# relocatable object's analysis facts at the addresses the loader gives it.
+#
+# The analysis tier reads a relocatable object through a copy patched to the
+# loader's layout, so every pass's addresses are load addresses.  The
+# patcher wrote little-endian fields only and handed a big-endian object
+# over unrebased, so its passes saw the pre-link addresses: the MIPS t9
+# seed of a PIC function landed at its section offset, greet's prologue
+# (lui gp,%hi(_gp_disp); addiu; addu gp,gp,t9) never resolved $gp, and its
+# call through the GOT stayed a load from an unknown t9:
+#     (**(void (**)(int))(v1 + 0x98))(*(int *)(v1 + 0x9c) + 0x80);   (bug)
+# and functions listed scale and greet twice, at 0x0 and 0x8 as well.
+# The fields are now written in the object's own byte order.
+#
+# Stage: P1 program prep (relocatable layout).
+# Single pass.
+#
+# Image: crates/unlace-analysis/tests/fixtures/relocrebase_be_mips.o
+# (relocrebase_be.c); see relocrebase_be.provenance.
+#
+# Assert #1: greet calls puts with its string.
+# Assert #2: no t9 variable is left.
+# Assert #3: each function is listed once, at its load address.
+
+[image]
+arch = 'MIPS:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '03e0000800000000'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/relocrebase_be_mips.o',
+    'read symbols',
+    'functions',
+    'lo fu greet',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'relocrebase-be #1: greet calls puts with its string'
+count = 1
+literal = 'puts("hello from a big-endian object");'
+
+[[match]]
+name = 'relocrebase-be #2: no t9 variable'
+count = 0
+literal = '// t9'
+
+[[match]]
+name = 'relocrebase-be #3: greet is listed once, at its load address'
+count = 1
+regex = '^0x400008 greet'
+
+[[match]]
+name = 'relocrebase-be #3b: nothing at a pre-link address'
+count = 0
+regex = '^0x[0-9a-f]{1,3} (scale|greet)'

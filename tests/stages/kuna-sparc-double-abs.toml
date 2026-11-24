@@ -1,0 +1,45 @@
+# Independently assembled binary64 sign-word absolute value.
+# .text
+# .global absolute_double32
+# .type absolute_double32,@function
+# absolute_double32:
+#  save %sp, -112, %sp
+#  st %i0, [%fp-8]
+#  st %i1, [%fp-4]
+#  ldd [%fp-8], %f10
+#  fabss %f10, %f0
+#  fmovs %f11, %f1
+#  ret
+#  restore
+# .size absolute_double32, .-absolute_double32
+
+[image]
+arch = 'sparc:BE:32:default:default'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'absolute_double32' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '9de3bf90f027bff8f227bffcd51fbff881a0012a83a0002b81c7e00881e80000'
+
+[script]
+commands = [
+    'parse line extern double absolute_double32(double x);',
+    'lo fu absolute_double32',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'sparc-double-abs #1 restores absolute value'
+count = 1
+literal = 'return ABS(x);'
+
+[[match]]
+name = 'sparc-double-abs #2 has no numeric high-word conversion'
+count = 0
+regex = 'CONCAT44|\(float\)|SUB84'

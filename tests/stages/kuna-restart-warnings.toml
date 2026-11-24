@@ -1,0 +1,37 @@
+# Restart, analysis warnings. sub_4009bc (the floatret_chain fixture) ends
+# in a stack-protector check. A pass that is later restarted duplicates the
+# shared return and records the `return-dupe` warning; the pass that is
+# kept has a single return and duplicates nothing. A
+# restart clears the function's warning comments with its analysis
+# (Architecture::clearAnalysis), so the header carries no warning of a pass
+# that was thrown away.
+#
+# Before: `void sub_4009bc(unsigned int a0,unsigned int a1) // return-dupe`.
+
+[image]
+arch = 'MIPS:LE:32:default:default'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/floatret_chain_mips_O0',
+    'read symbols',
+    'load function sub_4009bc',
+    'decompile',
+    'print C',
+]
+
+[[match]]
+name = 'restartwarnings #1: the prototype carries no warning of the discarded pass'
+count = 1
+regex = '^void sub_4009bc\(unsigned int a0,unsigned int a1\)$'
+
+[[match]]
+name = 'restartwarnings #2: nothing reports a duplicated return'
+count = 0
+literal = 'return-dupe'
+
+[[match]]
+name = "restartwarnings #3: the kept pass's own comment still prints"
+count = 1
+literal = '__stack_chk_fail(); // no-return'

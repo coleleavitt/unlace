@@ -5145,13 +5145,13 @@ is `async`, as is one whose body reads the `swiftasync` register (below),
 and the metadata's binding is upgraded to the matching model —
 `__swiftasynccall` with a nameless `async_context` hint on the `swiftasync`
 register — so a stripped image's resume partials take their context
-(`tests/stages/kuna-swiftasync.xml`, the stripped `swift_sigs_elf`). Only the
+(`tests/stages/kuna-swiftasync.toml`, the stripped `swift_sigs_elf`). Only the
 calls inside the function's own extent count, from its entry up to the next
 known entry (`Architecture::function_entry_after`): a flow that ran on into
 another function's body — an unchecked jump table read past its last case, a
 branch into a neighbour's shared tail — holds that function's calls, which say
 nothing about this one's convention, and a plain function would otherwise take
-the neighbour's `async_context` (`tests/stages/kuna-swiftasyncextent.xml`,
+the neighbour's `async_context` (`tests/stages/kuna-swiftasyncextent.toml`,
 `swift_runon_elf`).
 
 The concurrency runtime itself is declared
@@ -5203,7 +5203,7 @@ argument (`passes_context`, in `check_input_trial_use`) — a callee's context
 is the one thing every `async` call passes, and the caller's own, handed on
 without a write, would otherwise read as a preserved register — and the
 scratch register the indirect jump goes through is not
-(`carries_async_target`). The stage test `tests/stages/kuna-swiftconcurrency.xml`
+(`carries_async_target`). The stage test `tests/stages/kuna-swiftconcurrency.toml`
 runs the stripped `swift_async_elf` with `swiftcall` off and on.
 
 Two call-site rules read the image's Swift registers
@@ -5315,7 +5315,7 @@ context (`opaque() &+ b.v`, a type's metadata accessor first) reads the
 value it was called with; a call that does not return is followed by a trap
 on Apple targets. A path also ends where it leaves the function's extent, its
 entry up to the next known entry: a flow that runs on into a neighbour's body
-(`tests/stages/kuna-swiftasyncextent.xml`) reads that body's registers, not
+(`tests/stages/kuna-swiftasyncextent.toml`) reads that body's registers, not
 this function's. A read of the register on such a path is evidence unless it only
 stores the register: a `STORE` of it, or of the temporary its own instruction
 copied it into (an AArch64 `stp x20, x19`, an x86 `push %r13`). No C or
@@ -5747,7 +5747,7 @@ a pair `bejoin` does not prove to be one value is joined first register low
 this repair drops, so there a global in the second register stays uncomputed:
 SPARC's `restore` copies `%i1` into `%o1` whatever it holds, and an `int` that
 read a global into `%i1` for a store would otherwise come back as a swapped
-`CONCAT44` (`tests/stages/kuna-returnglobal-sparc.xml`). Anything the walk cannot
+`CONCAT44` (`tests/stages/kuna-returnglobal-sparc.toml`). Anything the walk cannot
 classify is computed, so an unfamiliar shape keeps today's answer. The RETURN is
 then rewritten to the surviving half and the dead concatenation destroyed.
 
@@ -5843,7 +5843,7 @@ phantom, and lost the half — and then the argument, which had no reader left,
 disappeared from the recovered signature too. Two functions differing only in
 whether the second returned half is `x` or `x*3+7` came out with different
 arities: `unsigned long wide(long a0)` against `undefined16 w2(long a0,long a1)`,
-for the same two-argument source (`tests/stages/kuna-retinputhalf.xml`).
+for the same two-argument source (`tests/stages/kuna-retinputhalf.toml`).
 
 kuna (DIV-85, always on) supplies the missing exception, on
 storage evidence the prototype model already holds. An unwritten terminal is a
@@ -5989,7 +5989,7 @@ A high half that really is leftover still goes: the upper half of RAX after a
 callee that returns `int` in EAX sits at its own slot and carries nothing the
 function computed, and the return narrows to EAX exactly as before. Over the
 castbench corpus and 98 further binaries (60,037 functions) the change moves no
-function; the shape it corrects is pinned by `tests/stages/kuna-returnpiece.xml`
+function; the shape it corrects is pinned by `tests/stages/kuna-returnpiece.toml`
 and by the compiled round trip over the `piecehi_*` fixtures in
 `unlace-cli/tests/decompile_all_cli.rs`.
 
@@ -6063,7 +6063,7 @@ output: when it is computed from a narrower piece of the call's second register,
 as a Cortex-M `uxtb r1,r1` is, the call can still lose that register and leave it
 an uninitialized local (GH-851).
 
-`tests/stages/kuna-retcallhalf.xml` pins the ARM callers and the four controls
+`tests/stages/kuna-retcallhalf.toml` pins the ARM callers and the four controls
 (the `smull` word, the hardening zero, the dummy pop and the `svc` argument) in
 single-function mode, and `unlace-cli/tests/call_result_pair_returns.rs` compiles
 the ARM, MIPS and i386 output of `decompile-all` back with gcc and clang and runs
@@ -6238,7 +6238,7 @@ and keeps upstream's answer. gcc `-O0` leaves the sign of a 64-bit intermediate 
 same low word where it printed `void`. On 64-bit targets the same shapes make a
 16-byte pair, printed `undefined16` (`SEXT816(a0 + 3)`) where it printed `void`.
 
-`tests/stages/kuna-retpairhalf.xml` pins seven ARM functions (`sx`, `zx`, `sxa`,
+`tests/stages/kuna-retpairhalf.toml` pins seven ARM functions (`sx`, `zx`, `sxa`,
 `kc`, `dupc`, `sxsel` and the spilled `kc0`) and seven controls (`int div7`, a
 stored sign word, a scrubbed `r1` the body used, an `svc` argument, and an `r1`
 written to `fpscr` or `cpsr`), and
@@ -6346,15 +6346,15 @@ functions) one function changes, ChibiOS's `chEvtGetAndClearEvents` (`movs
 r1,#0; msr basepri,r1` before the return), to the 32-bit result it has, and its
 four callers' result variables follow.
 
-`tests/stages/kuna-retsysreg.xml` pins ARM `vmsr fpscr`, `msr cpsr_c` and an
+`tests/stages/kuna-retsysreg.toml` pins ARM `vmsr fpscr`, `msr cpsr_c` and an
 SCTLR write beside a call's result and a computed `r0`, Thumb
 `ulPortRaiseBASEPRI` and `msr primask`, the `g64` high word and `mcrr` controls,
 `pld`, `pli` and CP15 cache-line controls that keep their pair, and the pair
 again with the option off, in single-function mode;
-`tests/stages/kuna-retsysreg-a64.xml` does the same for AArch64 `msr
+`tests/stages/kuna-retsysreg-a64.toml` does the same for AArch64 `msr
 ICC_PMR_EL1`, `msr fpcr` and `msr daif` against `prfm`, `dc cvau`, `dc civac`,
 `tlbi` and `ic ivau` controls (a 16-byte struct and an `__int128`), and
-`tests/stages/kuna-retsysreg-mips.xml` for MIPS `mtc0` against `pref`, `cache`,
+`tests/stages/kuna-retsysreg-mips.toml` for MIPS `mtc0` against `pref`, `cache`,
 `synci` and `mtc2` controls. `unlace-cli/tests/sysreg_return_halves.rs`
 decompiles the ARM and Thumb issue shape whole-binary.
 
@@ -6520,7 +6520,7 @@ detection reported as rustc-produced (`Compiler::Rustc`, recorded on the
 `Architecture` at `load file` and copied into the per-function snapshot per 00
 §0.5); the XML `<binaryimage>` bootstrap never runs the analyzer tier, so `auto`
 is inert on the datatest corpus **by construction**, not by luck. `always` drops
-the language test, which is what `tests/stages/kuna-rustabi.xml` needs — a
+the language test, which is what `tests/stages/kuna-rustabi.toml` needs — a
 `<bytechunk>` carries no `.comment` record to detect. The shipped default is
 `auto`: the pair this keeps alive is rendered as a raw fixed-size container until
 a later pass gives it an enum type, so on a Rust image the option buys

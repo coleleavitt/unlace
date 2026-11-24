@@ -1,0 +1,130 @@
+# The Swift concurrency runtime's prototypes and the async context of a
+# function that calls none of it (`option swiftcall on|off`).
+#
+# Issue: `swift_task_switch` and the other suspension entry points are
+# `swiftasync` functions that take the caller's context in the swiftasync
+# register (r14 on x86-64, x22 on arm64); with no prototype the call showed
+# the resume function and the executor but not the context it resumes
+# with. A resume partial that only loads its frame and returns through the
+# context calls no task runtime, so nothing said it is `async`: it read r14
+# as an unnamed register, and its return, a jump to the context's resume
+# function, did not pass the context.
+#
+# Stage / sub-stage: P1 `swiftruntime` (the generated concurrency table,
+# `kuna_swiftconcurrency.rs`) and P4 prototype models
+# (`kuna_swiftinfer.rs`: `seed` on the swiftasync register,
+# `async_callee_model`, `async_tail_call`, `passes_context`).
+#
+# P0 assertion: `option swiftcall on|off` (default on).
+#
+# Both passes load the stripped `swift_async_elf` with `swiftmetadata on`.
+# Pass 1 (`option swiftcall off`): `resumeLater(_:)` (0x5200) hands
+# `swift_task_switch` no context, and the partial of `hop(_:_:)` (0x4110)
+# reads r14 unnamed. Pass 2 (the default): the entry and the partial take
+# `async_context`, `swift_task_switch` and the return through
+# `resume_parent` pass it, and the continuation in 0x3700 is typed.
+# The last two passes load the stripped `swift_sigs_elf`, whose `Box.slow`
+# (0x3ea0) awaits the imported `Task.yield()`: only the import's mangled
+# name says it is `async`, so only with `swiftcall` on is the call handed
+# the context allocated for it.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_async_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x5200',
+    'decompile',
+    'print C',
+    'load addr 0x4110',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_async_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x5200',
+    'decompile',
+    'print C',
+    'load addr 0x3700',
+    'decompile',
+    'print C',
+    'load addr 0x4110',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_sigs_elf',
+    'option swiftmetadata on',
+    'option swiftcall off',
+    'read symbols',
+    'load addr 0x3ea0',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/swift_sigs_elf',
+    'option swiftmetadata on',
+    'read symbols',
+    'load addr 0x3ea0',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'swiftcall off: swift_task_switch is handed no context'
+count = 1
+literal = 'swift_task_switch(sub_3700,0,0)'
+
+[[match]]
+name = 'swiftcall off: the partial and both entries read r14 without a name'
+count = 3
+regex = '^  int8 v[0-9]+; // r14'
+
+[[match]]
+name = 'swiftcall on: the async entry takes its context'
+count = 1
+literal = 'sub_5200(swift.AsyncContext *async_context,void *a1)'
+
+[[match]]
+name = 'swiftcall on: swift_task_switch resumes with the context'
+count = 1
+literal = 'swift_task_switch(async_context,sub_3700,NULL,0)'
+
+[[match]]
+name = 'swiftcall on: the continuation context is typed'
+count = 1
+literal = 'swift_continuation_init((swift.ContinuationAsyncContext *)&async_context[1],0)'
+
+[[match]]
+name = 'swiftcall on: a partial that calls no task runtime takes its context'
+count = 1
+literal = 'sub_4110(swift.AsyncContext *async_context,'
+
+[[match]]
+name = 'swiftcall on: the return through the context passes it'
+count = 1
+literal = '(*async_context->resume_parent)(async_context,'
+
+[[match]]
+name = 'swiftcall off: an imported async function is called with nothing'
+count = 1
+literal = 'Swift.Task.yield()();'
+
+[[match]]
+name = 'swiftcall on: an imported async function is passed the new context'
+count = 1
+literal = 'Swift.Task.yield()(v1,'

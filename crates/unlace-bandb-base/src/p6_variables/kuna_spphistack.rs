@@ -32,13 +32,14 @@ crate::kuna_flag!(
 );
 
 /// Every live MULTIEQUAL input slot holding the spacebase input register.
+/// MULTIEQUAL has no per-opcode list in the op bank, so this walks the alive list.
 fn bare_sp_inputs(data: &Funcdata) -> Vec<(OpId, usize, VarnodeId)> {
     let mut found = Vec::new();
-    for op in data.obank().iter_code(OpCode::CPUI_MULTIEQUAL) {
+    for op in data.obank().iter_alive() {
         let Some(o) = data.obank().get(op) else {
             continue;
         };
-        if o.is_dead() || o.get_parent().is_none() {
+        if o.code() != OpCode::CPUI_MULTIEQUAL || o.is_dead() || o.get_parent().is_none() {
             continue;
         }
         for i in 0..o.num_input() {

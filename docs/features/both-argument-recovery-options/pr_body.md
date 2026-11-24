@@ -45,7 +45,7 @@ declares the name alone.
 
 ## The tests
 
-`tests/stages/kuna-declaredlibcproto.xml` is the two-pass case — the callee is
+`tests/stages/kuna-declaredlibcproto.toml` is the two-pass case — the callee is
 named in both passes (`sub_8049027` appears zero times), so the only thing that
 moves is the signature. `tests/cli/both-argument-recovery-options.json` and three
 cargo tests in `kuna-console/tests/verify_declaredlibcproto.rs` run the same

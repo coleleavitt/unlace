@@ -1110,7 +1110,7 @@ table is passed as its address). A global
 the header declines as
 read at two types is compiled at the pointer that comment lists, so a
 disagreement cannot hide behind a guessed declaration.
-`tests/stages/kuna-elemptr.xml` pins the witnesses, the three controls (a
+`tests/stages/kuna-elemptr.toml` pins the witnesses, the three controls (a
 record walked by a stride, a pointer read at two widths, the length), the byte
 step and the first-element read in both passes, the narrow load (pass 1 is
 upstream's widened read), and an element returned from the register its address
@@ -2256,7 +2256,7 @@ IDA both emit and adds 35 in 14 (`docs/features/fieldtype/record.json`). It stay
 because of the ledger below: a reader shares a record only on exact field-type
 agreement, so a field one reader re-types moves which record another reader is
 answered with (`docs/features/fieldtype/default-on-evaluation.md`).
-`tests/stages/kuna-fieldtype.xml` pins both passes, including the index and the
+`tests/stages/kuna-fieldtype.toml` pins both passes, including the index and the
 merged number as controls, and the compiled round trip in `decompile_all_cli.rs`
 checks the printed C computes what the binary does.
 

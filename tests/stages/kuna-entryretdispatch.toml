@@ -1,0 +1,57 @@
+# entryretdispatch: recover a function entry built from a stack-directed RET
+# call instead of stopping at its first RET.
+#
+# Layout (linked flat, x86-32):
+#   entry_dispatch @ 0x100000:
+#     push 0x10000b              ; continuation, exactly after RET
+#     push 0x100020              ; helper target
+#     ret                        ; semantically helper()
+#   continuation @ 0x10000b:
+#     ret                        ; ordinary function return
+#   helper @ 0x100020:
+#     mov eax,0x3333
+#     ret
+#
+# The bounded P2 recognizer proves the RET destination came from this run's
+# target store and the adjacent slot contains the RET's own fall-through.
+#
+# The RET is classified as CALL, flow resumes at 0x10000b, and helper appears
+# exactly once while the rendering still reaches one ordinary function return.
+
+[image]
+arch = 'x86:LE:32:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'entry_dispatch' },
+    { space = 'ram', offset = '0x100020', name = 'helper' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '680b0010006820001000c3c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = 'b833330000c3'
+
+[script]
+commands = [
+    'option voidtailreturn off',
+    'lo fu entry_dispatch',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ENTRYRETDISPATCH #1: the stack-directed RET is recovered as the helper call'
+count = 1
+literal = 'helper();'
+
+[[match]]
+name = 'ENTRYRETDISPATCH #2: the ordinary function return is retained'
+count = 1
+literal = 'return;'

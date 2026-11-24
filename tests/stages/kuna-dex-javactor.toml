@@ -1,0 +1,89 @@
+# Kuna DEX loader, constructors: P9 Java output, option javanew (default
+# on). The script loads the committed DEX fixture built from
+# tests/stages/fixtures/dex/Tries.java and Base.java and prints Java.
+#
+# Asserts #1-#2 are the off pass: the constructor is a method named
+# <init>, and its call of the superclass constructor is this.<init>(...).
+# Asserts #3-#6 are the default pass: the constructor is declared by its
+# class name, the superclass call is super(...), the same-class call is
+# this(...), and the implicit super() to java.lang.Object prints nothing.
+
+[image]
+arch = 'Dalvik:LE:32:DEX_Android12'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+readonly = true
+hex = '0e00'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/tries.dex',
+    'option setlanguage java-language',
+    'option javanew off',
+    'read symbols',
+    'load function demo::Tries::<init>_448',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/tries.dex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Tries::<init>_448',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/tries.dex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Tries::<init>_42c',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/tries.dex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Base::<init>_2f4',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'javactor #1: off declares a method named <init>'
+count = 1
+regex = '^void <init>_448\(int a1\)'
+
+[[match]]
+name = 'javactor #2: off calls the superclass constructor as <init>'
+count = 1
+literal = 'this.<init>(a1,"t");'
+
+[[match]]
+name = 'javactor #3: on declares the constructor by its class'
+count = 1
+regex = '^Tries\(int a1\)'
+
+[[match]]
+name = 'javactor #4: on calls the superclass constructor as super'
+count = 1
+regex = '^  super\(a1,"t"\);'
+
+[[match]]
+name = 'javactor #5: on calls a same-class constructor as this'
+count = 1
+regex = '^  this\(7\);'
+
+[[match]]
+name = 'javactor #6: on drops the implicit super() of java.lang.Object'
+count = 1
+regex = [
+    '^Base\(int a1,String a2\)',
+    '\{',
+    'this\.b = a1;',
+]

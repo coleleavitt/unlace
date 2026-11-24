@@ -1826,7 +1826,7 @@ at the match (01 §1.4).
   (Database::set_function_extra_pop)`). `ActionDefaultParams` copies it into
   every call spec that targets the function, as upstream copies the callee's
   own prototype, and the function's own prototype takes it when it is
-  decompiled (`tests/stages/kuna-extrapop-function.xml`). The prototype
+  decompiled (`tests/stages/kuna-extrapop-function.toml`). The prototype
   `ArchContext::query_function` returns carries it too, so a call through a
   register or an import slot that resolves to the function pops the same
   bytes.
@@ -10649,7 +10649,7 @@ this rule deliberately does not touch), with the `type:.eq.*` equality
 helpers' whole signatures improving. At `auto` the rule acts only when the
 image's source language is Go; `always` drops the language test (the
 stage-test bytechunk); `off` keeps the faithful concatenation. Pinned by
-`tests/stages/kuna-gobool.xml` (two-pass over a hand-assembled
+`tests/stages/kuna-gobool.toml` (two-pass over a hand-assembled
 `mov %rdi,%rax; cmp $1,%rdi; sete %al; ret`).
 
 ### (kuna) The SysV x86-64 vector calling convention — `option vectorabi`, default on

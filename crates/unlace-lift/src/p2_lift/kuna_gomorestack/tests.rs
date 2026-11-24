@@ -8,7 +8,7 @@
 //   - `live`: off/auto/always against the ArchContext source-language fact.
 //   - `ActionGoMorestack::apply` and the `match_entry_guard_loop` shape
 //     matcher are inert on a function with no calls (the end-to-end fold is
-//     pinned by `tests/stages/kuna-gomorestack.xml` and the unlace-console
+//     pinned by `tests/stages/kuna-gomorestack.toml` and the unlace-console
 //     `verify_go_morestack` integration test over a real Go build).
 
 use super::*;

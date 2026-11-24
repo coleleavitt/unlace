@@ -1,0 +1,91 @@
+# Authored scalar and packed SSE widening/subtract/add/narrow probes.
+# Binary64 arithmetic must survive even when every input is binary32.
+# The float-only and conversion-only controls keep their original widths.
+# Native/recompiled comparisons live in unlace-cli/tests/float_precision.rs.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'widened_update' },
+    { space = 'ram', offset = '0x100019', name = 'packed_update' },
+    { space = 'ram', offset = '0x100060', name = 'float_update' },
+    { space = 'ram', offset = '0x100069', name = 'widen_roundtrip' },
+    { space = 'ram', offset = '0x100072', name = 'widened_product' },
+    { space = 'ram', offset = '0x10008b', name = 'widened_quotient' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+f30f5ac0f30f5ac9f30f5ad2f20f5ccaf20f58c1f20f5ac0c3f30f1006f30f10
+5e040f14c30f5ac0f30f100af30f105a040f14cb0f5ac9f30f1011f30f105904
+0f14d30f5ad2660f5cca660f58c1660f5ac0f30f11070fc6c055f30f114704c3
+f30f5ccaf30f58c1c3f30f5ac0f20f5ac0c3f30f5ac0f30f5ac9f30f5ad2f20f
+59caf20f59c1f20f5ac0c3f30f5ac0f30f5ac9f30f5ad2f20f5ecaf20f5ec1f2
+0f5ac0c3
+'''
+
+[script]
+commands = [
+    'parse line extern float widened_update(float accum,float neg_theta,float local_axis);',
+    'parse line extern void packed_update(float *out,float *accum,float *neg_theta,float *local_axis);',
+    'parse line extern float float_update(float accum,float neg_theta,float local_axis);',
+    'parse line extern float widen_roundtrip(float value);',
+    'parse line extern float widened_product(float a,float b,float c);',
+    'parse line extern float widened_quotient(float a,float b,float c);',
+    'lo fu widened_update',
+    'decompile',
+    'print C',
+    'lo fu packed_update',
+    'decompile',
+    'print C',
+    'lo fu float_update',
+    'decompile',
+    'print C',
+    'lo fu widen_roundtrip',
+    'decompile',
+    'print C',
+    'lo fu widened_product',
+    'decompile',
+    'print C',
+    'lo fu widened_quotient',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'FLOATPRECISION #1: scalar subtraction and addition stay double'
+count = 1
+literal = 'return (float4)((float8)accum + ((float8)neg_theta - (float8)local_axis));'
+
+[[match]]
+name = 'FLOATPRECISION #2: original float grouping survives'
+count = 1
+literal = 'return accum + (neg_theta - local_axis);'
+
+[[match]]
+name = 'FLOATPRECISION #3: conversion-only roundtrip simplifies'
+count = 1
+literal = 'return value;'
+
+[[match]]
+name = 'FLOATPRECISION #4: widened multiplication keeps intermediate range'
+count = 1
+literal = 'return (float4)((float8)a * ((float8)b * (float8)c));'
+
+[[match]]
+name = 'FLOATPRECISION #5: widened division keeps intermediate range'
+count = 1
+literal = 'return (float4)((float8)a / ((float8)b / (float8)c));'
+
+[[match]]
+name = 'FLOATPRECISION #6: packed low lane stays double until its store'
+count = 1
+literal = '*out = (float4)((float8)*accum + ((float8)*neg_theta - (float8)*local_axis));'
+
+[[match]]
+name = 'FLOATPRECISION #7: packed high lane stays double until its store'
+count = 1
+literal = 'out[1] = (float4)((float8)v1 + ((float8)v2 - (float8)v3));'

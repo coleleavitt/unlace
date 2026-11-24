@@ -1,0 +1,83 @@
+# Kuna DEX loader, container formats: P1 environment binding. The fixtures
+# come from tests/stages/fixtures/dex/containers.py (hello.dex and
+# tries.dex rewrapped). Before, none of these loaded: kuna knew only DEX
+# files and APKs.
+#
+# #1: an ODEX (dey\n, DexOptHeader) loads its embedded DEX, decoded with
+# the ODEX_KitKat language. #2: a version-027 VDEX's DEX section. #3: an
+# OAT file (ELF, oatdata) that embeds its DEX. #4: a compact DEX file,
+# packed code items and data offsets from data_off, down to its try items.
+
+[image]
+arch = 'Dalvik:LE:32:DEX_Android12'
+symbols = [
+    { space = 'ram', offset = '0x0', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x0'
+readonly = true
+hex = '0e00'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/hello.odex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::add',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/hello.vdex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::greet',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/hello.oat',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Hello::getValue',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file tests/stages/fixtures/dex/tries.cdex',
+    'option setlanguage java-language',
+    'read symbols',
+    'load function demo::Tries::twoCatches',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "dex containers #1: an ODEX's method decompiles"
+count = 1
+regex = [
+    '^int add\(int a0,int a1\)',
+    '\{',
+    'return a0 \+ a1;',
+]
+
+[[match]]
+name = "dex containers #2: a VDEX's DEX section decompiles"
+count = 1
+literal = 'v1 = v1.append("Hello, ");'
+
+[[match]]
+name = "dex containers #3: an OAT's embedded DEX decompiles"
+count = 1
+literal = 'return this.value + Hello.counter;'
+
+[[match]]
+name = 'dex containers #4: a compact DEX keeps its code items and try items'
+count = 1
+literal = [
+    'catch (NumberFormatException e) {',
+    'v1 = -1;',
+    '}',
+    'catch (ArrayIndexOutOfBoundsException e) {',
+]

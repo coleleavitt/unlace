@@ -10,6 +10,8 @@ mod return_branch_cli;
 mod riscv_bitmanip;
 #[path = "riscv_crypto.rs"]
 mod riscv_crypto;
+#[path = "riscv_hints.rs"]
+mod riscv_hints;
 #[path = "riscv_zcb.rs"]
 mod riscv_zcb;
 #[path = "riscv_zcmp.rs"]

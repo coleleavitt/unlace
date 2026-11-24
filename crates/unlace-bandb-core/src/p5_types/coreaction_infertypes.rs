@@ -899,9 +899,12 @@ fn build_localtypes(data: &mut Funcdata) {
             }
         };
         // (kuna `ptrfromlocal`) The same use evidence for a pointer-width value a call returns
-        // or a load reads, over a vote that is still unknown.  See `kuna_ptrfromuse`.
+        // or a load reads, over an unknown or integer vote.  See `kuna_ptrfromuse`.
         let ct = if from_seed
-            || ct.get_metatype() != type_metatype::TYPE_UNKNOWN
+            || !matches!(
+                ct.get_metatype(),
+                type_metatype::TYPE_UNKNOWN | type_metatype::TYPE_INT | type_metatype::TYPE_UINT
+            )
             || !data
                 .get_arch()
                 .kuna_options

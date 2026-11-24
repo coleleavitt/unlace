@@ -1922,8 +1922,8 @@ mod tests {
         // declared signed
         // and kuna-pemain / a stripped PE names the function its CRT startup
         // calls `main`
-        // and powerpc-isa-hint / a failed generic PowerPC64 isel decode
-        // suggests an explicit ISA target
+        // and powerpc64-isel / the generic PowerPC64 decoder lifts isel as a
+        // conditional assignment
         // and cortus-aps3-constructors / inv with an immediate negates, extb.cc
         // sign-extends, and an indirect call keeps its target
         // and kuna-jumptablemax / a four-case switch is refused under

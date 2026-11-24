@@ -1941,7 +1941,7 @@ statement and the fabricated return value goes away; that is not the default,
 because an `int3` does return to a debugger that steps past it, and the value of
 naming the pad does not depend on asserting that the process dies there. `option
 int3pad off` restores the unannotated rendering. Exercised by
-`tests/stages/kuna-int3pad.xml`.
+`tests/stages/kuna-int3pad.toml`.
 
 **(kuna) A `ud2` after a call is a no-return call site — `option trapaftercall`, default on, `crates/unlace-lift/src/p2_lift/flow.rs (trap_follows_call)`.** clang with trap-unreachable (the Darwin and rustc default) emits `ud2` after every call it knows cannot return. A stripped image gives such a callee no name, so no name list marks it no-return, and flow walks into the trap. `FlowInfo::check_for_flow_modification` checks that the instruction is a machine `call` (E8, or FF /2, after prefixes; a tail `jmp` turned into a call does not count) and reads the two bytes after it (its size is the visited record's); `0F 0B` plants the artificial halt, the same path a named no-return callee takes, and marks a direct call's spec no-return. An indirect call (rustc calls through GOT slots) gets the halt only: `ActionDeindirect` would find a no-return mark disagreeing with the resolved callee's prototype and restart the function, doubling its cost. IDA also reads two `int3` bytes (MSVC) this way; kuna does not, because anti-debug code returns into an `int3` pad on purpose (`int3pad` above). The evidence is per call site and x86 language ids only (`ctx.trap_after_call`). Exercised by `tests/stages/kuna-trapaftercall.xml`.
 
@@ -2032,7 +2032,7 @@ no-return halt a call that never returns gets, as `brktrap` does. A trap the
 table does not name (an `__builtin_trap`, a KGDB or kprobes breakpoint) keeps
 its rendering, and an image with no `__bug_table` pays one empty-list test per
 BRANCHIND. The AArch64 `#0x800` the previous paragraph leaves alone is matched
-here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.xml`.
+here only through a table entry. Exercised by `tests/stages/kuna-kernelbug.toml`.
 
 **(kuna) The x86-64 `SYSCALL` user-op's ABI effects — `option x64syscall`,
 default `on`, x86-64-gated (DIV-152),
@@ -4122,7 +4122,7 @@ An `append` whose count the grow arm takes from a register set outside the head
 library name the image does not contain, on the strength of the grow call's
 argument shape alone, and no MSVC C++ corpus in the tree can measure it;
 `msvcstrappend` is on the `EXCLUDED_ON_PURPOSE` list in `p0_knowledge/modes.rs`,
-so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.xml`: four constant appends, a loop
+so `--mode aggressive` does not turn it on either. Exercised by `tests/stages/kuna-msvcstrappend.toml`: four constant appends, a loop
 appending a register-carried byte through a specialized grow helper, a two-byte
 literal append whose returned reference is used, an unprovable register-count
 append, a collapse whose continuation zeroes the changed registers, and 29 near
@@ -5825,10 +5825,10 @@ several clauses the selector tests stay in the handler
 type.
 
 **Limits.** SjLj tables are not read. Pinned by
-`tests/stages/kuna-itaniumeh.xml` (two passes over the `itaniumeh/eh_x86_64.elf`
-fixture), `tests/stages/kuna-itaniumeh-cold.xml` (the partitioned build),
-`tests/stages/kuna-itaniumeh-a64.xml` (AArch64, x0/x1),
-`tests/stages/kuna-itaniumeh-arm.xml` (ARM32 and stripped Thumb EHABI tables,
+`tests/stages/kuna-itaniumeh.toml` (two passes over the `itaniumeh/eh_x86_64.elf`
+fixture), `tests/stages/kuna-itaniumeh-cold.toml` (the partitioned build),
+`tests/stages/kuna-itaniumeh-a64.toml` (AArch64, x0/x1),
+`tests/stages/kuna-itaniumeh-arm.toml` (ARM32 and stripped Thumb EHABI tables,
 a type named only by its `type_info` string) and
 `tests/stages/kuna-itaniumeh-clang.xml` (clang ranges that start before the
 call, the multi-clause header) and `tests/stages/kuna-itaniumeh-sharedpad.xml`

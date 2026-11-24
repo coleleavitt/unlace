@@ -1,0 +1,113 @@
+# Kuna (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
+# (default off). The script loads the committed itaniumeh/eh_x86_64.elf
+# (g++ -O2 -fno-reorder-blocks-and-partition, source beside it): catcher()
+# catches std::runtime_error and ... around risky(); cleanup() runs a
+# destructor around two calls.
+#
+# Asserts #1-#2 are the off pass: the landing pads are unreachable, so
+# catcher is void and only the on pass prints __cxa_begin_catch.
+# Asserts #3-#7 and #9-#10 are the on pass: each landing pad prints as a
+# try region, the pads read eh_exception() and eh_selector(), the pad comment
+# names the catch types, the header lists the caught types (#9, #12), and calls
+# unwinding to one pad share its try. #8 proves a cleanup pad
+# does not hand the selector register to the destructor call.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64.elf',
+    'option itaniumeh off',
+    'read symbols',
+    'load function catcher',
+    'decompile',
+    'print C',
+    'load function cleanup',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_x86_64.elf',
+    'option itaniumeh on',
+    'read symbols',
+    'load function catcher',
+    'decompile',
+    'print C',
+    'load function cleanup',
+    'decompile',
+    'print C',
+    'load function typed',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itaniumeh #1: off shows catcher as the normal path only'
+count = 1
+literal = 'void catcher('
+
+[[match]]
+name = "itaniumeh #2: off drops the catch bodies (all three matches are the on pass's)"
+count = 3
+literal = '__cxa_begin_catch'
+
+[[match]]
+name = 'itaniumeh #3: on prints each landing pad as a try region (catcher two, cleanup one, typed one)'
+count = 4
+literal = 'try {'
+
+[[match]]
+name = 'itaniumeh #4: on tests the selector at the catch pads (catcher, typed)'
+count = 2
+literal = 'if (eh_selector() == 1)'
+
+[[match]]
+name = 'itaniumeh #5: on passes the exception to __cxa_begin_catch'
+count = 3
+literal = '__cxa_begin_catch(eh_exception())'
+
+[[match]]
+name = 'itaniumeh #6: on names the catch clauses by selector'
+count = 1
+literal = 'landing pad: catch (std::runtime_error) when selector == 1; catch (...) when selector == 2'
+
+[[match]]
+name = 'itaniumeh #7: on resumes unwinding from the cleanup pads and the unmatched selector'
+count = 3
+literal = '_Unwind_Resume(eh_exception())'
+
+[[match]]
+name = 'itaniumeh #8: the destructor keeps its one argument on both paths (one off, two on)'
+count = 3
+regex = 'release\(&v\d+\);'
+
+[[match]]
+name = 'itaniumeh #9: the header names the caught types in handler order'
+count = 1
+literal = '} catch (std::runtime_error) {'
+
+[[match]]
+name = 'itaniumeh #12: a typed clause and a catch-all share one header'
+count = 1
+literal = '} catch (std::runtime_error | ...) {'
+
+[[match]]
+name = 'itaniumeh #10: the second call of cleanup prints once per pass (inside the one try when on)'
+count = 2
+literal = 'risky(a0 + 1);'
+
+[[match]]
+name = 'itaniumeh #11: no exceptional edge prints as a bare if'
+count = 0
+regex = 'if \(!?eh_unwinding'

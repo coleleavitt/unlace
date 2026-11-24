@@ -1,0 +1,115 @@
+# Return-flow regression for `option msvcstackguard`.  The caller has two
+# semantic return values which join at one `/GS` epilogue:
+#
+#     2000  sub  rsp,0x48
+#           mov  rax,[cookie]
+#           xor  rax,rsp
+#           mov  [rsp+0x38],rax
+#           test ecx,ecx
+#           jne  failure
+#           call success_side_effect
+#           xor  eax,eax              ; success: EAX = 0
+#           jmp  shared
+#     failure:
+#           call failure_side_effect
+#           mov  eax,1                ; failure: EAX = 1
+#     shared:
+#           mov  rcx,[rsp+0x38]
+#           xor  rcx,rsp              ; (K ^ SP) ^ SP
+#     2032  call 2100                 ; checker
+#           add  rsp,0x48
+#           ret
+#
+# The checker is deliberately unnamed.  Its failure tail enters 0x2130,
+# whose ordinary returning CALL at 0x2134 precedes INT 0x29.  That nested
+# call makes the generic callee-body write probe incomplete; the option must
+# rely only on its exact `(K ^ SP) ^ SP`, one-direct-call recognition seed.
+#
+# Two passes flip `msvcstackguard`.  OFF retains exactly the raw checker
+# call and cookie algebra.  ON removes the boilerplate and keeps the two
+# machine return values (canonically rendered as `a0 != 0`).  The two
+# arm-specific calls keep the control-flow split observable.  This pins the
+# option-owned P7-to-P3 restart handoff independently of the generic
+# return-preservation heuristic.
+
+[image]
+arch = 'x86:LE:64:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x2000', name = 'guarded_returns' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2000'
+readonly = true
+hex = '''
+4883ec48488b05f50100004831e0488944243885c97509e86401000031c0eb0a
+e86b010000b801000000488b4c24384831e1e8c90000004883c448c3
+'''
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2100'
+readonly = true
+hex = '483b0df90000007501c3eb24'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2130'
+readonly = true
+hex = '4883ec28e827000000b902000000cd294883c428c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2160'
+readonly = true
+hex = '31d2c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2180'
+readonly = true
+hex = 'c7057e00000055000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2190'
+readonly = true
+hex = 'c7056e000000aa000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2200'
+hex = 'efcdab896745230100000000'
+
+[script]
+commands = [
+    'option msvcstackguard off',
+    'lo fu guarded_returns',
+    'decompile',
+    'print C',
+    'option msvcstackguard on',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MSVCSTACKGUARD-RETURN #1: option off retains the raw checker call'
+count = 1
+literal = 'sub_2100('
+
+[[match]]
+name = 'MSVCSTACKGUARD-RETURN #2: option off retains the cookie read'
+count = 1
+literal = 'dat_2200 ^'
+
+[[match]]
+name = 'MSVCSTACKGUARD-RETURN #3: option on keeps failure one and success zero'
+count = 1
+literal = 'return a0 != 0;'
+
+[[match]]
+name = 'MSVCSTACKGUARD-RETURN #4: both passes retain both arm-specific side effects'
+count = 4
+regex = 'sub_21[89]0\(\);'

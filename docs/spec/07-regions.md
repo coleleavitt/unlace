@@ -599,9 +599,9 @@ in most such frames, and deleting it removes the local-alias escape site that
 bottom of the frame, so dead stores the aliasing had been keeping alive are
 collected too. That is the same defect the `cookiescramble` alias exemption
 addresses on the same instruction, from the other side; the two compose.
-`tests/stages/kuna-msvcstackguard.xml` pins both directions, with the callee
+`tests/stages/kuna-msvcstackguard.toml` pins both directions, with the callee
 deliberately unnamed so the shape-only claim is what is tested.
-`tests/stages/kuna-msvcstackguard-return.xml` pins the restart handoff with a
+`tests/stages/kuna-msvcstackguard-return.toml` pins the restart handoff with a
 two-arm shared epilogue; its checker
 failure tail enters a helper with an ordinary returning call before fast-fail,
 so generic callee-body inference is deliberately unavailable.

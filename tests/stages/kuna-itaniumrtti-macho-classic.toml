@@ -1,0 +1,55 @@
+# `itaniumrtti` on Mach-O (classic LC_DYLD_INFO binds): P1 external refinement, option
+# itaniumrtti (default on). The script loads the committed
+# itaniumrtti_macho/libshapes_arm64_classic.dylib (clang++ and ld64.lld, source and
+# commands beside it). make() stores Circle's or Square's vptr; both
+# classes' typeinfos are local, reached only through LC_DYLD_INFO bind opcodes naming
+# __si_class_type_info and name pointers with bit 63 set.
+#
+# Assert #1 is the off pass: the vptr constants are raw addresses.
+# Asserts #2-#3 are the on pass: both resolve to the recovered vtables.
+
+[image]
+arch = 'AARCH64:LE:64:v8A'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib',
+    'option itaniumrtti off',
+    'read symbols',
+    'load function _make',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumrtti_macho/libshapes_arm64_classic.dylib',
+    'option itaniumrtti on',
+    'read symbols',
+    'load function _make',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'ITANIUMRTTI-MACHO-CLASSIC #1: off leaves the vptr stores as addresses'
+count = 1
+regex = 'v\d+ = 0x40a0;'
+
+[[match]]
+name = "ITANIUMRTTI-MACHO-CLASSIC #2: on names Square's vptr"
+count = 1
+regex = 'v\d+ = Square_vptr;'
+
+[[match]]
+name = "ITANIUMRTTI-MACHO-CLASSIC #3: on names Circle's vptr"
+count = 1
+regex = 'v\d+ = Circle_vptr;'

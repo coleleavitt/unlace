@@ -1,0 +1,70 @@
+# Kuna (IDA 9.5 gooMBA design, linear MBA without SMT): P3 simplification
+# quiescence, option mba (default off).
+#
+#   0x1000 mba_add: mov eax,edi; xor edi,esi; and eax,esi; lea eax,[rdi+rax*2]; ret
+#                   (x ^ y) + 2*(x & y)  ==  x + y
+#   0x1010 mba_or:  mov eax,esi; not eax; and eax,edi; add eax,esi; ret
+#                   (x & ~y) + y          ==  x | y
+#
+# Asserts #1-#2 are the off pass: the obfuscated forms print as written.
+# Asserts #3-#4 are the on pass: both fold.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'mba_add' },
+    { space = 'ram', offset = '0x1010', name = 'mba_or' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+readonly = true
+hex = '89f831f721f08d0447c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1010'
+readonly = true
+hex = '89f0f7d021f801f0c3'
+
+[script]
+commands = [
+    'option mba off',
+    'parse line extern uint4 mba_add(uint4 x,uint4 y);',
+    'parse line extern uint4 mba_or(uint4 x,uint4 y);',
+    'lo fu mba_add',
+    'decompile',
+    'print C',
+    'lo fu mba_or',
+    'decompile',
+    'print C',
+    'option mba on',
+    'lo fu mba_add',
+    'decompile',
+    'print C',
+    'lo fu mba_or',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'mba #1: off keeps the xor/and form'
+count = 1
+literal = 'return (x ^ y) + (x & y) * 2;'
+
+[[match]]
+name = 'mba #2: off keeps the and-not form'
+count = 1
+literal = '~y & x) + y;'
+
+[[match]]
+name = 'mba #3: on folds (x ^ y) + 2*(x & y) to an add'
+count = 1
+literal = 'return x + y;'
+
+[[match]]
+name = 'mba #4: on folds (x & ~y) + y to an or'
+count = 1
+regex = 'return [xy] \| [xy];'

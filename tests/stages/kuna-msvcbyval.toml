@@ -1,0 +1,210 @@
+# An MSVC __cdecl import's by-value class argument is sized at the call site
+# (kuna_msvcbyval.rs, always on).
+#
+# Issue: GH Noelo-Lab/kuna#990. An MSVC name states every parameter's type but
+# not the size of a class passed by value, so msvcsig applies such an import's
+# parameters up to the class and leaves the rest open. MSVC copy-constructs the
+# class in its outgoing slot (`push ecx; mov ecx,esp; call ??0`), so the
+# call-site recovery refuses every slot from that address up, and the call
+# keeps only the parameters before the class.
+#
+# Stage / sub-stage: P4 callee-prototype (`p4_calls/kuna_msvcbyval.rs`, run at
+# the end of ActionDefaultParams on the raw p-code) feeding P3 heritage (the
+# constructor call creates the slot) and P6 ActionRestrictLocal (the slot
+# stays a mapped local).
+#
+# Inert without msvcsig.
+#
+# Fixtures (see the fixtures README):
+#   msvcsig_protos_i386.exe 0x401020, the issue's repro:
+#     Arr Build(Arr &x, Arr &y) { return MakeStack(x, x, y); }
+#     with ?MakeStack@@YA?AVArr@@V1@AAV1@1@Z, `add esp,0x10` after the call.
+#   msvcbyval_i386.exe:
+#     0x401000 void Wide(Pair &p) { Join(p, p); }   8-byte Pair, `sub esp,8`
+#     0x401020 Late: Note(1)'s pop deferred into MakeStack's `add esp,0x14`
+#     0x401050 Folded: no frame pointer, the cleanup also releases a local
+#              (MakeStack(y, x, y) into a local r)
+#     0x401080 Fresh: MakeStack(GetArr(), x, y), GetArr returning straight
+#              into the slot through its hidden pointer
+#   msvcbyval_ce_i386.exe: the shapes the sizing must decline (a pop cleanup,
+#     padding or dead locals above the arguments, an addressed local the
+#     cleanup releases, a split cleanup), checked in the default pass, plus
+#     an 8-byte class after a scalar, a padded 6-byte class, and a plain
+#     8-byte struct that stay sized
+#
+# Without the sizing MakeStack(a1) and Join() keep only the parameters
+# before the class, and the pushed `ecx` that reserves the slot is an extra
+# parameter of Build.  With it MakeStack(a0,v1,a1,a2) and Join(v1,a0), the
+# copy constructor (or GetArr) building that same local, and Build and Fresh
+# taking exactly their three parameters. Late and Folded stay as they were:
+# their cleanups over-state MakeStack's arguments, so the size is declined.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/msvcsig_protos_i386.exe',
+    'read symbols',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/msvcbyval_i386.exe',
+    'read symbols',
+    'load addr 0x401000',
+    'decompile',
+    'print C',
+    'load addr 0x401020',
+    'decompile',
+    'print C',
+    'load addr 0x401050',
+    'decompile',
+    'print C',
+    'load addr 0x401080',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/msvcbyval_ce_i386.exe',
+    'read symbols',
+    'load addr 0x401000',
+    'decompile',
+    'print C',
+    'load addr 0x401130',
+    'decompile',
+    'print C',
+    'load addr 0x401190',
+    'decompile',
+    'print C',
+    'load addr 0x4011e0',
+    'decompile',
+    'print C',
+    'load addr 0x4010f0',
+    'decompile',
+    'print C',
+    'load addr 0x401210',
+    'decompile',
+    'print C',
+    'load addr 0x401240',
+    'decompile',
+    'print C',
+    'load addr 0x401260',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "MSVCBYVAL #1: only shift8's declined call keeps MakeStack's hidden return pointer alone"
+count = 1
+literal = 'MakeStack(a1);'
+
+[[match]]
+name = 'MSVCBYVAL #2: the reserving push of ecx is never read as a parameter of Build'
+count = 0
+literal = 'Arr * sub_401020(unsigned int a0,Arr *a1,Arr *a2,unsigned int a3)'
+
+[[match]]
+name = 'MSVCBYVAL #3: Join never drops both of its arguments'
+count = 0
+literal = 'Join();'
+
+[[match]]
+name = 'MSVCBYVAL #4: MakeStack gets every argument, the class in place (Build, Fresh)'
+count = 2
+literal = 'MakeStack(a0,v1,a1,a2);'
+
+[[match]]
+name = 'MSVCBYVAL #5: the copy constructor builds that same local'
+count = 1
+literal = 'Arr::Arr((Arr *)&v1,a1);'
+
+[[match]]
+name = 'MSVCBYVAL #6: Build takes exactly its three parameters'
+count = 1
+literal = 'Arr * sub_401020(Arr *a0,Arr *a1,Arr *a2)'
+
+[[match]]
+name = 'MSVCBYVAL #7: the 8-byte Pair is sized from sub esp,8'
+count = 1
+literal = 'Join(v1,a0);'
+
+[[match]]
+name = 'MSVCBYVAL #8: the Pair copy constructor builds the argument'
+count = 2
+literal = 'Pair::Pair((Pair *)&v1,a0);'
+
+[[match]]
+name = 'MSVCBYVAL #9: a deferred pop in the cleanup is declined'
+count = 1
+literal = 'MakeStack(a0);'
+
+[[match]]
+name = 'MSVCBYVAL #10: a local released by the cleanup is declined'
+count = 1
+literal = 'MakeStack((Arr *)&v2);'
+
+[[match]]
+name = 'MSVCBYVAL #11: the reserving push of ecx is never read as a parameter of Fresh'
+count = 0
+literal = 'Arr * sub_401080(unsigned int a0,Arr *a1,unsigned int a2,unsigned int a3)'
+
+[[match]]
+name = "MSVCBYVAL #12: GetArr's hidden pointer builds the slot, so Fresh takes three parameters"
+count = 1
+literal = 'Arr * sub_401080(Arr *a0,Arr *a1,Arr *a2)'
+
+[[match]]
+name = 'MSVCBYVAL #13: GetArr returns into the slot as a local'
+count = 1
+literal = 'GetArr((Arr *)&v1);'
+
+[[match]]
+name = 'MSVCBYVAL #14: a pop-run cleanup is not read as a size (Sink declined)'
+count = 1
+literal = 'Sink();'
+
+[[match]]
+name = 'MSVCBYVAL #15: padding above a class-last argument is not absorbed (Take3 declined)'
+count = 1
+literal = 'Take3(5);'
+
+[[match]]
+name = 'MSVCBYVAL #16: an 8-byte class follows a 4-byte stack argument without extra padding (Take4)'
+count = 1
+literal = 'Take4(5,v1);'
+
+[[match]]
+name = 'MSVCBYVAL #17: dead reserving pushes above the arguments leave shift8 declined'
+count = 1
+literal = 'void sub_4011e0(unsigned int a0,Arr *a1,Arr *a2,unsigned int a3)'
+
+[[match]]
+name = 'MSVCBYVAL #18: a 6-byte class padded to 8 by sub esp,8 is still sized (Put)'
+count = 1
+literal = 'Put(v1,v2);'
+
+[[match]]
+name = 'MSVCBYVAL #19: a local whose address is taken and that the cleanup releases is declined (podfold)'
+count = 1
+literal = 'Take(*a1,a1[1],v1);'
+
+[[match]]
+name = 'MSVCBYVAL #20: a cleanup split over two add esp is declined'
+count = 1
+literal = 'Take(*a0,a0[1],5);'
+
+[[match]]
+name = 'MSVCBYVAL #21: a trivially copyable 8-byte struct with a plain add esp is sized (podok)'
+count = 1
+literal = 'Take(*a0,5);'

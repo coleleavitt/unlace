@@ -1,0 +1,83 @@
+# Reduced accept/fork server loop: EINTR and failed fork continue to the
+# same head; the child closes the listener and returns. One source loop.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'retry_server' },
+    { space = 'ram', offset = '0x106a', name = '__errno_location' },
+    { space = 'ram', offset = '0x106b', name = 'accept' },
+    { space = 'ram', offset = '0x106c', name = 'fork' },
+    { space = 'ram', offset = '0x106d', name = 'close' },
+    { space = 'ram', offset = '0x106e', name = 'abort' },
+    { space = 'ram', offset = '0x106f', name = 'warn' },
+    { space = 'ram', offset = '0x1070', name = 'session' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '5341544883ec084189fceb0ae859000000833804752631d231f64489e7e84900000089c385c078e4e83f00000085c07810741e89dfe833000000ebdae82d00000031ffe82700000089dfe81e000000ebc54489e7e81400000089dfe81000000031c04883c408415c5bc3c3c3c3c3c3c3c3'
+
+[script]
+commands = [
+    'option loopcontinue off',
+    'lo fu retry_server',
+    'decompile',
+    'print C',
+    'option loopcontinue on',
+    'lo fu retry_server',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'LOOPCONTINUE #1: OFF three loops plus ON one loop'
+count = 4
+literal = 'while( true ) {'
+
+[[match]]
+name = 'LOOPCONTINUE #2: one outer infinite loop per pass'
+count = 2
+regex = '^  while\( true \) \{'
+
+[[match]]
+name = 'LOOPCONTINUE #3: ON preserves both early continues'
+count = 2
+literal = 'continue;'
+
+[[match]]
+name = 'LOOPCONTINUE #4: accept runs once per iteration in both passes'
+count = 2
+literal = '= accept('
+
+[[match]]
+name = 'LOOPCONTINUE #5: fork runs once in both passes'
+count = 2
+literal = '= fork();'
+
+[[match]]
+name = 'LOOPCONTINUE #6: fatal accept and fork-warning paths survive'
+count = 2
+literal = 'abort();'
+
+[[match]]
+name = 'LOOPCONTINUE #7: fork warning survives'
+count = 2
+literal = 'warn(0);'
+
+[[match]]
+name = 'LOOPCONTINUE #8: all close calls survive (three sites per pass)'
+count = 6
+literal = 'close('
+
+[[match]]
+name = 'LOOPCONTINUE #9: child session survives'
+count = 2
+literal = 'session(v1);'
+
+[[match]]
+name = 'LOOPCONTINUE #10: no goto or synthetic label remains'
+count = 0
+regex = 'goto |label_[0-9a-f]+:'

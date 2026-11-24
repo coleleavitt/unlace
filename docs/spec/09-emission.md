@@ -410,7 +410,7 @@ branch flip or `BOOL_NEGATE`, therefore prints `!(a < b)` or `!(a <= b)`.
 The printer must not absorb the negation into `>=` or `>`: those ordered
 comparisons are false on NaN, whereas the negated expressions are true.
 Integer comparisons and floating equality/inequality still use their
-complementary tokens. `tests/stages/kuna-minss-nan.xml` pins MINSS selection
+complementary tokens. `tests/stages/kuna-minss-nan.toml` pins MINSS selection
 with defaults and `nanignore none`; the CLI regression compiles the printed C
 and checks its NaN payloads, signed zeros, finite values and infinities against
 the authored instructions.
@@ -2007,14 +2007,14 @@ called from `decompile_step.rs`). The names are the ones already printed, and
 storage some Symbol now holds is skipped. The next `build_arch_handle` snapshots
 the new Symbols like any other. After `store64` writes an unnamed 8-byte global,
 a `load_high` decompiled next reads its upper half as `dat_105000._4_4_` rather
-than a separate `dat_105004` (`tests/stages/kuna-mapglobalsyms.xml`). The option
+than a separate `dat_105004` (`tests/stages/kuna-mapglobalsyms.toml`). The option
 is off by default because it makes a function's output depend on which
 functions were decompiled before it in the same session. A read that starts at a global data
 Symbol but is wider than it prints the Symbol's name with a leading `_`
 (`_small`, upstream `pushMismatchSymbol`); one that starts inside the Symbol
 prints as unnamed storage. Function Symbols take no part: an import slot named
 after its function keeps its plain rendering
-(`tests/stages/kuna-mapglobals.xml`).
+(`tests/stages/kuna-mapglobals.toml`).
 
 One unnamed high-variable case is deliberately canonicalized before that
 choice. If any member is the unaffected input stack pointer, every member uses
@@ -2166,7 +2166,7 @@ line fires a pending `else` brace before the label, as it does without the
 pretty-printer (`prettyprint.rs (EmitPrettyPrint::try_tag_line_indent)`). The
 line size also bounds `option commentindent`: an indent of N or more is refused
 (`printc.rs (PrintC::set_line_comment_indent)`), as upstream does
-(`tests/stages/kuna-maxlinewidth.xml`). The datatest corpus passes unchanged
+(`tests/stages/kuna-maxlinewidth.toml`). The datatest corpus passes unchanged
 with `maxlinewidth` set to 100 or 200. When selected, line breaks
 are chosen by `prettyprint.rs (EmitPrettyPrint)`, an Oppen-style streaming
 formatter transcribed verbatim because its breaks are part of the byte-exact

@@ -1,0 +1,58 @@
+# Kuna (IDA 9.5 eh34 design): P2 flow classification, option itaniumeh
+# (default off), on AArch64. The script loads the committed
+# itaniumeh/eh_aarch64.so (clang++ for aarch64-linux-gnu, source eh2.cc and
+# the command in the README beside it). The unwinder's registers are x0
+# (exception) and x1 (selector).
+#
+# Assert #1 is the off pass: no catch code. Asserts #2-#4 are the on pass.
+
+[image]
+arch = 'AARCH64:LE:64:v8A'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c0035fd6'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so',
+    'option itaniumeh off',
+    'read symbols',
+    'load function catcher',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-cli/tests/fixtures/itaniumeh/eh_aarch64.so',
+    'option itaniumeh on',
+    'read symbols',
+    'load function catcher',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'itaniumeh a64 #1: off has no catch code (the one match is the on pass)'
+count = 1
+literal = '__cxa_begin_catch'
+
+[[match]]
+name = 'itaniumeh a64 #2: on prints the pad as a try region'
+count = 1
+literal = 'try {'
+
+[[match]]
+name = 'itaniumeh a64 #3: on passes x0 to __cxa_begin_catch'
+count = 1
+literal = '__cxa_begin_catch(eh_exception())'
+
+[[match]]
+name = 'itaniumeh a64 #4: on names the catch type and selector'
+count = 1
+literal = 'landing pad: catch (Err) when selector == 2; catch (...) when selector == 1'

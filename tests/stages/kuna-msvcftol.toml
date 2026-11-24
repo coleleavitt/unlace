@@ -1,0 +1,71 @@
+# MSVC __ftol-family call-fixup (kuna_msvcftol).
+#
+# MSVC compiles an x86-32 float-to-integer conversion as `fld <src>; call
+# __ftol`: the value arrives in the x87 stack top ST0 and the __int64 result
+# returns in EDX:EAX. No vendored x86 prototype model has an <input> pentry
+# naming an x87 register (ST0 appears only as an <output> pentry), so the call
+# characterizes ST0 as NoContainment, Heritage never creates an argument
+# trial, and with nothing reading ST0 the whole feeding FLD chain is
+# dead-code eliminated together with every register it was based on.
+#
+# The XML wrapper only supplies the harness architecture. The script clears it
+# and loads the real i386 COFF fixture, whose `ftol_conv` performs exactly the
+# MSVC sequence twice against an UNDEFINED `__ftol` extern.
+#
+# Without the fixup the defect is two argument-less `__ftol()` calls, with no
+# trace of the float loads that fed them (assert #1 pins that form to zero).
+# The synthesized callfixup replaces each CALL with the helper's p-code. The fields are declared as integer words, so their
+# bits are first reinterpreted as float before numeric truncation. The
+# `(int4)(int8)` shape is deliberate: `_ftol`
+# returns an __int64, and modelling it at 32 bits would silently produce the
+# wrong high word for an `(__int64)d` conversion.
+#
+# Assertions span the one print.
+
+[image]
+arch = 'x86:LE:32:default:windows'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/ftol_i386.obj',
+    'read symbols',
+    'load function ftol_conv',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'MSVCFTOL #1: no argument-less helper call survives'
+count = 0
+literal = '__ftol()'
+
+[[match]]
+name = 'MSVCFTOL #2: the first conversion casts the field it actually reads'
+count = 1
+regex = 'union \{ unsigned int from; float to;.*a0\[6\]'
+
+[[match]]
+name = 'MSVCFTOL #3: the second conversion casts the field it actually reads'
+count = 1
+regex = 'union \{ unsigned int from; float to;.*a0\[7\]'
+
+[[match]]
+name = "MSVCFTOL #4: both conversions truncate at the helper's real 64-bit width"
+count = 2
+literal = '(int4)(int8)'
+
+[[match]]
+name = 'MSVCFTOL #5: the call is replaced by an injection'
+count = 1
+literal = '// injected'

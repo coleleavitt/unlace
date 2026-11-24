@@ -3418,6 +3418,21 @@ Flip `off` for consumers that diff against raw pointer arithmetic
 ([docs/options.md](../options.md)); the toggle is per-render and pure
 presentation.
 
+**(kuna) containerof** — the container idiom (default **off**, C output only;
+`crates/unlace-emit/src/p9_emit/kuna_containerof.rs (PrintC::push_container_of)`,
+tried first in `printc.rs (PrintC::op_type_cast_ir_with)`). A CAST to `S *` whose
+operand is printed inline and is made of constant steps from a pointer `p`
+(`PTRADD` with a constant index, `PTRSUB`, `INT_ADD` of a constant, `INT_SUB`,
+`CAST`, `COPY`; at most nine) is the container idiom when the steps sum to `-K`,
+`0 < K < sizeof(S)`, and `S` (a named, complete struct) has a member starting
+`K` bytes in. When `p` points to a struct, the member must be of that struct
+type: the search walks nested struct members and prints the dotted path
+(`in.node`), and gives up when `K` lands inside a member of another type. The CAST
+then prints `container_of(p, S, m)` instead of `(S *)&p[-1]`; under `on` the name
+is `CONTAINING_RECORD` on a Windows image (a Windows compiler spec or a Windows
+user-mode PE), and `container_of`/`containing_record` fix it. The IR does not
+change (`tests/stages/kuna-containerof.toml`).
+
 ## 9.6 Alternate languages
 
 **(kuna) The output-language plane.** The C++ tree kuna was ported from selected a

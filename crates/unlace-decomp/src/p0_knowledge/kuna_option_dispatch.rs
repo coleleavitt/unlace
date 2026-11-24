@@ -293,6 +293,7 @@ kuna_options! { self, p1;
     "loopcondhoist" => registered!(crate::kuna_ifnoexit::LoopCondHoist),
     "loopcontinue" => registered!(crate::kuna_loopcontinue::LoopContinue),
     "postinc" => registered!(crate::kuna_coreoptions::PostIncrement),
+    "containerof" => registered!(crate::kuna_containerof::ContainerOf),
     "regionlooprefine" => registered!(crate::region_structurer::RegionLoopRefine),
     "regionedgeorder" => registered!(crate::region_structurer::RegionEdgeOrder),
     "outline" => registered!(crate::kuna_outline::OutlineOption),

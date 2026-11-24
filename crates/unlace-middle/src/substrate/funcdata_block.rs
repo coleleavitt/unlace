@@ -1149,7 +1149,7 @@ impl Funcdata {
             statement = 1;
         }
         let maxref = self.get_arch().max_implied_ref;
-        for inst in self.bb_ops(bb) {
+        for inst in self.bb_ops_iter(bb) {
             let instobj = self.obank().get(inst).expect("bb_is_complex: stale op");
             if instobj.is_marker() {
                 continue;

@@ -1724,8 +1724,8 @@ prints the null statement `;` on its own line. A label followed by another
 label, a statement, or a nested block is untouched, so output that was already
 valid does not change. The Rust back-end (§9.6) needs no counterpart: it prints
 labels as comments and an empty arm as `N => { }`. The ARM and x86-64 shapes are
-pinned by `tests/stages/kuna-labelstmt-arm.xml` and
-`tests/stages/kuna-labelstmt-x64.xml`, and the unlace-cli round trip
+pinned by `tests/stages/kuna-labelstmt-arm.toml` and
+`tests/stages/kuna-labelstmt-x64.toml`, and the unlace-cli round trip
 `emitted_label_statements.rs` compiles the printed functions with
 `-std=c11 -pedantic-errors` and checks that they behave like their source.
 

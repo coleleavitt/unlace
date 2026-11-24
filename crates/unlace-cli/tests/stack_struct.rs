@@ -7,7 +7,7 @@ use common::process;
 use std::process::Command;
 
 /// `(base, memset)` of the four builds of `fixtures/stack_struct.c` in
-/// `tests/stages/kuna-stackstruct.xml`: gcc -O0, gcc -O2, clang -O0, clang -O2.
+/// `tests/stages/kuna-stackstruct.toml`: gcc -O0, gcc -O2, clang -O0, clang -O2.
 const BUILDS: [(u64, Option<u64>); 4] = [
     (0x401000, None),
     (0x501000, None),
@@ -16,10 +16,11 @@ const BUILDS: [(u64, Option<u64>); 4] = [
 ];
 
 fn image() -> std::path::PathBuf {
-    let xml = include_str!(concat!(
+    let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-stackstruct.xml"
-    ));
+        "/../../tests/stages/kuna-stackstruct.toml"
+    )))
+    .unwrap();
     let chunk =
         regex::Regex::new(r#"<bytechunk[^>]*offset="(0x[0-9a-f]+)"[^>]*>([0-9a-f]+)</bytechunk>"#)
             .unwrap();
@@ -41,10 +42,11 @@ fn image() -> std::path::PathBuf {
 
 /// The helpers' entries in one build, read off the stage file's symbols.
 fn helpers(base: u64) -> Vec<(String, u64)> {
-    let xml = include_str!(concat!(
+    let xml = &unlace_stagefile::xml_of_toml(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/stages/kuna-stackstruct.xml"
-    ));
+        "/../../tests/stages/kuna-stackstruct.toml"
+    )))
+    .unwrap();
     let symbol =
         regex::Regex::new(r#"offset="0x([0-9a-f]+)" name="(fetch|setup|report)_"#).unwrap();
     symbol

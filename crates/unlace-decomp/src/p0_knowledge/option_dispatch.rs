@@ -116,6 +116,7 @@ unlace_options! { self, p1;
     "retpairpaths" => registered!(crate::returnuncomputed::RetPairPaths),
     "bitidioms" => registered!(crate::bitidioms::BitIdioms),
     "satmul" => registered!(crate::satmul::SatMul),
+    "bitfieldarith" => registered!(crate::bitfieldarith::BitFieldArith),
     "helperroles" => registered!(crate::helperrole::HelperRoles),
     "dynalloca" => registered!(crate::dynalloca::DynAlloca),
     "vaarg" => registered!(crate::vaarg::VaArg),

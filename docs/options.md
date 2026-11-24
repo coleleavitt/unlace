@@ -36,6 +36,9 @@ Three tiers:
 | new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select | [`satmul`](#satmul----on--off-default-off) |
 | operator new[] is called with -(ulong)(overflow) ORed into n * size | [`satmul`](#satmul----on--off-default-off) |
 | a cmovo or seto after a mul feeds an allocation size | [`satmul`](#satmul----on--off-default-off) |
+| a register field is extracted with a shift and an AND | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| a flag field is set with a clear-mask OR and a shifted insert | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
+| packed descriptor or hardware register fields print as shift and mask arithmetic | [`bitfieldarith`](#bitfieldarith----on--off-default-off) |
 | memcpy(d, s, strlen(s) + 1) is printed instead of strcpy(d, s) | [`helperroles`](#helperroles----on--off-default-on) |
 | an inlined strcpy shows as a strlen call followed by a memcpy | [`helperroles`](#helperroles----on--off-default-on) |
 | a variable-length array prints as &(&Stack[-8])[-n] | [`dynalloca`](#dynalloca----on--off-default-off) |
@@ -1506,6 +1509,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **When to flip:** Off by default: it prints a helper that is not C. Turn it on for C++ code where every new T[n] prints as a 128-bit multiply, a SUB168(..., 8) != 0 test and a -1 select (or a -(ulong)(overflow) mask ORed into the product) before operator new[].
 - **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-satmul
 - **Example:** `option satmul on`
+
+### `bitfieldarith` -- on | off, default `off`
+
+- **Symptoms:** a register field is extracted with a shift and an AND; a flag field is set with a clear-mask OR and a shifted insert; packed descriptor or hardware register fields print as shift and mask arithmetic.
+- **What it does:** Recover the pure-arithmetic form of a bitfield access on a register value: (x >> s) & mask(w) as bitfield_get(x, s, w), and (x & ~(m << s)) | ((y & m) << s) as bitfield_set(x, y, s, w), for a constant s and a low mask m of w bits with s + w inside the operand. Main recovers bitfields only from struct-typed loads, stores and mapped varnodes, so packed fields in a register print as shifts and masks.
+- **When to flip:** Off by default: it prints bitfield_get and bitfield_set calls, which are not C and carry no field names. Turn it on to read register-level packing (flag words, descriptor fields, hardware registers) as one access per field instead of shift-and-mask arithmetic.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-bitfieldarith
+- **Example:** `option bitfieldarith on`
 
 ### `helperroles` -- on | off, default `on`
 

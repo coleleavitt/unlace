@@ -7,6 +7,7 @@ pub mod addcarrychain;
 pub mod addrcompare;
 pub mod alloca; // (unlace) a dynamic stack allocation becomes alloca(size)
 pub mod arraystride;
+pub mod bitfieldarith; // (unlace `bitfieldarith`) pure-arithmetic bitfield get and set
 pub mod bitidioms;
 pub mod booleanmask;
 pub mod boxedcompare;

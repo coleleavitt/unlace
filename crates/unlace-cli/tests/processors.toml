@@ -134,6 +134,9 @@ c4070009c4070808010210f1008110f144050008a00820a3c4072009012129f2004101f3064129f0
 meta_dsp = """
 00c5000083000062a00820a3
 """
+x86_64_native_oracle = """
+c4e27ddcc1c3662e0f1f840000000000660f3a170701c3
+"""
 
 [[family]]
 name = "blackfin"
@@ -3027,6 +3030,24 @@ address = "0x10000"
 expect = [
     "return ((unsigned int *)a0)[1];",  # ld.w w0,0(a0); copy_s.w v0,w0[1]
 ]
+
+# Found by the native oracle (tools/difffuzz, --oracle native): VEX.256 VAESENC decodes (was a bad
+# instruction; libcrypto uses it), and EXTRACTPS to memory stores 32 bits (was 64).
+[[family]]
+name = "x86_64_native_oracle"
+language = "x86:LE:64:default:gcc"
+base = "0x0"
+image = "x86_64_native_oracle"
+
+[[family.function]]
+test = "x86_vaesenc_ymm_decodes"
+address = "0x0"
+expect = ["aesenc(SUB3216(v2,0x10),SUB3216(v3,0x10))"]
+
+[[family.function]]
+test = "x86_extractps_stores_a_dword"
+address = "0x10"
+expect = ["unsigned int *a0"]
 
 # ELF routing and relocation rows: real ET_REL and ET_EXEC images (crates/unlace-cli/tests/fixtures/elfroute/fx.c,
 # built as its README says), loaded with no --target, so the loader picks the language from the ELF header (#706),

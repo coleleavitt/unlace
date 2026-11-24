@@ -4839,6 +4839,16 @@ Before, each was a bad instruction. The EVEX-promoted GPR forms in
 the AVX-512 scaling of whatever tuple context was current. Exercised by the
 `x86_64_cmpccxadd` row of `unlace-cli/tests/processors.toml`.
 
+### x86 legacy/VEX fixes from the native oracle (#98)
+
+Checking SSE, VEX and integer instructions against this CPU (`tools/difffuzz --oracle native`)
+fixed: a REX.X or VEX.X bit no longer extends a ModRM.rm vector register to XMM16-31 (only EVEX's
+does); the VEX scalar add/subtract/multiply keep bits 127:32/127:64 from the first source; 34 VEX
+scalar instructions ignore VEX.L; `lzcnt` with one register as source and destination takes CF from
+the source; `extractps m32` stores four bytes and `pinsrb` reads one. GFNI (legacy and VEX), the
+VEX.256 VAES and VPCLMULQDQ forms and AVX-NE-CONVERT decode (`gfni_vaes.sinc`, `avx_ne_convert.sinc`).
+Exercised by the `x86_64_native_oracle` row of `unlace-cli/tests/processors.toml`.
+
 ### x86 MOV DRn mod and VFPCLASSPH/SH display (#98)
 
 `MOV DRn, r64` decodes whatever ModRM.mod holds (the SDM says the field is ignored), as the

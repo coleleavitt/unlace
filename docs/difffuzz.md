@@ -359,3 +359,24 @@ in a copy of `apx_map4.sinc` makes the check report it (122 and 360 mismatches).
 
 There is no reference for the AVX-512 or AVX10.2 lifts here: Unicorn and QEMU (11.0) have no
 AVX-512, and Intel SDE needs Intel's licence accepted to download.
+
+## x86-64 against this CPU (`--oracle native`)
+
+`--arch x86-64-native --oracle native` runs each case natively instead of under Unicorn: the QEMU
+harness of `qemu_backend.py` (prologue loading every register, the instruction at its lifted
+address, an epilogue that writes the registers and touched pages to stdout) gets an x86-64 form,
+`X86NativeHarness`, whose ELF is executed directly. YMM0-YMM15 are compared at 256 bits, and the
+generator draws mostly from the legacy SSE, VEX and x87 opcode spaces, which Unicorn's QEMU core
+leaves out (AVX2, FMA, F16C, AES/VAES, VPCLMULQDQ, GFNI, SHA, AVX-VNNI, BMI, ADX on a CPU that has
+them; an instruction this CPU lacks ends with SIGILL and counts as `ref-exception`). The p-code of
+most vector arithmetic is a user operation, so those cases are `unmodeled`; moves, shuffles, blends,
+scalar float arithmetic, integer and flag semantics are compared.
+
+```sh
+~/.local/share/difffuzz-venv/bin/python tools/difffuzz/difffuzz.py --arch x86-64-native --oracle native \
+    --count 1500 --seed 41 --unlace <unlace> --sleighpath specs
+```
+
+`tools/x86_avx512_sweep.py --enc EncVEX` / `--enc EncNormal` (with VEX or legacy `--predicates`) is the
+matching decode check against `llvm-objdump` for those encodings. x87 is not compared: the p-code
+emulator has no 80-bit float.

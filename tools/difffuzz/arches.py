@@ -203,9 +203,14 @@ class X86_64(Arch):
     def ignored(self, mnemonic, operands, state):
         if mnemonic == "mov" and re.search(r"\b(dr|cr)\d", operands):
             return {"*"}
-        if mnemonic == "bswap" and not re.match(r"^[re]", operands):
+        if mnemonic == "bswap" and (not re.match(r"^[re]", operands) or re.match(r"^r\d+w$", operands)):
             return {"*"}
         if mnemonic in ("shld", "shrd") and operands.endswith("cl") and ("word" in operands or re.match(r"^[a-ds][xip]\b|^r\d+w", operands)):
+            return {"*"}
+        m = re.search(r",\s*(0x[0-9a-f]+|\d+)$", operands)
+        if mnemonic in ("shld", "shrd") and m and ("word ptr" in operands or re.match(r"^[a-ds][xip]\b|^r\d+w", operands)) \
+                and int(m.group(1), 0) & 31 > 16:
+            # a 16-bit SHLD/SHRD by more than 16 leaves the destination undefined (SDM)
             return {"*"}
         if mnemonic in ("extrq", "insertq"):
             # Unicorn's INSERTQ inserts the wrong field and its EXTRQ keeps bits 127:64, which the
@@ -221,6 +226,39 @@ class X86_64(Arch):
             if mnemonic in ("shld", "shrd"):
                 ign |= {"CF", "SF", "ZF", "PF"} if "," in operands else set()
         return ign
+
+
+class X86_64Native(X86_64):
+    """x86-64 against this CPU (qemu_backend.X86NativeHarness, --oracle native): YMM0..YMM15 compared
+    at full width, and encodings drawn mostly from the SSE, VEX (AVX/AVX2/FMA/BMI/AES/SHA/GFNI/VNNI)
+    and x87 opcode spaces that Unicorn's QEMU core leaves out."""
+    name = "x86-64-native"
+    vecs = [(f"YMM{i}", None) for i in range(16)]
+
+    def ignored(self, mnemonic, operands, state):
+        # a segment register's value is the process's selector natively and 0 in the p-code state
+        if re.search(r"\b[cdefgs]s\b(?!:)", operands):
+            return {"*"}
+        return super().ignored(mnemonic, operands, state)
+
+    def gen(self, rng):
+        tail = rng.getrandbits(64).to_bytes(8, "little") + rng.getrandbits(32).to_bytes(4, "little")
+        modrm = bytes([rng.choice([rng.getrandbits(8) | 0xC0, rng.getrandbits(8)])])
+        k = rng.random()
+        if k < 0.3:
+            pre = bytes(rng.choice([[], [0x66], [0xF2], [0xF3]])) + bytes(rng.choice([[], [], [0x40 | rng.getrandbits(4)]]))
+            esc = rng.choice([[0x0F], [0x0F], [0x0F, 0x38], [0x0F, 0x3A]])
+            return pre + bytes(esc) + bytes([rng.getrandbits(8)]) + modrm + tail
+        if k < 0.8:
+            if rng.random() < 0.4:
+                vex = bytes([0xC5, rng.getrandbits(8)])
+            else:
+                b1 = (rng.getrandbits(3) << 5) | rng.choice([1, 2, 3])
+                vex = bytes([0xC4, b1, rng.getrandbits(8)])
+            return vex + bytes([rng.getrandbits(8)]) + modrm + tail
+        if k < 0.9:
+            return bytes([0xD8 + rng.getrandbits(3)]) + modrm + tail
+        return super().gen(rng)
 
 
 A64_DENY = re.compile(
@@ -1163,4 +1201,4 @@ class M68k(Arch32):
         return cand["mnemonic"] == "link.w" and cand["op_str"].startswith("a7,")
 
 
-ARCHES = {a.name: a for a in (X86_64(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}
+ARCHES = {a.name: a for a in (X86_64(), X86_64Native(), AArch64(), RiscV64(), Arm32(), Thumb(), Mips32(), Mips64(), Mips64R6(), Mips32R6(), Ppc32(), Ppc64(), Ppc64le(), Ppc64Isa(), Ppc64leIsa(), S390x(), LoongArch64(), TriCore(), Nios2(), Sh4(), M68k())}

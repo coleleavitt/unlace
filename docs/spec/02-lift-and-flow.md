@@ -4409,6 +4409,7 @@ the vendored modules, and each has a CLI test that decompiles a small raw image.
 | `SCMP` | National SC/MP, INS8060 SC/MP II | `SCMP:LE:16:default` | National SC/MP Technical Description, INS8060 data sheet | `unlace-cli/tests/scmp_raw.rs` |
 | `KonamiCPU` | KONAMI CPU (052001/052526/053248, Konami-2) | `KONAMI:BE:16:default` | MC6809 programming manual, MAME `konami` (opcode map and postbyte) | `unlace-cli/tests/konami.rs` |
 | `Uxn` | Uxn virtual machine (Varvara ROMs) | `Uxn:BE:16:default` | Uxntal reference (opcode table and modes) | `unlace-cli/tests/uxn.rs` |
+| `Visium` | Visium (CDS GR5/GR6) | `visium:BE:32:default` | binutils `visium` opcode table and disassembler, GCC `config/visium` | `unlace-cli/tests/visium_raw.rs` |
 <!-- native-rows -->
 
 ### WDC 65816 (#98)

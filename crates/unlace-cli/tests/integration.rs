@@ -72,6 +72,8 @@ mod upd7725;
 mod uxn;
 #[path = "v810.rs"]
 mod v810;
+#[path = "visium_raw.rs"]
+mod visium_raw;
 #[path = "w65816_raw.rs"]
 mod w65816_raw;
 #[path = "x86_amx.rs"]

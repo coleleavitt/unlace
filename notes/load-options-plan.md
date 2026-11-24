@@ -178,20 +178,19 @@ identical on its own; lead runs `cargo check`.
    set variables to fake input use explicit options.
 9. CLI plumbing variables -> `paths::Overrides`; `docs/cli.md` environment table.
 
-## Status (2026-11-24)
+## Status (2026-11-24, done)
 
-Landed: #1073-#1076, #1078-#1083 (plan, fields, console, harness, wasm,
-`from_env_with`, strings/blobs, CLI plumbing, object loaders, docs), #1092
-(decompile-all explicit options; the decompile-time bug first suspected there
-does not exist), free functions and option arms via #1091, #1094 (dead
-writers, harness restore), #1100 (CLI invocation value for image selection),
-and the removal of the environment-reading `Bootstrap` mode with its
-`UNLACE_GOVERSION` write.
+Landed: #1072-#1076, #1078-#1083, #1092, #1094, #1100, #1102, #1104, plus the
+free-function and option-arm steps that came in through #1091. No production
+code writes a load-time variable into the process environment: every load
+reads its `LoadOptions` once (the console's from `IfaceDecompData::load_options`,
+the CLI's from `loadtime::settings` over the invocation value), `option` arms
+change only the program's options, and child processes get their variables
+through `Command::env`.
 
-Left: decompile-all's `LoadtimeEnv` guard still writes the `--option`
-variables around its load (its loads are explicit, so only gates read outside
-a load scope during that window see them, and `UNLACE_DECODE_JOBS` has no
-`LoadOptions` field yet); unit tests still fake input with the
-`ifuncfpret`, `ppcapu`, `macho_arm64e`, `symbolnamechars` and `libctypes`
-`set_*_env` helpers; `enter_environment` and `load_options_from_env` remain for
-a gate read outside any scope.
+Left on purpose: the `set_*_env` helpers for `ifuncfpret`, `ppcapu`,
+`macho_arm64e`, `symbolnamechars` and `libctypes`, which unit tests use to
+check how a gate parses its variable; `enter_environment` and
+`load_options_from_env`, the fallback for a gate read outside any load scope;
+the read-only diagnostic and fault-injection variables of the inventory's
+section D. None of this was built or measured after #1081 (edit-only, per Cole).

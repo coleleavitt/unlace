@@ -217,6 +217,10 @@ specs/Ghidra/Processors/WonderSwan vendors the NEC V30MZ (WonderSwan) SLEIGH spe
 aleph-void/ghidra-wonderswan (https://github.com/aleph-void/ghidra-wonderswan), a fork of JidouGhost-TL/ghidra-wonderswan, released under the
 Apache License, Version 2.0 (its license file is in that directory).
 
+specs/Ghidra/Processors/XaviX vendors the XaviX SLEIGH specification of
+aleph-void/ghidra-xavix (https://github.com/aleph-void/ghidra-xavix), released under the
+MIT License (its license file is in that directory).
+
 kuna
 Copyright 2026 The kuna Authors
 

@@ -1694,7 +1694,7 @@ and none of them fire). Deferring the decision until the flow work-stack drains,
 and then asking whether the function decoded `dest` by another path, is the sound
 fix; it is a change to the walk's ordering rather than to this predicate.
 
-**(kuna) EVM internal calls — `option evmcalls`, default off,
+**(kuna) EVM internal calls — `option evmcalls`, default on,
 `crates/unlace-lift/src/p2_lift/kuna_evmcalls.rs (classify, ActionEvmCalls)`.** The
 EVM has no call instruction for code inside a contract: solc lowers an internal call
 to `PUSH ret; <arguments>; PUSH fn; JUMP` and the callee returns with a `JUMP` to

@@ -1254,7 +1254,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   untouched and reported as requiring a linker veneer instead of being encoded
   as a branch in the wrong instruction set. Untyped and undefined targets do
   not infer state from their synthetic slot address. AArch64 branch, page, and
-  low-12 relocations preserve the instruction's opcode/register fields, while
+  low-12 relocations preserve the instruction's opcode/register fields, and
+  read and write the instruction little-endian in a big-endian object too
+  (A64 code is little-endian in every image; only data follows `EI_DATA`), while
   PowerPC64 `REL24` and TOC-family relocations preserve big-endian instruction
   layout and DS-form low bits. SPARC `WDISP30` and `WPLT30` rewrite the 30-bit
   word displacement of a `call`, computing `S + A - P` modulo 2³² so a call

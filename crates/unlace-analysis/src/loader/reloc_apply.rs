@@ -99,6 +99,24 @@ enum Specific {
     Generic { bits: u8 },
 }
 
+impl Specific {
+    /// An AArch64 instruction field. A64 instructions are little-endian in a
+    /// big-endian image too; only data is big-endian there.
+    fn is_aarch64_instruction(self) -> bool {
+        matches!(
+            self,
+            Specific::Aarch64Branch26
+                | Specific::Aarch64AdrPage { .. }
+                | Specific::Aarch64AddLo12
+                | Specific::Aarch64LdstLo12 { .. }
+                | Specific::Aarch64AdrLo21
+                | Specific::Aarch64Imm19 { .. }
+                | Specific::Aarch64Imm14
+                | Specific::Aarch64Movw { .. }
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum PpcHalf {
     Plain,
@@ -591,6 +609,7 @@ fn apply_info(
     toc: Option<u64>,
 ) -> Result<(), RelocationFailure> {
     debug_assert_eq!(field.len(), spec.width);
+    let little_endian = little_endian || spec.specific.is_aarch64_instruction();
     match spec.specific {
         Specific::ArmBranch24 => arm_branch24(
             field,
@@ -2087,6 +2106,37 @@ mod tests {
         .unwrap();
         assert_eq!(u32::from_le_bytes(page) & 0x1f, 0x13);
         assert_eq!(u32::from_le_bytes(page) & 0x9f00_0000, 0x9000_0000);
+    }
+
+    #[test]
+    fn aarch64_instructions_stay_little_endian_in_a_big_endian_object() {
+        // `b fib` in an aarch64_be object: data is big-endian, A64 code is not.
+        let jump = reloc(elf::R_AARCH64_JUMP26, false);
+        let spec = classify_info(Architecture::Aarch64, jump).unwrap().unwrap();
+        let mut branch = 0x1400_0000u32.to_le_bytes();
+        apply_info(
+            spec,
+            jump,
+            &mut branch,
+            false,
+            0x400164,
+            0x400160,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(u32::from_le_bytes(branch), 0x1400_0001);
+        let data = generic_reloc(
+            RelocationKind::Absolute,
+            RelocationEncoding::Generic,
+            64,
+            0,
+            false,
+        );
+        let spec = classify_info(Architecture::Aarch64, data).unwrap().unwrap();
+        let mut word = [0; 8];
+        apply_info(spec, data, &mut word, false, 0x400164, 0, None, None).unwrap();
+        assert_eq!(u64::from_be_bytes(word), 0x400164);
     }
 
     #[test]

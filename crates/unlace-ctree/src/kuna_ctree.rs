@@ -116,6 +116,9 @@ pub enum StmtKind {
     },
     /// An infinite loop.
     Loop { body: StmtId },
+    /// A `switch`: the structured switch's components in order, the head first, then the
+    /// case blocks.
+    Switch { parts: Vec<StmtId> },
     /// An unstructured branch: `goto`, `break` or `continue` by the block-goto flags in
     /// `gototype`.
     Goto { target: BlockId, gototype: uint4 },
@@ -261,10 +264,28 @@ impl CTree {
         out
     }
 
+    /// Component `k` of the structured block `id` was built from, as the statement the tree
+    /// holds in its place: the `k`-th statement of a sequence or switch, an `if`'s body (1) and
+    /// else (2), a top-tested loop's body (1), a bottom-tested or infinite loop's body (0).
+    /// `None` for a component the tree does not hold (a condition block, an if-goto's body).
+    pub fn part(&self, id: StmtId, k: usize) -> Option<StmtId> {
+        match &self.stmt(id).kind {
+            StmtKind::Seq(list) | StmtKind::Switch { parts: list } => list.get(k).copied(),
+            StmtKind::If { then, els, .. } => match k {
+                1 => Some(*then).filter(|then| self.stmt(*then).origin.is_some()),
+                2 => *els,
+                _ => None,
+            },
+            StmtKind::While { body, .. } | StmtKind::For { body, .. } => (k == 1).then_some(*body),
+            StmtKind::DoWhile { body, .. } | StmtKind::Loop { body } => (k == 0).then_some(*body),
+            _ => None,
+        }
+    }
+
     /// The statements directly under `id`, in print order.
     pub fn children(&self, id: StmtId) -> Vec<StmtId> {
         match &self.stmt(id).kind {
-            StmtKind::Seq(list) => list.clone(),
+            StmtKind::Seq(list) | StmtKind::Switch { parts: list } => list.clone(),
             StmtKind::If { pre, then, els, .. } => {
                 pre.iter().copied().chain([*then]).chain(*els).collect()
             }
@@ -294,6 +315,7 @@ impl CTree {
             StmtKind::DoWhile { cond, .. } => format!("do-while {}", self.expr_text(*cond)),
             StmtKind::For { cond, .. } => format!("for {}", self.expr_text(*cond)),
             StmtKind::Loop { .. } => "loop".to_string(),
+            StmtKind::Switch { parts } => format!("switch[{}]", parts.len()),
             StmtKind::Goto { gototype, .. } => format!("goto type={gototype:#x}"),
             StmtKind::Return(None) => "return".to_string(),
             StmtKind::Return(Some(e)) => format!("return {}", self.expr_text(*e)),

@@ -5725,15 +5725,22 @@ which only rises), and `kuna_ctreebuild::build` makes one statement per
 structured block from `sblocks.root`: a `BlockList` or `BlockGraph` becomes a
 sequence, a `BlockCopy` or `BlockBasic` leaf an ops statement, a `BlockIf` an
 `if` whose pre-statements and condition both name the condition block (an
-if-goto's body is a goto statement), and every other block an opaque statement.
+if-goto's body is a goto statement), a `BlockWhileDo` a `for` statement when it
+carries its initializer and iterator ops and a `while` otherwise, a `BlockDoWhile`
+a `do`-`while` whose condition is its body's branch, a `BlockInfLoop` an infinite
+loop, a `BlockSwitch` a switch over its components, a `BlockGoto` a sequence of
+its body and a goto statement, and a condition or multi-goto block an opaque
+statement.
 Nesting deeper than 2048 blocks stays opaque. The tree is at `built`.
 
 The walk is `printc/kuna_ctreeprint.rs`. The body prints from the root's
 statements; `emit_block` first asks the tree for the statement built from its
 block, and the walk prints a `BlockGraph` sequence (each statement in its own
 `begin_block`/`end_block`), a leaf (`emit_block_copy` or `emit_block_basic`),
-and the arms of a plain `if` (`emit_block_if` takes its body and else from the
-tree's `if`). Anything else, including every special form of `emit_block_if`
+and the components the block printers take through `emit_part`: a plain `if`'s
+body and else, a `for` or `while` body, a C `do`-`while` or infinite loop's body,
+and a goto block's body come from the statement the tree holds in that place
+(`CTree::part`). Anything else, including every special form of `emit_block_if`
 (`try`, `iteregion`, `iteboolean`, a switch plan) and every `BlockList`, prints
 through the block printer's own dispatch, and the children it prints come back
 through `emit_block`. At `built` each of these prints exactly the calls the

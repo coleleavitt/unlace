@@ -55,6 +55,16 @@ afterwards. The register file is unchanged.
 - MIPS: the installed QEMU has no 32-bit MIPS user binary, so MIPS32 code runs on a MIPS64 core
   with every register sign-extended from its 32-bit value (the state in which MIPS64 runs a
   MIPS32 instruction as MIPS32 does). Only the low 32 bits are compared.
+- Nios II (`--arch nios2`, `nios2:LE:32:R1`) has no Unicorn or Capstone support, so it runs only
+  with `--oracle qemu`, and `arches.py` decodes mnemonics itself from the Nios II opcode tables.
+  QEMU dropped the target after 8.2: build `qemu-nios2` from a QEMU 8.2 tree
+  (`configure --target-list=nios2-linux-user --disable-system --disable-tools`; on glibc 2.41
+  rename `struct sched_attr` in `linux-user/syscall.c`, which the C library now defines) and put
+  its build directory on `PATH`. The harness is ELF32: r1..r31 load from and store to the
+  tables, write(2)/exit(2) through `trap` (r2 = 64 / 93). BR with non-zero A/B fields, RET not
+  naming ra and branch offsets off a word boundary are reserved and not generated; DIV/DIVU by
+  zero and DIV of INT_MIN by -1 are undefined; addresses at or above 0x7FFF0000 are outside
+  QEMU's guest space. First run (seed 7, 2000 encodings, 3 trials): 4977 matches, no mismatches.
 - PowerPC has no QEMU harness. `qemu-ppc64` runs in 64-bit mode (MSR.SF is not user-writable),
   where record forms set CR0 from the 64-bit result, so it is not an exact reference for
   32-bit PowerPC.

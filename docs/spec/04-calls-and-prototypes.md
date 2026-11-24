@@ -10993,7 +10993,12 @@ function reads other than to spill them). The function's unlocked prototype
 is marked variadic. The printer writes `va_arg(ap,T)`, `T` the type of the
 call's output, `double` for an SSE read (type inference gives that output
 `double`), and `int` or `long` by size for an untyped integer read; a
-`va_list` that is an array prints `*ap`.
+`va_list` that is an array prints `*ap`. That `ap` has no HighVariable, so
+the local declarations end with `va_list ap;` whenever the body prints it
+(`printc.rs (prints_local_va_list)`), unless a local already has the name, and
+the `decompile-project` prelude includes `<stdarg.h>` for `va_list`,
+`va_start` and `va_arg`. Before, no such body compiled
+(`tests/stages/valist-declared.toml`, tools/semantic `varargs.vsum`).
 
 On a test set of 80 varargs reads in loops and switches (gcc and clang,
 `-O0` to `-O3`), 54 fold, against 11 before the promoted form and the walk

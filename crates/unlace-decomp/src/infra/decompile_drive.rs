@@ -3384,13 +3384,17 @@ pub fn print_c_prototype(arch: &mut Architecture, fd: &Funcdata) -> String {
 /// `long long` so the text is data-model independent) plus the fixed Ghidra
 /// `undefined` family block (`undefined`, `undefined1..8` — 3/5/6/7 mapped to
 /// the next larger unsigned integer with a sizeof note — and `undefined16/32`
-/// as byte-array structs).  `bool` is covered by `#include <stdbool.h>`;
+/// as byte-array structs).  `bool` is covered by `#include <stdbool.h>`, and
+/// `va_list`/`va_start`/`va_arg` by `#include <stdarg.h>`;
 /// `char`/`void` are real C and emit nothing.
 pub fn print_c_recompile_prelude(arch: &Architecture) -> String {
     use crate::dtype::type_metatype::*;
     let mut out = String::new();
     out.push_str("/* unlace recompile prelude (generated): core scalar typedefs */\n");
     out.push_str("#include <stdbool.h>\n");
+    // `va_start(ap,..)`/`va_arg(ap,T)` (option `vaarg`) and the `va_list ap;` a
+    // body declares for them.
+    out.push_str("#include <stdarg.h>\n");
     // A recovered aggregate can hold target pointers, and a host that compiles
     // this header for a different data model sizes them differently and moves
     // every field after such a member -- which also moves what `p[1]` means in

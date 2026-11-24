@@ -1,0 +1,42 @@
+# va_start(ap,..) and va_arg(ap,T) on the promoted local va_list (option
+# vaarg) print a variable `ap` that has no HighVariable, so nothing declared
+# it, and the export's prelude did not include <stdarg.h>: no variadic body
+# compiled (tools/semantic varargs.vsum, varargs.vmix). The body now declares
+# `va_list ap;`; the prelude includes <stdarg.h>.
+#
+# fixtures/valist/vsum-gcc-O2: vsum.c, gcc -O2 -fno-pie -no-pie -nostdlib
+# -static -fcf-protection=none -fno-asynchronous-unwind-tables
+# -Wl,--build-id=none, debug info and .comment stripped.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file tests/stages/fixtures/valist/vsum-gcc-O2',
+    'read symbols',
+    'load function vsum',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'va_list ap #1: the body starts the promoted va_list'
+count = 1
+regex = 'va_start\(ap,'
+
+[[match]]
+name = 'va_list ap #2: and declares it'
+count = 1
+regex = '^\s*va_list ap;$'

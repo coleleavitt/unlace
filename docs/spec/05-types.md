@@ -3732,9 +3732,17 @@ the vftable itself), so a slot of `C`'s offset-0 vftables is also `C::~C` when i
 fall-through walk stores `C`'s own vftable through `this` before any call, every
 other store being a base's, it does not return `this`, and its first 256 bytes
 test bit 0 of the flags argument, the `delete this` request
-(`kuna_msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1` or
-`[esp+n]` on x86; `test dl, 1`, its `bl`/`dil` copy or a frame copy on x64). A
-function the symbol table already names keeps it.
+(`kuna_msvcctors.rs (tests_delete_flag)`: `test byte ptr [ebp+8], 1`, `[esp+n]` or
+the unoptimized `mov eax, [ebp+8]; and eax, 1` on x86; `test dl, 1`, its `bl`/`dil`
+copy or a frame copy on x64). It returns `this`, as an MSVC deleting destructor
+does. Every walk steps over MSVC's frame-setup helpers (`__EH_prolog3` and its
+forms, `push size; mov eax, handler; call`, and `__SEH_prolog4`, `push size; push
+scopetable; call`): a call target that opens at least two candidate or vftable
+functions in that shape (`kuna_msvcctors.rs (frame_setup_helpers)`). The helper
+builds the frame and leaves `this` in ECX, so an MFC destructor's vftable store
+after it is still its first act; counted as a call, it disqualified every MFC
+destructor (`CDialog::~CDialog`, `CPaintDC::~CPaintDC`), and with it the deleting
+destructor that calls it. A function the symbol table already names keeps it.
 Named or not, its `this` gets the `C *` hint: a helper that stores `C`'s
 vftable into the object it is passed is handed a `C`.
 

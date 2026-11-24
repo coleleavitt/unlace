@@ -3598,6 +3598,15 @@ impl ConsoleProgram {
                         image_path,
                     ));
                 }
+                // (kuna `vtabletypes`) MSVC constructors and destructors are
+                // walked through the decoder, so they are found here too.
+                if analysis_pass_enabled(self.arch(), "vtabletypes") {
+                    merged.merge(unlace_analysis::passes::run_msvc_ctors(
+                        &bytes,
+                        self.arch(),
+                        image_path,
+                    ));
+                }
                 // (kuna `com`) COM ids and interfaces; off by default, and
                 // it builds types, so it runs only when asked for.
                 if analysis_pass_enabled(self.arch(), "com") {

@@ -130,8 +130,12 @@ pub mod dwarfscopes;
 use dwarfscopes::FrameBase;
 pub(crate) mod dwarfcomplex;
 mod dwarfdecls;
+// First step of on-demand type import (#1169): the reachability set is built and
+// tested here; the snapshot is not yet narrowed to it, so the pass is unchanged.
 pub mod dwarfenumtypedef;
 mod dwarflinkage;
+#[allow(dead_code)]
+mod dwarfondemand;
 mod dwarfsignatures;
 pub mod godwarfsig;
 mod goformals;

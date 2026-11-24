@@ -396,6 +396,55 @@ impl PrintC {
         }
     }
 
+    /// (unlace `itaniumeh`) The landing pad of the `try` printed around the block `blk`: the
+    /// nearest enclosing `try` whose normal path holds `blk`, a `Try` statement (`try_form`)
+    /// whose normal arm is on `blk`'s parent chain or a list's `try` form (`list_try_form`)
+    /// whose `if`'s normal path is. Printing descends only into a block's components, so this
+    /// is the pad `emit_eh_try` holds open while `blk` prints; without a tree, that pad.
+    pub(super) fn open_try_pad(&self, fd: &Funcdata, blk: BlockId) -> Option<u64> {
+        if self.ctree.is_none() {
+            return self.eh_open_pad;
+        }
+        crate::itaniumeh::eh_table(fd.get_arch())?;
+        let sb = fd.sblocks_ref();
+        let mut child = blk;
+        for _ in 0..(1usize << 16) {
+            let parent = sb.block(child).get_parent()?;
+            if sb.block(parent).get_type() == BlockType::If {
+                if let Some((_, Some(normal), pad, _)) = self.try_form(fd, parent)
+                    && normal == child
+                {
+                    // A Java `try` prints before it, and an `if` on the enclosing `try`'s
+                    // own edge prints its arms without opening a `try`: either way the
+                    // enclosing pad stays open.
+                    let outer = self.open_try_pad(fd, parent);
+                    let java = self
+                        .java_try_shape(fd, parent, &[])
+                        .filter(Self::java_try_standalone)
+                        .is_some();
+                    if java || (outer.is_some() && self.eh_if_target(fd, parent) == outer) {
+                        return outer;
+                    }
+                    return Some(pad);
+                }
+                if sb.block(parent).get_size() == 2
+                    && sb.block(parent).get_block(1) == child
+                    && let Some(ls) = sb.block(parent).get_parent()
+                    && sb.block(ls).get_type() == BlockType::Ls
+                {
+                    let list: Vec<BlockId> = sb.block(ls).get_list().to_vec();
+                    if let Some(form) = self.list_try_form(fd, ls, &list)
+                        && list.get(form.at) == Some(&parent)
+                    {
+                        return Some(form.pad);
+                    }
+                }
+            }
+            child = parent;
+        }
+        None
+    }
+
     /// (unlace `itaniumeh`) The `try` form of the blocks `list` of `blk`: the one the tree
     /// recorded for `blk`'s sequence when `list` is all of it, else the match itself (the rest
     /// of a switch arm or goto block, or a list the tree holds no sequence for).

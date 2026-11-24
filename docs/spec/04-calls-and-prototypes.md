@@ -2169,6 +2169,21 @@ classified:
   the walk cannot place leaves the extent unstated as well, except the
   caller's frame pointer, which the CRT's `_NLG_Notify` records in a global; a
   local's address handed to a call is still taken to stay among the locals.
+  (kuna `calleeargsmsvc`, default off, with `calleeargs` on) Two more pieces
+  of the MSVC frame boilerplate are read as no escape
+  (`kuna_calleepurge.rs (from_fs, scrambles)`). A local's address stored
+  through the FS segment base is the SEH registration (`lea eax,[ebp-0xc];
+  mov fs:[0],eax`): only the exception dispatcher reads the TEB's exception
+  list. An `INT_XOR` of a stack address with a value that is neither one nor a
+  constant is the `/GS` scramble (`xor eax,ebp` on the loaded cookie): its
+  result is data, which only the same address undoes, yielding the cookie.
+  Without it every MSVC C++ function with an exception frame or a cookie
+  states no extent, so a call to such a register-only helper keeps the
+  upstream test and takes the pushes the compiler made early for a later call:
+  in a `stream << text << value` chain, where `operator<<(const char *)` takes
+  the stream in ECX and the text in EDX, the `value` pushed before it for the
+  `__thiscall` `operator<<(unsigned long)` that pops it went to the first call
+  and the second printed without it.
   This bookkeeping runs only with the option on and never changes
   a value the pop proof reads; turning the option on or off drops the walks
   already taken, so a walk is never reused with the other setting. A nested call to a function recorded as

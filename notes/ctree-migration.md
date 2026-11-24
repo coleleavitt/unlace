@@ -71,17 +71,36 @@ With `option boolreturn off` and `option nestedand off` injected before every `p
 
 ## Order of work
 
-1. The walk dispatches every statement kind: `emit_ctree_stmt` owns the choice of emitter for
-   every kind (`If`, `SwitchOf`, `Return`/`Expr` from an `if` rewrite, `While`, `For`,
-   `DoWhile`, `Loop`, `Switch`, `Seq` of a list or goto block, `Opaque` condition), calling the
-   emitter `emit_block_raw` would call. Only `Opaque` statements (condition and multi-goto blocks)
-   and functions printed without a tree reach `emit_block_raw`. Identical output by construction.
-2. Proof run on a branch build: datatests and the whole stage corpus with
-   `option boolreturn off` + `option nestedand off` injected, `ctree` off vs on (pass sets
-   equal), plus real binaries printed both ways and diffed.
-3. and 4., done in one change since the flip is a no-op under default options: retire the
-   `ctree` option: the tree is built for every non-flat printed function, the
-   no-tree `emit_block_graph` path stays only for flat printing.
-5. Later, statement by statement: lists print from the tree's `Seq` children instead of
-   `get_list()`, and the print-time matchers left in `emit_block_if` (Java `try`, itaniumeh) move
-   into tree rewrites (`docs/architecture/ctree.md` §4).
+Done (2026-11-24):
+
+1. #1071: the walk chooses the emitter for every statement kind.
+2. #1087: the `ctree` option is retired; every non-flat function prints through the tree
+   (proof above).
+3. ctree/lists (on main via #1091): a list's elements print from the tree's `Seq` children
+   (`emit_list_items`); proof on ctree2 vs bf70f63aff: datatests 675/675 and stage corpus 6007
+   passing, identical result lists, `sort`/`indxbib`/`pdfunite` byte-identical.
+4. ctree/ehtry (on main via #1091): the itaniumeh `if` try form is a `Try` statement made by
+   `ctree_rewrite`.
+5. #1097: condition blocks are built as tree statements (marked `CTree::is_condition`), and
+   `BlockCondition` and multi-goto blocks are sequences; `emit_block_raw` is reached only for a
+   block past the builder's depth bound and in flat printing.
+6. #1101: the list-level itaniumeh `try` form is recorded on the list's sequence (`ListTry`).
+7. #1105: the enclosing `try`'s own edge comes from the tree (`open_try_pad`), not from
+   printer state.
+8. #1107: the DEX `try` forms are decided by the rewrite (`JavaTry`, `set_java_list`).
+
+#1097-#1107 were merged edit-only (no build, no measurement, by order of 2026-11-24); each calls
+the emitter the block printer called for the same block, and should print the same text.
+
+What still matches while printing: part of a list (the rest of a switch arm or goto block,
+`emit_arm_rest`, `emit_block_goto_from` with a skip) runs the list `try` matchers on the
+slice, and any block the tree holds no statement for (past the depth bound) runs every
+matcher itself.
+
+Left as is, on purpose: the per-kind emitters (`emit_block_if`, `emit_block_while_do`, the
+switch, loop and goto printers and their Rust/Go variants) still take the statement's origin
+block and read their components through the tree (`emit_part`, `emit_block` -> `node_for`).
+Changing their signatures to take a `StmtId` would only move the `origin` lookup into each one,
+while the block-based entry is still needed for flat printing and for subtrees past the depth
+bound. The next real step is building leaf conditions and switch arms as tree expressions
+(`ExprKind`) so the `NO_BRANCH`/`ONLY_BRANCH` split stops being a printer mode.

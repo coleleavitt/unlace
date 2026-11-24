@@ -1,0 +1,1292 @@
+# Samsung SAM8 (S3C8 / S3F8 series) and SAM88RCRI (S3C9 / S3F9 series) 8-bit cores.
+#
+# Clean-room module written from the Samsung S3C8-series user's manual, chapter 6
+# "Instruction Set" (opcode map table 6-5, condition codes table 6-6, per-instruction
+# formats), and the S3C9454B/F9454B user's manual (SAM88RCRI register architecture and
+# opcode map). Defining SAM88RCRI selects the reduced core.
+#
+# Address spaces
+#   code  64K program memory (instruction fetch, LDC and its variants, CALL #IA vectors)
+#   data  64K external data memory (LDE and its variants)
+#   rf    the register file page 0: 00-BF and, on SAM8, set 2 (C0-FF) which is reached by
+#         register-indirect, indexed, stack and working-register addressing
+#   sr    SAM8 only: set 1, reached by direct 8-bit addressing of D0-FF. D0-DF is common,
+#         E0-FF is bank 0 at sr:00E0-00FF and bank 1 at sr:01E0-01FF (FLAGS.BA, SB0/SB1)
+#
+# Working registers R0-R15: on SAM8, R0-R7 are the 8-byte slice at RP0 & F8 and R8-R15 the
+# slice at RP1 & F8, both in rf. The context tracks RP0/RP1 when they are known (after SRP,
+# SRP0, SRP1 and at the reset entry 0100, where RP0 = C0 and RP1 = C8); otherwise the
+# address is computed from RP0/RP1 at run time. SAM88RCRI has no register pointers: its
+# working registers are fixed at C0-CF.
+#
+# FLAGS (D5), RP0 (D6), RP1 (D7), SPH/SPL (D8/D9) and IPH/IPL (DA/DB) are registers; 8-bit
+# register operands that name them directly are routed to them. C, Z, S, V, D and H are
+# kept as separate flag registers and packed into FLAGS whenever FLAGS is read directly.
+
+define endian=big;
+define alignment=1;
+
+define space code     type=ram_space      size=2  default;
+define space data     type=ram_space      size=2;
+define space rf       type=ram_space      size=1;
+@ifndef SAM88RCRI
+define space sr       type=ram_space      size=2;
+@endif
+define space register type=register_space size=2;
+
+define register offset=0x00 size=2 [ SP IP ];
+define register offset=0x00 size=1 [ SPH SPL IPH IPL ];
+define register offset=0x10 size=2 [ PC ];
+define register offset=0x20 size=1 [ C Z S V D H FLAGS RP0 RP1 ];
+
+@ifndef SAM88RCRI
+define register offset=0x40 size=4 [ contextreg ];
+define context contextreg
+	rp0v = (0,0)     # 1: RP0 below is known
+	rp0  = (1,5)     # RP0[7:3]
+	rp1v = (6,6)     # 1: RP1 below is known
+	rp1  = (7,11)    # RP1[7:3]
+	bank = (12,12)   # FLAGS.BA, set 1 bank for E0-FF
+;
+@endif
+
+define token opbyte (8)
+	op    = (0,7)
+	ophi  = (4,7)
+	oplo  = (0,3)
+	ophis = (7,7)
+	ophii = (4,6)
+	ophin = (4,7)
+	ophip = (4,7)
+;
+define token byte1 (8)
+	b1    = (0,7)
+	b1s   = (0,7) signed
+	b1hi  = (4,7)
+	b1lo  = (0,3)
+	b1t3  = (5,7)
+	b1his = (7,7)
+	b1hii = (4,6)
+	b1hin = (4,7)
+	b1hip = (4,7)
+	b1los = (3,3)
+	b1loi = (0,2)
+	b1lon = (0,3)
+	b1lop = (0,3)
+	b1bit = (1,3) dec
+	b1dir = (0,0)
+	b1lo0 = (0,0)
+	b1pe  = (1,3)
+	b1pi  = (1,2)
+	b1lo2 = (0,1)
+;
+define token byte2 (8)
+	b2    = (0,7)
+	b2s   = (0,7) signed
+	b2hi  = (4,7)
+	b2lo  = (0,3)
+	b2t3  = (5,7)
+	b2los = (3,3)
+	b2loi = (0,2)
+	b2lon = (0,3)
+	b2lop = (0,3)
+;
+define token byte3 (8)
+	b3    = (0,7)
+;
+define token word16 (16)
+	w16   = (0,15)
+;
+
+attach names [ ophin b1hin b1lon b2lon ] [ "R0" "R1" "R2" "R3" "R4" "R5" "R6" "R7" "R8" "R9" "R10" "R11" "R12" "R13" "R14" "R15" ];
+attach names [ ophip b1hip b1lop b2lop ] [ "RR0" "RR1" "RR2" "RR3" "RR4" "RR5" "RR6" "RR7" "RR8" "RR9" "RR10" "RR11" "RR12" "RR13" "RR14" "RR15" ];
+attach names [ b1pe ] [ "RR0" "RR2" "RR4" "RR6" "RR8" "RR10" "RR12" "RR14" ];
+
+define pcodeop disableInterrupts;
+define pcodeop enableInterrupts;
+define pcodeop stop;
+define pcodeop idle;
+@ifndef SAM88RCRI
+define pcodeop waitForInterrupt;
+@endif
+
+macro packflags() {
+	FLAGS = (C << 7) | (Z << 6) | (S << 5) | (V << 4) | (D << 3) | (H << 2) | (FLAGS & 3);
+}
+
+macro unpackflags() {
+	C = (FLAGS >> 7) & 1;
+	Z = (FLAGS >> 6) & 1;
+	S = (FLAGS >> 5) & 1;
+	V = (FLAGS >> 4) & 1;
+	D = (FLAGS >> 3) & 1;
+	H = (FLAGS >> 2) & 1;
+}
+
+macro zs(r) {
+	Z = (r == 0);
+	S = (r s< 0);
+}
+
+# the system stack lives in the register file (SPL); a push pre-decrements
+macro push8(v) {
+	SPL = SPL - 1;
+	*[rf]:1 SPL = v;
+}
+macro pop8(v) {
+	v = *[rf]:1 SPL;
+	SPL = SPL + 1;
+}
+macro push16(v) {
+	SPL = SPL - 2;
+	*[rf]:2 SPL = v;
+}
+macro pop16(v) {
+	v = *[rf]:2 SPL;
+	SPL = SPL + 2;
+}
+
+# relative branch targets
+rel_b1: reloc is b1s [ reloc = inst_next + b1s; ] { export *:1 reloc; }
+rel_b2: reloc is b2s [ reloc = inst_next + b2s; ] { export *:1 reloc; }
+# direct address (JP, CALL), high byte first
+dabs: w16 is w16 { export *:1 w16; }
+
+# condition codes (table 6-6); 8 (always) is decoded as the unconditional form
+cc: "F"   is ophi=0x0 { local t:1 = 0; export t; }
+cc: "LT"  is ophi=0x1 { local t:1 = (S != V); export t; }
+cc: "LE"  is ophi=0x2 { local t:1 = (Z != 0) || (S != V); export t; }
+cc: "ULE" is ophi=0x3 { local t:1 = (C != 0) || (Z != 0); export t; }
+cc: "OV"  is ophi=0x4 { local t:1 = (V != 0); export t; }
+cc: "MI"  is ophi=0x5 { local t:1 = (S != 0); export t; }
+cc: "Z"   is ophi=0x6 { local t:1 = (Z != 0); export t; }
+cc: "C"   is ophi=0x7 { local t:1 = (C != 0); export t; }
+cc: "GE"  is ophi=0x9 { local t:1 = (S == V); export t; }
+cc: "GT"  is ophi=0xa { local t:1 = (Z == 0) && (S == V); export t; }
+cc: "UGT" is ophi=0xb { local t:1 = (C == 0) && (Z == 0); export t; }
+cc: "NOV" is ophi=0xc { local t:1 = (V == 0); export t; }
+cc: "PL"  is ophi=0xd { local t:1 = (S == 0); export t; }
+cc: "NZ"  is ophi=0xe { local t:1 = (Z == 0); export t; }
+cc: "NC"  is ophi=0xf { local t:1 = (C == 0); export t; }
+
+# working register ophi
+@ifdef SAM88RCRI
+Wr_ophi_a0: wa is ophi & ophin [ wa = 0xc0 | ophi; ] { export *[rf]:1 wa; }
+Wr_ophi: ophin is ophi & ophin & Wr_ophi_a0 { export Wr_ophi_a0; }
+Wrr_ophi_a1: wa is ophi & ophip [ wa = 0xc0 | ophi; ] { export *[rf]:2 wa; }
+Wrr_ophi: ophip is ophi & ophip & Wrr_ophi_a1 { export Wrr_ophi_a1; }
+@else
+Wr_ophi_a2: wa is rp0v=1 & ophis=0 & ophii & ophin [ wa = (rp0 << 3) | ophii; ] { export *[rf]:1 wa; }
+Wr_ophi: ophin is rp0v=1 & ophis=0 & ophii & ophin & Wr_ophi_a2 { export Wr_ophi_a2; }
+Wr_ophi_a3: wa is rp1v=1 & ophis=1 & ophii & ophin [ wa = (rp1 << 3) | ophii; ] { export *[rf]:1 wa; }
+Wr_ophi: ophin is rp1v=1 & ophis=1 & ophii & ophin & Wr_ophi_a3 { export Wr_ophi_a3; }
+Wr_ophi: ophin is rp0v=0 & ophis=0 & ophii & ophin { local a:1 = (RP0 & 0xf8) | ophii; export *[rf]:1 a; }
+Wr_ophi: ophin is rp1v=0 & ophis=1 & ophii & ophin { local a:1 = (RP1 & 0xf8) | ophii; export *[rf]:1 a; }
+Wrr_ophi_a4: wa is rp0v=1 & ophis=0 & ophii & ophip [ wa = (rp0 << 3) | ophii; ] { export *[rf]:2 wa; }
+Wrr_ophi: ophip is rp0v=1 & ophis=0 & ophii & ophip & Wrr_ophi_a4 { export Wrr_ophi_a4; }
+Wrr_ophi_a5: wa is rp1v=1 & ophis=1 & ophii & ophip [ wa = (rp1 << 3) | ophii; ] { export *[rf]:2 wa; }
+Wrr_ophi: ophip is rp1v=1 & ophis=1 & ophii & ophip & Wrr_ophi_a5 { export Wrr_ophi_a5; }
+Wrr_ophi: ophip is rp0v=0 & ophis=0 & ophii & ophip { local a:1 = (RP0 & 0xf8) | ophii; export *[rf]:2 a; }
+Wrr_ophi: ophip is rp1v=0 & ophis=1 & ophii & ophip { local a:1 = (RP1 & 0xf8) | ophii; export *[rf]:2 a; }
+@endif
+Ir_ophi: "@"^Wr_ophi is Wr_ophi { local p:1 = Wr_ophi; export *[rf]:1 p; }
+
+# working register b1hi
+@ifdef SAM88RCRI
+Wr_b1hi_a6: wa is b1hi & b1hin [ wa = 0xc0 | b1hi; ] { export *[rf]:1 wa; }
+Wr_b1hi: b1hin is b1hi & b1hin & Wr_b1hi_a6 { export Wr_b1hi_a6; }
+Wrr_b1hi_a7: wa is b1hi & b1hip [ wa = 0xc0 | b1hi; ] { export *[rf]:2 wa; }
+Wrr_b1hi: b1hip is b1hi & b1hip & Wrr_b1hi_a7 { export Wrr_b1hi_a7; }
+@else
+Wr_b1hi_a8: wa is rp0v=1 & b1his=0 & b1hii & b1hin [ wa = (rp0 << 3) | b1hii; ] { export *[rf]:1 wa; }
+Wr_b1hi: b1hin is rp0v=1 & b1his=0 & b1hii & b1hin & Wr_b1hi_a8 { export Wr_b1hi_a8; }
+Wr_b1hi_a9: wa is rp1v=1 & b1his=1 & b1hii & b1hin [ wa = (rp1 << 3) | b1hii; ] { export *[rf]:1 wa; }
+Wr_b1hi: b1hin is rp1v=1 & b1his=1 & b1hii & b1hin & Wr_b1hi_a9 { export Wr_b1hi_a9; }
+Wr_b1hi: b1hin is rp0v=0 & b1his=0 & b1hii & b1hin { local a:1 = (RP0 & 0xf8) | b1hii; export *[rf]:1 a; }
+Wr_b1hi: b1hin is rp1v=0 & b1his=1 & b1hii & b1hin { local a:1 = (RP1 & 0xf8) | b1hii; export *[rf]:1 a; }
+Wrr_b1hi_a10: wa is rp0v=1 & b1his=0 & b1hii & b1hip [ wa = (rp0 << 3) | b1hii; ] { export *[rf]:2 wa; }
+Wrr_b1hi: b1hip is rp0v=1 & b1his=0 & b1hii & b1hip & Wrr_b1hi_a10 { export Wrr_b1hi_a10; }
+Wrr_b1hi_a11: wa is rp1v=1 & b1his=1 & b1hii & b1hip [ wa = (rp1 << 3) | b1hii; ] { export *[rf]:2 wa; }
+Wrr_b1hi: b1hip is rp1v=1 & b1his=1 & b1hii & b1hip & Wrr_b1hi_a11 { export Wrr_b1hi_a11; }
+Wrr_b1hi: b1hip is rp0v=0 & b1his=0 & b1hii & b1hip { local a:1 = (RP0 & 0xf8) | b1hii; export *[rf]:2 a; }
+Wrr_b1hi: b1hip is rp1v=0 & b1his=1 & b1hii & b1hip { local a:1 = (RP1 & 0xf8) | b1hii; export *[rf]:2 a; }
+@endif
+Ir_b1hi: "@"^Wr_b1hi is Wr_b1hi { local p:1 = Wr_b1hi; export *[rf]:1 p; }
+
+# working register b1lo
+@ifdef SAM88RCRI
+Wr_b1lo_a12: wa is b1lo & b1lon [ wa = 0xc0 | b1lo; ] { export *[rf]:1 wa; }
+Wr_b1lo: b1lon is b1lo & b1lon & Wr_b1lo_a12 { export Wr_b1lo_a12; }
+Wrr_b1lo_a13: wa is b1lo & b1lop [ wa = 0xc0 | b1lo; ] { export *[rf]:2 wa; }
+Wrr_b1lo: b1lop is b1lo & b1lop & Wrr_b1lo_a13 { export Wrr_b1lo_a13; }
+@else
+Wr_b1lo_a14: wa is rp0v=1 & b1los=0 & b1loi & b1lon [ wa = (rp0 << 3) | b1loi; ] { export *[rf]:1 wa; }
+Wr_b1lo: b1lon is rp0v=1 & b1los=0 & b1loi & b1lon & Wr_b1lo_a14 { export Wr_b1lo_a14; }
+Wr_b1lo_a15: wa is rp1v=1 & b1los=1 & b1loi & b1lon [ wa = (rp1 << 3) | b1loi; ] { export *[rf]:1 wa; }
+Wr_b1lo: b1lon is rp1v=1 & b1los=1 & b1loi & b1lon & Wr_b1lo_a15 { export Wr_b1lo_a15; }
+Wr_b1lo: b1lon is rp0v=0 & b1los=0 & b1loi & b1lon { local a:1 = (RP0 & 0xf8) | b1loi; export *[rf]:1 a; }
+Wr_b1lo: b1lon is rp1v=0 & b1los=1 & b1loi & b1lon { local a:1 = (RP1 & 0xf8) | b1loi; export *[rf]:1 a; }
+Wrr_b1lo_a16: wa is rp0v=1 & b1los=0 & b1loi & b1lop [ wa = (rp0 << 3) | b1loi; ] { export *[rf]:2 wa; }
+Wrr_b1lo: b1lop is rp0v=1 & b1los=0 & b1loi & b1lop & Wrr_b1lo_a16 { export Wrr_b1lo_a16; }
+Wrr_b1lo_a17: wa is rp1v=1 & b1los=1 & b1loi & b1lop [ wa = (rp1 << 3) | b1loi; ] { export *[rf]:2 wa; }
+Wrr_b1lo: b1lop is rp1v=1 & b1los=1 & b1loi & b1lop & Wrr_b1lo_a17 { export Wrr_b1lo_a17; }
+Wrr_b1lo: b1lop is rp0v=0 & b1los=0 & b1loi & b1lop { local a:1 = (RP0 & 0xf8) | b1loi; export *[rf]:2 a; }
+Wrr_b1lo: b1lop is rp1v=0 & b1los=1 & b1loi & b1lop { local a:1 = (RP1 & 0xf8) | b1loi; export *[rf]:2 a; }
+@endif
+Ir_b1lo: "@"^Wr_b1lo is Wr_b1lo { local p:1 = Wr_b1lo; export *[rf]:1 p; }
+
+# working register b2lo
+@ifdef SAM88RCRI
+Wr_b2lo_a18: wa is b2lo & b2lon [ wa = 0xc0 | b2lo; ] { export *[rf]:1 wa; }
+Wr_b2lo: b2lon is b2lo & b2lon & Wr_b2lo_a18 { export Wr_b2lo_a18; }
+Wrr_b2lo_a19: wa is b2lo & b2lop [ wa = 0xc0 | b2lo; ] { export *[rf]:2 wa; }
+Wrr_b2lo: b2lop is b2lo & b2lop & Wrr_b2lo_a19 { export Wrr_b2lo_a19; }
+@else
+Wr_b2lo_a20: wa is rp0v=1 & b2los=0 & b2loi & b2lon [ wa = (rp0 << 3) | b2loi; ] { export *[rf]:1 wa; }
+Wr_b2lo: b2lon is rp0v=1 & b2los=0 & b2loi & b2lon & Wr_b2lo_a20 { export Wr_b2lo_a20; }
+Wr_b2lo_a21: wa is rp1v=1 & b2los=1 & b2loi & b2lon [ wa = (rp1 << 3) | b2loi; ] { export *[rf]:1 wa; }
+Wr_b2lo: b2lon is rp1v=1 & b2los=1 & b2loi & b2lon & Wr_b2lo_a21 { export Wr_b2lo_a21; }
+Wr_b2lo: b2lon is rp0v=0 & b2los=0 & b2loi & b2lon { local a:1 = (RP0 & 0xf8) | b2loi; export *[rf]:1 a; }
+Wr_b2lo: b2lon is rp1v=0 & b2los=1 & b2loi & b2lon { local a:1 = (RP1 & 0xf8) | b2loi; export *[rf]:1 a; }
+Wrr_b2lo_a22: wa is rp0v=1 & b2los=0 & b2loi & b2lop [ wa = (rp0 << 3) | b2loi; ] { export *[rf]:2 wa; }
+Wrr_b2lo: b2lop is rp0v=1 & b2los=0 & b2loi & b2lop & Wrr_b2lo_a22 { export Wrr_b2lo_a22; }
+Wrr_b2lo_a23: wa is rp1v=1 & b2los=1 & b2loi & b2lop [ wa = (rp1 << 3) | b2loi; ] { export *[rf]:2 wa; }
+Wrr_b2lo: b2lop is rp1v=1 & b2los=1 & b2loi & b2lop & Wrr_b2lo_a23 { export Wrr_b2lo_a23; }
+Wrr_b2lo: b2lop is rp0v=0 & b2los=0 & b2loi & b2lop { local a:1 = (RP0 & 0xf8) | b2loi; export *[rf]:2 a; }
+Wrr_b2lo: b2lop is rp1v=0 & b2los=1 & b2loi & b2lop { local a:1 = (RP1 & 0xf8) | b2loi; export *[rf]:2 a; }
+@endif
+Ir_b2lo: "@"^Wr_b2lo is Wr_b2lo { local p:1 = Wr_b2lo; export *[rf]:1 p; }
+
+# 8-bit register operand R in b1 (Cx = working register)
+Rd_b1: b1 is b1 { export *[rf]:1 b1; }
+Rd_b1: Wr_b1lo is b1hi=0xc & Wr_b1lo { export Wr_b1lo; }
+Rd_b1: "FLAGS" is b1=0xd5 { packflags(); export FLAGS; }
+Rd_b1: "SPL" is b1=0xd9 { export SPL; }
+RRd_b1: b1 is b1 { export *[rf]:2 b1; }
+RRd_b1: Wrr_b1lo is b1hi=0xc & Wrr_b1lo { export Wrr_b1lo; }
+@ifndef SAM88RCRI
+Rd_b1: b1 is b1hi=0xd & b1 { export *[sr]:1 b1; }
+Rd_b1: b1 is bank=0 & b1t3=7 & b1 { export *[sr]:1 b1; }
+Rd_b1_a24: sa is bank=1 & b1t3=7 & b1 [ sa = 0x100 | b1; ] { export *[sr]:1 sa; }
+Rd_b1: b1 is bank=1 & b1t3=7 & b1 & Rd_b1_a24 { export Rd_b1_a24; }
+Rd_b1: "RP0" is b1=0xd6 { export RP0; }
+Rd_b1: "RP1" is b1=0xd7 { export RP1; }
+Rd_b1: "SPH" is b1=0xd8 { export SPH; }
+Rd_b1: "IPH" is b1=0xda { export IPH; }
+Rd_b1: "IPL" is b1=0xdb { export IPL; }
+RRd_b1: b1 is b1hi=0xd & b1 { export *[sr]:2 b1; }
+RRd_b1: b1 is bank=0 & b1t3=7 & b1 { export *[sr]:2 b1; }
+RRd_b1_a25: sa is bank=1 & b1t3=7 & b1 [ sa = 0x100 | b1; ] { export *[sr]:2 sa; }
+RRd_b1: b1 is bank=1 & b1t3=7 & b1 & RRd_b1_a25 { export RRd_b1_a25; }
+RRd_b1: "SP" is b1=0xd8 { export SP; }
+RRd_b1: "IP" is b1=0xda { export IP; }
+@endif
+# fix-ups after a write to R in b1: FLAGS bits, register pointer tracking
+Rpost_b1: is b1=0xd5 { unpackflags(); }
+@ifndef SAM88RCRI
+Rpost_b1: is b1=0xd6 [ rp0v = 0; globalset(inst_next, rp0v); ] { }
+Rpost_b1: is b1=0xd7 [ rp1v = 0; globalset(inst_next, rp1v); ] { }
+@endif
+Rpost_b1: is b1 { }
+IRd_b1: "@"^Rd_b1 is Rd_b1 { local p:1 = Rd_b1; export *[rf]:1 p; }
+IRRd_b1: "@"^Rd_b1 is Rd_b1 { local p:1 = Rd_b1; export *[rf]:2 p; }
+
+# 8-bit register operand R in b2 (Cx = working register)
+Rd_b2: b2 is b2 { export *[rf]:1 b2; }
+Rd_b2: Wr_b2lo is b2hi=0xc & Wr_b2lo { export Wr_b2lo; }
+Rd_b2: "FLAGS" is b2=0xd5 { packflags(); export FLAGS; }
+Rd_b2: "SPL" is b2=0xd9 { export SPL; }
+RRd_b2: b2 is b2 { export *[rf]:2 b2; }
+RRd_b2: Wrr_b2lo is b2hi=0xc & Wrr_b2lo { export Wrr_b2lo; }
+@ifndef SAM88RCRI
+Rd_b2: b2 is b2hi=0xd & b2 { export *[sr]:1 b2; }
+Rd_b2: b2 is bank=0 & b2t3=7 & b2 { export *[sr]:1 b2; }
+Rd_b2_a26: sa is bank=1 & b2t3=7 & b2 [ sa = 0x100 | b2; ] { export *[sr]:1 sa; }
+Rd_b2: b2 is bank=1 & b2t3=7 & b2 & Rd_b2_a26 { export Rd_b2_a26; }
+Rd_b2: "RP0" is b2=0xd6 { export RP0; }
+Rd_b2: "RP1" is b2=0xd7 { export RP1; }
+Rd_b2: "SPH" is b2=0xd8 { export SPH; }
+Rd_b2: "IPH" is b2=0xda { export IPH; }
+Rd_b2: "IPL" is b2=0xdb { export IPL; }
+RRd_b2: b2 is b2hi=0xd & b2 { export *[sr]:2 b2; }
+RRd_b2: b2 is bank=0 & b2t3=7 & b2 { export *[sr]:2 b2; }
+RRd_b2_a27: sa is bank=1 & b2t3=7 & b2 [ sa = 0x100 | b2; ] { export *[sr]:2 sa; }
+RRd_b2: b2 is bank=1 & b2t3=7 & b2 & RRd_b2_a27 { export RRd_b2_a27; }
+RRd_b2: "SP" is b2=0xd8 { export SP; }
+RRd_b2: "IP" is b2=0xda { export IP; }
+@endif
+# fix-ups after a write to R in b2: FLAGS bits, register pointer tracking
+Rpost_b2: is b2=0xd5 { unpackflags(); }
+@ifndef SAM88RCRI
+Rpost_b2: is b2=0xd6 [ rp0v = 0; globalset(inst_next, rp0v); ] { }
+Rpost_b2: is b2=0xd7 [ rp1v = 0; globalset(inst_next, rp1v); ] { }
+@endif
+Rpost_b2: is b2 { }
+IRd_b2: "@"^Rd_b2 is Rd_b2 { local p:1 = Rd_b2; export *[rf]:1 p; }
+IRRd_b2: "@"^Rd_b2 is Rd_b2 { local p:1 = Rd_b2; export *[rf]:2 p; }
+
+# ---- arithmetic, logic, rotate and shift ----
+:ADD Wr_b1hi, Wr_b1lo is op=0x02; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d + s;
+	C = carry(d, s);
+	V = scarry(d, s);
+	H = ((d & 0xf) + (s & 0xf)) > 0xf;
+	D = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:ADD Wr_b1hi, Ir_b1lo is op=0x03; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d + s;
+	C = carry(d, s);
+	V = scarry(d, s);
+	H = ((d & 0xf) + (s & 0xf)) > 0xf;
+	D = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:ADD Rd_b2, Rd_b1 is op=0x04; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d + s;
+	C = carry(d, s);
+	V = scarry(d, s);
+	H = ((d & 0xf) + (s & 0xf)) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:ADD Rd_b2, IRd_b1 is op=0x05; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d + s;
+	C = carry(d, s);
+	V = scarry(d, s);
+	H = ((d & 0xf) + (s & 0xf)) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:ADD Rd_b1, "#"^b2 is op=0x06; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d + s;
+	C = carry(d, s);
+	V = scarry(d, s);
+	H = ((d & 0xf) + (s & 0xf)) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:ADC Wr_b1hi, Wr_b1lo is op=0x12; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local c:1 = C;
+	local r:1 = d + s + c;
+	C = carry(d, s) || carry(d + s, c);
+	V = ((d ^ r) & (s ^ r)) s< 0;
+	H = ((d & 0xf) + (s & 0xf) + c) > 0xf;
+	D = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:ADC Wr_b1hi, Ir_b1lo is op=0x13; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local c:1 = C;
+	local r:1 = d + s + c;
+	C = carry(d, s) || carry(d + s, c);
+	V = ((d ^ r) & (s ^ r)) s< 0;
+	H = ((d & 0xf) + (s & 0xf) + c) > 0xf;
+	D = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:ADC Rd_b2, Rd_b1 is op=0x14; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local c:1 = C;
+	local r:1 = d + s + c;
+	C = carry(d, s) || carry(d + s, c);
+	V = ((d ^ r) & (s ^ r)) s< 0;
+	H = ((d & 0xf) + (s & 0xf) + c) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:ADC Rd_b2, IRd_b1 is op=0x15; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local c:1 = C;
+	local r:1 = d + s + c;
+	C = carry(d, s) || carry(d + s, c);
+	V = ((d ^ r) & (s ^ r)) s< 0;
+	H = ((d & 0xf) + (s & 0xf) + c) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:ADC Rd_b1, "#"^b2 is op=0x16; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local c:1 = C;
+	local r:1 = d + s + c;
+	C = carry(d, s) || carry(d + s, c);
+	V = ((d ^ r) & (s ^ r)) s< 0;
+	H = ((d & 0xf) + (s & 0xf) + c) > 0xf;
+	D = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:SUB Wr_b1hi, Wr_b1lo is op=0x22; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	H = (d & 0xf) < (s & 0xf);
+	D = 1;
+	zs(r);
+	Wr_b1hi = r;
+}
+:SUB Wr_b1hi, Ir_b1lo is op=0x23; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	H = (d & 0xf) < (s & 0xf);
+	D = 1;
+	zs(r);
+	Wr_b1hi = r;
+}
+:SUB Rd_b2, Rd_b1 is op=0x24; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	H = (d & 0xf) < (s & 0xf);
+	D = 1;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:SUB Rd_b2, IRd_b1 is op=0x25; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	H = (d & 0xf) < (s & 0xf);
+	D = 1;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:SUB Rd_b1, "#"^b2 is op=0x26; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	H = (d & 0xf) < (s & 0xf);
+	D = 1;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:SBC Wr_b1hi, Wr_b1lo is op=0x32; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local c:1 = C;
+	local r:1 = d - s - c;
+	C = (d < s) || ((d - s) < c);
+	V = ((d ^ s) & (d ^ r)) s< 0;
+	H = (d & 0xf) < ((s & 0xf) + c);
+	D = 1;
+	zs(r);
+	Wr_b1hi = r;
+}
+:SBC Wr_b1hi, Ir_b1lo is op=0x33; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local c:1 = C;
+	local r:1 = d - s - c;
+	C = (d < s) || ((d - s) < c);
+	V = ((d ^ s) & (d ^ r)) s< 0;
+	H = (d & 0xf) < ((s & 0xf) + c);
+	D = 1;
+	zs(r);
+	Wr_b1hi = r;
+}
+:SBC Rd_b2, Rd_b1 is op=0x34; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local c:1 = C;
+	local r:1 = d - s - c;
+	C = (d < s) || ((d - s) < c);
+	V = ((d ^ s) & (d ^ r)) s< 0;
+	H = (d & 0xf) < ((s & 0xf) + c);
+	D = 1;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:SBC Rd_b2, IRd_b1 is op=0x35; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local c:1 = C;
+	local r:1 = d - s - c;
+	C = (d < s) || ((d - s) < c);
+	V = ((d ^ s) & (d ^ r)) s< 0;
+	H = (d & 0xf) < ((s & 0xf) + c);
+	D = 1;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:SBC Rd_b1, "#"^b2 is op=0x36; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local c:1 = C;
+	local r:1 = d - s - c;
+	C = (d < s) || ((d - s) < c);
+	V = ((d ^ s) & (d ^ r)) s< 0;
+	H = (d & 0xf) < ((s & 0xf) + c);
+	D = 1;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:OR Wr_b1hi, Wr_b1lo is op=0x42; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d | s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:OR Wr_b1hi, Ir_b1lo is op=0x43; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d | s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:OR Rd_b2, Rd_b1 is op=0x44; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d | s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:OR Rd_b2, IRd_b1 is op=0x45; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d | s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:OR Rd_b1, "#"^b2 is op=0x46; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d | s;
+	V = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:AND Wr_b1hi, Wr_b1lo is op=0x52; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:AND Wr_b1hi, Ir_b1lo is op=0x53; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:AND Rd_b2, Rd_b1 is op=0x54; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:AND Rd_b2, IRd_b1 is op=0x55; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:AND Rd_b1, "#"^b2 is op=0x56; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:TCM Wr_b1hi, Wr_b1lo is op=0x62; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = ~d & s;
+	V = 0;
+	zs(r);
+}
+:TCM Wr_b1hi, Ir_b1lo is op=0x63; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = ~d & s;
+	V = 0;
+	zs(r);
+}
+:TCM Rd_b2, Rd_b1 is op=0x64; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = ~d & s;
+	V = 0;
+	zs(r);
+}
+:TCM Rd_b2, IRd_b1 is op=0x65; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = ~d & s;
+	V = 0;
+	zs(r);
+}
+:TCM Rd_b1, "#"^b2 is op=0x66; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = ~d & s;
+	V = 0;
+	zs(r);
+}
+:TM Wr_b1hi, Wr_b1lo is op=0x72; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+}
+:TM Wr_b1hi, Ir_b1lo is op=0x73; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+}
+:TM Rd_b2, Rd_b1 is op=0x74; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+}
+:TM Rd_b2, IRd_b1 is op=0x75; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+}
+:TM Rd_b1, "#"^b2 is op=0x76; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d & s;
+	V = 0;
+	zs(r);
+}
+:CP Wr_b1hi, Wr_b1lo is op=0xa2; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	zs(r);
+}
+:CP Wr_b1hi, Ir_b1lo is op=0xa3; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	zs(r);
+}
+:CP Rd_b2, Rd_b1 is op=0xa4; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	zs(r);
+}
+:CP Rd_b2, IRd_b1 is op=0xa5; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	zs(r);
+}
+:CP Rd_b1, "#"^b2 is op=0xa6; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d - s;
+	C = d < s;
+	V = sborrow(d, s);
+	zs(r);
+}
+:XOR Wr_b1hi, Wr_b1lo is op=0xb2; Wr_b1hi & Wr_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Wr_b1lo;
+	local r:1 = d ^ s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:XOR Wr_b1hi, Ir_b1lo is op=0xb3; Wr_b1hi & Ir_b1lo {
+	local d:1 = Wr_b1hi;
+	local s:1 = Ir_b1lo;
+	local r:1 = d ^ s;
+	V = 0;
+	zs(r);
+	Wr_b1hi = r;
+}
+:XOR Rd_b2, Rd_b1 is op=0xb4; Rd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = Rd_b1;
+	local r:1 = d ^ s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:XOR Rd_b2, IRd_b1 is op=0xb5; IRd_b1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local s:1 = IRd_b1;
+	local r:1 = d ^ s;
+	V = 0;
+	zs(r);
+	Rd_b2 = r;
+	build Rpost_b2;
+}
+:XOR Rd_b1, "#"^b2 is op=0xb6; Rd_b1 & Rpost_b1; b2 {
+	local d:1 = Rd_b1;
+	local s:1 = b2;
+	local r:1 = d ^ s;
+	V = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:DEC Rd_b1 is op=0x00; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = d - 1;
+	V = sborrow(d, 1);
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:DEC IRd_b1 is op=0x01; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = d - 1;
+	V = sborrow(d, 1);
+	zs(r);
+	IRd_b1 = r;
+}
+:RLC Rd_b1 is op=0x10; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = (d << 1) | C;
+	C = d >> 7;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:RLC IRd_b1 is op=0x11; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = (d << 1) | C;
+	C = d >> 7;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	IRd_b1 = r;
+}
+:INC Rd_b1 is op=0x20; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = d + 1;
+	V = scarry(d, 1);
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:INC IRd_b1 is op=0x21; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = d + 1;
+	V = scarry(d, 1);
+	zs(r);
+	IRd_b1 = r;
+}
+:COM Rd_b1 is op=0x60; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = ~d;
+	V = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:COM IRd_b1 is op=0x61; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = ~d;
+	V = 0;
+	zs(r);
+	IRd_b1 = r;
+}
+:RL Rd_b1 is op=0x90; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = (d << 1) | (d >> 7);
+	C = d >> 7;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:RL IRd_b1 is op=0x91; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = (d << 1) | (d >> 7);
+	C = d >> 7;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	IRd_b1 = r;
+}
+:CLR Rd_b1 is op=0xb0; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = 0;
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:CLR IRd_b1 is op=0xb1; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = 0;
+	IRd_b1 = r;
+}
+:RRC Rd_b1 is op=0xc0; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = (d >> 1) | (C << 7);
+	C = d & 1;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:RRC IRd_b1 is op=0xc1; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = (d >> 1) | (C << 7);
+	C = d & 1;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	IRd_b1 = r;
+}
+:SRA Rd_b1 is op=0xd0; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = d s>> 1;
+	C = d & 1;
+	V = 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:SRA IRd_b1 is op=0xd1; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = d s>> 1;
+	C = d & 1;
+	V = 0;
+	zs(r);
+	IRd_b1 = r;
+}
+:RR Rd_b1 is op=0xe0; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = (d >> 1) | (d << 7);
+	C = d & 1;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:RR IRd_b1 is op=0xe1; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = (d >> 1) | (d << 7);
+	C = d & 1;
+	V = ((d ^ r) & 0x80) != 0;
+	zs(r);
+	IRd_b1 = r;
+}
+
+# ---- loads ----
+:LD Wr_ophi, "#"^b1 is oplo=0xc & Wr_ophi; b1 { Wr_ophi = b1; }
+:LD Wr_ophi, Rd_b1 is oplo=0x8 & Wr_ophi; Rd_b1 { Wr_ophi = Rd_b1; }
+:LD Rd_b1, Wr_ophi is oplo=0x9 & Wr_ophi; Rd_b1 & Rpost_b1 { Rd_b1 = Wr_ophi; build Rpost_b1; }
+:LD Wr_b1hi, Ir_b1lo is op=0xc7; Wr_b1hi & Ir_b1lo { Wr_b1hi = Ir_b1lo; }
+:LD Ir_b1hi, Wr_b1lo is op=0xd7; Ir_b1hi & Wr_b1lo { Ir_b1hi = Wr_b1lo; }
+:LD Rd_b2, Rd_b1 is op=0xe4; Rd_b1; Rd_b2 & Rpost_b2 { Rd_b2 = Rd_b1; build Rpost_b2; }
+:LD Rd_b2, IRd_b1 is op=0xe5; IRd_b1; Rd_b2 & Rpost_b2 { Rd_b2 = IRd_b1; build Rpost_b2; }
+:LD Rd_b1, "#"^b2 is op=0xe6; Rd_b1 & Rpost_b1; b2 { Rd_b1 = b2; build Rpost_b1; }
+:LD IRd_b1, "#"^b2 is op=0xd6; IRd_b1; b2 { IRd_b1 = b2; }
+:LD IRd_b2, Rd_b1 is op=0xf5; Rd_b1; IRd_b2 { IRd_b2 = Rd_b1; }
+:LD Wr_b1hi, "#"^b2^"["^Wr_b1lo^"]" is op=0x87; Wr_b1hi & Wr_b1lo; b2 { local a:1 = b2 + Wr_b1lo; Wr_b1hi = *[rf]:1 a; }
+:LD "#"^b2^"["^Wr_b1lo^"]", Wr_b1hi is op=0x97; Wr_b1hi & Wr_b1lo; b2 { local a:1 = b2 + Wr_b1lo; *[rf]:1 a = Wr_b1hi; }
+
+# working register pair for LDC/LDE: bit 0 of the nibble selects program (0) or data (1) memory
+@ifdef SAM88RCRI
+Wrrp_a28: wa is b1pe & b1los & b1pi [ wa = 0xc0 | (b1los << 3) | (b1pi << 1); ] { export *[rf]:2 wa; }
+Wrrp: b1pe is b1pe & b1los & b1pi & Wrrp_a28 { export Wrrp_a28; }
+@else
+Wrrp_a29: wa is rp0v=1 & b1los=0 & b1pi & b1pe [ wa = (rp0 << 3) | (b1pi << 1); ] { export *[rf]:2 wa; }
+Wrrp: b1pe is rp0v=1 & b1los=0 & b1pi & b1pe & Wrrp_a29 { export Wrrp_a29; }
+Wrrp_a30: wa is rp1v=1 & b1los=1 & b1pi & b1pe [ wa = (rp1 << 3) | (b1pi << 1); ] { export *[rf]:2 wa; }
+Wrrp: b1pe is rp1v=1 & b1los=1 & b1pi & b1pe & Wrrp_a30 { export Wrrp_a30; }
+Wrrp: b1pe is rp0v=0 & b1los=0 & b1pi & b1pe { local a:1 = (RP0 & 0xf8) | (b1pi << 1); export *[rf]:2 a; }
+Wrrp: b1pe is rp1v=0 & b1los=1 & b1pi & b1pe { local a:1 = (RP1 & 0xf8) | (b1pi << 1); export *[rf]:2 a; }
+@endif
+# long (16-bit) offset or address of LDC/LDE, low byte first
+xl: val is b2; b3 [ val = (b3 << 8) | b2; ] { export *[const]:2 val; }
+
+:LDC Wr_b1hi, "@"^Wrrp is op=0xc3; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[code]:1 a; }
+:LDC "@"^Wrrp, Wr_b1hi is op=0xd3; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp; *[code]:1 a = Wr_b1hi; }
+:LDC Wr_b1hi, "#"^b2s^"["^Wrrp^"]" is op=0xe7; Wr_b1hi & b1lo0=0 & Wrrp; b2s { local a:2 = Wrrp + b2s; Wr_b1hi = *[code]:1 a; }
+:LDC "#"^b2s^"["^Wrrp^"]", Wr_b1hi is op=0xf7; Wr_b1hi & b1lo0=0 & Wrrp; b2s { local a:2 = Wrrp + b2s; *[code]:1 a = Wr_b1hi; }
+:LDC Wr_b1hi, "#"^xl^"["^Wrrp^"]" is op=0xa7; Wr_b1hi & b1lo0=0 & Wrrp; xl { local a:2 = Wrrp + xl; Wr_b1hi = *[code]:1 a; }
+:LDC "#"^xl^"["^Wrrp^"]", Wr_b1hi is op=0xb7; Wr_b1hi & b1lo0=0 & Wrrp; xl { local a:2 = Wrrp + xl; *[code]:1 a = Wr_b1hi; }
+:LDC Wr_b1hi, xl is op=0xa7; Wr_b1hi & b1lo=0; xl { local a:2 = xl; Wr_b1hi = *[code]:1 a; }
+:LDC xl, Wr_b1hi is op=0xb7; Wr_b1hi & b1lo=0; xl { local a:2 = xl; *[code]:1 a = Wr_b1hi; }
+:LDCD Wr_b1hi, "@"^Wrrp is op=0xe2; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[code]:1 a; Wrrp = a - 1; }
+:LDCI Wr_b1hi, "@"^Wrrp is op=0xe3; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[code]:1 a; Wrrp = a + 1; }
+@ifndef SAM88RCRI
+:LDCPD "@"^Wrrp, Wr_b1hi is op=0xf2; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp - 1; Wrrp = a; *[code]:1 a = Wr_b1hi; }
+:LDCPI "@"^Wrrp, Wr_b1hi is op=0xf3; Wr_b1hi & b1lo0=0 & Wrrp { local a:2 = Wrrp + 1; Wrrp = a; *[code]:1 a = Wr_b1hi; }
+@endif
+
+:LDE Wr_b1hi, "@"^Wrrp is op=0xc3; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[data]:1 a; }
+:LDE "@"^Wrrp, Wr_b1hi is op=0xd3; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp; *[data]:1 a = Wr_b1hi; }
+:LDE Wr_b1hi, "#"^b2s^"["^Wrrp^"]" is op=0xe7; Wr_b1hi & b1lo0=1 & Wrrp; b2s { local a:2 = Wrrp + b2s; Wr_b1hi = *[data]:1 a; }
+:LDE "#"^b2s^"["^Wrrp^"]", Wr_b1hi is op=0xf7; Wr_b1hi & b1lo0=1 & Wrrp; b2s { local a:2 = Wrrp + b2s; *[data]:1 a = Wr_b1hi; }
+:LDE Wr_b1hi, "#"^xl^"["^Wrrp^"]" is op=0xa7; Wr_b1hi & b1lo0=1 & Wrrp; xl { local a:2 = Wrrp + xl; Wr_b1hi = *[data]:1 a; }
+:LDE "#"^xl^"["^Wrrp^"]", Wr_b1hi is op=0xb7; Wr_b1hi & b1lo0=1 & Wrrp; xl { local a:2 = Wrrp + xl; *[data]:1 a = Wr_b1hi; }
+:LDE Wr_b1hi, xl is op=0xa7; Wr_b1hi & b1lo=1; xl { local a:2 = xl; Wr_b1hi = *[data]:1 a; }
+:LDE xl, Wr_b1hi is op=0xb7; Wr_b1hi & b1lo=1; xl { local a:2 = xl; *[data]:1 a = Wr_b1hi; }
+:LDED Wr_b1hi, "@"^Wrrp is op=0xe2; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[data]:1 a; Wrrp = a - 1; }
+:LDEI Wr_b1hi, "@"^Wrrp is op=0xe3; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp; Wr_b1hi = *[data]:1 a; Wrrp = a + 1; }
+@ifndef SAM88RCRI
+:LDEPD "@"^Wrrp, Wr_b1hi is op=0xf2; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp - 1; Wrrp = a; *[data]:1 a = Wr_b1hi; }
+:LDEPI "@"^Wrrp, Wr_b1hi is op=0xf3; Wr_b1hi & b1lo0=1 & Wrrp { local a:2 = Wrrp + 1; Wrrp = a; *[data]:1 a = Wr_b1hi; }
+@endif
+
+# ---- stack ----
+:POP Rd_b1 is op=0x50; Rd_b1 & Rpost_b1 { local v:1 = 0; pop8(v); Rd_b1 = v; build Rpost_b1; }
+:POP IRd_b1 is op=0x51; IRd_b1 { local v:1 = 0; pop8(v); IRd_b1 = v; }
+:PUSH Rd_b1 is op=0x70; Rd_b1 { local v:1 = Rd_b1; push8(v); }
+:PUSH IRd_b1 is op=0x71; IRd_b1 { local v:1 = IRd_b1; push8(v); }
+
+# ---- program control ----
+:JR cc, rel_b1 is oplo=0xb & cc; rel_b1 { if (cc) goto rel_b1; }
+:JR rel_b1 is ophi=0x8 & oplo=0xb; rel_b1 { goto rel_b1; }
+:JP cc, dabs is oplo=0xd & cc; dabs { if (cc) goto dabs; }
+:JP dabs is ophi=0x8 & oplo=0xd; dabs { goto dabs; }
+:JP "@"^RRd_b1 is op=0x30; RRd_b1 { local t:2 = RRd_b1; goto [t]; }
+:CALL dabs is op=0xf6; dabs { local ra:2 = inst_next; push16(ra); call dabs; }
+:CALL "@"^RRd_b1 is op=0xf4; RRd_b1 { local t:2 = RRd_b1; local ra:2 = inst_next; push16(ra); call [t]; }
+:RET is op=0xaf { local t:2 = 0; pop16(t); return [t]; }
+:IRET is op=0xbf { pop8(FLAGS); unpackflags(); local t:2 = 0; pop16(t); enableInterrupts(); return [t]; }
+
+# ---- CPU control ----
+:DI is op=0x8f { disableInterrupts(); }
+:EI is op=0x9f { enableInterrupts(); }
+:RCF is op=0xcf { C = 0; }
+:SCF is op=0xdf { C = 1; }
+:CCF is op=0xef { C = !C; }
+:NOP is op=0xff { }
+:IDLE is op=0x6f { idle(); }
+:STOP is op=0x7f { stop(); }
+
+@ifndef SAM88RCRI
+:DA Rd_b1 is op=0x40; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local lo:1 = (H != 0) || ((d & 0xf) > 9);
+	local hi:1 = (C != 0) || (d > 0x99);
+	local adj:1 = (lo * 6) + (hi * 0x60);
+	local sadj:1 = (H * 6) + (C * 0x60);
+	local r:1 = ((D == 0) * (d + adj)) + ((D != 0) * (d - sadj));
+	C = ((D == 0) && hi) || ((D != 0) && (C != 0));
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:DA IRd_b1 is op=0x41; IRd_b1 {
+	local d:1 = IRd_b1;
+	local lo:1 = (H != 0) || ((d & 0xf) > 9);
+	local hi:1 = (C != 0) || (d > 0x99);
+	local adj:1 = (lo * 6) + (hi * 0x60);
+	local sadj:1 = (H * 6) + (C * 0x60);
+	local r:1 = ((D == 0) * (d + adj)) + ((D != 0) * (d - sadj));
+	C = ((D == 0) && hi) || ((D != 0) && (C != 0));
+	zs(r);
+	IRd_b1 = r;
+}
+:SWAP Rd_b1 is op=0xf0; Rd_b1 & Rpost_b1 {
+	local d:1 = Rd_b1;
+	local r:1 = (d << 4) | (d >> 4);
+	zs(r);
+	Rd_b1 = r;
+	build Rpost_b1;
+}
+:SWAP IRd_b1 is op=0xf1; IRd_b1 {
+	local d:1 = IRd_b1;
+	local r:1 = (d << 4) | (d >> 4);
+	zs(r);
+	IRd_b1 = r;
+}
+:DECW RRd_b1 is op=0x80; RRd_b1 {
+	local d:2 = RRd_b1;
+	local r:2 = d - 1;
+	V = sborrow(d, 1);
+	zs(r);
+	RRd_b1 = r;
+}
+:DECW IRRd_b1 is op=0x81; IRRd_b1 {
+	local d:2 = IRRd_b1;
+	local r:2 = d - 1;
+	V = sborrow(d, 1);
+	zs(r);
+	IRRd_b1 = r;
+}
+:INCW RRd_b1 is op=0xa0; RRd_b1 {
+	local d:2 = RRd_b1;
+	local r:2 = d + 1;
+	V = scarry(d, 1);
+	zs(r);
+	RRd_b1 = r;
+}
+:INCW IRRd_b1 is op=0xa1; IRRd_b1 {
+	local d:2 = IRRd_b1;
+	local r:2 = d + 1;
+	V = scarry(d, 1);
+	zs(r);
+	IRRd_b1 = r;
+}
+
+:DJNZ Wr_ophi, rel_b1 is oplo=0xa & Wr_ophi; rel_b1 { Wr_ophi = Wr_ophi - 1; if (Wr_ophi != 0) goto rel_b1; }
+:CPIJE Wr_b1lo, Ir_b1hi, rel_b2 is op=0xc2; Wr_b1hi & Wr_b1lo & Ir_b1hi; rel_b2 {
+	local v:1 = Ir_b1hi;
+	Wr_b1hi = Wr_b1hi + 1;
+	if (Wr_b1lo == v) goto rel_b2;
+}
+:CPIJNE Wr_b1lo, Ir_b1hi, rel_b2 is op=0xd2; Wr_b1hi & Wr_b1lo & Ir_b1hi; rel_b2 {
+	local v:1 = Ir_b1hi;
+	Wr_b1hi = Wr_b1hi + 1;
+	if (Wr_b1lo != v) goto rel_b2;
+}
+:LDW RRd_b2, RRd_b1 is op=0xc4; RRd_b1; RRd_b2 { RRd_b2 = RRd_b1; }
+:LDW RRd_b2, IRRd_b1 is op=0xc5; IRRd_b1; RRd_b2 { RRd_b2 = IRRd_b1; }
+:LDW RRd_b1, "#"^w16 is op=0xc6; RRd_b1; w16 { RRd_b1 = w16; }
+:PUSHUD IRd_b1, Rd_b2 is op=0x82; Rd_b1 & IRd_b1; Rd_b2 { local v:1 = Rd_b2; Rd_b1 = Rd_b1 - 1; local p:1 = Rd_b1; *[rf]:1 p = v; }
+:PUSHUI IRd_b1, Rd_b2 is op=0x83; Rd_b1 & IRd_b1; Rd_b2 { local v:1 = Rd_b2; Rd_b1 = Rd_b1 + 1; local p:1 = Rd_b1; *[rf]:1 p = v; }
+:POPUD Rd_b2, IRd_b1 is op=0x92; Rd_b1 & IRd_b1; Rd_b2 & Rpost_b2 { Rd_b2 = IRd_b1; Rd_b1 = Rd_b1 - 1; build Rpost_b2; }
+:POPUI Rd_b2, IRd_b1 is op=0x93; Rd_b1 & IRd_b1; Rd_b2 & Rpost_b2 { Rd_b2 = IRd_b1; Rd_b1 = Rd_b1 + 1; build Rpost_b2; }
+
+:MULT RRd_b2, Rd_b1 is op=0x84; Rd_b1; RRd_b2 {
+	local s:1 = Rd_b1;
+	local p:2 = (RRd_b2 >> 8) * zext(s);
+	C = p > 0xff;
+	Z = (p == 0);
+	S = (p s< 0);
+	V = 0;
+	RRd_b2 = p;
+}
+:MULT RRd_b2, IRd_b1 is op=0x85; IRd_b1; RRd_b2 {
+	local s:1 = IRd_b1;
+	local p:2 = (RRd_b2 >> 8) * zext(s);
+	C = p > 0xff;
+	Z = (p == 0);
+	S = (p s< 0);
+	V = 0;
+	RRd_b2 = p;
+}
+:MULT RRd_b2, "#"^b1 is op=0x86; b1; RRd_b2 {
+	local s:1 = b1;
+	local p:2 = (RRd_b2 >> 8) * zext(s);
+	C = p > 0xff;
+	Z = (p == 0);
+	S = (p s< 0);
+	V = 0;
+	RRd_b2 = p;
+}
+:DIV RRd_b2, Rd_b1 is op=0x94; Rd_b1; RRd_b2 {
+	local s:1 = Rd_b1;
+	local n:2 = RRd_b2;
+	V = (s == 0);
+	Z = V;
+	C = 0;
+	S = 0;
+	if (s == 0) goto <done>;
+	local q:2 = n / zext(s);
+	local rm:2 = n % zext(s);
+	V = q > 0xff;
+	C = V && (q < 0x200);
+	Z = (q == 0);
+	S = (q & 0x80) != 0;
+	RRd_b2 = (rm << 8) | (q & 0xff);
+<done>
+}
+:DIV RRd_b2, IRd_b1 is op=0x95; IRd_b1; RRd_b2 {
+	local s:1 = IRd_b1;
+	local n:2 = RRd_b2;
+	V = (s == 0);
+	Z = V;
+	C = 0;
+	S = 0;
+	if (s == 0) goto <done>;
+	local q:2 = n / zext(s);
+	local rm:2 = n % zext(s);
+	V = q > 0xff;
+	C = V && (q < 0x200);
+	Z = (q == 0);
+	S = (q & 0x80) != 0;
+	RRd_b2 = (rm << 8) | (q & 0xff);
+<done>
+}
+:DIV RRd_b2, "#"^b1 is op=0x96; b1; RRd_b2 {
+	local s:1 = b1;
+	local n:2 = RRd_b2;
+	V = (s == 0);
+	Z = V;
+	C = 0;
+	S = 0;
+	if (s == 0) goto <done>;
+	local q:2 = n / zext(s);
+	local rm:2 = n % zext(s);
+	V = q > 0xff;
+	C = V && (q < 0x200);
+	Z = (q == 0);
+	S = (q & 0x80) != 0;
+	RRd_b2 = (rm << 8) | (q & 0xff);
+<done>
+}
+
+:BOR Wr_b1hi, Rd_b2^"."^b1bit is op=0x07; Wr_b1hi & b1bit & b1dir=0; Rd_b2 {
+	local bit:1 = (Rd_b2 >> b1bit) & 1;
+	local r:1 = (Wr_b1hi & 1) | bit;
+	Wr_b1hi = (Wr_b1hi & 0xfe) | r;
+	Z = (r == 0);
+	S = 0;
+}
+:BOR Rd_b2^"."^b1bit, Wr_b1hi is op=0x07; Wr_b1hi & b1bit & b1dir=1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local r:1 = ((d >> b1bit) & 1) | (Wr_b1hi & 1);
+	Rd_b2 = (d & ~(1 << b1bit)) | (r << b1bit);
+	Z = (r == 0);
+	S = 0;
+	build Rpost_b2;
+}
+:BXOR Wr_b1hi, Rd_b2^"."^b1bit is op=0x27; Wr_b1hi & b1bit & b1dir=0; Rd_b2 {
+	local bit:1 = (Rd_b2 >> b1bit) & 1;
+	local r:1 = (Wr_b1hi & 1) ^ bit;
+	Wr_b1hi = (Wr_b1hi & 0xfe) | r;
+	Z = (r == 0);
+	S = 0;
+}
+:BXOR Rd_b2^"."^b1bit, Wr_b1hi is op=0x27; Wr_b1hi & b1bit & b1dir=1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local r:1 = ((d >> b1bit) & 1) ^ (Wr_b1hi & 1);
+	Rd_b2 = (d & ~(1 << b1bit)) | (r << b1bit);
+	Z = (r == 0);
+	S = 0;
+	build Rpost_b2;
+}
+:BAND Wr_b1hi, Rd_b2^"."^b1bit is op=0x67; Wr_b1hi & b1bit & b1dir=0; Rd_b2 {
+	local bit:1 = (Rd_b2 >> b1bit) & 1;
+	local r:1 = (Wr_b1hi & 1) & bit;
+	Wr_b1hi = (Wr_b1hi & 0xfe) | r;
+	Z = (r == 0);
+	S = 0;
+}
+:BAND Rd_b2^"."^b1bit, Wr_b1hi is op=0x67; Wr_b1hi & b1bit & b1dir=1; Rd_b2 & Rpost_b2 {
+	local d:1 = Rd_b2;
+	local r:1 = ((d >> b1bit) & 1) & (Wr_b1hi & 1);
+	Rd_b2 = (d & ~(1 << b1bit)) | (r << b1bit);
+	Z = (r == 0);
+	S = 0;
+	build Rpost_b2;
+}
+:BCP Wr_b1hi, Rd_b2^"."^b1bit is op=0x17; Wr_b1hi & b1bit & b1dir=0; Rd_b2 {
+	local bit:1 = (Rd_b2 >> b1bit) & 1;
+	Z = (Wr_b1hi & 1) == bit;
+	S = 0;
+}
+:LDB Wr_b1hi, Rd_b2^"."^b1bit is op=0x47; Wr_b1hi & b1bit & b1dir=0; Rd_b2 {
+	Wr_b1hi = (Wr_b1hi & 0xfe) | ((Rd_b2 >> b1bit) & 1);
+}
+:LDB Rd_b2^"."^b1bit, Wr_b1hi is op=0x47; Wr_b1hi & b1bit & b1dir=1; Rd_b2 & Rpost_b2 {
+	Rd_b2 = (Rd_b2 & ~(1 << b1bit)) | ((Wr_b1hi & 1) << b1bit);
+	build Rpost_b2;
+}
+:BTJRF rel_b2, Wr_b1hi^"."^b1bit is op=0x37; Wr_b1hi & b1bit & b1dir=0; rel_b2 {
+	if (((Wr_b1hi >> b1bit) & 1) == 0) goto rel_b2;
+}
+:BTJRT rel_b2, Wr_b1hi^"."^b1bit is op=0x37; Wr_b1hi & b1bit & b1dir=1; rel_b2 {
+	if (((Wr_b1hi >> b1bit) & 1) != 0) goto rel_b2;
+}
+:BITC Wr_b1hi^"."^b1bit is op=0x57; Wr_b1hi & b1bit & b1dir=0 {
+	local r:1 = Wr_b1hi ^ (1 << b1bit);
+	Wr_b1hi = r;
+	Z = ((r >> b1bit) & 1) == 0;
+	S = 0;
+}
+:BITR Wr_b1hi^"."^b1bit is op=0x77; Wr_b1hi & b1bit & b1dir=0 { Wr_b1hi = Wr_b1hi & ~(1 << b1bit); }
+:BITS Wr_b1hi^"."^b1bit is op=0x77; Wr_b1hi & b1bit & b1dir=1 { Wr_b1hi = Wr_b1hi | (1 << b1bit); }
+
+:CALL "#"^b1 is op=0xd4; b1 { local t:2 = *[code]:2 b1:2; local ra:2 = inst_next; push16(ra); call [t]; }
+:SRP "#"^b1 is op=0x31; b1 & b1lo2=0 [ rp0v = 1; rp1v = 1; rp0 = (b1 >> 3) & 0x1e; rp1 = ((b1 >> 3) & 0x1e) | 1;
+		globalset(inst_next, rp0v); globalset(inst_next, rp1v); globalset(inst_next, rp0); globalset(inst_next, rp1); ] {
+	RP0 = b1 & 0xf0;
+	RP1 = (b1 & 0xf0) | 8;
+}
+:SRP0 "#"^b1 is op=0x31; b1 & b1lo2=2 [ rp0v = 1; rp0 = b1 >> 3; globalset(inst_next, rp0v); globalset(inst_next, rp0); ] {
+	RP0 = b1 & 0xf8;
+}
+:SRP1 "#"^b1 is op=0x31; b1 & b1lo2=1 [ rp1v = 1; rp1 = b1 >> 3; globalset(inst_next, rp1v); globalset(inst_next, rp1); ] {
+	RP1 = b1 & 0xf8;
+}
+:NEXT is op=0x0f { local t:2 = *[code]:2 IP; IP = IP + 2; goto [t]; }
+:ENTER is op=0x1f { push16(IP); IP = inst_next; local t:2 = *[code]:2 IP; IP = IP + 2; goto [t]; }
+:EXIT is op=0x2f { pop16(IP); local t:2 = *[code]:2 IP; IP = IP + 2; goto [t]; }
+:WFI is op=0x3f { waitForInterrupt(); }
+:SB0 is op=0x4f [ bank = 0; globalset(inst_next, bank); ] { FLAGS = FLAGS & 0xfe; }
+:SB1 is op=0x5f [ bank = 1; globalset(inst_next, bank); ] { FLAGS = FLAGS | 1; }
+@endif

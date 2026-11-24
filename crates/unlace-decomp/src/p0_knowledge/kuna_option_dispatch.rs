@@ -375,6 +375,7 @@ kuna_options! { self, p1;
     "castternary" => registered!(crate::kuna_castternary::CastTernary),
     "callrettype" => registered!(crate::kuna_callrettype::CallRetType),
     "castnarrow" => registered!(crate::kuna_castnarrow::CastNarrow),
+    "structassign" => registered!(crate::kuna_structassign::StructAssign),
     "libcnames" => registered!(crate::kuna_libcnames::LibcNames),
     "contextnames" => registered!(crate::kuna_contextnames::ContextNames),
     "flownames" => registered!(crate::kuna_flownames::FlowNames),

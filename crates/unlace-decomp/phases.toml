@@ -8987,3 +8987,22 @@ inspiration = "unlace issue 10, over-folding: DecBench O2-noinline zlib gztell64
 change_kind = "structure-recovery"
 tier = "transform"
 symptoms = "guard clauses returning the same error constant print as one && or or chain|a null check and an unrelated field test are folded into one condition before a shared return -1"
+
+[[settable]]
+option = "structassign"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P9"
+subphase = "readability-rewrites"
+strength = "HARD"
+rewind = "P9"
+issue = "unlace-ida-gap-types-4"
+summary = "Print a memcpy that copies exactly one struct as a struct assignment. A compiler copies a struct with memcpy, or inlines the copy and kuna's copy folds turn it back into memcpy, so a by-value assignment `*d = *s;` or `v = *p;` prints as `memcpy(d,s,0x18);`. Hex-Rays turns such a copy back into a struct move when the size is the size of the struct the pointers point to (hexx64 sub_4C8BB0). When on, kuna_structassign decides at print time, with the IR unchanged: a direct call of memcpy (with or without leading underscores) with three arguments, whose result is unused, whose size is a constant, and whose destination and source are both typed as pointers to one and the same struct or union type of exactly that size, prints as `*d = *s`, and an argument that is the address of a variable prints as the variable (`v1 = *a0;`). Any other memcpy (a length that is not the struct size, two different types, a char or void pointer, a used result, __memcpy_chk) prints as before. C output only."
+use_when = "Off by default (not yet measured on a corpus). Turn it on to read struct copies as the assignments the source wrote, `*a0 = v1;` instead of `memcpy(a0,&v1,0x18);`, wherever type recovery gave both sides the same struct type. Leave it off when the call itself matters (a script matching memcpy calls, or code that copies between two objects that only happen to share a type)."
+example = "option structassign on"
+source_decompiler = "ida"
+inspiration = "Hex-Rays microcode structure-copy recognition (hexx64 sub_4C8BB0 and sub_4C8DE0, recognized structure copy: transformed memcpy to mov); notes/ida-gap/types-plugins-sigs.md row 16"
+change_kind = "presentation-default"
+tier = "transform"
+symptoms = "a struct copy prints as memcpy(d,s,0x18) where both sides have the same struct type|a by-value struct assignment or return reads as a memcpy call|memcpy(&v1,a0,sizeof) copies one whole record into a local of that record type"

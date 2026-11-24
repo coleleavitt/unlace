@@ -366,6 +366,17 @@ language yet, so it still needs an explicit `--target`. A relocatable ARC
 object loads, but its relocation types are not applied; a call to an undefined
 symbol keeps the unrelocated displacement.
 
+(kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
+section; its function and global names come from the `WASM_SYMBOL_TABLE`
+subsection of its `linking` custom section (version 2), for every index the
+`name` section does not name (`loader/format/wasm.rs`). An undefined symbol
+is named only when it carries `WASM_SYM_EXPLICIT_NAME`.
+
+(kuna, unlace#678) A relocatable object for a 16-bit machine (AVR, MSP430) is
+laid out from `SMALL_RELOC_BASE` (0x100) instead of 0x400000, which is past
+the end of its address space; every other machine keeps 0x400000
+(`reloc_object::reloc_base`, also used by the FID relocation map).
+
 (kuna, unlace#676) Six more ELF machines are read from the header
 (`crates/unlace-analysis/src/loader/kuna_elfmachinetarget.rs`), because the
 object reader either has no language stem for them or no architecture at all:
@@ -1083,7 +1094,8 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   This lets existing tail-call recovery resolve a named external destination
   and preserve its delay-slot arguments. The relocation encoder handles generic
   absolute, relative, PLT-relative, and image-offset fields at 8/16/32/64 bits in
-  the object's byte order, plus the instruction fields and ABI formulas for ARM
+  the object's byte order (an s390x `*DBL` field, `PC32DBL`/`PLT32DBL` and their
+  16-bit forms, holds `(S + A - P) >> 1` and rejects an odd value), plus the instruction fields and ABI formulas for ARM
   `CALL`/`JUMP24`/Thumb branches/`REL32`/`PREL31`, AArch64 branch/page/low-12
   forms, PowerPC `REL24`/`PLTREL24`/`LOCAL24PC`/`ADDR24` calls (32- and 64-bit;
   a `-fPIC` object's `PLTREL24` addend locates the caller's `.got2` for the
@@ -1242,7 +1254,9 @@ the section-flag translation, import resolution (§1.3), and extra constant rang
   untouched and reported as requiring a linker veneer instead of being encoded
   as a branch in the wrong instruction set. Untyped and undefined targets do
   not infer state from their synthetic slot address. AArch64 branch, page, and
-  low-12 relocations preserve the instruction's opcode/register fields, while
+  low-12 relocations preserve the instruction's opcode/register fields, and
+  read and write the instruction little-endian in a big-endian object too
+  (A64 code is little-endian in every image; only data follows `EI_DATA`), while
   PowerPC64 `REL24` and TOC-family relocations preserve big-endian instruction
   layout and DS-form low bits. SPARC `WDISP30` and `WPLT30` rewrite the 30-bit
   word displacement of a `call`, computing `S + A - P` modulo 2³² so a call
@@ -7233,6 +7247,15 @@ every other binary's pass list is byte-identical to before the pass existed):
   of one code pointer per slot (`mod.rs (type_vftable_labels)`): as an untyped
   label it took the `code` type, and a constructor's store of its address
   printed as a store of the label's value (`this->__vftable = (C_vtbl *)vftable`).
+  A function several classes' vftables hold is named once, for the holder that is a
+  base of every other holder (`mod.rs (SlotNames::emit)`, the bases read from each
+  class's `BaseClassArray`): a derived class that does not override a method keeps
+  its base's entry, so the method is the base's. Named per holder, the shortest
+  name won, and USBCAN-Driver.dll's `std::exception::what` read
+  `std::bad_alloc::vfunc_1`, Holley's `PEGRP32F.dll` `CDialog::DoModal`
+  `MaxDlg::vfunc_83` (38 such functions there against IDA 9.5). With no such
+  holder (unrelated classes sharing `_purecall` or an identical-code fold) every
+  holder names it, as before.
 
   The pass runs at every PE load whatever its gate says (its facts are committed
   only when it is on), so its cost is paid by every command on a C++ DLL. Both of

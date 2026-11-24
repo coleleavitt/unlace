@@ -14,7 +14,8 @@
 //! ```
 //!
 //! A linear memory address is therefore the address the decompiler shows. A
-//! function is named by the `name` section, then by its export or import name.
+//! function is named by the `name` section (in an object file, the `linking`
+//! section's symbol table), then by its export or import name.
 //! An immutable global with a constant initializer is read-only, and so is a
 //! table that nothing can write: one that is neither imported nor exported in
 //! a module whose every body was lowered (a lowered body holds no table write).

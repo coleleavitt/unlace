@@ -2014,3 +2014,21 @@ in 44 binaries; with the loop printed at the top, GED over those binaries' 21,65
 scored functions goes from 208,492 to 207,801 (-691; 99 functions better, 29
 worse). The 29 are sources that wrote the `do { reg = REG & BIT; } while (!reg);`
 form, such as libopencm3 `console_putc` (0 to 10).
+
+
+## 8.6 Reaching conditions (DREAM core)
+
+`crates/unlace-structure/src/p8_structure/reachingconditions.rs` is the pure core of
+condition-based structuring (DREAM, NDSS 2015, section IV-A), ported from the archived
+engine. It computes `cr(h, n)` for each node of a region relative to its header `h`:
+the header's condition is `True`, and every other node's is the OR over its forward
+incoming edges of `cr(h, p) AND label(p, n)`. Back-edges are found first by a DFS from
+the header (an edge into a node still on the DFS stack) and are left out of the sweep,
+which runs in topological order over the acyclic skeleton. A node budget bounds each
+condition tree; when a term or an OR would pass it, the sweep stops, `limited` is set,
+and no further node is materialized.
+
+Nothing in the default pipeline calls it yet, so it changes no output. Wiring it into the
+region structurer as the goto-free fallback for regions the fixed schemas reject (today
+those fall back to CollapseStructure and emit gotos) is the remaining step, and it will
+ship behind a default-off option with its row here.

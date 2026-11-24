@@ -1,83 +1,83 @@
 
 # KADDW/KADDB/KADDQ/KADDD 3-496 PAGE 1066 LINE 55984
-:KADDW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x4A; KReg_reg & KReg_rm
+:KADDW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x4A; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = vex1VVV_KReg[0,16] + KReg_rm[0,16];
 	KReg_reg = zext(tmp);
 }
 
 # KADDW/KADDB/KADDQ/KADDD 3-496 PAGE 1066 LINE 55986
-:KADDB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x4A; KReg_reg & KReg_rm
+:KADDB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x4A; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = vex1VVV_KReg[0,8] + KReg_rm[0,8];
 	KReg_reg = zext(tmp);
 }
 
 # KADDW/KADDB/KADDQ/KADDD 3-496 PAGE 1066 LINE 55988
-:KADDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x4A; KReg_reg & KReg_rm
+:KADDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x4A; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = vex1VVV_KReg[0,64] + KReg_rm[0,64];
 	KReg_reg = zext(tmp);
 }
 
 # KADDW/KADDB/KADDQ/KADDD 3-496 PAGE 1066 LINE 55990
-:KADDD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x4A; KReg_reg & KReg_rm
+:KADDD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x4A; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = vex1VVV_KReg[0,32] + KReg_rm[0,32];
 	KReg_reg = zext(tmp);
 }
 
 # KANDW/KANDB/KANDQ/KANDD 3-497 PAGE 1067 LINE 56039
-:KANDW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x41; KReg_reg & KReg_rm
+:KANDW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x41; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = vex1VVV_KReg[0,16] & KReg_rm[0,16];
 	KReg_reg = zext(tmp);
 }
 
 # KANDW/KANDB/KANDQ/KANDD 3-497 PAGE 1067 LINE 56041
-:KANDB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x41; KReg_reg & KReg_rm
+:KANDB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x41; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = vex1VVV_KReg[0,8] & KReg_rm[0,8];
 	KReg_reg = zext(tmp);
 }
 
 # KANDW/KANDB/KANDQ/KANDD 3-497 PAGE 1067 LINE 56043
-:KANDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x41; KReg_reg & KReg_rm
+:KANDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x41; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = vex1VVV_KReg[0,64] & KReg_rm[0,64];
 	KReg_reg = zext(tmp);
 }
 
 # KANDW/KANDB/KANDQ/KANDD 3-497 PAGE 1067 LINE 56045
-:KANDD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x41; KReg_reg & KReg_rm
+:KANDD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x41; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = vex1VVV_KReg[0,32] & KReg_rm[0,32];
 	KReg_reg = zext(tmp);
 }
 
 # KANDNW/KANDNB/KANDNQ/KANDND 3-498 PAGE 1068 LINE 56100
-:KANDNW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x42; KReg_reg & KReg_rm
+:KANDNW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x42; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = ~vex1VVV_KReg[0,16] & KReg_rm[0,16];
 	KReg_reg = zext(tmp);
 }
 
 # KANDNW/KANDNB/KANDNQ/KANDND 3-498 PAGE 1068 LINE 56102
-:KANDNB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x42; KReg_reg & KReg_rm
+:KANDNB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x42; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = ~vex1VVV_KReg[0,8] & KReg_rm[0,8];
 	KReg_reg = zext(tmp);
 }
 
 # KANDNW/KANDNB/KANDNQ/KANDND 3-498 PAGE 1068 LINE 56104
-:KANDNQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x42; KReg_reg & KReg_rm
+:KANDNQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x42; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = ~vex1VVV_KReg[0,64] & KReg_rm[0,64];
 	KReg_reg = zext(tmp);
 }
 
 # KANDNW/KANDNB/KANDNQ/KANDND 3-498 PAGE 1068 LINE 56106
-:KANDND KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x42; KReg_reg & KReg_rm
+:KANDND KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x42; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = ~vex1VVV_KReg[0,32] & KReg_rm[0,32];
 	KReg_reg = zext(tmp);
@@ -85,88 +85,88 @@
 
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56160
-:KMOVW KReg_reg, RegK_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m16
+:KMOVW KReg_reg, RegK_m16 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m16
 {
 	KReg_reg = zext(RegK_m16);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56162
-:KMOVB KReg_reg, RegK_m8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m8
+:KMOVB KReg_reg, RegK_m8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x90; KReg_reg ... & RegK_m8
 {
 	KReg_reg = zext(RegK_m8);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56164
-:KMOVQ KReg_reg, RegK_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m64
+:KMOVQ KReg_reg, RegK_m64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m64
 {
 	KReg_reg = zext(RegK_m64);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56166
-:KMOVD KReg_reg, RegK_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m32
+:KMOVD KReg_reg, RegK_m32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x90; KReg_reg ... & RegK_m32
 {
 	KReg_reg = zext(RegK_m32);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56168
-:KMOVW m16, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x91; KReg_reg ... & m16
+:KMOVW m16, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x91; KReg_reg ... & m16
 {
 	m16 = KReg_reg[0,16];
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56170
-:KMOVB m8, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x91; KReg_reg ... & m8
+:KMOVB m8, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x91; KReg_reg ... & m8
 {
 	m8 = KReg_reg[0,8];
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56172
-:KMOVQ m64, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x91; KReg_reg ... & m64
+:KMOVQ m64, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x91; KReg_reg ... & m64
 {
 	m64 = KReg_reg[0,64];
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56174
-:KMOVD m32, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x91; KReg_reg ... & m32
+:KMOVD m32, KReg_reg is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x91; KReg_reg ... & m32
 {
 	m32 = KReg_reg[0,32];
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56176
-:KMOVW KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 &KReg_reg
+:KMOVW KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x92; mod=3 & Rmr32 &KReg_reg
 {
 	KReg_reg = zext(Rmr32[0,16]);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56178
-:KMOVB KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
+:KMOVB KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
 {
 	KReg_reg = zext(Rmr32[0,8]);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56180
 @ifdef IA64
-:KMOVQ KReg_reg, Rmr64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x92; mod=3 & Rmr64 & KReg_reg
+:KMOVQ KReg_reg, Rmr64 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x92; mod=3 & Rmr64 & KReg_reg
 {
 	KReg_reg = zext(Rmr64);
 }
 @endif
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56182
-:KMOVD KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
+:KMOVD KReg_reg, Rmr32 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & rexRprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x92; mod=3 & Rmr32 & KReg_reg
 {
 	KReg_reg = zext(Rmr32);
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56184
-:KMOVW Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+:KMOVW Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & mod=3 & KReg_rm
 {
 	Reg32 = zext(KReg_rm[0,16]);
 	build check_Reg32_dest;
 }
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56186
-:KMOVB Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+:KMOVB Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & mod=3 & KReg_rm
 {
 	Reg32 = zext(KReg_rm[0,8]);
 	build check_Reg32_dest;
@@ -174,73 +174,73 @@
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56188
 @ifdef IA64
-:KMOVQ Reg64, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W1); byte=0x93; Reg64 & KReg_rm
+:KMOVQ Reg64, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x93; Reg64 & mod=3 & KReg_rm
 {
 	Reg64 = KReg_rm[0,64];
 }
 @endif
 
 # KMOVW/KMOVB/KMOVQ/KMOVD 3-499 PAGE 1069 LINE 56190
-:KMOVD Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & KReg_rm
+:KMOVD Reg32, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_F2) & $(VEX_0F) & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x93; Reg32 & check_Reg32_dest & mod=3 & KReg_rm
 {
 	Reg32 = KReg_rm[0,32];
 	build check_Reg32_dest;
 }
 
 # KNOTW/KNOTB/KNOTQ/KNOTD 3-501 PAGE 1071 LINE 56266
-:KNOTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x44; KReg_reg & KReg_rm
+:KNOTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x44; KReg_reg & mod=3 & KReg_rm
 {
 	KReg_reg = zext(~KReg_rm[0,16]);
 }
 
 # KNOTW/KNOTB/KNOTQ/KNOTD 3-501 PAGE 1071 LINE 56268
-:KNOTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x44; KReg_reg & KReg_rm
+:KNOTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x44; KReg_reg & mod=3 & KReg_rm
 {
 	KReg_reg = zext(~KReg_rm[0,8]);
 }
 
 # KNOTW/KNOTB/KNOTQ/KNOTD 3-501 PAGE 1071 LINE 56270
-:KNOTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x44; KReg_reg & KReg_rm
+:KNOTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x44; KReg_reg & mod=3 & KReg_rm
 {
 	KReg_reg = zext(~KReg_rm[0,64]);
 }
 
 # KNOTW/KNOTB/KNOTQ/KNOTD 3-501 PAGE 1071 LINE 56272
-:KNOTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x44; KReg_reg & KReg_rm
+:KNOTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x44; KReg_reg & mod=3 & KReg_rm
 {
 	KReg_reg = zext(~KReg_rm[0,32]);
 }
 
 # KORW/KORB/KORQ/KORD 3-502 PAGE 1072 LINE 56325
-:KORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x45; KReg_reg & KReg_rm
+:KORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x45; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = vex1VVV_KReg[0,16] | KReg_rm[0,16];
 	KReg_reg = zext(tmp);
 }
 
 # KORW/KORB/KORQ/KORD 3-502 PAGE 1072 LINE 56327
-:KORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x45; KReg_reg & KReg_rm
+:KORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x45; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = vex1VVV_KReg[0,8] | KReg_rm[0,8];
 	KReg_reg = zext(tmp);
 }
 
 # KORW/KORB/KORQ/KORD 3-502 PAGE 1072 LINE 56329
-:KORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x45; KReg_reg & KReg_rm
+:KORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x45; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = vex1VVV_KReg[0,64] | KReg_rm[0,64];
 	KReg_reg = zext(tmp);
 }
 
 # KORW/KORB/KORQ/KORD 3-502 PAGE 1072 LINE 56331
-:KORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x45; KReg_reg & KReg_rm
+:KORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x45; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = vex1VVV_KReg[0,32] | KReg_rm[0,32];
 	KReg_reg = zext(tmp);
 }
 
 # KORTESTW/KORTESTB/KORTESTQ/KORTESTD 3-503 PAGE 1073 LINE 56385
-:KORTESTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x98; KReg_reg & KReg_rm
+:KORTESTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x98; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = KReg_reg[0,16] | KReg_rm[0,16];
 	ZF = (tmp == 0);
@@ -248,7 +248,7 @@
 }
 
 # KORTESTW/KORTESTB/KORTESTQ/KORTESTD 3-503 PAGE 1073 LINE 56387
-:KORTESTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x98; KReg_reg & KReg_rm
+:KORTESTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x98; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = KReg_reg[0,8] | KReg_rm[0,8];
 	ZF = (tmp == 0);
@@ -256,7 +256,7 @@
 }
 
 # KORTESTW/KORTESTB/KORTESTQ/KORTESTD 3-503 PAGE 1073 LINE 56389
-:KORTESTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x98; KReg_reg & KReg_rm
+:KORTESTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x98; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = KReg_reg[0,64] | KReg_rm[0,64];
 	ZF = (tmp == 0);
@@ -264,7 +264,7 @@
 }
 
 # KORTESTW/KORTESTB/KORTESTQ/KORTESTD 3-503 PAGE 1073 LINE 56391
-:KORTESTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x98; KReg_reg & KReg_rm
+:KORTESTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x98; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = KReg_reg[0,32] | KReg_rm[0,32];
 	ZF = (tmp == 0);
@@ -272,63 +272,63 @@
 }
 
 # KSHIFTLW/KSHIFTLB/KSHIFTLQ/KSHIFTLD 3-505 PAGE 1075 LINE 56481
-:KSHIFTLW KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1); byte=0x32; KReg_reg & KReg_rm; imm8
+:KSHIFTLW KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x32; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:2 = KReg_rm[0,16] << imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTLW/KSHIFTLB/KSHIFTLQ/KSHIFTLD 3-505 PAGE 1075 LINE 56483
-:KSHIFTLB KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x32; KReg_reg & KReg_rm; imm8
+:KSHIFTLB KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x32; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:1 = KReg_rm[0,8] << imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTLW/KSHIFTLB/KSHIFTLQ/KSHIFTLD 3-505 PAGE 1075 LINE 56485
-:KSHIFTLQ KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1); byte=0x33; KReg_reg & KReg_rm; imm8
+:KSHIFTLQ KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x33; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:8 = KReg_rm[0,64] << imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTLW/KSHIFTLB/KSHIFTLQ/KSHIFTLD 3-505 PAGE 1075 LINE 56487
-:KSHIFTLD KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x33; KReg_reg & KReg_rm; imm8
+:KSHIFTLD KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x33; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:4 = KReg_reg[0,32] << imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTRW/KSHIFTRB/KSHIFTRQ/KSHIFTRD 3-507 PAGE 1077 LINE 56562
-:KSHIFTRW KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1); byte=0x30; KReg_reg & KReg_rm; imm8
+:KSHIFTRW KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x30; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:2 = KReg_rm[0,16] >> imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTRW/KSHIFTRB/KSHIFTRQ/KSHIFTRD 3-507 PAGE 1077 LINE 56564
-:KSHIFTRB KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x30; KReg_reg & KReg_rm; imm8
+:KSHIFTRB KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x30; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:1 = KReg_rm[0,8] >> imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTRW/KSHIFTRB/KSHIFTRQ/KSHIFTRD 3-507 PAGE 1077 LINE 56566
-:KSHIFTRQ KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W1); byte=0x31; KReg_reg & KReg_rm; imm8
+:KSHIFTRQ KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x31; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:8 = KReg_rm[0,64] >> imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KSHIFTRW/KSHIFTRB/KSHIFTRQ/KSHIFTRD 3-507 PAGE 1077 LINE 56568
-:KSHIFTRD KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & $(VEX_W0); byte=0x31; KReg_reg & KReg_rm; imm8
+:KSHIFTRD KReg_reg, KReg_rm, imm8 is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F3A) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x31; KReg_reg & mod=3 & KReg_rm; imm8
 {
 	local tmp:4 = KReg_rm[0,32] >> imm8:1;
 	KReg_reg = zext(tmp);
 }
 
 # KTESTW/KTESTB/KTESTQ/KTESTD 3-509 PAGE 1079 LINE 56643
-:KTESTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0); byte=0x99; KReg_reg & KReg_rm
+:KTESTW KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x99; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = KReg_reg[0,16] & KReg_rm[0,16];
 	ZF = (tmp == 0);
@@ -341,7 +341,7 @@
 }
 
 # KTESTW/KTESTB/KTESTQ/KTESTD 3-509 PAGE 1079 LINE 56645
-:KTESTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0); byte=0x99; KReg_reg & KReg_rm
+:KTESTB KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W0); byte=0x99; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = KReg_reg[0,8] & KReg_rm[0,8];
 	ZF = (tmp == 0);
@@ -354,7 +354,7 @@
 }
 
 # KTESTW/KTESTB/KTESTQ/KTESTD 3-509 PAGE 1079 LINE 56647
-:KTESTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1); byte=0x99; KReg_reg & KReg_rm
+:KTESTQ KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x99; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = KReg_reg[0,64] & KReg_rm[0,64];
 	ZF = (tmp == 0);
@@ -367,7 +367,7 @@
 }
 
 # KTESTW/KTESTB/KTESTQ/KTESTD 3-509 PAGE 1079 LINE 56649
-:KTESTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1); byte=0x99; KReg_reg & KReg_rm
+:KTESTD KReg_reg, KReg_rm is $(VEX_NONE) & $(VEX_L128) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & vexVVVV=0 & $(VEX_W1); byte=0x99; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = KReg_reg[0,32] & KReg_rm[0,32];
 	ZF = (tmp == 0);
@@ -380,7 +380,7 @@
 }
 
 # KUNPCKBW/KUNPCKWD/KUNPCKDQ 3-511 PAGE 1081 LINE 56747
-:KUNPCKBW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x4B; KReg_reg & KReg_rm
+:KUNPCKBW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x4B; KReg_reg & mod=3 & KReg_rm
 {
 	local src1:1 = vex1VVV_KReg[0,8];
 	local src2:1 = KReg_rm[0,8];
@@ -390,7 +390,7 @@
 }
 
 # KUNPCKBW/KUNPCKWD/KUNPCKDQ 3-511 PAGE 1081 LINE 56749
-:KUNPCKWD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x4B; KReg_reg & KReg_rm
+:KUNPCKWD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x4B; KReg_reg & mod=3 & KReg_rm
 {
 	local src1:2 = vex1VVV_KReg[0,16];
 	local src2:2 = KReg_rm[0,16];
@@ -400,7 +400,7 @@
 }
 
 # KUNPCKBW/KUNPCKWD/KUNPCKDQ 3-511 PAGE 1081 LINE 56751
-:KUNPCKDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x4B; KReg_reg & KReg_rm
+:KUNPCKDQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x4B; KReg_reg & mod=3 & KReg_rm
 {
 	local src1:4 = vex1VVV_KReg[0,32];
 	local src2:4 = KReg_rm[0,32];
@@ -410,56 +410,56 @@
 }
 
 # KXNORW/KXNORB/KXNORQ/KXNORD 3-512 PAGE 1082 LINE 56806
-:KXNORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x46; KReg_reg & KReg_rm
+:KXNORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x46; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = ~(vex1VVV_KReg[0,16] ^ KReg_rm[0,16]);
 	KReg_reg = zext(tmp);
 }
 
 # KXNORW/KXNORB/KXNORQ/KXNORD 3-512 PAGE 1082 LINE 56808
-:KXNORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x46; KReg_reg & KReg_rm
+:KXNORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x46; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = ~(vex1VVV_KReg[0,8] ^ KReg_rm[0,8]);
 	KReg_reg = zext(tmp);
 }
 
 # KXNORW/KXNORB/KXNORQ/KXNORD 3-512 PAGE 1082 LINE 56810
-:KXNORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x46; KReg_reg & KReg_rm
+:KXNORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x46; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = ~(vex1VVV_KReg[0,64] ^ KReg_rm[0,64]);
 	KReg_reg = zext(tmp);
 }
 
 # KXNORW/KXNORB/KXNORQ/KXNORD 3-512 PAGE 1082 LINE 56812
-:KXNORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x46; KReg_reg & KReg_rm
+:KXNORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x46; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = ~(vex1VVV_KReg[0,32] ^ KReg_rm[0,32]);
 	KReg_reg = zext(tmp);
 }
 
 # KXORW/KXORB/KXORQ/KXORD 3-513 PAGE 1083 LINE 56866
-:KXORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x47; KReg_reg & KReg_rm
+:KXORW KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NDS) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x47; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:2 = vex1VVV_KReg[0,16] ^ KReg_rm[0,16];
 	KReg_reg = zext(tmp);
 }
 
 # KXORW/KXORB/KXORQ/KXORD 3-513 PAGE 1083 LINE 56868
-:KXORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W0) & vex1VVV_KReg; byte=0x47; KReg_reg & KReg_rm
+:KXORB KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W0) & vex1VVV_KReg; byte=0x47; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:1 = vex1VVV_KReg[0,8] ^ KReg_rm[0,8];
 	KReg_reg = zext(tmp);
 }
 
 # KXORW/KXORB/KXORQ/KXORD 3-513 PAGE 1083 LINE 56870
-:KXORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x47; KReg_reg & KReg_rm
+:KXORQ KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_NONE) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x47; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:8 = vex1VVV_KReg[0,64] ^ KReg_rm[0,64];
 	KReg_reg = zext(tmp);
 }
 
 # KXORW/KXORB/KXORQ/KXORD 3-513 PAGE 1083 LINE 56872
-:KXORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & $(VEX_W1) & vex1VVV_KReg; byte=0x47; KReg_reg & KReg_rm
+:KXORD KReg_reg, vex1VVV_KReg, KReg_rm is $(VEX_NONE) & $(VEX_L256) & $(VEX_PRE_66) & $(VEX_0F) & rexRprefix=0 & rexBprefix=0 & $(VEX_W1) & vex1VVV_KReg; byte=0x47; KReg_reg & mod=3 & KReg_rm
 {
 	local tmp:4 = vex1VVV_KReg[0,32] ^ KReg_rm[0,32];
 	KReg_reg = zext(tmp);

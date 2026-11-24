@@ -5,7 +5,6 @@
 @include "apx_rex2map1.sinc"
 with : lockprefx=0 {
 @include "sgx.sinc"
-@include "fma.sinc"
 @include "amx.sinc"
 }
 @include "cmpccxadd.sinc"

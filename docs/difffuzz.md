@@ -151,6 +151,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   vtype, vxsat, vxrm, fcsr and vstart. Half of the x registers point into a 64 KiB data
   region, which is always mapped and compared. When QEMU raises SIGILL (a register group, SEW
   or EEW the instruction does not allow) the case is retried at LMUL 1 with each SEW.
+- **vtype as context.** Each encoding is lifted after a `vsetvli x0, x0` of each vtype it is run
+  at (`lift_variants`), so the decoder sees the vtype the harness sets, and the case is run with
+  the first of those vtypes QEMU accepts.
 - **What is compared.** `riscv.rvv.sinc` lifts every vector instruction to a user operation,
   so element values cannot be compared. The p-code runs twice, each time with different
   random user-operation results. A byte written the same way in both runs must equal QEMU's
@@ -159,6 +162,9 @@ mnemonics). Capstone 5 does not decode them. QEMU runs with
   gives every register the p-code does not read new contents, keeping vl, vtype, vxrm and
   fcsr. If a byte the p-code writes through a user operation changes, the result is
   `missing-input`, tagged with the case's tail/mask policy (`tu/mu` etc.).
+- **After vtype context (`tools/gen_rvv_groups.py`)** (pinned `unlace-92c033f5ca`, 400
+  encodings, seeds 5/6): VLEN 128 247 match, 17 with findings; VLEN 256 239 match, 29 with
+  findings. Every remaining finding is fflags or vxsat, which the lift leaves out.
 - **First run** (pinned `unlace-cc4eab698b`, 400 encodings each):
   - VLEN 128: 146 match, 111 with findings, 143 reference exceptions. The exceptions are
     SIGSEGV on indexed and strided addresses outside the region, and SIGILL on encodings
@@ -202,7 +208,8 @@ The exit status is 1 when a configuration has a finding of a failing kind (`mism
 accept, 2 when a configuration errored, and 0 otherwise. `sweep_known.json` maps
 `arch/oracle` to the difference keys (a register, `missing-output`, `missing-input`) and the
 fnmatch patterns over their values that are documented open classes. Today that is only the RISC-V
-vector classes below. A value mismatch is never accepted.
+vector accrued flags (fflags, vxsat), which the lift leaves out as the scalar F/D lift does. A value
+mismatch is never accepted.
 
 First run (unlace-2feb8da847, seed 1, 200 per configuration): every available configuration is
 `ok`. Unavailable were `ppc`, `ppc64le`, `ppc64le-isa` and `s390x` on QEMU (no

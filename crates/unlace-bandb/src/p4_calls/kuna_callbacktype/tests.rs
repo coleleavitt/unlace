@@ -1,7 +1,7 @@
 //! Unit tests for the slot table and the run's record. The end-to-end witness
 //! -- a comparator declared by the `qsort` call that names it -- is the CLI
 //! probe pair over `callbacktype_x86_64`; the stage test
-//! `tests/stages/kuna-callbacktype.xml` is the negative control for the
+//! `tests/stages/kuna-callbacktype.toml` is the negative control for the
 //! one-function path.
 
 use super::*;

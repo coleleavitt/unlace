@@ -1,6 +1,6 @@
 //! Unit tests for the re-tested-condition use rule: the reachability walk and the repeated
 //! `only_op_use` walk on a hand-built re-test merge.  The end-to-end behaviour
-//! is `tests/stages/kuna-condexeretuse.xml`.
+//! is `tests/stages/kuna-condexeretuse.toml`.
 
 use std::rc::Rc;
 

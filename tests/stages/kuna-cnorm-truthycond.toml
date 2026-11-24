@@ -1,0 +1,123 @@
+# kuna C-surface normalization: a boolean-context comparison against zero
+# renders in truthy form - `if (x != 0)` as `if (x)` and `if (p == 0)` as
+# `if (!p)` (user-reported readability issue on the angr fmt corpus binary:
+# `if (v8 != (char *)0x0)`; no upstream GH issue).
+#
+# Upstream Ghidra always renders the explicit comparison.  kuna adds the
+# settable option `truthycond` (DIV-36, docs/history.md), default-on:
+# the printer marks boolean contexts (if/while/for/ternary conditions,
+# &&/||/! operands) with a CONDITION_CONTEXT mod and elides the eligible
+# zero operand at INT_EQUAL/INT_NOTEQUAL.  Float compares, enum-typed and
+# equate-named zeros keep the explicit form; value uses never rewrite.
+#
+# Stage model: S9 emission / condition-form policy.  P0 assertion:
+# `option truthycond on|off`.
+#
+# tfn (0x100000): int4 tfn(int4 x) { if (x) return 7; return 3; }
+#   test edi,edi / jz +6 / mov eax,7 / ret / mov eax,3 / ret
+# pfn (0x100020): int4 pfn(int8 *p) { if (!p) return 1; return *p; }
+#   test rdi,rdi / jnz +6 / mov eax,1 / ret / mov eax,[rdi] / ret
+#
+# vfn (0x100040, clang -O1 x86_64 of: int b = (x != 0); sink(b);
+# return (x == 0)*3 + 4;): one `test edi,edi` feeds BOTH a setne (a VALUE
+# consumed as a call argument) and a sete, so the setne lifts as
+# BOOL_NEGATE over a shared INT_EQUAL that survives to print - the
+# adversarial shape for the negate-absorption path.  A VALUE position must
+# NEVER truthy-elide: `sink(x != 0)` would become `sink(x)` (5 instead of
+# 1 for x=5).  Asserts #5-#6 pin the value-safety in BOTH passes.
+#
+# Pass 1 (default): `if (x)` and `if (!p)` (asserts #1-#2, exactly once
+# each; the explicit forms cannot match the truthy patterns).
+# Pass 2 (option truthycond off): the explicit `if (x != 0)` and - with
+# the DIV-34 NULL default - `if (p == NULL)` (asserts #3-#4).
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'tfn' },
+    { space = 'ram', offset = '0x100020', name = 'pfn' },
+    { space = 'ram', offset = '0x100040', name = 'vfn' },
+    { space = 'ram', offset = '0x100070', name = 'sink' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = '85ff7406b807000000c3b803000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100020'
+readonly = true
+hex = '4885ff7506b801000000c38b07c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100040'
+readonly = true
+hex = '554889e5535031c031db85ff0f95c00f94c389c7e8170000008d045b83c0044883c4085b5dc3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100070'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'parse line extern int4 tfn(int4 x);',
+    'parse line extern int4 pfn(int8 *p);',
+    'parse line extern int4 vfn(int4 x);',
+    'parse line extern int4 sink(int4 b);',
+    'lo fu tfn',
+    'decompile',
+    'print C',
+    'lo fu pfn',
+    'decompile',
+    'print C',
+    'lo fu vfn',
+    'decompile',
+    'print C',
+    'option truthycond off',
+    'lo fu tfn',
+    'decompile',
+    'print C',
+    'lo fu pfn',
+    'decompile',
+    'print C',
+    'lo fu vfn',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'CNORM-TRUTHY #1: default renders the nonzero test truthy (DIV-36)'
+count = 1
+literal = 'if (x)'
+
+[[match]]
+name = 'CNORM-TRUTHY #2: default renders the null test as a negation'
+count = 1
+literal = 'if (!p)'
+
+[[match]]
+name = 'CNORM-TRUTHY #3: truthycond off restores the explicit != 0'
+count = 1
+literal = 'if (x != 0)'
+
+[[match]]
+name = 'CNORM-TRUTHY #4: truthycond off restores the explicit NULL compare (DIV-34 form)'
+count = 1
+literal = 'if (p == NULL)'
+
+[[match]]
+name = 'CNORM-TRUTHY #5: a VALUE position keeps its comparison in BOTH passes (negate-absorption safety)'
+count = 2
+literal = 'sink((uint4)(x != 0));'
+
+[[match]]
+name = 'CNORM-TRUTHY #6: the value-elision bug shape never appears'
+count = 0
+regex = 'sink\(\(uint4\)x\)|sink\(x\)'

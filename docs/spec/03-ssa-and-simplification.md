@@ -3166,7 +3166,7 @@ may simply not be linked yet. `condexe.rs (ConditionalExecution::build_heritage_
 records that per space from `Funcdata::num_heritage_passes`, as upstream. Most
 such ops fall to dead-code removal first. They still reach the test when the
 space's dead-code delay outlasts its heritage delay (the console
-`deadcode delay` command, `tests/stages/kuna-condexe-heritage.xml`), and on
+`deadcode delay` command, `tests/stages/kuna-condexe-heritage.toml`), and on
 ARM predicated code: a `moveq`/`movne` pair ahead of the re-tested branch
 (u-boot `env_attr_lookup`) now collapses into the guarded block.
 `condexe.rs (RuleOrPredicate)` (oppool1, group

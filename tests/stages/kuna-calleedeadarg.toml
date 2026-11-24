@@ -1,0 +1,71 @@
+# RE-friction round 2, need `void-callee-spurious-arg`, challenge
+# 68149b8a8f555589f353117c (Mach-O arm64 `practice_2_rengr`): one kuna output
+# contradicted itself.  The header declared `int _secret_function(void);` and
+# the body of `_main` called `_secret_function(v3);`, where `v3` was the
+# return value of the preceding `scanf`.  The export does not recompile, and
+# an agent reading it cannot tell whether the callee consumes the value.
+#
+# Root cause (P4, active-input trial scoring).  `ActionActiveParam` recovers
+# an unlocked callee's argument list from the CALLER's data flow alone
+# (`FuncCallSpecs::checkInputTrialUse`, fspec.cc:5592): the ABI's first
+# argument register holds a value the caller wrote and does not otherwise
+# use, and `AncestorRealistic::enterNode` answers pop_solid for a Varnode
+# defined by a CALL.  On AArch64 the return register and the first argument
+# register are the same `x0`, so the previous call's result IS the next
+# call's argument as far as the caller can see.  `calleearity` /
+# `calleearityfwd` cannot help: they reconcile against a SIBLING call to the
+# same callee, they are only ever additive, and here there is one call site.
+#
+# Stage / sub-stage: P4 "active-input-trial-scoring".  A bounded decode of
+# the CALLEE's own body vetoes the trial (kuna_calleedeadarg.rs, always on):
+# a register the callee provably overwrites, on every path from its entry and
+# before ever reading it, is dead there and cannot be carrying an argument.
+#
+# The fixture is the same construct, hand assembled: `caller` calls
+# `producer` (which returns 7 in w0) and then `target`, which overwrites x0
+# with 1 before returning and so never reads it.
+#
+# Without the veto `target` is called with the producer's return value; at
+# the shipped default the argument is gone and the producer's return value
+# has no consumer.
+
+[image]
+arch = 'AARCH64:LE:64:v8A:default'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'caller' },
+    { space = 'ram', offset = '0x100020', name = 'producer' },
+    { space = 'ram', offset = '0x100028', name = 'target' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+hex = '''
+fd7bbfa9fd0300910600009407000094
+00008052fd7bc1a8c0035fd61f2003d5
+e0008052c0035fd6200080d2c0035fd6
+'''
+
+[script]
+commands = [
+    'parse line extern int4 producer(void);',
+    'lo fu caller',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = "calleedeadarg #1: the previous call's return value is never passed to a callee that never reads it"
+count = 0
+literal = 'target(producer());'
+
+[[match]]
+name = "calleedeadarg #2: the argument the callee's own body proves it never reads is dropped"
+count = 1
+literal = 'target();'
+
+[[match]]
+name = 'calleedeadarg #3: with the argument gone the producer call stands on its own'
+count = 1
+literal = 'producer();'

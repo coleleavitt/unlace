@@ -1279,7 +1279,7 @@ variable. `--option boolbyte off` restores the upstream fold exactly - the
 candidate is never offered and the printer arm is not consulted - which is the
 ablation to reach for when a `bool` declaration is in question.
 
-`tests/stages/kuna-boolbyte.xml` pins the witness, the five refusals - a byte
+`tests/stages/kuna-boolbyte.toml` pins the witness, the five refusals - a byte
 that is also widened and added, a byte tested for its low bit, a byte stored
 through a pointer, a stack byte set to 0 and then filled by a callee, and a byte
 parameter copied into a slot a callee is handed the address of - and both
@@ -1384,7 +1384,7 @@ one type, three functions change a declaration count: two split a `char` byte
 or pointer from an unrelated `unsigned char` value that had shared its
 declaration, and one joins two `char *` locals. Every changed comparison was
 checked by compiling both forms and evaluating them over all 256 byte values.
-`tests/stages/kuna-charbyte.xml` pins the witness, the `unsigned char *` and
+`tests/stages/kuna-charbyte.toml` pins the witness, the `unsigned char *` and
 unsigned-compare controls, the `0xe9` comparison, and a pointer that is
 `char *` only because `strlen` takes one.
 
@@ -1660,7 +1660,7 @@ also holds a keymap entry's function is now typed as that function pointer and
 indexed. The cost is gcc's incompatible-pointer-type warnings, 247 to 312: a
 function whose recovered prototype differs from the DWARF type of the slot it
 is passed to was passed to a `void *` before, and gcc 14 and later reject that
-by default. Exercised by `tests/stages/kuna-calltargettype.xml` (gcc -O1 and clang
+by default. Exercised by `tests/stages/kuna-calltargettype.toml` (gcc -O1 and clang
 -O2 builds of a table dispatch, a local holding a table entry, a record's
 callback, a local called with two arities, a local that receives a function's
 address, a local handed to `qsort`, a float held in `xmm0` as an integer, and a

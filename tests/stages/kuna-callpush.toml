@@ -1,0 +1,67 @@
+# A call's own return-address push is part of the call (kuna_callpush.rs,
+# always on).
+#
+# The XML wrapper only provides the harness architecture. The script clears
+# it and loads callpush_gcc_O0_x86_64 (source beside it, gcc -O0). stacked()
+# calls alloca, so its stack pointer is the entry value minus a run-time
+# size and the frame cannot place it on the stack; pc_here() does the same
+# and then runs call 1f; 1: pop.
+#
+# Without the rule each call after the alloca prints the store of its own
+# return address through the stack pointer,
+# *(unsigned long *)&v9[v5 + -8] = 0x14e7; before weigh() in the loop and
+# *(unsigned long *)&v9[v5 + -0x18] = 0x1557; before spread().  The rule
+# prints neither. What the same pointer stores for spread()'s stack-passed
+# arguments stays, and so does the push of call 1f, whose destination is the
+# stored address and which pc_here reads back.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/callpush_gcc_O0_x86_64',
+    'read symbols',
+    'load function stacked',
+    'decompile',
+    'print C',
+    'load function pc_here',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'Call push #1: the push before the call in the loop is never printed'
+count = 0
+literal = '*(unsigned long *)&v9[v5 + -8] = 0x14e7;'
+
+[[match]]
+name = 'Call push #2: the push before the call with stack arguments is never printed'
+count = 0
+literal = '*(unsigned long *)&v9[v5 + -0x18] = 0x1557;'
+
+[[match]]
+name = 'Call push #3: the call in the loop is kept'
+count = 1
+literal = '*v1 = weigh(0x2004,v7);'
+
+[[match]]
+name = 'Call push #4: a stack-passed argument is kept'
+count = 1
+literal = '*(unsigned long *)&v9[v5 + -0x10] = v2;'
+
+[[match]]
+name = 'Call push #5: the push call 1f reads back is kept'
+count = 1
+literal = '*(unsigned long *)&v5[v1 + -8] = 0x1802;'

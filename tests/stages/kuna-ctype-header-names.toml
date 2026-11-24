@@ -1,0 +1,32 @@
+[image]
+arch = 'x86:LE:64:default:gcc'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/ctype_header_names_x86_64.elf',
+    'read symbols',
+    'option ctypes on',
+    'print C types',
+]
+
+[[match]]
+name = 'C type definition members use the declared pointer alias'
+count = 1
+literal = 'elm_tag *p;'
+
+[[match]]
+name = 'C type definition members retain the array of pointers'
+count = 1
+literal = 'elm_tag *list[2];'
+
+[[match]]
+name = 'C type definition members retain the pointer to an array'
+count = 1
+literal = 'elm_tag (*table)[3];'

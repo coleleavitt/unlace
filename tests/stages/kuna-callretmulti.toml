@@ -1,0 +1,74 @@
+# A call result is narrowed to its low word, then that derived value feeds a
+# comparison inside an inner loop and a store after the loop. The machine
+# calls helper once per outer iteration. Marking the call output implied is
+# only safe if its whole expression chain reaches one textual sink.
+#
+# Pass 1 uses the upstream-faithful option-off form. Pass 2 turns the shipped
+# option on explicitly. Both must retain one helper assignment, while the
+# existing ghangr-call-return-variable-folding test proves a true single-sink
+# call still folds when the option is on. Before the fix pass 2 printed
+# helper() at both downstream sinks, so assertion #1 counted only one call
+# assignment and assertion #2 counted two duplicated expressions.
+#
+# same_block_two_sink covers the cheap same-block case: the masked return
+# feeds one store directly and a second store through an add. Its expression
+# has only two terminal terms, so the default multiplier budget otherwise
+# permits the same call to be printed twice even without a CFG edge.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x1000', name = 'sub_140002930' },
+    { space = 'ram', offset = '0x1040', name = 'helper' },
+    { space = 'ram', offset = '0x1100', name = 'same_block_two_sink' },
+    { space = 'ram', offset = '0x1120', name = 'helper2' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1000'
+hex = '534883ec2031dbe83400000025ffff00807d09ffc80d0000ffffffffc031c96639044c74e348ffc14883f9107cf16689045c48ffc34883fb107ccd4883c4205bc3b807000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x1100'
+hex = 'e81b00000025ffff00008d480183c002890dea0e00008905e80e0000c3909090b807000000c3'
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x2000'
+hex = '0000000000000000'
+
+[script]
+commands = [
+    'option foldcallret off',
+    'lo fu sub_140002930',
+    'decompile',
+    'print C',
+    'lo fu same_block_two_sink',
+    'decompile',
+    'print C',
+    'option foldcallret on',
+    'lo fu sub_140002930',
+    'decompile',
+    'print C',
+    'lo fu same_block_two_sink',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'callretmulti #1: one helper assignment in each pass'
+count = 2
+literal = '= helper()'
+
+[[match]]
+name = 'callretmulti #2: helper is never duplicated into the low-word sinks'
+count = 0
+literal = '(unsigned short)helper()'
+
+[[match]]
+name = 'callretmulti #3: same-block fan-out evaluates helper2 once per pass'
+count = 2
+literal = 'helper2()'

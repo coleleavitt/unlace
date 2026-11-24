@@ -1,6 +1,6 @@
 //! Unit tests for the range arithmetic and the statement fold of
 //! [`crate::kuna_entryreads`]. The end-to-end behaviour is
-//! `tests/stages/kuna-bodyreads.xml` and
+//! `tests/stages/kuna-bodyreads.toml` and
 //! `tests/cli/passthrough-keeps-an-argument-the-callee-body-takes.json`.
 
 use super::*;

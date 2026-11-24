@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/compiler_spec.rxg -->
+
+<!-- Toshiba cc900 C convention (as seen in cc900-built Neo Geo Pocket code): arguments on the stack, the caller
+     removes them; results in L / HL / XHL; XIX, XIY, XIZ and XSP preserved; maximum mode, 32-bit return address. -->
+<compiler_spec>
+  <data_organization>
+    <pointer_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="2"/>
+    <long_size value="4"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="2"/>
+      <entry size="8" alignment="2"/>
+    </size_alignment_map>
+  </data_organization>
+  <global>
+    <range space="ram"/>
+  </global>
+  <stackpointer register="XSP" space="ram"/>
+  <returnaddress>
+    <varnode space="stack" offset="0" size="4"/>
+  </returnaddress>
+  <default_proto>
+    <prototype name="__stdcall" extrapop="4" stackshift="4">
+      <input>
+        <pentry minsize="1" maxsize="500" align="2">
+          <addr offset="4" space="stack"/>
+        </pentry>
+      </input>
+      <output>
+        <pentry minsize="1" maxsize="1">
+          <register name="L"/>
+        </pentry>
+        <pentry minsize="2" maxsize="2">
+          <register name="HL"/>
+        </pentry>
+        <pentry minsize="3" maxsize="4">
+          <register name="XHL"/>
+        </pentry>
+      </output>
+      <unaffected>
+        <register name="XIX"/>
+        <register name="XIY"/>
+        <register name="XIZ"/>
+        <register name="XSP"/>
+      </unaffected>
+      <killedbycall>
+        <register name="XWA"/>
+        <register name="XBC"/>
+        <register name="XDE"/>
+        <register name="XHL"/>
+      </killedbycall>
+    </prototype>
+  </default_proto>
+</compiler_spec>

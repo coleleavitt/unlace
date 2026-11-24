@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+
+<processor_spec>
+  <programcounter register="PC"/>
+  <register_data>
+    <!-- storage of banks 0-3 and of the previous-bank names: an explicit bank code reaches these while that bank is
+         not the current one (RFP); see GHIDRA-RARE.md -->
+    <register name="XWA_0" group="Banks"/> <register name="XBC_0" group="Banks"/>
+    <register name="XDE_0" group="Banks"/> <register name="XHL_0" group="Banks"/>
+    <register name="XWA_1" group="Banks"/> <register name="XBC_1" group="Banks"/>
+    <register name="XDE_1" group="Banks"/> <register name="XHL_1" group="Banks"/>
+    <register name="XWA_2" group="Banks"/> <register name="XBC_2" group="Banks"/>
+    <register name="XDE_2" group="Banks"/> <register name="XHL_2" group="Banks"/>
+    <register name="XWA_3" group="Banks"/> <register name="XBC_3" group="Banks"/>
+    <register name="XDE_3" group="Banks"/> <register name="XHL_3" group="Banks"/>
+    <register name="XWA_P" hidden="true"/> <register name="XBC_P" hidden="true"/>
+    <register name="XDE_P" hidden="true"/> <register name="XHL_P" hidden="true"/>
+    <register name="DMAS_0" group="DMA"/> <register name="DMAS_1" group="DMA"/>
+    <register name="DMAS_2" group="DMA"/> <register name="DMAS_3" group="DMA"/>
+    <register name="DMAD_0" group="DMA"/> <register name="DMAD_1" group="DMA"/>
+    <register name="DMAD_2" group="DMA"/> <register name="DMAD_3" group="DMA"/>
+    <register name="DMAC_0" group="DMA"/> <register name="DMAC_1" group="DMA"/>
+    <register name="DMAC_2" group="DMA"/> <register name="DMAC_3" group="DMA"/>
+    <register name="DMAM_0" group="DMA"/> <register name="DMAM_1" group="DMA"/>
+    <register name="DMAM_2" group="DMA"/> <register name="DMAM_3" group="DMA"/>
+    <register name="SF" group="Flags"/> <register name="ZF" group="Flags"/>
+    <register name="HF" group="Flags"/> <register name="VF" group="Flags"/>
+    <register name="NF" group="Flags"/> <register name="CF" group="Flags"/>
+  </register_data>
+</processor_spec>

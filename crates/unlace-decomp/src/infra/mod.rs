@@ -7,6 +7,7 @@ pub mod analyzesigs;
 #[cfg(test)]
 mod bandb_tests;
 pub mod callgraph;
+pub mod cfgdot;
 pub mod decompile_drive;
 pub mod graph;
 pub mod hooks;

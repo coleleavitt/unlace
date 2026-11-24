@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_340() {
-    assert_eq!(kuna_num_settables(), 340);
-    assert_eq!(SETTABLE_TABLE.len(), 340);
+fn settable_count_is_341() {
+    assert_eq!(kuna_num_settables(), 341);
+    assert_eq!(SETTABLE_TABLE.len(), 341);
 }
 
 #[test]
-fn tier_counts_are_70_core_169_transform_101_analysis() {
+fn tier_counts_are_70_core_170_transform_101_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_169_transform_101_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 169, 101));
+    assert_eq!((core, transform, analysis), (70, 170, 101));
 }
 
 #[test]
@@ -1292,7 +1292,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // +2 for `atomics` and `llscfold`.
     // +1 for `msvceh`; its P1 row follows `rtti`.
     // +1 for `phiarm`; its P6 row sits after `typemerge`.
-    assert_eq!(json.matches("},\n").count(), 333);
+    // +1 for `calleesaved`; its P6 row sits after `phiarm`.
+    assert_eq!(json.matches("},\n").count(), 334);
 }
 
 #[test]

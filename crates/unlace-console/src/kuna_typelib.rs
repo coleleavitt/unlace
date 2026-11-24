@@ -49,6 +49,7 @@ use unlace_base::types::int4;
 use unlace_decomp::architecture::Architecture;
 use unlace_decomp::dtype::{Datatype, TypeFactory, TypeField, flags, type_metatype};
 use unlace_decomp::fspec::PrototypePieces;
+use unlace_decomp::kuna_libcnames::LibraryNames;
 use unlace_decomp::kuna_typelib::TypeLib;
 
 use crate::grammar::{DataOrg, parse_protopieces, parse_type};
@@ -622,9 +623,11 @@ fn names_beyond_imports(matches: &[FidMatch]) -> Vec<(u64, String)> {
 
 /// Add the libraries' prototype for each import of `facts`, and for each function
 /// FLIRT, FID or a PDB named, that no earlier source in `merged` declared. On a
-/// Windows image a library also replaces a `win32sigs` declaration, which spells
-/// handles and records `void *`. Returns how many functions took one, and a
-/// note on the libraries `auto` chose from `UNLACE_TIL_DIR`.
+/// Windows image whose libraries were chosen (a file list, or `UNLACE_TIL_DIR`)
+/// a library also replaces a `win32sigs` declaration, which spells handles and
+/// records `void *`, keeping that entry's `libcnames` names; the built-in
+/// library alone leaves `win32sigs` as it is. Returns how many functions took
+/// one, and a note on the libraries `auto` chose from `UNLACE_TIL_DIR`.
 pub fn seed(
     arch: &Architecture,
     facts: &TypeLibFacts,
@@ -668,9 +671,10 @@ pub fn seed(
         .map(|lib| Reader::new(lib, facts.glibc, arch.types(), org))
         .collect();
     let mut prototype = |name: &str| readers.iter_mut().find_map(|r| r.prototype(name));
-    let windows = facts.target.starts_with("windows ");
+    let chosen_windows =
+        facts.target.starts_with("windows ") && sources.iter().any(|s| s.label != "auto");
     let replaceable =
-        |name: &str| windows && unlace_analysis::protos::kuna_win32sigs::declares(name);
+        |name: &str| chosen_windows && unlace_analysis::protos::kuna_win32sigs::declares(name);
     let beyond = names_beyond_imports(&merged.fid_names);
     let declared: BTreeSet<&str> = merged
         .prototypes
@@ -715,6 +719,22 @@ pub fn seed(
         .map(|(name, _)| *name)
         .collect();
     if !replaced.is_empty() {
+        let carried: BTreeMap<String, &'static LibraryNames> = merged
+            .prototypes_at
+            .iter()
+            .filter(|(_, pieces)| replaced.contains(pieces.name.as_str()))
+            .filter_map(|(_, pieces)| Some((pieces.name.clone(), pieces.kuna_library_names?)))
+            .collect();
+        let carry = |pieces: &mut PrototypePieces| {
+            if pieces.kuna_library_names.is_none()
+                && let Some(&names) = carried.get(&pieces.name)
+                && names.params.len() == pieces.intypes.len()
+            {
+                pieces.kuna_library_names = Some(names);
+            }
+        };
+        read.values_mut().flatten().for_each(&carry);
+        by_address.iter_mut().for_each(|(_, pieces)| carry(pieces));
         merged
             .prototypes
             .retain(|pieces| !replaced.contains(pieces.name.as_str()));

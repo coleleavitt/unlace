@@ -4410,17 +4410,19 @@ moves.
   out; x64 has one convention and keeps every entry. That is 7,962 functions,
   1,696 records and 2,703 typedefs for x86 and 8,111, 1,702 and 2,703 for x64,
   about 1.4 MB of text each. Every entry is offered (`*`). Every other source
-  of a prototype still declares first, with one exception: on a Windows image
-  (the built-in library or a library file) a library declaration replaces the
-  `win32sigs` entry for the same import, because that hand-written table
-  spells every handle, record pointer and callback `void *`
-  (`kuna_win32sigs::declares` names its entries; the table stays the fallback
-  for a name the library does not declare or cannot read). So
-  `CreateFileW(LPCWSTR, DWORD, DWORD,
-  LPSECURITY_ATTRIBUTES, ...)`, `ReadFile(..., LPOVERLAPPED)`,
+  of a prototype still declares first, the hand-written `win32sigs` table
+  included, so the built-in library declares the imports those leave:
+  `RegOpenKeyExA(HKEY, LPCSTR, DWORD, REGSAM, PHKEY)`,
   `NtCreateFile(..., POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, ...)`, with
-  `_SECURITY_ATTRIBUTES`, `_OVERLAPPED` and `_OBJECT_ATTRIBUTES` laid out for
-  the image's pointer width.
+  `_OBJECT_ATTRIBUTES` laid out for the image's pointer width. A library the
+  user chose (a file list, or one `UNLACE_TIL_DIR` picked) also replaces the
+  `win32sigs` entry for the same import, because that table spells every
+  handle, record pointer and callback `void *` (`kuna_win32sigs::declares`
+  names its entries; the table stays the fallback for a name the library does
+  not declare or cannot read), and the replacement keeps the entry's
+  `libcnames` parameter and result names. The built-in library alone does
+  not replace it: the table's `void *` handles are what the `libcnames`
+  names and the call-site recovery of its callers were tuned against.
 
   *Reading.* `TypeLibPass` runs at load and records only what needs the object
   file: the image's target, whether it names glibc (`libc.so.6` or a `GLIBC_`

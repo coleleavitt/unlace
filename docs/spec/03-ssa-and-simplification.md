@@ -3479,9 +3479,11 @@ invocations must also preserve the function's existing high-level state.
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_booleanmask.rs
 (RuleBoolSignShift)`, oppool1, fires on INT_SRIGHT. Pattern:
 `(b << k) s>> k` with the same non-byte-aligned `k` on both shifts (the
-byte-aligned case already belongs to `RuleLeftRight`), where the pre-shift
-value's known-nonzero mask fits entirely below the shifted-out bits — i.e. `b`
-is a boolean being smeared across the word. Rewrite: `INT_2COMP(b)` (`0 - b`,
+byte-aligned case already belongs to `RuleLeftRight`), where `k` is one less
+than the width in bits and the pre-shift value's known-nonzero mask is within bit
+0 — i.e. `b` is a boolean being smeared across the word. A wider value in the
+low bits is sign-extended from its top bit, not negated, so the rule declines
+for it (TriCore `sha d2,d4,-3` builds its count as `(c6 << 26) s>> 26`). Rewrite: `INT_2COMP(b)` (`0 - b`,
 giving 0 or all-ones), which the surrounding compare rules then clean to a
 plain boolean test. Always on.
 

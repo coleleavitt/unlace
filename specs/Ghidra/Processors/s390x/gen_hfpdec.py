@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Write the s390x hexadecimal floating point, decimal (packed and DFP) and remaining storage
-instructions as SLEIGH from hfpdec_insts.json.
+"""Write the s390x instructions gen_sinc.py's tables and gen_vector.py leave out as SLEIGH from
+hfpdec_insts.json: hexadecimal floating point, packed and decimal floating point, the
+translate and storage forms, the crypto (CPACF) instructions, the privileged and system
+instructions, and the condition-mask masks (0 and 15, or all of them for the families the
+tables lack) of the load/store/select-on-condition and compare-and-trap instructions.
 
     python3 gen_hfpdec.py --extract SZ.json   # refresh hfpdec_insts.json from an llvm-tblgen dump
     python3 gen_hfpdec.py data/languages       # write s390x_hfpdec.sinc and hfpdec_fields.txt
@@ -10,9 +13,12 @@ hfpdec_insts.json holds the LLVM SystemZ TableGen records (release/22.x; no code
 parser-only ones) whose mnemonic is in WANT below: mnemonic, operands and encoding bits (bit 0
 is the least significant bit of the instruction, as in gen_sinc.py's fields). It was extracted
 from llvm-tblgen -dump-json -I llvm/include -I llvm/lib/Target/SystemZ SystemZ.td. Exact p-code
-is written below for the HFP sign operations, the BFP forms the module lacked, TEST AND SET and
-BRANCH AND SET MODE; every other instruction is a user operation named after its mnemonic
-(hd_<mnemonic>, with hd_<mnemonic>_cc for its condition code).
+is written below for the HFP sign operations, the BFP forms the module lacked, TEST AND SET,
+BRANCH AND SET MODE, the condition-mask families (MASKED), the load-and-zero-rightmost-byte and
+load-pair-disjoint loads, the FPC loads, stores and rounding-mode sets, and the control flow of
+LOAD PSW; every other instruction is a user operation named after its mnemonic (hd_<mnemonic>,
+hd_<mnemonic>_<n> for each further output, hd_<mnemonic>_cc for its condition code) over its
+operands and the implicit registers the LLVM record names (r0/r1 for CPACF, ...).
 """
 import json
 import os
@@ -37,7 +43,27 @@ tdget tdgxt axtr axtra dxtr dxtra mxtr mxtra sxtr sxtra kxtr fixtr lxdtr ldxtr r
 cxlftr clfxtr cdlgtr czxt cpxt csxtr cuxtr ecctr
 bassm bsm cmpsc cu24 cuse didbr diebr madb maeb mdeb mdebr msdb mseb mvcin mvck mvcle mvcrl
 mvn mvpg mvz mxdb plo srstu tr trace tracg tre troo trot trt trte trto trtr trtre trtt ts
+bakr bpp bprp bsa bsg cfc cpya crdte csch csp csst diag ecag ecpga ectg epair epar epctr epsw
+ereg eregg esair esar esea etnd hsch iac idte ipk ipte irbm iske ivsk kdsa kimd klmd kmac kmc
+kmf lam lamy lasp lbear lcctl lctl lctlg lfas lfpc lgg lgsc llgfsg llzrgf lmd lpctl lpd lpp
+lpsw lpswe lpswey lptea lra lrag lray lsctl lura lurag lzrf lzrg mc msch msta mvcdk mvcos mvcp
+mvcs mvcsk niai nnpa ntstg palb pc pcc pckmo pfmf pfpo pgin pgout ppa ppno pr pt ptf ptff pti
+ptlb qctri qpaci qsi rchp rdp rp rrbe rrbm rsch sac sacf sal sam24 sam31 sam64 scctr schm sck
+sckc sckpf sfasr sie siga sigp sortl spctr spka spm spt spx srnm srnmb srnmt ssair ssar ssch
+sske ssm stam stamy stap stbear stck stckc stcke stckf stcps stcrw stctg stctl stfl stfle
+stfpc stgsc stidp stnsm stosm stpt stpx strag stsch stsi stura sturg tabort tam tar tb tbegin
+tbeginc tend tpei tpi tprot trap2 trap4 tsch upt xsch
+cfxr cksm clcl clcle clclu cspg cu12 cu14 cu21 cu41 cu42 dfltcc esta km kma kmctr kmo lcxr lexr
+lpdg lpxr ltxr mvcl mvclu
 """.split())
+# Condition-mask records (the mask is an operand) and the masks the hand-written rows of
+# gen_sinc.py leave out; each mask becomes its own constructor.
+MASKED = {"BICAsm": [0], "LOCAsm": [0, 15], "LOCGAsm": [0, 15], "LOCRAsm": [0, 15], "LOCGRAsm": [0, 15],
+          "LOCFHRAsm": [0, 15], "LOCHIAsm": [0, 15], "LOCGHIAsm": [0, 15], "LOCHHIAsm": [0, 15],
+          "SELRAsm": [0, 15], "SELGRAsm": [0, 15], "SELFHRAsm": [0, 15], "STOCAsm": [0, 15], "STOCGAsm": [0, 15],
+          "LOCFHAsm": list(range(16)), "STOCFHAsm": list(range(16)), "CLTAsm": list(range(16)), "CLGTAsm": list(range(16)),
+          "CITAsm": [0, 1, 14, 15], "CGITAsm": [0, 1, 14, 15], "CLFITAsm": [0, 1, 14, 15], "CLGITAsm": [0, 1, 14, 15],
+          "CRTAsm": [0, 1, 14, 15], "CGRTAsm": [0, 1, 14, 15], "CLRTAsm": [0, 1, 14, 15], "CLGRTAsm": [0, 1, 14, 15]}
 
 
 def mnemonic(asm):
@@ -60,11 +86,25 @@ def extract(dump):
         r = d[n]
         if r.get("Namespace") != "SystemZ" or r.get("isCodeGenOnly") or r.get("isPseudo") or r.get("isAsmParserOnly"):
             continue
-        if not r.get("Inst") or mnemonic(r["AsmString"]) not in WANT:
+        if not r.get("Inst"):
+            continue
+        if n not in MASKED and (mnemonic(r["AsmString"]) not in WANT or re.search(r"Asm[A-Z]*$", n)):
             continue
         bits = [0 if b is None else b if isinstance(b, int) else [b["var"], b["index"]] for b in r["Inst"]]
-        out.append({"name": n, "asm": r["AsmString"], "outs": ops(r["OutOperandList"]), "ins": ops(r["InOperandList"]),
-                    "bits": bits, "defs": [x["def"] for x in r.get("Defs", [])], "constraints": r.get("Constraints", "")})
+        rec = {"name": n, "asm": r["AsmString"], "outs": ops(r["OutOperandList"]), "ins": ops(r["InOperandList"]),
+               "bits": bits, "defs": [x["def"] for x in r.get("Defs", [])], "uses": [x["def"] for x in r.get("Uses", [])],
+               "constraints": r.get("Constraints", "")}
+        if n in MASKED:
+            # the extended mnemonic of each mask, from the records that fix it (LOCFHAsmE, ...)
+            mv = [v for t, v in rec["ins"] if t == "imm32zx4" and v.startswith("M")][0]
+            pos = {b[1]: p for p, b in enumerate(bits) if isinstance(b, list) and b[0] == mv}
+            rec["ext"] = {}
+            for e in d["!instanceof"]["Instruction"]:
+                if re.fullmatch(re.escape(n) + r"[A-Z]+", e) and d[e].get("Inst"):
+                    ib = d[e]["Inst"]
+                    m = sum((ib[pos[k]] if isinstance(ib[pos[k]], int) else 0) << k for k in range(4))
+                    rec["ext"].setdefault(str(m), []).append(mnemonic(d[e]["AsmString"]))
+        out.append(rec)
     out.sort(key=lambda x: x["name"])
     json.dump(out, open(os.path.join(HERE, "hfpdec_insts.json"), "w"), indent=0)
 
@@ -94,7 +134,11 @@ INSTS += [
 TOK = {16: "a", 32: "b", 48: "c"}
 REGS = {"r": [f"r{i}" for i in range(16)], "rl": [f"r{i}l" for i in range(16)], "rp": [f"r{i | 1}" for i in range(16)],
         "f": [f"f{i}" for i in range(16)], "fs": [f"f{i}s" for i in range(16)],
-        "fq": [f"f{i + 2 if i % 4 < 2 else i}" for i in range(16)]}
+        "fq": [f"f{i + 2 if i % 4 < 2 else i}" for i in range(16)], "rh": [f"r{i}h" for i in range(16)],
+        "a": [f"a{i}" for i in range(16)], "c": [f"c{i}" for i in range(16)]}
+# implicit register operands of the LLVM records
+IMPL = {"R0L": "r0l", "R0D": "r0", "R1L": "r1l", "R1D": "r1", "R2L": "r2l", "R2D": "r2", "R3D": "r3",
+        "R4D": "r4", "R5D": "r5", "FPC": "fpc", "F0Q": "f0", "F4Q": "f4"}
 fields, attach, subs, pcodeops, cons = {}, {}, {}, set(), []
 
 
@@ -165,7 +209,7 @@ def addr(t, vbs, kind):
     return name, extra
 
 
-KIND = {"GR64": "r", "ADDR64": "r", "GR32": "rl", "FP64": "f", "FP32": "fs", "FP128": "f", "GR128": "r"}
+KIND = {"GRH32": "rh", "AR32": "a", "CR64": "c", "GR64": "r", "ADDR64": "r", "GR32": "rl", "FP64": "f", "FP32": "fs", "FP128": "f", "GR128": "r"}
 
 
 def operands(ins):
@@ -208,6 +252,12 @@ def operands(ins):
             pat.append(n)
             if pair:
                 pat.append(pair)
+        elif ty.startswith("brtarget"):
+            f = fld(t, lo, hi, True)
+            n = f"REL_{f}"
+            subs[n] = f"{n}: reloc is {f} [ reloc = inst_start + 2 * {f}; ] {{ export *[const]:8 reloc; }}\n"
+            sym[v] = (n, None, "rel")
+            pat.append(n)
         elif ty.startswith("imm"):
             n = fld(t, lo, hi, "sx" in ty)
             sym[v] = (n, None, "imm")
@@ -276,6 +326,34 @@ def sem(ins, mn, sym):
         hi, lo = sym["R1"][0], sym["R1"][1]
         return (f"local m:8 = *:8 {mem[0][0]}; local x:16 = float2float({hi}); local y:16 = float2float(m); "
                 f"local res:16 = x f* y; {hi} = res(8); {lo} = res:8;")
+    if mn == "lzrg":
+        return f"local v:8 = *:8 {mem[0][0]}; {S('R1')} = v & 0xffffffffffffff00;"
+    if mn == "lzrf":
+        return f"local v:4 = *:4 {mem[0][0]}; {S('R1')} = v & 0xffffff00;"
+    if mn == "llzrgf":
+        return f"local v:4 = *:4 {mem[0][0]}; {S('R1')} = zext(v & 0xffffff00);"
+    if mn in ("lpd", "lpdg"):
+        w = 4 if mn == "lpd" else 8
+        ev, od = sym["R3"][0], sym["R3"][1]
+        lo = "" if w == 8 else "l"
+        return (f"local a:{w} = *:{w} {mem[0][0]}; local b:{w} = *:{w} {mem[1][0]}; "
+                f"{ev}{'' if w == 8 else ''} = {'a' if w == 8 else 'zext(a) | (' + ev + ' & 0xffffffff00000000)'}; "
+                f"{od} = {'b' if w == 8 else 'zext(b) | (' + od + ' & 0xffffffff00000000)'}; "
+                "CC0 = 1; CC1 = 0; CC2 = 0; CC3 = 0; ccAux();")
+    if mn in ("lpsw", "lpswe", "lpswey"):
+        # the new PSW's instruction address: bits 33-63 of an ESA/390 PSW, 64-127 of a z PSW
+        a = mem[0][0]
+        pcodeops.add("hd_" + mn)
+        nxt = f"local na:4 = *:4 ({a} + 4); local tg:8 = zext(na & 0x7fffffff);" if mn == "lpsw" else f"local tg:8 = *:8 ({a} + 8);"
+        return f"{nxt} hd_{mn}({a}); return [tg];"
+    if mn == "lfpc":
+        return f"fpc = *:4 {mem[0][0]};"
+    if mn == "stfpc":
+        return f"*:4 {mem[0][0]} = fpc;"
+    if mn in ("srnm", "srnmb", "srnmt"):
+        a = mem[0][0]
+        m, sh = {"srnm": (3, 0), "srnmb": (7, 0), "srnmt": (7, 4)}[mn]
+        return f"local v:4 = {a}:4; fpc = (fpc & ~0x{m << sh:x}) | ((v & {m}) << {sh});"
     if mn == "ts":
         a = mem[0][0]
         return f"local v:1 = *:1 {a}; *:1 {a} = 0xff; CC0 = (v & 0x80) == 0; CC1 = (v & 0x80) != 0; CC2 = 0; CC3 = 0; ccAux();"
@@ -300,6 +378,7 @@ def userop(ins, mn, sym, tied):
             args.append(s)
             if extra:
                 args.append(extra)
+    args += [IMPL[u] for u in ins.get("uses", []) if u in IMPL]
     pre = []
     for a in list(args):
         if a.startswith("imm_"):
@@ -311,21 +390,26 @@ def userop(ins, mn, sym, tied):
     outs = []
     for ty, v in ins["outs"]:
         s, extra, k = sym[v]
-        w = 4 if ty in ("GR32", "FP32") else 8
+        w = 4 if ty in ("GR32", "FP32", "AR32", "GRH32") else 8
         outs.append((s, w))
         if extra:
             outs.append((extra, w))
+    for d in ins["defs"]:
+        if d in IMPL:
+            outs.append((IMPL[d], 4 if d[-1] == "L" or d == "FPC" else 8))
     for i, (o, w) in enumerate(outs):
         nm = op if i == 0 else f"{op}_{i}"
         pcodeops.add(nm)
         body.append(f"local o{i}:{w} = {nm}({', '.join(args)});")
-    body += [f"{o} = o{i};" for i, (o, w) in enumerate(outs)]
     if not outs:
         pcodeops.add(op)
         body.append(f"{op}({', '.join(args)});")
     if "CC" in ins["defs"]:
         pcodeops.add(op + "_cc")
-        body.append(f"local cc:1 = {op}_cc({', '.join(args)}); ccFrom(cc);")
+        body.append(f"local cc:1 = {op}_cc({', '.join(args)});")
+    body += [f"{o} = o{i};" for i, (o, w) in enumerate(outs)]
+    if "CC" in ins["defs"]:
+        body.append("ccFrom(cc);")
     return " ".join(body)
 
 
@@ -350,11 +434,94 @@ def branch_mode(ins, mn, sym, t):
         out.append((f"bassm {r1},0", f"{head} & {r1} & {z2}=0", f"{r1} = inst_next | 1;"))
     return out
 
+CONDSFX = {1: "o", 2: "h", 3: "nle", 4: "l", 5: "nhe", 6: "lh", 7: "ne", 8: "e", 9: "nlh", 10: "he",
+           11: "nl", 12: "le", 13: "nh", 14: "no"}
+TRAPSFX = {2: "h", 4: "l", 6: "lh", 8: "e", 10: "he", 12: "le"}
+
+
+def cc_mask(m):
+    terms = [f for bit, f in ((8, "CC0"), (4, "CC1"), (2, "CC2"), (1, "CC3")) if m & bit]
+    return "1" if m == 15 else "0" if not terms else " || ".join(terms)
+
+
+def trap_mask(m, x, y, signed):
+    lt, gt = ("s<", "s>") if signed else ("<", ">")
+    terms = [e for bit, e in ((8, f"{x} == {y}"), (4, f"{x} {lt} {y}"), (2, f"{x} {gt} {y}")) if m & bit]
+    return " || ".join(f"({e})" for e in terms) if terms else "0"
+
+
+def masked(ins, sym, t):
+    """One constructor per mask of a condition-mask record, with exact p-code."""
+    name = ins["name"]
+    mv = [v for ty, v in ins["ins"] if ty == "imm32zx4" and v.startswith("M")][0]
+    mf = sym[mv][0]
+    base = [p for p in operands(ins)[2] if p != mf]
+    mem = [sym[k][0] for k in sym if isinstance(k, tuple)]
+    mref = "$" + mv
+
+    def S(v):
+        return sym[v][0]
+    out = []
+    for m in MASKED[name]:
+        names = sorted(ins["ext"].get(str(m), []))
+        base_mn = mnemonic(ins["asm"])
+        want = (TRAPSFX if "T" in name[1:5] and name.startswith("C") else CONDSFX).get(m)
+        mn = next((x for x in names if x == base_mn + (want or "")), names[0] if names else None)
+        s = ins["asm"].replace("{\t| }", " ").replace("{, |,}", ",")
+        if mn:
+            s = mn + re.sub(r"^\S+", "", s).replace("," + mref, "").replace(mref + ",", "")
+        s = s.replace(mref, str(m))
+        for k, x in sym.items():
+            if isinstance(k, tuple):
+                for pre in ("XBD", "BDL", "BDR", "RBD", "BD"):
+                    s = s.replace("$" + pre + k[0][-1], x[0])
+        s = re.sub(r"\$(\w+)", lambda q: sym[q.group(1)][0] if q.group(1) in sym else q.group(1), s)
+        c = cc_mask(m)
+        fam = re.sub(r"Asm$", "", name)
+        if fam == "BIC":
+            b = ""
+        elif fam in ("LOC", "LOCG", "LOCFH"):
+            w = 8 if fam == "LOCG" else 4
+            b = f"if (!({c})) goto inst_next; {S('R1')} = *:{w} {mem[0]};"
+        elif fam in ("STOC", "STOCG", "STOCFH"):
+            w = 8 if fam == "STOCG" else 4
+            b = f"if (!({c})) goto inst_next; *:{w} {mem[0]} = {S('R1')};"
+        elif fam in ("LOCR", "LOCGR", "LOCFHR"):
+            b = f"if (!({c})) goto inst_next; {S('R1')} = {S('R2')};"
+        elif fam in ("LOCHI", "LOCGHI", "LOCHHI"):
+            w = 8 if fam == "LOCGHI" else 4
+            b = f"if (!({c})) goto inst_next; local v:{w} = {S('I2')}; {S('R1')} = v;"
+        elif fam in ("SELR", "SELGR", "SELFHR"):
+            b = f"local res:{8 if fam == 'SELGR' else 4} = {S('R3')}; if (!({c})) goto <done>; res = {S('R2')}; <done> {S('R1')} = res;"
+        else:
+            sg = fam in ("CIT", "CGIT", "CRT", "CGRT")
+            w = 8 if fam in ("CGIT", "CLGIT", "CGRT", "CLGRT", "CLGT") else 4
+            if fam in ("CLT", "CLGT"):
+                y = f"*:{w} {mem[0]}"
+            elif fam.endswith("RT"):
+                y = S("R2")
+            else:
+                y = S("I2")
+            b = f"local x:{w} = {S('R1')}; local y:{w} = {y}; if (!({trap_mask(m, 'x', 'y', sg)})) goto inst_next; trap();"
+        b = re.sub(r"if \(!\(1\)\) goto inst_next; ", "", b)
+        b = re.sub(r"if \(!\(1\)\) goto <done>; ", "", b)
+        b = re.sub(r"if \(!\(0\)\) goto <done>; res = [^;]*; ", "", b)
+        if "goto <done>" not in b:
+            b = b.replace("<done> ", "")
+        if "if (!(0)) goto inst_next;" in b:
+            b = ""
+        out.append((s, " & ".join(base + [f"{mf}={m}"]), b))
+    return out
+
 
 seen = set()
 for ins in INSTS:
     mn = mnemonic(ins["asm"])
     t, sym, pat, tied = operands(ins)
+    if ins["name"] in MASKED:
+        for d, p, b in masked(ins, sym, t):
+            cons.append(f":{d} is {p} {{ {b} }}")
+        continue
     if mn in ("bsm", "bassm"):
         for d, p, b in branch_mode(ins, mn, sym, t):
             cons.append(f":{d} is {p} {{ {b} }}")
@@ -369,6 +536,7 @@ for ins in INSTS:
 lines = [NOTE.rstrip(),
          "# Hexadecimal floating point, packed decimal, decimal floating point and the remaining",
          "# storage-to-storage, translate and mode-setting instructions.", "",
+         "define register offset=0x2000 size=8 [ " + " ".join(REGS["c"]) + " ];", "",
          "macro ccFrom(cc) { CC0 = (cc == 0); CC1 = (cc == 1); CC2 = (cc == 2); CC3 = (cc == 3); ccAux(); }", ""]
 for kind, fl in sorted(attach.items()):
     lines.append(f"attach variables [ {' '.join(sorted(fl))} ] [ {' '.join(REGS[kind])} ];")

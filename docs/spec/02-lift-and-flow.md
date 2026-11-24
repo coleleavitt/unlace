@@ -5896,6 +5896,18 @@ with bit 63 cleared; bit 63 of R1 is set). Every other instruction is a user ope
 implements neither HFP nor `bsm`/`bassm`, so those lifts are checked against the
 architecture's definition only.
 
+The same generator now also covers the CPACF crypto instructions, the privileged and system
+instructions (with the control registers `c0`-`c15`), transactional execution, guarded
+storage, access-register moves and the remaining storage forms, so every instruction of LLVM's
+SystemZ target decodes. Their user operations take the implicit registers of the LLVM record
+(`r0l` and `r1` for CPACF) and write every output register, the condition code included.
+`lpsw`/`lpswe`/`lpswey` return to the new PSW's instruction address. Exact p-code for `lzrg`,
+`lzrf`, `llzrgf`, `lpd`, `lpdg`, `lfpc`, `stfpc` and `srnm`/`srnmb`/`srnmt`, and for the
+condition masks the hand-written rows lacked (0 and 15 of load/store/select on condition, 0, 1,
+14 and 15 of compare and trap, every mask of `locfh`, `stocfh`, `clt` and `clgt`), each its own
+constructor; mask 0 has no effect and mask 15 is unconditional. Checked against QEMU (`--oracle
+qemu`, every mask of those records plus the exact loads): no mismatch.
+
 ### s390x vector facility (#98)
 
 `specs/Ghidra/Processors/s390x/gen_vector.py` writes `s390x_vector.sinc` from

@@ -2354,7 +2354,8 @@ mod tests {
         // and rawswitch / an x86-64 table matched from its cmp/ja/lea/movslq/jmp instructions (option rawswitch)
         // and spphistack-mips + spphistack-aarch64 + spphistack-hexagon + spphistack-or1k / a va_list
         // walk from the incoming stack pointer is a stack-address local (option spphistack)
-        assert_eq!(count, 1022, "corpus file count drifted");
+        // and vastart-callindirect / a va_start prologue whose field writes moved into call INDIRECTs
+        assert_eq!(count, 1023, "corpus file count drifted");
     }
 
     /// ~20 representative SLEIGH spec files across varied processors

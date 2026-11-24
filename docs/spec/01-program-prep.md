@@ -362,9 +362,11 @@ its machine is read from the ELF header
 `EM_ARC_COMPACT2` (195, ARC EM and HS) selects `ARC:LE:32:ARCv2` or
 `ARC:BE:32:ARCv2` by the image's byte order (§2). `EM_ARC_COMPACT` (93,
 ARC600/ARC700) is not mapped: its 16-bit encodings differ and it has no
-language yet, so it still needs an explicit `--target`. A relocatable ARC
-object loads, but its relocation types are not applied; a call to an undefined
-symbol keeps the unrelocated displacement.
+language yet, so it still needs an explicit `--target`. A relocatable ARCv2
+object's `bl`/`b` (`S25W_PCREL`/`S25H_PCREL` and their `_PLT` spellings, the
+displacement from `P & !3`), middle-endian long immediates (`32_ME`) and data
+words (`32`, `PC32`) are applied (`reloc_apply.rs (classify_arc)`); the
+small-data forms against `_SDA_BASE_` and the GOT forms are not.
 
 (kuna, unlace#680) A WebAssembly relocatable object (`.o`) has no `name`
 section; its function and global names come from the `WASM_SYMBOL_TABLE`

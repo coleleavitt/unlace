@@ -3879,6 +3879,19 @@ stale earlier compare; a constant pointer is left to `RuleLoadVarnode`, which
 also resolves the spacebase-placeholder tail that a bare COPY would drop; a
 free pointer is declined. Always on (DIV-158).
 
+**boxedcompare** —
+`crates/unlace-bandb-base/src/p3_dataflow/kuna_boxedcompare.rs
+(RuleBoxedCompare)`, oppool1, fires on `INT_EQUAL`/`INT_NOTEQUAL`. *Pattern:* one operand is
+the all-ones constant of its size, and every bit of the other is known to be 1. This is the
+NaN-unboxing test of a RISC-V single- or half-precision register read, `SUB84(f >> 32, 0) ==
+0xffffffff`, after a boxed write (`0xffffffff00000000 | zext(x)`), a boxed constant, or a loop join
+of such values. The proof is a bounded walk (64 definitions) that keeps the bits known to be 1
+through constants, `COPY`, `INT_ZEXT`, `INT_OR`, `INT_AND`, shifts by a constant, `PIECE`,
+`SUBPIECE` and `MULTIEQUAL` (every input must agree). An input, any other definition or an
+exhausted budget proves nothing, so a function's own parameters stay unproven. *Rewrite:* the
+compare becomes a `COPY` of true (`==`) or false (`!=`), and the canonical-NaN branch of the
+unboxing dies. Exact, so always on.
+
 **x87truncate** —
 `crates/unlace-bandb-base/src/p3_dataflow/kuna_x87truncate.rs
 (RuleX87Truncate)`, oppool1, fires on CALLOTHER. *Pattern:* one of the x87

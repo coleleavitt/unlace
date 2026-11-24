@@ -1,0 +1,58 @@
+# A function that ends in TerminateProcess(GetCurrentProcess(), code) never
+# returns (noreturn_propagate, unlace#837).
+#
+# The CRT's __invoke_watson and __report_gsfailure end that way, and IDA names
+# them no-return; TerminateProcess itself returns for another process, so it
+# is not on the Known list. The script loads terminatecurrent_i686.exe (mingw
+# -O2, stripped, source terminatecurrent.c beside it): sub_4014b0 stores
+# 0xc000000d and the GetCurrentProcess() result as the arguments of
+# call [TerminateProcess] and then calls OutputDebugStringA and returns;
+# sub_401510 calls it when its argument is negative.
+#
+# Pass 1 (Listing on): the call through the TerminateProcess slot with the
+# current process ends its path, the ret behind it is unreachable, so
+# sub_4014b0 is concluded no-return and its call in sub_401510 prints
+# // no-return. Pass 2 (option noreturn_propagate off) keeps the call
+# returning. Stage: P1 no-return propagation.
+
+[image]
+arch = 'x86:LE:64:default:gcc'
+symbols = [
+    { space = 'ram', offset = '0x100000', name = 'harness_stub' },
+]
+
+[[image.bytes]]
+space = 'ram'
+offset = '0x100000'
+readonly = true
+hex = 'c3'
+
+[script]
+commands = [
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/terminatecurrent_i686.exe',
+    'option listing on',
+    'read symbols',
+    'load function sub_401510',
+    'decompile',
+    'print C',
+    'clear architecture',
+    'load file crates/unlace-analysis/tests/fixtures/terminatecurrent_i686.exe',
+    'option listing on',
+    'option noreturn_propagate off',
+    'read symbols',
+    'load function sub_401510',
+    'decompile',
+    'print C',
+    'quit',
+]
+
+[[match]]
+name = 'TERMINATECURRENT #1: the TerminateProcess(GetCurrentProcess()) wrapper is no-return'
+count = 1
+regex = 'sub_4014b0\(\); // no-return'
+
+[[match]]
+name = 'TERMINATECURRENT #2: both passes call the wrapper'
+min = 2
+regex = 'sub_4014b0\('

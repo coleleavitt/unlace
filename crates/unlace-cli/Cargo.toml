@@ -43,6 +43,7 @@ dynamic_linking = ["dep:unlace-decomp-dylib", "unlace-console/dynamic_linking"]
 flirt-sig.workspace = true
 object = { workspace = true, features = ["write"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+toml = { version = "1.1", default-features = false, features = ["parse", "serde", "std"] }
 
 [build-dependencies]
 unlace-slacomp.workspace = true

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<language_definitions>
+  <language processor="MMIX"
+    endian="big"
+    size="64"
+    variant="default"
+    version="1.0"
+    slafile="mmix.sla"
+    processorspec="mmix.pspec"
+    id="MMIX:BE:64:default">
+    <description>Knuth MMIX</description>
+    <compiler name="default" spec="mmix.cspec" id="default"/>
+    <external_name tool="gnu" name="mmix"/>
+  </language>
+</language_definitions>

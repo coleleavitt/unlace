@@ -19,6 +19,7 @@ pub mod kuna_constspaceload;
 pub mod kuna_copyrun;
 pub mod kuna_deadcascade;
 pub mod kuna_devectorize;
+pub mod kuna_egraph; // (kuna `egraph`) equality saturation over MBA trees
 pub mod kuna_flagcompare;
 pub mod kuna_floatnegation;
 pub mod kuna_floatnegpiece;

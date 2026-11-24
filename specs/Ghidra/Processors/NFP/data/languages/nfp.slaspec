@@ -1,0 +1,1030 @@
+# Netronome NFP-6xxx flow processor microengine (ME version 2.8), 8-context mode.
+# Written for unlace from the GNU binutils NFP disassembler (opcodes/nfp-dis.c and
+# include/opcode/nfp.h, binutils 2.45), read for field layouts only; no text is copied.
+# An instruction is one little-endian 64-bit word (44 bits used); the program counter
+# counts instructions, so a branch target n is byte address 8 * n. Operands name
+# context-relative GPRs (banks A and B), transfer registers ($xfer: separate read and
+# write files), next-neighbour registers, local memory through the LM_ADDR indices, or
+# 8-bit immediates.
+
+define endian=little;
+define alignment=8;
+
+define space ram      type=ram_space      size=4 default;
+define space lmem     type=ram_space      size=4;
+define space register type=register_space size=4;
+
+define register offset=0x0000 size=4 [ a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 ];
+define register offset=0x0040 size=4 [ b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 ];
+define register offset=0x0080 size=4 [ xfer_r0 xfer_r1 xfer_r2 xfer_r3 xfer_r4 xfer_r5 xfer_r6 xfer_r7 xfer_r8 xfer_r9 xfer_r10 xfer_r11 xfer_r12 xfer_r13 xfer_r14 xfer_r15 xfer_r16 xfer_r17 xfer_r18 xfer_r19 xfer_r20 xfer_r21 xfer_r22 xfer_r23 xfer_r24 xfer_r25 xfer_r26 xfer_r27 xfer_r28 xfer_r29 xfer_r30 xfer_r31 ];
+define register offset=0x0100 size=4 [ xfer_w0 xfer_w1 xfer_w2 xfer_w3 xfer_w4 xfer_w5 xfer_w6 xfer_w7 xfer_w8 xfer_w9 xfer_w10 xfer_w11 xfer_w12 xfer_w13 xfer_w14 xfer_w15 xfer_w16 xfer_w17 xfer_w18 xfer_w19 xfer_w20 xfer_w21 xfer_w22 xfer_w23 xfer_w24 xfer_w25 xfer_w26 xfer_w27 xfer_w28 xfer_w29 xfer_w30 xfer_w31 ];
+define register offset=0x0180 size=4 [ nn_r0 nn_r1 nn_r2 nn_r3 nn_r4 nn_r5 nn_r6 nn_r7 nn_r8 nn_r9 nn_r10 nn_r11 nn_r12 nn_r13 nn_r14 nn_r15 ];
+define register offset=0x01c0 size=4 [ nn_w0 nn_w1 nn_w2 nn_w3 nn_w4 nn_w5 nn_w6 nn_w7 nn_w8 nn_w9 nn_w10 nn_w11 nn_w12 nn_w13 nn_w14 nn_w15 ];
+define register offset=0x0200 size=4 [ abs_a0 abs_a1 abs_a2 abs_a3 abs_a4 abs_a5 abs_a6 abs_a7 abs_a8 abs_a9 abs_a10 abs_a11 abs_a12 abs_a13 abs_a14 abs_a15 abs_a16 abs_a17 abs_a18 abs_a19 abs_a20 abs_a21 abs_a22 abs_a23 abs_a24 abs_a25 abs_a26 abs_a27 abs_a28 abs_a29 abs_a30 abs_a31 abs_a32 abs_a33 abs_a34 abs_a35 abs_a36 abs_a37 abs_a38 abs_a39 abs_a40 abs_a41 abs_a42 abs_a43 abs_a44 abs_a45 abs_a46 abs_a47 abs_a48 abs_a49 abs_a50 abs_a51 abs_a52 abs_a53 abs_a54 abs_a55 abs_a56 abs_a57 abs_a58 abs_a59 abs_a60 abs_a61 abs_a62 abs_a63 abs_a64 abs_a65 abs_a66 abs_a67 abs_a68 abs_a69 abs_a70 abs_a71 abs_a72 abs_a73 abs_a74 abs_a75 abs_a76 abs_a77 abs_a78 abs_a79 abs_a80 abs_a81 abs_a82 abs_a83 abs_a84 abs_a85 abs_a86 abs_a87 abs_a88 abs_a89 abs_a90 abs_a91 abs_a92 abs_a93 abs_a94 abs_a95 abs_a96 abs_a97 abs_a98 abs_a99 abs_a100 abs_a101 abs_a102 abs_a103 abs_a104 abs_a105 abs_a106 abs_a107 abs_a108 abs_a109 abs_a110 abs_a111 abs_a112 abs_a113 abs_a114 abs_a115 abs_a116 abs_a117 abs_a118 abs_a119 abs_a120 abs_a121 abs_a122 abs_a123 abs_a124 abs_a125 abs_a126 abs_a127 ];
+define register offset=0x0400 size=4 [ abs_b0 abs_b1 abs_b2 abs_b3 abs_b4 abs_b5 abs_b6 abs_b7 abs_b8 abs_b9 abs_b10 abs_b11 abs_b12 abs_b13 abs_b14 abs_b15 abs_b16 abs_b17 abs_b18 abs_b19 abs_b20 abs_b21 abs_b22 abs_b23 abs_b24 abs_b25 abs_b26 abs_b27 abs_b28 abs_b29 abs_b30 abs_b31 abs_b32 abs_b33 abs_b34 abs_b35 abs_b36 abs_b37 abs_b38 abs_b39 abs_b40 abs_b41 abs_b42 abs_b43 abs_b44 abs_b45 abs_b46 abs_b47 abs_b48 abs_b49 abs_b50 abs_b51 abs_b52 abs_b53 abs_b54 abs_b55 abs_b56 abs_b57 abs_b58 abs_b59 abs_b60 abs_b61 abs_b62 abs_b63 abs_b64 abs_b65 abs_b66 abs_b67 abs_b68 abs_b69 abs_b70 abs_b71 abs_b72 abs_b73 abs_b74 abs_b75 abs_b76 abs_b77 abs_b78 abs_b79 abs_b80 abs_b81 abs_b82 abs_b83 abs_b84 abs_b85 abs_b86 abs_b87 abs_b88 abs_b89 abs_b90 abs_b91 abs_b92 abs_b93 abs_b94 abs_b95 abs_b96 abs_b97 abs_b98 abs_b99 abs_b100 abs_b101 abs_b102 abs_b103 abs_b104 abs_b105 abs_b106 abs_b107 abs_b108 abs_b109 abs_b110 abs_b111 abs_b112 abs_b113 abs_b114 abs_b115 abs_b116 abs_b117 abs_b118 abs_b119 abs_b120 abs_b121 abs_b122 abs_b123 abs_b124 abs_b125 abs_b126 abs_b127 ];
+define register offset=0x0600 size=4 [ LM_ADDR0 LM_ADDR1 LM_ADDR2 LM_ADDR3 T_INDEX NN_INDEX PC LCSR_DATA NODEST SP ];
+define register offset=0x0700 size=1 [ NF ZF CF VF ];
+
+define token instr(64)
+  o0_hi4 = (6,9)
+  o0_hi3 = (7,9)
+  o0_hi2 = (8,9)
+  o0_lo4 = (0,3)
+  o0_lo7 = (0,6)
+  o0_lo8 = (0,7)
+  o0_b6 = (6,6)
+  o0_b5 = (5,5)
+  o0_b4 = (4,4)
+  o0_b0 = (0,0)
+  o0_b3 = (3,3)
+  o0_lo3 = (0,2)
+  o0_hi8_2 = (6,7)
+  o0_lo5 = (0,4)
+  o0_f8_5 = (5,7)
+  o0_f8_4 = (4,7)
+  ga0 = (0,3)
+  gaa0 = (0,6)
+  gb0 = (0,3)
+  gab0 = (0,6)
+  xr0 = (0,3)
+  xrh0 = (0,3)
+  xw0 = (0,3)
+  xwh0 = (0,3)
+  nn0 = (0,3)
+  nnw0 = (0,3)
+  o10_hi4 = (16,19)
+  o10_hi3 = (17,19)
+  o10_hi2 = (18,19)
+  o10_lo4 = (10,13)
+  o10_lo7 = (10,16)
+  o10_lo8 = (10,17)
+  o10_b6 = (16,16)
+  o10_b5 = (15,15)
+  o10_b4 = (14,14)
+  o10_b0 = (10,10)
+  o10_b3 = (13,13)
+  o10_lo3 = (10,12)
+  o10_hi8_2 = (16,17)
+  o10_lo5 = (10,14)
+  o10_f8_5 = (15,17)
+  o10_f8_4 = (14,17)
+  ga10 = (10,13)
+  gaa10 = (10,16)
+  gb10 = (10,13)
+  gab10 = (10,16)
+  xr10 = (10,13)
+  xrh10 = (10,13)
+  xw10 = (10,13)
+  xwh10 = (10,13)
+  nn10 = (10,13)
+  nnw10 = (10,13)
+  o20_hi4 = (26,29)
+  o20_hi3 = (27,29)
+  o20_hi2 = (28,29)
+  o20_lo4 = (20,23)
+  o20_lo7 = (20,26)
+  o20_lo8 = (20,27)
+  o20_b6 = (26,26)
+  o20_b5 = (25,25)
+  o20_b4 = (24,24)
+  o20_b0 = (20,20)
+  o20_b3 = (23,23)
+  o20_lo3 = (20,22)
+  o20_hi8_2 = (26,27)
+  o20_lo5 = (20,24)
+  o20_f8_5 = (25,27)
+  o20_f8_4 = (24,27)
+  ga20 = (20,23)
+  gaa20 = (20,26)
+  gb20 = (20,23)
+  gab20 = (20,26)
+  xr20 = (20,23)
+  xrh20 = (20,23)
+  xw20 = (20,23)
+  xwh20 = (20,23)
+  nn20 = (20,23)
+  nnw20 = (20,23)
+  swap10 = (30,30)
+  swap8 = (19,19)
+  immmsb = (18,18)
+  dbank = (36,36)
+  nocc = (40,40)
+  wrboth = (41,41)
+  slmext = (42,42)
+  dlmext = (43,43)
+  predcc = (44,44)
+  cls5 = (35,39)
+  cls3 = (37,39)
+  cls4 = (36,39)
+  cls7 = (33,39)
+  b39 = (39,39)
+  aluop = (31,35)
+  shfop = (33,35)
+  shift = (28,32)
+  shz = (28,32)
+  bsz = (33,34)
+  evz = (0,15)
+  sc = (8,9)
+  imm8hi = (20,27)
+  by = (29,29)
+  wd = (30,30)
+  inv = (31,31)
+  bshift = (33,34)
+  b32 = (32,32)
+  b35 = (35,35)
+  b40 = (40,40)
+  brop = (0,4)
+  f5_7 = (5,7)
+  f10_13 = (10,13)
+  f18_19 = (18,19)
+  defer = (20,21)
+  tlo = (22,34)
+  thi = (40,40)
+  ctxsig = (14,17)
+  beq = (19,19)
+  bybyte = (8,9)
+  f8_9 = (8,9)
+  bbit = (18,18)
+  brimm = (22,30)
+  f31 = (31,31)
+  csrnum = (22,32)
+  csrwr = (21,21)
+  b20 = (20,20)
+  b33 = (33,33)
+  f21_23 = (21,23)
+  ldcc = (34,34)
+  bmask = (24,27)
+  zerof = (20,20)
+  evmask = (0,15)
+  sigor = (16,16)
+  bpt = (17,17)
+  resume = (18,18)
+  noload = (19,19)
+  csrA = (0,9)
+  csrB = (10,19)
+  cmd_tgt = (32,38)
+  cmd_mode = (42,44)
+  cmz = (42,44)
+  cmd_sig = (28,31)
+  cmd_len = (25,27)
+  cmd_xfer = (20,24)
+  cmd_ctxsw = (8,9)
+  cmd_a = (0,7)
+  cmd_b = (10,17)
+  cmd_tok = (18,19)
+  cmd_ind = (41,41)
+  f24_29 = (24,29)
+  mstep = (30,32)
+  mtype = (33,34)
+;
+
+attach variables [ ga0 ] [ a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 ];
+attach variables [ gb0 ] [ b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 ];
+attach variables [ gaa0 ] [ abs_a0 abs_a1 abs_a2 abs_a3 abs_a4 abs_a5 abs_a6 abs_a7 abs_a8 abs_a9 abs_a10 abs_a11 abs_a12 abs_a13 abs_a14 abs_a15 abs_a16 abs_a17 abs_a18 abs_a19 abs_a20 abs_a21 abs_a22 abs_a23 abs_a24 abs_a25 abs_a26 abs_a27 abs_a28 abs_a29 abs_a30 abs_a31 abs_a32 abs_a33 abs_a34 abs_a35 abs_a36 abs_a37 abs_a38 abs_a39 abs_a40 abs_a41 abs_a42 abs_a43 abs_a44 abs_a45 abs_a46 abs_a47 abs_a48 abs_a49 abs_a50 abs_a51 abs_a52 abs_a53 abs_a54 abs_a55 abs_a56 abs_a57 abs_a58 abs_a59 abs_a60 abs_a61 abs_a62 abs_a63 abs_a64 abs_a65 abs_a66 abs_a67 abs_a68 abs_a69 abs_a70 abs_a71 abs_a72 abs_a73 abs_a74 abs_a75 abs_a76 abs_a77 abs_a78 abs_a79 abs_a80 abs_a81 abs_a82 abs_a83 abs_a84 abs_a85 abs_a86 abs_a87 abs_a88 abs_a89 abs_a90 abs_a91 abs_a92 abs_a93 abs_a94 abs_a95 abs_a96 abs_a97 abs_a98 abs_a99 abs_a100 abs_a101 abs_a102 abs_a103 abs_a104 abs_a105 abs_a106 abs_a107 abs_a108 abs_a109 abs_a110 abs_a111 abs_a112 abs_a113 abs_a114 abs_a115 abs_a116 abs_a117 abs_a118 abs_a119 abs_a120 abs_a121 abs_a122 abs_a123 abs_a124 abs_a125 abs_a126 abs_a127 ];
+attach variables [ gab0 ] [ abs_b0 abs_b1 abs_b2 abs_b3 abs_b4 abs_b5 abs_b6 abs_b7 abs_b8 abs_b9 abs_b10 abs_b11 abs_b12 abs_b13 abs_b14 abs_b15 abs_b16 abs_b17 abs_b18 abs_b19 abs_b20 abs_b21 abs_b22 abs_b23 abs_b24 abs_b25 abs_b26 abs_b27 abs_b28 abs_b29 abs_b30 abs_b31 abs_b32 abs_b33 abs_b34 abs_b35 abs_b36 abs_b37 abs_b38 abs_b39 abs_b40 abs_b41 abs_b42 abs_b43 abs_b44 abs_b45 abs_b46 abs_b47 abs_b48 abs_b49 abs_b50 abs_b51 abs_b52 abs_b53 abs_b54 abs_b55 abs_b56 abs_b57 abs_b58 abs_b59 abs_b60 abs_b61 abs_b62 abs_b63 abs_b64 abs_b65 abs_b66 abs_b67 abs_b68 abs_b69 abs_b70 abs_b71 abs_b72 abs_b73 abs_b74 abs_b75 abs_b76 abs_b77 abs_b78 abs_b79 abs_b80 abs_b81 abs_b82 abs_b83 abs_b84 abs_b85 abs_b86 abs_b87 abs_b88 abs_b89 abs_b90 abs_b91 abs_b92 abs_b93 abs_b94 abs_b95 abs_b96 abs_b97 abs_b98 abs_b99 abs_b100 abs_b101 abs_b102 abs_b103 abs_b104 abs_b105 abs_b106 abs_b107 abs_b108 abs_b109 abs_b110 abs_b111 abs_b112 abs_b113 abs_b114 abs_b115 abs_b116 abs_b117 abs_b118 abs_b119 abs_b120 abs_b121 abs_b122 abs_b123 abs_b124 abs_b125 abs_b126 abs_b127 ];
+attach variables [ xr0 ] [ xfer_r0 xfer_r1 xfer_r2 xfer_r3 xfer_r4 xfer_r5 xfer_r6 xfer_r7 xfer_r8 xfer_r9 xfer_r10 xfer_r11 xfer_r12 xfer_r13 xfer_r14 xfer_r15 ];
+attach variables [ xrh0 ] [ xfer_r16 xfer_r17 xfer_r18 xfer_r19 xfer_r20 xfer_r21 xfer_r22 xfer_r23 xfer_r24 xfer_r25 xfer_r26 xfer_r27 xfer_r28 xfer_r29 xfer_r30 xfer_r31 ];
+attach variables [ xw0 ] [ xfer_w0 xfer_w1 xfer_w2 xfer_w3 xfer_w4 xfer_w5 xfer_w6 xfer_w7 xfer_w8 xfer_w9 xfer_w10 xfer_w11 xfer_w12 xfer_w13 xfer_w14 xfer_w15 ];
+attach variables [ xwh0 ] [ xfer_w16 xfer_w17 xfer_w18 xfer_w19 xfer_w20 xfer_w21 xfer_w22 xfer_w23 xfer_w24 xfer_w25 xfer_w26 xfer_w27 xfer_w28 xfer_w29 xfer_w30 xfer_w31 ];
+attach variables [ nn0 ] [ nn_r0 nn_r1 nn_r2 nn_r3 nn_r4 nn_r5 nn_r6 nn_r7 nn_r8 nn_r9 nn_r10 nn_r11 nn_r12 nn_r13 nn_r14 nn_r15 ];
+attach variables [ nnw0 ] [ nn_w0 nn_w1 nn_w2 nn_w3 nn_w4 nn_w5 nn_w6 nn_w7 nn_w8 nn_w9 nn_w10 nn_w11 nn_w12 nn_w13 nn_w14 nn_w15 ];
+attach variables [ ga10 ] [ a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 ];
+attach variables [ gb10 ] [ b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 ];
+attach variables [ gaa10 ] [ abs_a0 abs_a1 abs_a2 abs_a3 abs_a4 abs_a5 abs_a6 abs_a7 abs_a8 abs_a9 abs_a10 abs_a11 abs_a12 abs_a13 abs_a14 abs_a15 abs_a16 abs_a17 abs_a18 abs_a19 abs_a20 abs_a21 abs_a22 abs_a23 abs_a24 abs_a25 abs_a26 abs_a27 abs_a28 abs_a29 abs_a30 abs_a31 abs_a32 abs_a33 abs_a34 abs_a35 abs_a36 abs_a37 abs_a38 abs_a39 abs_a40 abs_a41 abs_a42 abs_a43 abs_a44 abs_a45 abs_a46 abs_a47 abs_a48 abs_a49 abs_a50 abs_a51 abs_a52 abs_a53 abs_a54 abs_a55 abs_a56 abs_a57 abs_a58 abs_a59 abs_a60 abs_a61 abs_a62 abs_a63 abs_a64 abs_a65 abs_a66 abs_a67 abs_a68 abs_a69 abs_a70 abs_a71 abs_a72 abs_a73 abs_a74 abs_a75 abs_a76 abs_a77 abs_a78 abs_a79 abs_a80 abs_a81 abs_a82 abs_a83 abs_a84 abs_a85 abs_a86 abs_a87 abs_a88 abs_a89 abs_a90 abs_a91 abs_a92 abs_a93 abs_a94 abs_a95 abs_a96 abs_a97 abs_a98 abs_a99 abs_a100 abs_a101 abs_a102 abs_a103 abs_a104 abs_a105 abs_a106 abs_a107 abs_a108 abs_a109 abs_a110 abs_a111 abs_a112 abs_a113 abs_a114 abs_a115 abs_a116 abs_a117 abs_a118 abs_a119 abs_a120 abs_a121 abs_a122 abs_a123 abs_a124 abs_a125 abs_a126 abs_a127 ];
+attach variables [ gab10 ] [ abs_b0 abs_b1 abs_b2 abs_b3 abs_b4 abs_b5 abs_b6 abs_b7 abs_b8 abs_b9 abs_b10 abs_b11 abs_b12 abs_b13 abs_b14 abs_b15 abs_b16 abs_b17 abs_b18 abs_b19 abs_b20 abs_b21 abs_b22 abs_b23 abs_b24 abs_b25 abs_b26 abs_b27 abs_b28 abs_b29 abs_b30 abs_b31 abs_b32 abs_b33 abs_b34 abs_b35 abs_b36 abs_b37 abs_b38 abs_b39 abs_b40 abs_b41 abs_b42 abs_b43 abs_b44 abs_b45 abs_b46 abs_b47 abs_b48 abs_b49 abs_b50 abs_b51 abs_b52 abs_b53 abs_b54 abs_b55 abs_b56 abs_b57 abs_b58 abs_b59 abs_b60 abs_b61 abs_b62 abs_b63 abs_b64 abs_b65 abs_b66 abs_b67 abs_b68 abs_b69 abs_b70 abs_b71 abs_b72 abs_b73 abs_b74 abs_b75 abs_b76 abs_b77 abs_b78 abs_b79 abs_b80 abs_b81 abs_b82 abs_b83 abs_b84 abs_b85 abs_b86 abs_b87 abs_b88 abs_b89 abs_b90 abs_b91 abs_b92 abs_b93 abs_b94 abs_b95 abs_b96 abs_b97 abs_b98 abs_b99 abs_b100 abs_b101 abs_b102 abs_b103 abs_b104 abs_b105 abs_b106 abs_b107 abs_b108 abs_b109 abs_b110 abs_b111 abs_b112 abs_b113 abs_b114 abs_b115 abs_b116 abs_b117 abs_b118 abs_b119 abs_b120 abs_b121 abs_b122 abs_b123 abs_b124 abs_b125 abs_b126 abs_b127 ];
+attach variables [ xr10 ] [ xfer_r0 xfer_r1 xfer_r2 xfer_r3 xfer_r4 xfer_r5 xfer_r6 xfer_r7 xfer_r8 xfer_r9 xfer_r10 xfer_r11 xfer_r12 xfer_r13 xfer_r14 xfer_r15 ];
+attach variables [ xrh10 ] [ xfer_r16 xfer_r17 xfer_r18 xfer_r19 xfer_r20 xfer_r21 xfer_r22 xfer_r23 xfer_r24 xfer_r25 xfer_r26 xfer_r27 xfer_r28 xfer_r29 xfer_r30 xfer_r31 ];
+attach variables [ xw10 ] [ xfer_w0 xfer_w1 xfer_w2 xfer_w3 xfer_w4 xfer_w5 xfer_w6 xfer_w7 xfer_w8 xfer_w9 xfer_w10 xfer_w11 xfer_w12 xfer_w13 xfer_w14 xfer_w15 ];
+attach variables [ xwh10 ] [ xfer_w16 xfer_w17 xfer_w18 xfer_w19 xfer_w20 xfer_w21 xfer_w22 xfer_w23 xfer_w24 xfer_w25 xfer_w26 xfer_w27 xfer_w28 xfer_w29 xfer_w30 xfer_w31 ];
+attach variables [ nn10 ] [ nn_r0 nn_r1 nn_r2 nn_r3 nn_r4 nn_r5 nn_r6 nn_r7 nn_r8 nn_r9 nn_r10 nn_r11 nn_r12 nn_r13 nn_r14 nn_r15 ];
+attach variables [ nnw10 ] [ nn_w0 nn_w1 nn_w2 nn_w3 nn_w4 nn_w5 nn_w6 nn_w7 nn_w8 nn_w9 nn_w10 nn_w11 nn_w12 nn_w13 nn_w14 nn_w15 ];
+attach variables [ ga20 ] [ a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 ];
+attach variables [ gb20 ] [ b0 b1 b2 b3 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 ];
+attach variables [ gaa20 ] [ abs_a0 abs_a1 abs_a2 abs_a3 abs_a4 abs_a5 abs_a6 abs_a7 abs_a8 abs_a9 abs_a10 abs_a11 abs_a12 abs_a13 abs_a14 abs_a15 abs_a16 abs_a17 abs_a18 abs_a19 abs_a20 abs_a21 abs_a22 abs_a23 abs_a24 abs_a25 abs_a26 abs_a27 abs_a28 abs_a29 abs_a30 abs_a31 abs_a32 abs_a33 abs_a34 abs_a35 abs_a36 abs_a37 abs_a38 abs_a39 abs_a40 abs_a41 abs_a42 abs_a43 abs_a44 abs_a45 abs_a46 abs_a47 abs_a48 abs_a49 abs_a50 abs_a51 abs_a52 abs_a53 abs_a54 abs_a55 abs_a56 abs_a57 abs_a58 abs_a59 abs_a60 abs_a61 abs_a62 abs_a63 abs_a64 abs_a65 abs_a66 abs_a67 abs_a68 abs_a69 abs_a70 abs_a71 abs_a72 abs_a73 abs_a74 abs_a75 abs_a76 abs_a77 abs_a78 abs_a79 abs_a80 abs_a81 abs_a82 abs_a83 abs_a84 abs_a85 abs_a86 abs_a87 abs_a88 abs_a89 abs_a90 abs_a91 abs_a92 abs_a93 abs_a94 abs_a95 abs_a96 abs_a97 abs_a98 abs_a99 abs_a100 abs_a101 abs_a102 abs_a103 abs_a104 abs_a105 abs_a106 abs_a107 abs_a108 abs_a109 abs_a110 abs_a111 abs_a112 abs_a113 abs_a114 abs_a115 abs_a116 abs_a117 abs_a118 abs_a119 abs_a120 abs_a121 abs_a122 abs_a123 abs_a124 abs_a125 abs_a126 abs_a127 ];
+attach variables [ gab20 ] [ abs_b0 abs_b1 abs_b2 abs_b3 abs_b4 abs_b5 abs_b6 abs_b7 abs_b8 abs_b9 abs_b10 abs_b11 abs_b12 abs_b13 abs_b14 abs_b15 abs_b16 abs_b17 abs_b18 abs_b19 abs_b20 abs_b21 abs_b22 abs_b23 abs_b24 abs_b25 abs_b26 abs_b27 abs_b28 abs_b29 abs_b30 abs_b31 abs_b32 abs_b33 abs_b34 abs_b35 abs_b36 abs_b37 abs_b38 abs_b39 abs_b40 abs_b41 abs_b42 abs_b43 abs_b44 abs_b45 abs_b46 abs_b47 abs_b48 abs_b49 abs_b50 abs_b51 abs_b52 abs_b53 abs_b54 abs_b55 abs_b56 abs_b57 abs_b58 abs_b59 abs_b60 abs_b61 abs_b62 abs_b63 abs_b64 abs_b65 abs_b66 abs_b67 abs_b68 abs_b69 abs_b70 abs_b71 abs_b72 abs_b73 abs_b74 abs_b75 abs_b76 abs_b77 abs_b78 abs_b79 abs_b80 abs_b81 abs_b82 abs_b83 abs_b84 abs_b85 abs_b86 abs_b87 abs_b88 abs_b89 abs_b90 abs_b91 abs_b92 abs_b93 abs_b94 abs_b95 abs_b96 abs_b97 abs_b98 abs_b99 abs_b100 abs_b101 abs_b102 abs_b103 abs_b104 abs_b105 abs_b106 abs_b107 abs_b108 abs_b109 abs_b110 abs_b111 abs_b112 abs_b113 abs_b114 abs_b115 abs_b116 abs_b117 abs_b118 abs_b119 abs_b120 abs_b121 abs_b122 abs_b123 abs_b124 abs_b125 abs_b126 abs_b127 ];
+attach variables [ xr20 ] [ xfer_r0 xfer_r1 xfer_r2 xfer_r3 xfer_r4 xfer_r5 xfer_r6 xfer_r7 xfer_r8 xfer_r9 xfer_r10 xfer_r11 xfer_r12 xfer_r13 xfer_r14 xfer_r15 ];
+attach variables [ xrh20 ] [ xfer_r16 xfer_r17 xfer_r18 xfer_r19 xfer_r20 xfer_r21 xfer_r22 xfer_r23 xfer_r24 xfer_r25 xfer_r26 xfer_r27 xfer_r28 xfer_r29 xfer_r30 xfer_r31 ];
+attach variables [ xw20 ] [ xfer_w0 xfer_w1 xfer_w2 xfer_w3 xfer_w4 xfer_w5 xfer_w6 xfer_w7 xfer_w8 xfer_w9 xfer_w10 xfer_w11 xfer_w12 xfer_w13 xfer_w14 xfer_w15 ];
+attach variables [ xwh20 ] [ xfer_w16 xfer_w17 xfer_w18 xfer_w19 xfer_w20 xfer_w21 xfer_w22 xfer_w23 xfer_w24 xfer_w25 xfer_w26 xfer_w27 xfer_w28 xfer_w29 xfer_w30 xfer_w31 ];
+attach variables [ nn20 ] [ nn_r0 nn_r1 nn_r2 nn_r3 nn_r4 nn_r5 nn_r6 nn_r7 nn_r8 nn_r9 nn_r10 nn_r11 nn_r12 nn_r13 nn_r14 nn_r15 ];
+attach variables [ nnw20 ] [ nn_w0 nn_w1 nn_w2 nn_w3 nn_w4 nn_w5 nn_w6 nn_w7 nn_w8 nn_w9 nn_w10 nn_w11 nn_w12 nn_w13 nn_w14 nn_w15 ];
+
+define pcodeop pop_count;
+define pcodeop ffs;
+define pcodeop crc;
+define pcodeop cam;
+define pcodeop add16;
+define pcodeop add8;
+define pcodeop indirect_shift;
+define pcodeop ctx_arb;
+define pcodeop ctx_kill;
+define pcodeop local_csr_rd;
+define pcodeop local_csr_wr;
+define pcodeop ctx_state;
+define pcodeop mult_step;
+define pcodeop cpp_cmd;
+define pcodeop byte_align;
+
+macro nzflags(r) {
+  NF = r s< 0;
+  ZF = r == 0;
+}
+
+OSA0: ga0 is o0_hi4=0 & ga0 { export ga0; }
+OSA0: gaa0 is o0_hi3=1 & gaa0 { export gaa0; }
+OSA0: "*$index" is o0_hi3=2 { tmp:4 = 0; export tmp; }
+OSA0: xr0 is o0_hi3=3 & o0_b6=0 & xr0 { export xr0; }
+OSA0: xrh0 is o0_hi3=3 & o0_b6=1 & xrh0 { export xrh0; }
+OSA0: nn0 is o0_hi4=10 & nn0 { export nn0; }
+OSA0: "0x"^o0_lo8 is o0_hi2=3 & o0_lo8 { export *[const]:4 o0_lo8; }
+OSA0: "*n$index" is o0_hi4=9 { tmp:4 = 0; export tmp; }
+OSA0: "*l$index0["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & slmext=0 & o0_lo4 { a:4 = LM_ADDR0 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSA0: "*l$index0++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSA0: "*l$index0--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSA0: "*l$index1["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & slmext=0 & o0_lo4 { a:4 = LM_ADDR1 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSA0: "*l$index1++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSA0: "*l$index1--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSA0: "*l$index2["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & slmext=1 & o0_lo4 { a:4 = LM_ADDR2 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSA0: "*l$index2++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSA0: "*l$index2--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSA0: "*l$index3["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & slmext=1 & o0_lo4 { a:4 = LM_ADDR3 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSA0: "*l$index3++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSA0: "*l$index3--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSA0: ga0 is o0_f8_5=0 & ga0 { export ga0; }
+QSA0: xr0 is o0_f8_5=4 & xr0 { export xr0; }
+QSA0: xrh0 is o0_f8_5=6 & xrh0 { export xrh0; }
+QSA0: "0x"^iv is o0_b5=1 & o0_hi8_2 & o0_lo5 & immmsb [ iv = (immmsb << 7) | (o0_hi8_2 << 5) | o0_lo5; ] { export *[const]:4 iv; }
+QSA0: "*$index" is o0_f8_4=4 & o0_b0=0 { tmp:4 = 0; export tmp; }
+QSA0: "*n$index" is o0_f8_4=4 & o0_b0=1 { tmp:4 = 0; export tmp; }
+QSA0: "*l$index0["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & slmext=0 & o0_lo3 { a:4 = LM_ADDR0 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSA0: "*l$index1["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & slmext=0 & o0_lo3 { a:4 = LM_ADDR1 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSA0: "*l$index2["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & slmext=1 & o0_lo3 { a:4 = LM_ADDR2 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSA0: "*l$index3["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & slmext=1 & o0_lo3 { a:4 = LM_ADDR3 + o0_lo3 * 4; export *[lmem]:4 a; }
+ODA0: ga0 is o0_hi4=0 & ga0 { export ga0; }
+ODA0: gaa0 is o0_hi3=1 & gaa0 { export gaa0; }
+ODA0: "*$index" is o0_hi3=2 { tmp:4 = 0; export tmp; }
+ODA0: xw0 is o0_hi3=3 & o0_b6=0 & xw0 { export xw0; }
+ODA0: xwh0 is o0_hi3=3 & o0_b6=1 & xwh0 { export xwh0; }
+ODA0: nnw0 is o0_hi4=10 & nnw0 { export nnw0; }
+ODA0: "--" is o0_hi2=3 { export NODEST; }
+ODA0: "*n$index" is o0_hi4=9 { tmp:4 = 0; export tmp; }
+ODA0: "*l$index0["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & dlmext=0 & o0_lo4 { a:4 = LM_ADDR0 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODA0: "*l$index0++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODA0: "*l$index0--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODA0: "*l$index1["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & dlmext=0 & o0_lo4 { a:4 = LM_ADDR1 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODA0: "*l$index1++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODA0: "*l$index1--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODA0: "*l$index2["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & dlmext=1 & o0_lo4 { a:4 = LM_ADDR2 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODA0: "*l$index2++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODA0: "*l$index2--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODA0: "*l$index3["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & dlmext=1 & o0_lo4 { a:4 = LM_ADDR3 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODA0: "*l$index3++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODA0: "*l$index3--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDA0: ga0 is o0_f8_5=0 & ga0 { export ga0; }
+QDA0: xw0 is o0_f8_5=4 & xw0 { export xw0; }
+QDA0: xwh0 is o0_f8_5=6 & xwh0 { export xwh0; }
+QDA0: "--" is o0_b5=1 { export NODEST; }
+QDA0: "*$index" is o0_f8_4=4 & o0_b0=0 { tmp:4 = 0; export tmp; }
+QDA0: "*n$index" is o0_f8_4=4 & o0_b0=1 { tmp:4 = 0; export tmp; }
+QDA0: "*l$index0["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & dlmext=0 & o0_lo3 { a:4 = LM_ADDR0 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDA0: "*l$index1["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & dlmext=0 & o0_lo3 { a:4 = LM_ADDR1 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDA0: "*l$index2["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & dlmext=1 & o0_lo3 { a:4 = LM_ADDR2 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDA0: "*l$index3["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & dlmext=1 & o0_lo3 { a:4 = LM_ADDR3 + o0_lo3 * 4; export *[lmem]:4 a; }
+OSB0: gb0 is o0_hi4=0 & gb0 { export gb0; }
+OSB0: gab0 is o0_hi3=1 & gab0 { export gab0; }
+OSB0: "*$index" is o0_hi3=2 { tmp:4 = 0; export tmp; }
+OSB0: xr0 is o0_hi3=3 & o0_b6=0 & xr0 { export xr0; }
+OSB0: xrh0 is o0_hi3=3 & o0_b6=1 & xrh0 { export xrh0; }
+OSB0: nn0 is o0_hi4=10 & nn0 { export nn0; }
+OSB0: "0x"^o0_lo8 is o0_hi2=3 & o0_lo8 { export *[const]:4 o0_lo8; }
+OSB0: "*n$index" is o0_hi4=9 { tmp:4 = 0; export tmp; }
+OSB0: "*l$index0["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & slmext=0 & o0_lo4 { a:4 = LM_ADDR0 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSB0: "*l$index0++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSB0: "*l$index0--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSB0: "*l$index1["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & slmext=0 & o0_lo4 { a:4 = LM_ADDR1 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSB0: "*l$index1++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSB0: "*l$index1--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSB0: "*l$index2["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & slmext=1 & o0_lo4 { a:4 = LM_ADDR2 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSB0: "*l$index2++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSB0: "*l$index2--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSB0: "*l$index3["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & slmext=1 & o0_lo4 { a:4 = LM_ADDR3 + o0_lo4 * 4; export *[lmem]:4 a; }
+OSB0: "*l$index3++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSB0: "*l$index3--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSB0: gb0 is o0_f8_5=0 & gb0 { export gb0; }
+QSB0: xr0 is o0_f8_5=4 & xr0 { export xr0; }
+QSB0: xrh0 is o0_f8_5=6 & xrh0 { export xrh0; }
+QSB0: "0x"^iv is o0_b5=1 & o0_hi8_2 & o0_lo5 & immmsb [ iv = (immmsb << 7) | (o0_hi8_2 << 5) | o0_lo5; ] { export *[const]:4 iv; }
+QSB0: "*$index" is o0_f8_4=4 & o0_b0=0 { tmp:4 = 0; export tmp; }
+QSB0: "*n$index" is o0_f8_4=4 & o0_b0=1 { tmp:4 = 0; export tmp; }
+QSB0: "*l$index0["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & slmext=0 & o0_lo3 { a:4 = LM_ADDR0 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSB0: "*l$index1["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & slmext=0 & o0_lo3 { a:4 = LM_ADDR1 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSB0: "*l$index2["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & slmext=1 & o0_lo3 { a:4 = LM_ADDR2 + o0_lo3 * 4; export *[lmem]:4 a; }
+QSB0: "*l$index3["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & slmext=1 & o0_lo3 { a:4 = LM_ADDR3 + o0_lo3 * 4; export *[lmem]:4 a; }
+ODB0: gb0 is o0_hi4=0 & gb0 { export gb0; }
+ODB0: gab0 is o0_hi3=1 & gab0 { export gab0; }
+ODB0: "*$index" is o0_hi3=2 { tmp:4 = 0; export tmp; }
+ODB0: xw0 is o0_hi3=3 & o0_b6=0 & xw0 { export xw0; }
+ODB0: xwh0 is o0_hi3=3 & o0_b6=1 & xwh0 { export xwh0; }
+ODB0: nnw0 is o0_hi4=10 & nnw0 { export nnw0; }
+ODB0: "--" is o0_hi2=3 { export NODEST; }
+ODB0: "*n$index" is o0_hi4=9 { tmp:4 = 0; export tmp; }
+ODB0: "*l$index0["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & dlmext=0 & o0_lo4 { a:4 = LM_ADDR0 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODB0: "*l$index0++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODB0: "*l$index0--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODB0: "*l$index1["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & dlmext=0 & o0_lo4 { a:4 = LM_ADDR1 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODB0: "*l$index1++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODB0: "*l$index1--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODB0: "*l$index2["^o0_lo4^"]" is o0_hi4=8 & o0_b5=0 & o0_b4=0 & dlmext=1 & o0_lo4 { a:4 = LM_ADDR2 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODB0: "*l$index2++" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODB0: "*l$index2--" is o0_hi4=8 & o0_b5=0 & o0_b4=1 & o0_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODB0: "*l$index3["^o0_lo4^"]" is o0_hi4=8 & o0_b5=1 & o0_b4=0 & dlmext=1 & o0_lo4 { a:4 = LM_ADDR3 + o0_lo4 * 4; export *[lmem]:4 a; }
+ODB0: "*l$index3++" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODB0: "*l$index3--" is o0_hi4=8 & o0_b5=1 & o0_b4=1 & o0_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDB0: gb0 is o0_f8_5=0 & gb0 { export gb0; }
+QDB0: xw0 is o0_f8_5=4 & xw0 { export xw0; }
+QDB0: xwh0 is o0_f8_5=6 & xwh0 { export xwh0; }
+QDB0: "--" is o0_b5=1 { export NODEST; }
+QDB0: "*$index" is o0_f8_4=4 & o0_b0=0 { tmp:4 = 0; export tmp; }
+QDB0: "*n$index" is o0_f8_4=4 & o0_b0=1 { tmp:4 = 0; export tmp; }
+QDB0: "*l$index0["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & dlmext=0 & o0_lo3 { a:4 = LM_ADDR0 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDB0: "*l$index1["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & dlmext=0 & o0_lo3 { a:4 = LM_ADDR1 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDB0: "*l$index2["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=0 & dlmext=1 & o0_lo3 { a:4 = LM_ADDR2 + o0_lo3 * 4; export *[lmem]:4 a; }
+QDB0: "*l$index3["^o0_lo3^"]" is o0_f8_4=5 & o0_b3=1 & dlmext=1 & o0_lo3 { a:4 = LM_ADDR3 + o0_lo3 * 4; export *[lmem]:4 a; }
+OSA10: ga10 is o10_hi4=0 & ga10 { export ga10; }
+OSA10: gaa10 is o10_hi3=1 & gaa10 { export gaa10; }
+OSA10: "*$index" is o10_hi3=2 { tmp:4 = 0; export tmp; }
+OSA10: xr10 is o10_hi3=3 & o10_b6=0 & xr10 { export xr10; }
+OSA10: xrh10 is o10_hi3=3 & o10_b6=1 & xrh10 { export xrh10; }
+OSA10: nn10 is o10_hi4=10 & nn10 { export nn10; }
+OSA10: "0x"^o10_lo8 is o10_hi2=3 & o10_lo8 { export *[const]:4 o10_lo8; }
+OSA10: "*n$index" is o10_hi4=9 { tmp:4 = 0; export tmp; }
+OSA10: "*l$index0["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & slmext=0 & o10_lo4 { a:4 = LM_ADDR0 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSA10: "*l$index0++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSA10: "*l$index0--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSA10: "*l$index1["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & slmext=0 & o10_lo4 { a:4 = LM_ADDR1 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSA10: "*l$index1++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSA10: "*l$index1--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSA10: "*l$index2["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & slmext=1 & o10_lo4 { a:4 = LM_ADDR2 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSA10: "*l$index2++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSA10: "*l$index2--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSA10: "*l$index3["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & slmext=1 & o10_lo4 { a:4 = LM_ADDR3 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSA10: "*l$index3++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSA10: "*l$index3--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSA10: ga10 is o10_f8_5=0 & ga10 { export ga10; }
+QSA10: xr10 is o10_f8_5=4 & xr10 { export xr10; }
+QSA10: xrh10 is o10_f8_5=6 & xrh10 { export xrh10; }
+QSA10: "0x"^iv is o10_b5=1 & o10_hi8_2 & o10_lo5 & immmsb [ iv = (immmsb << 7) | (o10_hi8_2 << 5) | o10_lo5; ] { export *[const]:4 iv; }
+QSA10: "*$index" is o10_f8_4=4 & o10_b0=0 { tmp:4 = 0; export tmp; }
+QSA10: "*n$index" is o10_f8_4=4 & o10_b0=1 { tmp:4 = 0; export tmp; }
+QSA10: "*l$index0["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & slmext=0 & o10_lo3 { a:4 = LM_ADDR0 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSA10: "*l$index1["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & slmext=0 & o10_lo3 { a:4 = LM_ADDR1 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSA10: "*l$index2["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & slmext=1 & o10_lo3 { a:4 = LM_ADDR2 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSA10: "*l$index3["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & slmext=1 & o10_lo3 { a:4 = LM_ADDR3 + o10_lo3 * 4; export *[lmem]:4 a; }
+ODA10: ga10 is o10_hi4=0 & ga10 { export ga10; }
+ODA10: gaa10 is o10_hi3=1 & gaa10 { export gaa10; }
+ODA10: "*$index" is o10_hi3=2 { tmp:4 = 0; export tmp; }
+ODA10: xw10 is o10_hi3=3 & o10_b6=0 & xw10 { export xw10; }
+ODA10: xwh10 is o10_hi3=3 & o10_b6=1 & xwh10 { export xwh10; }
+ODA10: nnw10 is o10_hi4=10 & nnw10 { export nnw10; }
+ODA10: "--" is o10_hi2=3 { export NODEST; }
+ODA10: "*n$index" is o10_hi4=9 { tmp:4 = 0; export tmp; }
+ODA10: "*l$index0["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & dlmext=0 & o10_lo4 { a:4 = LM_ADDR0 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODA10: "*l$index0++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODA10: "*l$index0--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODA10: "*l$index1["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & dlmext=0 & o10_lo4 { a:4 = LM_ADDR1 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODA10: "*l$index1++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODA10: "*l$index1--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODA10: "*l$index2["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & dlmext=1 & o10_lo4 { a:4 = LM_ADDR2 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODA10: "*l$index2++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODA10: "*l$index2--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODA10: "*l$index3["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & dlmext=1 & o10_lo4 { a:4 = LM_ADDR3 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODA10: "*l$index3++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODA10: "*l$index3--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDA10: ga10 is o10_f8_5=0 & ga10 { export ga10; }
+QDA10: xw10 is o10_f8_5=4 & xw10 { export xw10; }
+QDA10: xwh10 is o10_f8_5=6 & xwh10 { export xwh10; }
+QDA10: "--" is o10_b5=1 { export NODEST; }
+QDA10: "*$index" is o10_f8_4=4 & o10_b0=0 { tmp:4 = 0; export tmp; }
+QDA10: "*n$index" is o10_f8_4=4 & o10_b0=1 { tmp:4 = 0; export tmp; }
+QDA10: "*l$index0["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & dlmext=0 & o10_lo3 { a:4 = LM_ADDR0 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDA10: "*l$index1["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & dlmext=0 & o10_lo3 { a:4 = LM_ADDR1 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDA10: "*l$index2["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & dlmext=1 & o10_lo3 { a:4 = LM_ADDR2 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDA10: "*l$index3["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & dlmext=1 & o10_lo3 { a:4 = LM_ADDR3 + o10_lo3 * 4; export *[lmem]:4 a; }
+OSB10: gb10 is o10_hi4=0 & gb10 { export gb10; }
+OSB10: gab10 is o10_hi3=1 & gab10 { export gab10; }
+OSB10: "*$index" is o10_hi3=2 { tmp:4 = 0; export tmp; }
+OSB10: xr10 is o10_hi3=3 & o10_b6=0 & xr10 { export xr10; }
+OSB10: xrh10 is o10_hi3=3 & o10_b6=1 & xrh10 { export xrh10; }
+OSB10: nn10 is o10_hi4=10 & nn10 { export nn10; }
+OSB10: "0x"^o10_lo8 is o10_hi2=3 & o10_lo8 { export *[const]:4 o10_lo8; }
+OSB10: "*n$index" is o10_hi4=9 { tmp:4 = 0; export tmp; }
+OSB10: "*l$index0["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & slmext=0 & o10_lo4 { a:4 = LM_ADDR0 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSB10: "*l$index0++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSB10: "*l$index0--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSB10: "*l$index1["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & slmext=0 & o10_lo4 { a:4 = LM_ADDR1 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSB10: "*l$index1++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSB10: "*l$index1--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSB10: "*l$index2["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & slmext=1 & o10_lo4 { a:4 = LM_ADDR2 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSB10: "*l$index2++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSB10: "*l$index2--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSB10: "*l$index3["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & slmext=1 & o10_lo4 { a:4 = LM_ADDR3 + o10_lo4 * 4; export *[lmem]:4 a; }
+OSB10: "*l$index3++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSB10: "*l$index3--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSB10: gb10 is o10_f8_5=0 & gb10 { export gb10; }
+QSB10: xr10 is o10_f8_5=4 & xr10 { export xr10; }
+QSB10: xrh10 is o10_f8_5=6 & xrh10 { export xrh10; }
+QSB10: "0x"^iv is o10_b5=1 & o10_hi8_2 & o10_lo5 & immmsb [ iv = (immmsb << 7) | (o10_hi8_2 << 5) | o10_lo5; ] { export *[const]:4 iv; }
+QSB10: "*$index" is o10_f8_4=4 & o10_b0=0 { tmp:4 = 0; export tmp; }
+QSB10: "*n$index" is o10_f8_4=4 & o10_b0=1 { tmp:4 = 0; export tmp; }
+QSB10: "*l$index0["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & slmext=0 & o10_lo3 { a:4 = LM_ADDR0 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSB10: "*l$index1["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & slmext=0 & o10_lo3 { a:4 = LM_ADDR1 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSB10: "*l$index2["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & slmext=1 & o10_lo3 { a:4 = LM_ADDR2 + o10_lo3 * 4; export *[lmem]:4 a; }
+QSB10: "*l$index3["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & slmext=1 & o10_lo3 { a:4 = LM_ADDR3 + o10_lo3 * 4; export *[lmem]:4 a; }
+ODB10: gb10 is o10_hi4=0 & gb10 { export gb10; }
+ODB10: gab10 is o10_hi3=1 & gab10 { export gab10; }
+ODB10: "*$index" is o10_hi3=2 { tmp:4 = 0; export tmp; }
+ODB10: xw10 is o10_hi3=3 & o10_b6=0 & xw10 { export xw10; }
+ODB10: xwh10 is o10_hi3=3 & o10_b6=1 & xwh10 { export xwh10; }
+ODB10: nnw10 is o10_hi4=10 & nnw10 { export nnw10; }
+ODB10: "--" is o10_hi2=3 { export NODEST; }
+ODB10: "*n$index" is o10_hi4=9 { tmp:4 = 0; export tmp; }
+ODB10: "*l$index0["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & dlmext=0 & o10_lo4 { a:4 = LM_ADDR0 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODB10: "*l$index0++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODB10: "*l$index0--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODB10: "*l$index1["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & dlmext=0 & o10_lo4 { a:4 = LM_ADDR1 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODB10: "*l$index1++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODB10: "*l$index1--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODB10: "*l$index2["^o10_lo4^"]" is o10_hi4=8 & o10_b5=0 & o10_b4=0 & dlmext=1 & o10_lo4 { a:4 = LM_ADDR2 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODB10: "*l$index2++" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODB10: "*l$index2--" is o10_hi4=8 & o10_b5=0 & o10_b4=1 & o10_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODB10: "*l$index3["^o10_lo4^"]" is o10_hi4=8 & o10_b5=1 & o10_b4=0 & dlmext=1 & o10_lo4 { a:4 = LM_ADDR3 + o10_lo4 * 4; export *[lmem]:4 a; }
+ODB10: "*l$index3++" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODB10: "*l$index3--" is o10_hi4=8 & o10_b5=1 & o10_b4=1 & o10_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDB10: gb10 is o10_f8_5=0 & gb10 { export gb10; }
+QDB10: xw10 is o10_f8_5=4 & xw10 { export xw10; }
+QDB10: xwh10 is o10_f8_5=6 & xwh10 { export xwh10; }
+QDB10: "--" is o10_b5=1 { export NODEST; }
+QDB10: "*$index" is o10_f8_4=4 & o10_b0=0 { tmp:4 = 0; export tmp; }
+QDB10: "*n$index" is o10_f8_4=4 & o10_b0=1 { tmp:4 = 0; export tmp; }
+QDB10: "*l$index0["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & dlmext=0 & o10_lo3 { a:4 = LM_ADDR0 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDB10: "*l$index1["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & dlmext=0 & o10_lo3 { a:4 = LM_ADDR1 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDB10: "*l$index2["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=0 & dlmext=1 & o10_lo3 { a:4 = LM_ADDR2 + o10_lo3 * 4; export *[lmem]:4 a; }
+QDB10: "*l$index3["^o10_lo3^"]" is o10_f8_4=5 & o10_b3=1 & dlmext=1 & o10_lo3 { a:4 = LM_ADDR3 + o10_lo3 * 4; export *[lmem]:4 a; }
+OSA20: ga20 is o20_hi4=0 & ga20 { export ga20; }
+OSA20: gaa20 is o20_hi3=1 & gaa20 { export gaa20; }
+OSA20: "*$index" is o20_hi3=2 { tmp:4 = 0; export tmp; }
+OSA20: xr20 is o20_hi3=3 & o20_b6=0 & xr20 { export xr20; }
+OSA20: xrh20 is o20_hi3=3 & o20_b6=1 & xrh20 { export xrh20; }
+OSA20: nn20 is o20_hi4=10 & nn20 { export nn20; }
+OSA20: "0x"^o20_lo8 is o20_hi2=3 & o20_lo8 { export *[const]:4 o20_lo8; }
+OSA20: "*n$index" is o20_hi4=9 { tmp:4 = 0; export tmp; }
+OSA20: "*l$index0["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & slmext=0 & o20_lo4 { a:4 = LM_ADDR0 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSA20: "*l$index0++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSA20: "*l$index0--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSA20: "*l$index1["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & slmext=0 & o20_lo4 { a:4 = LM_ADDR1 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSA20: "*l$index1++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSA20: "*l$index1--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSA20: "*l$index2["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & slmext=1 & o20_lo4 { a:4 = LM_ADDR2 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSA20: "*l$index2++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSA20: "*l$index2--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSA20: "*l$index3["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & slmext=1 & o20_lo4 { a:4 = LM_ADDR3 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSA20: "*l$index3++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSA20: "*l$index3--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSA20: ga20 is o20_f8_5=0 & ga20 { export ga20; }
+QSA20: xr20 is o20_f8_5=4 & xr20 { export xr20; }
+QSA20: xrh20 is o20_f8_5=6 & xrh20 { export xrh20; }
+QSA20: "0x"^iv is o20_b5=1 & o20_hi8_2 & o20_lo5 & immmsb [ iv = (immmsb << 7) | (o20_hi8_2 << 5) | o20_lo5; ] { export *[const]:4 iv; }
+QSA20: "*$index" is o20_f8_4=4 & o20_b0=0 { tmp:4 = 0; export tmp; }
+QSA20: "*n$index" is o20_f8_4=4 & o20_b0=1 { tmp:4 = 0; export tmp; }
+QSA20: "*l$index0["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & slmext=0 & o20_lo3 { a:4 = LM_ADDR0 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSA20: "*l$index1["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & slmext=0 & o20_lo3 { a:4 = LM_ADDR1 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSA20: "*l$index2["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & slmext=1 & o20_lo3 { a:4 = LM_ADDR2 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSA20: "*l$index3["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & slmext=1 & o20_lo3 { a:4 = LM_ADDR3 + o20_lo3 * 4; export *[lmem]:4 a; }
+ODA20: ga20 is o20_hi4=0 & ga20 { export ga20; }
+ODA20: gaa20 is o20_hi3=1 & gaa20 { export gaa20; }
+ODA20: "*$index" is o20_hi3=2 { tmp:4 = 0; export tmp; }
+ODA20: xw20 is o20_hi3=3 & o20_b6=0 & xw20 { export xw20; }
+ODA20: xwh20 is o20_hi3=3 & o20_b6=1 & xwh20 { export xwh20; }
+ODA20: nnw20 is o20_hi4=10 & nnw20 { export nnw20; }
+ODA20: "--" is o20_hi2=3 { export NODEST; }
+ODA20: "*n$index" is o20_hi4=9 { tmp:4 = 0; export tmp; }
+ODA20: "*l$index0["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & dlmext=0 & o20_lo4 { a:4 = LM_ADDR0 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODA20: "*l$index0++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODA20: "*l$index0--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODA20: "*l$index1["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & dlmext=0 & o20_lo4 { a:4 = LM_ADDR1 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODA20: "*l$index1++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODA20: "*l$index1--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODA20: "*l$index2["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & dlmext=1 & o20_lo4 { a:4 = LM_ADDR2 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODA20: "*l$index2++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODA20: "*l$index2--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODA20: "*l$index3["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & dlmext=1 & o20_lo4 { a:4 = LM_ADDR3 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODA20: "*l$index3++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODA20: "*l$index3--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDA20: ga20 is o20_f8_5=0 & ga20 { export ga20; }
+QDA20: xw20 is o20_f8_5=4 & xw20 { export xw20; }
+QDA20: xwh20 is o20_f8_5=6 & xwh20 { export xwh20; }
+QDA20: "--" is o20_b5=1 { export NODEST; }
+QDA20: "*$index" is o20_f8_4=4 & o20_b0=0 { tmp:4 = 0; export tmp; }
+QDA20: "*n$index" is o20_f8_4=4 & o20_b0=1 { tmp:4 = 0; export tmp; }
+QDA20: "*l$index0["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & dlmext=0 & o20_lo3 { a:4 = LM_ADDR0 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDA20: "*l$index1["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & dlmext=0 & o20_lo3 { a:4 = LM_ADDR1 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDA20: "*l$index2["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & dlmext=1 & o20_lo3 { a:4 = LM_ADDR2 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDA20: "*l$index3["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & dlmext=1 & o20_lo3 { a:4 = LM_ADDR3 + o20_lo3 * 4; export *[lmem]:4 a; }
+OSB20: gb20 is o20_hi4=0 & gb20 { export gb20; }
+OSB20: gab20 is o20_hi3=1 & gab20 { export gab20; }
+OSB20: "*$index" is o20_hi3=2 { tmp:4 = 0; export tmp; }
+OSB20: xr20 is o20_hi3=3 & o20_b6=0 & xr20 { export xr20; }
+OSB20: xrh20 is o20_hi3=3 & o20_b6=1 & xrh20 { export xrh20; }
+OSB20: nn20 is o20_hi4=10 & nn20 { export nn20; }
+OSB20: "0x"^o20_lo8 is o20_hi2=3 & o20_lo8 { export *[const]:4 o20_lo8; }
+OSB20: "*n$index" is o20_hi4=9 { tmp:4 = 0; export tmp; }
+OSB20: "*l$index0["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & slmext=0 & o20_lo4 { a:4 = LM_ADDR0 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSB20: "*l$index0++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+OSB20: "*l$index0--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & slmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+OSB20: "*l$index1["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & slmext=0 & o20_lo4 { a:4 = LM_ADDR1 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSB20: "*l$index1++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+OSB20: "*l$index1--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & slmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+OSB20: "*l$index2["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & slmext=1 & o20_lo4 { a:4 = LM_ADDR2 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSB20: "*l$index2++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+OSB20: "*l$index2--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & slmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+OSB20: "*l$index3["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & slmext=1 & o20_lo4 { a:4 = LM_ADDR3 + o20_lo4 * 4; export *[lmem]:4 a; }
+OSB20: "*l$index3++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+OSB20: "*l$index3--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & slmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QSB20: gb20 is o20_f8_5=0 & gb20 { export gb20; }
+QSB20: xr20 is o20_f8_5=4 & xr20 { export xr20; }
+QSB20: xrh20 is o20_f8_5=6 & xrh20 { export xrh20; }
+QSB20: "0x"^iv is o20_b5=1 & o20_hi8_2 & o20_lo5 & immmsb [ iv = (immmsb << 7) | (o20_hi8_2 << 5) | o20_lo5; ] { export *[const]:4 iv; }
+QSB20: "*$index" is o20_f8_4=4 & o20_b0=0 { tmp:4 = 0; export tmp; }
+QSB20: "*n$index" is o20_f8_4=4 & o20_b0=1 { tmp:4 = 0; export tmp; }
+QSB20: "*l$index0["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & slmext=0 & o20_lo3 { a:4 = LM_ADDR0 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSB20: "*l$index1["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & slmext=0 & o20_lo3 { a:4 = LM_ADDR1 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSB20: "*l$index2["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & slmext=1 & o20_lo3 { a:4 = LM_ADDR2 + o20_lo3 * 4; export *[lmem]:4 a; }
+QSB20: "*l$index3["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & slmext=1 & o20_lo3 { a:4 = LM_ADDR3 + o20_lo3 * 4; export *[lmem]:4 a; }
+ODB20: gb20 is o20_hi4=0 & gb20 { export gb20; }
+ODB20: gab20 is o20_hi3=1 & gab20 { export gab20; }
+ODB20: "*$index" is o20_hi3=2 { tmp:4 = 0; export tmp; }
+ODB20: xw20 is o20_hi3=3 & o20_b6=0 & xw20 { export xw20; }
+ODB20: xwh20 is o20_hi3=3 & o20_b6=1 & xwh20 { export xwh20; }
+ODB20: nnw20 is o20_hi4=10 & nnw20 { export nnw20; }
+ODB20: "--" is o20_hi2=3 { export NODEST; }
+ODB20: "*n$index" is o20_hi4=9 { tmp:4 = 0; export tmp; }
+ODB20: "*l$index0["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & dlmext=0 & o20_lo4 { a:4 = LM_ADDR0 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODB20: "*l$index0++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 + 4; export *[lmem]:4 a; }
+ODB20: "*l$index0--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & dlmext=0 { a:4 = LM_ADDR0; LM_ADDR0 = LM_ADDR0 - 4; export *[lmem]:4 a; }
+ODB20: "*l$index1["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & dlmext=0 & o20_lo4 { a:4 = LM_ADDR1 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODB20: "*l$index1++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 + 4; export *[lmem]:4 a; }
+ODB20: "*l$index1--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & dlmext=0 { a:4 = LM_ADDR1; LM_ADDR1 = LM_ADDR1 - 4; export *[lmem]:4 a; }
+ODB20: "*l$index2["^o20_lo4^"]" is o20_hi4=8 & o20_b5=0 & o20_b4=0 & dlmext=1 & o20_lo4 { a:4 = LM_ADDR2 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODB20: "*l$index2++" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=0 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 + 4; export *[lmem]:4 a; }
+ODB20: "*l$index2--" is o20_hi4=8 & o20_b5=0 & o20_b4=1 & o20_b0=1 & dlmext=1 { a:4 = LM_ADDR2; LM_ADDR2 = LM_ADDR2 - 4; export *[lmem]:4 a; }
+ODB20: "*l$index3["^o20_lo4^"]" is o20_hi4=8 & o20_b5=1 & o20_b4=0 & dlmext=1 & o20_lo4 { a:4 = LM_ADDR3 + o20_lo4 * 4; export *[lmem]:4 a; }
+ODB20: "*l$index3++" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=0 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 + 4; export *[lmem]:4 a; }
+ODB20: "*l$index3--" is o20_hi4=8 & o20_b5=1 & o20_b4=1 & o20_b0=1 & dlmext=1 { a:4 = LM_ADDR3; LM_ADDR3 = LM_ADDR3 - 4; export *[lmem]:4 a; }
+QDB20: gb20 is o20_f8_5=0 & gb20 { export gb20; }
+QDB20: xw20 is o20_f8_5=4 & xw20 { export xw20; }
+QDB20: xwh20 is o20_f8_5=6 & xwh20 { export xwh20; }
+QDB20: "--" is o20_b5=1 { export NODEST; }
+QDB20: "*$index" is o20_f8_4=4 & o20_b0=0 { tmp:4 = 0; export tmp; }
+QDB20: "*n$index" is o20_f8_4=4 & o20_b0=1 { tmp:4 = 0; export tmp; }
+QDB20: "*l$index0["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & dlmext=0 & o20_lo3 { a:4 = LM_ADDR0 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDB20: "*l$index1["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & dlmext=0 & o20_lo3 { a:4 = LM_ADDR1 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDB20: "*l$index2["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=0 & dlmext=1 & o20_lo3 { a:4 = LM_ADDR2 + o20_lo3 * 4; export *[lmem]:4 a; }
+QDB20: "*l$index3["^o20_lo3^"]" is o20_f8_4=5 & o20_b3=1 & dlmext=1 & o20_lo3 { a:4 = LM_ADDR3 + o20_lo3 * 4; export *[lmem]:4 a; }
+
+# ALU operands: field 0-9 is always bank A and field 10-19 bank B; bit 30 swaps which of
+# them is the left (A) operand. The destination (field 20-29) is in the bank bit 36 names.
+AOP: OSA0  is swap10=0 & OSA0  { export OSA0; }
+AOP: OSB10 is swap10=1 & OSB10 { export OSB10; }
+BOP: OSB10 is swap10=0 & OSB10 { export OSB10; }
+BOP: OSA0  is swap10=1 & OSA0  { export OSA0; }
+DST: ODA20 is dbank=0 & ODA20 { export ODA20; }
+DST: ODB20 is dbank=1 & ODB20 { export ODB20; }
+SA8: QSA0  is swap8=0 & QSA0  { export QSA0; }
+SA8: QSB10 is swap8=1 & QSB10 { export QSB10; }
+SB8: QSB10 is swap8=0 & QSB10 { export QSB10; }
+SB8: QSA0  is swap8=1 & QSA0  { export QSA0; }
+D8: QDA20 is dbank=0 & QDA20 { export QDA20; }
+D8: QDB20 is dbank=1 & QDB20 { export QDB20; }
+CCF: is nocc=1 { }
+CCF: is nocc=0 { }
+
+# alu[dst, A, op, B] (bits 39-37 = 101, operator in bits 31-35); bit 40 (no_cc) keeps the flags.
+:alu "["^DST^", "^"--"^", B, "^BOP^"]" is cls3=5 & nocc=0 & aluop=0 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^"--"^", B, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=0 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +, "^BOP^"]" is cls3=5 & nocc=0 & aluop=1 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a + b;
+  
+  nzflags(r); CF = carry(a, b); VF = scarry(a, b);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=1 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a + b;
+  DST = r;
+}
+:alu "["^DST^", "^"--"^", ~B, "^BOP^"]" is cls3=5 & nocc=0 & aluop=4 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = ~b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^"--"^", ~B, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=4 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = ~b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", AND, "^BOP^"]" is cls3=5 & nocc=0 & aluop=8 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a & b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", AND, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=8 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a & b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", ~AND, "^BOP^"]" is cls3=5 & nocc=0 & aluop=12 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = ~a & b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", ~AND, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=12 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = ~a & b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", AND~, "^BOP^"]" is cls3=5 & nocc=0 & aluop=16 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a & ~b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", AND~, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=16 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a & ~b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", OR, "^BOP^"]" is cls3=5 & nocc=0 & aluop=20 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a | b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", OR, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=20 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a | b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", XOR, "^BOP^"]" is cls3=5 & nocc=0 & aluop=24 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a ^ b;
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", XOR, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=24 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a ^ b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", -, "^BOP^"]" is cls3=5 & nocc=0 & aluop=21 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a - b;
+  
+  nzflags(r); CF = a < b; VF = sborrow(a, b);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", -, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=21 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a - b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", B-A, "^BOP^"]" is cls3=5 & nocc=0 & aluop=25 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = b - a;
+  
+  nzflags(r); CF = b < a; VF = sborrow(b, a);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", B-A, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=25 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = b - a;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +carry, "^BOP^"]" is cls3=5 & nocc=0 & aluop=17 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a + b + zext(CF);
+  
+  nzflags(r); CF = carry(a, b);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +carry, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=17 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a + b + zext(CF);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", -carry, "^BOP^"]" is cls3=5 & nocc=0 & aluop=13 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a - b - zext(CF);
+  
+  nzflags(r); CF = a < b;
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", -carry, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=13 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = a - b - zext(CF);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +16, "^BOP^"]" is cls3=5 & nocc=0 & aluop=5 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = add16(a, b);
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +16, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=5 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = add16(a, b);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +8, "^BOP^"]" is cls3=5 & nocc=0 & aluop=9 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = add8(a, b);
+  
+  nzflags(r);
+  DST = r;
+}
+:alu "["^DST^", "^AOP^", +8, "^BOP^"], no_cc" is cls3=5 & nocc=1 & aluop=9 & DST & AOP & BOP {
+  a:4 = AOP; b:4 = BOP; r:4 = add8(a, b);
+  DST = r;
+}
+:pop_count3 "["^DST^", "^BOP^"]" is cls3=5 & aluop=3 & DST & BOP { DST = pop_count(BOP); }
+:pop_count1 "["^BOP^"]" is cls3=5 & aluop=6 & BOP { pop_count(BOP); }
+:pop_count2 "["^BOP^"]" is cls3=5 & aluop=7 & BOP { pop_count(BOP); }
+:ffs "["^DST^", "^BOP^"]" is cls3=5 & aluop=14 & DST & BOP { r:4 = ffs(BOP); nzflags(r); DST = r; }
+:crc "["^DST^", "^BOP^"]" is cls3=5 & aluop=18 & DST & BOP & AOP { DST = crc(BOP, AOP); }
+:cam_clear is cls3=5 & aluop=11 { cam(11:1); }
+:cam_read_tag "["^DST^", "^BOP^"]" is cls3=5 & aluop=15 & DST & BOP { DST = cam(15:1, BOP); }
+:cam_write "["^BOP^", "^AOP^"]" is cls3=5 & aluop=19 & BOP & AOP { cam(19:1, BOP, AOP); }
+:cam_lookup "["^DST^", "^AOP^"]" is cls3=5 & aluop=23 & DST & AOP { DST = cam(23:1, AOP); }
+:cam_write_state "["^BOP^"]" is cls3=5 & aluop=27 & BOP { cam(27:1, BOP); }
+:cam_read_state "["^DST^", "^BOP^"]" is cls3=5 & aluop=31 & DST & BOP { DST = cam(31:1, BOP); }
+
+
+# alu_shf[dst, A, op, B, shift] (bits 39-37 = 100): B is rotated (sc 0), shifted right
+# (sc 1) or left by 32 - n (sc 2) first; sc 3 is dbl_shf, the A:B pair shifted right.
+SHB: SB8^", >>rot"^shift is sc=0 & shz!=0 & SB8 & shift { b:4 = SB8; r:4 = (b >> shift) | (b << (32 - shift)); export r; }
+SHB: SB8 is sc=0 & shz=0 & SB8 { export SB8; }
+SHB: SB8^", >>"^shift is sc=1 & shz!=0 & SB8 & shift { b:4 = SB8; r:4 = b >> shift; export r; }
+SHB: SB8^", <<"^sl is sc=2 & shz!=0 & SB8 & shift [ sl = 32 - shift; ] { b:4 = SB8; r:4 = b << sl; export r; }
+SHB: SB8^", indirect" is (sc=1 | sc=2) & shz=0 & SB8 { b:4 = SB8; r:4 = indirect_shift(b); export r; }
+
+:alu_shf "["^D8^", "^"--"^", B, "^SHB^"]" is cls3=4 & shfop=0 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^"--"^", B, "^SHB^"], no_cc" is cls3=4 & shfop=0 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = b; 
+  D8 = r;
+}
+:alu_shf "["^D8^", "^"--"^", ~B, "^SHB^"]" is cls3=4 & shfop=1 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = ~b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^"--"^", ~B, "^SHB^"], no_cc" is cls3=4 & shfop=1 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = ~b; 
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", AND, "^SHB^"]" is cls3=4 & shfop=2 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a & b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", AND, "^SHB^"], no_cc" is cls3=4 & shfop=2 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a & b; 
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", ~AND, "^SHB^"]" is cls3=4 & shfop=3 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = ~a & b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", ~AND, "^SHB^"], no_cc" is cls3=4 & shfop=3 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = ~a & b; 
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", AND~, "^SHB^"]" is cls3=4 & shfop=4 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a & ~b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", AND~, "^SHB^"], no_cc" is cls3=4 & shfop=4 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a & ~b; 
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", OR, "^SHB^"]" is cls3=4 & shfop=5 & sc!=3 & nocc=0 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a | b; nzflags(r);
+  D8 = r;
+}
+:alu_shf "["^D8^", "^SA8^", OR, "^SHB^"], no_cc" is cls3=4 & shfop=5 & sc!=3 & nocc=1 & D8 & SA8 & SHB {
+  a:4 = SA8; b:4 = SHB; r:4 = a | b; 
+  D8 = r;
+}
+:asr "["^D8^", "^SB8^", >>"^shift^"]" is cls3=4 & shfop=6 & sc!=3 & D8 & SB8 & shift { b:4 = SB8; r:4 = b s>> shift; nzflags(r); D8 = r; }
+:dbl_shf "["^D8^", "^SA8^", "^SB8^", >>"^shift^"]" is cls3=4 & shfop<6 & sc=3 & D8 & SA8 & SB8 & shift {
+  v:8 = (zext(SA8) << 32) | zext(SB8); v = v >> shift; r:4 = v:4; nzflags(r); D8 = r;
+}
+:byte_align "["^D8^", "^SB8^"]" is cls3=4 & shfop=7 & D8 & SB8 & SA8 { D8 = byte_align(SA8, SB8); }
+
+
+# immed (bits 39-36 = 1111, 35 = 0): a 16-bit value from bits 20-27 and the immediate operand
+# field, optionally inverted, placed in byte (immed_bN), word (immed_wN) or shifted left by
+# 8 * bits 33-34; the other operand field is the destination (A or B bank).
+IDST: ODA0 is o0_hi2!=3 & ODA0 { export ODA0; }
+IDST: ODB10 is o0_hi2=3 & ODB10 { export ODB10; }
+IVAL: "0x"^iv is o10_hi2=3 & imm8hi & o10_lo8 & inv=0 [ iv = (imm8hi << 8) | o10_lo8; ] { export *[const]:4 iv; }
+IVAL: "0x"^iv is o10_hi2!=3 & imm8hi & o0_lo8 & inv=0 [ iv = (imm8hi << 8) | o0_lo8; ] { export *[const]:4 iv; }
+IVAL: "0x"^iv is o10_hi2=3 & imm8hi & o10_lo8 & inv=1 [ iv = (((imm8hi << 8) | o10_lo8) $xor 0xffff) | 0xffff0000; ] { export *[const]:4 iv; }
+IVAL: "0x"^iv is o10_hi2!=3 & imm8hi & o0_lo8 & inv=1 [ iv = (((imm8hi << 8) | o0_lo8) $xor 0xffff) | 0xffff0000; ] { export *[const]:4 iv; }
+:nop is cls4=15 & b35=0 & b32=0 & b40=0 & o0_hi2=3 & o10_hi2=3 & imm8hi=0 & o10_lo8=0 { }
+:immed "["^IDST^", "^IVAL^"]" is cls4=15 & b35=0 & b32=0 & b40=0 & by=0 & wd=0 & bsz=0 & IDST & IVAL { IDST = IVAL; }
+:immed "["^IDST^", "^IVAL^", <<"^sh^"]" is cls4=15 & b35=0 & b32=0 & b40=0 & by=0 & wd=0 & bsz!=0 & bshift & IDST & IVAL [ sh = bshift * 8; ] { IDST = IVAL << sh; }
+:immed_b^bshift "["^IDST^", "^IVAL^"]" is cls4=15 & b35=0 & b32=0 & b40=0 & by=1 & bshift & IDST & IVAL {
+  sh:4 = bshift * 8;
+  v:4 = (IVAL & 0xff) << sh; m:4 = 0xff << sh; IDST = (IDST & ~m) | v;
+}
+:immed_w^wn "["^IDST^", "^IVAL^"]" is cls4=15 & b35=0 & b32=0 & b40=0 & by=0 & wd=1 & bshift & IDST & IVAL [ wn = bshift >> 1; ] {
+  sh:4 = wn * 16;
+  v:4 = (IVAL & 0xffff) << sh; m:4 = 0xffff << sh; IDST = (IDST & ~m) | v;
+}
+
+
+# ld_field[dst, mask, src, shift] (bits 39-35 = 11000): the bytes selected by the 4-bit mask
+# come from the shifted source; ld_field_w_clr clears the others; load_cc sets the flags.
+LDD: QDA0  is swap8=0 & QDA0  { export QDA0; }
+LDD: QDB10 is swap8=1 & QDB10 { export QDB10; }
+LDS: QSB10 is swap8=0 & QSB10 { export QSB10; }
+LDS: QSA0  is swap8=1 & QSA0  { export QSA0; }
+LSH: LDS is sc=0 & shz=0 & LDS { export LDS; }
+LSH: LDS^", >>rot"^shift is sc=0 & shz!=0 & LDS & shift { b:4 = LDS; r:4 = (b >> shift) | (b << (32 - shift)); export r; }
+LSH: LDS^", >>"^shift is sc=1 & LDS & shift { b:4 = LDS; r:4 = b >> shift; export r; }
+LSH: LDS^", <<"^sl is sc=2 & shz!=0 & LDS & shift [ sl = 32 - shift; ] { b:4 = LDS; r:4 = b << sl; export r; }
+LSH: LDS^", <<indirect" is sc=2 & shz=0 & LDS { b:4 = LDS; r:4 = indirect_shift(b); export r; }
+LSH: LDS^", >>dbl"^shift is sc=3 & LDS & shift { b:4 = LDS; r:4 = indirect_shift(b); export r; }
+:ld_field "["^LDD^", "^bmask^", "^LSH^"]" is ldcc=0 & cls5=0x18 & b40=0 & b33=0 & f21_23=0 & zerof=0 & bmask & LDD & LSH {
+  bm:4 = ((bmask & 1) * 0xff) | ((bmask & 2) * 0x7f80) | ((bmask & 4) * 0x3fc000) | ((bmask & 8) * 0x1fe00000);
+  v:4 = LSH; d:4 = (LDD & ~bm) | (v & bm);
+  LDD = d;
+}
+:ld_field "["^LDD^", "^bmask^", "^LSH^"], load_cc" is ldcc=1 & cls5=0x18 & b40=0 & b33=0 & f21_23=0 & zerof=0 & bmask & LDD & LSH {
+  bm:4 = ((bmask & 1) * 0xff) | ((bmask & 2) * 0x7f80) | ((bmask & 4) * 0x3fc000) | ((bmask & 8) * 0x1fe00000);
+  v:4 = LSH; d:4 = (LDD & ~bm) | (v & bm);
+  nzflags(d);
+  LDD = d;
+}
+:ld_field_w_clr "["^LDD^", "^bmask^", "^LSH^"]" is ldcc=0 & cls5=0x18 & b40=0 & b33=0 & f21_23=0 & zerof=1 & bmask & LDD & LSH {
+  bm:4 = ((bmask & 1) * 0xff) | ((bmask & 2) * 0x7f80) | ((bmask & 4) * 0x3fc000) | ((bmask & 8) * 0x1fe00000);
+  v:4 = LSH; d:4 = v & bm;
+  LDD = d;
+}
+:ld_field_w_clr "["^LDD^", "^bmask^", "^LSH^"], load_cc" is ldcc=1 & cls5=0x18 & b40=0 & b33=0 & f21_23=0 & zerof=1 & bmask & LDD & LSH {
+  bm:4 = ((bmask & 1) * 0xff) | ((bmask & 2) * 0x7f80) | ((bmask & 4) * 0x3fc000) | ((bmask & 8) * 0x1fe00000);
+  v:4 = LSH; d:4 = v & bm;
+  nzflags(d);
+  LDD = d;
+}
+
+
+# Branches: the target instruction number is bit 40 : bits 22-34 (byte address 8 * n);
+# bits 20-21 defer that many following instructions past the branch.
+TGT: ta is thi & tlo [ ta = ((thi << 13) | tlo) * 8; ] { export *:4 ta; }
+
+BYR: QSB10 is o0_b5=1 & QSB10 { export QSB10; }
+BYR: QSA0 is o0_b5=0 & QSA0 { export QSA0; }
+BYV: QSA0 is o0_b5=1 & QSA0 { export QSA0; }
+BYV: QSB10 is o0_b5=0 & QSB10 { export QSB10; }
+BBR: QSB10 is o0_b5=1 & QSB10 { export QSB10; }
+BBR: QSA0 is o0_b5=0 & QSA0 { export QSA0; }
+BBN: bn is o0_b5=1 & o0_hi8_2 & o0_lo5 [ bn = (((o0_hi8_2 << 5) | o0_lo5) - 1) & 0x1f; ] { export *[const]:4 bn; }
+BBN: bn is o0_b5=0 & o10_hi8_2 & o10_lo5 [ bn = (((o10_hi8_2 << 5) | o10_lo5) - 1) & 0x1f; ] { export *[const]:4 bn; }
+JREG: OSB10 is o0_hi2=3 & OSB10 { export OSB10; }
+JREG: OSA0 is o0_hi2!=3 & OSA0 { export OSA0; }
+JIMM: "."^jv is o0_hi2=3 & brimm & o0_lo8 [ jv = (brimm << 8) | o0_lo8; ] { export *[const]:4 jv; }
+JIMM: "."^jv is o0_hi2!=3 & brimm & o10_lo8 [ jv = (brimm << 8) | o10_lo8; ] { export *[const]:4 jv; }
+TGT2: "."^tn is thi & tlo [ tn = (thi << 13) | tlo; ] { export *[const]:4 tn; }
+:beq "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=0 & defer=0 & TGT { c:1 = ZF;  if (c) goto TGT; }
+:bne "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=1 & defer=0 & TGT { c:1 = !ZF;  if (c) goto TGT; }
+:bmi "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=2 & defer=0 & TGT { c:1 = NF;  if (c) goto TGT; }
+:bpl "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=3 & defer=0 & TGT { c:1 = !NF;  if (c) goto TGT; }
+:bcs "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=4 & defer=0 & TGT { c:1 = CF;  if (c) goto TGT; }
+:bcc "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=5 & defer=0 & TGT { c:1 = !CF;  if (c) goto TGT; }
+:bvs "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=6 & defer=0 & TGT { c:1 = VF;  if (c) goto TGT; }
+:bvc "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=7 & defer=0 & TGT { c:1 = !VF;  if (c) goto TGT; }
+:bge "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=8 & defer=0 & TGT { c:1 = NF == VF;  if (c) goto TGT; }
+:blt "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=9 & defer=0 & TGT { c:1 = NF != VF;  if (c) goto TGT; }
+:ble "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=10 & defer=0 & TGT { c:1 = ZF || (NF != VF);  if (c) goto TGT; }
+:bgt "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=11 & defer=0 & TGT { c:1 = !ZF && (NF == VF);  if (c) goto TGT; }
+:br "["^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=24 & defer=0 & TGT {  goto TGT; }
+:br_ctx_eq "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=16 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(16:1, cs);  if (c) goto TGT; }
+:br_ctx_ne "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=17 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(17:1, cs);  if (c) goto TGT; }
+:br_signal "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=18 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(18:1, cs);  if (c) goto TGT; }
+:br_nsignal "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=19 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(19:1, cs);  if (c) goto TGT; }
+:br_inp_state "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=20 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(20:1, cs);  if (c) goto TGT; }
+:br_ninp_state "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=21 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(21:1, cs);  if (c) goto TGT; }
+:br_cls_state "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=22 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(22:1, cs);  if (c) goto TGT; }
+:br_ncls_state "["^ctxsig^", "^TGT^"]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=23 & defer=0 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(23:1, cs);  if (c) goto TGT; }
+:br_byte_eq "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"]" is cls5=0x19 & beq=1 & defer=0 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) == BYV;  if (c) goto TGT; }
+:br_byte_ne "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"]" is cls5=0x19 & beq=0 & defer=0 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) != BYV;  if (c) goto TGT; }
+:br_bset "["^BBR^", "^BBN^", "^TGT^"]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=1 & defer=0 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 1;  if (c) goto TGT; }
+:br_bclr "["^BBR^", "^BBN^", "^TGT^"]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=0 & defer=0 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 0;  if (c) goto TGT; }
+:rtn "["^JREG^"]" is cls7=0x74 & f31=0 & brimm=0 & defer=0 & JREG { t:4 = JREG * 8;  return [t]; }
+:jump "["^JREG^", "^JIMM^"]" is cls7=0x74 & f31=0 & defer=0 & JREG & JIMM { t:4 = JREG * 8;  goto [t]; }
+:beq "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=0 & defer=1 & TGT { c:1 = ZF; delayslot(1); if (c) goto TGT; }
+:bne "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=1 & defer=1 & TGT { c:1 = !ZF; delayslot(1); if (c) goto TGT; }
+:bmi "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=2 & defer=1 & TGT { c:1 = NF; delayslot(1); if (c) goto TGT; }
+:bpl "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=3 & defer=1 & TGT { c:1 = !NF; delayslot(1); if (c) goto TGT; }
+:bcs "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=4 & defer=1 & TGT { c:1 = CF; delayslot(1); if (c) goto TGT; }
+:bcc "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=5 & defer=1 & TGT { c:1 = !CF; delayslot(1); if (c) goto TGT; }
+:bvs "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=6 & defer=1 & TGT { c:1 = VF; delayslot(1); if (c) goto TGT; }
+:bvc "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=7 & defer=1 & TGT { c:1 = !VF; delayslot(1); if (c) goto TGT; }
+:bge "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=8 & defer=1 & TGT { c:1 = NF == VF; delayslot(1); if (c) goto TGT; }
+:blt "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=9 & defer=1 & TGT { c:1 = NF != VF; delayslot(1); if (c) goto TGT; }
+:ble "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=10 & defer=1 & TGT { c:1 = ZF || (NF != VF); delayslot(1); if (c) goto TGT; }
+:bgt "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=11 & defer=1 & TGT { c:1 = !ZF && (NF == VF); delayslot(1); if (c) goto TGT; }
+:br "["^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=24 & defer=1 & TGT { delayslot(1); goto TGT; }
+:br_ctx_eq "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=16 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(16:1, cs); delayslot(1); if (c) goto TGT; }
+:br_ctx_ne "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=17 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(17:1, cs); delayslot(1); if (c) goto TGT; }
+:br_signal "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=18 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(18:1, cs); delayslot(1); if (c) goto TGT; }
+:br_nsignal "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=19 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(19:1, cs); delayslot(1); if (c) goto TGT; }
+:br_inp_state "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=20 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(20:1, cs); delayslot(1); if (c) goto TGT; }
+:br_ninp_state "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=21 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(21:1, cs); delayslot(1); if (c) goto TGT; }
+:br_cls_state "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=22 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(22:1, cs); delayslot(1); if (c) goto TGT; }
+:br_ncls_state "["^ctxsig^", "^TGT^"], defer[1]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=23 & defer=1 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(23:1, cs); delayslot(1); if (c) goto TGT; }
+:br_byte_eq "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[1]" is cls5=0x19 & beq=1 & defer=1 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) == BYV; delayslot(1); if (c) goto TGT; }
+:br_byte_ne "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[1]" is cls5=0x19 & beq=0 & defer=1 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) != BYV; delayslot(1); if (c) goto TGT; }
+:br_bset "["^BBR^", "^BBN^", "^TGT^"], defer[1]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=1 & defer=1 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 1; delayslot(1); if (c) goto TGT; }
+:br_bclr "["^BBR^", "^BBN^", "^TGT^"], defer[1]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=0 & defer=1 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 0; delayslot(1); if (c) goto TGT; }
+:rtn "["^JREG^"], defer[1]" is cls7=0x74 & f31=0 & brimm=0 & defer=1 & JREG { t:4 = JREG * 8; delayslot(1); return [t]; }
+:jump "["^JREG^", "^JIMM^"], defer[1]" is cls7=0x74 & f31=0 & defer=1 & JREG & JIMM { t:4 = JREG * 8; delayslot(1); goto [t]; }
+:beq "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=0 & defer=2 & TGT { c:1 = ZF; delayslot(9); if (c) goto TGT; }
+:bne "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=1 & defer=2 & TGT { c:1 = !ZF; delayslot(9); if (c) goto TGT; }
+:bmi "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=2 & defer=2 & TGT { c:1 = NF; delayslot(9); if (c) goto TGT; }
+:bpl "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=3 & defer=2 & TGT { c:1 = !NF; delayslot(9); if (c) goto TGT; }
+:bcs "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=4 & defer=2 & TGT { c:1 = CF; delayslot(9); if (c) goto TGT; }
+:bcc "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=5 & defer=2 & TGT { c:1 = !CF; delayslot(9); if (c) goto TGT; }
+:bvs "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=6 & defer=2 & TGT { c:1 = VF; delayslot(9); if (c) goto TGT; }
+:bvc "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=7 & defer=2 & TGT { c:1 = !VF; delayslot(9); if (c) goto TGT; }
+:bge "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=8 & defer=2 & TGT { c:1 = NF == VF; delayslot(9); if (c) goto TGT; }
+:blt "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=9 & defer=2 & TGT { c:1 = NF != VF; delayslot(9); if (c) goto TGT; }
+:ble "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=10 & defer=2 & TGT { c:1 = ZF || (NF != VF); delayslot(9); if (c) goto TGT; }
+:bgt "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=11 & defer=2 & TGT { c:1 = !ZF && (NF == VF); delayslot(9); if (c) goto TGT; }
+:br "["^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=24 & defer=2 & TGT { delayslot(9); goto TGT; }
+:br_ctx_eq "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=16 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(16:1, cs); delayslot(9); if (c) goto TGT; }
+:br_ctx_ne "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=17 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(17:1, cs); delayslot(9); if (c) goto TGT; }
+:br_signal "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=18 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(18:1, cs); delayslot(9); if (c) goto TGT; }
+:br_nsignal "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=19 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(19:1, cs); delayslot(9); if (c) goto TGT; }
+:br_inp_state "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=20 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(20:1, cs); delayslot(9); if (c) goto TGT; }
+:br_ninp_state "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=21 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(21:1, cs); delayslot(9); if (c) goto TGT; }
+:br_cls_state "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=22 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(22:1, cs); delayslot(9); if (c) goto TGT; }
+:br_ncls_state "["^ctxsig^", "^TGT^"], defer[2]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=23 & defer=2 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(23:1, cs); delayslot(9); if (c) goto TGT; }
+:br_byte_eq "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[2]" is cls5=0x19 & beq=1 & defer=2 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) == BYV; delayslot(9); if (c) goto TGT; }
+:br_byte_ne "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[2]" is cls5=0x19 & beq=0 & defer=2 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) != BYV; delayslot(9); if (c) goto TGT; }
+:br_bset "["^BBR^", "^BBN^", "^TGT^"], defer[2]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=1 & defer=2 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 1; delayslot(9); if (c) goto TGT; }
+:br_bclr "["^BBR^", "^BBN^", "^TGT^"], defer[2]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=0 & defer=2 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 0; delayslot(9); if (c) goto TGT; }
+:rtn "["^JREG^"], defer[2]" is cls7=0x74 & f31=0 & brimm=0 & defer=2 & JREG { t:4 = JREG * 8; delayslot(9); return [t]; }
+:jump "["^JREG^", "^JIMM^"], defer[2]" is cls7=0x74 & f31=0 & defer=2 & JREG & JIMM { t:4 = JREG * 8; delayslot(9); goto [t]; }
+:beq "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=0 & defer=3 & TGT { c:1 = ZF; delayslot(17); if (c) goto TGT; }
+:bne "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=1 & defer=3 & TGT { c:1 = !ZF; delayslot(17); if (c) goto TGT; }
+:bmi "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=2 & defer=3 & TGT { c:1 = NF; delayslot(17); if (c) goto TGT; }
+:bpl "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=3 & defer=3 & TGT { c:1 = !NF; delayslot(17); if (c) goto TGT; }
+:bcs "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=4 & defer=3 & TGT { c:1 = CF; delayslot(17); if (c) goto TGT; }
+:bcc "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=5 & defer=3 & TGT { c:1 = !CF; delayslot(17); if (c) goto TGT; }
+:bvs "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=6 & defer=3 & TGT { c:1 = VF; delayslot(17); if (c) goto TGT; }
+:bvc "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=7 & defer=3 & TGT { c:1 = !VF; delayslot(17); if (c) goto TGT; }
+:bge "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=8 & defer=3 & TGT { c:1 = NF == VF; delayslot(17); if (c) goto TGT; }
+:blt "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=9 & defer=3 & TGT { c:1 = NF != VF; delayslot(17); if (c) goto TGT; }
+:ble "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=10 & defer=3 & TGT { c:1 = ZF || (NF != VF); delayslot(17); if (c) goto TGT; }
+:bgt "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=11 & defer=3 & TGT { c:1 = !ZF && (NF == VF); delayslot(17); if (c) goto TGT; }
+:br "["^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=24 & defer=3 & TGT { delayslot(17); goto TGT; }
+:br_ctx_eq "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=16 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(16:1, cs); delayslot(17); if (c) goto TGT; }
+:br_ctx_ne "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=17 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(17:1, cs); delayslot(17); if (c) goto TGT; }
+:br_signal "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=18 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(18:1, cs); delayslot(17); if (c) goto TGT; }
+:br_nsignal "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=19 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(19:1, cs); delayslot(17); if (c) goto TGT; }
+:br_inp_state "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=20 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(20:1, cs); delayslot(17); if (c) goto TGT; }
+:br_ninp_state "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=21 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(21:1, cs); delayslot(17); if (c) goto TGT; }
+:br_cls_state "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=22 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(22:1, cs); delayslot(17); if (c) goto TGT; }
+:br_ncls_state "["^ctxsig^", "^TGT^"], defer[3]" is cls5=0x1b & f5_7=1 & f10_13=0 & f18_19=0 & brop=23 & defer=3 & ctxsig & TGT { cs:1 = ctxsig; c:1 = ctx_state(23:1, cs); delayslot(17); if (c) goto TGT; }
+:br_byte_eq "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[3]" is cls5=0x19 & beq=1 & defer=3 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) == BYV; delayslot(17); if (c) goto TGT; }
+:br_byte_ne "["^BYR^", "^bybyte^", "^BYV^", "^TGT^"], defer[3]" is cls5=0x19 & beq=0 & defer=3 & BYR & bybyte & BYV & TGT { v:4 = BYR >> (bybyte * 8); c:1 = (v & 0xff) != BYV; delayslot(17); if (c) goto TGT; }
+:br_bset "["^BBR^", "^BBN^", "^TGT^"], defer[3]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=1 & defer=3 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 1; delayslot(17); if (c) goto TGT; }
+:br_bclr "["^BBR^", "^BBN^", "^TGT^"], defer[3]" is cls5=0x1a & beq=0 & f8_9=0 & bbit=0 & defer=3 & BBR & BBN & TGT { c:1 = ((BBR >> BBN) & 1) == 0; delayslot(17); if (c) goto TGT; }
+:rtn "["^JREG^"], defer[3]" is cls7=0x74 & f31=0 & brimm=0 & defer=3 & JREG { t:4 = JREG * 8; delayslot(17); return [t]; }
+:jump "["^JREG^", "^JIMM^"], defer[3]" is cls7=0x74 & f31=0 & defer=3 & JREG & JIMM { t:4 = JREG * 8; delayslot(17); goto [t]; }
+
+
+:ctx_arb "[kill]" is cls5=0x1c & evz=0 & noload=0 & bpt=0 { ctx_kill(); return [0:4]; }
+:ctx_arb "[voluntary]" is cls5=0x1c & evz=1 & bpt=0 & resume=0 { ctx_arb(1:2); }
+:ctx_arb "[bpt]" is cls5=0x1c & bpt=1 { ctx_arb(0:2); }
+:ctx_arb "["^evmask^"]" is cls5=0x1c & bpt=0 & resume=0 & evmask { em:2 = evmask; ctx_arb(em); }
+:ctx_arb "["^evmask^"], br["^TGT^"]" is cls5=0x1c & bpt=0 & resume=1 & evmask & TGT { em:2 = evmask; ctx_arb(em); goto TGT; }
+CSRS: OSB10 is o0_hi2=3 & o10_hi2!=3 & OSB10 { export OSB10; }
+CSRS: OSA0 is (o0_hi2!=3 | o10_hi2=3) & OSA0 { export OSA0; }
+:local_csr_wr "["^csrnum^", "^CSRS^"]" is cls7=0x7e & b40=0 & b20=0 & csrwr=1 & csrnum & CSRS { cn:2 = csrnum; local_csr_wr(cn, CSRS); }
+:local_csr_rd "["^csrnum^"]" is cls7=0x7e & b40=0 & b20=0 & csrwr=0 & csrnum { cn:2 = csrnum; LCSR_DATA = local_csr_rd(cn); }
+:mul_step "["^AOP^", "^BOP^"], "^mtype^", "^mstep is cls7=0x7c & f24_29=0 & mtype & mstep & AOP & BOP & DST { mt:1 = mtype; ms:1 = mstep; DST = mult_step(AOP, BOP, mt, ms); }
+CMDA: QSA0 is QSA0 { export QSA0; }
+CMDB: QSB10 is QSB10 { export QSB10; }
+:cmd "["^cmd_tgt^", $xfer_"^cmd_xfer^", "^CMDA^", "^CMDB^", "^cl^"], sig"^cmd_sig is b39=0 & cmz<5 & cmd_mode & cmd_tgt & cmd_xfer & cmd_sig & cmd_len & CMDA & CMDB [ cl = cmd_len + 1; ] {
+  t:1 = cmd_tgt; md:1 = cmd_mode; x:1 = cmd_xfer; n:1 = cl; s:1 = cmd_sig; cpp_cmd(t, md, x, CMDA, CMDB, n, s);
+}
+:cmd "["^cmd_tgt^", $xfer_"^cmd_xfer^", "^cmd_b^", "^cmd_a^"], sig"^cmd_sig is b39=0 & cmz>=5 & cmd_mode & cmd_tgt & cmd_xfer & cmd_sig & cmd_len & cmd_a & cmd_b {
+  t:1 = cmd_tgt; md:1 = cmd_mode; x:1 = cmd_xfer; av:2 = (cmd_b << 8) | cmd_a; n:1 = cmd_len; s:1 = cmd_sig; cpp_cmd(t, md, x, av, n, s);
+}

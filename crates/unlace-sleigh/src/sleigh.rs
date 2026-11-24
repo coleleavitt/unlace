@@ -55,8 +55,9 @@ mod operand_tests;
 const MAX_DEPTH: i32 = 32;
 /// C++ `ParserContext::MAX_OPERAND`.
 const MAX_OPERAND: i32 = 20;
-/// C++ `ParserContext::MAX_INSTRUCTION_LEN`.
-const MAX_INSTRUCTION_LEN: i32 = 16;
+/// C++ `ParserContext::MAX_INSTRUCTION_LEN` (16 upstream); raised so the longest
+/// encodings of long-operand ISAs (NEC V60 Format II, VAX) fit in the buffer.
+pub(crate) const MAX_INSTRUCTION_LEN: i32 = 32;
 /// C++ `ParserContext::INITIAL_STATE_NUM`.
 const INITIAL_STATE_NUM: i32 = 64;
 /// C++ `ParserContext::STATE_GROWTH`.
@@ -1932,7 +1933,7 @@ impl Sleigh {
     }
 
     /// Load the instruction bytes for `addr` into `pos.buf` (C++
-    /// `loader->loadFill(pos.getBuffer(),16,pos.getAddr())`).
+    /// `loader->loadFill(pos.getBuffer(),16,pos.getAddr())`, here `MAX_INSTRUCTION_LEN` bytes).
     fn load_fill_context(&self, pos: &mut ParserContext) -> KunaResult<()> {
         let addr = pos.addr.clone();
         let buf = pos.get_buffer_mut();

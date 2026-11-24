@@ -99,7 +99,7 @@ impl Case {
             .arg(image)
             .args(["--sleighpath"])
             .arg(
-                std::env::var_os("KUNA_CALLWIDE_SPECS")
+                unlace_base::env::var_os("UNLACE_CALLWIDE_SPECS")
                     .map_or_else(|| common::repo_root().join("specs"), PathBuf::from),
             )
             .args([

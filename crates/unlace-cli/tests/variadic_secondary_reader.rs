@@ -46,7 +46,8 @@ fn function<'a>(text: &'a str, name: &str) -> &'a str {
 
 fn decompile(binary: &std::path::Path) -> String {
     let mut cmd = Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
+        unlace_base::env::var_os("UNLACE_TEST_BIN")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     );
     cmd.env("KUNA_SPECS", common::repo_root().join("specs"));
     cmd.arg("decompile-all").arg(binary).args([
@@ -132,7 +133,8 @@ fn decompile_imported_kind(binary: &std::path::Path, floating: bool) -> String {
         ("caller_imported_integer", "0x14000101d", "int *value", 3)
     };
     let output = Command::new(
-        std::env::var_os("KUNA_TEST_BIN").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
+        unlace_base::env::var_os("UNLACE_TEST_BIN")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     )
     .env("KUNA_SPECS", common::repo_root().join("specs"))
     .arg("decompile-all")

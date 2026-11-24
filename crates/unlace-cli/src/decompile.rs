@@ -802,7 +802,7 @@ fn decompile(args: &DecompileArgs) -> Result<DecompileOutcome, String> {
         for note in stderr_text.lines().filter(forwarded) {
             unlace_base::notes::say_once(&binary, note);
         }
-        if std::env::var_os("KUNA_CALLEEPURGE_DEBUG").is_some() {
+        if unlace_base::env::var_os("UNLACE_CALLEEPURGE_DEBUG").is_some() {
             for line in stderr_text
                 .lines()
                 .filter(|l| l.starts_with("calleepurge: "))

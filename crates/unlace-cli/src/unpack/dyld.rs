@@ -43,7 +43,7 @@ pub(super) fn run(binary: &str, output: Option<&str>, list: bool, json: bool) ->
             return 1;
         }
     };
-    let mut name = std::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV)
+    let mut name = unlace_base::env::var(unlace_decomp::kuna_dyldcache::DYLDIMAGE_ENV)
         .unwrap_or_default()
         .trim()
         .to_string();

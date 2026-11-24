@@ -1770,7 +1770,7 @@ mod tests {
         assert_eq!(first.signed, second.signed);
         assert_eq!(first.inputs.len(), second.inputs.len());
         assert_ne!(first.inputs, second.inputs);
-        let keep = std::env::var_os("KUNA_CALLWIDE_REPLAY_DIR");
+        let keep = unlace_base::env::var_os("UNLACE_CALLWIDE_REPLAY_DIR");
         let dir = keep.as_ref().map_or_else(
             || {
                 std::env::temp_dir().join(format!(

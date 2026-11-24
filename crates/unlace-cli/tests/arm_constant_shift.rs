@@ -145,7 +145,8 @@ fn signed_constant_lsl_is_defined_and_preserves_signed_consumers() {
     std::fs::write(&image, bytes).unwrap();
     std::fs::write(&assertions, declarations).unwrap();
     let mut command = Command::new(
-        std::env::var_os("KUNA_TEST_RUNNER").unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
+        unlace_base::env::var_os("UNLACE_TEST_RUNNER")
+            .unwrap_or_else(|| env!("CARGO_BIN_EXE_unlace").into()),
     );
     command.env("KUNA_BINARY", env!("CARGO_BIN_EXE_unlace"));
     command.env("KUNA_SPECS", common::repo_root().join("specs"));

@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_352() {
-    assert_eq!(kuna_num_settables(), 352);
-    assert_eq!(SETTABLE_TABLE.len(), 352);
+fn settable_count_is_353() {
+    assert_eq!(kuna_num_settables(), 353);
+    assert_eq!(SETTABLE_TABLE.len(), 353);
 }
 
 #[test]
-fn tier_counts_are_70_core_177_transform_105_analysis() {
+fn tier_counts_are_70_core_177_transform_106_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_177_transform_105_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 177, 105));
+    assert_eq!((core, transform, analysis), (70, 177, 106));
 }
 
 #[test]
@@ -323,6 +323,9 @@ fn option_values_live_value_present_for_129() {
         // (kuna) The COM id and interface pass -- an analysis-pass gate read
         // console-side. Default-off.
         "com",
+        // (kuna) The clsid.cfg file the COM pass also reads -- read at the
+        // analysis commit, console-side via kuna_live_value. Default off.
+        "comcfg",
         // (kuna) The libgcc `__divdi3` contract -- an analysis-pass gate read
         // console-side via kuna_live_value, like `libcsigs`. Default-off.
         "libgccsigs",
@@ -1317,7 +1320,8 @@ fn emit_catalog_json_static_form_brackets_and_commas() {
     // Recounted from phases.toml after merging origin/main: 350 rows, 349 commas.
     // +1 for `javasync`; its P9 row sits after `javanew`: 351 rows, 350 commas.
     // +1 for `condcallpush`; its P8 row is last: 352 rows, 351 commas.
-    assert_eq!(json.matches("},\n").count(), 351);
+    // +1 for `comcfg`; its P1 row follows `com`: 353 rows, 352 commas.
+    assert_eq!(json.matches("},\n").count(), 352);
 }
 
 #[test]

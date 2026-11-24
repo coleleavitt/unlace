@@ -5494,6 +5494,39 @@ next slot, with every reference shifted by the same amount. Stores of
 stack-passed arguments through the same pointer, and a stack probe's
 `*p = *p` touch, are not the call's push and stay.
 
+### (kuna) `armpairparam` — a 64-bit parameter in an aligned register pair
+
+On 32-bit ARM a `long long` argument takes an even-aligned pair of argument
+registers, `r0:r1` or `r2:r3`. The cspec states this only in its `<rule>`
+`join align="true"`, which the locked-prototype assignment reads; the
+`<pentry>` list that recovery reads has one 4-byte entry per register, so an
+unprototyped function recovers two `int` parameters and `pairparam`'s
+`RuleDoubleInputPair` refuses to join the registers
+(`possible_input_param` has no 8-byte slot at `r0`). With option
+`armpairparam` (default off; `pairparam` must be on),
+`crates/unlace-middle/src/p4_calls/kuna_armpairparam.rs (pair_slots)` accepts a
+range that is exactly two consecutive general register entries of the input
+model in one space, the first at an even position among them (`r0` and `r2`
+on ARM; the same rule pairs `a0:a1` on MIPS o32 and `r3:r4` on 32-bit
+PowerPC, whose models list the registers in order), and
+`kuna_armpairparam.rs (joined_pair)` adds that the function's inputs are not
+locked. Three places read it:
+
+- `RuleDoubleInputPair` joins such a pair when a borrow, carry or two-word
+  equality links it, even though the function later writes one of the
+  registers (a register write is a new value, not a store into the parameter);
+- heritage's `entry_partition` leaves the joined 8-byte input whole instead of
+  splitting it back into the per-register slots;
+- `ActionInputPrototype` registers one trial per register for the joined
+  input, both mapped to it, so the ordinary trial analysis decides whether the
+  parameter exists; `update_input_types` keeps the first used trial and
+  `kuna_armpairparam.rs (param_addr)` places the parameter at the start of the
+  pair with the input's 8-byte type.
+
+Off, nothing changes. On, the joined pair prints as one `long long` and the
+double-precision forms (`kuna_borrowcompare.rs`) fold its arithmetic and
+compares, instead of an `SBORROW4`/`CONCAT44` chain.
+
 ### (kuna) `returnpair` — the register-pair return split
 
 Provenance: upstream issue GH-6990, implemented kuna-side

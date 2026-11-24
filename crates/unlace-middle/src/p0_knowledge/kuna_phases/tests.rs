@@ -47,13 +47,13 @@ fn surface_count_is_102() {
 }
 
 #[test]
-fn settable_count_is_343() {
-    assert_eq!(kuna_num_settables(), 343);
-    assert_eq!(SETTABLE_TABLE.len(), 343);
+fn settable_count_is_345() {
+    assert_eq!(kuna_num_settables(), 345);
+    assert_eq!(SETTABLE_TABLE.len(), 345);
 }
 
 #[test]
-fn tier_counts_are_70_core_171_transform_102_analysis() {
+fn tier_counts_are_70_core_172_transform_103_analysis() {
     let mut core = 0;
     let mut transform = 0;
     let mut analysis = 0;
@@ -65,7 +65,7 @@ fn tier_counts_are_70_core_171_transform_102_analysis() {
             other => panic!("invalid tier {other:?} on {}", s.option),
         }
     }
-    assert_eq!((core, transform, analysis), (70, 171, 102));
+    assert_eq!((core, transform, analysis), (70, 172, 103));
 }
 
 #[test]
@@ -382,6 +382,8 @@ fn option_values_live_value_present_for_129() {
         "dwarf",
         "dwarf_lines",
         "cvftrace",
+        // (kuna) Go pclntab source positions, read console-side like `cvftrace`.
+        "gopcln",
         "addrtable",
         "operand_refs",
         "formatstring",
@@ -969,7 +971,8 @@ fn option_values_live_value_present_for_129() {
     // +1 for `guarddispatch` (live_field = guard_dispatch).
     // +1 for `flownames` (live_field = flow_names).
     // +1 for `llscfold` (live_field = llsc_fold); `atomics` is four-valued, so it has none.
-    assert_eq!(with_live, 142);
+    // +1 for `armpairparam` (live_field = arm_pair_params).
+    assert_eq!(with_live, 143);
 }
 
 #[test]

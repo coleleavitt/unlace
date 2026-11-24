@@ -1,6 +1,10 @@
 //! (kuna `typelib`) The prebuilt type library: a platform C library's
 //! declarations, read for the functions an image imports.
 //!
+//! Three libraries are built in: the libc of an x86-64 Linux ELF (from musl,
+//! `scripts/typelib/gen_musl.py`) and the Windows API of an x86 and an x64 PE
+//! (from IDA's Windows SDK type libraries, `scripts/typelib/gen_windows.py`).
+//!
 //! A library is one text file. Its first three lines name the format, the
 //! target and the source the entries were generated from; every entry after
 //! them is one function, one typedef or one record:
@@ -51,7 +55,14 @@ use crate::grammar::{DataOrg, parse_protopieces, parse_type};
 const FORMAT: &str = unlace_decomp::kuna_typelib::MAGIC;
 
 /// The libraries built into kuna, by target.
-const BUILTIN: &[(&str, &str)] = &[("linux x86_64", include_str!("../typelib/linux-x86_64.ktl"))];
+const BUILTIN: &[(&str, &str)] = &[
+    ("linux x86_64", include_str!("../typelib/linux-x86_64.ktl")),
+    ("windows x86", include_str!("../typelib/windows-x86.ktl")),
+    (
+        "windows x86_64",
+        include_str!("../typelib/windows-x86_64.ktl"),
+    ),
+];
 
 /// Largest library file `typelib <path>` reads.
 const MAX_LIBRARY_BYTES: u64 = 16 << 20;
@@ -496,7 +507,9 @@ fn is_til_file(path: &std::path::Path) -> bool {
 }
 
 /// Add the library's prototype for each import of `facts` that no earlier
-/// source in `merged` declared. Returns how many functions took one.
+/// source in `merged` declared. On a Windows image the library also replaces
+/// a `win32sigs` declaration, which spells handles and records `void *`.
+/// Returns how many functions took one.
 pub fn seed(
     arch: &Architecture,
     facts: &TypeLibFacts,
@@ -524,11 +537,15 @@ pub fn seed(
         word_size,
     };
     let mut reader = Reader::new(&lib, facts.glibc, arch.types(), org);
+    let windows = facts.target.starts_with("windows ");
+    let replaceable =
+        |name: &str| windows && unlace_analysis::protos::kuna_win32sigs::declares(name);
     let declared: BTreeSet<&str> = merged
         .prototypes
         .iter()
         .chain(merged.prototypes_at.iter().map(|(_, pieces)| pieces))
         .map(|pieces| pieces.name.as_str())
+        .filter(|name| !replaceable(name))
         .collect();
     let mut read: BTreeMap<&str, Option<PrototypePieces>> = BTreeMap::new();
     let mut by_address = Vec::new();
@@ -544,6 +561,19 @@ pub fn seed(
         }
     }
     drop(declared);
+    let replaced: BTreeSet<&str> = read
+        .iter()
+        .filter(|(name, pieces)| pieces.is_some() && replaceable(name))
+        .map(|(name, _)| *name)
+        .collect();
+    if !replaced.is_empty() {
+        merged
+            .prototypes
+            .retain(|pieces| !replaced.contains(pieces.name.as_str()));
+        merged
+            .prototypes_at
+            .retain(|(_, pieces)| !replaced.contains(pieces.name.as_str()));
+    }
     let mut seeded = 0;
     for (name, pieces) in read {
         let Some(pieces) = pieces else { continue };

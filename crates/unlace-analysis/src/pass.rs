@@ -778,12 +778,14 @@ pub struct AnalysisOutput {
     /// Source-line annotations recovered from debug metadata, each to be
     /// installed as a `Comment::user2` so the decompiled output carries the
     /// `file:line` of the instruction. The commit boundary writes each into the
-    /// architecture's `commentdb`. Produced by the DWARF lines pass and the CVF
-    /// trace lines pass (`dwarf_lines on`, `cvftrace lines`); empty otherwise. See
+    /// architecture's `commentdb`. Produced by the DWARF lines pass, the CVF
+    /// trace lines pass and the Go pclntab passes (`dwarf_lines on`,
+    /// `cvftrace lines`, `gopcln`); empty otherwise. See
     /// [`CommentFact`].
     pub comments: Vec<CommentFact>,
     /// (kuna) Function header (plate) comments, keyed by `func_addr`. Produced
-    /// only by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`).
+    /// by [`crate::entry::kuna_itaniumeh::EhNotePass`] (`ehnote`) and the Go
+    /// source-position pass (`gopcln`).
     pub header_comments: Vec<CommentFact>,
     /// Functions the FID matcher re-identified by full-hash fingerprint, by
     /// `(addr, name)`. The commit boundary **renames** each (resolved by ADDRESS) only

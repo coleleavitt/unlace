@@ -248,6 +248,7 @@ kuna_options! { self, p1;
     "narrowargs" => registered!(crate::kuna_narrowargs::NarrowArgs),
     "regnarrow" => registered!(crate::kuna_regnarrow::NarrowLocals),
     "pairparam" => registered!(crate::kuna_borrowcompare::PairParams),
+    "armpairparam" => registered!(crate::kuna_armpairparam::ArmPairParams),
     "narrowret" => registered!(crate::kuna_narrowret::NarrowRet),
     "regsigned" => registered!(crate::kuna_regnarrow::NarrowSigned),
     "narrowext" => {
@@ -528,6 +529,7 @@ kuna_options! { self, p1;
     },
     "dwarf" => registered!(crate::kuna_analysisgates::Dwarf),
     "cvftrace" => registered!(crate::kuna_analysisgates::CvfTrace),
+    "gopcln" => registered!(crate::kuna_analysisgates::GoPcln),
     "dwarf_lines" => {
         registered!(crate::kuna_analysisgates::DwarfLines)
     },

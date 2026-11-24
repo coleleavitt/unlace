@@ -35,6 +35,8 @@ struct Layout {
     hasmain: u64,
 }
 
+const CUTAB: u64 = 4;
+const FILETAB: u64 = 7;
 const FTAB: u64 = 16;
 const MINPC: u64 = 20;
 const TEXT: u64 = 22;
@@ -91,6 +93,11 @@ pub(crate) struct Moduledata {
     pub typelinks: (u64, u64),
     /// `(ptr, len)` of `[]*itab`.
     pub itablinks: (u64, u64),
+    /// `cutab` and `filetab` (words 4 and 7 since go1.16).
+    pub cutab: u64,
+    pub filetab: u64,
+    /// `gofunc` (go1.18+), three words after `types`: `types, etypes, rodata, gofunc`.
+    pub gofunc: Option<u64>,
 }
 
 /// The `moduledata` whose `pcHeader` is `header_vma`, read with the row for
@@ -172,6 +179,13 @@ fn read(
         etypes,
         typelinks: slice(l.typelinks)?,
         itablinks: slice(l.itablinks)?,
+        cutab: w(CUTAB)?,
+        filetab: w(FILETAB)?,
+        gofunc: if l.since_minor >= 18 {
+            w(l.types + 3).filter(|&g| g != 0)
+        } else {
+            None
+        },
     })
 }
 

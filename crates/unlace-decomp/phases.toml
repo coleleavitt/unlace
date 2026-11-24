@@ -1743,6 +1743,28 @@ live_true = "on"
 live_false = "off"
 
 [[settable]]
+option = "minmax"
+values = "on|off"
+default = "off"
+destructive = false
+phase = "P3"
+subphase = "simplification-quiescence"
+strength = "HARD"
+rewind = "P3"
+issue = "unlace-minmax"
+summary = "Print a branch-free min or max, written as arithmetic on the sign of a difference, as min(a, b) or max(a, b). With d = a - b and s = d >> (W - 1) (arithmetic), b + (d & s) is min(a, b) and a - (d & s) is max(a, b): a compiler lowers `a < b ? a : b` without a branch to that form. The rule matches an INT_ADD of b and d & s, or an INT_SUB of a and d & s, where d is the INT_SUB of a and b and s is the sign of d, and rewrites the op in place into the builtin call min(a, b) or max(a, b) (signed). It is exact only when a - b does not overflow, the case the sign of d assumes, so it is a judgement call and off by default."
+use_when = "Off by default: the sign-of-difference form is exact only without signed overflow in a - b, and the call is not C. Turn it on to read branch-free selects of the smaller or larger of two signed values as min and max, the way the source wrote them."
+example = "option minmax on"
+live_field = "min"
+live_true = "on"
+live_false = "off"
+source_decompiler = "unlace"
+inspiration = "unlace idiom_recognition try_min_idiom and try_max_idiom (the archived master pass, passes-idioms)"
+change_kind = "new-analysis"
+tier = "transform"
+symptoms = "a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31))|a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31))|a cmov-style min or max of two ints prints as a shift, a mask and an add"
+
+[[settable]]
 option = "bitfieldarith"
 values = "on|off"
 default = "off"

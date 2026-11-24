@@ -26,6 +26,7 @@
 //!   stripped-offset-to-load-address mapping.
 //! - [`loadimage_wasm`] -- a WebAssembly module laid out as a flat image, its
 //!   bodies lowered to register form.
+//! - [`pe_resources`] -- the PE resource directory as flat (type, name, language, RVA, size) records.
 //! - [`loader`] -- image-format markup: PLT/GOT import naming, relocations,
 //!   ARM/MIPS mapping markers, the known no-return name lists.
 //! - [`analyzers`] -- the metadata analyzers, one module per pass (strings,
@@ -65,6 +66,7 @@ pub mod loadimage_wasm;
 pub mod neolite;
 pub mod pass;
 pub mod passes;
+pub mod pe_resources;
 pub mod pklite;
 pub mod upx;
 

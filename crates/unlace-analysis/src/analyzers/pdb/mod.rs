@@ -61,6 +61,7 @@ pub mod locate;
 pub(crate) mod pdbframe;
 pub mod pdbinterior;
 pub mod pdblines;
+pub mod pdbshape;
 pub(crate) mod pdbtpi;
 pub mod pdbtypes;
 pub mod walk;

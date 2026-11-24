@@ -5607,7 +5607,9 @@ over the fixed bytes after them, the function length, each public name as
 `:0000 name`, each referenced global name as `^offset name`, and the remaining
 bytes. Functions with only a local symbol, compiler-generated names and functions
 with fewer than four fixed bytes in their first 32 are left out; the last are
-counted on stderr.
+counted on stderr. The exception is GCC's `crtstuff.c` helpers (`deregister_tm_clones`,
+`register_tm_clones`, `__do_global_dtors_aux`, `frame_dummy`), which are named from
+their local symbols so a `crtbegin*.o` yields them.
 
 `--sig` also writes the binary signature file (format version 10, uncompressed)
 that `--option flirt on` reads through `UNLACE_FLIRT_SIGS`. `--libname` sets the

@@ -1534,6 +1534,14 @@ The control surface: each of these can make output worse on the wrong source sha
 - **Where / provenance:** P3/simplification-quiescence · unlace · presentation-default · bitidioms
 - **Example:** `--option bitidioms off`
 
+### `minmax` -- on | off, default `off`
+
+- **Symptoms:** a branch-free minimum prints as b + ((a - b) & ((a - b) >> 31)); a branch-free maximum prints as a - ((a - b) & ((a - b) >> 31)); a cmov-style min or max of two ints prints as a shift, a mask and an add.
+- **What it does:** Print a branch-free min or max, written as arithmetic on the sign of a difference, as min(a, b) or max(a, b). With d = a - b and s = d >> (W - 1) (arithmetic), b + (d & s) is min(a, b) and a - (d & s) is max(a, b): a compiler lowers `a < b ? a : b` without a branch to that form. The rule matches an INT_ADD of b and d & s, or an INT_SUB of a and d & s, where d is the INT_SUB of a and b and s is the sign of d, and rewrites the op in place into the builtin call min(a, b) or max(a, b) (signed). It is exact only when a - b does not overflow, the case the sign of d assumes, so it is a judgement call and off by default.
+- **When to flip:** Off by default: the sign-of-difference form is exact only without signed overflow in a - b, and the call is not C. Turn it on to read branch-free selects of the smaller or larger of two signed values as min and max, the way the source wrote them.
+- **Where / provenance:** P3/simplification-quiescence · unlace · new-analysis · unlace-minmax
+- **Example:** `option minmax on`
+
 ### `satmul` -- on | off, default `off`
 
 - **Symptoms:** new T[n] prints as a 128-bit multiply with a SUB168 high-half test and a -1 select; operator new[] is called with -(ulong)(overflow) ORed into n * size; a cmovo or seto after a mul feeds an allocation size.

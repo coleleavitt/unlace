@@ -116,3 +116,13 @@ def register_map(langid: str) -> tuple[dict, bool]:
                 regs[name] = (off + i * size, size)
     e = ENDIAN.search(text)
     return regs, bool(e and e.group(1) == "big")
+
+
+SPACEDEF = re.compile(r"define\s+space\s+(\w+)\s+type\s*=\s*(\w+)")
+
+
+def space_names(langid: str) -> dict:
+    """{space id: name} of a language's declared address spaces: the SLEIGH compiler numbers them
+    from 3 (after const, other and unique) in declaration order, and LOAD/STORE carry that id."""
+    text = preprocess(find_language(langid))
+    return {3 + i: (m.group(1) if m.group(2) == "register_space" else "ram") for i, m in enumerate(SPACEDEF.finditer(text))}

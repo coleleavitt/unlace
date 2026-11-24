@@ -231,6 +231,15 @@ afterwards. The register file is unchanged.
     carry in V, it zero-extends @aa:16 and leaves DIVXU by zero different: all of those are
     ignored. binutils' h8300h decoder also prints H8S/H8SX forms, which are not generated. Seed 7,
     2500 encodings: 6122 matches; the language needed no fix.
+  - TI PRU (`--arch pru`, `PRU:LE:32:v3`): IMEM at 0x20000000 + address, DMEM from 0. r30/r31 are
+    the pin registers and the carry is not readable from the simulator, so neither is compared and
+    the carry-in instructions are not generated. A burst past r31.b3 is illegal (sim/pru raises
+    SIGILL), one reaching r30/r31 is not compared. Two fixes came out of it: `pcode_emu` now sends a
+    LOAD/STORE into the register space to the registers (it sent every LOAD/STORE to RAM; the space
+    ids come from `slaregs.space_names`), and `pru.sinc`'s unrolled register-file bursts with more
+    than 20 operands (75 bytes and up from rN.b0) are the byte loop the other start bytes use, since
+    the engine stops at 20 operands ("SLEIGH parser out of state space"). A simulator stopped by a
+    signal is restarted. Seed 5, 1500 encodings: 2836 matches, no mismatches.
   - The simulators that cache decoded instructions (the CGEN ones) do not notice code rewritten
     at an address they ran, so a different instruction at a used address starts a fresh
     simulator. MCORE and MSP430 are not wired: sim/mcore's single step leaves PC elsewhere, and

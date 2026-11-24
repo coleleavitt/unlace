@@ -229,6 +229,11 @@ def run_case_gdbsim(arch, regs, row, cand, rng, seed, tmp):
     if not res.get("ok"):
         if res.get("bad"):
             return {"status": "bad-address"}
+        # a simulator stopped by a signal is not reliable for the next case (sim/pru then fails
+        # an event-queue assertion), so it is restarted
+        s = _SESSIONS.pop(arch.name, None)
+        if s is not None:
+            s.close()
         return {"status": "ref-exception", "why": "sim " + str(res.get("why"))[:60]}
     ref = res["regs"]
     diffs = {}
